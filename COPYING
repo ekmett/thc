@@ -1,0 +1,13 @@
+Copyright (C) 2015, Edward Kmett. All rights reserved.
+
+The following files have more permissive licenses.
+---------------------------------------------------------------------
+
+* m4/acx_pthread.m4
+* m4/ax_cxx_compile_stdcxx_11.m4
+* m4/ax_c_have_attribute.m4
+    modified to remove the tripled up __'s in the resulting define
+
+* m4/ax_c_have_attribute_cold.m4
+    based on m4/ac_have_attribute.m4 in google gflags.
+    changed to detect a particular flag (required -Werror)
