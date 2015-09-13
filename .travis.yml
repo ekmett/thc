@@ -38,5 +38,4 @@ before_install:
 script:
   - mkdir build && cd build
   - cmake ..
-  - make --jobs 2 check
-
+  - make --jobs 2

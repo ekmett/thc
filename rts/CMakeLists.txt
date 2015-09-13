@@ -1,4 +1,4 @@
-add_library(rts gc.cc)
+add_library(rts rts.cc)
 target_include_directories(rts PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 include(CheckCXXCompilerFlag)
