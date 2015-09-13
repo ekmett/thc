@@ -6,7 +6,7 @@
 
 namespace thc {
 
-enum class spaces : std::int64_t {
+enum class spaces : std::uintptr_t {
   external   = 0, // null pointers, integers, 32-bit floats, etc.
   local_min  = 1,
   local_max  = 7,
@@ -19,28 +19,35 @@ enum class triggers : int {
   reloc = 2
 };
 
+enum class types : std::uintptr_t {
+  constructor        = 0,
+  unique_constructor = 1, // duplication turns off this bit, leaving a constructor, no other impact
+  indirection        = 2,
+  unique_closure     = 3, // duplication requires construction of an indirection. then we stuff this inside of it.
+  blackhole          = 4  // this is a blackhole stuffed into an indirection that we are currently executing.
+  max_type           = 7  // if we weren't concurrent we could add hash-consing here
+};
+
+-- unique, unique_needs_indirection, indirect,
+
 struct gc_ptr {
   static thread_local int expected_nmt[16];
 
-  union { 
+  union {
     // layout chosen so that a 0-extended 32 bit integer is a legal 'gc_ptr'
-    struct bits {
-      std::uint64_t unique   : 1;   // locally unique?
-      std::uint64_t indirect : 1;   // an indirection?
-      std::uint64_t reserved : 1;   // not currently used
-      std::uint64_t offset   : 9;   // offset within a 4k page
-      std::uint64_t segment  : 9;   // which 4k page within a 2mb region
-      std::uint64_t region   : 19;  // which 2mb region in the system? 1tb addressable memory.
-      std::uint64_t space    : 4;   // which generation/space are we in?
-      std::uint64_t nmt      : 1;   // not-marked-through toggle for LVB read-barrier
-      std::uint64_t tag      : 19;  // constructor
-    };
-    std::uint64_t addr;
+    std::uintptr_t type     : 3,  // locally unique?
+                   offset   : 9,  // offset within a 4k page
+                   segment  : 9,  // which 4k page within a 2mb region
+                   region   : 19, // which 2mb region in the system? 1tb addressable memory.
+                   space    : 4,  // which generation/space are we in?
+                   nmt      : 1,  // not-marked-through toggle for LVB read-barrier
+                   tag      : 19; // constructor #
+    std::uintptr_t addr;
   };
 
   // offset and region
-  static std::uint64_t mask = 0x7fffffffff;
-    
+  static std::uintptr_t mask = 0x7ffffffff8;
+
   template <typename T> T & operator * () {
     return *reinterpret_cast<T *>(addr & mask);
   };
@@ -60,15 +67,15 @@ struct gc_ptr {
     void lvb_slow_path(void * address, int trigger);
 };
 
-static bool test_bit(std::int64_t * m, int r) {
+static bool test_bit(std::uint64_t * m, int r) {
   return m[r >> 6] & (1<<(r&0x3f));
 }
 
 // stuff one of these in thread local storage?
 struct gc_env {
-  std::int64_t regions_begin; // lo <= x < hi
-  std::int64_t regions_end;
-  std::int64_t * mapped_regions; // 1 bit per region, packed
+  std::uint32_t regions_begin; // lo <= x < hi
+  std::uint32_t regions_end;
+  std::uint64_t * mapped_regions; // 1 bit per region, packed
   layout * info_layouts;
 
   static bool in_protected_region(ptr p) {
