@@ -16,3 +16,5 @@ old
 .cabal-sandbox/
 cabal.sandbox.config
 codex.tags
+autom4te.cache/
+configure
