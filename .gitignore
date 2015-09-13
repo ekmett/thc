@@ -24,6 +24,4 @@ CMakeScripts
 Makefile
 cmake_install.cmake
 install_manifest.txt
-cmake
-debug
-release
+build
