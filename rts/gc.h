@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdint>
 #include <mutex>
+#include <queue>
 #include <unordered_set>
 #include "thread_local.h"
 #include <boost/lockfree/queue.hpp>
@@ -17,7 +18,6 @@ using std::uintptr_t;
 using std::mutex;
 using std::unordered_set;
 using std::unique_lock;
-using boost::lockfree::queue;
 
 namespace spaces {
   enum {
@@ -62,15 +62,7 @@ extern uint64_t * mapped_regions; // 1 bit per region, packed
 extern unordered_set<hec*> hecs;
 // end contents under the gc_mutex
 
-static inline void add_hec(hec & c) {
-  unique_lock<mutex> lock(gc_mutex_);
-  hecs.insert(&c);
-}
-
-static inline void remove_hec(hec & c) {
-  unique_lock<mutex> lock(mutex_);
-  hecs.erase(&c);
-}
+extern boost::lockfree::queue<gc_ptr> global_mark_queue[8];
 
 static inline bool protected_region(uint32_t r) {
   assert(regions_begin <= r && r < regions_end);
@@ -86,9 +78,9 @@ struct gc_ptr {
     uint64_t type     : 3,  // locally unique?
              offset   : 9,  // offset within a 4k page
              segment  : 9,  // which 4k page within a 2mb region
-             region   : 19, // which 2mb region in the system? 1tb addressable memory.
-             space    : 4,  // which generation/space are we in?
+             region   : 19, // which 2mb region in the system? 1tb addressable.
              nmt      : 1,  // not-marked-through toggle for LVB read-barrier
+             space    : 4,  // which generation/space are we in?
              tag      : 19; // constructor #
     uint64_t addr;
   };
@@ -124,11 +116,11 @@ inline bool operator!=(const gc_ptr& lhs, const gc_ptr& rhs){ return lhs.addr !=
 class hec {
   public:
     static thread_local hec * current;
-    uint16_t expected_nmt; // array of 16 bits
-    queue<gc_ptr> mark_queue[16];
+    uint16_t expected_nmt; // 16 bits, one per space
+    std::queue<gc_ptr> local_mark_queue[8]; // mark queues for local spaces
 
   private:
-    // perform raii to bind to the current_hec
+    // we perform raii to bind the current hec, so hide these
 
     hec(hec const &);               // private copy constructor for RAII
     hec & operator = (hec const &); // private assignment operator for RAII
@@ -136,11 +128,13 @@ class hec {
   public:
     hec() {
       current = this;
-      add_hec(*this);
+      unique_lock<mutex> lock(gc_mutex);
+      hecs.insert(this);
     }
     ~hec() {
-      remove_hec(*this);
       current = nullptr;
+      unique_lock<mutex> lock(gc_mutex);
+      hecs.erase(this);
     }
 
     inline bool get_expected_nmt(int i) { return expected_nmt & (1 << i); }
@@ -149,7 +143,7 @@ class hec {
 static inline void gc_ptr::lvb(uint64_t * address) {
   int trigger = 0;
   if (nmt != hec::current->get_expected_nmt(space)) trigger |= triggers::nmt;
-  if (space != 0 && protected_region(region))   trigger |= triggers::reloc;
+  if (space != 0 && protected_region(region))       trigger |= triggers::reloc;
   if (trigger != 0) lvb_slow_path(address, trigger)
 }
 
