@@ -18,3 +18,9 @@ cabal.sandbox.config
 codex.tags
 autom4te.cache/
 configure
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
