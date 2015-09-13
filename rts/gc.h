@@ -17,7 +17,7 @@ enum class spaces : std::uintptr_t {
   global_max = 15
 };
 
-enum class triggers : int {
+enum triggers : int {
   nmt = 1,
   reloc = 2
 };
@@ -52,11 +52,11 @@ class gc {
 
   void add_core(core & c) {
     std::unique_lock<std::mutex> lock(mutex_);
-    cores.insert(c);
+    cores.insert(&c);
   }
   void remove_core(core & c) {
     std::unique_lock<std::mutex> lock(mutex_);
-    cores.erase(c);
+    cores.erase(&c);
     // TODO: check to make sure we don't need to advance the gc state if we were blocking?
   }
 
@@ -64,7 +64,7 @@ class gc {
     gc() {}  // TODO: allocate a growable system heap, add parameters here
     ~gc() {} // TODO: return memory to the system
 
-    static inline bool is_protected_region(uint32_t r) {
+    inline bool is_protected_region(uint32_t r) {
       assert(regions_begin <= r && r < regions_end);
       return mapped_regions[r>>6]&(1<<((r-regions_begin)&0x3f));
     }
@@ -79,7 +79,6 @@ class core {
     std::uint16_t expected_nmt; // array of 16 bits
     gc & system_;
     // static extern boost::thread_specific_ptr<core> current;
-    static thread_local extern core * current;
 
   public:
     core(gc & system) : system_(system) {
@@ -91,6 +90,7 @@ class core {
       current = nullptr;
     }
 
+    static thread_local core * current;
     // perform raii to bind to the current_core
 
     inline bool get_expected_nmt(int i) { return expected_nmt & (1 << i); }
@@ -122,12 +122,6 @@ struct gc_ptr {
   template <typename T> T * operator -> () {
     return reinterpret_cast<T *>(addr & mask);
   };
-
-  static inline bool is_protected() {
-    auto r = p.region;
-    assert(regions_begin <= r && r < regions_end);
-    return p.space && mapped_regions[r>>6]&(1<<((r-regions_begin)&0x3f));
-  }
 
   // modify this to look like an assignment operator e.g. operator = (...) ?
 
