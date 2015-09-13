@@ -10,6 +10,12 @@ AC_CONFIG_HEADER([rts/config.h])
 AC_CANONICAL_SYSTEM
 AC_CONFIG_SRCDIR([rts/gc.cpp])
 
+# libtool version into for thc
+# bump first and third number when adding to the interfaces
+# bump first number and reset third when removing from the interfae
+# bump second number whenever the implementation changes
+AC_SUBST(VERSION_INFO,[1:0:0])
+
 AC_LANG([C++])
 AC_PROG_CXX
 AM_PROG_CC_C_O
