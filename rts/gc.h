@@ -50,7 +50,7 @@ class gc {
   friend core;
   friend gc_ptr;
 
-  static void add_core(core & c) {
+  void add_core(core & c) {
     std::unique_lock<std::mutex> lock(mutex_);
     cores.insert(c);
   }
@@ -113,7 +113,7 @@ struct gc_ptr {
   };
 
   // offset and region
-  static std::uintptr_t mask = 0x7ffffffff8;
+  static const std::uintptr_t mask = 0x7ffffffff8;
 
   template <typename T> T & operator * () {
     return *reinterpret_cast<T *>(addr & mask);
