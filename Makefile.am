@@ -21,15 +21,15 @@ nobase_noinst_HEADERS = \
 nobase_include_HEADERS = \
         rts/gc.h \
 
-lib_LTLIBRARIES = libjit++.la
-libjit___la_LIBADD = $(LIBOBJS)
-libjit___la_LDFLAGS = -release $(PACKAGE_VERSION) -version-info $(VERSION_INFO)
-libjit___la_SOURCES = \
+lib_LTLIBRARIES = libthc++.la
+libthc___la_LIBADD = $(LIBOBJS)
+libthc___la_LDFLAGS = -release $(PACKAGE_VERSION) -version-info $(VERSION_INFO)
+libthc___la_SOURCES = \
 	rts/gc.cc
 
-test_interpreter_DEPENDENCIES = libjit++.la
-test_interpreter_SOURCES = test/t_interpreter.cc
-test_interpreter_LDADD = libjit++.la $(PTHREAD_LIBS) $(LIB_OBJS)
+# test_interpreter_DEPENDENCIES = libthc.la
+# test_interpreter_SOURCES = test/t_interpreter.cc
+# test_interpreter_LDADD = libthc.la $(PTHREAD_LIBS) $(LIB_OBJS)
 
 # clear out caches
 maintainer-clean-local:
