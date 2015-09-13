@@ -1,6 +1,7 @@
 #ifndef INCLUDED_RTS_GC_H
 #define INCLUDED_RTS_GC_H
 
+#include <boost/thread.hpp>
 #include <cassert>
 #include <cstdint>
 
@@ -19,22 +20,73 @@ enum class triggers : int {
   reloc = 2
 };
 
-enum class types : std::uintptr_t {
+enum class types : std::uint64_t {
   constructor        = 0,
   unique_constructor = 1, // duplication turns off this bit, leaving a constructor, no other impact
   indirection        = 2,
   unique_closure     = 3, // duplication requires construction of an indirection. then we stuff this inside of it.
-  blackhole          = 4  // this is a blackhole stuffed into an indirection that we are currently executing.
+  blackhole          = 4, // this is a blackhole stuffed into an indirection that we are currently executing.
   max_type           = 7  // if we weren't concurrent we could add hash-consing here
 };
 
--- unique, unique_needs_indirection, indirect,
+class core;
+
+class gc {
+
+  gc(gc const &);               // private copy constructor for RAII
+  gc & operator = (gc const &); // private assignment operator for RAII
+
+  // global garbage collector configuration
+  std::uint32_t regions_begin;    // lo <= x < hi
+  std::uint32_t regions_end;
+  std::uint64_t * mapped_regions; // 1 bit per region, packed
+
+  friend core;
+  void register(core &);
+  void unregister(core &);
+
+  public:
+    gc();  // allocate a growable system heap, add parameters here
+    ~gc(); // return memory to the system
+
+  static inline bool in_protected_region(ptr p) {
+    auto r = p.region;
+    assert(regions_begin <= r && r < regions_end);
+    return p.space && mapped_regions[r>>6]&(1<<((r-regions_begin)&0x3f));
+  }
+
+}
+
+// cores are haskell execution contexts.
+class core {
+  private:
+    std::uint16_t expected_nmt; // array of 16 bits
+    gc & system_;
+    static extern boost::thread_specific_ptr<core> current;
+
+    core(core const &);               // private copy constructor for RAII
+    core & operator = (core const &); // private assignment operator for RAII
+
+  public:
+    core(gc & system) : system_(system) {
+      current.reset(this);
+      system.register(*this);
+    }
+    ~core() {
+      system.unregister(*this);
+      current.release();
+    }
+
+    // perform raii to bind to the current_core
+
+    inline bool get_expected_nmt(int i) { return expected_nmt & (1 << i); }
+};
 
 struct gc_ptr {
-  static thread_local int expected_nmt[16];
 
   union {
     // layout chosen so that a 0-extended 32 bit integer is a legal 'gc_ptr'
+    // as are legal native c pointers
     std::uintptr_t type     : 3,  // locally unique?
                    offset   : 9,  // offset within a 4k page
                    segment  : 9,  // which 4k page within a 2mb region
@@ -58,33 +110,14 @@ struct gc_ptr {
 
   inline void lvb(void * address) {
     int trigger = 0;
-    if (nmt != expected_nmt[space]) trigger |= triggers::nmt;
-    if (env.is_protected(region))   trigger |= triggers::reloc;
+    core current = *core::current;
+    if (nmt != current->get_expected_nmt(space)) trigger |= triggers::nmt;
+    if (current->gc.is_protected(region))   trigger |= triggers::reloc;
     if (trigger) lvb_slow_path(address, trigger)
   }
 
   private:
     void lvb_slow_path(void * address, int trigger);
 };
-
-static bool test_bit(std::uint64_t * m, int r) {
-  return m[r >> 6] & (1<<(r&0x3f));
-}
-
-// stuff one of these in thread local storage?
-struct gc_env {
-  std::uint32_t regions_begin; // lo <= x < hi
-  std::uint32_t regions_end;
-  std::uint64_t * mapped_regions; // 1 bit per region, packed
-  layout * info_layouts;
-
-  static bool in_protected_region(ptr p) {
-    auto r = p.region;
-    assert(regions_begin <= r && r < regions_end);
-    return p.space != 0 && test_bit(mapped_regions,r - regions_begin);
-  }
-};
-
-}
 
 #endif
