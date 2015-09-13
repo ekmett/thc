@@ -39,3 +39,13 @@ script:
   - mkdir build && cd build
   - cmake ..
   - make --jobs 2
+
+notifications:
+  irc:
+    channels:
+      - "irc.freenode.org#thc"
+    skip_join: true
+    template:
+      - "\x0313thc\x0f/\x0306%{branch}\x0f \x0314%{commit}\x0f %{message} \x0302\x1f%{build_url}\x0f"
+
+# EOF
