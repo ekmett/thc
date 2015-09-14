@@ -4,6 +4,8 @@ namespace thc {
 
 using std::uint64_t;
 
+thread_local hec * hec::current;
+
 void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
   uint64_t old = addr;
 
