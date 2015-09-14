@@ -9,3 +9,5 @@ build:
 
 build/Makefile: CMakeLists.txt rts/CMakeLists.txt build
 	(cd build && cmake ..)
+
+.PHONY: all clean
