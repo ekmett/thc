@@ -1,4 +1,4 @@
-#include "gc.h"
+#include "thc/gc.h"
 
 namespace thc {
 

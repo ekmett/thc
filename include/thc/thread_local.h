@@ -1,5 +1,5 @@
-#ifndef INCLUDED_THREAD_LOCAL_H
-#define INCLUDED_THREAD_LOCAL_H
+#ifndef INCLUDED_THC_THREAD_LOCAL_H
+#define INCLUDED_THC_THREAD_LOCAL_H
 
 #ifndef thread_local
 # if __STDC_VERSION__ >= 201112 && !defined __STDC_NO_THREADS__

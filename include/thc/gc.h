@@ -6,7 +6,7 @@
 #include <mutex>
 #include <queue>
 #include <unordered_set>
-#include "thread_local.h"
+#include "thc/thread_local.h"
 #include <boost/lockfree/queue.hpp>
 
 namespace thc {

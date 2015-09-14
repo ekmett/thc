@@ -21,6 +21,9 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 find_package(Boost 1.45.0 REQUIRED COMPONENTS thread)
 include_directories(${Boost_INCLUDE_DIRS})
 
+link_libraries(${Boost_LIBRARIES})
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
 # directories
 add_subdirectory(rts)
 add_subdirectory(tests)
