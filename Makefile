@@ -1,8 +1,8 @@
 all: build/Makefile
-	make -C build
+	make --jobs 2 -C build
 
 doc: build/Makefile
-	make -C build doc
+	make --jobs 2 -C build doc
 	open build/html/annotated.html
 
 clean:
