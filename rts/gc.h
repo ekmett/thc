@@ -21,28 +21,28 @@ using std::unique_lock;
 
 namespace spaces {
   enum {
-    external = 0,
-    local_min = 1,
-    local_max = 7,
-    global_min = 8,
-    global_max = 15
+    external = 0,   ///< non-heap pointers or 0-extended 32-bit integers and the like
+    local_min = 1,  ///< the first usable local heap
+    local_max = 7,  ///< the last usable local heap
+    global_min = 8, ///< the first usable global heap
+    global_max = 15 ///< the last usable global heap
   };
 }
 
 namespace triggers {
   enum {
-    nmt         = 1,
-    relocation  = 2,
-    contraction = 4
+    nmt         = 1, ///< this pointer is not-marked-through for the garbage collector. queue it
+    relocation  = 2, ///< the page is locked and is in the middle of a relocation, help it along.
+    contraction = 4  ///< this pointer has delusions of uniqueness. disabuse it
   };
 }
 
 namespace types {
   enum {
-    constructor        = 0,
-    closure            = 1,
-    indirection        = 2,
-    blackhole          = 3  // this is a blackhole stuffed into an indirection that we are currently executing.
+    constructor = 0, ///< a data constructor
+    closure     = 1, ///< a closure
+    indirection = 2, ///< an indirection to a closure, blackhole or final answer
+    blackhole   = 3  ///< a blackhole stuffed into an indirection that we are currently executing.
   };
 }
 
@@ -69,6 +69,8 @@ static inline bool protected_region(uint32_t r) {
 }
 
 
+/// A heap pointer.
+///
 struct gc_ptr {
   union {
     // layout chosen so that a 0-extended 32 bit integer is a legal 'gc_ptr' as are legal native c pointers
@@ -112,7 +114,7 @@ struct gc_ptr {
 inline bool operator==(const gc_ptr& lhs, const gc_ptr& rhs){ return lhs.addr == rhs.addr; }
 inline bool operator!=(const gc_ptr& lhs, const gc_ptr& rhs){ return lhs.addr != rhs.addr; }
 
-// hecs are haskell execution contexts.
+/// A "Haskell execution context".
 class hec {
   public:
     static thread_local hec * current;
