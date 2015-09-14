@@ -9,10 +9,22 @@ void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
 
   // this object was white, make it grey.
   if (trigger | triggers.nmt) {
-    // TODO: anything local unique which contains no pointers to mark could maybe move to to-space eagerly.
     nmt = !nmt;
-    if (space <= 8) hec::current->local_mark_queue[space].push(*this);
-    else global_mark_queue[space - 8].push(*this);
+    if (unique) {
+      // For anything locally unique we should walk the local subspace, chasing any unique references
+      // and doing opportunistic graph reduction. When we consume k unique references we can
+      // afford O(k) work. This means we'd act like a semispace copying collector for
+      // objects that are known unique, and only ever pass to the marking system things
+      // with multiple (potential) references. This also avoids crafting an indirection
+      // upon enqueuing a unique closure for marking. It also generalizes Wadler's garbage collector
+      //
+      // this would be sufficient to handle things like a GRIN primitive for + being applied
+      // to known integers.
+
+
+    } else {
+      if (space <= 8) hec::current->local_mark_queue[space].push(*this);
+      else global_mark_queue[space - 8].push(*this);
   }
 
   if (trigger | triggers.reloc) {

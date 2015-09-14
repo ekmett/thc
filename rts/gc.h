@@ -33,7 +33,7 @@ namespace triggers {
   enum {
     nmt = 1,
     reloc = 2
-  }
+  };
 }
 
 namespace types {
