@@ -3,8 +3,13 @@
 namespace rts {
 
 using std::uint64_t;
+using std::unordered_set;
+using std::mutex;
 
 thread_local hec * hec::current;
+unordered_set<hec*> hecs;
+mutex gc_mutex;
+boost::lockfree::queue<gc_ptr> global_mark_queue[8];
 
 void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
   uint64_t old = addr;
