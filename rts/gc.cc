@@ -1,11 +1,11 @@
 #include "gc.h"
 
-namespace gc {
+namespace thc {
 
 using std::uint64_t;
 
 void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
-  struct gcptr old = addr;
+  gc_ptr old = addr;
 
   // this object was white, make it grey.
   if (trigger | triggers.nmt) {
@@ -20,11 +20,10 @@ void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
       //
       // this would be sufficient to handle things like a GRIN primitive for + being applied
       // to known integers.
-
-
     } else {
       if (space <= 8) hec::current->local_mark_queue[space].push(*this);
       else global_mark_queue[space - 8].push(*this);
+    }
   }
 
   if (trigger | triggers.reloc) {
@@ -36,4 +35,6 @@ void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
   }
 
   __sync_val_compare_and_swap(address,old,addr);
+}
+
 }

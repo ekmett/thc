@@ -97,7 +97,7 @@ struct gc_ptr {
   };
 
   template <typename T> T & operator [] (std::ptrdiff_t i) {
-    return *reinterpret_cast<T *>((addr&mask) + (i * sizeof T))
+    return *reinterpret_cast<T *>((addr&mask) + (i * sizeof(T)));
   }
   // TODO: partially template specialize these to make it so gc_ptr loads from those addresses automatically apply the
   // read-barrier?
@@ -106,7 +106,7 @@ struct gc_ptr {
   void lvb(uint64_t * address);
 
   private:
-    void lvb_slow_path(gc_ptr * address, int trigger);
+    void lvb_slow_path(uint64_t * address, int trigger);
 };
 
 inline bool operator==(const gc_ptr& lhs, const gc_ptr& rhs){ return lhs.addr == rhs.addr; }
@@ -140,11 +140,13 @@ class hec {
     inline bool get_expected_nmt(int i) { return expected_nmt & (1 << i); }
 };
 
-static inline void gc_ptr::lvb(uint64_t * address) {
+inline void gc_ptr::lvb(uint64_t * address) {
   int trigger = 0;
   if (nmt != hec::current->get_expected_nmt(space)) trigger |= triggers::nmt;
   if (space != 0 && protected_region(region))       trigger |= triggers::reloc;
-  if (trigger != 0) lvb_slow_path(address, trigger)
+  if (trigger != 0) lvb_slow_path(address, trigger);
 }
+
+} // namespace thc
 
 #endif
