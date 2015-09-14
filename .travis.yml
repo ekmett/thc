@@ -17,6 +17,7 @@ addons:
 
     packages:
       - libboost1.55-all-dev
+      - doxygen
 
 matrix:
   exclude:
