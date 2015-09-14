@@ -1,5 +1,5 @@
-#include "thc/gc.h"
+#include "rts/gc.h"
 
 int main(int argc, char ** argv) {
-  thc::hec env;
+  rts::hec env;
 }

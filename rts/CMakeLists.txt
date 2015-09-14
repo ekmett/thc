@@ -1,1 +1,1 @@
-add_library(thc gc.cc)
+add_library(rts gc.cc)

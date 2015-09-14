@@ -1,6 +1,6 @@
-#include "thc/gc.h"
+#include "rts/gc.h"
 
-namespace thc {
+namespace rts {
 
 using std::uint64_t;
 

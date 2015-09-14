@@ -6,10 +6,10 @@
 #include <mutex>
 #include <queue>
 #include <unordered_set>
-#include "thc/thread_local.h"
+#include "rts/thread_local.h"
 #include <boost/lockfree/queue.hpp>
 
-namespace thc {
+namespace rts {
 
 using std::uint16_t;
 using std::uint32_t;
@@ -150,6 +150,6 @@ inline void gc_ptr::lvb(uint64_t * address, bool unique_context) {
   }
 }
 
-} // namespace thc
+} // namespace rts
 
 #endif
