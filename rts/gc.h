@@ -31,8 +31,9 @@ namespace spaces {
 
 namespace triggers {
   enum {
-    nmt = 1,
-    reloc = 2
+    nmt         = 1,
+    relocation  = 2,
+    contraction = 4
   };
 }
 
@@ -101,8 +102,8 @@ struct gc_ptr {
   // TODO: partially template specialize these to make it so gc_ptr loads from those addresses automatically apply the
   // read-barrier?
 
-  // LVB-style read-barrier
-  void lvb(uint64_t * address);
+  // LVB-style read-barrier, modified to do contraction of "locally unique" references when the context isn't unique.
+  void lvb(uint64_t * address, bool unique_context = true);
 
   private:
     void lvb_slow_path(uint64_t * address, int trigger);
@@ -139,11 +140,14 @@ class hec {
     inline bool get_expected_nmt(int i) { return expected_nmt & (1 << i); }
 };
 
-inline void gc_ptr::lvb(uint64_t * address) {
-  int trigger = 0;
-  if (nmt != hec::current->get_expected_nmt(space)) trigger |= triggers::nmt;
-  if (space != 0 && protected_region(region))       trigger |= triggers::reloc;
-  if (trigger != 0) lvb_slow_path(address, trigger);
+inline void gc_ptr::lvb(uint64_t * address, bool unique_context) {
+  if (space != 0) {
+    int trigger = 0;
+    if (nmt != hec::current->get_expected_nmt(space)) trigger |= triggers::nmt;
+    if (protected_region(region))                     trigger |= triggers::relocation;
+    if (!unique_context && unique)                    trigger |= triggers::contraction;
+    if (trigger != 0) lvb_slow_path(address, trigger);
+  }
 }
 
 } // namespace thc
