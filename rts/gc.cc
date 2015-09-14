@@ -5,10 +5,10 @@ namespace thc {
 using std::uint64_t;
 
 void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
-  gc_ptr old = addr;
+  uint64_t old = addr;
 
   // this object was white, make it grey.
-  if (trigger | triggers.nmt) {
+  if (trigger | triggers::nmt) {
     nmt = !nmt;
     if (unique) {
       // For anything locally unique we should walk the local subspace, chasing any unique references
@@ -26,7 +26,7 @@ void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
     }
   }
 
-  if (trigger | triggers.reloc) {
+  if (trigger | triggers::reloc) {
     // this page is actively being relocated. cooperate
     // grab a handle to the information about this page that is being relocated
     // try to claim this object

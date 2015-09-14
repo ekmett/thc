@@ -39,11 +39,9 @@ namespace triggers {
 namespace types {
   enum {
     constructor        = 0,
-    unique_constructor = 1, // duplication turns off this bit, leaving a constructor, no other impact
+    closure            = 1,
     indirection        = 2,
-    unique_closure     = 3, // duplication requires construction of an indirection. then we stuff this inside of it.
-    blackhole          = 4, // this is a blackhole stuffed into an indirection that we are currently executing.
-    max_type           = 7  // if we weren't concurrent we could add hash-consing here
+    blackhole          = 3  // this is a blackhole stuffed into an indirection that we are currently executing.
   };
 }
 
@@ -75,7 +73,8 @@ struct gc_ptr {
     // layout chosen so that a 0-extended 32 bit integer is a legal 'gc_ptr' as are legal native c pointers
     // TODO: consider setting space 15 to also be a native pointer that way 0 and 1 extended pointers would
     // be legal.
-    uint64_t type     : 3,  // locally unique?
+    uint64_t unique   : 1,
+             type     : 2,
              offset   : 9,  // offset within a 4k page
              segment  : 9,  // which 4k page within a 2mb region
              region   : 19, // which 2mb region in the system? 1tb addressable.
