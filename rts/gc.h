@@ -76,18 +76,18 @@ struct gc_ptr {
     // layout chosen so that a 0-extended 32 bit integer is a legal 'gc_ptr' as are legal native c pointers
     // TODO: consider setting space 15 to also be a native pointer that way 0 and 1 extended pointers would
     // be legal.
-    uint64_t unique   : 1,
-             type     : 2,
-             offset   : 9,  // offset within a 4k page
-             segment  : 9,  // which 4k page within a 2mb region
-             region   : 19, // which 2mb region in the system? 1tb addressable.
-             nmt      : 1,  // not-marked-through toggle for LVB read-barrier
-             space    : 4,  // which generation/space are we in?
-             tag      : 19; // constructor #
+    uint64_t unique   : 1,  ///< does this reference locally believe it is unique?
+             type     : 2,  ///< what type of this pointer is this?
+             offset   : 9,  ///< offset within a 4k page
+             segment  : 9,  ///< which 4k page within a 2mb region
+             region   : 19, ///< which 2mb region in the system? 1tb addressable.
+             nmt      : 1,  ///< not-marked-through toggle for LVB read-barrier
+             space    : 4,  ///< which generation/space are we in?
+             tag      : 19; ///< constructor #
     uint64_t addr;
   };
 
-  // offset and region
+  /// mask for the offset, segment and region
   static const uint64_t mask = 0x7ffffffff8;
 
   template <typename T> T & operator * () {
@@ -101,13 +101,14 @@ struct gc_ptr {
   template <typename T> T & operator [] (std::ptrdiff_t i) {
     return *reinterpret_cast<T *>((addr&mask) + (i * sizeof(T)));
   }
-  // TODO: partially template specialize these to make it so gc_ptr loads from those addresses automatically apply the
-  // read-barrier?
 
-  // LVB-style read-barrier, modified to do contraction of "locally unique" references when the context isn't unique.
+  // TODO: partially template specialize these to make it so gc_ptr loads from those addresses automatically apply the
+
+  /// loaded-value-barrier read-barrier, modified to do contraction of "locally unique" references when the context isn't unique.
   void lvb(uint64_t * address, bool unique_context = true);
 
   private:
+    /// this implements the slow-path of the loaded-value-barrier
     void lvb_slow_path(uint64_t * address, int trigger);
 };
 
@@ -117,15 +118,13 @@ inline bool operator!=(const gc_ptr& lhs, const gc_ptr& rhs){ return lhs.addr !=
 /// A "Haskell execution context".
 class hec {
   public:
-    static thread_local hec * current;
-    uint16_t expected_nmt; // 16 bits, one per space
-    std::queue<gc_ptr> local_mark_queue[8]; // mark queues for local spaces
+    static thread_local hec * current; ///< track the current haskell execution context in a thread_local variable.
+    uint16_t expected_nmt; ///< 16 bits, one per space
+    std::queue<gc_ptr> local_mark_queue[8]; ///< mark queues for local spaces
 
   private:
-    // we perform raii to bind the current hec, so hide these
-
-    hec(hec const &);               // private copy constructor for RAII
-    hec & operator = (hec const &); // private assignment operator for RAII
+    hec(hec const &);               ///< private copy constructor for RAII
+    hec & operator = (hec const &); ///< private assignment operator for RAII
 
   public:
     hec() {
@@ -139,6 +138,8 @@ class hec {
       hecs.erase(this);
     }
 
+    /// extract an appropriate bit from out expected_nmt mask for what the expected value of the 'not-marked-through'
+    /// flag is for a given space.
     inline bool get_expected_nmt(int i) { return expected_nmt & (1 << i); }
 };
 
