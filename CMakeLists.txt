@@ -1,6 +1,8 @@
+include(CheckSymbolExists)
+
 cmake_minimum_required(VERSION 2.8.11)
 cmake_policy(SET CMP0048 NEW)
-project(THC VERSION 0.1 LANGUAGES CXX)
+project(THC VERSION 0.1 LANGUAGES CXX C)
 
 # make it easier to add options
 macro(add_option var default type docstring)
@@ -47,6 +49,31 @@ if (THC_BUILD_DOCUMENTATION)
       VERBATIM)
   endif(DOXYGEN_FOUND)
 endif(THC_BUILD_DOCUMENTATION)
+
+# memory management
+
+check_symbol_exists(mmap sys/mman.h HAVE_MMAP)
+if(HAVE_MMAP)
+  check_symbol_exists(munmap sys/mman.h HAVE_MUNMAP)
+  check_symbol_exists(mremap sys/mman.h HAVE_MREMAP)
+  check_symbol_exists(MAP_ANON sys/mman.h HAVE_MAP_ANONYMOUS)
+  if(NOT HAVE_MAP_ANONYMOUS)
+    if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+      add_definitions(-D_DARWIN_C_SOURCE)
+      check_symbol_exists(MAP_ANON sys/mman.h HAVE_MAP_ANONYMOUS)
+    elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+      add_definitions(-D__BSD_VISIBLE)
+      check_symbol_exists(MAP_ANON sys/mman.h HAVE_MAP_ANONYMOUS)
+    elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+      check_symbol_exists(MAP_ANONYMOUS sys/mman.h HAVE_MAP_ANONYMOUS)
+    endif()
+  endif()
+endif()
+
+check_symbol_exists(madvise sys/mman.h HAVE_MADVISE)
+if(NOT HAVE_MADVISE)
+  check_symbol_exists(posix_madvise sys/mman.h HAVE_POSIX_MADVISE)
+endif()
 
 # directories
 add_subdirectory(rts)
