@@ -19,7 +19,7 @@ matrix:
     - os: osx
       compiler: clang
       osx_image: xcode6.4
-      env: XCODE=6.4
+      env: XCODE=6.4 OSX_SCRIPT="brew install doxygen"
 
     - os: osx
       compiler: clang
