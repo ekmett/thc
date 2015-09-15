@@ -26,11 +26,6 @@ matrix:
       osx_image: xcode7
       env: XCODE=7 OSX_SCRIPT="brew install cmake"
 
-    - os: osx
-      osx_image: xcode7
-      compiler: gcc
-      env: XCODE=7 OSX_SCRIPT="brew install cmake"
-
     - os: linux
       compiler: gcc
 
