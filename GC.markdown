@@ -5,9 +5,13 @@ Operational Thesis:
 I want a heap:
 
 1.) which doesn't have to use header words per object
+
 2.) which doesn't stop the world
+
 3.) which doesn't have to pay for full semispace storage overhead to improve locality
+
 4.) which doesn't pay for forwarding pointers for unique data, which let's me generalize Wadler's space leak fix to do much broader forms of opportunistic evaluation
+
 5.) which lets me determine which case I'm evaluating on the other side of the prefetch overhead of reading the target of a pointer.
 
 It'd be nice to get benefits in terms of the underlying evaluation model to avoid megamorphic jumps to unknown addresses, while I'm at it.
