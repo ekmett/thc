@@ -5,8 +5,10 @@ cmake_policy(SET CMP0048 NEW)
 project(THC VERSION 0.1 LANGUAGES CXX C)
 
 # use _GNU_SOURCE on linux to enable things like remap_file_pages
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_LARGEFILE_SOURCE")
+add_definitions(-D_GNU_SOURCE)
+
+# get operations that permit larger offsets
+add_definitions(-D_LARGEFILE_SOURCE)
 
 # make it easier to add options
 macro(add_option var default type docstring)
