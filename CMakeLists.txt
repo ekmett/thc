@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 2.8.11)
 cmake_policy(SET CMP0048 NEW)
 project(THC VERSION 0.1 LANGUAGES CXX C)
 
+# use _GNU_SOURCE on linux to enable things like remap_file_pages
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_LARGEFILE_SOURCE")
+
 # make it easier to add options
 macro(add_option var default type docstring)
     if(NOT DEFINED ${var})
@@ -57,6 +61,7 @@ if(HAVE_MMAP)
   check_symbol_exists(munmap sys/mman.h HAVE_MUNMAP)
   check_symbol_exists(mremap sys/mman.h HAVE_MREMAP)
   check_symbol_exists(MAP_ANON sys/mman.h HAVE_MAP_ANONYMOUS)
+  check_symbol_exists(remap_file_pages sys/mman.h HAVE_REMAP_FILE_PAGES)
   if(NOT HAVE_MAP_ANONYMOUS)
     if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
       add_definitions(-D_DARWIN_C_SOURCE)
