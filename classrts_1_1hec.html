@@ -63,6 +63,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
     <ul class="tablist">
       <li><a href="annotated.html"><span>Class&#160;List</span></a></li>
       <li><a href="classes.html"><span>Class&#160;Index</span></a></li>
+      <li><a href="functions.html"><span>Class&#160;Members</span></a></li>
     </ul>
   </div>
 <!-- window showing the filter options -->
@@ -70,7 +71,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Classes</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Pages</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Classes</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -103,22 +104,26 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:a0780b539beb73956e270f4303a9268da"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a0780b539beb73956e270f4303a9268da"></a>
-bool&#160;</td><td class="memItemRight" valign="bottom"><b>get_expected_nmt</b> (int i)</td></tr>
+bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrts_1_1hec.html#a0780b539beb73956e270f4303a9268da">get_expected_nmt</a> (int i)</td></tr>
+<tr class="memdesc:a0780b539beb73956e270f4303a9268da"><td class="mdescLeft">&#160;</td><td class="mdescRight">extract an appropriate bit from out expected_nmt mask for what the expected value of the 'not-marked-through' flag is for a given space. <br /></td></tr>
 <tr class="separator:a0780b539beb73956e270f4303a9268da"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:ad80e2a7153121da4d9a5b15f0257a51e"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="ad80e2a7153121da4d9a5b15f0257a51e"></a>
-uint16_t&#160;</td><td class="memItemRight" valign="bottom"><b>expected_nmt</b></td></tr>
+uint16_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrts_1_1hec.html#ad80e2a7153121da4d9a5b15f0257a51e">expected_nmt</a></td></tr>
+<tr class="memdesc:ad80e2a7153121da4d9a5b15f0257a51e"><td class="mdescLeft">&#160;</td><td class="mdescRight">16 bits, one per space <br /></td></tr>
 <tr class="separator:ad80e2a7153121da4d9a5b15f0257a51e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a48b84ced274058511791c04e959c157b"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a48b84ced274058511791c04e959c157b"></a>
-std::queue&lt; <a class="el" href="structrts_1_1gc__ptr.html">gc_ptr</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>local_mark_queue</b> [8]</td></tr>
+std::queue&lt; <a class="el" href="structrts_1_1gc__ptr.html">gc_ptr</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrts_1_1hec.html#a48b84ced274058511791c04e959c157b">local_mark_queue</a> [8]</td></tr>
+<tr class="memdesc:a48b84ced274058511791c04e959c157b"><td class="mdescLeft">&#160;</td><td class="mdescRight">mark queues for local spaces <br /></td></tr>
 <tr class="separator:a48b84ced274058511791c04e959c157b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
 <tr class="memitem:ad34b9156a5cdc8b631dabae684edf341"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="ad34b9156a5cdc8b631dabae684edf341"></a>
-static thread_local <a class="el" href="classrts_1_1hec.html">hec</a> *&#160;</td><td class="memItemRight" valign="bottom"><b>current</b></td></tr>
+static thread_local <a class="el" href="classrts_1_1hec.html">hec</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classrts_1_1hec.html#ad34b9156a5cdc8b631dabae684edf341">current</a></td></tr>
+<tr class="memdesc:ad34b9156a5cdc8b631dabae684edf341"><td class="mdescLeft">&#160;</td><td class="mdescRight">track the current haskell execution context in a thread_local variable. <br /></td></tr>
 <tr class="separator:ad34b9156a5cdc8b631dabae684edf341"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>

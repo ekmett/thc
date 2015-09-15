@@ -63,6 +63,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
     <ul class="tablist">
       <li><a href="annotated.html"><span>Class&#160;List</span></a></li>
       <li><a href="classes.html"><span>Class&#160;Index</span></a></li>
+      <li><a href="functions.html"><span>Class&#160;Members</span></a></li>
     </ul>
   </div>
 <!-- window showing the filter options -->
@@ -70,7 +71,7 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
      onmouseover="return searchBox.OnSearchSelectShow()"
      onmouseout="return searchBox.OnSearchSelectHide()"
      onkeydown="return searchBox.OnSearchSelectKey(event)">
-<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Classes</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Pages</a></div>
+<a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(0)"><span class="SelectionMark">&#160;</span>All</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(1)"><span class="SelectionMark">&#160;</span>Classes</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(2)"><span class="SelectionMark">&#160;</span>Functions</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(3)"><span class="SelectionMark">&#160;</span>Variables</a><a class="SelectItem" href="javascript:void(0)" onclick="searchBox.OnSelectItem(4)"><span class="SelectionMark">&#160;</span>Pages</a></div>
 
 <!-- iframe showing the search results (closed by default) -->
 <div id="MSearchResultsWindow">
@@ -93,19 +94,19 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
 <p>This is the complete list of members for <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>, including all inherited members.</p>
 <table class="directory">
   <tr bgcolor="#f0f0f0" class="even"><td class="entry"><b>addr</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
-  <tr bgcolor="#f0f0f0"><td class="entry"><b>lvb</b>(uint64_t *address, bool unique_context=true) (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"><span class="mlabel">inline</span></td></tr>
-  <tr bgcolor="#f0f0f0" class="even"><td class="entry"><b>mask</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"><span class="mlabel">static</span></td></tr>
-  <tr bgcolor="#f0f0f0"><td class="entry"><b>nmt</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
-  <tr bgcolor="#f0f0f0" class="even"><td class="entry"><b>offset</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#ab959c6080d938b5faf37122d769f610d">lvb</a>(uint64_t *address, bool unique_context=true)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"><span class="mlabel">inline</span></td></tr>
+  <tr class="even"><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#a38e775ced77b76234b3d935191be5b4d">mask</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"><span class="mlabel">static</span></td></tr>
+  <tr><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#a2308ea5bc7fc05b7b36bcb39dd19ddc6">nmt</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr class="even"><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#aad3b62052fccd6a83eb7d3b9c160c39b">offset</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
   <tr bgcolor="#f0f0f0"><td class="entry"><b>operator*</b>() (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"><span class="mlabel">inline</span></td></tr>
   <tr bgcolor="#f0f0f0" class="even"><td class="entry"><b>operator-&gt;</b>() (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"><span class="mlabel">inline</span></td></tr>
   <tr bgcolor="#f0f0f0"><td class="entry"><b>operator[]</b>(std::ptrdiff_t i) (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"><span class="mlabel">inline</span></td></tr>
-  <tr bgcolor="#f0f0f0" class="even"><td class="entry"><b>region</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
-  <tr bgcolor="#f0f0f0"><td class="entry"><b>segment</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
-  <tr bgcolor="#f0f0f0" class="even"><td class="entry"><b>space</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
-  <tr bgcolor="#f0f0f0"><td class="entry"><b>tag</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
-  <tr bgcolor="#f0f0f0" class="even"><td class="entry"><b>type</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
-  <tr bgcolor="#f0f0f0"><td class="entry"><b>unique</b> (defined in <a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a>)</td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr class="even"><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#aad7c4b1d9c5ca79d2e674e9c8e1213ed">region</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#a664f5b99329457cca0b863e2bf1cb10c">segment</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr class="even"><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#ab053c8345b22b54a94b4c419d433c344">space</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#af35645ecd7e91135261f35229059d221">tag</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr class="even"><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#a8106ea48dd8284cb9512ac8ecd3fe3e2">type</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
+  <tr><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html#ae4f57b97ffc6b4abb85d0e640b230e17">unique</a></td><td class="entry"><a class="el" href="structrts_1_1gc__ptr.html">rts::gc_ptr</a></td><td class="entry"></td></tr>
 </table></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
