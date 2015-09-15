@@ -52,6 +52,7 @@ void gc_ptr::lvb_slow_path(uint64_t * address, int trigger) {
     // addr = new_indirection(addr);
   }
 
+  // TODO: use __sync_fetch_and_or / __sync_fetch_and_and to swap when trigger = triggers::nmt exactly
   __sync_val_compare_and_swap(address,old,addr);
 }
 
