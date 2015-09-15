@@ -17,7 +17,7 @@ addons:
 
     packages:
       - doxygen
-      - libboost-thread1.55.0
+      - libboost-thread1.55-dev
       # - libboost1.55-all-dev
 
 matrix:
