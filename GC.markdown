@@ -60,9 +60,10 @@ Consider a mark-compact form with, per page meta-data:
    next global page (circular list)
    up to 32 bytes of other meta-data
 
+
 This gives 256 bytes of metadata per 4k page, (1/16th overhead) in exchange for being able to use a mark-compact algorithm but without any real synchronization
 beyond a CAS to set a forwarding pointer, and a requirement that every local collection complete at least once per global collection.
-If we wanted to allow aging as well, we'd still hit less than 1/8th overhead.
+If we wanted to allow aging as well, we'd still hit less than 1/8th overhead, if we only allow older generations in the global heap then we have enough room to do this with about 1/12th overhead with only one extra forwarding pointer by merging the local/global/old start-bits into something with 2-bits per word.
 
 ## Closures
 
@@ -78,9 +79,7 @@ On the plus side we can share marking code.
 
 ## Working model:
 
-Use a loaded value barrier as a read-barrier. Modify it to track uniqueness. Unlike Wise/Friedman, don't bother to recover uniqueness during mark for now, we can't stop the world. We can recover uniqueness locally by stepping through an indirection. Investigate later if we can recover uniqueness during GC.
-
-~~Observation: If an indirection points to an 8 byte block of memory that we will replace with a blackhole with an _ironclad guarantee_ that nobody else will enter the thunk while we evaluate it, then we can store a _unique_ pointer in a non-unique indirection and retain that property. During evaluation of it we remain locally unique. In compressor terms, if we copy the indirections to to-space they become require-update pages.~~
+Use a loaded value barrier as a read-barrier. Modify it to track uniqueness. Unlike Wise/Friedman, don't bother to recover uniqueness during mark for now, we can't stop the world. Closures recover uniqueness of their contents. TODO: Investigate later if we can recover uniqueness during GC.
 
 Wadler's trick becomes two smaller tricks: a unique selector referencing a data constructor can forward itself. a non-unique selector referencing a data constructor is a chain of an indirection referencing a selector, referencing the data constructor. we can evaluate this with a variant of the blackholing process, either by inserting a blackhole as usual into the indirection, then copying the value from the selected field, or by directly compare-and-swapping the contents of the field in for the indirection.
 
