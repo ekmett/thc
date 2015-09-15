@@ -1,4 +1,4 @@
-## Garbage collection
+# Garbage Collection
 
 Operational Thesis:
 
