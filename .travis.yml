@@ -47,7 +47,7 @@ before_install:
   - if [ "$TRAVIS_OS_NAME" == "osx" ];
     then
      brew update || brew update;
-     $OSX_SCRIPT
+     $OSX_SCRIPT;
     fi
 
 script:
