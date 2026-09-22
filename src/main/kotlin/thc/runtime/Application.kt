@@ -88,6 +88,49 @@ internal class TargetCache(private val metrics: Metrics) : Node() {
         dispatch.execute(this, target, arguments, metrics)
 }
 
+/**
+ * Cache a thunk's target before building its call packet. Environment presence
+ * is fixed by that target's capture layout. Merging one-slot and two-slot
+ * arrays before the target cache prevents their scalar replacement even when
+ * the target subsequently inlines.
+ */
+@ReportPolymorphism
+@GenerateInline
+@GenerateUncached
+internal abstract class DispatchThunkTarget : Node() {
+    abstract fun execute(inliningTarget: Node, target: RootCallTarget,
+                         environment: CapturedFrame?, metrics: Metrics): Any?
+
+    @Specialization(guards = ["target == cachedTarget"], limit = "3")
+    fun direct(target: RootCallTarget, environment: CapturedFrame?, metrics: Metrics,
+               @Cached("target") cachedTarget: RootCallTarget,
+               @Cached("environment != null") hasEnvironment: Boolean,
+               @Cached("createDirect(cachedTarget, metrics)") call: DirectCallNode): Any? =
+        if (hasEnvironment) Calls.direct(call, arrayOf(0L, environment))
+        else Calls.direct(call, arrayOf(0L))
+
+    @Specialization(replaces = ["direct"])
+    fun indirect(target: RootCallTarget, environment: CapturedFrame?, metrics: Metrics,
+                 @Cached("create()") call: IndirectCallNode): Any? {
+        if (metrics.enabled) metrics.indirectCalls++
+        return if (environment != null) Calls.indirect(call, target, arrayOf(0L, environment))
+        else Calls.indirect(call, target, arrayOf(0L))
+    }
+
+    companion object {
+        @JvmStatic fun createDirect(target: RootCallTarget, metrics: Metrics): DirectCallNode {
+            if (metrics.enabled) metrics.directCacheMisses++
+            return DirectCallNode.create(target)
+        }
+    }
+}
+
+internal class ThunkTargetCache(private val metrics: Metrics) : Node() {
+    @Child private var dispatch: DispatchThunkTarget = DispatchThunkTargetNodeGen.create()
+    fun call(target: RootCallTarget, environment: CapturedFrame?): Any? =
+        dispatch.execute(this, target, environment, metrics)
+}
+
 /** Cadenza's exact/PAP/overapplication specializations with a fixed site arity. */
 @ReportPolymorphism
 internal abstract class Dispatch(

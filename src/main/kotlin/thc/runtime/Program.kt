@@ -88,7 +88,7 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
     override fun execute(frame: VirtualFrame): Any = Thunk(target, captureLayout?.capture(frame, captures))
 }
 internal class Force(private val metrics: Metrics) : Node() {
-    @Child private var calls = TargetCache(metrics)
+    @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
     @CompilationFinal private var seenThunk = false
@@ -116,8 +116,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                     if (metrics.enabled) { metrics.thunkEvaluations++; metrics.recordThunk(thunk.target.rootNode.name) }
                     try {
                         val environment = thunk.environment
-                        val args: Array<Any?> = if (environment == null) arrayOf(0L) else arrayOf(0L, environment)
-                        val result = try { calls.call(thunk.target, args) }
+                        val result = try { calls.call(thunk.target, environment) }
                         catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
                         if (result is Thunk) fault("Thunk target violated WHNF convention")
                         thunk.value = result

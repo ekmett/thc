@@ -1,0 +1,18 @@
+  PID  %CPU COMM
+ 4476  32.2 /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge
+98517  21.9 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer
+58309  19.2 /Applications/ChatGPT.app/Contents/Resources/codex
+  375   6.5 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper
+99987   5.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/150.0.4078.83/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft Edge Helper (Renderer)
+58320   4.7 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/153.0.8010.48/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)
+69663   2.9 /System/Library/CoreServices/ReportCrash
+75497   2.5 ssh
+58276   2.4 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+61862   2.2 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)
+  545   1.9 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN
+59092   1.8 /System/Library/CoreServices/Siri.app/Contents/MacOS/Siri
+  349   1.8 /usr/libexec/locationd
+75498   1.7 /bin/zsh
+63011   1.6 /System/Library/PrivateFrameworks/CoreSymbolication.framework/coresymbolicationd
+93239   1.6 /System/Library/Frameworks/AppKit.framework/Versions/C/XPCServices/ThemeWidgetControlViewService.xpc/Contents/MacOS/ThemeWidgetControlViewService
+  302   1.0 /usr/libexec/logd
