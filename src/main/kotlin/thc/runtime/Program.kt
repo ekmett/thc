@@ -284,8 +284,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             @field:CompilationFinal(dimensions = 1) private val argumentIndices: IntArray,
                             body: Expr, private val metrics: Metrics) : RootNode(language, descriptor) {
     private val bodyIdentity = Any()
+    @field:CompilationFinal private var hasSelfTail = false
     private val tailCallProfile = BranchProfile.create()
-    private val selfTailProfile = BranchProfile.create()
     val mask = System.identityHashCode(bodyIdentity).let { h ->
         (1L shl (h and 63)) or (1L shl ((h ushr 6) and 63)) or (1L shl ((h ushr 12) and 63)) or
             (1L shl ((h ushr 18) and 63)) or (1L shl ((h ushr 24) and 63))
@@ -304,12 +304,16 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.compiledEntries++
         frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
         buildFrame(frame.arguments, frame)
+        // Non-looping roots retain entry argument facts. Once self recursion
+        // is observed, PE selects only the loop body instead of duplicating it.
+        if (hasSelfTail) return loop.execute(frame)
         return try { (loop.repeatingNode as SelfRepeater).once(frame) }
         catch (tail: TailCall) {
             tailCallProfile.enter()
             if (!isSelf(tail.target)) throw tail
-            selfTailProfile.enter()
-            // Preserve bloom ancestry and refresh captures as well as arguments.
+            CompilerDirectives.transferToInterpreterAndInvalidate()
+            hasSelfTail = true
+            // Keep this frame's bloom ancestry and restore the new captures.
             buildFrame(tail.args, frame)
             loop.execute(frame)
         }
