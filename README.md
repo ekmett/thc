@@ -41,6 +41,13 @@ On macOS, `JAVA_HOME` is the `Contents/Home` directory inside the GraalVM bundle
 The `--compile` flag requests guest compilation and checks that code was
 installed. Compilation failures are errors.
 
+The AST backend remains the default. To run the same Core through the experimental
+[bytecode backend](docs/bytecode.md):
+
+```sh
+THC_BACKEND=bytecode scripts/run.sh sumLoop 100000 --compile
+```
+
 For an ordinary `containers` example:
 
 ```sh
@@ -59,16 +66,21 @@ support for the paths exercised; they don't make the gaps disappear.
 ## Where things stand
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before
-and after requested compilation. In the latest retained macOS ARM64 comparison,
-a workload over roughly 10,000 input items takes **3.05 ms under THC versus 1.29 ms
-under GHC**, or **2.37 times the cost**, after warmup. No unsupported trap was entered.
+and after requested compilation. In the latest macOS ARM64 comparison, a workload
+over roughly 10,000 input items takes **2.35 ms with bytecode, 2.81 ms with the AST
+interpreter, and 1.24 ms with GHC**. Bytecode is about **1.90 times the cost of GHC**.
+No unsupported trap was entered.
 
-Specializing thunk-call packets removed 2.84% of allocation, but did not establish
-a throughput improvement. That is one workload, with three fresh processes and
-five measured windows per process. There is plenty left to do. The
-[Map report](docs/map-example.md) records the original baseline; the
-[call-packet follow-up](docs/call-packets.md) has the subsequent measurements,
-actual Graal graphs, and remaining costs.
+For this workload, bytecode takes 16.3% less time and allocates 8.1% less than the
+AST interpreter. The comparison uses the same runtime build and exported Core,
+three fresh processes per engine, and five measured windows per process. Each JVM
+warms for at least 12,000 complete workloads, past the host bridge's compilation
+threshold. AST remains the default while we extend the comparisons.
+
+The [bytecode report](docs/bytecode.md) includes the measurements, actual
+instruction streams, and compiled Graal graphs. The [original Map report](docs/map-example.md),
+[call-packet follow-up](docs/call-packets.md), and [inlining report](docs/map-inlining.md)
+record the preceding experiments. There is plenty left to do.
 
 The first attempt at compiling Map was particularly useful: generic frame reads
 and string comparisons in case dispatch blew up partial evaluation. Fixing those
@@ -85,6 +97,7 @@ currently integer-only.
 ```sh
 scripts/benchmark.sh
 THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh
+THC_BACKEND=bytecode THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-bytecode
 ```
 
 Run the corresponding `try` script first. Benchmarks use changing inputs,

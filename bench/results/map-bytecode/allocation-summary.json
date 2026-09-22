@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "engines": {
+    "ast": {
+      "bytesPerCall": [
+        10647717.0,
+        10647717.0,
+        10647717.0
+      ],
+      "medianBytesPerCall": 10647717.0,
+      "warmCalls": 12000,
+      "diagnostics": {
+        "backend": "ast",
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "indexed primitive slots; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    },
+    "bytecode": {
+      "bytesPerCall": [
+        9784348.5,
+        9784348.5,
+        9784348.5
+      ],
+      "medianBytesPerCall": 9784348.5,
+      "warmCalls": 12000,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 72,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    }
+  },
+  "bytecodeReductionPercent": 8.108484663895554,
+  "sourceCommit": "0ef73a049d0090613918479d44b8a01a8ecc4ae1",
+  "runtimeJarSha256": "aaa573a73d97cb1b198030064deef5966a4ec764e39d6a72f12d7134e293bb39",
+  "method": "ThreadMXBean current-thread allocation after >=12000 calls and >=15 seconds warmup, followed by requested guest compilation; 3 samples of256 calls. Same varying16-input cycle; host entry included; other threads excluded. Allocation volume, not retained heap; separate from throughput and graph capture."
+}

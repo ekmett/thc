@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "sourceCommit": "0ef73a049d0090613918479d44b8a01a8ecc4ae1",
+  "runtime": {
+    "runtimeJars": [
+      {
+        "path": "work/bytecode-v3/lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+      },
+      {
+        "path": "work/bytecode-v3/lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+      },
+      {
+        "path": "work/bytecode-v3/lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+      },
+      {
+        "path": "work/bytecode-v3/lib/thc-0.1-experiment.jar",
+        "sha256": "aaa573a73d97cb1b198030064deef5966a4ec764e39d6a72f12d7134e293bb39"
+      },
+      {
+        "path": "work/bytecode-v3/lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+      },
+      {
+        "path": "work/bytecode-v3/lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+      },
+      {
+        "path": "work/bytecode-v3/lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+      }
+    ],
+    "sources": [
+      {
+        "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "8b80ec379adb80b69cd928a62bd7340c4303118866c6e07cf949f3d7c99468d7"
+      },
+      {
+        "path": "src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+      },
+      {
+        "path": "src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+      },
+      {
+        "path": "src/main/kotlin/thc/Language.kt",
+        "sha256": "4918f1eac62092244b8d9b4b8b3e6ddd6843d4bde5995c2dd3199aaa6b824365"
+      },
+      {
+        "path": "src/main/kotlin/thc/Main.kt",
+        "sha256": "e1c739771dfde00c774c03808471f4d7bee74b3d45089e1d7159e067c07d27ac"
+      },
+      {
+        "path": "src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+      },
+      {
+        "path": "src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "09dcbec827f0496c039e3ed564011a280db140b2e6c849019e193eb14435a06b"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "7fe56f3d67feb75e72fa44b30186c7eff4e61dd604756c210418323a84c0fd7c"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "c6c993faeeb4841b7bb6adf0aad4064b676f0f4fb6943bfe84aa3a011df623b1"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "c39bde6f8de17a7153ded168a14b99395757df8a1ec5c4e7ad6ce31e3e35bb00"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "30e246ea31ff26828b31e23da0b29bf774d17798320469fe1d228d3cfed44860"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "1eb4f9c04a0dcfe4abbfc5318075a67cf4afe9757357179a63c2278b8aabcb34"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "29281233a30a1a09fd627247034e8bb914af810563039020b396cfa27dd4b28c"
+      }
+    ]
+  },
+  "backends": {
+    "baseline": "ast",
+    "candidate": "bytecode"
+  },
+  "correctness": "correctness.json",
+  "timingSummary": "comparison/summary.json",
+  "timingValidation": "comparison/validation.json",
+  "timingConfiguration": "comparison/run-config.json",
+  "allocationSummary": "allocation-summary.json",
+  "graphProvenance": "../../../docs/bytecode-graphs/provenance.json",
+  "rejectedEarlierAttempt": "../map-bytecode-guarded/comparison/validation.json"
+}

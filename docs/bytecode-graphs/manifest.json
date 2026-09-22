@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "sourceCommit": "0ef73a049d0090613918479d44b8a01a8ecc4ae1",
+  "runtimeJarSha256": "aaa573a73d97cb1b198030064deef5966a4ec764e39d6a72f12d7134e293bb39",
+  "rawGraphCount": 20,
+  "claimScope": "Ten latest compiled roots per backend from the same frozen runtime. Static graph counts; dynamic allocation and timing are separate measurements.",
+  "artifacts": {
+    "ast-capture.log": {
+      "bytes": 5564,
+      "sha256": "6aa1aea8b3469edb49c53a34cbf62481049c1ab8522d2d43b2cfa02e89563d6d"
+    },
+    "ast-capture.tsv": {
+      "bytes": 47,
+      "sha256": "5b0bc36d598c26890a5a972a72c33738035e118adde736c70b44ce296caee410"
+    },
+    "bytecode-capture.log": {
+      "bytes": 7784,
+      "sha256": "ce9df0f13c5f138541463fdd7492f1478fac97a08c3b86769d95016bba2fedb4"
+    },
+    "bytecode-capture.tsv": {
+      "bytes": 47,
+      "sha256": "8cec81799483b3910ad10ce68996fdb96d5111faa160fb689cc216a4de984c23"
+    },
+    "final-selected-bgv.tar.xz": {
+      "bytes": 10602812,
+      "sha256": "6b1c74106302597cba4d7493429a76d0b75698ad30ba6482e8143171785cb583"
+    },
+    "graph-comparison.json": {
+      "bytes": 536995,
+      "sha256": "09d433538379a1bef70221e8f820c3265c996225fe6efd2b3d42eeeca64aa6ec"
+    },
+    "instruction-dump.log": {
+      "bytes": 1348,
+      "sha256": "c9a482e737bd03a048edfc6975d0248ddc198419bba3bb0bb869f3c616edd47d"
+    },
+    "map-instructions.txt": {
+      "bytes": 658372,
+      "sha256": "d8ce366e50f2d6614cc8707220f829caea36e1c280d1b3a5ed51b1cb96d8b1d9"
+    },
+    "provenance.json": {
+      "bytes": 13137,
+      "sha256": "d8c62e8675e18fcf21bd4e3d882c43eb7f7762f6fab1188a6d31cc01e508e8b9"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "passed": false,
+  "error": "/Users/ekmett/thc/bench/results/map-bytecode/comparison/candidate-1.log: compilation/deoptimization during measurement: ['[engine] opt done   engine=1  id=106   org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time   393( 381+11  )ms|AST   10|Inlined   4Y   1N|IR    474/  1432|CodeSize    6840|Addr 0x0001191218c0|CompId 3083   |UTC 2026-09-22T19:30:28.628|Src n/a']",
+  "validatedWindows": 5,
+  "processes": [
+    {
+      "engine": "baseline",
+      "fork": 1,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 5120,
+        "elapsedNs": 15307283500,
+        "checksum": 288670311360
+      },
+      "diagnostics": {
+        "backend": "ast",
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "indexed primitive slots; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    }
+  ]
+}

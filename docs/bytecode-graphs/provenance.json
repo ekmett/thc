@@ -1,0 +1,351 @@
+{
+  "schema": 1,
+  "sourceCommit": "0ef73a049d0090613918479d44b8a01a8ecc4ae1",
+  "runtime": {
+    "runtimeJars": [
+      {
+        "path": "work/bytecode-v3/lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+      },
+      {
+        "path": "work/bytecode-v3/lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+      },
+      {
+        "path": "work/bytecode-v3/lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+      },
+      {
+        "path": "work/bytecode-v3/lib/thc-0.1-experiment.jar",
+        "sha256": "aaa573a73d97cb1b198030064deef5966a4ec764e39d6a72f12d7134e293bb39"
+      },
+      {
+        "path": "work/bytecode-v3/lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+      },
+      {
+        "path": "work/bytecode-v3/lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+      },
+      {
+        "path": "work/bytecode-v3/lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+      },
+      {
+        "path": "work/bytecode-v3/lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+      }
+    ],
+    "sources": [
+      {
+        "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "8b80ec379adb80b69cd928a62bd7340c4303118866c6e07cf949f3d7c99468d7"
+      },
+      {
+        "path": "src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+      },
+      {
+        "path": "src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+      },
+      {
+        "path": "src/main/kotlin/thc/Language.kt",
+        "sha256": "4918f1eac62092244b8d9b4b8b3e6ddd6843d4bde5995c2dd3199aaa6b824365"
+      },
+      {
+        "path": "src/main/kotlin/thc/Main.kt",
+        "sha256": "e1c739771dfde00c774c03808471f4d7bee74b3d45089e1d7159e067c07d27ac"
+      },
+      {
+        "path": "src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+      },
+      {
+        "path": "src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "09dcbec827f0496c039e3ed564011a280db140b2e6c849019e193eb14435a06b"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "7fe56f3d67feb75e72fa44b30186c7eff4e61dd604756c210418323a84c0fd7c"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "c6c993faeeb4841b7bb6adf0aad4064b676f0f4fb6943bfe84aa3a011df623b1"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "c39bde6f8de17a7153ded168a14b99395757df8a1ec5c4e7ad6ce31e3e35bb00"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "30e246ea31ff26828b31e23da0b29bf774d17798320469fe1d228d3cfed44860"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "1eb4f9c04a0dcfe4abbfc5318075a67cf4afe9757357179a63c2278b8aabcb34"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "29281233a30a1a09fd627247034e8bb914af810563039020b396cfa27dd4b28c"
+      }
+    ]
+  },
+  "backends": {
+    "ast": "explicit backend=ast",
+    "bytecode": "explicit backend=bytecode"
+  },
+  "compilerGraphBudget": 100000,
+  "truffleVersion": "25.3.4.1",
+  "mapBytecodeRootCount": 72,
+  "graphComparison": "graph-comparison.json",
+  "instructionDump": "map-instructions.txt",
+  "correctness": "../../bench/results/map-bytecode/correctness.json",
+  "captureDirectories": {
+    "ast": "work/graphs/map-bytecode-v3-ast",
+    "bytecode": "work/graphs/map-bytecode-v3"
+  },
+  "additionalSourceHashes": [
+    {
+      "path": "build.gradle.kts",
+      "sha256": "35997180f7ef35ddcf3fabe7bf9203356bfcde86c80a32b9244336f82e2fa495"
+    },
+    {
+      "path": "src/test/kotlin/thc/BytecodeBackendTest.kt",
+      "sha256": "edbd0ed1d09404b750195dfe5a90e5e19c2a04d38cd4a902fa9b3d1abfdfaac1"
+    },
+    {
+      "path": "tools/BytecodeDump.java",
+      "sha256": "62a5dc0d7af30dc2d2ff8e50f5a4ea7e0dcd9b81fce20af4e133e0a638131dbc"
+    }
+  ],
+  "rawGraphArchive": "final-selected-bgv.tar.xz",
+  "rawGraphs": [
+    {
+      "backend": "ast",
+      "rootId": 21,
+      "role": "insert",
+      "compilationId": 2584,
+      "file": "TruffleHotSpotCompilation-2584[lambda_sc,_x,_ds1].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2584[lambda_sc,_x,_ds1].bgv",
+      "bytes": 11558656,
+      "sha256": "87d13680b513f4500bfc0d12e9fb63f57a399163c4379d4e05e2a68ab6e612a7"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 21,
+      "role": "insert",
+      "compilationId": 2691,
+      "file": "TruffleHotSpotCompilation-2691[lambda_sc,_x,_ds1].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2691[lambda_sc,_x,_ds1].bgv",
+      "bytes": 12536645,
+      "sha256": "ad9c206511003daee52138ea7b43391328162a5a89277eee8c261382cb3d28aa"
+    },
+    {
+      "backend": "ast",
+      "rootId": 22,
+      "role": "adjust",
+      "compilationId": 2698,
+      "file": "TruffleHotSpotCompilation-2698[lambda_ww,_ds2].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2698[lambda_ww,_ds2].bgv",
+      "bytes": 4178885,
+      "sha256": "011168bce94610e7b1176fcade9cca0c17d334191ea2eeb0d031b3fc65101ffd"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 22,
+      "role": "adjust",
+      "compilationId": 2785,
+      "file": "TruffleHotSpotCompilation-2785[lambda_ww,_ds2].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2785[lambda_ww,_ds2].bgv",
+      "bytes": 8540549,
+      "sha256": "900675aef8cc1210e027050bf6f183d6b7f517376054a9b1e594f9abb49203cc"
+    },
+    {
+      "backend": "ast",
+      "rootId": 17,
+      "role": "lookup",
+      "compilationId": 2757,
+      "file": "TruffleHotSpotCompilation-2757[lambda_def,_ww,_ds1].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2757[lambda_def,_ww,_ds1].bgv",
+      "bytes": 726559,
+      "sha256": "b8f08172bc99245e1332ce4550854d499e53711705a3e7dea2ace18c2380650f"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 17,
+      "role": "lookup",
+      "compilationId": 2848,
+      "file": "TruffleHotSpotCompilation-2848[lambda_def,_ww,_ds1].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2848[lambda_def,_ww,_ds1].bgv",
+      "bytes": 661929,
+      "sha256": "c2fcb4cfd28dc54fb0db17fd8c71969b7a46830300a4ca3643c9fd982419026a"
+    },
+    {
+      "backend": "ast",
+      "rootId": 18,
+      "role": "weighted fold",
+      "compilationId": 2792,
+      "file": "TruffleHotSpotCompilation-2792[lambda_ww,_ds].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2792[lambda_ww,_ds].bgv",
+      "bytes": 8848325,
+      "sha256": "215eac0ed50a3f0065954b4af18681f9cb75634f975d7dd8ba355d9c26c64d35"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 18,
+      "role": "weighted fold",
+      "compilationId": 2884,
+      "file": "TruffleHotSpotCompilation-2884[lambda_ww,_ds].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2884[lambda_ww,_ds].bgv",
+      "bytes": 10416240,
+      "sha256": "c3caf6dd85839ac7641f9e60ab9ddcd390c5987ee00ced9488e0c9f58731d530"
+    },
+    {
+      "backend": "ast",
+      "rootId": 36,
+      "role": "range 36",
+      "compilationId": 2804,
+      "file": "TruffleHotSpotCompilation-2804[lambda_x,_v].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2804[lambda_x,_v].bgv",
+      "bytes": 10790977,
+      "sha256": "18007b1ad15d40feaa3a3f9b35a0dd154ff275171cb210df8f3f4a8f4c71ff3e"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 36,
+      "role": "range 36",
+      "compilationId": 2928,
+      "file": "TruffleHotSpotCompilation-2928[lambda_x,_v].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2928[lambda_x,_v].bgv",
+      "bytes": 11022514,
+      "sha256": "2326df6f9413d5425b0e15c089eb5e214aaa0e40f1501e08241959389f715603"
+    },
+    {
+      "backend": "ast",
+      "rootId": 10,
+      "role": "balance 10",
+      "compilationId": 2833,
+      "file": "TruffleHotSpotCompilation-2833[lambda_k,_x,_l,_r].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2833[lambda_k,_x,_l,_r].bgv",
+      "bytes": 1223960,
+      "sha256": "8bbea9087661dcf6aaa2e524f3f258e8f7fc3be9cda57fe771f6127b24d4c81d"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 10,
+      "role": "balance 10",
+      "compilationId": 2942,
+      "file": "TruffleHotSpotCompilation-2942[lambda_k,_x,_l,_r].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2942[lambda_k,_x,_l,_r].bgv",
+      "bytes": 896127,
+      "sha256": "89ebb643292f39c4451364b25d49ec05b1d10be467d42163e58b325aef133f5b"
+    },
+    {
+      "backend": "ast",
+      "rootId": 26,
+      "role": "query",
+      "compilationId": 2820,
+      "file": "TruffleHotSpotCompilation-2820[lambda_x,_ww].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2820[lambda_x,_ww].bgv",
+      "bytes": 1912596,
+      "sha256": "b5aedb7849b86de4a944faeb7a1e6443489a6181239b5531a67102c8e31c4699"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 26,
+      "role": "query",
+      "compilationId": 2918,
+      "file": "TruffleHotSpotCompilation-2918[lambda_x,_ww].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2918[lambda_x,_ww].bgv",
+      "bytes": 1053638,
+      "sha256": "98cb39ea94ab7e5f4a3d8fa49a2252525721a0543390d5554d1620c031fa20b5"
+    },
+    {
+      "backend": "ast",
+      "rootId": 31,
+      "role": "range 31",
+      "compilationId": 2824,
+      "file": "TruffleHotSpotCompilation-2824[lambda_x,_v].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2824[lambda_x,_v].bgv",
+      "bytes": 13131547,
+      "sha256": "7bafe5cb7d0f70bbb4d39c6903b1741741d9dceb82cd751fe7d2011def411f13"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 31,
+      "role": "range 31",
+      "compilationId": 2974,
+      "file": "TruffleHotSpotCompilation-2974[lambda_x,_v].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2974[lambda_x,_v].bgv",
+      "bytes": 15487998,
+      "sha256": "f28e7e7fa673ae8f647ade38ab42bbd472af8cb3c6747c153722847d9b31dbfe"
+    },
+    {
+      "backend": "ast",
+      "rootId": 15,
+      "role": "balance 15",
+      "compilationId": 2837,
+      "file": "TruffleHotSpotCompilation-2837[lambda_k,_x,_l,_r].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2837[lambda_k,_x,_l,_r].bgv",
+      "bytes": 12693652,
+      "sha256": "5fbe9ae1ac9393e305496f768cb5163078d6439e94bc63f2938ead2a0f084ce8"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 15,
+      "role": "balance 15",
+      "compilationId": 2984,
+      "file": "TruffleHotSpotCompilation-2984[lambda_k,_x,_l,_r].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-2984[lambda_k,_x,_l,_r].bgv",
+      "bytes": 13119848,
+      "sha256": "7c73c7a193e16d32531f99c8316e7eaede479fea3678a40e6247b9c37cb8b9b0"
+    },
+    {
+      "backend": "ast",
+      "rootId": 40,
+      "role": "entry",
+      "compilationId": 2881,
+      "file": "TruffleHotSpotCompilation-2881[lambda_n].bgv",
+      "archivePath": "ast/TruffleHotSpotCompilation-2881[lambda_n].bgv",
+      "bytes": 5463355,
+      "sha256": "c8ad85fd76560642d9edf433dab5487ddba4046d129827c58bf2e8a3f74ccb83"
+    },
+    {
+      "backend": "bytecode",
+      "rootId": 40,
+      "role": "entry",
+      "compilationId": 3044,
+      "file": "TruffleHotSpotCompilation-3044[lambda_n].bgv",
+      "archivePath": "bytecode/TruffleHotSpotCompilation-3044[lambda_n].bgv",
+      "bytes": 6479414,
+      "sha256": "9bbb9ef801c2b95ce0b26b4e85e9d2adee64e9176f3802d7fef5aec346e05faa"
+    }
+  ],
+  "measurements": {
+    "allocation": "../../bench/results/map-bytecode/allocation-summary.json",
+    "timingSummary": "../../bench/results/map-bytecode/comparison/summary.json",
+    "validation": "../../bench/results/map-bytecode/comparison/validation.json",
+    "configuration": "../../bench/results/map-bytecode/comparison/run-config.json"
+  }
+}

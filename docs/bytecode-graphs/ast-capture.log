@@ -1,0 +1,32 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/work/bytecode-v3/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/map-bytecode-v3-ast
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time  3294( 425+2869)ms|AST  772|Inlined   9Y  21N|IR   5612/ 11018|CodeSize   52392|Addr 0x00011d80a680|CompId 2288   |UTC 2026-09-22T19:34:47.773|Src n/a
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-22T19:34:47.801|Src n/a|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-22T19:34:47.802|Src n/a|Reason uncommon trap
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/map-bytecode-v3-ast
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time  3465( 414+3051)ms|AST  772|Inlined   9Y  21N|IR   6131/ 13020|CodeSize   60916|Addr 0x00011d846900|CompId 2584   |UTC 2026-09-22T19:34:51.268|Src n/a
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/map-bytecode-v3-ast
+[engine] opt done   engine=1  id=22    lambda ww, ds2                                     |Tier 2|Time   371( 105+265 )ms|AST  327|Inlined   6Y   8N|IR   2722/  7244|CodeSize   31212|Addr 0x00011d866fc0|CompId 2698   |UTC 2026-09-22T19:34:51.677|Src n/a
+[engine] opt done   engine=1  id=17    lambda def, ww, ds1                                |Tier 2|Time    30(  11+19  )ms|AST  167|Inlined   1Y   0N|IR    473/   784|CodeSize    4292|Addr 0x00011d8750c0|CompId 2757   |UTC 2026-09-22T19:34:51.737|Src n/a
+[engine] opt done   engine=1  id=35    argument thunk                                     |Tier 2|Time  2340( 367+1973)ms|AST  104|Inlined   8Y  14N|IR   4781/  9847|CodeSize   43040|Addr 0x00011d885680|CompId 2762   |UTC 2026-09-22T19:34:54.093|Src n/a
+[engine] opt done   engine=1  id=18    lambda ww, ds                                      |Tier 2|Time  1353( 273+1081)ms|AST  181|Inlined  17Y  16N|IR   6080/ 13865|CodeSize   66976|Addr 0x00011d89c280|CompId 2792   |UTC 2026-09-22T19:34:55.468|Src n/a
+[engine] opt done   engine=1  id=36    lambda x, v                                        |Tier 2|Time  1690( 485+1205)ms|AST  139|Inlined   8Y  18N|IR   4364/ 11641|CodeSize   60684|Addr 0x00011d8b15c0|CompId 2804   |UTC 2026-09-22T19:34:57.168|Src n/a
+[engine] opt done   engine=1  id=26    lambda x, ww                                       |Tier 2|Time   116(  40+77  )ms|AST  266|Inlined   5Y   0N|IR   1343/  2908|CodeSize   10776|Addr 0x00011d8c3f40|CompId 2820   |UTC 2026-09-22T19:34:57.313|Src n/a
+[engine] opt done   engine=1  id=31    lambda x, v                                        |Tier 2|Time  3873( 471+3402)ms|AST  141|Inlined  19Y  19N|IR   7723/ 15681|CodeSize   70148|Addr 0x00011d8cb4c0|CompId 2824   |UTC 2026-09-22T19:35:01.196|Src n/a
+[engine] opt done   engine=1  id=10    lambda k, x, l, r                                  |Tier 2|Time   152(  16+136 )ms|AST 2557|Inlined   0Y   0N|IR    788/  1589|CodeSize    6756|Addr 0x00011d8de9c0|CompId 2833   |UTC 2026-09-22T19:35:01.376|Src n/a
+[engine] opt done   engine=1  id=15    lambda k, x, l, r                                  |Tier 2|Time  4476( 520+3956)ms|AST 2559|Inlined  11Y  21N|IR   7602/ 16307|CodeSize   70908|Addr 0x00011d8e0a00|CompId 2837   |UTC 2026-09-22T19:35:05.902|Src n/a
+[engine] opt done   engine=1  id=40    lambda n                                           |Tier 2|Time   488( 465+23  )ms|AST   42|Inlined   2Y   1N|IR    264/   870|CodeSize    3712|Addr 0x00011d8f58c0|CompId 2881   |UTC 2026-09-22T19:35:07.046|Src n/a
+PHASE WARM BEGIN
+PHASE WARM END calls=3584 elapsedNs=10341742083 checksum=202069217952
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"backend":"ast","instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"unsupportedPolicy":"diagnostic-traps","deferredUnsupported":["Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)","Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1","Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"],"unsupportedTraps":0,"frames":"indexed primitive slots; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

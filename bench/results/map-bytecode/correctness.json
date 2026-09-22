@@ -1,0 +1,152 @@
+{
+  "scope": "Correctness and graph-capture validation; throughput is validated separately.",
+  "tests": [
+    {
+      "suite": "thc.BloomHeaderTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.BytecodeBackendTest",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.CStringTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.CoreLinkerTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.DiagnosticModeTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.FramesTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.GuestExceptionsTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.RuntimeTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.SelfTailProfileTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.StrictFieldsTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "suite": "thc.ThunkDispatchTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "map": {
+    "ast": {
+      "beforeInputs": 18,
+      "afterInputs": 18,
+      "maximumInput": 100000,
+      "diagnostics": {
+        "backend": "ast",
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3,
+          "argument thunk": 502086
+        },
+        "compiledEntries": 6415407,
+        "thunkEvaluations": 502089,
+        "thunkHits": 977357,
+        "blackholes": 0,
+        "directCacheMisses": 50,
+        "indirectCalls": 0,
+        "tailBounces": 5032652,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "indexed primitive slots; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "log": "check-ast.log"
+    },
+    "bytecode": {
+      "beforeInputs": 18,
+      "afterInputs": 18,
+      "maximumInput": 100000,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 72,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3,
+          "argument thunk": 502086
+        },
+        "compiledEntries": 6413403,
+        "thunkEvaluations": 502089,
+        "thunkHits": 977357,
+        "blackholes": 0,
+        "directCacheMisses": 45,
+        "indirectCalls": 0,
+        "tailBounces": 66,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "log": "check-bytecode.log"
+    }
+  },
+  "totalTests": 54,
+  "passed": true
+}

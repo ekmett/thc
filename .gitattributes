@@ -10,3 +10,5 @@ bench/results/** -whitespace linguist-generated=true
 *.tar.xz binary
 *.jar binary
 gradlew.bat whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+docs/bytecode-graphs/** -whitespace linguist-generated=true
