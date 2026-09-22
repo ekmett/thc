@@ -290,6 +290,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         (1L shl (h and 63)) or (1L shl ((h ushr 6) and 63)) or (1L shl ((h ushr 12) and 63)) or
             (1L shl ((h ushr 18) and 63)) or (1L shl ((h ushr 24) and 63))
     }
+    // Immutable packet header for calls with no additional ancestry bits. Keep
+    // this typed as Any so a cached header is returned without unbox/rebox.
+    val boxedMask: Any = mask
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics)))
     fun isSelf(target: RootCallTarget) = (target.rootNode as? FunctionRoot)?.bodyIdentity === bodyIdentity
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {

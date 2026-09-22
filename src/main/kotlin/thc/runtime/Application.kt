@@ -277,7 +277,9 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
             bounce(target, arguments)
         } else {
             unrollProfile.enter()
-            arguments[0] = mask
+            // The root's own mask is common after non-tail entry. Reuse only
+            // on exact equality; preserve every additional ancestry bit.
+            arguments[0] = if (mask == sourceRoot.mask) sourceRoot.boxedMask else mask
         }
     }
 

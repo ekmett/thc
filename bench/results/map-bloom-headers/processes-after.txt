@@ -1,0 +1,18 @@
+  PID  %CPU COMM
+58309  15.1 /Applications/ChatGPT.app/Contents/Resources/codex
+98517   7.8 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer
+69663   7.8 /System/Library/CoreServices/ReportCrash
+  375   5.9 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper
+58276   5.4 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+58320   4.1 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/153.0.8010.48/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)
+63011   3.7 /System/Library/PrivateFrameworks/CoreSymbolication.framework/coresymbolicationd
+61862   1.7 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)
+81717   1.3 /bin/zsh
+69791   1.2 /System/Library/CoreServices/diagnosticservicesd
+  374   0.7 /usr/sbin/cfprefsd
+97676   0.6 /System/Library/PrivateFrameworks/CoreAnalytics.framework/Support/analyticsd
+  545   0.6 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN
+16574   0.5 /usr/libexec/trustd
+53043   0.4 /System/Library/PrivateFrameworks/BiomeStreams.framework/Support/biomed
+  426   0.3 /usr/sbin/mDNSResponder
+  365   0.3 /usr/sbin/notifyd
