@@ -20,7 +20,9 @@ import time
 
 ENTRY = 'mapAggregate'
 FORKS, SAMPLES, SAMPLE_SECONDS = 3, 5, 2
-JVM_WARM_SECONDS, NATIVE_WARM_SECONDS, MINIMUM_WARM_CALLS = 15, 1, 256
+# The Polyglot entry itself compiles at 10,000 calls. Warm beyond it as well
+# as the guest roots; a time-only warmup can leave it compiling in measurement.
+JVM_WARM_SECONDS, NATIVE_WARM_SECONDS, MINIMUM_WARM_CALLS = 15, 1, 12000
 ENGINES = ('baseline', 'candidate', 'native')
 FIELDS = ['entry', 'sample', 'repetitions', 'inputBase', 'checksum', 'elapsedNs']
 EVENT = re.compile(r'\bopt\s+(?:done|start|fail|inval\w*|deopt|queued|unqueued)\b|\bdeopt(?:imization)?\b', re.I)
@@ -72,7 +74,7 @@ def read_windows(path, base, cycle_sum):
     return rows
 
 
-def validate_jvm_log(path, cycle_sum):
+def validate_jvm_log(path, cycle_sum, backend):
     expected = ['PHASE WARM BEGIN', 'PHASE WARM END']
     expected += [f'PHASE MEASURE {i} {edge}' for i in range(1, SAMPLES + 1) for edge in ('BEGIN', 'END')]
     expected += ['PHASE VERIFY BEGIN', 'PHASE VERIFY END']
@@ -106,6 +108,7 @@ def validate_jvm_log(path, cycle_sum):
     require(phase_index == len(expected), f'{path}: incomplete phase sequence')
     require(diagnostics is not None, f'{path}: missing diagnostics')
     require(diagnostics.get('instrumented') is False, f'{path}: timing instrumentation was enabled')
+    require(diagnostics.get('backend', 'ast') == backend, f'{path}: wrong Core backend')
     require(diagnostics.get('unsupportedPolicy') == 'diagnostic-traps', f'{path}: incorrect unsupported policy')
     require(diagnostics.get('unsupportedTraps') == 0, f'{path}: unsupported path entered')
     require(not measured_events, f'{path}: compilation/deoptimization during measurement: {measured_events}')
@@ -139,6 +142,8 @@ def main():
     parser.add_argument('--candidate-source-dir', type=Path, default=Path(__file__).resolve().parents[1] / 'src/main',
                         help='source tree to hash with the candidate (default: this checkout src/main)')
     parser.add_argument('--input-base', type=int, default=10000, help='first of sixteen varying inputs (default: 10000)')
+    parser.add_argument('--baseline-backend', choices=('ast', 'bytecode'), default='ast')
+    parser.add_argument('--candidate-backend', choices=('ast', 'bytecode'), default='ast')
     parser.add_argument('--process-timeout', type=int, default=300, help='maximum seconds for each timing process (default: 300)')
     args = parser.parse_args()
     require(args.java_home is not None, 'Set JAVA_HOME or pass --java-home')
@@ -179,11 +184,12 @@ def main():
             else:
                 command = [str(java), '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true',
                            '-Dthc.diagnosticUnsupported=true', f'-Dthc.minimumWarmCalls={MINIMUM_WARM_CALLS}',
+                           f'-Dthc.backend={getattr(args, engine + "_backend")}',
                            '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules)),
                            ENTRY, '--steady', str(JVM_WARM_SECONDS), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
             commands.append({'fork': fork, 'position': position, 'engine': engine, 'argv': command})
     config = {'schema': 1, 'recordedAtUtc': datetime.now(timezone.utc).isoformat(), 'entry': ENTRY,
-              'baselineCommit': args.baseline_commit, 'inputBase': args.input_base, 'forks': FORKS, 'samples': SAMPLES,
+              'baselineCommit': args.baseline_commit, 'backends': {e: getattr(args, e + '_backend') for e in ENGINES[:2]}, 'inputBase': args.input_base, 'forks': FORKS, 'samples': SAMPLES,
               'sampleSeconds': SAMPLE_SECONDS, 'jvmWarmSeconds': JVM_WARM_SECONDS, 'nativeWarmSeconds': NATIVE_WARM_SECONDS,
               'minimumJvmWarmCalls': MINIMUM_WARM_CALLS, 'diagnosticUnsupported': True, 'instrumented': False,
               'protocol': 'serialized rotated engine order; median of per-fork window medians; signed64 checksums',
@@ -222,7 +228,7 @@ def main():
                 with raw.open('w') as output, log.open('w') as errors:
                     subprocess.run(spec['argv'], stdout=output, stderr=errors, check=True, timeout=args.process_timeout)
                 windows = read_windows(raw, args.input_base, cycle_sum)
-                check = validate_jvm_log(log, cycle_sum) if engine != 'native' else {'nativeProcessSucceeded': True}
+                check = validate_jvm_log(log, cycle_sum, getattr(args, engine + '_backend')) if engine != 'native' else {'nativeProcessSucceeded': True}
                 process_checks.append({'engine': engine, 'fork': fork, **check})
                 for window in windows:
                     row = {'engine': engine, 'fork': fork, **window}

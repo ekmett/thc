@@ -27,6 +27,11 @@ Kmett's Cadenza at commit `e2b66e241527cde5d29014af1e4f83d9f2402f88`.
   publication, function frame preamble and peeled self-tail loop restoration,
   following Cadenza's lambda, recursive-let and root machinery.
 - `src/main/java/thc/runtime/Calls.java`: Java vararg call bridge.
+- `src/main/java/thc/runtime/BytecodeRoot.java` and
+  `src/main/kotlin/thc/runtime/BytecodeProgram.kt`: Bytecode DSL root, constant
+  operation metadata, shared dispatch operations, and replayable lowering, guided
+  by Cadenza's `bytecode/BytecodeRoot.java` and `bytecode/compiler.kt`. THC retains
+  selective StaticShape captures and adds Core laziness and native self backedges.
 
 Haskell-specific additions are lazy thunk update/blackhole handling, forcing
 returned functions before overapplication, GHC Core lowering, and Long rather

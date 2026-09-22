@@ -30,6 +30,8 @@ tasks.test {
     useJUnitPlatform()
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)
+    // Keep the default tests independent of THC_BACKEND; bytecode tests select their backend explicitly.
+    systemProperty("thc.backend", "ast")
     testLogging { events("failed", "skipped", "passed") }
 }
 tasks.register<JavaExec>("probe") {

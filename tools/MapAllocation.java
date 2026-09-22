@@ -22,7 +22,7 @@ public final class MapAllocation {
       long warmStart = System.nanoTime();
       do {
         for (int i = 0; i < 16; i++) { checksum += function.execute(base + (calls & 15)).asLong(); calls++; }
-      } while (System.nanoTime() - warmStart < 15_000_000_000L);
+      } while (calls < 12_000 || System.nanoTime() - warmStart < 15_000_000_000L);
       function.invokeMember("compile");
       for (int sample = 1; sample <= 3; sample++) {
         long before = bean.getThreadAllocatedBytes(thread), result = 0;

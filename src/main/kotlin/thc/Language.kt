@@ -17,6 +17,8 @@ import com.oracle.truffle.api.library.ExportLibrary
 import com.oracle.truffle.api.library.ExportMessage
 import com.oracle.truffle.api.nodes.RootNode
 import thc.runtime.Program
+import thc.runtime.BytecodeProgram
+import thc.runtime.ExecutableProgram
 import java.io.File
 
 object CoreModules {
@@ -89,9 +91,10 @@ object CoreModules {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false): String = Json.stringify(mapOf(
+    fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
+                backend: String = "ast"): String = Json.stringify(mapOf(
         "modules" to paths.map { Json.parse(File(it).readText()) as Map<String, Any?> },
-        "entry" to entry, "instrument" to instrument, "diagnosticUnsupported" to diagnosticUnsupported))
+        "entry" to entry, "instrument" to instrument, "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend))
 }
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
@@ -109,7 +112,12 @@ class Language : TruffleLanguage<Language.State>() {
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
-        val value = EntryValue(Program(this, linked), entry, (selected["arity"] as Number).toInt())
+        val program = when (val backend = input["backend"] ?: "ast") {
+            "ast" -> Program(this, linked)
+            "bytecode" -> BytecodeProgram(this, linked)
+            else -> throw IllegalArgumentException("Unknown THC backend: $backend")
+        }
+        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt())
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any = value
             override fun getName(): String = "THC load $entry"
@@ -118,7 +126,7 @@ class Language : TruffleLanguage<Language.State>() {
 }
 
 @ExportLibrary(InteropLibrary::class)
-class EntryValue(private val program: Program, private val entry: String, private val argumentCount: Int) : TruffleObject {
+class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
     @ExportMessage fun isExecutable() = true
@@ -143,12 +151,16 @@ class EntryValue(private val program: Program, private val entry: String, privat
         return dispatch.execute(guestTarget, arrayOf(guestEntry, normalized))
     }
     @ExportMessage fun hasMembers() = true
-    @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(arrayOf("diagnostics", "compile"))
-    @ExportMessage fun isMemberReadable(member: String) = member == "diagnostics"
+    @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(
+        if (program is BytecodeProgram) arrayOf("diagnostics", "compile", "bytecode") else arrayOf("diagnostics", "compile"))
+    @ExportMessage fun isMemberReadable(member: String) = member == "diagnostics" || (member == "bytecode" && program is BytecodeProgram)
     @ExportMessage @CompilerDirectives.TruffleBoundary
     fun readMember(member: String): Any {
-        if (member != "diagnostics") throw UnknownIdentifierException.create(member)
-        return Json.stringify(program.diagnostics())
+        return when {
+            member == "diagnostics" -> Json.stringify(program.diagnostics())
+            member == "bytecode" && program is BytecodeProgram -> program.bytecodeDump()
+            else -> throw UnknownIdentifierException.create(member)
+        }
     }
     @ExportMessage fun isMemberInvocable(member: String) = member == "compile"
     @ExportMessage @CompilerDirectives.TruffleBoundary

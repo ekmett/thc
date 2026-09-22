@@ -269,9 +269,9 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
 
     fun check(frame: VirtualFrame, target: RootCallTarget, arguments: Array<Any?>) {
         val sourceRoot = rootNode
-        if (sourceRoot !is FunctionRoot) bounce(target, arguments)
-        val mask = frame.getLong(FrameLayout.BLOOM_FILTER)
-        val targetRoot = target.rootNode as? FunctionRoot
+        if (sourceRoot !is GuestRoot) bounce(target, arguments)
+        val mask = sourceRoot.bloom(frame)
+        val targetRoot = target.rootNode as? GuestRoot
             ?: throw RuntimeFault("Tail call target does not use the THC calling convention")
         if (mask and targetRoot.mask == targetRoot.mask) {
             bounce(target, arguments)

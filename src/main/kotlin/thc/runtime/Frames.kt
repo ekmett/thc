@@ -110,6 +110,15 @@ class CaptureLayout(language: TruffleLanguage<*>, primitiveEligible: BooleanArra
         return environment
     }
 
+    /** Bytecode stack operands use the same selective immutable capture shape. */
+    @ExplodeLoop
+    fun captureValues(values: Array<Any?>): CapturedFrame {
+        check(values.size == fields.size)
+        val environment = shape.factory.create(this)
+        for (index in fields.indices) fields[index].initialize(environment, values[index])
+        return environment
+    }
+
     /** The call site's constant layout lets Graal fold StaticProperty offsets. */
     fun read(environment: CapturedFrame, index: Int): Any? {
         assert(environment.layout === this)

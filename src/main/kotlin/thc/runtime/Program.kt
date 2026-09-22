@@ -28,7 +28,7 @@ internal class RecCell {
     var value: Any? = null
 }
 /** Program linkage is fixed before guest execution; CAF contents remain lazy. */
-private class GlobalBinding(val name: String) {
+internal class GlobalBinding(val name: String) {
     @CompilationFinal private var initialized = false
     @CompilationFinal private var value: Any? = null
     fun initialize(value: Any?) { check(!initialized); this.value = value; initialized = true }
@@ -282,16 +282,11 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             @field:CompilationFinal(dimensions = 1) private val environmentSlots: IntArray,
                             @field:CompilationFinal(dimensions = 1) private val argumentSlots: IntArray,
                             @field:CompilationFinal(dimensions = 1) private val argumentIndices: IntArray,
-                            body: Expr, private val metrics: Metrics) : RootNode(language, descriptor) {
-    private val bodyIdentity = Any()
+                            body: Expr, private val metrics: Metrics) : GuestRoot(language, descriptor) {
     @field:CompilationFinal private var hasSelfTail = false
     private val tailCallProfile = BranchProfile.create()
-    val mask = System.identityHashCode(bodyIdentity).let { h ->
-        (1L shl (h and 63)) or (1L shl ((h ushr 6) and 63)) or (1L shl ((h ushr 12) and 63)) or
-            (1L shl ((h ushr 18) and 63)) or (1L shl ((h ushr 24) and 63))
-    }
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics)))
-    fun isSelf(target: RootCallTarget) = (target.rootNode as? FunctionRoot)?.bodyIdentity === bodyIdentity
+    override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
         val offset = if (captureLayout == null) 1 else 2
         for (i in argumentSlots.indices) FrameAccess.write(frame, argumentSlots[i], arguments[argumentIndices[i] + offset])
@@ -322,7 +317,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     override fun toString() = label
     override fun isCloningAllowed() = true
 }
-private class EntryRoot(language: TruffleLanguage<*>?, private val arity: Int, metrics: Metrics) : RootNode(language, FrameLayout().build()) {
+internal class EntryRoot(language: TruffleLanguage<*>?, private val arity: Int, metrics: Metrics) : RootNode(language, FrameLayout().build()) {
     @Child private var dispatch = Dispatch.create(arity, false, metrics)
     @Child private var force = Force(metrics)
     override fun execute(frame: VirtualFrame): Any? {
@@ -343,7 +338,7 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
 private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: IntArray)
 
 /** Exported GHC Core lowers lexical bindings to indexed frame slots, as Cadenza does. */
-class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>) {
+class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>) : ExecutableProgram {
     private val metrics = Metrics(moduleData["instrument"] != false)
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
     private val deferredUnsupported = linkedSetOf<String>()
@@ -367,15 +362,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
         ?: names.entries.singleOrNull { it.key.substringAfterLast('.') == name }?.value?.singleOrNull()
         ?: throw RuntimeFault("Unknown or ambiguous entry $name")
-    fun hostEntryTarget(arity: Int = 0): RootCallTarget = hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
-    fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
-    fun entryTarget(name: String): RootCallTarget {
+    override fun hostEntryTarget(arity: Int): RootCallTarget = hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
+    override fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
+    override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
         while (value is Thunk && value.state == 2) value = value.value
         return when (value) { is Closure -> value.target; is Thunk -> value.target; else -> hostEntryTarget(0) }
     }
-    fun diagnostics(): Map<String, Any> = linkedMapOf(
-        "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
+    override fun diagnostics(): Map<String, Any> = linkedMapOf(
+        "backend" to "ast", "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
         "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,

@@ -14,8 +14,10 @@ fun executionContext(): Context = Context.newBuilder("thc")
     .option("compiler.MaximumGraalGraphSize", "100000")
     .build()
 
-fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true): Value =
-    context.eval("thc", CoreModules.request(modules, entry, instrument, java.lang.Boolean.getBoolean("thc.diagnosticUnsupported")))
+@JvmOverloads
+fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
+              backend: String = System.getProperty("thc.backend", System.getenv("THC_BACKEND") ?: "ast")): Value =
+    context.eval("thc", CoreModules.request(modules, entry, instrument, java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend))
 
 fun main(args: Array<String>) {
     require(args.size >= 3) { "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]" }
