@@ -1,0 +1,18 @@
+98517  16.4 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer
+ 5925  10.6 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/153.0.8010.53/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)
+  375   7.0 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper
+ 5867   6.7 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+ 5917   3.7 /Applications/ChatGPT.app/Contents/Resources/codex
+61862   2.2 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)
+ 5886   1.0 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/153.0.8010.53/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service)
+  545   1.0 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN
+68086   0.6 /System/Library/Services/AppleSpell.service/Contents/MacOS/AppleSpell
+ 1567   0.6 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/150.0.4078.83/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft Edge Helper (Renderer)
+79757   0.5 /System/Library/CoreServices/Siri.app/Contents/MacOS/Siri
+16574   0.5 /usr/libexec/trustd
+    1   0.5 /sbin/launchd
+64041   0.4 /usr/sbin/bluetoothd
+80280   0.3 /System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/HIServices.framework/Versions/A/XPCServices/com.apple.hiservices-xpcservice.xpc/Contents/MacOS/com.apple.hiservices-xpcservice
+ 5235   0.3 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/150.0.4078.83/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft Edge Helper (Renderer)
+  426   0.3 /usr/sbin/mDNSResponder
+  162   0.3 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder

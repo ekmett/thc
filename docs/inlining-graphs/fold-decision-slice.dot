@@ -1,0 +1,16 @@
+digraph fold_inlining {
+graph [rankdir=TB,bgcolor="white",pad="0.3",nodesep="0.35",ranksep="0.5",fontname="Helvetica",fontsize=16,label="Fold 2808: actual inlining-decision tree slice\nNot a machine control-flow graph",labelloc=t];
+node [shape=box,style="rounded,filled",fontname="Helvetica",fontsize=12,margin="0.16,0.12",color="#667085"];
+edge [color="#667085",fontname="Helvetica",fontsize=10];
+n2 [fillcolor="#FFF0CB",label="Tree node 2: lambda ww, ds\nExpanded | frequency 0.99971542401821289\nCost 922 IR nodes | benefit -0.9997154240182129\nBenefit/cost -0.0010842900477420964"];
+n5 [fillcolor="#F2F4F7",label="Tree node 5: argument thunk\nCutoff | frequency 0.00028449499829772708"];
+n6 [fillcolor="#FFF0CB",label="Tree node 6: lambda ww, ds\nExpanded | frequency 0.99943092901991515"];
+n7 [fillcolor="#F2F4F7",label="Tree node 7: argument thunk\nCutoff | frequency 0.00028449499829772708"];
+n8 [fillcolor="#FFF0CB",label="Tree node 8: lambda ww, ds\nExpanded | frequency 0.99943092901991515"];
+subgraph cluster_entry { label="Expanded callee: entry body\nFunctionRoot.execute:307 / SelfRepeater.once"; fontname="Helvetica"; fontsize=12; color="#C4CBD4"; n5; n6; }
+subgraph cluster_loop { label="Expanded callee: loop body\nFunctionRoot.execute:314 / executeRepeatingWithValue"; fontname="Helvetica"; fontsize=12; color="#C4CBD4"; n7; n8; }
+n2 -> n5 [label="children[0]"];
+n2 -> n6 [label="children[1]"];
+n2 -> n7 [label="children[2]"];
+n2 -> n8 [label="children[3]"];
+}

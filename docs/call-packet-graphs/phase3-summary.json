@@ -1,0 +1,628 @@
+{
+  "schema": 1,
+  "candidateCommit": "3d82a88ad155b0cfced239d500726fa176fc4f0c",
+  "status": "Rejected: dynamic-mask regression removed, but all intended constant-header savings also lost.",
+  "lookupGate": {
+    "passed": true,
+    "requirement": "Exactly one latest lookup root; zero Object[] allocations after mid-tier and zero residual MethodCallTarget nodes before high-tier lowering."
+  },
+  "comparisons": [
+    {
+      "root": "TruffleIR.Tier2.lambda_sc,_x,_ds1() [rootId=21]",
+      "phase1Compilation": 2600,
+      "phase3Compilation": 2577,
+      "phase1": {
+        "beforeHighNodes": 4466,
+        "afterMidNodes": 10225,
+        "committedPacketCount": 18,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "phase3": {
+        "beforeHighNodes": 4466,
+        "afterMidNodes": 10225,
+        "committedPacketCount": 18,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds2() [rootId=22]",
+      "phase1Compilation": 2730,
+      "phase3Compilation": 2709,
+      "phase1": {
+        "beforeHighNodes": 2495,
+        "afterMidNodes": 5789,
+        "committedPacketCount": 8,
+        "lateObjectArrayCount": 8,
+        "lateLongBoxCount": 8,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+        }
+      },
+      "phase3": {
+        "beforeHighNodes": 2495,
+        "afterMidNodes": 5789,
+        "committedPacketCount": 8,
+        "lateObjectArrayCount": 8,
+        "lateLongBoxCount": 8,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+        }
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_def,_ww,_ds1() [rootId=17]",
+      "phase1Compilation": 2780,
+      "phase3Compilation": 2755,
+      "phase1": {
+        "beforeHighNodes": 605,
+        "afterMidNodes": 1216,
+        "committedPacketCount": 0,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "phase3": {
+        "beforeHighNodes": 605,
+        "afterMidNodes": 1216,
+        "committedPacketCount": 0,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds() [rootId=18]",
+      "phase1Compilation": 2808,
+      "phase3Compilation": 2779,
+      "phase1": {
+        "beforeHighNodes": 5557,
+        "afterMidNodes": 11612,
+        "committedPacketCount": 18,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 17,
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 17
+        }
+      },
+      "phase3": {
+        "beforeHighNodes": 5557,
+        "afterMidNodes": 11612,
+        "committedPacketCount": 18,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 17,
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 17
+        }
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_v() [rootId=36]",
+      "phase1Compilation": 2820,
+      "phase3Compilation": 2792,
+      "phase1": {
+        "beforeHighNodes": 3241,
+        "afterMidNodes": 7289,
+        "committedPacketCount": 12,
+        "lateObjectArrayCount": 12,
+        "lateLongBoxCount": 14,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 2,
+          "thc.runtime.FrameAccess.read": 4,
+          "thc.runtime.TailCheck.check": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 14
+        }
+      },
+      "phase3": {
+        "beforeHighNodes": 3241,
+        "afterMidNodes": 7289,
+        "committedPacketCount": 12,
+        "lateObjectArrayCount": 12,
+        "lateLongBoxCount": 14,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 2,
+          "thc.runtime.FrameAccess.read": 4,
+          "thc.runtime.TailCheck.check": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 14
+        }
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_ww() [rootId=26]",
+      "phase1Compilation": 2831,
+      "phase3Compilation": 2803,
+      "phase1": {
+        "beforeHighNodes": 3133,
+        "afterMidNodes": 5956,
+        "committedPacketCount": 0,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {}
+      },
+      "phase3": {
+        "beforeHighNodes": 3133,
+        "afterMidNodes": 5956,
+        "committedPacketCount": 0,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {}
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=10]",
+      "phase1Compilation": 2834,
+      "phase3Compilation": 2805,
+      "phase1": {
+        "beforeHighNodes": 451,
+        "afterMidNodes": 1127,
+        "committedPacketCount": 0,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "phase3": {
+        "beforeHighNodes": 451,
+        "afterMidNodes": 1127,
+        "committedPacketCount": 0,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_v() [rootId=31]",
+      "phase1Compilation": 2849,
+      "phase3Compilation": 2819,
+      "phase1": {
+        "beforeHighNodes": 7794,
+        "afterMidNodes": 17225,
+        "committedPacketCount": 28,
+        "lateObjectArrayCount": 28,
+        "lateLongBoxCount": 28,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 2,
+          "thc.runtime.FrameAccess.read": 18,
+          "thc.runtime.TailCheck.check": 8
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 30
+        }
+      },
+      "phase3": {
+        "beforeHighNodes": 7794,
+        "afterMidNodes": 17225,
+        "committedPacketCount": 28,
+        "lateObjectArrayCount": 28,
+        "lateLongBoxCount": 28,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 2,
+          "thc.runtime.FrameAccess.read": 18,
+          "thc.runtime.TailCheck.check": 8
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 30
+        }
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=15]",
+      "phase1Compilation": 2856,
+      "phase3Compilation": 2825,
+      "phase1": {
+        "beforeHighNodes": 5767,
+        "afterMidNodes": 12964,
+        "committedPacketCount": 18,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "phase3": {
+        "beforeHighNodes": 5767,
+        "afterMidNodes": 12964,
+        "committedPacketCount": 18,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_n() [rootId=40]",
+      "phase1Compilation": 2888,
+      "phase3Compilation": 2857,
+      "phase1": {
+        "beforeHighNodes": 178,
+        "afterMidNodes": 419,
+        "committedPacketCount": 1,
+        "lateObjectArrayCount": 1,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.TailCheck.check": 1
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+        }
+      },
+      "phase3": {
+        "beforeHighNodes": 178,
+        "afterMidNodes": 419,
+        "committedPacketCount": 1,
+        "lateObjectArrayCount": 1,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.TailCheck.check": 1
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+        }
+      },
+      "matchingMetrics": {
+        "beforeHighNodes": true,
+        "afterMidNodes": true,
+        "committedPacketCount": true,
+        "lateObjectArrayCount": true,
+        "lateLongBoxCount": true,
+        "lateLongBoxesByOrigin": true,
+        "methodTargets": true
+      }
+    }
+  ],
+  "insertionHeaderExpressions": [
+    {
+      "commit": 30034,
+      "header": 30032,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 1640,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[0|0x0]"
+        }
+      ]
+    },
+    {
+      "commit": 30038,
+      "header": 30037,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30045,
+      "header": 30044,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30057,
+      "header": 30055,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 1640,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[0|0x0]"
+        }
+      ]
+    },
+    {
+      "commit": 30061,
+      "header": 30060,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30070,
+      "header": 30069,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30103,
+      "header": 30101,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 1640,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[0|0x0]"
+        }
+      ]
+    },
+    {
+      "commit": 30107,
+      "header": 30106,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30113,
+      "header": 30112,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30125,
+      "header": 30123,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 1640,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[0|0x0]"
+        }
+      ]
+    },
+    {
+      "commit": 30129,
+      "header": 30128,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30135,
+      "header": 30134,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 179,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[18577365944762368|0x42000412000000]"
+        }
+      ]
+    },
+    {
+      "commit": 30148,
+      "header": 30147,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 180,
+          "class": "jdk.graal.compiler.nodes.calc.OrNode",
+          "value": null
+        }
+      ]
+    },
+    {
+      "commit": 30164,
+      "header": 30162,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 1640,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[0|0x0]"
+        }
+      ]
+    },
+    {
+      "commit": 30168,
+      "header": 30167,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 26497,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[-9132737076852686848|0x8142000413280000]"
+        }
+      ]
+    },
+    {
+      "commit": 30185,
+      "header": 30184,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 26497,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[-9132737076852686848|0x8142000413280000]"
+        }
+      ]
+    },
+    {
+      "commit": 30193,
+      "header": 30191,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 1640,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[0|0x0]"
+        }
+      ]
+    },
+    {
+      "commit": 30197,
+      "header": 30196,
+      "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "valueInputs": [
+        {
+          "node": 26497,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "value": "long[-9132737076852686848|0x8142000413280000]"
+        }
+      ]
+    }
+  ],
+  "conclusion": "The dynamic-mask guard fixes the new boxing/phi regression, but no shared constant header survives. All selected latest roots return to phase1 allocation and graph-size metrics; the retained runtime is restored byte-for-byte to phase1, with additional ancestry tests."
+}

@@ -1,0 +1,103 @@
+{
+  "schema": 1,
+  "artifacts": {
+    "fold-decision-slice.dot": {
+      "bytes": 1479,
+      "sha256": "564786f3050f81aa2e1f929e3598a332ba06a6d1717d780e8e2e2573f96a081a"
+    },
+    "fold-decision-slice.json": {
+      "bytes": 10088,
+      "sha256": "2228663d66fc648c95cc5779e0839438be4882b594146ab867c38abab1aacdd4"
+    },
+    "fold-decision-slice.png": {
+      "bytes": 78668,
+      "sha256": "6af20812d8f20c4ff551f92969781b3443997de968410b04857d86043ca0c5b5"
+    },
+    "fold-decision-slice.svg": {
+      "bytes": 7928,
+      "sha256": "43c43eaff013160f26642953d752b615ccb793702113916b1e1c35f82312d95f"
+    },
+    "fold-shared-call-profile-proof.json": {
+      "bytes": 22001,
+      "sha256": "e5536fa276cc2025d594597bf552a96a0b5c85fb44579d7b9e765d11984d211d"
+    },
+    "phase1-call-tree-audit.json": {
+      "bytes": 310801,
+      "sha256": "7a153ebfe55df07442ade3c28b9b39bf4c8cdc727fd1f5e168d80554198bd55d"
+    },
+    "pinned-policy-provenance.json": {
+      "bytes": 3530,
+      "sha256": "7f27aa12fa707aa4037631d64c2af5f597134cabea194b4ddab60c92aa6713cc"
+    },
+    "profiled-self-loop-capture.log": {
+      "bytes": 5564,
+      "sha256": "d253155183cb2eafa56c946ac88317edba6e74143e4c144917415f3c86424b0e"
+    },
+    "profiled-self-loop-capture.tsv": {
+      "bytes": 47,
+      "sha256": "4c28226504d387ae6ec3f31f27754a4190afbccade9c93ddd7d356339219102f"
+    },
+    "profiled-self-loop-comparison.json": {
+      "bytes": 122104,
+      "sha256": "c893a2cd334729fb57980a5604c181aa38020c3b9a7e00bb72408659114efe8f"
+    },
+    "profiled-self-loop-provenance.json": {
+      "bytes": 4137,
+      "sha256": "f348d6599be015b771269321393f7546068bce90d47152d6baf86290f8fbcdc1"
+    },
+    "profiled-self-loop-selected-bgv.tar.xz": {
+      "bytes": 3267328,
+      "sha256": "85c97f867b5f9c244aa44032d43efcf8f133099c6464b03cd9c6b488bfbfe61f"
+    },
+    "selected-inlining-bgv.tar.xz": {
+      "bytes": 2484640,
+      "sha256": "7d568fc0aca92e22baa95fad417e1482885e76b1c5b307579dd4e42341b62b3a"
+    },
+    "single-loop-graph-comparison.json": {
+      "bytes": 118291,
+      "sha256": "5e86ebcef6415e73271cf1d236fca1f4d836a247a304b3726bbf8b974c052a61"
+    },
+    "single-loop-provenance.json": {
+      "bytes": 1347,
+      "sha256": "3f321e60665487bae9b9846cb9d240191fef1c9b8125f46d861f880c4c2ff61d"
+    }
+  },
+  "selectedRawGraphs": [
+    {
+      "runtime": "phase1",
+      "compilation": 2808
+    },
+    {
+      "runtime": "single-loop rejected",
+      "compilation": 2792
+    },
+    {
+      "runtime": "single-loop rejected",
+      "compilation": 2822
+    },
+    {
+      "runtime": "profiled-self-loop retained",
+      "compilation": 2738
+    },
+    {
+      "runtime": "profiled-self-loop retained",
+      "compilation": 2763
+    },
+    {
+      "runtime": "profiled-self-loop retained",
+      "compilation": 2788
+    },
+    {
+      "runtime": "profiled-self-loop retained",
+      "compilation": 2556
+    },
+    {
+      "runtime": "profiled-self-loop retained",
+      "compilation": 2792
+    },
+    {
+      "runtime": "profiled-self-loop retained",
+      "compilation": 2775
+    }
+  ]
+}

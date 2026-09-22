@@ -1,0 +1,32 @@
+diff --git a/src/main/kotlin/thc/runtime/Program.kt b/src/main/kotlin/thc/runtime/Program.kt
+index 4773442..22da71f 100644
+--- a/src/main/kotlin/thc/runtime/Program.kt
++++ b/src/main/kotlin/thc/runtime/Program.kt
+@@ -284,8 +284,6 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
+                             @field:CompilationFinal(dimensions = 1) private val argumentIndices: IntArray,
+                             body: Expr, private val metrics: Metrics) : RootNode(language, descriptor) {
+     private val bodyIdentity = Any()
+-    private val tailCallProfile = BranchProfile.create()
+-    private val selfTailProfile = BranchProfile.create()
+     val mask = System.identityHashCode(bodyIdentity).let { h ->
+         (1L shl (h and 63)) or (1L shl ((h ushr 6) and 63)) or (1L shl ((h ushr 12) and 63)) or
+             (1L shl ((h ushr 18) and 63)) or (1L shl ((h ushr 24) and 63))
+@@ -304,15 +302,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
+         if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.compiledEntries++
+         frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
+         buildFrame(frame.arguments, frame)
+-        return try { (loop.repeatingNode as SelfRepeater).once(frame) }
+-        catch (tail: TailCall) {
+-            tailCallProfile.enter()
+-            if (!isSelf(tail.target)) throw tail
+-            selfTailProfile.enter()
+-            // Preserve bloom ancestry and refresh captures as well as arguments.
+-            buildFrame(tail.args, frame)
+-            loop.execute(frame)
+-        }
++        // Keep one body in the compiled graph. SelfRepeater handles both the
++        // initial invocation and subsequent self-tail iterations.
++        return loop.execute(frame)
+     }
+     override fun getName() = label
+     override fun toString() = label

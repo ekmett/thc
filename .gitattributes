@@ -2,8 +2,11 @@
 docs/graphs/** -whitespace linguist-generated=true
 docs/cadenza-graphs/** -whitespace linguist-generated=true
 docs/map-graphs/** -whitespace linguist-generated=true
+docs/call-packet-graphs/** -whitespace linguist-generated=true
+docs/inlining-graphs/** -whitespace linguist-generated=true
 bench/results/** -whitespace linguist-generated=true
 *.bgv binary
 *.zip binary
+*.tar.xz binary
 *.jar binary
 gradlew.bat whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

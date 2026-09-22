@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "baselineCommit": "60148ed860a93c8846201c325abc8ec83aee7aaf",
+  "phase1Commit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "phase2Commit": "98c5e3ff15dd3886e3226cd99bc19d50426014c4",
+  "candidateCommit": "3d82a88ad155b0cfced239d500726fa176fc4f0c",
+  "classpath": "work/candidates/map-bloom-headers-pe-constant/runtime/lib/*",
+  "sourceHashes": {
+    "src/main/java/thc/runtime/Calls.java": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+    "src/main/kotlin/thc/Json.kt": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80",
+    "src/main/kotlin/thc/Language.kt": "330eacfa8d07591c3873d2d54ac5430da50372276c3ea3725c7f69208dba895f",
+    "src/main/kotlin/thc/Main.kt": "61d7479783c6d903fc4b0dc553d77446f3552ee28ec12706e54a3de17792e793",
+    "src/main/kotlin/thc/MapCheck.kt": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11",
+    "src/main/kotlin/thc/Probe.kt": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7",
+    "src/main/kotlin/thc/runtime/Application.kt": "2e3b6c5464d97fa07beac26f2b9cd1faa6624a60e890ee8ae50d77db69660df8",
+    "src/main/kotlin/thc/runtime/DataValues.kt": "c6c993faeeb4841b7bb6adf0aad4064b676f0f4fb6943bfe84aa3a011df623b1",
+    "src/main/kotlin/thc/runtime/Frames.kt": "c48213451a096a03fc0c7443b0c670bae0cd92378728e20b06ef1a53bcc7fa7e",
+    "src/main/kotlin/thc/runtime/GuestExceptions.kt": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026",
+    "src/main/kotlin/thc/runtime/LiteralAddresses.kt": "1eb4f9c04a0dcfe4abbfc5318075a67cf4afe9757357179a63c2278b8aabcb34",
+    "src/main/kotlin/thc/runtime/Program.kt": "c8831b6f98eab6db53f0ebbc0af142c747911a68dc2ba5de3f69fbab2d25fe5e"
+  },
+  "jarHashes": {
+    "annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+    "collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+    "jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+    "kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+    "nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+    "polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+    "thc-0.1-experiment.jar": "6ebae8ea840e80f6c3ca4a541fa91c5ee5a0ed2f325942bc10449b6020839e37",
+    "truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+    "truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+    "truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+    "word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+  },
+  "capturePurpose": "Corrected candidate: cached own-root bloom box only for partial-evaluation-constant masks; original boxing for dynamic masks.",
+  "status": "Rejected: dynamic-mask regression removed, but all intended constant-header savings also lost."
+}

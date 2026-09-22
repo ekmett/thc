@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "baselineCommit": "60148ed860a93c8846201c325abc8ec83aee7aaf",
+  "candidateCommit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "classpath": "work/candidates/map-thunk-packets/runtime/lib/*",
+  "sourceHashes": {
+    "src/main/java/thc/runtime/Calls.java": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+    "src/main/kotlin/thc/Json.kt": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80",
+    "src/main/kotlin/thc/Language.kt": "330eacfa8d07591c3873d2d54ac5430da50372276c3ea3725c7f69208dba895f",
+    "src/main/kotlin/thc/Main.kt": "61d7479783c6d903fc4b0dc553d77446f3552ee28ec12706e54a3de17792e793",
+    "src/main/kotlin/thc/MapCheck.kt": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11",
+    "src/main/kotlin/thc/Probe.kt": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7",
+    "src/main/kotlin/thc/runtime/Application.kt": "b1bdaf300f10496593e92d568f9c2c00c117ed8daf27187383a2ed26d09d37dc",
+    "src/main/kotlin/thc/runtime/DataValues.kt": "c6c993faeeb4841b7bb6adf0aad4064b676f0f4fb6943bfe84aa3a011df623b1",
+    "src/main/kotlin/thc/runtime/Frames.kt": "c48213451a096a03fc0c7443b0c670bae0cd92378728e20b06ef1a53bcc7fa7e",
+    "src/main/kotlin/thc/runtime/GuestExceptions.kt": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026",
+    "src/main/kotlin/thc/runtime/LiteralAddresses.kt": "1eb4f9c04a0dcfe4abbfc5318075a67cf4afe9757357179a63c2278b8aabcb34",
+    "src/main/kotlin/thc/runtime/Program.kt": "c2fe42503b0057614a8261c4f4b4d4cb426d3cb90f7b2074e51a8b6852fd5ad0",
+    "src/test/kotlin/thc/CStringTest.kt": "fd874bcefdaa87172d6c84deb31ad1c6b7bdd462337fdcb2cf8aed5854ed3123",
+    "src/test/kotlin/thc/CoreLinkerTest.kt": "f2eb12b925d13e32a8a0e409aa7f0dc1c4096b374f05942bde94226b91367a20",
+    "src/test/kotlin/thc/DiagnosticModeTest.kt": "b349bf43273f5e6a34735db7e36798b92820bb53bc193cfadf7c14dcb4f8d40b",
+    "src/test/kotlin/thc/FramesTest.kt": "efafeedbb72764e92204223482c3b7ae4738f80d49a644999bccc99d4bec3d8b",
+    "src/test/kotlin/thc/GuestExceptionsTest.kt": "47c191ab4dbf1d248b0e2101887f07e1aa99ccb19b23f0f9355fe1fb07135dad",
+    "src/test/kotlin/thc/RuntimeTest.kt": "e651015da8cdd7df945aac02b7897f021ae9d83121aac1581ff9868140f988af",
+    "src/test/kotlin/thc/StrictFieldsTest.kt": "db2cce99bf7d9d34a85882740b8b14c8c87a130de4c2b0e680a49a181d6f86a9",
+    "src/test/kotlin/thc/ThunkDispatchTest.kt": "78909f1649e895e68c0bf2b448f5fd1768b3571a3565223e348a1c4a536f81ad"
+  },
+  "jarHashes": {
+    "annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+    "collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+    "jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+    "kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+    "nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+    "polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+    "thc-0.1-experiment.jar": "d1dd45b7afb8fbcc30d8c5e7712201adb6e1ce04d7122505ac0c402a92f6a3f7",
+    "truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+    "truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+    "truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+    "word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+  },
+  "capturePurpose": "Phase 1 fixed-shape thunk dispatch only; subsequent working-tree experiments are excluded by frozen classpath."
+}

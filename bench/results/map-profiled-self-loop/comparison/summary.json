@@ -1,0 +1,141 @@
+{
+  "entry": "mapAggregate",
+  "windowCount": 45,
+  "cycleChecksumSigned64": 902094723,
+  "engines": {
+    "baseline": {
+      "medianNsPerCall": 2943542.9140625,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 2839013.4544270835,
+          "windowNsPerCall": [
+            2840041.2864583335,
+            2839013.4544270835,
+            2820279.67578125,
+            2844491.9166666665,
+            2812182.0755208335
+          ],
+          "lastVsFirstPercent": -0.9809438711449792
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 2943542.9140625,
+          "windowNsPerCall": [
+            2943542.9140625,
+            2896801.5950520835,
+            2943732.3138020835,
+            3023847.5481770835,
+            2903112.1419270835
+          ],
+          "lastVsFirstPercent": -1.3735411140860965
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 3442145.7786458335,
+          "windowNsPerCall": [
+            2976088.8138020835,
+            3199111.328125,
+            4458765.94921875,
+            3654439.5611979165,
+            3442145.7786458335
+          ],
+          "lastVsFirstPercent": 15.660048943510585
+        }
+      ],
+      "minWindowNsPerCall": 2812182.0755208335,
+      "maxWindowNsPerCall": 4458765.94921875
+    },
+    "candidate": {
+      "medianNsPerCall": 2925187.4453125,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 3017161.3502604165,
+          "windowNsPerCall": [
+            2916124.6197916665,
+            3017161.3502604165,
+            3452812.1744791665,
+            3103910.7526041665,
+            2979193.73828125
+          ],
+          "lastVsFirstPercent": 2.162771716322931
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 2871051.1067708335,
+          "windowNsPerCall": [
+            2898609.86328125,
+            2871051.1067708335,
+            2863486.2200520835,
+            2889361.328125,
+            2868777.88671875
+          ],
+          "lastVsFirstPercent": -1.029182193174838
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 2925187.4453125,
+          "windowNsPerCall": [
+            2925187.4453125,
+            2881174.5338541665,
+            2845336.8046875,
+            3146366.9713541665,
+            3306505.0455729165
+          ],
+          "lastVsFirstPercent": 13.035663778451646
+        }
+      ],
+      "minWindowNsPerCall": 2845336.8046875,
+      "maxWindowNsPerCall": 3452812.1744791665
+    },
+    "native": {
+      "medianNsPerCall": 1295074.7767857143,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 1296536.2723214286,
+          "windowNsPerCall": [
+            1305700.5208333333,
+            1256509.486607143,
+            1321352.8645833333,
+            1288796.875,
+            1296536.2723214286
+          ],
+          "lastVsFirstPercent": -0.7018645061162787
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 1280883.9285714286,
+          "windowNsPerCall": [
+            1280883.9285714286,
+            1286391.7410714286,
+            1272204.2410714286,
+            1261627.232142857,
+            1324726.5625
+          ],
+          "lastVsFirstPercent": 3.422842066374354
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 1295074.7767857143,
+          "windowNsPerCall": [
+            1571091.40625,
+            1295074.7767857143,
+            1341356.7708333333,
+            1280789.6205357143,
+            1269083.705357143
+          ],
+          "lastVsFirstPercent": -19.22279631162339
+        }
+      ],
+      "minWindowNsPerCall": 1256509.486607143,
+      "maxWindowNsPerCall": 1571091.40625
+    }
+  },
+  "ratios": {
+    "candidate/baseline": 0.993764157926046,
+    "candidate/native": 2.258701580593371
+  },
+  "limits": "Exploratory workload comparison. No measured Truffle events does not establish absence of host JIT/GC or external machine contention."
+}

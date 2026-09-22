@@ -1,0 +1,470 @@
+{
+  "schema": 1,
+  "recordedAtUtc": "2026-09-22T18:49:28.136195+00:00",
+  "entry": "mapAggregate",
+  "baselineCommit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "inputBase": 10000,
+  "forks": 3,
+  "samples": 5,
+  "sampleSeconds": 2,
+  "jvmWarmSeconds": 15,
+  "nativeWarmSeconds": 1,
+  "minimumJvmWarmCalls": 256,
+  "diagnosticUnsupported": true,
+  "instrumented": false,
+  "protocol": "serialized rotated engine order; median of per-fork window medians; signed64 checksums",
+  "candidateSourceNote": "Recorded source hashes identify the supplied tree; the caller must build these runtime JARs from that tree.",
+  "commands": [
+    {
+      "fork": 1,
+      "position": 1,
+      "engine": "baseline",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=256",
+        "-cp",
+        "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/annotations-13.0.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/build/map/core/Data.Set.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.Debug.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.json,/Users/ekmett/thc/build/map/core/THC.MapWorkload.json,/Users/ekmett/thc/build/map/core/THC.InterfaceClosure.json,/Users/ekmett/thc/build/map/core/GHC.Internal.CString.json,/Users/ekmett/thc/build/map/core/GHC.Internal.Err.json,/Users/ekmett/thc/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 2,
+      "engine": "candidate",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=256",
+        "-cp",
+        "/Users/ekmett/thc/work/single-loop/lib/annotations-13.0.jar:/Users/ekmett/thc/work/single-loop/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/single-loop/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/build/map/core/Data.Set.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.Debug.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.json,/Users/ekmett/thc/build/map/core/THC.MapWorkload.json,/Users/ekmett/thc/build/map/core/THC.InterfaceClosure.json,/Users/ekmett/thc/build/map/core/GHC.Internal.CString.json,/Users/ekmett/thc/build/map/core/GHC.Internal.Err.json,/Users/ekmett/thc/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 3,
+      "engine": "native",
+      "argv": [
+        "/Users/ekmett/thc/work/baselines/map-60148ed/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 1,
+      "engine": "candidate",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=256",
+        "-cp",
+        "/Users/ekmett/thc/work/single-loop/lib/annotations-13.0.jar:/Users/ekmett/thc/work/single-loop/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/single-loop/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/build/map/core/Data.Set.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.Debug.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.json,/Users/ekmett/thc/build/map/core/THC.MapWorkload.json,/Users/ekmett/thc/build/map/core/THC.InterfaceClosure.json,/Users/ekmett/thc/build/map/core/GHC.Internal.CString.json,/Users/ekmett/thc/build/map/core/GHC.Internal.Err.json,/Users/ekmett/thc/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 2,
+      "engine": "native",
+      "argv": [
+        "/Users/ekmett/thc/work/baselines/map-60148ed/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 3,
+      "engine": "baseline",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=256",
+        "-cp",
+        "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/annotations-13.0.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/build/map/core/Data.Set.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.Debug.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.json,/Users/ekmett/thc/build/map/core/THC.MapWorkload.json,/Users/ekmett/thc/build/map/core/THC.InterfaceClosure.json,/Users/ekmett/thc/build/map/core/GHC.Internal.CString.json,/Users/ekmett/thc/build/map/core/GHC.Internal.Err.json,/Users/ekmett/thc/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 1,
+      "engine": "native",
+      "argv": [
+        "/Users/ekmett/thc/work/baselines/map-60148ed/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 2,
+      "engine": "baseline",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=256",
+        "-cp",
+        "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/annotations-13.0.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/build/map/core/Data.Set.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.Debug.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.json,/Users/ekmett/thc/build/map/core/THC.MapWorkload.json,/Users/ekmett/thc/build/map/core/THC.InterfaceClosure.json,/Users/ekmett/thc/build/map/core/GHC.Internal.CString.json,/Users/ekmett/thc/build/map/core/GHC.Internal.Err.json,/Users/ekmett/thc/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 3,
+      "engine": "candidate",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=256",
+        "-cp",
+        "/Users/ekmett/thc/work/single-loop/lib/annotations-13.0.jar:/Users/ekmett/thc/work/single-loop/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/single-loop/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/single-loop/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/build/map/core/Data.Set.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Internal.Debug.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.Internal.json,/Users/ekmett/thc/build/map/core/Data.Map.Strict.json,/Users/ekmett/thc/build/map/core/THC.MapWorkload.json,/Users/ekmett/thc/build/map/core/THC.InterfaceClosure.json,/Users/ekmett/thc/build/map/core/GHC.Internal.CString.json,/Users/ekmett/thc/build/map/core/GHC.Internal.Err.json,/Users/ekmett/thc/build/map/core/GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    }
+  ],
+  "provenance": {
+    "runtimeJars": {
+      "baseline": [
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/thc-0.1-experiment.jar",
+          "sha256": "d1dd45b7afb8fbcc30d8c5e7712201adb6e1ce04d7122505ac0c402a92f6a3f7"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/candidates/map-thunk-packets/runtime/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        }
+      ],
+      "candidate": [
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/thc-0.1-experiment.jar",
+          "sha256": "f1b0a065fec0620dc8d443be5f3f8c2cf91a70156b891a2db6ffc7f36a259dad"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/single-loop/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        }
+      ]
+    },
+    "nativeBinary": [
+      {
+        "path": "/Users/ekmett/thc/work/baselines/map-60148ed/native-oracle",
+        "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf"
+      }
+    ],
+    "moduleManifest": [
+      {
+        "path": "/Users/ekmett/thc/build/map/modules.txt",
+        "sha256": "4e182b75f802ceed69ffa99b67631e5db3bc1a034df2935819db1aad1b9a7a77"
+      }
+    ],
+    "modules": [
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Data.Map.Internal.Debug.json",
+        "sha256": "2ae7a32d79b322d4e19f644c4ab921fef21e2b72bff06a41e9bdda12a8d764bd"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Data.Map.Internal.json",
+        "sha256": "ade6f684ff062fb02ebcc57bc4de0b263daee7dea45fdee79385de8e1d46419b"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Data.Map.Strict.Internal.json",
+        "sha256": "8491b564b38a318f7517daaae262ad5dad7ad348fdb73cb06f96f5ce4fa21116"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Data.Map.Strict.json",
+        "sha256": "abf7b444458225365b226e733b4d4464248a662ad475c899b7c4a8709376963d"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Data.Set.Internal.json",
+        "sha256": "c49d4f69ebbeebc4ca3521480b5ed815510e36a1790267e02ccd54b9a473b982"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/GHC.InterfaceClosure.json",
+        "sha256": "e67d041d02641bb6715bdcfe396243e3fb69f8de9b67f0691466bab083dd8d62"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/GHC.Internal.CString.json",
+        "sha256": "6a7d5720ca755e1d291fa0a47ab26c8e875ebefe05baf6b93007b1f955a1335f"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/GHC.Internal.Err.json",
+        "sha256": "407a24029983351ab1eaa365fdfccfb11998886a55b9ca74279bf226a60b031c"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/THC.InterfaceClosure.json",
+        "sha256": "02bae9cbccff1319e3cc5163e3ed10814d32cd733ea1e0cbd6eeb134f1267827"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/THC.MapWorkload.json",
+        "sha256": "c0f26755435ec805bea787b45686d81470bd84d9e3f2bfc7878f10742fafd0d8"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitQueue.json",
+        "sha256": "b1312dafef0068a97410f76563a5caf7b8b9f93d5bdb9b315858f2b3e571000c"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.BitUtil.json",
+        "sha256": "1439bd7fddf327432e68be7b6d77a11601ff69d0ee28d6e8eea2b03463e38dff"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "d9ab42eacbdce7cdd40ee21fbcc031c94662fe6c6d94d9cafe71cd1d00a0a328"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.Prelude.json",
+        "sha256": "b5bc201542409f574dd007d40dd1571b59f17bef3b8eb9185c56e72c125ac522"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "6b45d40e5225673155660332661b0f0b51fbeb8d1476be262ef458535da0ae19"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "11fdb4794d1b24bcfcf29cbdf6db7d6a47e842b2be92cdd8781a115d3cdcd7a2"
+      },
+      {
+        "path": "/Users/ekmett/thc/build/map/core/Utils.Containers.Internal.StrictPair.json",
+        "sha256": "aeac97a815d1e85a2797c95d706162937314e0dc45b1358af4216a13f4514754"
+      }
+    ],
+    "candidateSources": [
+      {
+        "path": "/Users/ekmett/thc/src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/Language.kt",
+        "sha256": "330eacfa8d07591c3873d2d54ac5430da50372276c3ea3725c7f69208dba895f"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/Main.kt",
+        "sha256": "61d7479783c6d903fc4b0dc553d77446f3552ee28ec12706e54a3de17792e793"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "b1bdaf300f10496593e92d568f9c2c00c117ed8daf27187383a2ed26d09d37dc"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "c6c993faeeb4841b7bb6adf0aad4064b676f0f4fb6943bfe84aa3a011df623b1"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "c48213451a096a03fc0c7443b0c670bae0cd92378728e20b06ef1a53bcc7fa7e"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "1eb4f9c04a0dcfe4abbfc5318075a67cf4afe9757357179a63c2278b8aabcb34"
+      },
+      {
+        "path": "/Users/ekmett/thc/src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "cfcf4a8423bdce4c81851f9d22326b35d79b6b30be9e2bb61fdcf2cc31a8d662"
+      }
+    ],
+    "java": [
+      {
+        "path": "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "sha256": "9e8bdaa48f05fd17a8f591bef68f759f2b16d4c7e2d237a669f114c89ba28b0a"
+      },
+      {
+        "path": "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/release",
+        "sha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05"
+      }
+    ],
+    "harness": [
+      {
+        "path": "/Users/ekmett/thc/tools/compare-map-runtimes.py",
+        "sha256": "1d0520bb7476bbd448c04d85a6a952e4a5cc5228d4a63eadeaa8aeba0ede97be"
+      }
+    ]
+  },
+  "oracle": {
+    "values": [
+      56348923,
+      56349446,
+      56349569,
+      56353391,
+      56359652,
+      56362669,
+      56365275,
+      56367476,
+      56392339,
+      56393734,
+      56394726,
+      56395324,
+      56410122,
+      56414010,
+      56417496,
+      56420571
+    ],
+    "cycleChecksumSigned64": 902094723,
+    "rows": [
+      {
+        "path": "/Users/ekmett/thc/bench/results/map-single-loop/comparison/oracle.tsv",
+        "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+      }
+    ]
+  }
+}

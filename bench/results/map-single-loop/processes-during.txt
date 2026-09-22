@@ -1,0 +1,18 @@
+99772 100.3 /Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java
+40636  12.2 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/150.0.4078.83/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft Edge Helper (Renderer)
+98517  11.1 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer
+58309   9.6 /Applications/ChatGPT.app/Contents/Resources/codex
+ 4476   9.2 /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge
+  375   5.0 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper
+69663   2.6 /System/Library/CoreServices/ReportCrash
+99974   2.0 /bin/zsh
+58320   1.8 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/153.0.8010.48/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)
+ 4482   1.7 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/150.0.4078.83/Helpers/Microsoft Edge Helper.app/Contents/MacOS/Microsoft Edge Helper
+  545   1.6 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN
+63011   1.5 /System/Library/PrivateFrameworks/CoreSymbolication.framework/coresymbolicationd
+61862   1.5 /Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/150.0.7871.102/Helpers/Google Chrome Helper (Renderer).app/Contents/MacOS/Google Chrome Helper (Renderer)
+58276   1.5 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+93239   0.4 /System/Library/Frameworks/AppKit.framework/Versions/C/XPCServices/ThemeWidgetControlViewService.xpc/Contents/MacOS/ThemeWidgetControlViewService
+79757   0.4 /System/Library/CoreServices/Siri.app/Contents/MacOS/Siri
+64041   0.4 /usr/sbin/bluetoothd
+16574   0.4 /usr/libexec/trustd

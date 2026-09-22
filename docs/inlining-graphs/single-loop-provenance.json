@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "candidateRuntimeJarSha256": "f1b0a065fec0620dc8d443be5f3f8c2cf91a70156b891a2db6ffc7f36a259dad",
+  "phase1RuntimeCommit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "capture": "work/graphs/map-single-loop",
+  "programSourceSha256": "cfcf4a8423bdce4c81851f9d22326b35d79b6b30be9e2bb61fdcf2cc31a8d662",
+  "graphFiles": [
+    {
+      "file": "TruffleHotSpotCompilation-2614[lambda_sc,_x,_ds1].bgv",
+      "sha256": "44af7104cd88f77b316f49feb1759cffd81219ed4c0efb2f589e2e67d95cc41a"
+    },
+    {
+      "file": "TruffleHotSpotCompilation-2764[lambda_def,_ww,_ds1].bgv",
+      "sha256": "052d409bbd7a8f082f87fdac564d17c52559966763a717039bef3099cf71a770"
+    },
+    {
+      "file": "TruffleHotSpotCompilation-2822[lambda_x,_v].bgv",
+      "sha256": "8436510f8f470a1e7492885047828df374fb3734505d6f8a0895467fe998ccac"
+    },
+    {
+      "file": "TruffleHotSpotCompilation-2792[lambda_ww,_ds].bgv",
+      "sha256": "d18fc51850a9999c24c8d51d202dbc952bd9874555e5da00af5360a67a53c794"
+    }
+  ],
+  "capturePolicy": "Default selected Agnostic; existing budgets; no backend CFG output.",
+  "status": "Rejected: improved inlining and allocation, but controlled throughput regressed.",
+  "timingSummary": "bench/results/map-single-loop/comparison/summary.json",
+  "allocationSummary": "bench/results/map-single-loop/allocation-summary.json"
+}

@@ -2,6 +2,8 @@
 
 The [Map workload](../examples/THC/MapWorkload.hs) runs ordinary `containers` code through exported GHC Core and THC. In this run, a complete workload took **3.101 ms on THC versus 1.326 ms on native GHC: 2.339× GHC's time**. Both engines built the same unmodified `containers-0.8` sources. The native comparison, compiled-result checks, and graph inspection all use the real histogram/update/lookup/fold workload.
 
+This report records the initial implementation at `60148ed`. The [call-packet follow-up](call-packets.md) retains subsequent changes, measurements, and compiler graphs; the numbers and graph IDs below refer to this original baseline.
+
 This result uses **explicit diagnostic mode**. The complete syntactic dependency audit remains **`accepted: false`**, with three unresolved globals and thirteen unsupported sites on retained exception/backtrace paths. Default strict loading rejects this bundle. Diagnostic loading preserves traps at unsupported expressions; every tested and timed execution reported **zero unsupported traps**. General Haskell exception/IO compatibility remains unfinished.
 
 ## Workload and compilation

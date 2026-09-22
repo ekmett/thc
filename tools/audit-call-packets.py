@@ -115,6 +115,12 @@ def inspect_graph(graph, mid):
                                 'stamp': arg['properties'].get('stamp')})
         late.append({'id': n['id'], 'block': n.get('block'), 'lengthInputs': lengths,
                      'sourceFamily': family(n), 'sourcePosition': source(n)})
+    late_boxes = []
+    for n in mid['nodes']:
+        if short(n).endswith('NewInstanceNode') and n['properties'].get('instanceClass') == 'java.lang.Long':
+            position = source(n)
+            origin = next((line.split('(')[0] for line in position if line.startswith('thc.runtime.')), 'unknown')
+            late_boxes.append({'id': n['id'], 'block': n.get('block'), 'origin': origin, 'sourcePosition': position})
     method_targets = collections.Counter(n['properties'].get('targetMethod') for n in graph['nodes'] if short(n) == 'MethodCallTargetNode')
     return {'root': graph['group'], 'beforeHighOrdinal': graph['ordinal'], 'midOrdinal': mid['ordinal'],
             'beforeHighNodes': len(graph['nodes']), 'afterMidNodes': len(mid['nodes']),
@@ -122,7 +128,10 @@ def inspect_graph(graph, mid):
             'packetsBySource': dict(collections.Counter(p['sourceFamily'] for p in packets)),
             'packetsByClassification': dict(collections.Counter(p['classification'] for p in packets)),
             'lateArraysBySource': dict(collections.Counter(p['sourceFamily'] for p in late)),
-            'methodTargets': dict(method_targets), 'packets': packets, 'lateArrays': late}
+            'methodTargets': dict(method_targets), 'packets': packets, 'lateArrays': late,
+            'lateLongBoxCount': len(late_boxes),
+            'lateLongBoxesByOrigin': dict(collections.Counter(box['origin'] for box in late_boxes)),
+            'lateLongBoxes': late_boxes}
 
 
 def read_capture(directory):
@@ -178,8 +187,8 @@ def main():
             if root not in old:
                 continue
             row = {'root': root, 'baselineCompilation': old[root]['compilationId'], 'candidateCompilation': new['compilationId']}
-            for key in ('committedPacketCount', 'lateObjectArrayCount', 'packetsBySource', 'packetsByClassification', 'lateArraysBySource', 'methodTargets'):
-                row[key] = {'baseline': old[root][key], 'candidate': new[key]}
+            for key in ('committedPacketCount', 'lateObjectArrayCount', 'packetsBySource', 'packetsByClassification', 'lateArraysBySource', 'methodTargets', 'lateLongBoxCount', 'lateLongBoxesByOrigin'):
+                row[key] = {'baseline': old[root].get(key), 'candidate': new[key]}
             report['comparison'].append(row)
     if args.require_clean_lookup:
         lookup = [g for root, g in latest.items() if 'lambda_def,_ww,_ds1' in root]
@@ -188,7 +197,7 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
     for root, g in latest.items():
-        print(f"{g['compilationId']} {root}: packets={g['committedPacketCount']} lateArrays={g['lateObjectArrayCount']} sources={g['packetsBySource']} classes={g['packetsByClassification']}")
+        print(f"{g['compilationId']} {root}: packets={g['committedPacketCount']} lateArrays={g['lateObjectArrayCount']} lateLongBoxes={g['lateLongBoxCount']} sources={g['packetsBySource']} classes={g['packetsByClassification']}")
     if args.require_clean_lookup and not report['lookupGate']['passed']:
         return 1
     return 0

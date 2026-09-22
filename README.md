@@ -59,13 +59,16 @@ support for the paths exercised; they don't make the gaps disappear.
 ## Where things stand
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before
-and after requested compilation. On the current macOS ARM64 measurements, a
-workload over roughly 10,000 input items takes **3.10 ms under THC versus 1.33 ms under
-GHC**, or **2.34 times the cost**, after warmup. No unsupported trap was entered.
+and after requested compilation. In the latest retained macOS ARM64 comparison,
+a workload over roughly 10,000 input items takes **3.05 ms under THC versus 1.29 ms
+under GHC**, or **2.37 times the cost**, after warmup. No unsupported trap was entered.
 
-That is one workload, with three fresh processes and five measured windows per
-process. There is plenty left to do. See the [Map report](docs/map-example.md)
-for the method, raw results, actual Graal graphs, and remaining costs.
+Specializing thunk-call packets removed 2.84% of allocation, but did not establish
+a throughput improvement. That is one workload, with three fresh processes and
+five measured windows per process. There is plenty left to do. The
+[Map report](docs/map-example.md) records the original baseline; the
+[call-packet follow-up](docs/call-packets.md) has the subsequent measurements,
+actual Graal graphs, and remaining costs.
 
 The first attempt at compiling Map was particularly useful: generic frame reads
 and string comparisons in case dispatch blew up partial evaluation. Fixing those

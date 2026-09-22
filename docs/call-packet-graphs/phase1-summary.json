@@ -1,0 +1,564 @@
+{
+  "schema": 1,
+  "baselineCommit": "60148ed860a93c8846201c325abc8ec83aee7aaf",
+  "phase1Commit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "lookupGate": {
+    "passed": true,
+    "requirement": "Exactly one latest lookup root; zero Object[] allocations after mid-tier and zero residual MethodCallTarget nodes before high-tier lowering."
+  },
+  "comparisons": [
+    {
+      "root": "TruffleIR.Tier2.lambda_sc,_x,_ds1() [rootId=21]",
+      "baselineCompilation": 2568,
+      "candidateCompilation": 2600,
+      "committedPacketCount": {
+        "baseline": 28,
+        "candidate": 18
+      },
+      "lateObjectArrayCount": {
+        "baseline": 28,
+        "candidate": 18
+      },
+      "packetsBySource": {
+        "baseline": {
+          "application-packet": 18,
+          "thunk-force": 10
+        },
+        "candidate": {
+          "application-packet": 18
+        }
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "residual-call-abi": 24,
+          "materialized-for-inlined-array-read": 4
+        },
+        "candidate": {
+          "residual-call-abi": 18
+        }
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "application-packet": 18,
+          "thunk-force": 10
+        },
+        "candidate": {
+          "application-packet": 18
+        }
+      },
+      "methodTargets": {
+        "baseline": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        },
+        "candidate": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds2() [rootId=22]",
+      "baselineCompilation": 2708,
+      "candidateCompilation": 2730,
+      "committedPacketCount": {
+        "baseline": 8,
+        "candidate": 8
+      },
+      "lateObjectArrayCount": {
+        "baseline": 8,
+        "candidate": 8
+      },
+      "packetsBySource": {
+        "baseline": {
+          "application-packet": 8
+        },
+        "candidate": {
+          "application-packet": 8
+        }
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "residual-call-abi": 8
+        },
+        "candidate": {
+          "residual-call-abi": 8
+        }
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "application-packet": 8
+        },
+        "candidate": {
+          "application-packet": 8
+        }
+      },
+      "methodTargets": {
+        "baseline": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+        },
+        "candidate": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_def,_ww,_ds1() [rootId=17]",
+      "baselineCompilation": 2757,
+      "candidateCompilation": 2780,
+      "committedPacketCount": {
+        "baseline": 4,
+        "candidate": 0
+      },
+      "lateObjectArrayCount": {
+        "baseline": 4,
+        "candidate": 0
+      },
+      "packetsBySource": {
+        "baseline": {
+          "thunk-force": 4
+        },
+        "candidate": {}
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "materialized-for-inlined-array-read": 4
+        },
+        "candidate": {}
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "thunk-force": 4
+        },
+        "candidate": {}
+      },
+      "methodTargets": {
+        "baseline": {},
+        "candidate": {}
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds() [rootId=18]",
+      "baselineCompilation": 2794,
+      "candidateCompilation": 2808,
+      "committedPacketCount": {
+        "baseline": 21,
+        "candidate": 18
+      },
+      "lateObjectArrayCount": {
+        "baseline": 21,
+        "candidate": 18
+      },
+      "packetsBySource": {
+        "baseline": {
+          "thunk-force": 4,
+          "application-packet": 17
+        },
+        "candidate": {
+          "application-packet": 18
+        }
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "materialized-for-inlined-array-read": 4,
+          "residual-call-abi": 16,
+          "stored-or-escaping": 1
+        },
+        "candidate": {
+          "residual-call-abi": 17,
+          "stored-or-escaping": 1
+        }
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "application-packet": 17,
+          "thunk-force": 4
+        },
+        "candidate": {
+          "application-packet": 18
+        }
+      },
+      "methodTargets": {
+        "baseline": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 16
+        },
+        "candidate": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 17
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_ww() [rootId=26]",
+      "baselineCompilation": 2813,
+      "candidateCompilation": 2831,
+      "committedPacketCount": {
+        "baseline": 16,
+        "candidate": 0
+      },
+      "lateObjectArrayCount": {
+        "baseline": 16,
+        "candidate": 0
+      },
+      "packetsBySource": {
+        "baseline": {
+          "thunk-force": 16
+        },
+        "candidate": {}
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "materialized-for-inlined-array-read": 16
+        },
+        "candidate": {}
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "thunk-force": 16
+        },
+        "candidate": {}
+      },
+      "methodTargets": {
+        "baseline": {},
+        "candidate": {}
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=10]",
+      "baselineCompilation": 2816,
+      "candidateCompilation": 2834,
+      "committedPacketCount": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "lateObjectArrayCount": {
+        "baseline": 0,
+        "candidate": 0
+      },
+      "packetsBySource": {
+        "baseline": {},
+        "candidate": {}
+      },
+      "packetsByClassification": {
+        "baseline": {},
+        "candidate": {}
+      },
+      "lateArraysBySource": {
+        "baseline": {},
+        "candidate": {}
+      },
+      "methodTargets": {
+        "baseline": {},
+        "candidate": {}
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_v() [rootId=31]",
+      "baselineCompilation": 2829,
+      "candidateCompilation": 2849,
+      "committedPacketCount": {
+        "baseline": 37,
+        "candidate": 28
+      },
+      "lateObjectArrayCount": {
+        "baseline": 37,
+        "candidate": 28
+      },
+      "packetsBySource": {
+        "baseline": {
+          "thunk-force": 8,
+          "application-packet": 29
+        },
+        "candidate": {
+          "application-packet": 28
+        }
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "materialized-for-inlined-array-read": 4,
+          "residual-call-abi": 33
+        },
+        "candidate": {
+          "residual-call-abi": 28
+        }
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "application-packet": 29,
+          "thunk-force": 8
+        },
+        "candidate": {
+          "application-packet": 28
+        }
+      },
+      "methodTargets": {
+        "baseline": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 31
+        },
+        "candidate": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 30
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=15]",
+      "baselineCompilation": 2844,
+      "candidateCompilation": 2856,
+      "committedPacketCount": {
+        "baseline": 22,
+        "candidate": 18
+      },
+      "lateObjectArrayCount": {
+        "baseline": 22,
+        "candidate": 18
+      },
+      "packetsBySource": {
+        "baseline": {
+          "thunk-force": 8,
+          "application-packet": 14
+        },
+        "candidate": {
+          "application-packet": 18
+        }
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "materialized-for-inlined-array-read": 4,
+          "residual-call-abi": 18
+        },
+        "candidate": {
+          "residual-call-abi": 18
+        }
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "application-packet": 14,
+          "thunk-force": 8
+        },
+        "candidate": {
+          "application-packet": 18
+        }
+      },
+      "methodTargets": {
+        "baseline": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 16
+        },
+        "candidate": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_n() [rootId=40]",
+      "baselineCompilation": 2880,
+      "candidateCompilation": 2888,
+      "committedPacketCount": {
+        "baseline": 1,
+        "candidate": 1
+      },
+      "lateObjectArrayCount": {
+        "baseline": 1,
+        "candidate": 1
+      },
+      "packetsBySource": {
+        "baseline": {
+          "application-packet": 1
+        },
+        "candidate": {
+          "application-packet": 1
+        }
+      },
+      "packetsByClassification": {
+        "baseline": {
+          "residual-call-abi": 1
+        },
+        "candidate": {
+          "residual-call-abi": 1
+        }
+      },
+      "lateArraysBySource": {
+        "baseline": {
+          "application-packet": 1
+        },
+        "candidate": {
+          "application-packet": 1
+        }
+      },
+      "methodTargets": {
+        "baseline": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+        },
+        "candidate": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+        }
+      }
+    }
+  ],
+  "baselineLookupPackets": [
+    {
+      "commit": 8086,
+      "block": "62",
+      "virtualArray": 7466,
+      "length": 1,
+      "values": [
+        "8085"
+      ],
+      "sourceFamily": "thunk-force",
+      "sourcePosition": [
+        "thc.runtime.Force.execute(Program.kt:119) [bci:290]",
+        "thc.runtime.FunctionBody.execute(Program.kt:268) [bci:13]",
+        "thc.runtime.SelfRepeater.once(Program.kt:271) [bci:5]",
+        "thc.runtime.SelfRepeater.executeRepeatingWithValue(Program.kt:273) [bci:3]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:315) [bci:172]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "classification": "materialized-for-inlined-array-read",
+      "sinks": [
+        {
+          "node": 7602,
+          "class": "LoadIndexedNode",
+          "block": "64",
+          "edge": "array",
+          "path": [
+            7466,
+            8087,
+            6750,
+            7602
+          ],
+          "stamp": "a java.lang.Object",
+          "name": "LoadIndexed"
+        }
+      ]
+    },
+    {
+      "commit": 8089,
+      "block": "63",
+      "virtualArray": 7471,
+      "length": 2,
+      "values": [
+        "8085",
+        "6731"
+      ],
+      "sourceFamily": "thunk-force",
+      "sourcePosition": [
+        "thc.runtime.Force.execute(Program.kt:119) [bci:309]",
+        "thc.runtime.FunctionBody.execute(Program.kt:268) [bci:13]",
+        "thc.runtime.SelfRepeater.once(Program.kt:271) [bci:5]",
+        "thc.runtime.SelfRepeater.executeRepeatingWithValue(Program.kt:273) [bci:3]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:315) [bci:172]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "classification": "materialized-for-inlined-array-read",
+      "sinks": [
+        {
+          "node": 7602,
+          "class": "LoadIndexedNode",
+          "block": "64",
+          "edge": "array",
+          "path": [
+            7471,
+            8090,
+            6750,
+            7602
+          ],
+          "stamp": "a java.lang.Object",
+          "name": "LoadIndexed"
+        }
+      ]
+    },
+    {
+      "commit": 8102,
+      "block": "78",
+      "virtualArray": 7378,
+      "length": 1,
+      "values": [
+        "8101"
+      ],
+      "sourceFamily": "thunk-force",
+      "sourcePosition": [
+        "thc.runtime.Force.execute(Program.kt:119) [bci:290]",
+        "thc.runtime.FunctionBody.execute(Program.kt:268) [bci:13]",
+        "thc.runtime.SelfRepeater.once(Program.kt:271) [bci:5]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:308) [bci:123]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "classification": "materialized-for-inlined-array-read",
+      "sinks": [
+        {
+          "node": 7560,
+          "class": "LoadIndexedNode",
+          "block": "80",
+          "edge": "array",
+          "path": [
+            7378,
+            8103,
+            3450,
+            7560
+          ],
+          "stamp": "a java.lang.Object",
+          "name": "LoadIndexed"
+        }
+      ]
+    },
+    {
+      "commit": 8105,
+      "block": "79",
+      "virtualArray": 7383,
+      "length": 2,
+      "values": [
+        "8101",
+        "3431"
+      ],
+      "sourceFamily": "thunk-force",
+      "sourcePosition": [
+        "thc.runtime.Force.execute(Program.kt:119) [bci:309]",
+        "thc.runtime.FunctionBody.execute(Program.kt:268) [bci:13]",
+        "thc.runtime.SelfRepeater.once(Program.kt:271) [bci:5]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:308) [bci:123]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "classification": "materialized-for-inlined-array-read",
+      "sinks": [
+        {
+          "node": 7560,
+          "class": "LoadIndexedNode",
+          "block": "80",
+          "edge": "array",
+          "path": [
+            7383,
+            8106,
+            3450,
+            7560
+          ],
+          "stamp": "a java.lang.Object",
+          "name": "LoadIndexed"
+        }
+      ]
+    }
+  ],
+  "phase1Lookup": {
+    "root": "TruffleIR.Tier2.lambda_def,_ww,_ds1()",
+    "beforeHighOrdinal": 5,
+    "midOrdinal": 7,
+    "beforeHighNodes": 605,
+    "afterMidNodes": 1216,
+    "committedPacketCount": 0,
+    "lateObjectArrayCount": 0,
+    "packetsBySource": {},
+    "packetsByClassification": {},
+    "lateArraysBySource": {},
+    "methodTargets": {},
+    "compilationId": 2780,
+    "rootInstanceId": 17,
+    "rootKey": "TruffleIR.Tier2.lambda_def,_ww,_ds1() [rootId=17]",
+    "bgv": "TruffleHotSpotCompilation-2780[lambda_def,_ww,_ds1].bgv"
+  },
+  "interpretation": "All surviving phase1 arrays in the selected final lambda roots are current application ABI packets or the escaping TailCall packet. No thunk-force allocation remains. Static graph counts are not allocations per workload; measured bytes are reported separately."
+}

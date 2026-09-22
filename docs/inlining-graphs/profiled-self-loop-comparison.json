@@ -1,0 +1,4171 @@
+{
+  "schema": 1,
+  "status": "Retained: lower measured allocation and no demonstrated CPU gain; the all-root-loop regression is not observed in this narrower candidate.",
+  "candidateJarSha256": "011765470885156527d3292e9a2943b08ed581f9e0ad08f57118404450dd9567",
+  "tests": 43,
+  "mapInputsPreAndPostCompilation": 18,
+  "unsupportedTraps": 0,
+  "lookupGate": {
+    "passed": true,
+    "requirement": "Exactly one latest lookup root; zero Object[] allocations after mid-tier and zero residual MethodCallTarget nodes before high-tier lowering."
+  },
+  "policyAndBudgetsUnchanged": true,
+  "comparisons": [
+    {
+      "root": "TruffleIR.Tier2.lambda_sc,_x,_ds1() [rootId=21]",
+      "phase1": {
+        "compilationId": 2600,
+        "beforeHighNodes": 4466,
+        "afterMidNodes": 10225,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "allRootLoop": {
+        "compilationId": 2614,
+        "beforeHighNodes": 4573,
+        "afterMidNodes": 10596,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2556,
+        "beforeHighNodes": 4466,
+        "afterMidNodes": 10225,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds2() [rootId=22]",
+      "phase1": {
+        "compilationId": 2730,
+        "beforeHighNodes": 2495,
+        "afterMidNodes": 5789,
+        "lateObjectArrayCount": 8,
+        "lateLongBoxCount": 8,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+        }
+      },
+      "allRootLoop": {
+        "compilationId": 2734,
+        "beforeHighNodes": 2511,
+        "afterMidNodes": 5835,
+        "lateObjectArrayCount": 8,
+        "lateLongBoxCount": 8,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+        }
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2679,
+        "beforeHighNodes": 2495,
+        "afterMidNodes": 5789,
+        "lateObjectArrayCount": 8,
+        "lateLongBoxCount": 8,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_def,_ww,_ds1() [rootId=17]",
+      "phase1": {
+        "compilationId": 2780,
+        "beforeHighNodes": 605,
+        "afterMidNodes": 1216,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "allRootLoop": {
+        "compilationId": 2764,
+        "beforeHighNodes": 389,
+        "afterMidNodes": 753,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2738,
+        "beforeHighNodes": 389,
+        "afterMidNodes": 753,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds() [rootId=18]",
+      "phase1": {
+        "compilationId": 2808,
+        "beforeHighNodes": 5557,
+        "afterMidNodes": 11612,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 17,
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 17
+        }
+      },
+      "allRootLoop": {
+        "compilationId": 2792,
+        "beforeHighNodes": 5629,
+        "afterMidNodes": 11996,
+        "lateObjectArrayCount": 16,
+        "lateLongBoxCount": 19,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 19
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 3,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 16
+        }
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2763,
+        "beforeHighNodes": 5596,
+        "afterMidNodes": 11963,
+        "lateObjectArrayCount": 16,
+        "lateLongBoxCount": 19,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 19
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 3,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 16
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_v() [rootId=36]",
+      "phase1": {
+        "compilationId": 2820,
+        "beforeHighNodes": 3241,
+        "afterMidNodes": 7289,
+        "lateObjectArrayCount": 12,
+        "lateLongBoxCount": 14,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 2,
+          "thc.runtime.FrameAccess.read": 4,
+          "thc.runtime.TailCheck.check": 8
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 14
+        }
+      },
+      "allRootLoop": {
+        "compilationId": 2800,
+        "beforeHighNodes": 2850,
+        "afterMidNodes": 6265,
+        "lateObjectArrayCount": 10,
+        "lateLongBoxCount": 11,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 1,
+          "thc.runtime.FrameAccess.read": 3,
+          "thc.runtime.TailCheck.check": 7
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 12
+        }
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2775,
+        "beforeHighNodes": 3584,
+        "afterMidNodes": 7991,
+        "lateObjectArrayCount": 15,
+        "lateLongBoxCount": 16,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 1,
+          "thc.runtime.FrameAccess.read": 4,
+          "thc.runtime.TailCheck.check": 11
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 18
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_ww() [rootId=26]",
+      "phase1": {
+        "compilationId": 2831,
+        "beforeHighNodes": 3133,
+        "afterMidNodes": 5956,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {}
+      },
+      "allRootLoop": {
+        "compilationId": 2818,
+        "beforeHighNodes": 1199,
+        "afterMidNodes": 3283,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {}
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2788,
+        "beforeHighNodes": 1201,
+        "afterMidNodes": 3141,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {}
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_x,_v() [rootId=31]",
+      "phase1": {
+        "compilationId": 2849,
+        "beforeHighNodes": 7794,
+        "afterMidNodes": 17225,
+        "lateObjectArrayCount": 28,
+        "lateLongBoxCount": 28,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 2,
+          "thc.runtime.FrameAccess.read": 18,
+          "thc.runtime.TailCheck.check": 8
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 2,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 30
+        }
+      },
+      "allRootLoop": {
+        "compilationId": 2822,
+        "beforeHighNodes": 7045,
+        "afterMidNodes": 16939,
+        "lateObjectArrayCount": 21,
+        "lateLongBoxCount": 19,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 1,
+          "thc.runtime.FrameAccess.read": 8,
+          "thc.runtime.TailCheck.check": 9,
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 1,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2792,
+        "beforeHighNodes": 5579,
+        "afterMidNodes": 12111,
+        "lateObjectArrayCount": 17,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.CaptureLayout$CaptureField.restore": 1,
+          "thc.runtime.FrameAccess.read": 7,
+          "thc.runtime.TailCheck.check": 9,
+          "thc.runtime.Primitive.execute": 1
+        },
+        "methodTargets": {
+          "java.lang.Long.longValue()": 1,
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 20
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=10]",
+      "phase1": {
+        "compilationId": 2834,
+        "beforeHighNodes": 451,
+        "afterMidNodes": 1127,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "allRootLoop": {
+        "compilationId": 2834,
+        "beforeHighNodes": 683,
+        "afterMidNodes": 1155,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2804,
+        "beforeHighNodes": 451,
+        "afterMidNodes": 1127,
+        "lateObjectArrayCount": 0,
+        "lateLongBoxCount": 0,
+        "lateLongBoxesByOrigin": {},
+        "methodTargets": {}
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=15]",
+      "phase1": {
+        "compilationId": 2856,
+        "beforeHighNodes": 5767,
+        "afterMidNodes": 12964,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      },
+      "allRootLoop": {
+        "compilationId": 2838,
+        "beforeHighNodes": 5432,
+        "afterMidNodes": 10332,
+        "lateObjectArrayCount": 13,
+        "lateLongBoxCount": 13,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 4,
+          "thc.runtime.TailCheck.check": 9
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 15
+        }
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2809,
+        "beforeHighNodes": 5767,
+        "afterMidNodes": 12964,
+        "lateObjectArrayCount": 18,
+        "lateLongBoxCount": 18,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.FrameAccess.read": 6,
+          "thc.runtime.TailCheck.check": 12
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+        }
+      }
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_n() [rootId=40]",
+      "phase1": {
+        "compilationId": 2888,
+        "beforeHighNodes": 178,
+        "afterMidNodes": 419,
+        "lateObjectArrayCount": 1,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.TailCheck.check": 1
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+        }
+      },
+      "allRootLoop": {
+        "compilationId": 2872,
+        "beforeHighNodes": 187,
+        "afterMidNodes": 428,
+        "lateObjectArrayCount": 1,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.TailCheck.check": 1
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+        }
+      },
+      "profiledSelfLoop": {
+        "compilationId": 2840,
+        "beforeHighNodes": 178,
+        "afterMidNodes": 419,
+        "lateObjectArrayCount": 1,
+        "lateLongBoxCount": 1,
+        "lateLongBoxesByOrigin": {
+          "thc.runtime.TailCheck.check": 1
+        },
+        "methodTargets": {
+          "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+        }
+      }
+    }
+  ],
+  "callTrees": [
+    {
+      "compilation": 2556,
+      "PEGraphNodes": 1365,
+      "nodes": [
+        {
+          "id": 0,
+          "parent": null,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 0,
+          "Frequency": 1.0,
+          "IR Nodes": 10009,
+          "Cost Benefit": "bpc:          NaN, b:          NaN, c:          NaN",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 27952
+        },
+        {
+          "id": 1,
+          "parent": 0,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 1,
+          "Frequency": 0.48985101489851013,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0090, c:    1431.0000",
+          "Threshold": "2.615170448137995E-10",
+          "Inline BpC": "6.263715747672415E-6",
+          "Subtree IR Nodes": 1431
+        },
+        {
+          "id": 2,
+          "parent": 0,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 0.008099190080991902,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0081, c:    1112.0000",
+          "Threshold": "5.8076441752131067E-11",
+          "Inline BpC": "1.4566888634877521E-5",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 3,
+          "parent": 0,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 0.07679232076792321,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0001, b:       0.0768, c:    1112.0000",
+          "Threshold": "1.731809030750109E-11",
+          "Inline BpC": "1.3811568483439426E-4",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 4,
+          "parent": 0,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 1,
+          "Frequency": 0.3732626737326267,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0068, c:    1431.0000",
+          "Threshold": "1.161448613840343E-9",
+          "Inline BpC": "4.772902814056148E-6",
+          "Subtree IR Nodes": 1431
+        },
+        {
+          "id": 5,
+          "parent": 0,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 0.0011998800119988001,
+          "IR Nodes": 1655,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c:    4359.0000",
+          "Threshold": "1.5275660582380712E-5",
+          "Inline BpC": "3.354252877308101E-8",
+          "Subtree IR Nodes": 9445
+        },
+        {
+          "id": 6,
+          "parent": 0,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 0.032396760323967606,
+          "IR Nodes": 1655,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0010, c:    1655.0000",
+          "Threshold": "6.79203632617183E-9",
+          "Inline BpC": "5.789812916925409E-7",
+          "Subtree IR Nodes": 4359
+        },
+        {
+          "id": 7,
+          "parent": 0,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 9.999000099990002e-05,
+          "IR Nodes": 41,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c:      41.0000",
+          "Threshold": "1.0411181076233363E-9",
+          "Inline BpC": "7.31634153657805E-6",
+          "Subtree IR Nodes": 41
+        },
+        {
+          "id": 8,
+          "parent": 1,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 2,
+          "Frequency": 0.2399540167971004,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.2400, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 9,
+          "parent": 1,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.0039673964810298295,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0040, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 10,
+          "parent": 1,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.03761679626457912,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0376, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 11,
+          "parent": 1,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 2,
+          "Frequency": 0.18284309955165867,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.1828, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 12,
+          "parent": 1,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.0005877624416340488,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0006, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 13,
+          "parent": 1,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.015869585924119318,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0159, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 14,
+          "parent": 1,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 4.8980203469504065e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 15,
+          "parent": 4,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 2,
+          "Frequency": 0.18284309955165867,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.1828, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 16,
+          "parent": 4,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.0030231253446998067,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0030, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 17,
+          "parent": 4,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.028663706971968538,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0287, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 18,
+          "parent": 4,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 2,
+          "Frequency": 0.13932502360202936,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.1393, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 19,
+          "parent": 4,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.0004478704214370084,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0004, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 20,
+          "parent": 4,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.012092501378799227,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0121, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 21,
+          "parent": 4,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 3.73225351197507e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 22,
+          "parent": 6,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.03143854628621645,
+          "IR Nodes": 161,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0006, c:    1592.0000",
+          "Threshold": "3.885974979543925E-8",
+          "Inline BpC": "3.985701032831887E-5",
+          "Subtree IR Nodes": 2704
+        },
+        {
+          "id": 23,
+          "parent": 22,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 0.03143854628621645,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0006, c:    1431.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 2543
+        },
+        {
+          "id": 24,
+          "parent": 23,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.015400203805236915,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0154, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 25,
+          "parent": 23,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.00025462676224212905,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0003, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 26,
+          "parent": 23,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.0024142389308883347,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0024, c:    1112.0000",
+          "Threshold": "1.165467050837195E-7",
+          "Inline BpC": "4.342156350518587E-6",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 27,
+          "parent": 23,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.011734835845060096,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0117, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 28,
+          "parent": 23,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 4,
+          "Frequency": 3.772248329513023e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 29,
+          "parent": 23,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 4,
+          "Frequency": 0.0010185070489685162,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0010, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 30,
+          "parent": 23,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 3.143540274594186e-06,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 31,
+          "parent": 5,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.001164390603193202,
+          "IR Nodes": 161,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c:    2704.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 7790
+        },
+        {
+          "id": 32,
+          "parent": 31,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 0.001164390603193202,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c:    2543.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 7629
+        },
+        {
+          "id": 33,
+          "parent": 32,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.0005703779187124783,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:    1431.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1431
+        },
+        {
+          "id": 34,
+          "parent": 32,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 9.430620823782559e-06,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:    1112.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 35,
+          "parent": 32,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 8.941625669956796e-05,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c:    1112.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 36,
+          "parent": 32,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.00043462354981704056,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:    2543.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 2543
+        },
+        {
+          "id": 37,
+          "parent": 32,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 4,
+          "Frequency": 1.3971290109307494e-06,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 38,
+          "parent": 32,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 4,
+          "Frequency": 3.7722483295130237e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 39,
+          "parent": 32,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 1.1642741757756244e-07,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 40,
+          "parent": 33,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 0.0002794002023570074,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0003, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 41,
+          "parent": 33,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 4.61959918165291e-06,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 42,
+          "parent": 33,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 4.3800644092709066e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 43,
+          "parent": 33,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 0.0002129007869766705,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0002, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 44,
+          "parent": 33,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 5,
+          "Frequency": 6.843850639485792e-07,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 45,
+          "parent": 33,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 5,
+          "Frequency": 1.847839672661164e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 46,
+          "parent": 33,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 5.70320886623816e-08,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 47,
+          "parent": 36,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 0.0002129007869766705,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0002, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 48,
+          "parent": 36,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 3.5200987436436643e-06,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 49,
+          "parent": 36,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 3.337575105084363e-05,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:    1112.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 50,
+          "parent": 36,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 0.00016222874827187406,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0002, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 51,
+          "parent": 36,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 5,
+          "Frequency": 5.214961101694318e-07,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 52,
+          "parent": 36,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 5,
+          "Frequency": 1.4080394974574657e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 53,
+          "parent": 36,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 4.345800918078598e-08,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        }
+      ],
+      "edges": [
+        {
+          "from": 0,
+          "to": 1,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 0,
+          "to": 2,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 0,
+          "to": 3,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 0,
+          "to": 4,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 0,
+          "to": 5,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 0,
+          "to": 6,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 0,
+          "to": 7,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 1,
+          "to": 8,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 1,
+          "to": 9,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 1,
+          "to": 10,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 1,
+          "to": 11,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 1,
+          "to": 12,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 1,
+          "to": 13,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 1,
+          "to": 14,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 4,
+          "to": 15,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 4,
+          "to": 16,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 4,
+          "to": 17,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 4,
+          "to": 18,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 4,
+          "to": 19,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 4,
+          "to": 20,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 4,
+          "to": 21,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 5,
+          "to": 31,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 6,
+          "to": 22,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 22,
+          "to": 23,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 23,
+          "to": 24,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 23,
+          "to": 25,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 23,
+          "to": 26,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 23,
+          "to": 27,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 23,
+          "to": 28,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 23,
+          "to": 29,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 23,
+          "to": 30,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 31,
+          "to": 32,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 32,
+          "to": 33,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 32,
+          "to": 34,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 32,
+          "to": 35,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 32,
+          "to": 36,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 32,
+          "to": 37,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 32,
+          "to": 38,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 32,
+          "to": 39,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 33,
+          "to": 40,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 33,
+          "to": 41,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 33,
+          "to": 42,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 33,
+          "to": 43,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 33,
+          "to": 44,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 33,
+          "to": 45,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 33,
+          "to": 46,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 36,
+          "to": 47,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 36,
+          "to": 48,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 36,
+          "to": 49,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 36,
+          "to": 50,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 36,
+          "to": 51,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 36,
+          "to": 52,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 36,
+          "to": 53,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        }
+      ]
+    },
+    {
+      "compilation": 2763,
+      "PEGraphNodes": 495,
+      "nodes": [
+        {
+          "id": 0,
+          "parent": null,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 0,
+          "Frequency": 1.0,
+          "IR Nodes": 7947,
+          "Cost Benefit": "bpc:          NaN, b:          NaN, c:          NaN",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 17639
+        },
+        {
+          "id": 1,
+          "parent": 0,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 0.00039896269698783165,
+          "IR Nodes": 148,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     732.0000",
+          "Threshold": "4.106766398748201E-12",
+          "Inline BpC": "5.957188904476775E-7",
+          "Subtree IR Nodes": 4236
+        },
+        {
+          "id": 2,
+          "parent": 0,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 1,
+          "Frequency": 0.9996010373030122,
+          "IR Nodes": 536,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c:    1852.0000",
+          "Threshold": "1.0387236024226204E-10",
+          "Inline BpC": "2.9388611331540916E-8",
+          "Subtree IR Nodes": 5456
+        },
+        {
+          "id": 3,
+          "parent": 2,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.00039880352575424383,
+          "IR Nodes": 148,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     732.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 3652
+        },
+        {
+          "id": 4,
+          "parent": 2,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 2,
+          "depth": 2,
+          "Frequency": 0.999202233777258,
+          "IR Nodes": 536,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:    1268.0000",
+          "Threshold": "3.408003248003643E-10",
+          "Inline BpC": "2.92381158329935E-8",
+          "Subtree IR Nodes": 1268
+        },
+        {
+          "id": 5,
+          "parent": 4,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.0003986444180240407,
+          "IR Nodes": 148,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     732.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 732
+        },
+        {
+          "id": 6,
+          "parent": 4,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 3,
+          "Frequency": 0.998803589359234,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.9988, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 7,
+          "parent": 1,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.00039896269698783165,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 4088
+        },
+        {
+          "id": 8,
+          "parent": 7,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 0.000175344105326152,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "1.3458603540559437E-11",
+          "Inline BpC": "2.7922948279678306E-8",
+          "Subtree IR Nodes": 1752
+        },
+        {
+          "id": 9,
+          "parent": 7,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 0.0001865150608418113,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "7.507580541199358E-12",
+          "Inline BpC": "2.970188468885008E-8",
+          "Subtree IR Nodes": 1752
+        },
+        {
+          "id": 10,
+          "parent": 9,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 8.197336923997606e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "3.198895109691396E-9",
+          "Inline BpC": "1.3053978320749604E-8",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 11,
+          "parent": 9,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 8.719579094354679e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "9.954054173515228E-10",
+          "Inline BpC": "1.388563109203742E-8",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 12,
+          "parent": 8,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 7.70637342908438e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "1.8428924889705502E-8",
+          "Inline BpC": "1.2272135768918613E-8",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 13,
+          "parent": 8,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 8.197336923997607e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "5.734558665459632E-9",
+          "Inline BpC": "1.3053978320749604E-8",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 14,
+          "parent": 11,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 3.832255011968881e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 15,
+          "parent": 11,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 4.0764032266108125e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 16,
+          "parent": 13,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 3.6027295780969486e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 17,
+          "parent": 13,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 3.832255011968882e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 18,
+          "parent": 12,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 3.3869511220825855e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 19,
+          "parent": 12,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 3.602729578096948e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 20,
+          "parent": 10,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 3.602729578096948e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 21,
+          "parent": 10,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 5,
+          "Frequency": 3.832255011968881e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 22,
+          "parent": 5,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.0003986444180240407,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 23,
+          "parent": 22,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 5,
+          "Frequency": 0.0001752042217215659,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0002, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 24,
+          "parent": 22,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 5,
+          "Frequency": 0.00018636626542623905,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0002, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 25,
+          "parent": 3,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.00039880352575424383,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 3504
+        },
+        {
+          "id": 26,
+          "parent": 25,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 4,
+          "Frequency": 0.00017527414956899017,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "5.552646171195621E-10",
+          "Inline BpC": "2.7911808064924795E-8",
+          "Subtree IR Nodes": 1752
+        },
+        {
+          "id": 27,
+          "parent": 25,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 4,
+          "Frequency": 0.000186440648290109,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1168
+        },
+        {
+          "id": 28,
+          "parent": 27,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 5,
+          "Frequency": 8.19406649235029e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 29,
+          "parent": 27,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 2,
+          "depth": 5,
+          "Frequency": 8.716100307562596e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "1.7844319885403616E-9",
+          "Inline BpC": "1.3880091243207546E-8",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 30,
+          "parent": 26,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 5,
+          "Frequency": 7.703298873557118e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "1.8428924889705502E-8",
+          "Inline BpC": "1.2267239644534451E-8",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 31,
+          "parent": 26,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 2,
+          "depth": 5,
+          "Frequency": 8.194066492350291e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "1.028016298126473E-8",
+          "Inline BpC": "1.3048770270352347E-8",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 32,
+          "parent": 29,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 6,
+          "Frequency": 3.8307260851737614e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 33,
+          "parent": 29,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 6,
+          "Frequency": 4.074776893785514e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 34,
+          "parent": 31,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 6,
+          "Frequency": 3.601292223387953e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 35,
+          "parent": 31,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 6,
+          "Frequency": 3.8307260851737614e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 36,
+          "parent": 30,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 6,
+          "Frequency": 3.385599854928353e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 37,
+          "parent": 30,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 6,
+          "Frequency": 3.601292223387953e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        }
+      ],
+      "edges": [
+        {
+          "from": 0,
+          "to": 1,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 0,
+          "to": 2,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 1,
+          "to": 7,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 2,
+          "to": 3,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 2,
+          "to": 4,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 3,
+          "to": 25,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 4,
+          "to": 6,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 5,
+          "to": 22,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 7,
+          "to": 8,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 7,
+          "to": 9,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 8,
+          "to": 12,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 8,
+          "to": 13,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 9,
+          "to": 10,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 9,
+          "to": 11,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 10,
+          "to": 20,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 10,
+          "to": 21,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 11,
+          "to": 14,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 11,
+          "to": 15,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 12,
+          "to": 18,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 12,
+          "to": 19,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 13,
+          "to": 16,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 13,
+          "to": 17,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 22,
+          "to": 23,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 22,
+          "to": 24,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 25,
+          "to": 27,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 26,
+          "to": 30,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 26,
+          "to": 31,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 27,
+          "to": 28,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 27,
+          "to": 29,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 29,
+          "to": 32,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 29,
+          "to": 33,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 30,
+          "to": 36,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 30,
+          "to": 37,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 31,
+          "to": 34,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 31,
+          "to": 35,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        }
+      ]
+    },
+    {
+      "compilation": 2792,
+      "PEGraphNodes": 537,
+      "nodes": [
+        {
+          "id": 0,
+          "parent": null,
+          "directCallTarget": "lambda x, v",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 0,
+          "Frequency": 1.0,
+          "IR Nodes": 11313,
+          "Cost Benefit": "bpc:          NaN, b:          NaN, c:          NaN",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 30062
+        },
+        {
+          "id": 1,
+          "parent": 0,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 1999.2,
+          "IR Nodes": 162,
+          "Cost Benefit": "bpc:       0.2492, b:     185.9256, c:     746.0000",
+          "Threshold": "4.3802611117035935E-12",
+          "Inline BpC": "2.929122788203753",
+          "Subtree IR Nodes": 1330
+        },
+        {
+          "id": 2,
+          "parent": 0,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 0.8,
+          "IR Nodes": 150,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0146, c:    1581.0000",
+          "Threshold": "4.539416166502019E-11",
+          "Inline BpC": "5.152678913006865E-4",
+          "Subtree IR Nodes": 7779
+        },
+        {
+          "id": 3,
+          "parent": 0,
+          "directCallTarget": "lambda x, z",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 1,
+          "Frequency": 0.8,
+          "IR Nodes": 173,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     173.0000",
+          "Threshold": "5.017645790367075E-11",
+          "Inline BpC": "0.004624277456647399",
+          "Subtree IR Nodes": 10628
+        },
+        {
+          "id": 4,
+          "parent": 1,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 1999.2,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.3184, b:     185.9256, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1168
+        },
+        {
+          "id": 5,
+          "parent": 4,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 878.6484,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:     878.6484, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 6,
+          "parent": 4,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 934.6260000000001,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.1488, b:      86.9202, c:     584.0000",
+          "Threshold": "8.03526122185614E-12",
+          "Inline BpC": "0.14883598972602735",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 7,
+          "parent": 6,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 410.76812700000005,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:     410.7681, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 8,
+          "parent": 6,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 436.93765500000006,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:     436.9377, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 9,
+          "parent": 2,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.8,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0146, c:    1431.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 7629
+        },
+        {
+          "id": 10,
+          "parent": 9,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 0.39188081191880814,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0072, c:    1431.0000",
+          "Threshold": "3.8282474331682204E-8",
+          "Inline BpC": "5.010972598137928E-6",
+          "Subtree IR Nodes": 1431
+        },
+        {
+          "id": 11,
+          "parent": 9,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.006479352064793522,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0065, c:    1112.0000",
+          "Threshold": "8.50158693187437E-9",
+          "Inline BpC": "1.1653510907902017E-5",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 12,
+          "parent": 9,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.06143385661433857,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0001, b:       0.0614, c:    1112.0000",
+          "Threshold": "2.4945947269429505E-9",
+          "Inline BpC": "1.104925478675154E-4",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 13,
+          "parent": 9,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 1,
+          "depth": 3,
+          "Frequency": 0.2986101389861014,
+          "IR Nodes": 1431,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0055, c:    1431.0000",
+          "Threshold": "1.7001999536423567E-7",
+          "Inline BpC": "3.81832225124495E-6",
+          "Subtree IR Nodes": 2543
+        },
+        {
+          "id": 14,
+          "parent": 9,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.0009599040095990401,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0010, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 15,
+          "parent": 9,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.025917408259174088,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0259, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 16,
+          "parent": 9,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 7.999200079992002e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 17,
+          "parent": 3,
+          "directCallTarget": "lambda adjusted",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 2,
+          "Frequency": 0.8,
+          "IR Nodes": 253,
+          "Cost Benefit": "bpc:      -0.0032, b:      -0.8000, c:     253.0000",
+          "Threshold": "6.561452663029049E-11",
+          "Inline BpC": "0.0031620553359683794",
+          "Subtree IR Nodes": 10455
+        },
+        {
+          "id": 18,
+          "parent": 17,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.8,
+          "IR Nodes": 536,
+          "Cost Benefit": "bpc:      -0.0000, b:      -0.0042, c:    4772.0000",
+          "Threshold": "1.1028082338495505E-4",
+          "Inline BpC": "-8.859541984135435E-7",
+          "Subtree IR Nodes": 7892
+        },
+        {
+          "id": 19,
+          "parent": 17,
+          "directCallTarget": "lambda x, ww",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 3,
+          "Frequency": 0.8,
+          "IR Nodes": 469,
+          "Cost Benefit": "bpc:       0.0004, b:       0.7994, c:    2269.0000",
+          "Threshold": "8.719669012870708E-10",
+          "Inline BpC": "3.523058619532665E-4",
+          "Subtree IR Nodes": 2310
+        },
+        {
+          "id": 20,
+          "parent": 18,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.00031917015759026535,
+          "IR Nodes": 148,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     732.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 4236
+        },
+        {
+          "id": 21,
+          "parent": 18,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 1,
+          "depth": 4,
+          "Frequency": 0.8039896269698783,
+          "IR Nodes": 536,
+          "Cost Benefit": "bpc:      -0.0000, b:      -0.0043, c:    1852.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 3120
+        },
+        {
+          "id": 22,
+          "parent": 21,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 0.00032076186992614336,
+          "IR Nodes": 148,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     732.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1316
+        },
+        {
+          "id": 23,
+          "parent": 21,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 5,
+          "Frequency": 0.8079991503439551,
+          "IR Nodes": 536,
+          "Cost Benefit": "bpc:      -0.0000, b:      -0.0043, c:    1268.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1268
+        },
+        {
+          "id": 24,
+          "parent": 19,
+          "directCallTarget": "lambda x, ww",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.5333333333333333,
+          "IR Nodes": 256,
+          "Cost Benefit": "bpc:       0.0004, b:       0.5327, c:    1198.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1239
+        },
+        {
+          "id": 25,
+          "parent": 19,
+          "directCallTarget": "lambda def, ww, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 5333.066666666667,
+          "IR Nodes": 561,
+          "Cost Benefit": "bpc:       9.4953, b:    5326.8870, c:     561.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 602
+        },
+        {
+          "id": 26,
+          "parent": 25,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 6.179683275395906,
+          "IR Nodes": 41,
+          "Cost Benefit": "bpc:       0.1507, b:       6.1797, c:      41.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 41
+        },
+        {
+          "id": 27,
+          "parent": 24,
+          "directCallTarget": "lambda def, ww, ds1",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 0.5333333333333333,
+          "IR Nodes": 561,
+          "Cost Benefit": "bpc:       0.0009, b:       0.5327, c:     561.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 602
+        },
+        {
+          "id": 28,
+          "parent": 24,
+          "directCallTarget": "lambda y",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 0.5333333333333333,
+          "IR Nodes": 246,
+          "Cost Benefit": "bpc:       0.0014, b:       0.5333, c:     381.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 381
+        },
+        {
+          "id": 29,
+          "parent": 28,
+          "directCallTarget": "lambda y",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 6,
+          "Frequency": 0.5333333333333333,
+          "IR Nodes": 135,
+          "Cost Benefit": "bpc:       0.0040, b:       0.5333, c:     135.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 135
+        },
+        {
+          "id": 30,
+          "parent": 27,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 6,
+          "Frequency": 0.0006179992275009656,
+          "IR Nodes": 41,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0006, c:      41.0000",
+          "Threshold": "2.435005799952024E-9",
+          "Inline BpC": "6.029260756106981E-5",
+          "Subtree IR Nodes": 41
+        },
+        {
+          "id": 31,
+          "parent": 23,
+          "directCallTarget": "argument thunk",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 6,
+          "Frequency": 0.0003223615201851008,
+          "IR Nodes": 148,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     732.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 732
+        },
+        {
+          "id": 32,
+          "parent": 23,
+          "directCallTarget": "lambda ww, ds",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 6,
+          "Frequency": 0.8120286693462688,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.8120, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 33,
+          "parent": 20,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 5,
+          "Frequency": 0.00031917015759026535,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 4088
+        },
+        {
+          "id": 34,
+          "parent": 33,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 1,
+          "depth": 6,
+          "Frequency": 0.0001402752842609216,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1752
+        },
+        {
+          "id": 35,
+          "parent": 33,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 1,
+          "depth": 6,
+          "Frequency": 0.00014921204867344905,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1752
+        },
+        {
+          "id": 36,
+          "parent": 35,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 7,
+          "Frequency": 6.557869539198086e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 37,
+          "parent": 35,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 7,
+          "Frequency": 6.975663275483743e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 38,
+          "parent": 34,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 7,
+          "Frequency": 6.165098743267505e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 39,
+          "parent": 34,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 2,
+          "depth": 7,
+          "Frequency": 6.557869539198086e-05,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 40,
+          "parent": 37,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 3.065804009575105e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 41,
+          "parent": 37,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 3.26112258128865e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 42,
+          "parent": 39,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 2.8821836624775585e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 43,
+          "parent": 39,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 3.065804009575105e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 44,
+          "parent": 38,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 2.7095608976660685e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 45,
+          "parent": 38,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 2.8821836624775585e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 46,
+          "parent": 36,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 2.8821836624775585e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 47,
+          "parent": 36,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 3,
+          "depth": 8,
+          "Frequency": 3.065804009575105e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 48,
+          "parent": 31,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 7,
+          "Frequency": 0.0003223615201851008,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 49,
+          "parent": 22,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 0,
+          "depth": 6,
+          "Frequency": 0.00032076186992614336,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 1168
+        },
+        {
+          "id": 50,
+          "parent": 49,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 7,
+          "Frequency": 0.00014097484183254,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 51,
+          "parent": 49,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Expanded",
+          "recursionDepth": 1,
+          "depth": 7,
+          "Frequency": 0.00014995617419047202,
+          "IR Nodes": 584,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c:     584.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 584
+        },
+        {
+          "id": 52,
+          "parent": 51,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 8,
+          "Frequency": 6.590573855671245e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 53,
+          "parent": 51,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 8,
+          "Frequency": 7.010451143404567e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 54,
+          "parent": 48,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 8,
+          "Frequency": 0.0001416778881213518,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0001, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 55,
+          "parent": 48,
+          "directCallTarget": "lambda ww, ds2",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 1,
+          "depth": 8,
+          "Frequency": 0.00015070401068653462,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0002, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 56,
+          "parent": 10,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.19196321343768033,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.1920, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 57,
+          "parent": 10,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.0031739171848238637,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0032, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 58,
+          "parent": 10,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.0300934370116633,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0301, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 59,
+          "parent": 10,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.14627447964132695,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.1463, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 60,
+          "parent": 10,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.00047020995330723905,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0005, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 61,
+          "parent": 10,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.012695668739295455,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0127, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 62,
+          "parent": 10,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 3.9184162775603255e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 63,
+          "parent": 13,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.14627447964132692,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.1463, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 64,
+          "parent": 13,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.0024185002757598456,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0024, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 65,
+          "parent": 13,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Inlined",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.02293096557757483,
+          "IR Nodes": 1112,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0229, c:    1112.0000",
+          "Threshold": "5.229979661821549E-7",
+          "Inline BpC": "4.1242743844559044E-5",
+          "Subtree IR Nodes": 1112
+        },
+        {
+          "id": 66,
+          "parent": 13,
+          "directCallTarget": "lambda sc, x, ds1",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 2,
+          "depth": 4,
+          "Frequency": 0.11146001888162349,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.1115, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 67,
+          "parent": 13,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.0003582963371496067,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0004, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 68,
+          "parent": 13,
+          "directCallTarget": "lambda k, x, l, r",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 0.009674001103039382,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0097, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        },
+        {
+          "id": 69,
+          "parent": 13,
+          "directCallTarget": "lvl",
+          "state": "CallNode$State.Cutoff",
+          "recursionDepth": 0,
+          "depth": 4,
+          "Frequency": 2.9858028095800562e-05,
+          "IR Nodes": 0,
+          "Cost Benefit": "bpc:       0.0000, b:       0.0000, c: 2147483647.0000",
+          "Threshold": "0.0",
+          "Inline BpC": "0.0",
+          "Subtree IR Nodes": 0
+        }
+      ],
+      "edges": [
+        {
+          "from": 0,
+          "to": 1,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 0,
+          "to": 2,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 0,
+          "to": 3,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 1,
+          "to": 4,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 2,
+          "to": 9,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 3,
+          "to": 17,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 4,
+          "to": 6,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 6,
+          "to": 7,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 6,
+          "to": 8,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 9,
+          "to": 10,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 9,
+          "to": 11,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 9,
+          "to": 12,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 9,
+          "to": 13,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 9,
+          "to": 14,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 9,
+          "to": 15,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 9,
+          "to": 16,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 10,
+          "to": 56,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 10,
+          "to": 57,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 10,
+          "to": 58,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 10,
+          "to": 59,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 10,
+          "to": 60,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 10,
+          "to": 61,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 10,
+          "to": 62,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 13,
+          "to": 63,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 13,
+          "to": 64,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 13,
+          "to": 65,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 2,
+          "toIndex": 0,
+          "listIndex": 2
+        },
+        {
+          "from": 13,
+          "to": 66,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 3,
+          "toIndex": 0,
+          "listIndex": 3
+        },
+        {
+          "from": 13,
+          "to": 67,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 4,
+          "toIndex": 0,
+          "listIndex": 4
+        },
+        {
+          "from": 13,
+          "to": 68,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 5,
+          "toIndex": 0,
+          "listIndex": 5
+        },
+        {
+          "from": 13,
+          "to": 69,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 6,
+          "toIndex": 0,
+          "listIndex": 6
+        },
+        {
+          "from": 17,
+          "to": 18,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 17,
+          "to": 19,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 18,
+          "to": 20,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 18,
+          "to": 21,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 19,
+          "to": 24,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 19,
+          "to": 25,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 20,
+          "to": 33,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 21,
+          "to": 22,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 21,
+          "to": 23,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 22,
+          "to": 49,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 23,
+          "to": 31,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 23,
+          "to": 32,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 24,
+          "to": 27,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 24,
+          "to": 28,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 25,
+          "to": 26,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 27,
+          "to": 30,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 28,
+          "to": 29,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 31,
+          "to": 48,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 33,
+          "to": 34,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 33,
+          "to": 35,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 34,
+          "to": 38,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 34,
+          "to": 39,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 35,
+          "to": 36,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 35,
+          "to": 37,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 36,
+          "to": 46,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 36,
+          "to": 47,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 37,
+          "to": 40,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 37,
+          "to": 41,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 38,
+          "to": 44,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 38,
+          "to": 45,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 39,
+          "to": 42,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 39,
+          "to": 43,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 48,
+          "to": 54,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 48,
+          "to": 55,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 49,
+          "to": 50,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 49,
+          "to": 51,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        },
+        {
+          "from": 51,
+          "to": 52,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 0,
+          "toIndex": 0,
+          "listIndex": 0
+        },
+        {
+          "from": 51,
+          "to": 53,
+          "label": "children",
+          "type": "Successor",
+          "fromIndex": 1,
+          "toIndex": 0,
+          "listIndex": 1
+        }
+      ]
+    }
+  ],
+  "performance": {
+    "baselineMedianNsPerCall": 2943542.9140625,
+    "candidateMedianNsPerCall": 2925187.4453125,
+    "nativeMedianNsPerCall": 1295074.7767857143,
+    "candidateOverBaseline": 0.993764157926046,
+    "candidateOverNative": 2.258701580593371,
+    "windowCount": 45,
+    "candidateBytesPerCall": 10647949.0,
+    "allocationReductionVsPhase1Percent": 4.665654750970106,
+    "allocationReductionVsOriginalPercent": 7.377395501353334,
+    "timingSummary": "../../bench/results/map-profiled-self-loop/comparison/summary.json",
+    "validation": "../../bench/results/map-profiled-self-loop/comparison/validation.json",
+    "scope": "Observed on this desktop; timing difference is within variation and does not establish a CPU gain."
+  }
+}

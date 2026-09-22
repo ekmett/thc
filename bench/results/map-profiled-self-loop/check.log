@@ -1,0 +1,59 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/build/install/thc/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+VERIFIED_MAP	before-requested-compilation	-3	0
+VERIFIED_MAP	before-requested-compilation	0	0
+VERIFIED_MAP	before-requested-compilation	1	59
+VERIFIED_MAP	before-requested-compilation	2	3811
+VERIFIED_MAP	before-requested-compilation	3	7160
+VERIFIED_MAP	before-requested-compilation	4	10512
+VERIFIED_MAP	before-requested-compilation	7	16932
+VERIFIED_MAP	before-requested-compilation	15	65471
+VERIFIED_MAP	before-requested-compilation	16	71366
+VERIFIED_MAP	before-requested-compilation	31	143361
+VERIFIED_MAP	before-requested-compilation	100	573630
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time   414( 226+188 )ms|AST  772|Inlined   9Y  21N|IR   5853/ 11037|CodeSize   50108|Addr 0x000119fec780|CompId 2278   |UTC 2026-09-22T18:55:51.368|Src n/a
+[engine] opt done   engine=1  id=17    lambda def, ww, ds1                                |Tier 2|Time    29(  16+14  )ms|AST  167|Inlined   1Y   0N|IR    644/  1037|CodeSize    6000|Addr 0x00011a002cc0|CompId 2391   |UTC 2026-09-22T18:55:51.415|Src n/a
+VERIFIED_MAP	before-requested-compilation	1024	5779685
+[engine] opt done   engine=1  id=22    lambda ww, ds2                                     |Tier 2|Time   132(  45+87  )ms|AST  327|Inlined   6Y   8N|IR   2771/  7117|CodeSize   29612|Addr 0x00011a012540|CompId 2415   |UTC 2026-09-22T18:55:51.565|Src n/a
+[engine] opt done   engine=1  id=18    lambda ww, ds                                      |Tier 2|Time   374( 128+246 )ms|AST  183|Inlined  12Y  21N|IR   5672/ 12327|CodeSize   53128|Addr 0x00011a01df80|CompId 2428   |UTC 2026-09-22T18:55:51.945|Src n/a
+VERIFIED_MAP	before-requested-compilation	4095	23067517
+VERIFIED_MAP	before-requested-compilation	4096	23069687
+[engine] opt done   engine=1  id=35    argument thunk                                     |Tier 2|Time   403( 182+221 )ms|AST  104|Inlined  12Y  19N|IR   6618/ 12377|CodeSize   53048|Addr 0x00011a034fc0|CompId 2450   |UTC 2026-09-22T18:55:52.372|Src n/a
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-22T18:55:52.379|Src n/a|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-22T18:55:52.380|Src n/a|Reason uncommon trap
+VERIFIED_MAP	before-requested-compilation	4097	23069746
+[engine] opt done   engine=1  id=36    lambda x, v                                        |Tier 2|Time   402( 251+151 )ms|AST  139|Inlined   7Y  13N|IR   3667/  9303|CodeSize   41256|Addr 0x00011a043580|CompId 2476   |UTC 2026-09-22T18:55:52.787|Src n/a
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time   409( 185+224 )ms|AST  772|Inlined   9Y  21N|IR   6500/ 13708|CodeSize   59700|Addr 0x00011a04e700|CompId 2492   |UTC 2026-09-22T18:55:53.205|Src n/a
+[engine] opt done   engine=1  id=26    lambda x, ww                                       |Tier 2|Time   108(  36+72  )ms|AST  266|Inlined   8Y   0N|IR   1984/  5267|CodeSize   22220|Addr 0x00011a05e700|CompId 2508   |UTC 2026-09-22T18:55:53.322|Src n/a
+VERIFIED_MAP	before-requested-compilation	10000	56348923
+[engine] opt done   engine=1  id=10    lambda k, x, l, r                                  |Tier 2|Time    18(   8+11  )ms|AST 2557|Inlined   0Y   0N|IR    797/  1562|CodeSize    6528|Addr 0x00011a0644c0|CompId 2514   |UTC 2026-09-22T18:55:53.354|Src n/a
+[engine] opt done   engine=1  id=30    argument thunk                                     |Tier 2|Time   134(  34+100 )ms|AST  103|Inlined   7Y   8N|IR   2911/  7456|CodeSize   30248|Addr 0x00011a066400|CompId 2515   |UTC 2026-09-22T18:55:53.506|Src n/a
+VERIFIED_MAP	before-requested-compilation	65536	370634752
+[engine] opt done   engine=1  id=31    lambda x, v                                        |Tier 2|Time   580( 183+397 )ms|AST  141|Inlined  24Y  20N|IR   8204/ 16016|CodeSize   74148|Addr 0x00011a06e240|CompId 2525   |UTC 2026-09-22T18:55:54.137|Src n/a
+VERIFIED_MAP	before-requested-compilation	100000	566683714
+[engine] opt done   engine=1  id=40    lambda n                                           |Tier 2|Time   216( 209+7   )ms|AST   42|Inlined   3Y   3N|IR    343/   840|CodeSize    3556|Addr 0x00011a082100|CompId 2544   |UTC 2026-09-22T18:55:54.374|Src n/a
+VERIFIED_MAP	after-requested-compilation	-3	0
+VERIFIED_MAP	after-requested-compilation	0	0
+VERIFIED_MAP	after-requested-compilation	1	59
+VERIFIED_MAP	after-requested-compilation	2	3811
+VERIFIED_MAP	after-requested-compilation	3	7160
+VERIFIED_MAP	after-requested-compilation	4	10512
+VERIFIED_MAP	after-requested-compilation	7	16932
+VERIFIED_MAP	after-requested-compilation	15	65471
+VERIFIED_MAP	after-requested-compilation	16	71366
+VERIFIED_MAP	after-requested-compilation	31	143361
+VERIFIED_MAP	after-requested-compilation	100	573630
+VERIFIED_MAP	after-requested-compilation	1024	5779685
+VERIFIED_MAP	after-requested-compilation	4095	23067517
+VERIFIED_MAP	after-requested-compilation	4096	23069687
+VERIFIED_MAP	after-requested-compilation	4097	23069746
+VERIFIED_MAP	after-requested-compilation	10000	56348923
+VERIFIED_MAP	after-requested-compilation	65536	370634752
+VERIFIED_MAP	after-requested-compilation	100000	566683714
+MAP_DIAGNOSTICS {"instrumented":true,"thunkEvaluationsByLabel":{"lvl":3,"argument thunk":502086},"compiledEntries":6415407,"thunkEvaluations":502089,"thunkHits":977357,"blackholes":0,"directCacheMisses":50,"indirectCalls":0,"tailBounces":5032652,"papAllocations":0,"unsupportedPolicy":"diagnostic-traps","deferredUnsupported":["Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)","Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1","Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"],"unsupportedTraps":0,"frames":"indexed primitive slots; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

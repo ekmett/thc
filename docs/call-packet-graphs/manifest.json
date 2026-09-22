@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "phase1Commit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "archivedCompilations": [
+    2600,
+    2780,
+    2831
+  ],
+  "lookupGatePassed": true,
+  "artifacts": {
+    "phase2-capture.tsv": {
+      "bytes": 47,
+      "sha256": "b67b4b883ebc8fe71682b929ada532c596802e46dcec962952bd21a06c0ca685"
+    },
+    "phase2-provenance.json": {
+      "bytes": 3877,
+      "sha256": "471b6dea5cf3da4a19daea7998b3428f1e7341e415ce887c1c3e89251e2f5bfa"
+    },
+    "phase2-summary.json": {
+      "bytes": 276052,
+      "sha256": "8aaeb670991cba14c243e80e7df965584cf4dfb1e68ada4fcf3be1b9db201e2c"
+    },
+    "phase1-capture.tsv": {
+      "bytes": 48,
+      "sha256": "912cc0577f6ccb2380db28fc9d09a79ed6fd1c82c9611eb6b51424ed78c8d2f5"
+    },
+    "phase3-provenance.json": {
+      "bytes": 3086,
+      "sha256": "8f24065487c0a790c60b532fa6a9ee6983d01042b7f8fb763bba4126d61afc4c"
+    },
+    "phase2-query-bgv.zip": {
+      "bytes": 874829,
+      "sha256": "cdf8423321ea4d661af5acd0be9b73e803aa3afebb508e1d00cbadbf64d52ef8"
+    },
+    "phase1-selected-bgv.zip": {
+      "bytes": 2897283,
+      "sha256": "55ffccc3af70774c2da4ef58a174c1cbdc788e7d0734a862633abb849e366633"
+    },
+    "phase3-summary.json": {
+      "bytes": 19117,
+      "sha256": "01dc6196e7fe3981c92b316e5c229c15a961e84e95cc990a0b3de0735a449d2c"
+    },
+    "phase3-capture.log": {
+      "bytes": 5849,
+      "sha256": "8b183a1031bbe4648984e63e752a0f4179ead7abd413b8dabb37ef408c2e3adc"
+    },
+    "phase1-summary.json": {
+      "bytes": 15851,
+      "sha256": "1f27ac14e27e95c9e14a730a830233fba46c66a0fd629d0bcc33b0d95134c3be"
+    },
+    "phase2-packet-traces.zip": {
+      "bytes": 62399,
+      "sha256": "e90b389be1786805c4f3a4278e09c4a3021d4e0dcde8251387a78bc2bd536540"
+    },
+    "phase3-capture.tsv": {
+      "bytes": 47,
+      "sha256": "ca2ee1e4f2f39a2b41a2aac4069164b2c8aded1256d69dc8e6e5afe291c029df"
+    },
+    "phase1-provenance.json": {
+      "bytes": 3733,
+      "sha256": "c215aa9303a3ae04b409e02bf46265aacd39d101101c7edb7ea575b3a3bde370"
+    },
+    "phase3-packet-traces.zip": {
+      "bytes": 32048,
+      "sha256": "82f9f32366c24917c08bc4357492513b097c36f694ab60aee31552c2e18b6f22"
+    },
+    "phase1-capture.log": {
+      "bytes": 5801,
+      "sha256": "b0c1e660654b622ea6062e2265dc7d3c102c13bfae17376ebe897bd9eebc696d"
+    },
+    "phase2-capture.log": {
+      "bytes": 5801,
+      "sha256": "840d4ceec109d80ef5e01d5fd919a204c45365c4e7ecee9358e6a59cc31d9084"
+    },
+    "phase3-selected-bgv.tar.xz": {
+      "bytes": 1155196,
+      "sha256": "cdb9ecac57fdbb9fd6d1c846a0bcefef55dc0fa4728b7b23f86aa3572c166dd4"
+    },
+    "phase1-packet-traces.zip": {
+      "bytes": 46967,
+      "sha256": "870d5acfb996f2a4bd25c4b5e5a04df8d5114af8945fc53a1d68629f0e78ba86"
+    }
+  },
+  "phase2Commit": "98c5e3ff15dd3886e3226cd99bc19d50426014c4",
+  "phase2ArchivedCompilations": [
+    2834
+  ],
+  "retainedRuntimeCommit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "finalTests": 41,
+  "rejectedCandidates": [
+    {
+      "commit": "98c5e3ff15dd3886e3226cd99bc19d50426014c4",
+      "reason": "Introduced materialized dynamic-mask boxes before inlined unboxing."
+    },
+    {
+      "commit": "3d82a88ad155b0cfced239d500726fa176fc4f0c",
+      "reason": "Removed regression but also removed all intended constant-header savings."
+    }
+  ],
+  "phase3ArchivedCompilations": [
+    2577,
+    2803
+  ],
+  "restorationCommit": "69b366aaacac5c1da9292632d98a6aedc80faba1",
+  "retainedRuntimeJarSha256": "d1dd45b7afb8fbcc30d8c5e7712201adb6e1ce04d7122505ac0c402a92f6a3f7",
+  "runtimeSourceAndRebuiltJarEqualPhase1": true,
+  "scope": "Historical call-packet experiments through the phase-one restoration. The subsequently retained self-tail inlining change is documented in ../map-inlining.md."
+}

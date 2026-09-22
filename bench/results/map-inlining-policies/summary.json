@@ -1,0 +1,284 @@
+{
+  "schema": 1,
+  "scope": "Diagnostic inlining-policy comparison, NOT a throughput benchmark. One process per policy; reported sites are static. Default expands different subgraphs so declined-call counts are not dynamic execution costs.",
+  "runtimeSourceCommit": "9a60b99b5a4a2196dd5184e783c7e3f852444a15",
+  "runtimeJarSha256": "d1dd45b7afb8fbcc30d8c5e7712201adb6e1ce04d7122505ac0c402a92f6a3f7",
+  "graalVersion": "25.3.4.1",
+  "productionPolicyChanged": false,
+  "jvmOptions": [
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xss2m",
+    "-Dthc.traceCompilation=true",
+    "-Dthc.minimumWarmCalls=256",
+    "-Dthc.diagnosticUnsupported=true",
+    "-Dpolyglot.compiler.TraceInlining=true",
+    "-Dpolyglot.compiler.TraceInliningDetails=true"
+  ],
+  "variantOption": "-Dpolyglot.compiler.InliningPolicy=Default",
+  "probeArguments": [
+    "mapAggregate",
+    "--steady",
+    "10",
+    "0.01",
+    "1",
+    "10000"
+  ],
+  "finalCompilations": {
+    "Agnostic": {
+      "21": {
+        "label": "lambda sc, x, ds1",
+        "tier": 2,
+        "inlined": 9,
+        "notInlined": 21,
+        "irBeforeBackend": 6131,
+        "irAfterBackend": 12755,
+        "codeBytes": 56716,
+        "compilationId": 2393
+      },
+      "22": {
+        "label": "lambda ww, ds2",
+        "tier": 2,
+        "inlined": 6,
+        "notInlined": 8,
+        "irBeforeBackend": 2722,
+        "irAfterBackend": 7094,
+        "codeBytes": 29336,
+        "compilationId": 2483
+      },
+      "17": {
+        "label": "lambda def, ww, ds1",
+        "tier": 2,
+        "inlined": 2,
+        "notInlined": 0,
+        "irBeforeBackend": 754,
+        "irAfterBackend": 1274,
+        "codeBytes": 5988,
+        "compilationId": 2544
+      },
+      "35": {
+        "label": "argument thunk",
+        "tier": 2,
+        "inlined": 8,
+        "notInlined": 14,
+        "irBeforeBackend": 4781,
+        "irAfterBackend": 9644,
+        "codeBytes": 40180,
+        "compilationId": 2551
+      },
+      "18": {
+        "label": "lambda ww, ds",
+        "tier": 2,
+        "inlined": 15,
+        "notInlined": 17,
+        "irBeforeBackend": 5977,
+        "irAfterBackend": 13351,
+        "codeBytes": 59548,
+        "compilationId": 2585
+      },
+      "36": {
+        "label": "lambda x, v",
+        "tier": 2,
+        "inlined": 10,
+        "notInlined": 14,
+        "irBeforeBackend": 4156,
+        "irAfterBackend": 10904,
+        "codeBytes": 51504,
+        "compilationId": 2601
+      },
+      "26": {
+        "label": "lambda x, ww",
+        "tier": 2,
+        "inlined": 16,
+        "notInlined": 0,
+        "irBeforeBackend": 3997,
+        "irAfterBackend": 6445,
+        "codeBytes": 29396,
+        "compilationId": 2630
+      },
+      "10": {
+        "label": "lambda k, x, l, r",
+        "tier": 2,
+        "inlined": 0,
+        "notInlined": 0,
+        "irBeforeBackend": 788,
+        "irAfterBackend": 1552,
+        "codeBytes": 6300,
+        "compilationId": 2637
+      },
+      "30": {
+        "label": "argument thunk",
+        "tier": 2,
+        "inlined": 7,
+        "notInlined": 8,
+        "irBeforeBackend": 2855,
+        "irAfterBackend": 7433,
+        "codeBytes": 30060,
+        "compilationId": 2646
+      },
+      "31": {
+        "label": "lambda x, v",
+        "tier": 2,
+        "inlined": 25,
+        "notInlined": 31,
+        "irBeforeBackend": 9458,
+        "irAfterBackend": 23285,
+        "codeBytes": 112236,
+        "compilationId": 2664
+      },
+      "15": {
+        "label": "lambda k, x, l, r",
+        "tier": 2,
+        "inlined": 11,
+        "notInlined": 21,
+        "irBeforeBackend": 7602,
+        "irAfterBackend": 15952,
+        "codeBytes": 66372,
+        "compilationId": 2680
+      },
+      "40": {
+        "label": "lambda n",
+        "tier": 2,
+        "inlined": 2,
+        "notInlined": 1,
+        "irBeforeBackend": 264,
+        "irAfterBackend": 865,
+        "codeBytes": 3584,
+        "compilationId": 2737
+      }
+    },
+    "Default": {
+      "21": {
+        "label": "lambda sc, x, ds1",
+        "tier": 2,
+        "inlined": 8,
+        "notInlined": 41,
+        "irBeforeBackend": 7520,
+        "irAfterBackend": 18363,
+        "codeBytes": 100020,
+        "compilationId": 2406
+      },
+      "22": {
+        "label": "lambda ww, ds2",
+        "tier": 2,
+        "inlined": 6,
+        "notInlined": 8,
+        "irBeforeBackend": 2824,
+        "irAfterBackend": 7161,
+        "codeBytes": 29676,
+        "compilationId": 2487
+      },
+      "17": {
+        "label": "lambda def, ww, ds1",
+        "tier": 2,
+        "inlined": 2,
+        "notInlined": 0,
+        "irBeforeBackend": 754,
+        "irAfterBackend": 1274,
+        "codeBytes": 5992,
+        "compilationId": 2549
+      },
+      "35": {
+        "label": "argument thunk",
+        "tier": 2,
+        "inlined": 9,
+        "notInlined": 41,
+        "irBeforeBackend": 7616,
+        "irAfterBackend": 18701,
+        "codeBytes": 101532,
+        "compilationId": 2574
+      },
+      "18": {
+        "label": "lambda ww, ds",
+        "tier": 2,
+        "inlined": 26,
+        "notInlined": 28,
+        "irBeforeBackend": 8737,
+        "irAfterBackend": 21016,
+        "codeBytes": 97316,
+        "compilationId": 2608
+      },
+      "36": {
+        "label": "lambda x, v",
+        "tier": 2,
+        "inlined": 10,
+        "notInlined": 52,
+        "irBeforeBackend": 8585,
+        "irAfterBackend": 21536,
+        "codeBytes": 115432,
+        "compilationId": 2630
+      },
+      "26": {
+        "label": "lambda x, ww",
+        "tier": 2,
+        "inlined": 18,
+        "notInlined": 0,
+        "irBeforeBackend": 3950,
+        "irAfterBackend": 6234,
+        "codeBytes": 29440,
+        "compilationId": 2652
+      },
+      "30": {
+        "label": "argument thunk",
+        "tier": 2,
+        "inlined": 7,
+        "notInlined": 8,
+        "irBeforeBackend": 2974,
+        "irAfterBackend": 7500,
+        "codeBytes": 31056,
+        "compilationId": 2653
+      },
+      "10": {
+        "label": "lambda k, x, l, r",
+        "tier": 2,
+        "inlined": 0,
+        "notInlined": 0,
+        "irBeforeBackend": 788,
+        "irAfterBackend": 1552,
+        "codeBytes": 6312,
+        "compilationId": 2656
+      },
+      "31": {
+        "label": "lambda x, v",
+        "tier": 2,
+        "inlined": 22,
+        "notInlined": 32,
+        "irBeforeBackend": 8744,
+        "irAfterBackend": 21119,
+        "codeBytes": 95356,
+        "compilationId": 2658
+      },
+      "20": {
+        "label": "argument thunk",
+        "tier": 2,
+        "inlined": 9,
+        "notInlined": 41,
+        "irBeforeBackend": 8072,
+        "irAfterBackend": 19305,
+        "codeBytes": 104016,
+        "compilationId": 2683
+      },
+      "15": {
+        "label": "lambda k, x, l, r",
+        "tier": 2,
+        "inlined": 8,
+        "notInlined": 43,
+        "irBeforeBackend": 8621,
+        "irAfterBackend": 21020,
+        "codeBytes": 108480,
+        "compilationId": 2691
+      },
+      "40": {
+        "label": "lambda n",
+        "tier": 2,
+        "inlined": 12,
+        "notInlined": 46,
+        "irBeforeBackend": 7502,
+        "irAfterBackend": 19484,
+        "codeBytes": 101552,
+        "compilationId": 2742
+      }
+    }
+  },
+  "unsupportedTraps": 0,
+  "lastTierVerified": true
+}

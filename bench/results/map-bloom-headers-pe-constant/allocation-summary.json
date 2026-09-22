@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "jvmBytesPerCall": [
+    11169058.5,
+    11169107.46875,
+    11169058.71875
+  ],
+  "jvmMedianBytesPerCall": 11169058.71875,
+  "originalBaselineJvmMedianBytesPerCall": 11496058.71875,
+  "phase1JvmMedianBytesPerCall": 11169058.71875,
+  "reductionVsOriginalPercent": 2.8444531121493366,
+  "reductionVsPhase1Percent": 0.0,
+  "nativeBytesPerCallEstimate": 7074187.625,
+  "jvmOverNativeAllocationEstimate": 1.578846831723664,
+  "method": {
+    "jvm": "ThreadMXBean current-thread allocated bytes after at least 15 seconds warmup and explicit guest compilation, 3 samples of 256 calls. Includes host entry work on this thread; excludes allocations by other threads.",
+    "native": "Difference in GHC RTS total allocated bytes for separate processes of 272 and 16 calls, divided by 256. Startup and reporting overhead approximately cancel. Same 16-input cycle and measured native binary.",
+    "scope": "Allocation volume, not retained heap or peak process memory. Separate from throughput timing and graph capture."
+  },
+  "unsupportedTraps": 0,
+  "disposition": "Rejected experiment: PE-constant gating removes the introduced boxing regression but also loses the intended cached-header optimization. The final runtime returns to phase1."
+}

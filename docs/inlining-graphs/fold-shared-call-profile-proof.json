@@ -1,0 +1,428 @@
+{
+  "schema": 1,
+  "compilation": 2808,
+  "graphOrdinal": 0,
+  "claim": "Entry and loop PE invokes share exactly the same DirectCallNode constant argument1, so the inliner reads the same aggregate profile for both.",
+  "pairs": [
+    {
+      "entryInvoke": 515,
+      "loopInvoke": 3573,
+      "sharedDirectCallNodeConstant": 496,
+      "sharedTargetConstant": 479
+    },
+    {
+      "entryInvoke": 1766,
+      "loopInvoke": 4764,
+      "sharedDirectCallNodeConstant": 1759,
+      "sharedTargetConstant": 1
+    }
+  ],
+  "nodes": [
+    {
+      "id": 1,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "id": "1",
+        "idx": "1",
+        "stamp": "a!# com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget",
+        "value": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "stableDimension": 0,
+        "isDefaultStable": false,
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.hots...",
+        "stampKind": "a java.lang.Object",
+        "relativeFrequency": 1.0,
+        "nodeToBlock": "B0",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "toString": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "category": "floating",
+        "name": "C(Object[Instance<com.oracle.truffle.runtime.hots...) a java.lang.Object",
+        "class": "jdk.graal.compiler.nodes.ConstantNode",
+        "block": "0"
+      }
+    },
+    {
+      "id": 479,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "4",
+      "properties": {
+        "id": "479",
+        "idx": "479",
+        "stamp": "a!# com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget",
+        "value": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "stableDimension": 0,
+        "isDefaultStable": false,
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.hots...",
+        "stampKind": "a java.lang.Object",
+        "relativeFrequency": 0.99999,
+        "nodeToBlock": "B4",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "toString": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "category": "floating",
+        "name": "C(Object[Instance<com.oracle.truffle.runtime.hots...) a java.lang.Object",
+        "class": "jdk.graal.compiler.nodes.ConstantNode",
+        "block": "4"
+      }
+    },
+    {
+      "id": 496,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "4",
+      "properties": {
+        "id": "496",
+        "idx": "496",
+        "stamp": "a!# com.oracle.truffle.runtime.OptimizedDirectCallNode",
+        "value": "Object[Instance<com.oracle.truffle.runtime.OptimizedDirectCallNode>]",
+        "stableDimension": 0,
+        "isDefaultStable": false,
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.Opti...",
+        "stampKind": "a java.lang.Object",
+        "relativeFrequency": 0.99999,
+        "nodeToBlock": "B4",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "toString": "Object[Instance<com.oracle.truffle.runtime.OptimizedDirectCallNode>]",
+        "category": "floating",
+        "name": "C(Object[Instance<com.oracle.truffle.runtime.Opti...) a java.lang.Object",
+        "class": "jdk.graal.compiler.nodes.ConstantNode",
+        "block": "4"
+      }
+    },
+    {
+      "id": 515,
+      "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+      "block": "8",
+      "properties": {
+        "id": "515",
+        "idx": "515",
+        "hasPredecessor": "true",
+        "stamp": "a java.lang.Object",
+        "bci": 30,
+        "polymorphic": false,
+        "inlineControl": "Invoke$InlineControl.Normal",
+        "isInOOMETry": false,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DispatchThunkTarget.direct(Application.kt:109) [bci:28]\nthc.runtime.DispatchThunkTargetNodeGen.execute(DispatchThunkTargetNodeGen.java:68) [bci:58]\nthc.runtime.ThunkTargetCache.call(Application.kt:131) [bci:14]\nthc.runtime.Force.execute(Program.kt:119) [bci:299]\nthc.runtime.Case.execute(Program.kt:188) [bci:13]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.FunctionRoot.execute(Program.kt:307) [bci:123]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "targetMethod": "OptimizedCallTarget.callDirect",
+        "relativeFrequency": 0.166665,
+        "nodeToBlock": "B8",
+        "nodeCostSize": "NodeSize.SIZE_2",
+        "nodeCostCycles": "NodeCycles.CYCLES_2",
+        "category": "controlSplit",
+        "killedLocationIdentity": "ANY_LOCATION",
+        "name": "Invoke!#OptimizedCallTarget.callDirect",
+        "class": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+        "block": "8"
+      }
+    },
+    {
+      "id": 516,
+      "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+      "block": "8",
+      "properties": {
+        "id": "516",
+        "idx": "516",
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callDirect(Lcom/oracle/truffle/api/nodes/Node;, [Ljava/lang/Object;)",
+        "referencedType": null,
+        "invokeKind": "CallTargetNode$InvokeKind.Special",
+        "returnStamp": "a java.lang.Object",
+        "typeProfile": null,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DispatchThunkTarget.direct(Application.kt:109) [bci:28]\nthc.runtime.DispatchThunkTargetNodeGen.execute(DispatchThunkTargetNodeGen.java:68) [bci:58]\nthc.runtime.ThunkTargetCache.call(Application.kt:131) [bci:14]\nthc.runtime.Force.execute(Program.kt:119) [bci:299]\nthc.runtime.Case.execute(Program.kt:188) [bci:13]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.FunctionRoot.execute(Program.kt:307) [bci:123]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "relativeFrequency": 0.166665,
+        "nodeToBlock": "B8",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "MethodCallTarget",
+        "class": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+        "block": "8"
+      }
+    },
+    {
+      "id": 1759,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "29",
+      "properties": {
+        "id": "1759",
+        "idx": "1759",
+        "stamp": "a!# com.oracle.truffle.runtime.OptimizedDirectCallNode",
+        "value": "Object[Instance<com.oracle.truffle.runtime.OptimizedDirectCallNode>]",
+        "stableDimension": 0,
+        "isDefaultStable": false,
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.Opti...",
+        "stampKind": "a java.lang.Object",
+        "relativeFrequency": 0.33333,
+        "nodeToBlock": "B29",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "toString": "Object[Instance<com.oracle.truffle.runtime.OptimizedDirectCallNode>]",
+        "category": "floating",
+        "name": "C(Object[Instance<com.oracle.truffle.runtime.Opti...) a java.lang.Object",
+        "class": "jdk.graal.compiler.nodes.ConstantNode",
+        "block": "29"
+      }
+    },
+    {
+      "id": 1766,
+      "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+      "block": "29",
+      "properties": {
+        "id": "1766",
+        "idx": "1766",
+        "hasPredecessor": "true",
+        "stamp": "a java.lang.Object",
+        "bci": 30,
+        "polymorphic": false,
+        "inlineControl": "Invoke$InlineControl.Normal",
+        "isInOOMETry": false,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DirectCallerNode.call(Application.kt:307) [bci:39]\nthc.runtime.Dispatch.direct(Application.kt:152) [bci:48]\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]\nthc.runtime.Application.execute(Program.kt:151) [bci:109]\nthc.runtime.Case.execute(Program.kt:188) [bci:10]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.FunctionRoot.execute(Program.kt:307) [bci:123]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "targetMethod": "OptimizedCallTarget.callDirect",
+        "relativeFrequency": 0.33333,
+        "nodeToBlock": "B29",
+        "nodeCostSize": "NodeSize.SIZE_2",
+        "nodeCostCycles": "NodeCycles.CYCLES_2",
+        "category": "controlSplit",
+        "killedLocationIdentity": "ANY_LOCATION",
+        "name": "Invoke!#OptimizedCallTarget.callDirect",
+        "class": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+        "block": "29"
+      }
+    },
+    {
+      "id": 1767,
+      "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+      "block": "29",
+      "properties": {
+        "id": "1767",
+        "idx": "1767",
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callDirect(Lcom/oracle/truffle/api/nodes/Node;, [Ljava/lang/Object;)",
+        "referencedType": null,
+        "invokeKind": "CallTargetNode$InvokeKind.Special",
+        "returnStamp": "a java.lang.Object",
+        "typeProfile": null,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DirectCallerNode.call(Application.kt:307) [bci:39]\nthc.runtime.Dispatch.direct(Application.kt:152) [bci:48]\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]\nthc.runtime.Application.execute(Program.kt:151) [bci:109]\nthc.runtime.Case.execute(Program.kt:188) [bci:10]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.FunctionRoot.execute(Program.kt:307) [bci:123]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "relativeFrequency": 0.33333,
+        "nodeToBlock": "B29",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "MethodCallTarget",
+        "class": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+        "block": "29"
+      }
+    },
+    {
+      "id": 3573,
+      "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+      "block": "54",
+      "properties": {
+        "id": "3573",
+        "idx": "3573",
+        "hasPredecessor": "true",
+        "stamp": "a java.lang.Object",
+        "bci": 30,
+        "polymorphic": false,
+        "inlineControl": "Invoke$InlineControl.Normal",
+        "isInOOMETry": false,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DispatchThunkTarget.direct(Application.kt:109) [bci:28]\nthc.runtime.DispatchThunkTargetNodeGen.execute(DispatchThunkTargetNodeGen.java:68) [bci:58]\nthc.runtime.ThunkTargetCache.call(Application.kt:131) [bci:14]\nthc.runtime.Force.execute(Program.kt:119) [bci:299]\nthc.runtime.Case.execute(Program.kt:188) [bci:13]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.SelfRepeater.executeRepeatingWithValue(Program.kt:272) [bci:3]\ncom.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]\nthc.runtime.FunctionRoot.execute(Program.kt:314) [bci:172]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "targetMethod": "OptimizedCallTarget.callDirect",
+        "relativeFrequency": 0.14460373825562234,
+        "nodeToBlock": "B54",
+        "nodeCostSize": "NodeSize.SIZE_2",
+        "nodeCostCycles": "NodeCycles.CYCLES_2",
+        "category": "controlSplit",
+        "killedLocationIdentity": "ANY_LOCATION",
+        "name": "Invoke!#OptimizedCallTarget.callDirect",
+        "class": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+        "block": "54"
+      }
+    },
+    {
+      "id": 3574,
+      "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+      "block": "54",
+      "properties": {
+        "id": "3574",
+        "idx": "3574",
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callDirect(Lcom/oracle/truffle/api/nodes/Node;, [Ljava/lang/Object;)",
+        "referencedType": null,
+        "invokeKind": "CallTargetNode$InvokeKind.Special",
+        "returnStamp": "a java.lang.Object",
+        "typeProfile": null,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DispatchThunkTarget.direct(Application.kt:109) [bci:28]\nthc.runtime.DispatchThunkTargetNodeGen.execute(DispatchThunkTargetNodeGen.java:68) [bci:58]\nthc.runtime.ThunkTargetCache.call(Application.kt:131) [bci:14]\nthc.runtime.Force.execute(Program.kt:119) [bci:299]\nthc.runtime.Case.execute(Program.kt:188) [bci:13]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.SelfRepeater.executeRepeatingWithValue(Program.kt:272) [bci:3]\ncom.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]\nthc.runtime.FunctionRoot.execute(Program.kt:314) [bci:172]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "relativeFrequency": 0.14460373825562234,
+        "nodeToBlock": "B54",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "MethodCallTarget",
+        "class": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+        "block": "54"
+      }
+    },
+    {
+      "id": 4764,
+      "nodeClass": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+      "block": "75",
+      "properties": {
+        "id": "4764",
+        "idx": "4764",
+        "hasPredecessor": "true",
+        "stamp": "a java.lang.Object",
+        "bci": 30,
+        "polymorphic": false,
+        "inlineControl": "Invoke$InlineControl.Normal",
+        "isInOOMETry": false,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DirectCallerNode.call(Application.kt:307) [bci:39]\nthc.runtime.Dispatch.direct(Application.kt:152) [bci:48]\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]\nthc.runtime.Application.execute(Program.kt:151) [bci:109]\nthc.runtime.Case.execute(Program.kt:188) [bci:10]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.SelfRepeater.executeRepeatingWithValue(Program.kt:272) [bci:3]\ncom.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]\nthc.runtime.FunctionRoot.execute(Program.kt:314) [bci:172]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "targetMethod": "OptimizedCallTarget.callDirect",
+        "relativeFrequency": 0.2892074765112447,
+        "nodeToBlock": "B75",
+        "nodeCostSize": "NodeSize.SIZE_2",
+        "nodeCostCycles": "NodeCycles.CYCLES_2",
+        "category": "controlSplit",
+        "killedLocationIdentity": "ANY_LOCATION",
+        "name": "Invoke!#OptimizedCallTarget.callDirect",
+        "class": "jdk.graal.compiler.nodes.InvokeWithExceptionNode",
+        "block": "75"
+      }
+    },
+    {
+      "id": 4765,
+      "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+      "block": "75",
+      "properties": {
+        "id": "4765",
+        "idx": "4765",
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callDirect(Lcom/oracle/truffle/api/nodes/Node;, [Ljava/lang/Object;)",
+        "referencedType": null,
+        "invokeKind": "CallTargetNode$InvokeKind.Special",
+        "returnStamp": "a java.lang.Object",
+        "typeProfile": null,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]\nthc.runtime.Calls.direct(Calls.java:10) [bci:2]\nthc.runtime.DirectCallerNode.call(Application.kt:307) [bci:39]\nthc.runtime.Dispatch.direct(Application.kt:152) [bci:48]\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]\nthc.runtime.Application.execute(Program.kt:151) [bci:109]\nthc.runtime.Case.execute(Program.kt:188) [bci:10]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.Case.runAlternative(Program.kt:208) [bci:136]\nthc.runtime.Case.execute(Program.kt:198) [bci:159]\nthc.runtime.FunctionBody.execute(Program.kt:267) [bci:10]\nthc.runtime.SelfRepeater.once(Program.kt:270) [bci:5]\nthc.runtime.SelfRepeater.executeRepeatingWithValue(Program.kt:272) [bci:3]\ncom.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]\nthc.runtime.FunctionRoot.execute(Program.kt:314) [bci:172]\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "relativeFrequency": 0.2892074765112447,
+        "nodeToBlock": "B75",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "MethodCallTarget",
+        "class": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+        "block": "75"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": 516,
+      "to": 515,
+      "label": "callTarget",
+      "type": "Extension",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 479,
+      "to": 516,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": 0
+    },
+    {
+      "from": 496,
+      "to": 516,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 1
+    },
+    {
+      "from": 1767,
+      "to": 1766,
+      "label": "callTarget",
+      "type": "Extension",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 1767,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": 0
+    },
+    {
+      "from": 1759,
+      "to": 1767,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 1
+    },
+    {
+      "from": 3574,
+      "to": 3573,
+      "label": "callTarget",
+      "type": "Extension",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 479,
+      "to": 3574,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": 0
+    },
+    {
+      "from": 496,
+      "to": 3574,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 1
+    },
+    {
+      "from": 4765,
+      "to": 4764,
+      "label": "callTarget",
+      "type": "Extension",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 4765,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": 0
+    },
+    {
+      "from": 1759,
+      "to": 4765,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 1
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "method": "Read bundled src.zip directly with Python zipfile; no JVM invocation, source extraction, runtime modification, or benchmark. SHA-256 covers unmodified selected archive entries, not the whole archive.",
+  "sourceArchive": "GraalVM 25.3.4.1/Contents/Home/lib/src.zip",
+  "jdkRelease": {
+    "JAVA_RUNTIME_VERSION": "25.0.4.1+1-LTS-jvmci-25.3-b22",
+    "JAVA_VERSION": "25.0.4.1",
+    "OS_ARCH": "aarch64",
+    "OS_NAME": "Darwin",
+    "SOURCE": ".:git:fecdb64f22b3 open:git:d3982e66e535 labsjdk-builder:91e3f5c97b05f5680e66091af25c3603c60aeb9d compiler:7b025988a922a73286d1326e1eddc1ca39d3f569 espresso-shared:7b025988a922a73286d1326e1eddc1ca39d3f569 graal-enterprise:1ae76db84672404d04046996ec0da752c1f18f70 lium:1ae76db84672404d04046996ec0da752c1f18f70 regex:7b025988a922a73286d1326e1eddc1ca39d3f569 reporter:1ae76db84672404d04046996ec0da752c1f18f70 sdk:7b025988a922a73286d1326e1eddc1ca39d3f569 substratevm:7b025988a922a73286d1326e1eddc1ca39d3f569 substratevm-enterprise:1ae76db84672404d04046996ec0da752c1f18f70 substratevm-enterprise-gcs:c3445a4d685b611e3087241ec9a56141a5fd6ed5 tools:7b025988a922a73286d1326e1eddc1ca39d3f569 truffle:7b025988a922a73286d1326e1eddc1ca39d3f569 truffle-enterprise:1ae76db84672404d04046996ec0da752c1f18f70 vm:7b025988a922a73286d1326e1eddc1ca39d3f569 vm-enterprise:1ae76db84672404d04046996ec0da752c1f18f70 wasm:7b025988a922a73286d1326e1eddc1ca39d3f569 web-image:7b025988a922a73286d1326e1eddc1ca39d3f569 web-image-enterprise:1ae76db84672404d04046996ec0da752c1f18f70",
+    "GRAALVM_VERSION": "25.3.4.1"
+  },
+  "sources": [
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/TruffleCompilerOptions.java",
+      "sha256": "1dd01c9b32897bcc77f6ccda1b18074baae9568d95187887b520b0855678808e"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/phases/inlining/AgnosticInliningPhase.java",
+      "sha256": "ac16744ffe1ba14cdd4bb7dff97cca35fda5aac84c61c0d3cfc631697e0adbc7"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/phases/inlining/InliningPolicyProvider.java",
+      "sha256": "fc2083077ac3e5c73b77e726297c66f92fae8dc45a319e305176f5287996f5d1"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/inlining/AgnosticInliningPolicyProvider.java",
+      "sha256": "35f9e639c33c88a42c21cfc5453ac95af1121ffdd8a81dfa4808d60cb2d407b8"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/phases/inlining/DefaultInliningPolicyProvider.java",
+      "sha256": "1d9487a1f3ea2bee8748853592e0c2763612d8511b488aae9da7b54e5d669229"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/inlining/AgnosticInliningPolicy.java",
+      "sha256": "69e5172457750be29101692bbaa0f7076671bb1174d5fa3709d88a867c9b36e0"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/inlining/CostBenefit.java",
+      "sha256": "ee9c45b5c727813c092aedc3647fd229617cb4d86a6d94cd3a16a417e0d25317"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/phases/inlining/DefaultInliningPolicy.java",
+      "sha256": "b10e1dc0dbb38fd3a3022d0d44dbcf2b185be9e7092ba9c11131b5ba7a545b3c"
+    },
+    {
+      "entry": "jdk.graal.compiler/jdk/graal/compiler/truffle/phases/inlining/CallNode.java",
+      "sha256": "d55ad7447fc21deb4d4f05235366090e504ed5889f010a165dac8f342e586de8",
+      "relevantLines": {
+        "addChildren": "140\u2013157",
+        "getCallCount": "169\u2013179",
+        "calculateFrequency": "196\u2013198"
+      }
+    }
+  ]
+}
