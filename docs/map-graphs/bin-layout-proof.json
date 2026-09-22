@@ -1,0 +1,69 @@
+{
+  "source": {
+    "compilationId": 2816,
+    "graphOrdinal": 5,
+    "phase": "2: Before phase HighTierLowering"
+  },
+  "nodes": [
+    {
+      "id": 11589,
+      "class": "VirtualInstanceNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+        "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+        "fields": [
+          "thc.runtime.DataValue.layout",
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__0",
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__1",
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__2",
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__3",
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__4"
+        ],
+        "name": "VirtualInstance(6) GeneratedStaticObject$$4"
+      }
+    },
+    {
+      "id": 12181,
+      "class": "CommitAllocationNode",
+      "block": "19",
+      "properties": {
+        "stamp": "void",
+        "object(11693)": "GeneratedStaticObject$$4[582,3996,4090,4172,12229,11690]",
+        "object(11690)": "GeneratedStaticObject$$4[582,4648,63,79,2573,505]",
+        "name": "Alloc 11693, 11690"
+      }
+    },
+    {
+      "id": 3996,
+      "class": "AddNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64",
+        "name": "+"
+      }
+    },
+    {
+      "id": 4648,
+      "class": "AddNode",
+      "block": "15",
+      "properties": {
+        "stamp": "i64",
+        "name": "+"
+      }
+    }
+  ],
+  "layout": {
+    "class": "GeneratedStaticObject$$4",
+    "constructor": "main:Data.Map.Internal.Bin",
+    "fields": [
+      "layout reference",
+      "size: i64",
+      "key: object",
+      "value: object",
+      "left: object",
+      "right: object"
+    ]
+  },
+  "claim": "Bin has a directly stored primitive size and four object fields; no per-Bin Object[] payload or boxed size. Int keys and values are separate boxed Haskell I# objects. Object[] allocations elsewhere in other graphs are call packets, not the Bin representation."
+}

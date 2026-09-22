@@ -1,0 +1,139 @@
+{
+  "entry": "under",
+  "compilation": "1943[lambda_n]",
+  "sourceBgv": "TruffleHotSpotCompilation-1943[lambda_n].bgv",
+  "graph": "2: Before phase HighTierLowering",
+  "nodes": 272,
+  "artifact": "under-guest-before-high.json",
+  "invokes": [
+    {
+      "node": 604,
+      "block": "0",
+      "stamp": "void",
+      "targetMethod": "thc.runtime.Closure.pap([Ljava/lang/Object;, I, I)",
+      "name": "MethodCallTarget"
+    }
+  ],
+  "committedAllocations": [
+    {
+      "node": 5756,
+      "block": "0",
+      "stamp": "void",
+      "object(1439)": "Object[][1489]",
+      "object(1489)": "GeneratedStaticObject$$1[477,2231]",
+      "name": "Alloc 1439, 1489"
+    },
+    {
+      "node": 5761,
+      "block": "9",
+      "stamp": "void",
+      "object(2117)": "Object[][5760]",
+      "name": "Alloc 2117"
+    },
+    {
+      "node": 5764,
+      "block": "10",
+      "stamp": "void",
+      "object(2121)": "Object[][5760,1993]",
+      "name": "Alloc 2121"
+    },
+    {
+      "node": 5767,
+      "block": "11",
+      "stamp": "void",
+      "object(2209)": "GeneratedStaticObject$$1[477,2170]",
+      "name": "Alloc 2209"
+    }
+  ],
+  "boxing": [
+    {
+      "node": 5760,
+      "block": "8",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    },
+    {
+      "node": 5771,
+      "block": "14",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    }
+  ],
+  "captureLoads": [],
+  "typedDataFields": [
+    {
+      "node": 1489,
+      "block": "0",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.field__0"
+      ],
+      "name": "VirtualInstance(1) GeneratedStaticObject$$1"
+    },
+    {
+      "node": 1822,
+      "block": "3",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.field__0",
+      "name": "LoadField#GeneratedStaticObject$$1.field__0"
+    },
+    {
+      "node": 2080,
+      "block": "14",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.field__0",
+      "name": "LoadField#GeneratedStaticObject$$1.field__0"
+    },
+    {
+      "node": 2209,
+      "block": "4",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.field__0"
+      ],
+      "name": "VirtualInstance(5) GeneratedStaticObject$$1"
+    },
+    {
+      "node": 5745,
+      "block": "2",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.field__0",
+      "name": "LoadField#GeneratedStaticObject$$1.field__0"
+    }
+  ],
+  "callTree": [
+    {
+      "node": 0,
+      "target": "lambda n",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 1,
+      "target": "lambda f, x",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 2,
+      "target": "lambda ds, ds",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 3,
+      "target": "lvl",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 4,
+      "target": "lvl",
+      "state": "CallNode$State.Inlined"
+    }
+  ],
+  "notes": [
+    "Residual Closure.pap MethodCallTarget604 at the explicit boundary. Commit5756 contains a one-element PAP argument array1439 and typed Box1489; the Box stores primitive2231 directly, not a payload array or boxed Long.",
+    "No committed Thunk or capture object. PAP itself creates the copied prefix and Closure beyond the boundary; those allocations are not graph CommitAllocationNodes."
+  ]
+}

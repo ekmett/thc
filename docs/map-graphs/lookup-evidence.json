@@ -1,0 +1,121 @@
+{
+  "summary": {
+    "role": "lookup",
+    "compilationId": 2757,
+    "root": "TruffleIR.Tier2.lambda_def,_ww,_ds1()",
+    "bgv": "TruffleHotSpotCompilation-2757[lambda_def,_ww,_ds1].bgv",
+    "sha256": "f99cecc554fba7bcdfc26b73597d329f9980e8feee54404d482573297e1280c5",
+    "rawBytes": 1469317,
+    "phases": {
+      "afterRootPE": {
+        "graphOrdinal": 0,
+        "nodes": 937
+      },
+      "beforeHighTierLowering": {
+        "graphOrdinal": 5,
+        "nodes": 651
+      },
+      "afterMidTier": {
+        "graphOrdinal": 7,
+        "nodes": 1331
+      }
+    },
+    "remainingMethodTargets": {},
+    "commitSites": 6,
+    "committedObjectDescriptionsByType": {
+      "Object[]": 4,
+      "GeneratedStaticObject$$6": 2
+    },
+    "allocatingBoxKinds": {
+      "JavaKind.Long": 2
+    },
+    "stringEqualsNodeIds": [],
+    "rootPEVirtualFrameGetNodeIds": []
+  },
+  "methods": [],
+  "allocationCommits": [
+    {
+      "id": 8086,
+      "class": "CommitAllocationNode",
+      "block": "62",
+      "properties": {
+        "stamp": "void",
+        "object(7466)": "Object[][8085]",
+        "name": "Alloc 7466"
+      }
+    },
+    {
+      "id": 8089,
+      "class": "CommitAllocationNode",
+      "block": "63",
+      "properties": {
+        "stamp": "void",
+        "object(7471)": "Object[][8085,6731]",
+        "name": "Alloc 7471"
+      }
+    },
+    {
+      "id": 8092,
+      "class": "CommitAllocationNode",
+      "block": "64",
+      "properties": {
+        "stamp": "void",
+        "object(7622)": "GeneratedStaticObject$$6[1338,530]",
+        "name": "Alloc 7622"
+      }
+    },
+    {
+      "id": 8102,
+      "class": "CommitAllocationNode",
+      "block": "78",
+      "properties": {
+        "stamp": "void",
+        "object(7378)": "Object[][8101]",
+        "name": "Alloc 7378"
+      }
+    },
+    {
+      "id": 8105,
+      "class": "CommitAllocationNode",
+      "block": "79",
+      "properties": {
+        "stamp": "void",
+        "object(7383)": "Object[][8101,3431]",
+        "name": "Alloc 7383"
+      }
+    },
+    {
+      "id": 8108,
+      "class": "CommitAllocationNode",
+      "block": "80",
+      "properties": {
+        "stamp": "void",
+        "object(7580)": "GeneratedStaticObject$$6[1338,530]",
+        "name": "Alloc 7580"
+      }
+    }
+  ],
+  "boxingNodes": [
+    {
+      "id": 8085,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "61",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 8101,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "77",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    }
+  ],
+  "note": "Static sites in one compiled graph, including conditionally entered paths and inlined callees. These are not dynamic allocations per iteration."
+}

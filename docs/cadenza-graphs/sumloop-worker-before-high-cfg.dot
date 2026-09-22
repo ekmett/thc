@@ -1,0 +1,20 @@
+digraph cfg {
+  graph [rankdir=TB]; node [shape=box,fontname="Menlo",fontsize=10];
+  label="2: Before phase HighTierLowering";
+  "B0" [label="B0\n0 StartNode void\n2 ParameterNode a java.lang.Object[]\n1 ConstantNode a!# com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget\n3 FrameState\n28 ConstantNode i32 [3]\n29 PiArrayNode a java.lang.Object[]\n31 PiNode a!# java.lang.Object[]\n5 ConstantNode i32 [0]\n22 ConstantNode i32 [1]\n71 ConstantNode i32 [2]\n568 ConstantNode i64 [1]\n109 VirtualArrayNode a!# byte[]\n3889 VirtualObjectState\n537 ConstantNode i64 [0]\n1276 ConstantNode i64 [-1]\n166 ConstantNode i64 [36028805894111360]\n108 VirtualArrayNode a!# long[]\n107 VirtualArrayNode a!# java.lang.Object[]\n3836 VirtualObjectState\n3833 VirtualArrayNode a!# java.lang.Object[]\n104 ConstantNode a!# java.lang.Object[]\n101 ConstantNode a!# com.oracle.truffle.api.frame.FrameDescriptor\n103 VirtualInstanceNode a!# com.oracle.truffle.api.impl.FrameWithoutBoxing\n3834 VirtualObjectState\n348 ConstantNode a!# thc.runtime.SelfRepeater\n345 ConstantNode a!# com.oracle.truffle.runtime.OptimizedOSRLoopNode$OptimizedDefaultOSRLoopNode\n132 ConstantNode a!# com.oracle.truffle.runtime.CompilationState\n158 FrameState\n157 FrameState\n2056 FrameState\n4329 VirtualBoxingNode a!# java.lang.Long\n40 LoadIndexedNode a java.lang.Object\n45 PiNode a!# java.lang.Long\n46 BoxNode$TrustedBoxedValue a!# java.lang.Long\n58 LoadIndexedNode a java.lang.Object\n62 PiNode a!# java.lang.Long\n63 BoxNode$TrustedBoxedValue a!# java.lang.Long\n75 LoadIndexedNode a java.lang.Object\n79 PiNode a!# java.lang.Long\n80 BoxNode$TrustedBoxedValue a!# java.lang.Long\n3835 VirtualObjectState\n162 UnboxNode i64\n167 OrNode i64 [-9187343230960664448 - 9223372036854775807] bits:xxxxxxxx1xxxxxxxxxxxxxxxxxxxxx1xxxx1xxx1xxxxxxxxxxxxxxxx1xxxxxxx\n4317 UnboxNode i64\n569 IntegerLessThanNode void\n571 ConditionalNode i64 [0 - 1] bits:0...0x\n1277 AddNode i64\n4319 UnboxNode i64\n1604 AddNode i64\n866 IfNode void"];
+  "B0" -> "B1";
+  "B0" -> "B2";
+  "B1" [label="B1\n871 BeginNode void\n1834 EndNode void"];
+  "B1" -> "B6";
+  "B2" [label="B2\n868 BeginNode void\n2053 EndNode void"];
+  "B2" -> "B3";
+  "B3" [label="B3\n2054 LoopBeginNode void\n4032 VirtualObjectState\n2055 FrameState\n2251 IntegerLessThanNode void\n2253 ConditionalNode i64 [0 - 1] bits:0...0x\n2922 AddNode i64\n3234 AddNode i64\n2534 IfNode void\n4029 ValuePhiNode i64\n4030 ValuePhiNode i64\n4031 ValuePhiNode i64 [0 - 1] bits:0...0x"];
+  "B3" -> "B5";
+  "B3" -> "B4";
+  "B4" [label="B4\n2536 BeginNode void\n3715 LoopEndNode void"];
+  "B4" -> "B3";
+  "B5" [label="B5\n3712 LoopExitNode void\n4331 VirtualObjectState\n4264 VirtualObjectState\n3718 FrameState\n4332 BoxNode$AllocatingBoxNode a!# java.lang.Long\n3724 EndNode void"];
+  "B5" -> "B6";
+  "B6" [label="B6\n1835 MergeNode void\n4309 VirtualObjectState\n3727 FrameState\n3773 ReturnNode void\n3725 ValuePhiNode a!# java.lang.Long\n4306 ValuePhiNode i64\n4307 ValuePhiNode i64\n4308 ValuePhiNode i64 [0 - 1] bits:0...0x"];
+  "B(no block)" [label="B(no block)\n4260 ValueProxyNode i64\n4261 ValueProxyNode i64\n4262 ValueProxyNode i64 [0 - 1] bits:0...0x"];
+}

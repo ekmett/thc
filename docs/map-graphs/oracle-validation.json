@@ -1,0 +1,23 @@
+{
+  "inputs": [
+    -3,
+    0,
+    1,
+    2,
+    3,
+    4,
+    7,
+    15,
+    16,
+    31,
+    100,
+    1024,
+    4095,
+    4096,
+    4097,
+    10000,
+    65536,
+    100000
+  ],
+  "allNativeResultsMatchIndependentHistogram": true
+}

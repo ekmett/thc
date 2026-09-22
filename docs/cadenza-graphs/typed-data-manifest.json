@@ -1,0 +1,71 @@
+{
+  "source": "final cadenza-data graph captures",
+  "graphStage": "graph5 Before HighTierLowering",
+  "artifacts": [
+    {
+      "entry": "captured",
+      "prefix": "captured-guest",
+      "compilation": "1955[lambda_n]",
+      "nodes": 198,
+      "methodCalls": 0,
+      "evidence": "captured-guest-evidence.json"
+    },
+    {
+      "entry": "under",
+      "prefix": "under-guest",
+      "compilation": "1943[lambda_n]",
+      "nodes": 272,
+      "methodCalls": 1,
+      "evidence": "under-guest-evidence.json"
+    },
+    {
+      "entry": "over",
+      "prefix": "over-guest",
+      "compilation": "1968[lambda_n]",
+      "nodes": 446,
+      "methodCalls": 0,
+      "evidence": "over-guest-evidence.json"
+    },
+    {
+      "entry": "capturedChangingEnv",
+      "prefix": "changing-env-worker",
+      "compilation": "2018[lambda_ds]",
+      "nodes": 564,
+      "methodCalls": 0,
+      "evidence": "changing-env-worker-evidence.json"
+    },
+    {
+      "entry": "capturedChangingEnv",
+      "prefix": "changing-env-guest",
+      "compilation": "2190[lambda_n]",
+      "nodes": 800,
+      "methodCalls": 0,
+      "evidence": "changing-env-guest-evidence.json"
+    },
+    {
+      "entry": "caseList",
+      "prefix": "case-list-builder",
+      "compilation": "2038[lambda_n]",
+      "nodes": 30,
+      "methodCalls": 0,
+      "evidence": "case-list-builder-evidence.json"
+    },
+    {
+      "entry": "caseList",
+      "prefix": "case-list-worker",
+      "compilation": "2139[lambda_n,_xs,_acc]",
+      "nodes": 768,
+      "methodCalls": 0,
+      "evidence": "case-list-worker-evidence.json"
+    },
+    {
+      "entry": "caseList",
+      "prefix": "case-list-guest",
+      "compilation": "2251[lambda_n]",
+      "nodes": 804,
+      "methodCalls": 0,
+      "evidence": "case-list-guest-evidence.json"
+    }
+  ],
+  "note": "See separate sumloop-manifest.json for the sumLoop worker and host. Node IDs and generated class suffixes are compilation-specific."
+}

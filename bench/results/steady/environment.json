@@ -1,0 +1,22 @@
+{
+  "recorded": "2026-09-22",
+  "system": "macOS-15.5-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "cpu": "Apple M3",
+  "memoryBytes": "17179869184",
+  "ghc": "9.14.1",
+  "java": "java version \"25.0.4.1\" 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)",
+  "graalArtifacts": "25.3.4.1",
+  "kotlin": "2.4.20",
+  "gradle": "9.7.1",
+  "jvmArguments": [
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xss2m"
+  ],
+  "guestCompilation": "synchronous last tier; graph budget100000, timeout30s",
+  "nativeOptions": [
+    "-O2",
+    "-dcore-lint",
+    "-dstg-lint"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "tests": "10",
+  "failures": "0",
+  "errors": "0",
+  "skipped": "0",
+  "time": "3.227",
+  "nativeOracleRows": 112,
+  "compiledGuestEntries": [
+    "sumLoop",
+    "fib",
+    "captured",
+    "exact",
+    "under",
+    "over",
+    "unknown",
+    "shared",
+    "lazyArgument",
+    "lazyField",
+    "recursiveCaf",
+    "caseList",
+    "multiModule",
+    "cacheSaturation",
+    "mutualTail",
+    "selfMutualTail"
+  ]
+}

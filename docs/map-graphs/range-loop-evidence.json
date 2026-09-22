@@ -1,0 +1,1680 @@
+{
+  "summary": {
+    "role": "range-loop",
+    "compilationId": 2829,
+    "root": "TruffleIR.Tier2.lambda_x,_v()",
+    "bgv": "TruffleHotSpotCompilation-2829[lambda_x,_v].bgv",
+    "sha256": "6b02c86a034412af8c26aeb61ff77c9cb95424ce8238ac1926580731d4b1c75d",
+    "rawBytes": 16008742,
+    "phases": {
+      "afterRootPE": {
+        "graphOrdinal": 0,
+        "nodes": 929
+      },
+      "beforeHighTierLowering": {
+        "graphOrdinal": 5,
+        "nodes": 8324
+      },
+      "afterMidTier": {
+        "graphOrdinal": 7,
+        "nodes": 18525
+      }
+    },
+    "remainingMethodTargets": {
+      "java.lang.Long.longValue()": 2,
+      "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 31
+    },
+    "commitSites": 90,
+    "committedObjectDescriptionsByType": {
+      "Object[]": 37,
+      "GeneratedStaticObject$$4": 53,
+      "GeneratedStaticObject$$6": 19,
+      "Thunk": 6,
+      "GeneratedStaticObject$$7": 2,
+      "GeneratedStaticObject$$13": 2,
+      "GeneratedStaticObject$$11": 2,
+      "RecCell": 2,
+      "Closure": 6,
+      "GeneratedStaticObject$$10": 2,
+      "GeneratedStaticObject$$9": 2,
+      "GeneratedStaticObject$$15": 2
+    },
+    "allocatingBoxKinds": {
+      "JavaKind.Long": 35
+    },
+    "stringEqualsNodeIds": [],
+    "rootPEVirtualFrameGetNodeIds": []
+  },
+  "methods": [
+    {
+      "id": 12987,
+      "class": "MethodCallTargetNode",
+      "block": "500",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "java.lang.Long.longValue()",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 13212,
+      "class": "MethodCallTargetNode",
+      "block": "968",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "java.lang.Long.longValue()",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20560,
+      "class": "MethodCallTargetNode",
+      "block": "71",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20620,
+      "class": "MethodCallTargetNode",
+      "block": "97",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20680,
+      "class": "MethodCallTargetNode",
+      "block": "142",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20740,
+      "class": "MethodCallTargetNode",
+      "block": "168",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20800,
+      "class": "MethodCallTargetNode",
+      "block": "231",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20860,
+      "class": "MethodCallTargetNode",
+      "block": "257",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20920,
+      "class": "MethodCallTargetNode",
+      "block": "308",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 20980,
+      "class": "MethodCallTargetNode",
+      "block": "334",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21042,
+      "class": "MethodCallTargetNode",
+      "block": "368",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21117,
+      "class": "MethodCallTargetNode",
+      "block": "378",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21178,
+      "class": "MethodCallTargetNode",
+      "block": "450",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21241,
+      "class": "MethodCallTargetNode",
+      "block": "455",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21303,
+      "class": "MethodCallTargetNode",
+      "block": "468",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21338,
+      "class": "MethodCallTargetNode",
+      "block": "478",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21387,
+      "class": "MethodCallTargetNode",
+      "block": "499",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21462,
+      "class": "MethodCallTargetNode",
+      "block": "501",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21523,
+      "class": "MethodCallTargetNode",
+      "block": "584",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21583,
+      "class": "MethodCallTargetNode",
+      "block": "610",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21643,
+      "class": "MethodCallTargetNode",
+      "block": "655",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21703,
+      "class": "MethodCallTargetNode",
+      "block": "681",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21763,
+      "class": "MethodCallTargetNode",
+      "block": "729",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21823,
+      "class": "MethodCallTargetNode",
+      "block": "776",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21883,
+      "class": "MethodCallTargetNode",
+      "block": "802",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 21944,
+      "class": "MethodCallTargetNode",
+      "block": "836",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 22018,
+      "class": "MethodCallTargetNode",
+      "block": "846",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 22079,
+      "class": "MethodCallTargetNode",
+      "block": "918",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 22141,
+      "class": "MethodCallTargetNode",
+      "block": "923",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 22203,
+      "class": "MethodCallTargetNode",
+      "block": "936",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 22237,
+      "class": "MethodCallTargetNode",
+      "block": "946",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 22285,
+      "class": "MethodCallTargetNode",
+      "block": "967",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    },
+    {
+      "id": 22359,
+      "class": "MethodCallTargetNode",
+      "block": "969",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    }
+  ],
+  "allocationCommits": [
+    {
+      "id": 28351,
+      "class": "CommitAllocationNode",
+      "block": "8",
+      "properties": {
+        "stamp": "void",
+        "object(6684)": "Object[][28350]",
+        "name": "Alloc 6684"
+      }
+    },
+    {
+      "id": 28354,
+      "class": "CommitAllocationNode",
+      "block": "9",
+      "properties": {
+        "stamp": "void",
+        "object(6689)": "Object[][28350,899]",
+        "name": "Alloc 6689"
+      }
+    },
+    {
+      "id": 28363,
+      "class": "CommitAllocationNode",
+      "block": "71",
+      "properties": {
+        "stamp": "void",
+        "object(17648)": "Object[][28350,28362,17372]",
+        "name": "Alloc 17648"
+      }
+    },
+    {
+      "id": 28365,
+      "class": "CommitAllocationNode",
+      "block": "75",
+      "properties": {
+        "stamp": "void",
+        "object(17654)": "GeneratedStaticObject$$4[7094,17267,17291,17357,20566,17400]",
+        "name": "Alloc 17654"
+      }
+    },
+    {
+      "id": 28367,
+      "class": "CommitAllocationNode",
+      "block": "87",
+      "properties": {
+        "stamp": "void",
+        "object(17670)": "GeneratedStaticObject$$4[7094,17267,17291,17666,17485,17501]",
+        "object(17666)": "GeneratedStaticObject$$6[7161,17472]",
+        "name": "Alloc 17670, 17666"
+      }
+    },
+    {
+      "id": 28374,
+      "class": "CommitAllocationNode",
+      "block": "97",
+      "properties": {
+        "stamp": "void",
+        "object(17684)": "Object[][28350,28373,17573]",
+        "name": "Alloc 17684"
+      }
+    },
+    {
+      "id": 28376,
+      "class": "CommitAllocationNode",
+      "block": "98",
+      "properties": {
+        "stamp": "void",
+        "object(17689)": "GeneratedStaticObject$$4[7094,17267,17291,17538,17554,20626]",
+        "name": "Alloc 17689"
+      }
+    },
+    {
+      "id": 28378,
+      "class": "CommitAllocationNode",
+      "block": "106",
+      "properties": {
+        "stamp": "void",
+        "object(13797)": "GeneratedStaticObject$$4[7094,13410,13434,13500,17726,13543]",
+        "name": "Alloc 13797"
+      }
+    },
+    {
+      "id": 28380,
+      "class": "CommitAllocationNode",
+      "block": "117",
+      "properties": {
+        "stamp": "void",
+        "object(13813)": "GeneratedStaticObject$$4[7094,13410,13434,13809,13628,13644]",
+        "object(13809)": "GeneratedStaticObject$$6[7161,13615]",
+        "name": "Alloc 13813, 13809"
+      }
+    },
+    {
+      "id": 28387,
+      "class": "CommitAllocationNode",
+      "block": "142",
+      "properties": {
+        "stamp": "void",
+        "object(16546)": "Object[][28350,28386,16270]",
+        "name": "Alloc 16546"
+      }
+    },
+    {
+      "id": 28389,
+      "class": "CommitAllocationNode",
+      "block": "146",
+      "properties": {
+        "stamp": "void",
+        "object(16552)": "GeneratedStaticObject$$4[7094,16165,16189,16255,20686,16298]",
+        "name": "Alloc 16552"
+      }
+    },
+    {
+      "id": 28391,
+      "class": "CommitAllocationNode",
+      "block": "158",
+      "properties": {
+        "stamp": "void",
+        "object(16568)": "GeneratedStaticObject$$4[7094,16165,16189,16564,16383,16399]",
+        "object(16564)": "GeneratedStaticObject$$6[7161,16370]",
+        "name": "Alloc 16568, 16564"
+      }
+    },
+    {
+      "id": 28398,
+      "class": "CommitAllocationNode",
+      "block": "168",
+      "properties": {
+        "stamp": "void",
+        "object(16582)": "Object[][28350,28397,16471]",
+        "name": "Alloc 16582"
+      }
+    },
+    {
+      "id": 28400,
+      "class": "CommitAllocationNode",
+      "block": "169",
+      "properties": {
+        "stamp": "void",
+        "object(16587)": "GeneratedStaticObject$$4[7094,16165,16189,16436,16452,20746]",
+        "name": "Alloc 16587"
+      }
+    },
+    {
+      "id": 28402,
+      "class": "CommitAllocationNode",
+      "block": "174",
+      "properties": {
+        "stamp": "void",
+        "object(13832)": "GeneratedStaticObject$$4[7094,13410,13434,13681,13697,16624]",
+        "name": "Alloc 13832"
+      }
+    },
+    {
+      "id": 28404,
+      "class": "CommitAllocationNode",
+      "block": "180",
+      "properties": {
+        "stamp": "void",
+        "object(7537)": "GeneratedStaticObject$$4[7094,7123,7149,7219,13869,7267]",
+        "name": "Alloc 7537"
+      }
+    },
+    {
+      "id": 28406,
+      "class": "CommitAllocationNode",
+      "block": "191",
+      "properties": {
+        "stamp": "void",
+        "object(7553)": "GeneratedStaticObject$$4[7094,7123,7149,7549,7359,7376]",
+        "object(7549)": "GeneratedStaticObject$$6[7161,7345]",
+        "name": "Alloc 7553, 7549"
+      }
+    },
+    {
+      "id": 28413,
+      "class": "CommitAllocationNode",
+      "block": "231",
+      "properties": {
+        "stamp": "void",
+        "object(15995)": "Object[][28350,28412,15719]",
+        "name": "Alloc 15995"
+      }
+    },
+    {
+      "id": 28415,
+      "class": "CommitAllocationNode",
+      "block": "235",
+      "properties": {
+        "stamp": "void",
+        "object(16001)": "GeneratedStaticObject$$4[7094,15614,15638,15704,20806,15747]",
+        "name": "Alloc 16001"
+      }
+    },
+    {
+      "id": 28417,
+      "class": "CommitAllocationNode",
+      "block": "247",
+      "properties": {
+        "stamp": "void",
+        "object(16017)": "GeneratedStaticObject$$4[7094,15614,15638,16013,15832,15848]",
+        "object(16013)": "GeneratedStaticObject$$6[7161,15819]",
+        "name": "Alloc 16017, 16013"
+      }
+    },
+    {
+      "id": 28424,
+      "class": "CommitAllocationNode",
+      "block": "257",
+      "properties": {
+        "stamp": "void",
+        "object(16031)": "Object[][28350,28423,15920]",
+        "name": "Alloc 16031"
+      }
+    },
+    {
+      "id": 28426,
+      "class": "CommitAllocationNode",
+      "block": "258",
+      "properties": {
+        "stamp": "void",
+        "object(16036)": "GeneratedStaticObject$$4[7094,15614,15638,15885,15901,20866]",
+        "name": "Alloc 16036"
+      }
+    },
+    {
+      "id": 28428,
+      "class": "CommitAllocationNode",
+      "block": "266",
+      "properties": {
+        "stamp": "void",
+        "object(8778)": "GeneratedStaticObject$$4[7094,8391,8415,8481,16073,8524]",
+        "name": "Alloc 8778"
+      }
+    },
+    {
+      "id": 28430,
+      "class": "CommitAllocationNode",
+      "block": "277",
+      "properties": {
+        "stamp": "void",
+        "object(8794)": "GeneratedStaticObject$$4[7094,8391,8415,8790,8609,8625]",
+        "object(8790)": "GeneratedStaticObject$$6[7161,8596]",
+        "name": "Alloc 8794, 8790"
+      }
+    },
+    {
+      "id": 28437,
+      "class": "CommitAllocationNode",
+      "block": "308",
+      "properties": {
+        "stamp": "void",
+        "object(14893)": "Object[][28350,28436,14617]",
+        "name": "Alloc 14893"
+      }
+    },
+    {
+      "id": 28439,
+      "class": "CommitAllocationNode",
+      "block": "312",
+      "properties": {
+        "stamp": "void",
+        "object(14899)": "GeneratedStaticObject$$4[7094,14512,14536,14602,20926,14645]",
+        "name": "Alloc 14899"
+      }
+    },
+    {
+      "id": 28441,
+      "class": "CommitAllocationNode",
+      "block": "324",
+      "properties": {
+        "stamp": "void",
+        "object(14915)": "GeneratedStaticObject$$4[7094,14512,14536,14911,14730,14746]",
+        "object(14911)": "GeneratedStaticObject$$6[7161,14717]",
+        "name": "Alloc 14915, 14911"
+      }
+    },
+    {
+      "id": 28448,
+      "class": "CommitAllocationNode",
+      "block": "334",
+      "properties": {
+        "stamp": "void",
+        "object(14929)": "Object[][28350,28447,14818]",
+        "name": "Alloc 14929"
+      }
+    },
+    {
+      "id": 28450,
+      "class": "CommitAllocationNode",
+      "block": "335",
+      "properties": {
+        "stamp": "void",
+        "object(14934)": "GeneratedStaticObject$$4[7094,14512,14536,14783,14799,20986]",
+        "name": "Alloc 14934"
+      }
+    },
+    {
+      "id": 28452,
+      "class": "CommitAllocationNode",
+      "block": "336",
+      "properties": {
+        "stamp": "void",
+        "object(8813)": "GeneratedStaticObject$$4[7094,8391,8415,8662,8678,14971]",
+        "name": "Alloc 8813"
+      }
+    },
+    {
+      "id": 28454,
+      "class": "CommitAllocationNode",
+      "block": "341",
+      "properties": {
+        "stamp": "void",
+        "object(7572)": "GeneratedStaticObject$$4[7094,7123,7149,7415,7432,8850]",
+        "name": "Alloc 7572"
+      }
+    },
+    {
+      "id": 28460,
+      "class": "CommitAllocationNode",
+      "block": "368",
+      "properties": {
+        "stamp": "void",
+        "object(10804)": "Object[][28350,28459,9478,9732]",
+        "name": "Alloc 10804"
+      }
+    },
+    {
+      "id": 28464,
+      "class": "CommitAllocationNode",
+      "block": "378",
+      "properties": {
+        "stamp": "void",
+        "object(10840)": "Object[][28463,9663,9956,21048,9800]",
+        "name": "Alloc 10840"
+      }
+    },
+    {
+      "id": 28466,
+      "class": "CommitAllocationNode",
+      "block": "384",
+      "properties": {
+        "stamp": "void",
+        "object(10832)": "GeneratedStaticObject$$4[7094,9863,9663,9892,21048,9800]",
+        "name": "Alloc 10832"
+      }
+    },
+    {
+      "id": 28468,
+      "class": "CommitAllocationNode",
+      "block": "410",
+      "properties": {
+        "stamp": "void",
+        "object(19278)": "GeneratedStaticObject$$4[7094,19371,18962,18979,18855,19277]",
+        "object(19277)": "GeneratedStaticObject$$4[7094,1392,9663,19032,7471,7471]",
+        "name": "Alloc 19278, 19277"
+      }
+    },
+    {
+      "id": 28471,
+      "class": "CommitAllocationNode",
+      "block": "422",
+      "properties": {
+        "stamp": "void",
+        "object(19262)": "GeneratedStaticObject$$4[7094,19370,9663,19101,21048,7471]",
+        "name": "Alloc 19262"
+      }
+    },
+    {
+      "id": 28473,
+      "class": "CommitAllocationNode",
+      "block": "440",
+      "properties": {
+        "stamp": "void",
+        "object(10861)": "GeneratedStaticObject$$4[7094,9637,10855,10857,10177,10194]",
+        "object(10855)": "GeneratedStaticObject$$6[7161,9477]",
+        "object(10857)": "GeneratedStaticObject$$6[7161,10163]",
+        "name": "Alloc 10861, 10855, 10857"
+      }
+    },
+    {
+      "id": 28483,
+      "class": "CommitAllocationNode",
+      "block": "450",
+      "properties": {
+        "stamp": "void",
+        "object(10887)": "Object[][28350,28482,9478,10299]",
+        "name": "Alloc 10887"
+      }
+    },
+    {
+      "id": 28487,
+      "class": "CommitAllocationNode",
+      "block": "455",
+      "properties": {
+        "stamp": "void",
+        "object(10911)": "Object[][28486,9663,10462,10215,21184]",
+        "name": "Alloc 10911"
+      }
+    },
+    {
+      "id": 28489,
+      "class": "CommitAllocationNode",
+      "block": "461",
+      "properties": {
+        "stamp": "void",
+        "object(10903)": "GeneratedStaticObject$$4[7094,10365,9663,10394,10215,21184]",
+        "name": "Alloc 10903"
+      }
+    },
+    {
+      "id": 28493,
+      "class": "CommitAllocationNode",
+      "block": "468",
+      "properties": {
+        "stamp": "void",
+        "object(10874)": "Object[][28492,9663,10537,7471,10868]",
+        "object(10868)": "Thunk[10539,10869,5,119]",
+        "object(10869)": "GeneratedStaticObject$$7[10540,119,9477,22,9478,9646]",
+        "name": "Alloc 10874, 10868, 10869"
+      }
+    },
+    {
+      "id": 28499,
+      "class": "CommitAllocationNode",
+      "block": "476",
+      "properties": {
+        "stamp": "void",
+        "object(10776)": "Object[][28498]",
+        "name": "Alloc 10776"
+      }
+    },
+    {
+      "id": 28502,
+      "class": "CommitAllocationNode",
+      "block": "477",
+      "properties": {
+        "stamp": "void",
+        "object(10780)": "Object[][28498,10606]",
+        "name": "Alloc 10780"
+      }
+    },
+    {
+      "id": 28505,
+      "class": "CommitAllocationNode",
+      "block": "482",
+      "properties": {
+        "stamp": "void",
+        "object(10790)": "GeneratedStaticObject$$4[7094,1392,10787,22372,7471,7471]",
+        "object(10787)": "GeneratedStaticObject$$6[7161,9477]",
+        "name": "Alloc 10790, 10787"
+      }
+    },
+    {
+      "id": 28512,
+      "class": "CommitAllocationNode",
+      "block": "499",
+      "properties": {
+        "stamp": "void",
+        "object(13079)": "Object[][28511,12947,12719]",
+        "object(12719)": "Thunk[12656,12720,5,119]",
+        "object(12720)": "GeneratedStaticObject$$13[12657,119,22617,22,1759]",
+        "name": "Alloc 13079, 12719, 12720"
+      }
+    },
+    {
+      "id": 28519,
+      "class": "CommitAllocationNode",
+      "block": "501",
+      "properties": {
+        "stamp": "void",
+        "object(13106)": "Object[][28518,13102,12947,12947]",
+        "object(13102)": "GeneratedStaticObject$$11[13022,119,13074,22,28514,13096,13092]",
+        "object(13096)": "RecCell[22,13101]",
+        "object(13101)": "Closure[13102,13011,71,13035]",
+        "object(13092)": "Closure[13093,13011,71,13018]",
+        "object(13093)": "GeneratedStaticObject$$10[13015,28514,13083]",
+        "object(13083)": "Closure[13084,13011,22,13010]",
+        "object(13084)": "GeneratedStaticObject$$9[12995,119,12985,22,28514]",
+        "name": "Alloc 13106, 13102, 13096, 13101, 13092, 13093, 13083, 13084"
+      }
+    },
+    {
+      "id": 28531,
+      "class": "CommitAllocationNode",
+      "block": "515",
+      "properties": {
+        "stamp": "void",
+        "object(6719)": "Thunk[949,6720,5,119]",
+        "object(6720)": "GeneratedStaticObject$$15[2302,119,27102,22,6737,6738,6739]",
+        "name": "Alloc 6719, 6720"
+      }
+    },
+    {
+      "id": 28538,
+      "class": "CommitAllocationNode",
+      "block": "521",
+      "properties": {
+        "stamp": "void",
+        "object(6768)": "Object[][28537]",
+        "name": "Alloc 6768"
+      }
+    },
+    {
+      "id": 28541,
+      "class": "CommitAllocationNode",
+      "block": "522",
+      "properties": {
+        "stamp": "void",
+        "object(6773)": "Object[][28537,3800]",
+        "name": "Alloc 6773"
+      }
+    },
+    {
+      "id": 28550,
+      "class": "CommitAllocationNode",
+      "block": "584",
+      "properties": {
+        "stamp": "void",
+        "object(18199)": "Object[][28537,28549,17923]",
+        "name": "Alloc 18199"
+      }
+    },
+    {
+      "id": 28552,
+      "class": "CommitAllocationNode",
+      "block": "588",
+      "properties": {
+        "stamp": "void",
+        "object(18205)": "GeneratedStaticObject$$4[7094,17818,17842,17908,21529,17951]",
+        "name": "Alloc 18205"
+      }
+    },
+    {
+      "id": 28554,
+      "class": "CommitAllocationNode",
+      "block": "600",
+      "properties": {
+        "stamp": "void",
+        "object(18221)": "GeneratedStaticObject$$4[7094,17818,17842,18217,18036,18052]",
+        "object(18217)": "GeneratedStaticObject$$6[7161,18023]",
+        "name": "Alloc 18221, 18217"
+      }
+    },
+    {
+      "id": 28561,
+      "class": "CommitAllocationNode",
+      "block": "610",
+      "properties": {
+        "stamp": "void",
+        "object(18235)": "Object[][28537,28560,18124]",
+        "name": "Alloc 18235"
+      }
+    },
+    {
+      "id": 28563,
+      "class": "CommitAllocationNode",
+      "block": "611",
+      "properties": {
+        "stamp": "void",
+        "object(18240)": "GeneratedStaticObject$$4[7094,17818,17842,18089,18105,21589]",
+        "name": "Alloc 18240"
+      }
+    },
+    {
+      "id": 28565,
+      "class": "CommitAllocationNode",
+      "block": "619",
+      "properties": {
+        "stamp": "void",
+        "object(14348)": "GeneratedStaticObject$$4[7094,13961,13985,14051,18277,14094]",
+        "name": "Alloc 14348"
+      }
+    },
+    {
+      "id": 28567,
+      "class": "CommitAllocationNode",
+      "block": "630",
+      "properties": {
+        "stamp": "void",
+        "object(14364)": "GeneratedStaticObject$$4[7094,13961,13985,14360,14179,14195]",
+        "object(14360)": "GeneratedStaticObject$$6[7161,14166]",
+        "name": "Alloc 14364, 14360"
+      }
+    },
+    {
+      "id": 28574,
+      "class": "CommitAllocationNode",
+      "block": "655",
+      "properties": {
+        "stamp": "void",
+        "object(17097)": "Object[][28537,28573,16821]",
+        "name": "Alloc 17097"
+      }
+    },
+    {
+      "id": 28576,
+      "class": "CommitAllocationNode",
+      "block": "659",
+      "properties": {
+        "stamp": "void",
+        "object(17103)": "GeneratedStaticObject$$4[7094,16716,16740,16806,21649,16849]",
+        "name": "Alloc 17103"
+      }
+    },
+    {
+      "id": 28578,
+      "class": "CommitAllocationNode",
+      "block": "671",
+      "properties": {
+        "stamp": "void",
+        "object(17119)": "GeneratedStaticObject$$4[7094,16716,16740,17115,16934,16950]",
+        "object(17115)": "GeneratedStaticObject$$6[7161,16921]",
+        "name": "Alloc 17119, 17115"
+      }
+    },
+    {
+      "id": 28585,
+      "class": "CommitAllocationNode",
+      "block": "681",
+      "properties": {
+        "stamp": "void",
+        "object(17133)": "Object[][28537,28584,17022]",
+        "name": "Alloc 17133"
+      }
+    },
+    {
+      "id": 28587,
+      "class": "CommitAllocationNode",
+      "block": "682",
+      "properties": {
+        "stamp": "void",
+        "object(17138)": "GeneratedStaticObject$$4[7094,16716,16740,16987,17003,21709]",
+        "name": "Alloc 17138"
+      }
+    },
+    {
+      "id": 28589,
+      "class": "CommitAllocationNode",
+      "block": "687",
+      "properties": {
+        "stamp": "void",
+        "object(14383)": "GeneratedStaticObject$$4[7094,13961,13985,14232,14248,17175]",
+        "name": "Alloc 14383"
+      }
+    },
+    {
+      "id": 28591,
+      "class": "CommitAllocationNode",
+      "block": "693",
+      "properties": {
+        "stamp": "void",
+        "object(8227)": "GeneratedStaticObject$$4[7094,7840,7864,7930,14420,7973]",
+        "name": "Alloc 8227"
+      }
+    },
+    {
+      "id": 28593,
+      "class": "CommitAllocationNode",
+      "block": "704",
+      "properties": {
+        "stamp": "void",
+        "object(8243)": "GeneratedStaticObject$$4[7094,7840,7864,8239,8058,8074]",
+        "object(8239)": "GeneratedStaticObject$$6[7161,8045]",
+        "name": "Alloc 8243, 8239"
+      }
+    },
+    {
+      "id": 28600,
+      "class": "CommitAllocationNode",
+      "block": "729",
+      "properties": {
+        "stamp": "void",
+        "object(9323)": "Object[][28537,28599,9047]",
+        "name": "Alloc 9323"
+      }
+    },
+    {
+      "id": 28602,
+      "class": "CommitAllocationNode",
+      "block": "733",
+      "properties": {
+        "stamp": "void",
+        "object(9329)": "GeneratedStaticObject$$4[7094,8942,8966,9032,21769,9075]",
+        "name": "Alloc 9329"
+      }
+    },
+    {
+      "id": 28604,
+      "class": "CommitAllocationNode",
+      "block": "745",
+      "properties": {
+        "stamp": "void",
+        "object(9345)": "GeneratedStaticObject$$4[7094,8942,8966,9341,9160,9176]",
+        "object(9341)": "GeneratedStaticObject$$6[7161,9147]",
+        "name": "Alloc 9345, 9341"
+      }
+    },
+    {
+      "id": 28611,
+      "class": "CommitAllocationNode",
+      "block": "776",
+      "properties": {
+        "stamp": "void",
+        "object(15444)": "Object[][28537,28610,15168]",
+        "name": "Alloc 15444"
+      }
+    },
+    {
+      "id": 28613,
+      "class": "CommitAllocationNode",
+      "block": "780",
+      "properties": {
+        "stamp": "void",
+        "object(15450)": "GeneratedStaticObject$$4[7094,15063,15087,15153,21829,15196]",
+        "name": "Alloc 15450"
+      }
+    },
+    {
+      "id": 28615,
+      "class": "CommitAllocationNode",
+      "block": "792",
+      "properties": {
+        "stamp": "void",
+        "object(15466)": "GeneratedStaticObject$$4[7094,15063,15087,15462,15281,15297]",
+        "object(15462)": "GeneratedStaticObject$$6[7161,15268]",
+        "name": "Alloc 15466, 15462"
+      }
+    },
+    {
+      "id": 28622,
+      "class": "CommitAllocationNode",
+      "block": "802",
+      "properties": {
+        "stamp": "void",
+        "object(15480)": "Object[][28537,28621,15369]",
+        "name": "Alloc 15480"
+      }
+    },
+    {
+      "id": 28624,
+      "class": "CommitAllocationNode",
+      "block": "803",
+      "properties": {
+        "stamp": "void",
+        "object(15485)": "GeneratedStaticObject$$4[7094,15063,15087,15334,15350,21889]",
+        "name": "Alloc 15485"
+      }
+    },
+    {
+      "id": 28626,
+      "class": "CommitAllocationNode",
+      "block": "804",
+      "properties": {
+        "stamp": "void",
+        "object(9364)": "GeneratedStaticObject$$4[7094,8942,8966,9213,9229,15522]",
+        "name": "Alloc 9364"
+      }
+    },
+    {
+      "id": 28628,
+      "class": "CommitAllocationNode",
+      "block": "809",
+      "properties": {
+        "stamp": "void",
+        "object(8262)": "GeneratedStaticObject$$4[7094,7840,7864,8111,8127,9401]",
+        "name": "Alloc 8262"
+      }
+    },
+    {
+      "id": 28634,
+      "class": "CommitAllocationNode",
+      "block": "836",
+      "properties": {
+        "stamp": "void",
+        "object(12346)": "Object[][28537,28633,9478,11331]",
+        "name": "Alloc 12346"
+      }
+    },
+    {
+      "id": 28638,
+      "class": "CommitAllocationNode",
+      "block": "846",
+      "properties": {
+        "stamp": "void",
+        "object(12382)": "Object[][28637,11267,11542,21950,11394]",
+        "name": "Alloc 12382"
+      }
+    },
+    {
+      "id": 28640,
+      "class": "CommitAllocationNode",
+      "block": "852",
+      "properties": {
+        "stamp": "void",
+        "object(12374)": "GeneratedStaticObject$$4[7094,11454,11267,11482,21950,11394]",
+        "name": "Alloc 12374"
+      }
+    },
+    {
+      "id": 28642,
+      "class": "CommitAllocationNode",
+      "block": "878",
+      "properties": {
+        "stamp": "void",
+        "object(20363)": "GeneratedStaticObject$$4[7094,19371,20060,20077,19962,20362]",
+        "object(20362)": "GeneratedStaticObject$$4[7094,1392,11267,20126,7471,7471]",
+        "name": "Alloc 20363, 20362"
+      }
+    },
+    {
+      "id": 28645,
+      "class": "CommitAllocationNode",
+      "block": "890",
+      "properties": {
+        "stamp": "void",
+        "object(20347)": "GeneratedStaticObject$$4[7094,19370,11267,20189,21950,7471]",
+        "name": "Alloc 20347"
+      }
+    },
+    {
+      "id": 28647,
+      "class": "CommitAllocationNode",
+      "block": "908",
+      "properties": {
+        "stamp": "void",
+        "object(12403)": "GeneratedStaticObject$$4[7094,11243,12397,12399,11751,11767]",
+        "object(12397)": "GeneratedStaticObject$$6[7161,11094]",
+        "object(12399)": "GeneratedStaticObject$$6[7161,11738]",
+        "name": "Alloc 12403, 12397, 12399"
+      }
+    },
+    {
+      "id": 28657,
+      "class": "CommitAllocationNode",
+      "block": "918",
+      "properties": {
+        "stamp": "void",
+        "object(12429)": "Object[][28537,28656,9478,11865]",
+        "name": "Alloc 12429"
+      }
+    },
+    {
+      "id": 28661,
+      "class": "CommitAllocationNode",
+      "block": "923",
+      "properties": {
+        "stamp": "void",
+        "object(12453)": "Object[][28660,11267,12019,11786,22085]",
+        "name": "Alloc 12453"
+      }
+    },
+    {
+      "id": 28663,
+      "class": "CommitAllocationNode",
+      "block": "929",
+      "properties": {
+        "stamp": "void",
+        "object(12445)": "GeneratedStaticObject$$4[7094,11927,11267,11955,11786,22085]",
+        "name": "Alloc 12445"
+      }
+    },
+    {
+      "id": 28667,
+      "class": "CommitAllocationNode",
+      "block": "936",
+      "properties": {
+        "stamp": "void",
+        "object(12416)": "Object[][28666,11267,12090,7471,12410]",
+        "object(12410)": "Thunk[10539,12411,5,119]",
+        "object(12411)": "GeneratedStaticObject$$7[10540,119,11094,22,9478,11252]",
+        "name": "Alloc 12416, 12410, 12411"
+      }
+    },
+    {
+      "id": 28673,
+      "class": "CommitAllocationNode",
+      "block": "944",
+      "properties": {
+        "stamp": "void",
+        "object(12318)": "Object[][28672]",
+        "name": "Alloc 12318"
+      }
+    },
+    {
+      "id": 28676,
+      "class": "CommitAllocationNode",
+      "block": "945",
+      "properties": {
+        "stamp": "void",
+        "object(12322)": "Object[][28672,12151]",
+        "name": "Alloc 12322"
+      }
+    },
+    {
+      "id": 28679,
+      "class": "CommitAllocationNode",
+      "block": "950",
+      "properties": {
+        "stamp": "void",
+        "object(12332)": "GeneratedStaticObject$$4[7094,1392,12329,22378,7471,7471]",
+        "object(12329)": "GeneratedStaticObject$$6[7161,11094]",
+        "name": "Alloc 12332, 12329"
+      }
+    },
+    {
+      "id": 28686,
+      "class": "CommitAllocationNode",
+      "block": "967",
+      "properties": {
+        "stamp": "void",
+        "object(13285)": "Object[][28685,12947,12866]",
+        "object(12866)": "Thunk[12656,12867,5,119]",
+        "object(12867)": "GeneratedStaticObject$$13[12657,119,6764,22,4620]",
+        "name": "Alloc 13285, 12866, 12867"
+      }
+    },
+    {
+      "id": 28693,
+      "class": "CommitAllocationNode",
+      "block": "969",
+      "properties": {
+        "stamp": "void",
+        "object(13312)": "Object[][28692,13308,12947,12947]",
+        "object(13308)": "GeneratedStaticObject$$11[13022,119,13280,22,28688,13302,13298]",
+        "object(13302)": "RecCell[22,13307]",
+        "object(13307)": "Closure[13308,13011,71,13035]",
+        "object(13298)": "Closure[13299,13011,71,13018]",
+        "object(13299)": "GeneratedStaticObject$$10[13015,28688,13289]",
+        "object(13289)": "Closure[13290,13011,22,13010]",
+        "object(13290)": "GeneratedStaticObject$$9[12995,119,13210,22,28688]",
+        "name": "Alloc 13312, 13308, 13302, 13307, 13298, 13299, 13289, 13290"
+      }
+    },
+    {
+      "id": 28705,
+      "class": "CommitAllocationNode",
+      "block": "983",
+      "properties": {
+        "stamp": "void",
+        "object(6801)": "Thunk[949,6802,5,119]",
+        "object(6802)": "GeneratedStaticObject$$15[2302,119,6764,22,6819,6820,6821]",
+        "name": "Alloc 6801, 6802"
+      }
+    }
+  ],
+  "boxingNodes": [
+    {
+      "id": 28350,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "7",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28358,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "24",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28362,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "71",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28373,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "97",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28386,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "142",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28397,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "168",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28412,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "231",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28423,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "257",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28436,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "308",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28447,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "334",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28459,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "368",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28463,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "378",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28482,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "450",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28486,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "455",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28492,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "468",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28498,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "475",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28511,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "499",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28518,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "501",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28537,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "520",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28545,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "537",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28549,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "584",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28560,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "610",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28573,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "655",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28584,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "681",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28599,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "729",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28610,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "776",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28621,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "802",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28633,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "836",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28637,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "846",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28656,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "918",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28660,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "923",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28666,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "936",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28672,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "943",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28685,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "967",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    },
+    {
+      "id": 28692,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "969",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    }
+  ],
+  "note": "Static sites in one compiled graph, including conditionally entered paths and inlined callees. These are not dynamic allocations per iteration."
+}

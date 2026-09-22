@@ -1,0 +1,42 @@
+digraph actual_slice {
+graph [rankdir=TB,bgcolor="white",pad="0.3",nodesep="0.30",ranksep="0.44",fontname="Helvetica",fontsize=15,label="sumLoop: actual optimized data-flow slice
+Warmed host compilation 2237 / Before HighTierLowering",labelloc=t];
+node [shape=box,style="rounded,filled",fillcolor="#f4f6f8",color="#9ba6b4",fontname="Menlo",fontsize=11,margin="0.13,0.09"];
+edge [fontname="Menlo",fontsize=10,color="#52657b",fontcolor="#39495e",arrowsize=0.7];
+n2496 [label="2496  LoadFieldNode\nthc.runtime.Env.values\na java.lang.Object[]"];
+n2497 [label="2497  LoadIndexedNode\na java.lang.Object"];
+n2516 [label="2516  UnboxNode\ni64"];
+n2613 [label="2613  LoadIndexedNode\na java.lang.Object"];
+n2638 [label="2638  UnboxNode\ni64"];
+n2654 [label="2654  AddNode\ni64\nx=2516, y=2638"];
+n2716 [label="2716  PiNode\na!# java.lang.Long"];
+n2718 [label="2718  PiNode\na!# java.lang.Long"];
+n2767 [label="2767  ValuePhiNode\na!# thc.runtime.Env",fillcolor="#dcecf7",color="#427795"];
+n2807 [label="2807  AddNode\ni64\nx=2516, y=2805 (-1)"];
+n10800 [label="10800  BoxNode$AllocatingBoxNode\na!# java.lang.Long",fillcolor="#fff0dc",color="#ba7d28"];
+n10801 [label="10801  BoxNode$AllocatingBoxNode\na!# java.lang.Long",fillcolor="#fff0dc",color="#ba7d28"];
+n10802 [label="10802  CommitAllocationNode\nvoid\nEnv[2721,2793]\nObject[][10800,10801]",fillcolor="#fff0dc",color="#ba7d28"];
+n10803 [label="10803  AllocatedObjectNode\na!# thc.runtime.Env",fillcolor="#fff0dc",color="#ba7d28"];
+n2767 -> n2496 [label="object"];
+n2496 -> n2497 [label="array"];
+n2716 -> n2516 [label="value"];
+n2496 -> n2613 [label="array"];
+n2718 -> n2638 [label="value"];
+n2516 -> n2654 [label="x"];
+n2638 -> n2654 [label="y"];
+n2497 -> n2716 [label="object"];
+n2613 -> n2718 [label="object"];
+n2767 -> n2767 [label="values[1]",constraint=false,style=dashed];
+n10803 -> n2767 [label="values[2]",constraint=false,color="#b76d1a",penwidth=2];
+n2516 -> n2807 [label="x"];
+n2807 -> n10800 [label="value"];
+n2654 -> n10801 [label="value"];
+n10800 -> n10802 [label="values[2]"];
+n10801 -> n10802 [label="values[3]"];
+n10802 -> n10803 [label="commit"];
+{rank=same;n2497;n2613;}
+{rank=same;n2716;n2718;}
+{rank=same;n2516;n2638;}
+{rank=same;n2807;n2654;}
+{rank=same;n10800;n10801;}
+}

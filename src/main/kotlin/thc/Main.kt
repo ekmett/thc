@@ -1,0 +1,34 @@
+package thc
+
+import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.Value
+
+fun executionContext(): Context = Context.newBuilder("thc")
+    .allowExperimentalOptions(true)
+    .option("engine.BackgroundCompilation", "false")
+    .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
+    .option("engine.MultiTier", "false")
+    .option("engine.SingleTierCompilationThreshold", "10000")
+    .option("engine.CompilationFailureAction", "Throw")
+    .option("compiler.CompilationTimeout", "30")
+    .option("compiler.MaximumGraalGraphSize", "100000")
+    .build()
+
+fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true): Value =
+    context.eval("thc", CoreModules.request(modules, entry, instrument, java.lang.Boolean.getBoolean("thc.diagnosticUnsupported")))
+
+fun main(args: Array<String>) {
+    require(args.size >= 3) { "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]" }
+    val modules = args[0].split(',')
+    val entry = args[1]
+    val input = args[2].toLong()
+    executionContext().use { context ->
+        val function = loadEntry(context, modules, entry)
+        if (args.drop(3).contains("--compile")) {
+            repeat(40) { function.execute(input + (it and 3)).asLong() }
+            function.invokeMember("compile")
+        }
+        println(function.execute(input).asLong())
+        System.err.println(function.getMember("diagnostics").asString())
+    }
+}

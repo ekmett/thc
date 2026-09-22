@@ -1,0 +1,235 @@
+{
+  "source": {
+    "compilationId": 2757,
+    "graphOrdinal": 5,
+    "phase": "2: Before phase HighTierLowering"
+  },
+  "mapLoopHeader": 3807,
+  "mapPhi": 7408,
+  "invariantPrimitiveSearchKey": 7661,
+  "binLeftLoad": 4430,
+  "binRightLoad": 4522,
+  "primitiveNodeKeyLoad": 4807,
+  "lessThan": 5089,
+  "equals": 5893,
+  "descentLoopEnds": [
+    8081,
+    8082,
+    8083,
+    8001
+  ],
+  "commitDominators": [
+    {
+      "id": 8086,
+      "block": "62",
+      "dominatedByResultThunkInitializationBlock": "61",
+      "dominatorBlocks": [
+        "0",
+        "1",
+        "6",
+        "7",
+        "8",
+        "11",
+        "22",
+        "23",
+        "26",
+        "27",
+        "32",
+        "33",
+        "57",
+        "58",
+        "59",
+        "61",
+        "62"
+      ]
+    },
+    {
+      "id": 8089,
+      "block": "63",
+      "dominatedByResultThunkInitializationBlock": "61",
+      "dominatorBlocks": [
+        "0",
+        "1",
+        "6",
+        "7",
+        "8",
+        "11",
+        "22",
+        "23",
+        "26",
+        "27",
+        "32",
+        "33",
+        "57",
+        "58",
+        "59",
+        "61",
+        "63"
+      ]
+    },
+    {
+      "id": 8092,
+      "block": "64",
+      "dominatedByResultThunkInitializationBlock": "61",
+      "dominatorBlocks": [
+        "0",
+        "1",
+        "6",
+        "7",
+        "8",
+        "11",
+        "22",
+        "23",
+        "26",
+        "27",
+        "32",
+        "33",
+        "57",
+        "58",
+        "59",
+        "61",
+        "64"
+      ]
+    },
+    {
+      "id": 8102,
+      "block": "78",
+      "dominatedByResultThunkInitializationBlock": "77",
+      "dominatorBlocks": [
+        "0",
+        "1",
+        "6",
+        "7",
+        "73",
+        "74",
+        "75",
+        "77",
+        "78"
+      ]
+    },
+    {
+      "id": 8105,
+      "block": "79",
+      "dominatedByResultThunkInitializationBlock": "77",
+      "dominatorBlocks": [
+        "0",
+        "1",
+        "6",
+        "7",
+        "73",
+        "74",
+        "75",
+        "77",
+        "79"
+      ]
+    },
+    {
+      "id": 8108,
+      "block": "80",
+      "dominatedByResultThunkInitializationBlock": "77",
+      "dominatorBlocks": [
+        "0",
+        "1",
+        "6",
+        "7",
+        "73",
+        "74",
+        "75",
+        "77",
+        "80"
+      ]
+    }
+  ],
+  "thunkStateSwitches": [
+    {
+      "node": {
+        "id": 6702,
+        "class": "IntegerSwitchNode",
+        "block": "59",
+        "properties": {
+          "stamp": "void",
+          "keySuccessors": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "keys": [
+            1,
+            2,
+            3
+          ],
+          "name": "IntegerSwitch"
+        }
+      },
+      "successors": [
+        {
+          "index": 0,
+          "node": 6703,
+          "block": "65"
+        },
+        {
+          "index": 1,
+          "node": 6704,
+          "block": "60"
+        },
+        {
+          "index": 2,
+          "node": 6705,
+          "block": "66"
+        },
+        {
+          "index": 3,
+          "node": 6706,
+          "block": "61"
+        }
+      ]
+    },
+    {
+      "node": {
+        "id": 3402,
+        "class": "IntegerSwitchNode",
+        "block": "75",
+        "properties": {
+          "stamp": "void",
+          "keySuccessors": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "keys": [
+            1,
+            2,
+            3
+          ],
+          "name": "IntegerSwitch"
+        }
+      },
+      "successors": [
+        {
+          "index": 0,
+          "node": 3403,
+          "block": "81"
+        },
+        {
+          "index": 1,
+          "node": 3404,
+          "block": "76"
+        },
+        {
+          "index": 2,
+          "node": 3405,
+          "block": "82"
+        },
+        {
+          "index": 3,
+          "node": 3406,
+          "block": "77"
+        }
+      ]
+    }
+  ],
+  "claim": "Normal left/right tree descent has no allocation or residual calls. All six commit sites are dominated by the default (unforced state 0) arm of the result-thunk state switch: B61 or B77. State 2 takes B60 or B76 and reuses the memoized value. The loop-carried value is the Map pointer; the i64 search key is invariant, not a key phi.",
+  "limit": "This graph retains conditional thunk forcing and RecCell guards. The claim excludes first forcing of a lazy result/default and does not assert that the entire Map workload is allocation-free."
+}

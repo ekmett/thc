@@ -1,0 +1,60 @@
+{
+  "entry": "caseList",
+  "compilation": "2038[lambda_n]",
+  "sourceBgv": "TruffleHotSpotCompilation-2038[lambda_n].bgv",
+  "graph": "2: Before phase HighTierLowering",
+  "nodes": 30,
+  "artifact": "case-list-builder-before-high.json",
+  "invokes": [],
+  "committedAllocations": [
+    {
+      "node": 1822,
+      "block": "0",
+      "stamp": "void",
+      "object(1821)": "GeneratedStaticObject$$2[1417,1767,1770]",
+      "object(1767)": "GeneratedStaticObject$$3[1008,1831]",
+      "object(1770)": "Thunk[1115,1771,5,85]",
+      "object(1771)": "GeneratedStaticObject$$4[1117,85,1833,22]",
+      "name": "Alloc 1821, 1767, 1770, 1771"
+    }
+  ],
+  "boxing": [],
+  "captureLoads": [],
+  "typedDataFields": [
+    {
+      "node": 1767,
+      "block": "0",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3.field__0"
+      ],
+      "name": "VirtualInstance(1) GeneratedStaticObject$$3"
+    },
+    {
+      "node": 1821,
+      "block": "0",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__1"
+      ],
+      "name": "VirtualInstance(0) GeneratedStaticObject$$2"
+    }
+  ],
+  "callTree": [
+    {
+      "node": 0,
+      "target": "lambda n",
+      "state": "CallNode$State.Inlined"
+    }
+  ],
+  "notes": [
+    "Commit1822 allocates Cons virtual1821 with layout+two object fields, Box1767 with layout+primitive i64 field1831, lazy tail Thunk1770 and typed capture1771. VirtualInstance fields explicitly show no payload-array field.",
+    "No Object[] allocation and no AllocatingBoxNode in graph5. Mid tier contains exactly Cons2926, Box2934, Thunk2939 and capture2948 NewInstances; no NewArray. Unbox1831/1833 read the incoming boxed ABI argument but do not allocate per-cell java.lang.Long.",
+    "This is still a lazy boxed list: Cons points to a separate Box and tail Thunk. Typed constructor representation removes the per-instance payload array and primitive-field boxing; it does not fuse the list or remove semantically required lazy-tail storage."
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "inputBase": 10000,
+  "inputCycleLength": 16,
+  "jvmSampleCalls": 256,
+  "jvmBytesPerCall": [
+    11496058.5,
+    11496105.71875,
+    11496058.71875
+  ],
+  "jvmMedianBytesPerCall": 11496058.71875,
+  "nativeBytesPerCallEstimate": 7074187.625,
+  "jvmOverNativeAllocationEstimate": 1.6250712206336202,
+  "method": {
+    "jvm": "ThreadMXBean current-thread allocated bytes after at least 15 seconds warmup and explicit guest compilation, 3 samples of 256 calls. Includes host entry work on this thread; excludes allocations by other threads.",
+    "native": "Difference in GHC RTS total allocated bytes for separate processes of 272 and 16 calls, divided by 256. Startup and reporting overhead approximately cancel. Same 16-input cycle and measured native binary.",
+    "scope": "Allocation volume, not retained heap or peak process memory. Separate from throughput timing and graph capture."
+  },
+  "unsupportedTraps": 0
+}

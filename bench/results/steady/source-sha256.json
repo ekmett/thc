@@ -1,0 +1,20 @@
+{
+  "build.gradle.kts": "6f05fc7340017ca438a00a4ee4c3299f8be81d7ca5ce4d30b31feda687660571",
+  "compiler/Thc/Plugin.hs": "6ebae4f3bb2afebf4f733f6919908120d196198731375809537669e8a05c259a",
+  "compiler/test-fixtures/StrictFields.hs": "e6caa8723bdcbcb3d8c530ed464b1309d16ebfa04c4e412ff17d88820635ee8e",
+  "examples/NativeOracle.hs": "676fb6b7e278de07edd61907b2c4deec4aaa97f73465b75d0118c97a5578bc8c",
+  "examples/THC/Fixtures.hs": "bdf4d07cd5fad10b1c9ef91cde58710688bdd6cb6737fe68189d83461cb9219b",
+  "examples/THC/Prim.hs": "16bf3a487114870ded07e6b2e57d0c31981ba21d832fd21eb46994c1533f5a0d",
+  "scripts/benchmark.sh": "19d8ef11b21ebc692e8e894e8f5eb4dd47e9adffa5cdcabea9e33ac1f4c3ad61",
+  "scripts/gradle.sh": "6d82af8ffccecdab15d7b716418e952437ee0aae69d8d08563404f7efa79c1a6",
+  "scripts/native-oracle.sh": "ab0cc01b4e9128e7f342f8f5699897b5f16d1d5b56dff37d7c6b328069616b26",
+  "scripts/run.sh": "9344a54fd15305433b7ec09d75413340c8e4aad4915f9522600189096f32b7f9",
+  "scripts/summarize-benchmark.py": "42659479db08e5541e3d5f9f4cf86386b070703c68138f410ed93e00def72f3a",
+  "scripts/try.sh": "087f3134f635b3389f988453476cb44e092f1f9592e96dc99027b8fbb848b47a",
+  "src/main/java/thc/runtime/Calls.java": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+  "src/main/kotlin/thc/Json.kt": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80",
+  "src/main/kotlin/thc/Language.kt": "3fb197c19dbf9bef5db1e50aa01f15783b1b502bb2e1275fc6ef561f09d5157c",
+  "src/main/kotlin/thc/Main.kt": "0eea6a2056cbf66c7d4f0f5f3c0b801409946822b3c7581c25cdb502d345761a",
+  "src/main/kotlin/thc/Probe.kt": "937bbc68debcbca33d9ca79df7cc3c9e0b07384eda03d4444325db9b7e52ed75",
+  "src/main/kotlin/thc/runtime/Program.kt": "de28634b1f80564c8dae9599d657f13061036a8afaf53809351f3fd8adf0c166"
+}

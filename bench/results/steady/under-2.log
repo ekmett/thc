@@ -1,0 +1,26 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/build/install/thc/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=8     FunctionRoot@472c5ab4                              |Tier 2|Time   235(  49+186 )ms|AST   52|Inlined   5Y   2N|IR   2789/ 13511|CodeSize   53816|Addr 0x0001197b4140|CompId 1911   |UTC 2026-09-22T13:44:13.944|Src n/a
+PHASE WARM BEGIN
+[engine] opt done   engine=1  id=40    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time   210(  40+170 )ms|AST    9|Inlined   6Y   1N|IR   2464/ 10554|CodeSize   41128|Addr 0x0001197dad80|CompId 2091   |UTC 2026-09-22T13:44:14.178|Src n/a
+[engine] opt done   engine=1  id=7     FunctionRoot@590abc2b                              |Tier 2|Time    45(   7+38  )ms|AST   31|Inlined   0Y   0N|IR    676/  4457|CodeSize   17852|Addr 0x0001197ea4c0|CompId 2113   |UTC 2026-09-22T13:44:14.226|Src n/a
+PHASE WARM END calls=180655360 elapsedNs=10000078500 checksum=20685038720
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE MEASURE 2 BEGIN
+PHASE MEASURE 2 END
+PHASE MEASURE 3 BEGIN
+PHASE MEASURE 3 END
+PHASE MEASURE 4 BEGIN
+PHASE MEASURE 4 END
+PHASE MEASURE 5 BEGIN
+PHASE MEASURE 5 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

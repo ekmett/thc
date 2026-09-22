@@ -1,0 +1,97 @@
+{
+  "name": "THC schema1 runtime capability contract",
+  "reviewedAgainst": [
+    "src/main/kotlin/thc/runtime/Program.kt",
+    "src/main/kotlin/thc/runtime/DataValues.kt"
+  ],
+  "externalBindings": [],
+  "literalKinds": [
+    "int",
+    "word",
+    "char",
+    "string-bytes"
+  ],
+  "integerLiteralRanges": {
+    "int": [
+      -9223372036854775808,
+      9223372036854775807
+    ],
+    "word": [
+      0,
+      18446744073709551615
+    ],
+    "char": [
+      0,
+      1114111
+    ]
+  },
+  "constructorKinds": [
+    "boxed"
+  ],
+  "fieldRepresentations": [
+    "IntRep",
+    "WordRep",
+    "Int8Rep",
+    "Word8Rep",
+    "Int16Rep",
+    "Word16Rep",
+    "Int32Rep",
+    "Word32Rep",
+    "Int64Rep",
+    "Word64Rep",
+    "BoxedRep (Just Lifted)",
+    "BoxedRep (Just Unlifted)"
+  ],
+  "strictLiftedFields": true,
+  "primitives": {
+    "negateInt#": 1,
+    "not#": 1,
+    "notI#": 1,
+    "int2Word#": 1,
+    "word2Int#": 1,
+    "ord#": 1,
+    "chr#": 1,
+    "narrow8Int#": 1,
+    "narrow16Int#": 1,
+    "narrow32Int#": 1,
+    "+#": 2,
+    "plusWord#": 2,
+    "-#": 2,
+    "minusWord#": 2,
+    "*#": 2,
+    "timesWord#": 2,
+    "quotInt#": 2,
+    "remInt#": 2,
+    "==#": 2,
+    "eqWord#": 2,
+    "eqChar#": 2,
+    "/=#": 2,
+    "neWord#": 2,
+    "neChar#": 2,
+    "<#": 2,
+    "ltChar#": 2,
+    "<=#": 2,
+    "leChar#": 2,
+    ">#": 2,
+    "gtChar#": 2,
+    ">=#": 2,
+    "geChar#": 2,
+    "and#": 2,
+    "andI#": 2,
+    "or#": 2,
+    "orI#": 2,
+    "xor#": 2,
+    "xorI#": 2,
+    "uncheckedIShiftL#": 2,
+    "uncheckedShiftL#": 2,
+    "uncheckedIShiftRA#": 2,
+    "uncheckedIShiftRL#": 2,
+    "uncheckedShiftRL#": 2,
+    "plusAddr#": 2,
+    "indexCharOffAddr#": 2,
+    "raise#": 1
+  },
+  "limitations": [
+    "Address operations support immutable managed literal backing only; no raw pointers or foreign address access."
+  ]
+}

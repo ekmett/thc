@@ -1,0 +1,44 @@
+digraph lookup {
+graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.35", ranksep="0.40", label="Actual lookup recurrence slice | compilation 2757 | graph 5
+Only existing value, condition and merge edges are shown; guards/control paths are omitted.", labelloc=t, fontsize=16, fontname="Helvetica"];
+node [shape=box, style="rounded,filled", fillcolor="#edf4ff", color="#4b6588", fontname="Helvetica", fontsize=11];
+edge [fontname="Helvetica", fontsize=9, color="#718096", arrowsize=0.7];
+n3807 [label="3807 LoopBegin",fillcolor="#e8ddff"];
+n3889 [label="3889 RecCell resolution phi"];
+n3897 [label="3897 WHNF force phi"];
+n4246 [label="4246 Bin.key (Object)"];
+n4430 [label="4430 Bin.left (Object)",fillcolor="#def7e5"];
+n4522 [label="4522 Bin.right (Object)",fillcolor="#def7e5"];
+n4646 [label="4646 key RecCell phi"];
+n4800 [label="4800 I# type refinement"];
+n4807 [label="4807 I#.value (i64)",fillcolor="#fff0cb"];
+n5089 [label="5089 signed key < node key",fillcolor="#fff0cb"];
+n5161 [label="5161 If: left / other"];
+n5893 [label="5893 node key == key",fillcolor="#fff0cb"];
+n5965 [label="5965 If: equal / right"];
+n7408 [label="7408 Map pointer phi",fillcolor="#e8ddff"];
+n7640 [label="7640 loop-exit value proxy"];
+n7661 [label="7661 search key (i64)\nloop invariant; unboxed before header",fillcolor="#fff0cb"];
+n7671 [label="7671 DataValue refinement"];
+n7916 [label="7916 Bin type refinement"];
+n7408 -> n3889 [label="values[0]"];
+n3889 -> n3897 [label="values[0]"];
+n7916 -> n4246 [label="object"];
+n7916 -> n4430 [label="object"];
+n7916 -> n4522 [label="object"];
+n4246 -> n4646 [label="values[0]"];
+n7671 -> n4800 [label="object"];
+n4800 -> n4807 [label="object"];
+n7661 -> n5089 [label="x"];
+n4807 -> n5089 [label="y"];
+n5089 -> n5161 [label="condition"];
+n4807 -> n5893 [label="x"];
+n7661 -> n5893 [label="y"];
+n5893 -> n5965 [label="condition"];
+n3807 -> n7408 [label="merge",style=dashed,color="#805ad5"];
+n4522 -> n7408 [label="values[2]",color="#087f48",penwidth=2,constraint=false];
+n4430 -> n7408 [label="values[3]",color="#087f48",penwidth=2,constraint=false];
+n3897 -> n7640 [label="value"];
+n4646 -> n7671 [label="object"];
+n7640 -> n7916 [label="object"];
+}

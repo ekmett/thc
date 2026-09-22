@@ -1,0 +1,16 @@
+  PID  %CPU COMM
+58309  12.8 /Applications/ChatGPT.app/Contents/Resources/codex
+58276   5.7 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+ 4476   4.2 /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge
+ 4482   4.0 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/150.0.4078.83/Helpers/Microsoft Edge Helper.app/Contents/MacOS/Microsoft Edge Helper
+98517   3.9 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer
+58320   3.6 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/153.0.8010.48/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)
+69663   2.5 /System/Library/CoreServices/ReportCrash
+57426   1.5 /bin/zsh
+22214   1.3 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Support/mds
+63011   1.3 /System/Library/PrivateFrameworks/CoreSymbolication.framework/coresymbolicationd
+22213   1.1 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Versions/A/Support/mds_stores
+  349   0.7 /usr/libexec/locationd
+  545   0.6 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN
+64041   0.6 /usr/sbin/bluetoothd
+  426   0.5 /usr/sbin/mDNSResponder

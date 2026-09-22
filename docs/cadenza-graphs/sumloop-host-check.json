@@ -1,0 +1,93 @@
+{
+  "passed": true,
+  "graph": "/Users/ekmett/thc/docs/cadenza-graphs/sumloop-host-before-high.json",
+  "snapshot": "2: Before phase HighTierLowering",
+  "scope": "All scheduled nodes in continuing natural-loop blocks; excludes entry/exit paths and virtual object/state metadata.",
+  "naturalLoopCount": 2,
+  "summationLoopCandidates": [
+    1924
+  ],
+  "loopBegin": 1924,
+  "loopEnds": [
+    2019
+  ],
+  "headerBlock": "30",
+  "continuingBlocks": [
+    "30",
+    "31"
+  ],
+  "cfgEdges": [
+    {
+      "from": "30",
+      "to": "31"
+    },
+    {
+      "from": "31",
+      "to": "30"
+    }
+  ],
+  "scheduledNodeCount": 13,
+  "scheduledNodeIds": [
+    1924,
+    1925,
+    1931,
+    1932,
+    1986,
+    1988,
+    1992,
+    1993,
+    2019,
+    2057,
+    2058,
+    2059,
+    2060
+  ],
+  "i64ArithmeticPhis": [
+    {
+      "id": 2057,
+      "block": "30",
+      "class": "ValuePhiNode",
+      "name": "Phi(1904, 1992, i64)",
+      "stamp": "i64",
+      "updates": [
+        {
+          "node": 1992,
+          "operands": [
+            2057,
+            1903
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2058,
+      "block": "30",
+      "class": "ValuePhiNode",
+      "name": "Phi(2097, 1993, i64)",
+      "stamp": "i64",
+      "updates": [
+        {
+          "node": 1993,
+          "operands": [
+            2057,
+            2058
+          ]
+        }
+      ]
+    }
+  ],
+  "summationSignatures": [
+    {
+      "counterPhi": 2057,
+      "counterUpdate": 1992,
+      "stepConstants": [
+        1903
+      ],
+      "accumulatorPhi": 2058,
+      "accumulatorUpdate": 1993
+    }
+  ],
+  "violations": [],
+  "nodeDot": "/Users/ekmett/thc/docs/cadenza-graphs/sumloop-host-loop.dot",
+  "cfgDot": "/Users/ekmett/thc/docs/cadenza-graphs/sumloop-host-loop-cfg.dot"
+}

@@ -1,0 +1,85 @@
+{
+  "summary": {
+    "role": "entry",
+    "compilationId": 2880,
+    "root": "TruffleIR.Tier2.lambda_n()",
+    "bgv": "TruffleHotSpotCompilation-2880[lambda_n].bgv",
+    "sha256": "0eef807242850d422c8a269f69198aa91201a8bebe75d74186e3d38447191306",
+    "rawBytes": 5813659,
+    "phases": {
+      "afterRootPE": {
+        "graphOrdinal": 0,
+        "nodes": 81
+      },
+      "beforeHighTierLowering": {
+        "graphOrdinal": 5,
+        "nodes": 178
+      },
+      "afterMidTier": {
+        "graphOrdinal": 7,
+        "nodes": 419
+      }
+    },
+    "remainingMethodTargets": {
+      "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+    },
+    "commitSites": 1,
+    "committedObjectDescriptionsByType": {
+      "Object[]": 1,
+      "GeneratedStaticObject$$21": 1,
+      "RecCell": 1,
+      "Closure": 3,
+      "GeneratedStaticObject$$19": 1,
+      "GeneratedStaticObject$$17": 1
+    },
+    "allocatingBoxKinds": {
+      "JavaKind.Long": 1
+    },
+    "stringEqualsNodeIds": [],
+    "rootPEVirtualFrameGetNodeIds": []
+  },
+  "methods": [
+    {
+      "id": 981,
+      "class": "MethodCallTargetNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "name": "MethodCallTarget"
+      }
+    }
+  ],
+  "allocationCommits": [
+    {
+      "id": 1028,
+      "class": "CommitAllocationNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void",
+        "object(908)": "Object[][1027,904,822,826]",
+        "object(904)": "GeneratedStaticObject$$21[834,669,794,22,898,894]",
+        "object(898)": "RecCell[22,903]",
+        "object(903)": "Closure[904,821,28,847]",
+        "object(894)": "Closure[895,821,28,830]",
+        "object(895)": "GeneratedStaticObject$$19[827,883]",
+        "object(883)": "Closure[884,821,22,820]",
+        "object(884)": "GeneratedStaticObject$$17[797,669,1003,22,669,794,22]",
+        "name": "Alloc 908, 904, 898, 903, 894, 895, 883, 884"
+      }
+    }
+  ],
+  "boxingNodes": [
+    {
+      "id": 1027,
+      "class": "BoxNode$AllocatingBoxNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "name": "BoxNode$AllocatingBox"
+      }
+    }
+  ],
+  "note": "Static sites in one compiled graph, including conditionally entered paths and inlined callees. These are not dynamic allocations per iteration."
+}

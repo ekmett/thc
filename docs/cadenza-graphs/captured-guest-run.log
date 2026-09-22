@@ -1,0 +1,19 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/build/install/thc/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/cadenza-data-captured
+[engine] opt done   engine=1  id=5     lambda n                                           |Tier 2|Time   229(  58+172 )ms|AST   45|Inlined   3Y   0N|IR    289/   688|CodeSize    2200|Addr 0x00011dfaed80|CompId 1955   |UTC 2026-09-22T14:56:43.596|Src n/a
+PHASE WARM BEGIN
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/cadenza-data-captured
+[engine] opt done   engine=1  id=38    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time   375(  49+326 )ms|AST   10|Inlined   5Y   0N|IR    586/  1196|CodeSize    6072|Addr 0x00011dfbb740|CompId 2161   |UTC 2026-09-22T14:56:43.991|Src n/a
+PHASE WARM END calls=636331776 elapsedNs=10000091000 checksum=72859988352
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"frames":"indexed primitive slots; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

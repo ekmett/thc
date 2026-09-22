@@ -1,0 +1,111 @@
+{
+  "summary": {
+    "role": "balance-A",
+    "compilationId": 2816,
+    "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r()",
+    "bgv": "TruffleHotSpotCompilation-2816[lambda_k,_x,_l,_r].bgv",
+    "sha256": "ee1ce7ec48af6c3b18605100ac6e0bda02ca031061b1e46e0764db4f6e44ba26",
+    "rawBytes": 1223827,
+    "phases": {
+      "afterRootPE": {
+        "graphOrdinal": 0,
+        "nodes": 788
+      },
+      "beforeHighTierLowering": {
+        "graphOrdinal": 5,
+        "nodes": 451
+      },
+      "afterMidTier": {
+        "graphOrdinal": 7,
+        "nodes": 1127
+      }
+    },
+    "remainingMethodTargets": {},
+    "commitSites": 7,
+    "committedObjectDescriptionsByType": {
+      "GeneratedStaticObject$$4": 11
+    },
+    "allocatingBoxKinds": {},
+    "stringEqualsNodeIds": [],
+    "rootPEVirtualFrameGetNodeIds": []
+  },
+  "methods": [],
+  "allocationCommits": [
+    {
+      "id": 12181,
+      "class": "CommitAllocationNode",
+      "block": "19",
+      "properties": {
+        "stamp": "void",
+        "object(11693)": "GeneratedStaticObject$$4[582,3996,4090,4172,12229,11690]",
+        "object(11690)": "GeneratedStaticObject$$4[582,4648,63,79,2573,505]",
+        "name": "Alloc 11693, 11690"
+      }
+    },
+    {
+      "id": 12184,
+      "class": "CommitAllocationNode",
+      "block": "20",
+      "properties": {
+        "stamp": "void",
+        "object(11693)": "GeneratedStaticObject$$4[582,3996,4090,1577,12229,11690]",
+        "object(11690)": "GeneratedStaticObject$$4[582,4648,63,79,2573,505]",
+        "name": "Alloc 11693, 11690"
+      }
+    },
+    {
+      "id": 12187,
+      "class": "CommitAllocationNode",
+      "block": "21",
+      "properties": {
+        "stamp": "void",
+        "object(11643)": "GeneratedStaticObject$$4[582,6125,63,79,6342,505]",
+        "name": "Alloc 11643"
+      }
+    },
+    {
+      "id": 12189,
+      "class": "CommitAllocationNode",
+      "block": "35",
+      "properties": {
+        "stamp": "void",
+        "object(11623)": "GeneratedStaticObject$$4[582,11751,8616,8698,7564,11620]",
+        "object(11620)": "GeneratedStaticObject$$4[582,3537,63,79,6342,6342]",
+        "name": "Alloc 11623, 11620"
+      }
+    },
+    {
+      "id": 12192,
+      "class": "CommitAllocationNode",
+      "block": "36",
+      "properties": {
+        "stamp": "void",
+        "object(11623)": "GeneratedStaticObject$$4[582,11751,8616,7251,7564,11620]",
+        "object(11620)": "GeneratedStaticObject$$4[582,3537,63,79,6342,6342]",
+        "name": "Alloc 11623, 11620"
+      }
+    },
+    {
+      "id": 12195,
+      "class": "CommitAllocationNode",
+      "block": "40",
+      "properties": {
+        "stamp": "void",
+        "object(11603)": "GeneratedStaticObject$$4[582,11750,63,79,96,6342]",
+        "name": "Alloc 11603"
+      }
+    },
+    {
+      "id": 12197,
+      "class": "CommitAllocationNode",
+      "block": "42",
+      "properties": {
+        "stamp": "void",
+        "object(11589)": "GeneratedStaticObject$$4[582,3537,63,79,6342,6342]",
+        "name": "Alloc 11589"
+      }
+    }
+  ],
+  "boxingNodes": [],
+  "note": "Static sites in one compiled graph, including conditionally entered paths and inlined callees. These are not dynamic allocations per iteration."
+}

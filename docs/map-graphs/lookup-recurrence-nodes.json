@@ -1,0 +1,363 @@
+{
+  "source": {
+    "compilationId": 2757,
+    "graphOrdinal": 5,
+    "phase": "2: Before phase HighTierLowering"
+  },
+  "nodes": [
+    {
+      "id": 3807,
+      "class": "LoopBeginNode",
+      "block": "23",
+      "properties": {
+        "stamp": "void",
+        "name": "LoopBegin"
+      }
+    },
+    {
+      "id": 3889,
+      "class": "ValuePhiNode",
+      "block": "26",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "valueDescription": "a java.lang.Object",
+        "name": "Phi(7408, 3883, a java.lang.Object)"
+      }
+    },
+    {
+      "id": 3897,
+      "class": "ValuePhiNode",
+      "block": "27",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "valueDescription": "a java.lang.Object",
+        "name": "Phi(3889, 3964, a java.lang.Object)"
+      }
+    },
+    {
+      "id": 4246,
+      "class": "LoadFieldNode",
+      "block": "34",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__1",
+        "name": "LoadField#GeneratedStaticObject$$4.field__1"
+      }
+    },
+    {
+      "id": 4430,
+      "class": "LoadFieldNode",
+      "block": "34",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__3",
+        "name": "LoadField#GeneratedStaticObject$$4.field__3"
+      }
+    },
+    {
+      "id": 4522,
+      "class": "LoadFieldNode",
+      "block": "34",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__4",
+        "name": "LoadField#GeneratedStaticObject$$4.field__4"
+      }
+    },
+    {
+      "id": 4646,
+      "class": "ValuePhiNode",
+      "block": "37",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "valueDescription": "a java.lang.Object",
+        "name": "Phi(4246, 4640, a java.lang.Object)"
+      }
+    },
+    {
+      "id": 4800,
+      "class": "PiNode",
+      "block": "37",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+        "name": "Pi"
+      }
+    },
+    {
+      "id": 4807,
+      "class": "LoadFieldNode",
+      "block": "37",
+      "properties": {
+        "stamp": "i64",
+        "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6.field__0",
+        "name": "LoadField#GeneratedStaticObject$$6.field__0"
+      }
+    },
+    {
+      "id": 5089,
+      "class": "IntegerLessThanNode",
+      "block": "37",
+      "properties": {
+        "stamp": "void",
+        "name": "<"
+      }
+    },
+    {
+      "id": 5161,
+      "class": "IfNode",
+      "block": "37",
+      "properties": {
+        "stamp": "void",
+        "name": "If"
+      }
+    },
+    {
+      "id": 5893,
+      "class": "IntegerEqualsNode",
+      "block": "44",
+      "properties": {
+        "stamp": "void",
+        "name": "=="
+      }
+    },
+    {
+      "id": 5965,
+      "class": "IfNode",
+      "block": "44",
+      "properties": {
+        "stamp": "void",
+        "name": "If"
+      }
+    },
+    {
+      "id": 7408,
+      "class": "ValuePhiNode",
+      "block": "23",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "valueDescription": "a java.lang.Object",
+        "name": "Phi(8024, 7408, 4522, 4430, 5444, 6328, a java.lang.Object)"
+      }
+    },
+    {
+      "id": 7640,
+      "class": "ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "name": "ValueProxy(3897)"
+      }
+    },
+    {
+      "id": 7661,
+      "class": "UnboxNode",
+      "block": "22",
+      "properties": {
+        "stamp": "i64",
+        "boxingKind": "JavaKind.Long",
+        "name": "Unbox"
+      }
+    },
+    {
+      "id": 7671,
+      "class": "PiNode",
+      "block": "37",
+      "properties": {
+        "stamp": "a! thc.runtime.DataValue",
+        "name": "Pi"
+      }
+    },
+    {
+      "id": 7916,
+      "class": "PiNode",
+      "block": "34",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+        "name": "Pi"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": 7408,
+      "to": 3889,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 3889,
+      "to": 3897,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 7916,
+      "to": 4246,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 7916,
+      "to": 4430,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 7916,
+      "to": 4522,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 4246,
+      "to": 4646,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 7671,
+      "to": 4800,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 4800,
+      "to": 4807,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 7661,
+      "to": 5089,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 4807,
+      "to": 5089,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5089,
+      "to": 5161,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 4807,
+      "to": 5893,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 7661,
+      "to": 5893,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5893,
+      "to": 5965,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 3807,
+      "to": 7408,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 4522,
+      "to": 7408,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 4430,
+      "to": 7408,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 3897,
+      "to": 7640,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 4646,
+      "to": 7671,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 7640,
+      "to": 7916,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    }
+  ],
+  "allEdgesCopiedFromGraph": true
+}

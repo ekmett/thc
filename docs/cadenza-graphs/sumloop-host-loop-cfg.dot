@@ -1,0 +1,8 @@
+digraph actual_scheduled_cfg {
+  node [shape=box,fontname=Helvetica,fontsize=10];
+  label="Induced scheduled CFG of continuing natural-loop blocks";
+  "b30" [label="B30\n1924: LoopBeginNode\n1931: IntegerLessThanNode\n1932: ConditionalNode\n1992: AddNode\n1993: AddNode\n1986: IfNode\n2057: ValuePhiNode\n2058: ValuePhiNode\n2059: ValuePhiNode"];
+  "b31" [label="B31\n1988: BeginNode\n2019: LoopEndNode"];
+  "b30" -> "b31";
+  "b31" -> "b30";
+}

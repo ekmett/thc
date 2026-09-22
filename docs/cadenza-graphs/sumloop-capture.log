@@ -1,0 +1,21 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/build/install/thc/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/cadenza-data-sumLoop
+[engine] opt done   engine=1  id=2     lambda x, acc                                      |Tier 2|Time   102(  53+49  )ms|AST  125|Inlined   0Y   0N|IR    307/   299|CodeSize    1144|Addr 0x0001304674c0|CompId 1869   |UTC 2026-09-22T14:56:31.866|Src n/a
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/cadenza-data-sumLoop
+[engine] opt done   engine=1  id=3     lambda n                                           |Tier 2|Time    85(  23+62  )ms|AST   52|Inlined   1Y   0N|IR    251/   336|CodeSize    1192|Addr 0x0001304731c0|CompId 2055   |UTC 2026-09-22T14:56:31.957|Src n/a
+PHASE WARM BEGIN
+Dumping IGV graphs in /Users/ekmett/thc/work/graphs/cadenza-data-sumLoop
+[engine] opt done   engine=1  id=36    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time   256(  44+212 )ms|AST   10|Inlined   3Y   0N|IR    543/  1077|CodeSize    5024|Addr 0x000130480840|CompId 2169   |UTC 2026-09-22T14:56:32.240|Src n/a
+PHASE WARM END calls=5558272 elapsedNs=10000168583 checksum=278358497986560
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"frames":"indexed primitive slots; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

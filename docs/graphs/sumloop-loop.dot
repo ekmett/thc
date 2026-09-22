@@ -1,0 +1,42 @@
+digraph actual_slice {
+graph [rankdir=TB,bgcolor="white",pad="0.3",nodesep="0.30",ranksep="0.44",fontname="Helvetica",fontsize=15,label="sumLoop: actual optimized data-flow slice
+Before HighTierLowering / compilation 1895",labelloc=t];
+node [shape=box,style="rounded,filled",fillcolor="#f4f6f8",color="#9ba6b4",fontname="Menlo",fontsize=11,margin="0.13,0.09"];
+edge [fontname="Menlo",fontsize=10,color="#52657b",fontcolor="#39495e",arrowsize=0.7];
+n1805 [label="1805  LoadFieldNode\nthc.runtime.Env.values\na java.lang.Object[]"];
+n1808 [label="1808  LoadIndexedNode\na java.lang.Object"];
+n1904 [label="1904  UnboxNode\ni64"];
+n2610 [label="2610  LoadIndexedNode\na java.lang.Object"];
+n2731 [label="2731  UnboxNode\ni64"];
+n2759 [label="2759  AddNode\ni64\nx=1904, y=2731"];
+n3310 [label="3310  PiNode\na!# java.lang.Long"];
+n3314 [label="3314  PiNode\na!# java.lang.Long"];
+n3378 [label="3378  ValuePhiNode\na!# thc.runtime.Env",fillcolor="#dcecf7",color="#427795"];
+n3458 [label="3458  AddNode\ni64\nx=1904, y=-1 (3455 outside slice)"];
+n5900 [label="5900  BoxNode$AllocatingBoxNode\na!# java.lang.Long",fillcolor="#fff0dc",color="#ba7d28"];
+n5901 [label="5901  BoxNode$AllocatingBoxNode\na!# java.lang.Long",fillcolor="#fff0dc",color="#ba7d28"];
+n5902 [label="5902  CommitAllocationNode\nvoid\nEnv[3318,3420]\nObject[2][5900,5901]",fillcolor="#fff0dc",color="#ba7d28"];
+n5903 [label="5903  AllocatedObjectNode\na!# thc.runtime.Env",fillcolor="#fff0dc",color="#ba7d28"];
+n3378 -> n1805 [label="object"];
+n1805 -> n1808 [label="array"];
+n3310 -> n1904 [label="value"];
+n1805 -> n2610 [label="array"];
+n3314 -> n2731 [label="value"];
+n1904 -> n2759 [label="x"];
+n2731 -> n2759 [label="y"];
+n1808 -> n3310 [label="object"];
+n2610 -> n3314 [label="object"];
+n3378 -> n3378 [label="values[1]",constraint=false,style=dashed];
+n5903 -> n3378 [label="values[2]",constraint=false,color="#b76d1a",penwidth=2];
+n1904 -> n3458 [label="x"];
+n3458 -> n5900 [label="value"];
+n2759 -> n5901 [label="value"];
+n5900 -> n5902 [label="values[2]"];
+n5901 -> n5902 [label="values[3]"];
+n5902 -> n5903 [label="commit"];
+{rank=same;n1808;n2610;}
+{rank=same;n3310;n3314;}
+{rank=same;n1904;n2731;}
+{rank=same;n3458;n2759;}
+{rank=same;n5900;n5901;}
+}

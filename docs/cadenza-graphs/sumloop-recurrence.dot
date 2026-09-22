@@ -1,0 +1,18 @@
+digraph actual_recurrence {
+graph [rankdir=TB, bgcolor="white", pad="0.25", ranksep="0.5", fontname="Helvetica", label="Actual compiled sumLoop: primitive recurrence slice", labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#e7f1fa", fontname="Menlo", fontsize=12, margin="0.16,0.12"];
+edge [fontname="Menlo",fontsize=10,color="#496d8d"];
+n1276 [label="1276  ConstantNode\ni64 [-1]"];
+n2922 [label="2922  AddNode\ni64"];
+n3234 [label="3234  AddNode\ni64"];
+n4029 [label="4029  ValuePhiNode\ni64"];
+n4030 [label="4030  ValuePhiNode\ni64"];
+n4029 -> n2922 [label="x"];
+n1276 -> n2922 [label="y"];
+n4029 -> n3234 [label="x"];
+n4030 -> n3234 [label="y"];
+n2922 -> n4029 [label="values[1]",constraint=false,color="#b06729",penwidth=2];
+n3234 -> n4030 [label="values[1]",constraint=false,color="#b06729",penwidth=2];
+{rank=same;n4029;n4030;}
+{rank=same;n3234;n2922;}
+}

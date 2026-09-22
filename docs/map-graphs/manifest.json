@@ -1,0 +1,446 @@
+{
+  "schema": 1,
+  "captureEntry": "mapAggregate",
+  "inputBase": 10000,
+  "diagnosticUnsupported": true,
+  "unsupportedTraps": 0,
+  "installedLastTierVerified": true,
+  "rawGraphArchive": "final-selected-bgv.zip",
+  "roles": [
+    {
+      "role": "insert",
+      "compilationId": 2568,
+      "root": "TruffleIR.Tier2.lambda_sc,_x,_ds1()",
+      "bgv": "TruffleHotSpotCompilation-2568[lambda_sc,_x,_ds1].bgv",
+      "sha256": "266eb6966f7f5a300ac31915a4f7e3adfc03c17d65e3b83b8810a53348a6403e",
+      "rawBytes": 11762218,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 1381
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 4609
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 10645
+        }
+      },
+      "remainingMethodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 21
+      },
+      "commitSites": 55,
+      "committedObjectDescriptionsByType": {
+        "Object[]": 28,
+        "GeneratedStaticObject$$4": 31,
+        "GeneratedStaticObject$$6": 13,
+        "Thunk": 4,
+        "GeneratedStaticObject$$7": 4
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 27
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "adjust",
+      "compilationId": 2708,
+      "root": "TruffleIR.Tier2.lambda_ww,_ds2()",
+      "bgv": "TruffleHotSpotCompilation-2708[lambda_ww,_ds2].bgv",
+      "sha256": "3e114f7c71e374a567ad86526c76a651390fca53ec2476dc709a1d571b42c3e2",
+      "rawBytes": 4179016,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 519
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 2495
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 5789
+        }
+      },
+      "remainingMethodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 8
+      },
+      "commitSites": 28,
+      "committedObjectDescriptionsByType": {
+        "Object[]": 8,
+        "GeneratedStaticObject$$4": 26,
+        "GeneratedStaticObject$$6": 7
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 16
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "lookup",
+      "compilationId": 2757,
+      "root": "TruffleIR.Tier2.lambda_def,_ww,_ds1()",
+      "bgv": "TruffleHotSpotCompilation-2757[lambda_def,_ww,_ds1].bgv",
+      "sha256": "f99cecc554fba7bcdfc26b73597d329f9980e8feee54404d482573297e1280c5",
+      "rawBytes": 1469317,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 937
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 651
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 1331
+        }
+      },
+      "remainingMethodTargets": {},
+      "commitSites": 6,
+      "committedObjectDescriptionsByType": {
+        "Object[]": 4,
+        "GeneratedStaticObject$$6": 2
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 2
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "weighted-fold",
+      "compilationId": 2794,
+      "root": "TruffleIR.Tier2.lambda_ww,_ds()",
+      "bgv": "TruffleHotSpotCompilation-2794[lambda_ww,_ds].bgv",
+      "sha256": "6ff8eba30bebca8ba42ad686ded6e6226fe900cf5f706242ca78ff7b3bb428c5",
+      "rawBytes": 8755109,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 943
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 5240
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 10968
+        }
+      },
+      "remainingMethodTargets": {
+        "java.lang.Long.longValue()": 2,
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 16
+      },
+      "commitSites": 55,
+      "committedObjectDescriptionsByType": {
+        "Object[]": 21,
+        "GeneratedStaticObject$$6": 12,
+        "GeneratedStaticObject$$4": 31,
+        "TailCall": 1
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 19
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "query-loop",
+      "compilationId": 2813,
+      "root": "TruffleIR.Tier2.lambda_x,_ww()",
+      "bgv": "TruffleHotSpotCompilation-2813[lambda_x,_ww].bgv",
+      "sha256": "65b153265c8fcada32aa1bdd1a6b223484be47f463453680f022f906e669e500",
+      "rawBytes": 5423836,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 719
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 3317
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 6577
+        }
+      },
+      "remainingMethodTargets": {},
+      "commitSites": 24,
+      "committedObjectDescriptionsByType": {
+        "Object[]": 16,
+        "GeneratedStaticObject$$6": 8
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 9
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "balance-A",
+      "compilationId": 2816,
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r()",
+      "bgv": "TruffleHotSpotCompilation-2816[lambda_k,_x,_l,_r].bgv",
+      "sha256": "ee1ce7ec48af6c3b18605100ac6e0bda02ca031061b1e46e0764db4f6e44ba26",
+      "rawBytes": 1223827,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 788
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 451
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 1127
+        }
+      },
+      "remainingMethodTargets": {},
+      "commitSites": 7,
+      "committedObjectDescriptionsByType": {
+        "GeneratedStaticObject$$4": 11
+      },
+      "allocatingBoxKinds": {},
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "range-loop",
+      "compilationId": 2829,
+      "root": "TruffleIR.Tier2.lambda_x,_v()",
+      "bgv": "TruffleHotSpotCompilation-2829[lambda_x,_v].bgv",
+      "sha256": "6b02c86a034412af8c26aeb61ff77c9cb95424ce8238ac1926580731d4b1c75d",
+      "rawBytes": 16008742,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 929
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 8324
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 18525
+        }
+      },
+      "remainingMethodTargets": {
+        "java.lang.Long.longValue()": 2,
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 31
+      },
+      "commitSites": 90,
+      "committedObjectDescriptionsByType": {
+        "Object[]": 37,
+        "GeneratedStaticObject$$4": 53,
+        "GeneratedStaticObject$$6": 19,
+        "Thunk": 6,
+        "GeneratedStaticObject$$7": 2,
+        "GeneratedStaticObject$$13": 2,
+        "GeneratedStaticObject$$11": 2,
+        "RecCell": 2,
+        "Closure": 6,
+        "GeneratedStaticObject$$10": 2,
+        "GeneratedStaticObject$$9": 2,
+        "GeneratedStaticObject$$15": 2
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 35
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "balance-B",
+      "compilationId": 2844,
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r()",
+      "bgv": "TruffleHotSpotCompilation-2844[lambda_k,_x,_l,_r].bgv",
+      "sha256": "58bd6187794d2b239e79f72afbcc5311c3216c94d2823d535081b58498525ead",
+      "rawBytes": 10248623,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 1402
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 4071
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 9902
+        }
+      },
+      "remainingMethodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 16
+      },
+      "commitSites": 46,
+      "committedObjectDescriptionsByType": {
+        "GeneratedStaticObject$$4": 32,
+        "Object[]": 22,
+        "GeneratedStaticObject$$6": 10,
+        "Thunk": 3,
+        "GeneratedStaticObject$$7": 3
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 18
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    },
+    {
+      "role": "entry",
+      "compilationId": 2880,
+      "root": "TruffleIR.Tier2.lambda_n()",
+      "bgv": "TruffleHotSpotCompilation-2880[lambda_n].bgv",
+      "sha256": "0eef807242850d422c8a269f69198aa91201a8bebe75d74186e3d38447191306",
+      "rawBytes": 5813659,
+      "phases": {
+        "afterRootPE": {
+          "graphOrdinal": 0,
+          "nodes": 81
+        },
+        "beforeHighTierLowering": {
+          "graphOrdinal": 5,
+          "nodes": 178
+        },
+        "afterMidTier": {
+          "graphOrdinal": 7,
+          "nodes": 419
+        }
+      },
+      "remainingMethodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+      },
+      "commitSites": 1,
+      "committedObjectDescriptionsByType": {
+        "Object[]": 1,
+        "GeneratedStaticObject$$21": 1,
+        "RecCell": 1,
+        "Closure": 3,
+        "GeneratedStaticObject$$19": 1,
+        "GeneratedStaticObject$$17": 1
+      },
+      "allocatingBoxKinds": {
+        "JavaKind.Long": 1
+      },
+      "stringEqualsNodeIds": [],
+      "rootPEVirtualFrameGetNodeIds": []
+    }
+  ],
+  "limitations": [
+    "Only the selected compilations are archived; earlier invalidated insertion compilation 2249 and argument-thunk compilations are omitted.",
+    "Phase node counts are not the graph-cost budget used by Graal.",
+    "Commit site counts are not dynamic allocation counts.",
+    "Balance A and B have identical runtime labels; no unverified mapping to balanceL/balanceR is claimed."
+  ],
+  "artifacts": {
+    "capture.log": {
+      "bytes": 6039,
+      "sha256": "2ef4c7a6b3291ddb9f8d5d4bf369d2f7039ccda4b7ea54082ccdf3390ec24c65"
+    },
+    "final-selected-bgv.zip": {
+      "bytes": 11013939,
+      "sha256": "21c5b2d411cc324a007eb4474378676d9c4667f967341697acb5dbd4b61e22b8"
+    },
+    "weighted-fold-evidence.json": {
+      "bytes": 25549,
+      "sha256": "52e59cf383f8c91fd03ec73fa826efbe2f5aec383048ac3fbfff14cda4809d26"
+    },
+    "lookup-recurrence.svg": {
+      "bytes": 21326,
+      "sha256": "32d59ec9fb686b33761dd1878b339ffaa0f76605efe65b254c7c22c019ded621"
+    },
+    "provenance.json": {
+      "bytes": 26911,
+      "sha256": "e136c8d84a028457354233cfb4e76ce0295e4cfd92de7f19b96f4f12689113c6"
+    },
+    "query-loop-evidence.json": {
+      "bytes": 8811,
+      "sha256": "d8d59804fc2c3d51d9a3c95dffef4e45737cbc9174f3088143e4f0e63a1276bc"
+    },
+    "lookup-recurrence.dot": {
+      "bytes": 2188,
+      "sha256": "67f33795591f8cf3458c4d4faa4717e4cf1769afc7adbdeae8192c8f1b3e7c21"
+    },
+    "oracle-validation.json": {
+      "bytes": 231,
+      "sha256": "e7ce9a7d01854381ac3d12e0bc6b6eff203506a96009fb256eaff33cafdd6830"
+    },
+    "export-frontier.json": {
+      "bytes": 223599,
+      "sha256": "f325a8538c685e780d38cf505dc40e0ddc5b02ea874be8e793dc9aa32c201210"
+    },
+    "failed-insert-pe.zip": {
+      "bytes": 2399850,
+      "sha256": "f3a30b35bae7046dc09c55a0afe6b1ccb7caf9d18c0a3f305ccece0ee68f0cfb"
+    },
+    "balance-B-evidence.json": {
+      "bytes": 23804,
+      "sha256": "1fd7d65de9ca12de7076eddb2a0830e7f9622caf5f2f3a00b80f18ef61539512"
+    },
+    "lookup-recurrence.png": {
+      "bytes": 128603,
+      "sha256": "154cbe9251bc364ae311de70c1232df90f5bb29b0885d5d238759858440d6265"
+    },
+    "balance-A-evidence.json": {
+      "bytes": 3199,
+      "sha256": "e675163d030fa54a40bf36471adc4ae234d88d84b33508f763910bb37e6a1ac8"
+    },
+    "reachability-audit.json": {
+      "bytes": 223080,
+      "sha256": "3c193c9045f20ebf0c0e878a056e8b7c691663fa9e50e7962f11999d9056e0a5"
+    },
+    "bin-layout-proof.json": {
+      "bytes": 2159,
+      "sha256": "862f6188132e6eea2e99f0276f7b26e5eb87c34113d5191fc1f29aba4a126016"
+    },
+    "failed-insert-pe-evidence.json": {
+      "bytes": 24013,
+      "sha256": "f097c9d747faf24e20b9d4f883113d87ed6f12ae85f1f5af8129fa9d1def80b5"
+    },
+    "insert-evidence.json": {
+      "bytes": 29680,
+      "sha256": "f166fe0fe591c50cfcf9dc4f10fdb47bf73ab5d2f6cef5e0cb7926048a43416e"
+    },
+    "lookup-path-proof.json": {
+      "bytes": 4491,
+      "sha256": "9769302951f77edac69f98cc0abfe5a0df2ffa6281c3306e59741e6bc4079af1"
+    },
+    "lookup-evidence.json": {
+      "bytes": 2936,
+      "sha256": "4393788406eaf8bb1cd922e3cce9124e2fa73c1484a8a370b53718f10f5b0f82"
+    },
+    "entry-evidence.json": {
+      "bytes": 2487,
+      "sha256": "3307b636e79caeb49c681dcd7833d35f6c4014ca55f49e5c86e1739469690918"
+    },
+    "adjust-evidence.json": {
+      "bytes": 15531,
+      "sha256": "63f872abadc4c45261822e5400e83a875776394f7e80a2615c8f0d4ade2b8855"
+    },
+    "range-loop-evidence.json": {
+      "bytes": 45626,
+      "sha256": "b6b0d8b48a0f87a80e9207249b35d660d745719f1f075bb70c8481553de864ef"
+    },
+    "capture.tsv": {
+      "bytes": 47,
+      "sha256": "29162de45c85a725a727c6b99ee2f8e5f375e079507be2bf79df591d31207110"
+    },
+    "lookup-recurrence-nodes.json": {
+      "bytes": 7490,
+      "sha256": "28e309cac2817b9d4c4f7e7646ed7bece379406823c1f87fdc5b96fc8c4f40da"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "windows": 30,
+  "minimumSampleSeconds": 2,
+  "forks": {
+    "mapAggregate-1.log": {
+      "warmCalls": 4864,
+      "warmElapsedNs": 15108370375,
+      "verifiedLastTier": true,
+      "unsupportedTraps": 0,
+      "diagnosticPolicy": "diagnostic-traps"
+    },
+    "mapAggregate-2.log": {
+      "warmCalls": 4864,
+      "warmElapsedNs": 15125769750,
+      "verifiedLastTier": true,
+      "unsupportedTraps": 0,
+      "diagnosticPolicy": "diagnostic-traps"
+    },
+    "mapAggregate-3.log": {
+      "warmCalls": 5120,
+      "warmElapsedNs": 15770927291,
+      "verifiedLastTier": true,
+      "unsupportedTraps": 0,
+      "diagnosticPolicy": "diagnostic-traps"
+    }
+  },
+  "tests": 37,
+  "testFailures": 0,
+  "nativeOracleRows": 18,
+  "compiledMapRows": 18,
+  "beforeRequestedCompilationRows": 18,
+  "completeHaskellCompatibility": false,
+  "capabilityAuditAccepted": false
+}

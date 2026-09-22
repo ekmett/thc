@@ -1,0 +1,378 @@
+{
+  "entry": "caseList",
+  "compilation": "2139[lambda_n,_xs,_acc]",
+  "sourceBgv": "TruffleHotSpotCompilation-2139[lambda_n,_xs,_acc].bgv",
+  "graph": "2: Before phase HighTierLowering",
+  "nodes": 768,
+  "artifact": "case-list-worker-before-high.json",
+  "invokes": [],
+  "committedAllocations": [
+    {
+      "node": 35275,
+      "block": "7",
+      "stamp": "void",
+      "object(13662)": "Object[][35274]",
+      "name": "Alloc 13662"
+    },
+    {
+      "node": 35278,
+      "block": "8",
+      "stamp": "void",
+      "object(13667)": "Object[][35274,1244]",
+      "name": "Alloc 13667"
+    },
+    {
+      "node": 35281,
+      "block": "21",
+      "stamp": "void",
+      "object(15989)": "GeneratedStaticObject$$2[1692,15981,15982]",
+      "object(15981)": "GeneratedStaticObject$$3[2550,15795]",
+      "object(15982)": "Thunk[1293,15983,5,119]",
+      "object(15983)": "GeneratedStaticObject$$4[15946,119,15795,22]",
+      "name": "Alloc 15989, 15981, 15982, 15983"
+    },
+    {
+      "node": 35287,
+      "block": "33",
+      "stamp": "void",
+      "object(16489)": "GeneratedStaticObject$$2[1692,16481,16482]",
+      "object(16481)": "GeneratedStaticObject$$3[2550,16342]",
+      "object(16482)": "Thunk[1293,16483,5,119]",
+      "object(16483)": "GeneratedStaticObject$$4[15946,119,16342,22]",
+      "name": "Alloc 16489, 16481, 16482, 16483"
+    },
+    {
+      "node": 35297,
+      "block": "55",
+      "stamp": "void",
+      "object(14581)": "Object[][35296]",
+      "name": "Alloc 14581"
+    },
+    {
+      "node": 35300,
+      "block": "56",
+      "stamp": "void",
+      "object(14586)": "Object[][35296,7684]",
+      "name": "Alloc 14586"
+    },
+    {
+      "node": 35303,
+      "block": "63",
+      "stamp": "void",
+      "object(16237)": "GeneratedStaticObject$$2[1692,16229,16230]",
+      "object(16229)": "GeneratedStaticObject$$3[2550,16061]",
+      "object(16230)": "Thunk[1293,16231,5,119]",
+      "object(16231)": "GeneratedStaticObject$$4[15946,119,16061,22]",
+      "name": "Alloc 16237, 16229, 16230, 16231"
+    },
+    {
+      "node": 35309,
+      "block": "69",
+      "stamp": "void",
+      "object(16736)": "GeneratedStaticObject$$2[1692,16728,16729]",
+      "object(16728)": "GeneratedStaticObject$$3[2550,16589]",
+      "object(16729)": "Thunk[1293,16730,5,119]",
+      "object(16730)": "GeneratedStaticObject$$4[15946,119,16589,22]",
+      "name": "Alloc 16736, 16728, 16729, 16730"
+    }
+  ],
+  "boxing": [
+    {
+      "node": 35274,
+      "block": "6",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    },
+    {
+      "node": 35296,
+      "block": "54",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    },
+    {
+      "node": 35319,
+      "block": "81",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    },
+    {
+      "node": 35321,
+      "block": "80",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    }
+  ],
+  "captureLoads": [
+    {
+      "node": 15770,
+      "block": "16",
+      "stamp": "i32 [0 - 1] bits:0...0x",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.capture__0__tag",
+      "name": "LoadField#GeneratedStaticObject$$4.capture__0__tag"
+    },
+    {
+      "node": 15775,
+      "block": "18",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.capture__0__primitive",
+      "name": "LoadField#GeneratedStaticObject$$4.capture__0__primitive"
+    },
+    {
+      "node": 15778,
+      "block": "17",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.capture__0__object",
+      "name": "LoadField#GeneratedStaticObject$$4.capture__0__object"
+    },
+    {
+      "node": 16037,
+      "block": "58",
+      "stamp": "i32 [0 - 1] bits:0...0x",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.capture__0__tag",
+      "name": "LoadField#GeneratedStaticObject$$4.capture__0__tag"
+    },
+    {
+      "node": 16042,
+      "block": "60",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.capture__0__primitive",
+      "name": "LoadField#GeneratedStaticObject$$4.capture__0__primitive"
+    },
+    {
+      "node": 16045,
+      "block": "59",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.capture__0__object",
+      "name": "LoadField#GeneratedStaticObject$$4.capture__0__object"
+    },
+    {
+      "node": 16288,
+      "block": "28",
+      "stamp": "i32 [0 - 1] bits:0...0x",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$5.capture__0__tag",
+      "name": "LoadField#GeneratedStaticObject$$5.capture__0__tag"
+    },
+    {
+      "node": 16293,
+      "block": "30",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$5.capture__0__primitive",
+      "name": "LoadField#GeneratedStaticObject$$5.capture__0__primitive"
+    },
+    {
+      "node": 16296,
+      "block": "29",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$5.capture__0__object",
+      "name": "LoadField#GeneratedStaticObject$$5.capture__0__object"
+    },
+    {
+      "node": 16537,
+      "block": "64",
+      "stamp": "i32 [0 - 1] bits:0...0x",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$5.capture__0__tag",
+      "name": "LoadField#GeneratedStaticObject$$5.capture__0__tag"
+    },
+    {
+      "node": 16542,
+      "block": "66",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$5.capture__0__primitive",
+      "name": "LoadField#GeneratedStaticObject$$5.capture__0__primitive"
+    },
+    {
+      "node": 16545,
+      "block": "65",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$5.capture__0__object",
+      "name": "LoadField#GeneratedStaticObject$$5.capture__0__object"
+    }
+  ],
+  "typedDataFields": [
+    {
+      "node": 2152,
+      "block": "39",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0",
+      "name": "LoadField#GeneratedStaticObject$$2.field__0"
+    },
+    {
+      "node": 2248,
+      "block": "39",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__1",
+      "name": "LoadField#GeneratedStaticObject$$2.field__1"
+    },
+    {
+      "node": 4875,
+      "block": "42",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3.field__0",
+      "name": "LoadField#GeneratedStaticObject$$3.field__0"
+    },
+    {
+      "node": 8565,
+      "block": "74",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0",
+      "name": "LoadField#GeneratedStaticObject$$2.field__0"
+    },
+    {
+      "node": 8657,
+      "block": "74",
+      "stamp": "a java.lang.Object",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__1",
+      "name": "LoadField#GeneratedStaticObject$$2.field__1"
+    },
+    {
+      "node": 11222,
+      "block": "77",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3.field__0",
+      "name": "LoadField#GeneratedStaticObject$$3.field__0"
+    },
+    {
+      "node": 15981,
+      "block": "2",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3.field__0"
+      ],
+      "name": "VirtualInstance(4) GeneratedStaticObject$$3"
+    },
+    {
+      "node": 15989,
+      "block": "2",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__1"
+      ],
+      "name": "VirtualInstance(3) GeneratedStaticObject$$2"
+    },
+    {
+      "node": 16229,
+      "block": "45",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3.field__0"
+      ],
+      "name": "VirtualInstance(15) GeneratedStaticObject$$3"
+    },
+    {
+      "node": 16237,
+      "block": "45",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__1"
+      ],
+      "name": "VirtualInstance(14) GeneratedStaticObject$$2"
+    },
+    {
+      "node": 16481,
+      "block": "2",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3.field__0"
+      ],
+      "name": "VirtualInstance(8) GeneratedStaticObject$$3"
+    },
+    {
+      "node": 16489,
+      "block": "2",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__1"
+      ],
+      "name": "VirtualInstance(7) GeneratedStaticObject$$2"
+    },
+    {
+      "node": 16728,
+      "block": "45",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3.field__0"
+      ],
+      "name": "VirtualInstance(19) GeneratedStaticObject$$3"
+    },
+    {
+      "node": 16736,
+      "block": "45",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__1"
+      ],
+      "name": "VirtualInstance(18) GeneratedStaticObject$$2"
+    }
+  ],
+  "callTree": [
+    {
+      "node": 0,
+      "target": "lambda n, xs, acc",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 1,
+      "target": "argument thunk",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 2,
+      "target": "argument thunk",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 3,
+      "target": "argument thunk",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 4,
+      "target": "argument thunk",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 5,
+      "target": "lambda n",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 6,
+      "target": "lambda n",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 7,
+      "target": "lambda n",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 8,
+      "target": "lambda n",
+      "state": "CallNode$State.Inlined"
+    }
+  ],
+  "notes": [
+    "Loop6890/B46 count phi14488 and accumulator phi14489 are i64; decrement9369 and sum12704 feed both continuation edges. Cons head8565/tail8657 are direct object fields; Box11222 is a direct i64 field.",
+    "List production commits35281/35287/35303/35309 contain Cons, Box, tail Thunk and capture without per-cell payload Object[]. Separate Object[] commits35275/35278/35297/35300 are thunk-entry call packets. The backedges B78/B79 themselves allocate no objects."
+  ]
+}

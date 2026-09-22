@@ -1,0 +1,92 @@
+{
+  "entry": "captured",
+  "compilation": "1955[lambda_n]",
+  "sourceBgv": "TruffleHotSpotCompilation-1955[lambda_n].bgv",
+  "graph": "2: Before phase HighTierLowering",
+  "nodes": 198,
+  "artifact": "captured-guest-before-high.json",
+  "invokes": [],
+  "committedAllocations": [
+    {
+      "node": 3765,
+      "block": "5",
+      "stamp": "void",
+      "object(1964)": "Object[][3764]",
+      "name": "Alloc 1964"
+    },
+    {
+      "node": 3768,
+      "block": "6",
+      "stamp": "void",
+      "object(1968)": "Object[][3764,1844]",
+      "name": "Alloc 1968"
+    },
+    {
+      "node": 3771,
+      "block": "7",
+      "stamp": "void",
+      "object(2004)": "GeneratedStaticObject$$1[938,2007]",
+      "name": "Alloc 2004"
+    }
+  ],
+  "boxing": [
+    {
+      "node": 3764,
+      "block": "4",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    },
+    {
+      "node": 3775,
+      "block": "10",
+      "stamp": "a!# java.lang.Long",
+      "name": "BoxNode$AllocatingBox"
+    }
+  ],
+  "captureLoads": [],
+  "typedDataFields": [
+    {
+      "node": 1937,
+      "block": "10",
+      "stamp": "i64",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.field__0",
+      "name": "LoadField#GeneratedStaticObject$$1.field__0"
+    },
+    {
+      "node": 2004,
+      "block": "0",
+      "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+      "type": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+      "fields": [
+        "thc.runtime.DataValue.layout",
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.field__0"
+      ],
+      "name": "VirtualInstance(3) GeneratedStaticObject$$1"
+    }
+  ],
+  "callTree": [
+    {
+      "node": 0,
+      "target": "lambda n",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 1,
+      "target": "lambda f, x",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 2,
+      "target": "lambda ds",
+      "state": "CallNode$State.Inlined"
+    },
+    {
+      "node": 3,
+      "target": "lvl",
+      "state": "CallNode$State.Inlined"
+    }
+  ],
+  "notes": [
+    "All call-tree nodes are inlined; no residual MethodCallTargetNode. Direct-long Box field1937 replaces payload array/boxed field. Thunk-entry packets remain on conditional force paths; final result boxing remains."
+  ]
+}

@@ -1,0 +1,651 @@
+{
+  "compilation": "TruffleHotSpotCompilation-2274[lambda_sc,_x,_ds1]",
+  "status": "failed during root partial evaluation, before optimized graph exists",
+  "nodes": 65176,
+  "graphSizeCost": 100006,
+  "graphSizeLimit": 100000,
+  "sourceArchive": "failed-insert-pe.zip",
+  "parsedGraph": "work/graphs/map-failed-pe/parsed/graph-00000.json",
+  "nodeClassCounts": {
+    "jdk.graal.compiler.nodes.BeginNode": 16716,
+    "jdk.graal.compiler.nodes.ConstantNode": 499,
+    "jdk.graal.compiler.nodes.DeoptimizeNode": 1260,
+    "jdk.graal.compiler.nodes.EndNode": 7285,
+    "jdk.graal.compiler.nodes.FixedGuardNode": 4160,
+    "jdk.graal.compiler.nodes.FrameState": 8215,
+    "jdk.graal.compiler.nodes.IfNode": 1831,
+    "jdk.graal.compiler.nodes.InvokeWithExceptionNode": 89,
+    "jdk.graal.compiler.nodes.LogicConstantNode": 2,
+    "jdk.graal.compiler.nodes.LogicNegationNode": 130,
+    "jdk.graal.compiler.nodes.LoopBeginNode": 171,
+    "jdk.graal.compiler.nodes.LoopEndNode": 171,
+    "jdk.graal.compiler.nodes.LoopExitNode": 342,
+    "jdk.graal.compiler.nodes.MergeNode": 2164,
+    "jdk.graal.compiler.nodes.ParameterNode": 1,
+    "jdk.graal.compiler.nodes.PiArrayNode": 1,
+    "jdk.graal.compiler.nodes.PiNode": 2311,
+    "jdk.graal.compiler.nodes.ReturnNode": 3,
+    "jdk.graal.compiler.nodes.SimplifyingGraphDecoder$CanonicalizeToNullNode": 1,
+    "jdk.graal.compiler.nodes.StartNode": 1,
+    "jdk.graal.compiler.nodes.UnwindNode": 4,
+    "jdk.graal.compiler.nodes.ValuePhiNode": 1949,
+    "jdk.graal.compiler.nodes.calc.AddNode": 259,
+    "jdk.graal.compiler.nodes.calc.AndNode": 50,
+    "jdk.graal.compiler.nodes.calc.ConditionalNode": 124,
+    "jdk.graal.compiler.nodes.calc.IntegerEqualsNode": 1049,
+    "jdk.graal.compiler.nodes.calc.IntegerLessThanNode": 204,
+    "jdk.graal.compiler.nodes.calc.IsNullNode": 1482,
+    "jdk.graal.compiler.nodes.calc.LeftShiftNode": 29,
+    "jdk.graal.compiler.nodes.calc.ObjectEqualsNode": 172,
+    "jdk.graal.compiler.nodes.calc.OrNode": 1,
+    "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 2946,
+    "jdk.graal.compiler.nodes.extended.BoxNode$PureBoxNode": 547,
+    "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 2,
+    "jdk.graal.compiler.nodes.extended.IntegerSwitchNode": 547,
+    "jdk.graal.compiler.nodes.extended.UnboxNode": 161,
+    "jdk.graal.compiler.nodes.java.ExceptionObjectNode": 190,
+    "jdk.graal.compiler.nodes.java.FinalFieldBarrierNode": 40,
+    "jdk.graal.compiler.nodes.java.InstanceOfNode": 1987,
+    "jdk.graal.compiler.nodes.java.LoadFieldNode": 1391,
+    "jdk.graal.compiler.nodes.java.LoadIndexedNode": 491,
+    "jdk.graal.compiler.nodes.java.MethodCallTargetNode": 68,
+    "jdk.graal.compiler.nodes.java.NewArrayNode": 214,
+    "jdk.graal.compiler.nodes.java.NewInstanceNode": 40,
+    "jdk.graal.compiler.nodes.java.StoreFieldNode": 223,
+    "jdk.graal.compiler.nodes.java.StoreIndexedNode": 520,
+    "jdk.graal.compiler.nodes.virtual.VirtualArrayNode": 3,
+    "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode": 1,
+    "jdk.graal.compiler.replacements.PEGraphDecoder$FixedAnchorNode": 391,
+    "jdk.graal.compiler.replacements.arraycopy.ArrayCopyNode": 122,
+    "jdk.graal.compiler.truffle.nodes.frame.NewFrameNode": 1,
+    "jdk.graal.compiler.truffle.nodes.frame.VirtualFrameGetNode": 3879,
+    "jdk.graal.compiler.truffle.nodes.frame.VirtualFrameGetTagNode": 547,
+    "jdk.graal.compiler.truffle.nodes.frame.VirtualFrameSetNode": 189
+  },
+  "frameReadKinds": {
+    "JavaKind.Byte": 547,
+    "JavaKind.Boolean": 547,
+    "JavaKind.Float": 547,
+    "JavaKind.Double": 547,
+    "JavaKind.Int": 547,
+    "JavaKind.Long": 597,
+    "JavaKind.Object": 547
+  },
+  "boxingKinds": {
+    "JavaKind.Byte": 547,
+    "JavaKind.Float": 547,
+    "JavaKind.Double": 547,
+    "JavaKind.Int": 547,
+    "JavaKind.Long": 758
+  },
+  "loopOrigins": {
+    "java.lang.StringLatin1.equals([B, [B)": 171
+  },
+  "frequentFrameStates": [
+    {
+      "method": "thc.runtime.Application.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 151,
+      "count": 838
+    },
+    {
+      "method": "thc.runtime.FrameAccess.read(Lcom/oracle/truffle/api/frame/Frame;, I)",
+      "sourceFile": "Frames.kt",
+      "sourceLine": 56,
+      "count": 547
+    },
+    {
+      "method": "thc.runtime.Evaluate.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 142,
+      "count": 543
+    },
+    {
+      "method": "thc.runtime.LocalRead.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 69,
+      "count": 529
+    },
+    {
+      "method": "java.lang.String.equals(Ljava/lang/Object;)",
+      "sourceFile": "String.java",
+      "sourceLine": 1926,
+      "count": 342
+    },
+    {
+      "method": "thc.runtime.Expr.executeLong(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 61,
+      "count": 322
+    },
+    {
+      "method": "thc.runtime.Construct.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 212,
+      "count": 312
+    },
+    {
+      "method": "thc.runtime.Case.runAlternative(Lcom/oracle/truffle/api/frame/VirtualFrame;, Ljava/lang/Object;, Lthc/runtime/Alternative;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 205,
+      "count": 267
+    },
+    {
+      "method": "thc.runtime.Case.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 195,
+      "count": 183
+    },
+    {
+      "method": "thc.runtime.ApplicationKt.access$appendWithHeader(I, [Ljava/lang/Object;, I, [Ljava/lang/Object;, I)",
+      "sourceFile": "Application.kt",
+      "sourceLine": 1,
+      "count": 183
+    },
+    {
+      "method": "java.lang.StringLatin1.equals([B, [B)",
+      "sourceFile": "StringLatin1.java",
+      "sourceLine": 100,
+      "count": 171
+    },
+    {
+      "method": "kotlin.jvm.internal.Intrinsics.areEqual(Ljava/lang/Object;, Ljava/lang/Object;)",
+      "sourceFile": "Intrinsics.java",
+      "sourceLine": 169,
+      "count": 171
+    },
+    {
+      "method": "java.lang.StringLatin1.equals([B, [B)",
+      "sourceFile": "StringLatin1.java",
+      "sourceLine": 105,
+      "count": 171
+    },
+    {
+      "method": "java.lang.StringLatin1.equals([B, [B)",
+      "sourceFile": "StringLatin1.java",
+      "sourceLine": 102,
+      "count": 171
+    },
+    {
+      "method": "thc.runtime.DataLayout.create([Ljava/lang/Object;)",
+      "sourceFile": "DataValues.kt",
+      "sourceLine": 41,
+      "count": 140
+    },
+    {
+      "method": "com.oracle.truffle.api.staticobject.StaticProperty.checkObjectSetAccess(Ljava/lang/Object;)",
+      "sourceFile": "StaticProperty.java",
+      "sourceLine": 158,
+      "count": 130
+    },
+    {
+      "method": "com.oracle.truffle.api.staticobject.StaticProperty.setObject(Ljava/lang/Object;, Ljava/lang/Object;)",
+      "sourceFile": "StaticProperty.java",
+      "sourceLine": 213,
+      "count": 130
+    },
+    {
+      "method": "com.oracle.truffle.api.staticobject.StaticProperty.setObject(Ljava/lang/Object;, Ljava/lang/Object;)",
+      "sourceFile": "StaticProperty.java",
+      "sourceLine": 214,
+      "count": 130
+    },
+    {
+      "method": "sun.misc.Unsafe.putObject(Ljava/lang/Object;, J, Ljava/lang/Object;)",
+      "sourceFile": "Unsafe.java",
+      "sourceLine": 241,
+      "count": 130
+    },
+    {
+      "method": "thc.runtime.FrameAccess.write(Lcom/oracle/truffle/api/frame/Frame;, I, Ljava/lang/Object;)",
+      "sourceFile": "Frames.kt",
+      "sourceLine": 77,
+      "count": 125
+    },
+    {
+      "method": "thc.runtime.FrameAccess.write(Lcom/oracle/truffle/api/frame/Frame;, I, Ljava/lang/Object;)",
+      "sourceFile": "Frames.kt",
+      "sourceLine": 69,
+      "count": 124
+    },
+    {
+      "method": "thc.runtime.Primitive.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 229,
+      "count": 124
+    },
+    {
+      "method": "thc.runtime.Primitive.executeLong(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 232,
+      "count": 124
+    },
+    {
+      "method": "thc.runtime.ApplicationKt.appendWithHeader(I, [Ljava/lang/Object;, I, [Ljava/lang/Object;, I)",
+      "sourceFile": "Application.kt",
+      "sourceLine": 217,
+      "count": 122
+    },
+    {
+      "method": "thc.runtime.Dispatch.direct(Lcom/oracle/truffle/api/frame/VirtualFrame;, Lthc/runtime/Closure;, [Ljava/lang/Object;, Lcom/oracle/truffle/api/RootCallTarget;, I, Z, Lthc/runtime/DirectCallerNode;)",
+      "sourceFile": "Application.kt",
+      "sourceLine": 106,
+      "count": 122
+    },
+    {
+      "method": "com.oracle.truffle.runtime.OptimizedDirectCallNode.call([Ljava/lang/Object;)",
+      "sourceFile": "OptimizedDirectCallNode.java",
+      "sourceLine": 94,
+      "count": 122
+    },
+    {
+      "method": "thc.runtime.DataLayout$Field.initialize(Lthc/runtime/DataValue;, Ljava/lang/Object;)",
+      "sourceFile": "DataValues.kt",
+      "sourceLine": 101,
+      "count": 112
+    },
+    {
+      "method": "thc.runtime.DataLayout$Field.restore(Lthc/runtime/DataValue;, Lcom/oracle/truffle/api/frame/Frame;, I)",
+      "sourceFile": "DataValues.kt",
+      "sourceLine": 122,
+      "count": 96
+    },
+    {
+      "method": "thc.runtime.DataLayout.restore(Lthc/runtime/DataValue;, I, Lcom/oracle/truffle/api/frame/Frame;, I)",
+      "sourceFile": "DataValues.kt",
+      "sourceLine": 66,
+      "count": 96
+    },
+    {
+      "method": "thc.runtime.Case.runAlternative(Lcom/oracle/truffle/api/frame/VirtualFrame;, Ljava/lang/Object;, Lthc/runtime/Alternative;)",
+      "sourceFile": "Program.kt",
+      "sourceLine": 203,
+      "count": 96
+    }
+  ],
+  "evidenceNodes": {
+    "424": {
+      "id": 424,
+      "nodeClass": "jdk.graal.compiler.truffle.nodes.frame.VirtualFrameGetNode",
+      "block": "(no block)",
+      "properties": {
+        "id": "424",
+        "idx": "424",
+        "hasPredecessor": "true",
+        "stamp": "i32 [-128 - 127]",
+        "frameSlotIndex": 6,
+        "accessTag": 6,
+        "type": "VirtualFrameAccessType.Indexed",
+        "accessFlags": "VirtualFrameAccessFlags.NON_STATIC",
+        "accessKind": "JavaKind.Byte",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "fixed",
+        "name": "VirtualFrameGet",
+        "class": "jdk.graal.compiler.truffle.nodes.frame.VirtualFrameGetNode"
+      }
+    },
+    "426": {
+      "id": 426,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "block": "(no block)",
+      "properties": {
+        "id": "426",
+        "idx": "426",
+        "hasPredecessor": "true",
+        "stamp": "a!# java.lang.Byte",
+        "boxingKind": "JavaKind.Byte",
+        "accessedLocation": "java.lang.Byte.value",
+        "hasIdentity": false,
+        "nodeCostSize": "NodeSize.SIZE_8",
+        "nodeCostCycles": "NodeCycles.CYCLES_8",
+        "category": "fixed",
+        "killedLocationIdentity": "INIT_LOCATION",
+        "locationIdentity": "INIT_LOCATION",
+        "name": "BoxNode$AllocatingBox",
+        "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode"
+      }
+    },
+    "429": {
+      "id": 429,
+      "nodeClass": "jdk.graal.compiler.truffle.nodes.frame.VirtualFrameGetNode",
+      "block": "(no block)",
+      "properties": {
+        "id": "429",
+        "idx": "429",
+        "hasPredecessor": "true",
+        "stamp": "i32 [0 - 1] bits:0...0x",
+        "frameSlotIndex": 6,
+        "accessTag": 5,
+        "type": "VirtualFrameAccessType.Indexed",
+        "accessFlags": "VirtualFrameAccessFlags.NON_STATIC",
+        "accessKind": "JavaKind.Boolean",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "fixed",
+        "name": "VirtualFrameGet",
+        "class": "jdk.graal.compiler.truffle.nodes.frame.VirtualFrameGetNode"
+      }
+    },
+    "436": {
+      "id": 436,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "block": "(no block)",
+      "properties": {
+        "id": "436",
+        "idx": "436",
+        "hasPredecessor": "true",
+        "stamp": "a!# java.lang.Float",
+        "boxingKind": "JavaKind.Float",
+        "accessedLocation": "java.lang.Float.value",
+        "hasIdentity": false,
+        "nodeCostSize": "NodeSize.SIZE_8",
+        "nodeCostCycles": "NodeCycles.CYCLES_8",
+        "category": "fixed",
+        "killedLocationIdentity": "INIT_LOCATION",
+        "locationIdentity": "INIT_LOCATION",
+        "name": "BoxNode$AllocatingBox",
+        "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode"
+      }
+    },
+    "601": {
+      "id": 601,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "(no block)",
+      "properties": {
+        "id": "601",
+        "idx": "601",
+        "stamp": "void",
+        "hasSpeculationFence": false,
+        "loopOrigFrequency": 1.0,
+        "nextEndIndex": 1,
+        "unswitches": 0,
+        "splits": 0,
+        "peelings": 0,
+        "compilerInverted": false,
+        "loopType": "LoopBeginNode$LoopType.SIMPLE_LOOP",
+        "unrollFactor": 1,
+        "countedDescendantCloneFactor": 1,
+        "osrLoop": false,
+        "mayEmitThreadedCode": false,
+        "nonCountedStripMinedOuter": false,
+        "nonCountedStripMinedInner": false,
+        "countedStripMinedOuter": false,
+        "countedStripMinedInner": false,
+        "rotated": false,
+        "stripMinedLimit": -1,
+        "disableCounted": false,
+        "canNeverOverflow": false,
+        "loopEndsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "loopExitsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "guestLoopEndsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "guestLoopBeginSafepointState": "LoopBeginNode$SafepointState.OPTIMIZER_DISABLED",
+        "cloneFromNodeId": -1,
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "merge",
+        "name": "LoopBegin",
+        "class": "jdk.graal.compiler.nodes.LoopBeginNode"
+      }
+    },
+    "603": {
+      "id": 603,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "(no block)",
+      "properties": {
+        "id": "603",
+        "idx": "603",
+        "localsSize": 3,
+        "stackSize": 0,
+        "locksSize": 0,
+        "stackState": "FrameState$StackState.BeforePop",
+        "bci": 9,
+        "code": "java.lang.StringLatin1.equals([B, [B)",
+        "validForDeoptimization": true,
+        "sourceFile": "StringLatin1.java",
+        "sourceLine": 100,
+        "bytecode": "iload_2",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "state",
+        "name": "@StringLatin1.equals:9",
+        "class": "jdk.graal.compiler.nodes.FrameState"
+      }
+    },
+    "604": {
+      "id": 604,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "(no block)",
+      "properties": {
+        "id": "604",
+        "idx": "604",
+        "localsSize": 3,
+        "stackSize": 0,
+        "locksSize": 0,
+        "stackState": "FrameState$StackState.AfterPop",
+        "bci": 44,
+        "code": "java.lang.String.equals(Ljava/lang/Object;)",
+        "validForDeoptimization": true,
+        "sourceFile": "String.java",
+        "sourceLine": 1926,
+        "bytecode": "invokestatic",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "state",
+        "name": "@String.equals:44",
+        "class": "jdk.graal.compiler.nodes.FrameState"
+      }
+    },
+    "605": {
+      "id": 605,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "(no block)",
+      "properties": {
+        "id": "605",
+        "idx": "605",
+        "localsSize": 2,
+        "stackSize": 0,
+        "locksSize": 0,
+        "stackState": "FrameState$StackState.AfterPop",
+        "bci": 18,
+        "code": "kotlin.jvm.internal.Intrinsics.areEqual(Ljava/lang/Object;, Ljava/lang/Object;)",
+        "validForDeoptimization": true,
+        "sourceFile": "Intrinsics.java",
+        "sourceLine": 169,
+        "bytecode": "invokevirtual",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "state",
+        "name": "@Intrinsics.areEqual:18",
+        "class": "jdk.graal.compiler.nodes.FrameState"
+      }
+    },
+    "606": {
+      "id": 606,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "(no block)",
+      "properties": {
+        "id": "606",
+        "idx": "606",
+        "localsSize": 10,
+        "stackSize": 0,
+        "locksSize": 0,
+        "stackState": "FrameState$StackState.AfterPop",
+        "bci": 92,
+        "code": "thc.runtime.Case.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+        "validForDeoptimization": true,
+        "sourceFile": "Program.kt",
+        "sourceLine": 191,
+        "bytecode": "invokestatic",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "state",
+        "name": "@Case.execute:92",
+        "class": "jdk.graal.compiler.nodes.FrameState"
+      }
+    },
+    "742": {
+      "id": 742,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "(no block)",
+      "properties": {
+        "id": "742",
+        "idx": "742",
+        "stamp": "void",
+        "hasSpeculationFence": false,
+        "loopOrigFrequency": 1.0,
+        "nextEndIndex": 1,
+        "unswitches": 0,
+        "splits": 0,
+        "peelings": 0,
+        "compilerInverted": false,
+        "loopType": "LoopBeginNode$LoopType.SIMPLE_LOOP",
+        "unrollFactor": 1,
+        "countedDescendantCloneFactor": 1,
+        "osrLoop": false,
+        "mayEmitThreadedCode": false,
+        "nonCountedStripMinedOuter": false,
+        "nonCountedStripMinedInner": false,
+        "countedStripMinedOuter": false,
+        "countedStripMinedInner": false,
+        "rotated": false,
+        "stripMinedLimit": -1,
+        "disableCounted": false,
+        "canNeverOverflow": false,
+        "loopEndsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "loopExitsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "guestLoopEndsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "guestLoopBeginSafepointState": "LoopBeginNode$SafepointState.OPTIMIZER_DISABLED",
+        "cloneFromNodeId": -1,
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "merge",
+        "name": "LoopBegin",
+        "class": "jdk.graal.compiler.nodes.LoopBeginNode"
+      }
+    },
+    "747": {
+      "id": 747,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "(no block)",
+      "properties": {
+        "id": "747",
+        "idx": "747",
+        "localsSize": 10,
+        "stackSize": 0,
+        "locksSize": 0,
+        "stackState": "FrameState$StackState.AfterPop",
+        "bci": 92,
+        "code": "thc.runtime.Case.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+        "validForDeoptimization": true,
+        "sourceFile": "Program.kt",
+        "sourceLine": 191,
+        "bytecode": "invokestatic",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "state",
+        "name": "@Case.execute:92",
+        "class": "jdk.graal.compiler.nodes.FrameState"
+      }
+    },
+    "854": {
+      "id": 854,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "(no block)",
+      "properties": {
+        "id": "854",
+        "idx": "854",
+        "stamp": "void",
+        "hasSpeculationFence": false,
+        "loopOrigFrequency": 1.0,
+        "nextEndIndex": 1,
+        "unswitches": 0,
+        "splits": 0,
+        "peelings": 0,
+        "compilerInverted": false,
+        "loopType": "LoopBeginNode$LoopType.SIMPLE_LOOP",
+        "unrollFactor": 1,
+        "countedDescendantCloneFactor": 1,
+        "osrLoop": false,
+        "mayEmitThreadedCode": false,
+        "nonCountedStripMinedOuter": false,
+        "nonCountedStripMinedInner": false,
+        "countedStripMinedOuter": false,
+        "countedStripMinedInner": false,
+        "rotated": false,
+        "stripMinedLimit": -1,
+        "disableCounted": false,
+        "canNeverOverflow": false,
+        "loopEndsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "loopExitsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "guestLoopEndsSafepointState": "LoopBeginNode$SafepointState.ENABLED",
+        "guestLoopBeginSafepointState": "LoopBeginNode$SafepointState.OPTIMIZER_DISABLED",
+        "cloneFromNodeId": -1,
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "merge",
+        "name": "LoopBegin",
+        "class": "jdk.graal.compiler.nodes.LoopBeginNode"
+      }
+    },
+    "859": {
+      "id": 859,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "(no block)",
+      "properties": {
+        "id": "859",
+        "idx": "859",
+        "localsSize": 8,
+        "stackSize": 0,
+        "locksSize": 0,
+        "stackState": "FrameState$StackState.AfterPop",
+        "bci": 6,
+        "code": "thc.runtime.Case.runAlternative(Lcom/oracle/truffle/api/frame/VirtualFrame;, Ljava/lang/Object;, Lthc/runtime/Alternative;)",
+        "validForDeoptimization": true,
+        "sourceFile": "Program.kt",
+        "sourceLine": 200,
+        "bytecode": "invokestatic",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "state",
+        "name": "@Case.runAlternative:6",
+        "class": "jdk.graal.compiler.nodes.FrameState"
+      }
+    },
+    "461": {
+      "id": 461,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "(no block)",
+      "properties": {
+        "id": "461",
+        "idx": "461",
+        "localsSize": 5,
+        "stackSize": 0,
+        "locksSize": 0,
+        "stackState": "FrameState$StackState.AfterPop",
+        "bci": 123,
+        "code": "thc.runtime.FunctionRoot.execute(Lcom/oracle/truffle/api/frame/VirtualFrame;)",
+        "validForDeoptimization": true,
+        "sourceFile": "Program.kt",
+        "sourceLine": 303,
+        "bytecode": "invokevirtual",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "state",
+        "name": "@FunctionRoot.execute:123",
+        "class": "jdk.graal.compiler.nodes.FrameState"
+      }
+    }
+  },
+  "findings": [
+    "547 generic FrameAccess.read sites expand Frame.getValue through Byte/Boolean/Float/Double/Int/Long/Object alternatives; runtime writes only Long/Boolean/Object.547 boxing nodes for each impossible Byte/Float/Double/Int kind inflate partial evaluation before later elimination can occur.",
+    "All171 LoopBegin nodes belong to StringLatin1.equals. FrameState chains at601/742 and854 identify parsed alternative-kind String comparisons in Case.execute/runAlternative.",
+    "All8191 body FrameStates trace through the peeled FunctionRoot.execute once(frame) call at old Program.kt303/bci123. No self-loop execution body is present in this failed snapshot, so unprofiled self-tail re-entry cannot explain this first bailout.",
+    "These are failed partial-evaluation node counts, not final machine-code allocation counts. Do not infer per-iteration boxing from this graph."
+  ],
+  "recommendedChecks": [
+    "Constrain frame reads to actual supported per-frame tag kinds; preserve older primitive frames when the shared descriptor widens.",
+    "Parse alternative kinds into an enum/int outside guest execution.",
+    "Recompile without raising the graph-size limit, and compare the final optimized graph."
+  ]
+}

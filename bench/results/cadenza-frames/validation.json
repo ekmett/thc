@@ -1,0 +1,29 @@
+{
+  "tests": "13",
+  "failures": "0",
+  "errors": "0",
+  "skipped": "0",
+  "time": "2.951",
+  "nativeOracleRows": 133,
+  "compiledGuestEntries": [
+    "sumLoop",
+    "fib",
+    "captured",
+    "exact",
+    "under",
+    "over",
+    "unknown",
+    "shared",
+    "lazyArgument",
+    "lazyField",
+    "recursiveCaf",
+    "caseList",
+    "multiModule",
+    "cacheSaturation",
+    "mutualTail",
+    "selfMutualTail",
+    "capturedChangingEnv",
+    "localMutualClosures",
+    "nestedCaptureThunk"
+  ]
+}

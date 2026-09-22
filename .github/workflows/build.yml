@@ -1,0 +1,60 @@
+name: Build
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-update: false
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - name: Verify pinned toolchain
+        shell: bash
+        run: |
+          test "$(ghc --numeric-version)" = 9.14.1
+          test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          release = dict(line.split('=', 1) for line in (Path(os.environ['JAVA_HOME']) / 'release').read_text().splitlines() if '=' in line)
+          assert release['GRAALVM_VERSION'].strip('"') == '25.3.4.1', release.get('GRAALVM_VERSION')
+          assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
+          PY
+          java --version
+      - name: Build and test from source
+        run: scripts/try.sh
+      - name: Check exact dependency auditor
+        run: python3 scripts/test-audit-core.py
+      - name: Run ordinary Map workload with explicit unsupported-path traps
+        env:
+          THC_DIAGNOSTIC_UNSUPPORTED: 'true'
+        run: scripts/try-map.sh
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: test-results-${{ runner.os }}
+          path: |
+            build/reports/tests/
+            build/test-results/
+            build/map/audit.json
+            build/map/check.log
+            build/map/provenance.json
+            build/map/reproduction-provenance.json

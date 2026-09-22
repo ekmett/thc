@@ -1,0 +1,28 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/build/install/thc/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=6     FunctionRoot@472c5ab4                              |Tier 2|Time    43(  38+5   )ms|AST   56|Inlined   0Y   0N|IR    150/   630|CodeSize    3064|Addr 0x000118fbb700|CompId 1996   |UTC 2026-09-22T13:45:48.907|Src n/a
+[engine] opt done   engine=1  id=4     FunctionRoot@4ff9897e                              |Tier 2|Time     8(   6+2   )ms|AST   23|Inlined   0Y   0N|IR     29/   186|CodeSize     952|Addr 0x000118fc24c0|CompId 2088   |UTC 2026-09-22T13:45:48.918|Src n/a
+[engine] opt done   engine=1  id=3     FunctionRoot@81c4c36                               |Tier 2|Time   294(  37+257 )ms|AST  183|Inlined  10Y   0N|IR   4451/ 19994|CodeSize   91788|Addr 0x000118fc8fc0|CompId 2094   |UTC 2026-09-22T13:45:49.213|Src n/a
+[engine] opt done   engine=1  id=8     FunctionRoot@29247bae                              |Tier 2|Time   358(  34+324 )ms|AST   60|Inlined  11Y   0N|IR   4549/ 20303|CodeSize   87936|Addr 0x000118fe7000|CompId 2122   |UTC 2026-09-22T13:45:49.582|Src n/a
+PHASE WARM BEGIN
+[engine] opt done   engine=1  id=40    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time   449(  49+400 )ms|AST    9|Inlined  13Y   0N|IR   4899/ 20773|CodeSize   88612|Addr 0x00011901ae40|CompId 2229   |UTC 2026-09-22T13:45:50.111|Src n/a
+PHASE WARM END calls=2075648 elapsedNs=10000668250 checksum=12126973440
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE MEASURE 2 BEGIN
+PHASE MEASURE 2 END
+PHASE MEASURE 3 BEGIN
+PHASE MEASURE 3 END
+PHASE MEASURE 4 BEGIN
+PHASE MEASURE 4 END
+PHASE MEASURE 5 BEGIN
+PHASE MEASURE 5 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

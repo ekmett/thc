@@ -1,0 +1,41 @@
+{
+  "tests": "16",
+  "failures": "0",
+  "errors": "0",
+  "skipped": "0",
+  "time": "2.867",
+  "nativeOracleRows": 133,
+  "compiledGuestEntries": [
+    "sumLoop",
+    "fib",
+    "captured",
+    "exact",
+    "under",
+    "over",
+    "unknown",
+    "shared",
+    "lazyArgument",
+    "lazyField",
+    "recursiveCaf",
+    "caseList",
+    "multiModule",
+    "cacheSaturation",
+    "mutualTail",
+    "selfMutualTail",
+    "capturedChangingEnv",
+    "localMutualClosures",
+    "nestedCaptureThunk"
+  ],
+  "measurementWindows": 120,
+  "minWindowSeconds": 2,
+  "warmupSecondsAtLeast": 10,
+  "warmupCallsAtLeast": 20000,
+  "measuredTruffleCompilationEvents": 0,
+  "finalVerificationRecompilations": 0,
+  "sourceHashesVerified": true,
+  "timingCaveat": "Substantial window/fork variability; competing Contacts, ReportCrash and Spotlight CPU activity observed during this run. Ratios are estimates, not controlled steady-state constants.",
+  "graphChecks": {
+    "worker": true,
+    "host": true
+  }
+}

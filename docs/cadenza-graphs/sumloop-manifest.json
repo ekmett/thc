@@ -1,0 +1,85 @@
+{
+  "sourceCapture": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop",
+  "artifacts": [
+    {
+      "file": "sumloop-worker.bgv",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/TruffleHotSpotCompilation-1869[lambda_x,_acc].bgv",
+      "sha256": "29f260e7735c294ec62a0d109cbe2acbe588e198682f8a33fe0a304324267ba8"
+    },
+    {
+      "file": "sumloop-worker.cfg",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/TruffleHotSpotCompilation-1869[lambda_x,_acc].cfg",
+      "sha256": "a126b268c2d7da2fcdd72dec4f18ff148ce17765cab8439c3d8146a98a6cb2b0"
+    },
+    {
+      "file": "sumloop-worker-before-high.json",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-1869[lambda_x,_acc]/graph-00005.json",
+      "sha256": "c5d66569c2d71310a0a9c90ca593eba51179090799b8bcfdd266b9083c37fc7a"
+    },
+    {
+      "file": "sumloop-worker-high.json",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-1869[lambda_x,_acc]/graph-00006.json",
+      "sha256": "9858c37a7043c957d3d709ed0fbf598a1a72534e14b89e8da62bad799b4590cb"
+    },
+    {
+      "file": "sumloop-worker-low.json",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-1869[lambda_x,_acc]/graph-00008.json",
+      "sha256": "1d1c6a5d4c33359bba61ae555cd677494d4dc53851af2a4b788208b33627eebf"
+    },
+    {
+      "file": "sumloop-worker-before-high-cfg.dot",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-1869[lambda_x,_acc]/graph-00005-cfg.dot",
+      "sha256": "a4124805fc59a6133f16bc558982560e0550e9f9468a092e6cee3b5a3f433d53"
+    },
+    {
+      "file": "sumloop-worker-high-cfg.dot",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-1869[lambda_x,_acc]/graph-00006-cfg.dot",
+      "sha256": "a0e0c8a6ae86eda6f0dc590b3d46f61de6f6dd45b12ef8c895558f4a638af7b6"
+    },
+    {
+      "file": "sumloop-worker-low-cfg.dot",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-1869[lambda_x,_acc]/graph-00008-cfg.dot",
+      "sha256": "217ecb0d624fd32f96a40be8070b9747544f5b0010e5febb8d63b827bc6c54e9"
+    },
+    {
+      "file": "sumloop-host.bgv",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "dac8c95245a6d53a8f73aa051266ea11a9414a1dc8059b2cb932536e4a2067ef"
+    },
+    {
+      "file": "sumloop-host.cfg",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute].cfg",
+      "sha256": "ef26220f6b85907cf6351b2d1d1e6c7f22776d62aa7eadfbe6573d316bd5b5f3"
+    },
+    {
+      "file": "sumloop-host-before-high.json",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute]/graph-00005.json",
+      "sha256": "09d961d8591957e2a80fb2b5771a645b143ab21c5621331f6a6ecd757f13468b"
+    },
+    {
+      "file": "sumloop-host-high.json",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute]/graph-00006.json",
+      "sha256": "3b547b4d70ca0ece1c51fb1a566660ea67f3b2642f6897bda0a994217a740d2e"
+    },
+    {
+      "file": "sumloop-host-low.json",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute]/graph-00008.json",
+      "sha256": "b06b01c5b58497fd73eb5d5a217ae21e95856e949d41d9011d4217d5161a974c"
+    },
+    {
+      "file": "sumloop-host-before-high-cfg.dot",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute]/graph-00005-cfg.dot",
+      "sha256": "f168c604fb1d6ecc1008a7344a0b4b26387e1941acbebdaf5d09a4469c17190c"
+    },
+    {
+      "file": "sumloop-host-high-cfg.dot",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute]/graph-00006-cfg.dot",
+      "sha256": "da7db4c8dedc90489faea8d1cabfb8a2d8ce4a4dcc44522a722c2990c9fde8aa"
+    },
+    {
+      "file": "sumloop-host-low-cfg.dot",
+      "source": "/Users/ekmett/thc/work/graphs/cadenza-data-sumLoop/parsed-TruffleHotSpotCompilation-2169[org.graalvm.polyglot.Value<EntryValue>.execute]/graph-00008-cfg.dot",
+      "sha256": "8c270d939a5820bf28c41fffa4fd30e602814c81c2152f1064b4dec46847027b"
+    }
+  ]
+}
