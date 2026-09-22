@@ -277,9 +277,11 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
             bounce(target, arguments)
         } else {
             unrollProfile.enter()
-            // The root's own mask is common after non-tail entry. Reuse only
-            // on exact equality; preserve every additional ancestry bit.
-            arguments[0] = if (mask == sourceRoot.mask) sourceRoot.boxedMask else mask
+            // Cache only a PE-constant own mask. For dynamic ancestry, mixing a
+            // cached object with a fresh box blocks box/unbox cancellation when
+            // the callee inlines. The original boxing path stays virtual there.
+            arguments[0] = if (CompilerDirectives.isPartialEvaluationConstant(mask) && mask == sourceRoot.mask)
+                sourceRoot.boxedMask else mask
         }
     }
 
