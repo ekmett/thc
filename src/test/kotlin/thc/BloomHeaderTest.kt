@@ -44,38 +44,6 @@ class BloomHeaderTest {
         error("Could not construct a non-colliding test target")
     }
 
-    @Test fun ownMaskReusesAnImmutableHeaderAcrossFreshCallPackets() {
-        val metrics = Metrics(true)
-        val probe = Probe(metrics)
-        val source = root(probe, metrics)
-        probe.target = nonCollidingTarget(source, metrics).callTarget
-        val first = run(source, 0L)
-        assertEquals(source.mask, first)
-        assertSame(source.boxedMask, first)
-        repeat(8) { assertSame(first, run(source, 0L)) }
-        assertEquals(0L, metrics.tailBounces)
-    }
-
-    @Test fun extraAncestryUsesTheExactUncachedMaskThenOwnMaskStillReusesItsHeader() {
-        val metrics = Metrics(true)
-        val probe = Probe(metrics)
-        val source = root(probe, metrics)
-        val target = nonCollidingTarget(source, metrics)
-        probe.target = target.callTarget
-        val available = (source.mask or target.mask).inv()
-        val bitA = java.lang.Long.lowestOneBit(available)
-        val bitB = java.lang.Long.lowestOneBit(available xor bitA)
-        assertNotEquals(0L, bitA)
-        assertNotEquals(0L, bitB)
-        for (extra in listOf(bitA, bitB, bitA or bitB, bitA)) {
-            val header = run(source, extra)
-            assertEquals(source.mask or extra, header)
-            assertNotSame(source.boxedMask, header)
-        }
-        assertSame(source.boxedMask, run(source, 0L))
-        assertEquals(0L, metrics.tailBounces)
-    }
-
     @Test fun compiledDynamicAncestryPreservesEveryBitAndStillDetectsBloomHits() {
         executionContext().use { context ->
             context.initialize("thc")
