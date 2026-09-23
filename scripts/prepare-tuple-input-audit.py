@@ -18,6 +18,36 @@ FORMALS = {'consumePair': [0], 'consumeMixed': [0], 'consumeLazy': [0], 'identit
            'mapPair': [0], 'applyPair': [1], 'prefix': [1], 'prefixedPair': [0], 'beforePair': [1], 'recur': [0],
            'consumeState': [0], 'consumeNested': [0], 'consumeDead': [0]}
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
+# Expected entered guest roots follow these retained source paths. A PAP creation
+# is not an entry, and recur's matching self transfer restores its existing frame.
+# Validate the actual call syntax below independently for each export stage.
+ENTRY_PATHS = {
+    'pairCase': ['pairCase', 'consumePair'], 'pairInputs': ['pairInputs', 'consumePair'],
+    'mixedCase': ['mixedCase', 'consumeMixed'], 'lazyCase': ['lazyCase', 'consumeLazy'],
+    'roundTripCase': ['roundTripCase', 'identityPair', 'mapPair', 'consumePair'],
+    'indirectCase': ['indirectCase', 'applyPair', 'consumePair'],
+    'prefixCase': ['prefixCase', 'prefix'], 'papCase': ['papCase', 'apply', 'prefixedPair', 'consumePair'],
+    'overCase': ['overCase', 'opaqueFunction', 'beforePair', 'consumePair'],
+    'selfCase': ['selfCase', 'recur'], 'selfDepth': ['selfDepth', 'recur'],
+    'stateCase': ['stateCase', '<local lambda>', 'consumeState'],
+    'nestedCase': ['nestedCase', 'consumeNested'], 'deadCase': ['deadCase', 'consumeDead'],
+    'effectCase': ['effectCase', 'effectState', 'failureCheck', 'consumeState'],
+}
+CALLS = {
+    'consumePair': [], 'consumeMixed': [], 'consumeLazy': [], 'identityPair': [], 'mapPair': [],
+    'prefix': [], 'opaqueFunction': [], 'consumeState': [], 'consumeNested': [], 'consumeDead': [], 'failureCheck': [],
+    'prefixedPair': [('consumePair', 1)], 'beforePair': [('consumePair', 1)],
+    'pairCase': [('consumePair', 1)], 'pairInputs': [('consumePair', 1)],
+    'mixedCase': [('consumeMixed', 1)], 'lazyCase': [('consumeLazy', 1)],
+    'roundTripCase': [('mapPair', 1), ('identityPair', 1), ('consumePair', 1)],
+    'applyPair': [('<formal 0>', 1)], 'indirectCase': [('applyPair', 2)],
+    'apply': [('<formal 0>', 1)], 'papCase': [('apply', 2), ('prefixedPair', 1)],
+    'prefixCase': [('prefix', 3)], 'overCase': [('opaqueFunction', 2), ('beforePair', 1)],
+    'recur': [('recur', 2)], 'selfCase': [('recur', 2)], 'selfDepth': [('recur', 2)],
+    'stateCase': [('<local lambda>', 1), ('consumeState', 1)],
+    'nestedCase': [('consumeNested', 1)], 'deadCase': [('consumeDead', 2)],
+    'effectState': [('failureCheck', 1)], 'effectCase': [('consumeState', 1), ('effectState', 1)],
+}
 
 
 def check(condition, message):
@@ -49,6 +79,19 @@ def inventory(stage):
     module = json.loads((OUT / f'{stage}-core/TupleInputAudit.json').read_text())
     check(module['ghc'] == '9.14.1' and module['boundary'] == STAGES[stage], 'Wrong native export boundary')
     bindings = {b['name']: b for b in module['bindings']}
+    global_names = {b['id']: b['name'] for b in module['bindings']}
+    retained_calls = {}
+    for name, expected_calls in CALLS.items():
+        expr = bindings[name]['expr']
+        check(expr[0] == 'lam', f'{stage}/{name}: callable source path disappeared')
+        names = global_names | {formal['id']: f'<formal {i}>' for i, formal in enumerate(expr[1])}
+        actual_calls = []
+        for node in walk(expr):
+            if isinstance(node, list) and node and node[0] == 'app' and node[1][0] in ('var', 'lam'):
+                target = '<local lambda>' if node[1][0] == 'lam' else names.get(node[1][1], '<unresolved>')
+                actual_calls.append((target, len(node[2])))
+        check(actual_calls == expected_calls, f'{stage}/{name}: retained callable edges changed: {actual_calls}')
+        retained_calls[name] = actual_calls
     for name, positions in FORMALS.items():
         expression = bindings[name]['expr']
         check(expression[0] == 'lam', f'{stage}/{name}: lambda disappeared')
@@ -81,7 +124,8 @@ def inventory(stage):
                 realTuplePap=dict(formalArity=2, actualArity=1),
                 overapplication=dict(formalArity=arity, actualArities=[len(a[2]) for a in over]),
                 constructorFreeIdentity=True, mixedFloatingAndLazyReference=True,
-                stateAndNestedEmpty=True)
+                stateAndNestedEmpty=True, retainedCalls=retained_calls,
+                guestEntryPaths=ENTRY_PATHS, expectedGuestEntries={name: len(path) for name, path in ENTRY_PATHS.items()})
 
 
 def wrap(x):
