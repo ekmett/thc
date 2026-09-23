@@ -14,7 +14,7 @@ import thc.Language
 internal class TypedInputLayout(val language: Language, val logical: ArgumentLayout, val hasEnvironment: Boolean) {
     val header = if (hasEnvironment) 2 else 1
     @field:CompilationFinal(dimensions = 1)
-    val leaves = (0 until logical.logicalArity).flatMap { ArgumentLayout.leaves(logical.proof(it)) }.toTypedArray()
+    val leaves = logical.physicalProofs
     private val reps = leaves.map(::fieldRep)
     val packet = language.handoffLayouts.intern(listOf("WordRep") +
         (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps)
@@ -85,9 +85,7 @@ internal fun discardTypedInput(language: Language, input: HandoffStorage) {
 /** Compile-time source descriptors only: no activation frame or guest payload is retained. */
 internal abstract class InputSource(val layout: ArgumentLayout?) {
     @field:CompilationFinal(dimensions = 1)
-    internal val physicalProofs = layout?.let { shape ->
-        (0 until shape.logicalArity).flatMap { ArgumentLayout.leaves(shape.proof(it)) }.toTypedArray()
-    }
+    internal val physicalProofs = layout?.physicalProofs
     abstract fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long
     abstract fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float
     abstract fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double
@@ -118,6 +116,10 @@ internal class ScalarArrayInputSource(layout: ArgumentLayout?) : InputSource(lay
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = values!![index]
     override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) { values!![index] = value }
 }
+
+// The legacy prefix has no tuple fields. Reuse its immutable descriptor so a
+// compiled call never constructs or recursively analyzes source metadata.
+private val scalarPrefixSource = ScalarArrayInputSource(null)
 
 internal class AstInputSource(layout: ArgumentLayout,
     @field:CompilationFinal(dimensions = 1) val slots: IntArray) : InputSource(layout) {
@@ -182,7 +184,7 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
     val storage = layout.create()
     function.typedSupplied?.let { copyInputFields(it, storage, 0, 0, prefixWidth, input.prefix(oldCount), layout) } ?: run {
         check(prefixWidth == function.supplied.size)
-        ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, storage, 0, prefixWidth, layout)
+        scalarPrefixSource.copy(frame, node, function.supplied, 0, storage, 0, prefixWidth, layout)
     }
     source.copy(frame, node, values, sourceOffset, storage, prefixWidth, sourceWidth, layout)
     return Closure(function.environment, NO_PAP_ARGUMENTS, remainingArity - count, function.target, oldCount + count, storage)
@@ -234,7 +236,7 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
         if (input.hasEnvironment) input.packet.setObject(loan, 1, function.environment)
         function.typedSupplied?.let { copyInputFields(it, loan, 0, input.header, prefixWidth, input.prefix(prefixCount), input.packet) } ?: run {
             check(function.supplied.size == prefixWidth)
-            ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, loan, input.header, prefixWidth, input.packet)
+            scalarPrefixSource.copy(frame, node, function.supplied, 0, loan, input.header, prefixWidth, input.packet)
         }
         val from = ArgumentLayout.offset(source.layout, logicalOffset)
         val width = ArgumentLayout.offset(source.layout, logicalOffset + count) - from

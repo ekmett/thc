@@ -8,7 +8,8 @@ internal val EMPTY_TUPLE_SLOTS = intArrayOf()
  * A null layout preserves the scalar-only convention, with identity offsets. */
 internal class ArgumentLayout private constructor(
     @field:CompilationFinal(dimensions = 1) private val proofs: Array<CoreRepresentation>,
-    @field:CompilationFinal(dimensions = 1) private val offsets: IntArray
+    @field:CompilationFinal(dimensions = 1) private val offsets: IntArray,
+    @field:CompilationFinal(dimensions = 1) val physicalProofs: Array<CoreRepresentation>
 ) {
     val logicalArity: Int get() = proofs.size
     val physicalArity: Int get() = offsets.last()
@@ -24,8 +25,12 @@ internal class ArgumentLayout private constructor(
             if (proofs.none { it.isTuple }) return null
             proofs.forEach(CoreRepresentations::requireInput)
             val offsets = IntArray(proofs.size + 1)
-            for (i in proofs.indices) offsets[i + 1] = offsets[i] + leaves(proofs[i]).size
-            return ArgumentLayout(proofs.toTypedArray(), offsets)
+            val physical = ArrayList<CoreRepresentation>()
+            for (i in proofs.indices) {
+                physical.addAll(leaves(proofs[i]))
+                offsets[i + 1] = physical.size
+            }
+            return ArgumentLayout(proofs.toTypedArray(), offsets, physical.toTypedArray())
         }
         // State# is erased inside a tuple, but an ordinary scalar State# formal
         // retains its existing Unit argument. Zero physical width never identifies
