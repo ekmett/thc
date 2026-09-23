@@ -74,7 +74,8 @@ class ByteArrayContracts(unittest.TestCase):
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
 
     def test_state_is_not_an_empty_tuple_and_reference_is_not_lifted(self):
-        for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#', 'readDoubleArray#'):
+        for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#', 'readDoubleArray#',
+                     'readInt32Array#', 'readWord32Array#'):
             for mutation in ('empty-tuple', 'missing-state', 'lifted-reference'):
                 module, app = fixture(name)
                 proof = app[6]['rep']
@@ -82,7 +83,7 @@ class ByteArrayContracts(unittest.TestCase):
                     proof['components'][0].update(aggregate='unboxed-tuple', components=[], kind='unknown')
                 elif mutation == 'missing-state':
                     proof['components'].pop(0)
-                elif name in ('readIntArray#', 'readDoubleArray#'):
+                elif name.startswith('read'):
                     proof['components'][1]['primReps'] = ['WordRep']
                     proof['primReps'] = ['WordRep']
                 else:
@@ -94,7 +95,9 @@ class ByteArrayContracts(unittest.TestCase):
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
         for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',
                      'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#',
-                     'readDoubleArray#', 'writeDoubleArray#', 'indexDoubleArray#'):
+                     'readDoubleArray#', 'writeDoubleArray#', 'indexDoubleArray#',
+                     'readInt32Array#', 'writeInt32Array#', 'indexInt32Array#',
+                     'readWord32Array#', 'writeWord32Array#', 'indexWord32Array#'):
             module, _ = fixture(name)
             parameter = module['bindings'][0]['expr'][1][0]
             parameter['rep']['primReps'] = ['BoxedRep (Just Lifted)']
@@ -127,6 +130,30 @@ class ByteArrayContracts(unittest.TestCase):
                     app[6]['rep']['primReps'] = [rep]
                 report = check(module)
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, kind, rep))
+
+    def test_32bit_arrays_require_exact_signedness_width_and_machine_index(self):
+        for family in ('Int32', 'Word32'):
+            for operation in ('read', 'write', 'index'):
+                name = operation + family + 'Array#'
+                for replacement in ('IntRep', 'WordRep', 'Int64Rep', 'Word64Rep', 'Int32Rep', 'Word32Rep'):
+                    if replacement != 'IntRep':
+                        module, app = fixture(name)
+                        module['bindings'][0]['expr'][1][1]['rep']['primReps'] = [replacement]
+                        app[2][1][2]['rep']['primReps'] = [replacement]
+                        self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
+                                      (name, 'index', replacement))
+                    if replacement == family + 'Rep':
+                        continue
+                    module, app = fixture(name)
+                    if operation == 'write':
+                        module['bindings'][0]['expr'][1][2]['rep']['primReps'] = [replacement]
+                        app[2][2][2]['rep']['primReps'] = [replacement]
+                    else:
+                        app[6]['rep']['primReps'] = [replacement]
+                        if operation == 'read':
+                            app[6]['rep']['components'][1]['primReps'] = [replacement]
+                    self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
+                                  (name, 'payload', replacement))
 
     def test_copy_requires_exact_proofs_for_both_references_offsets_count_and_state(self):
         for argument in range(6):

@@ -149,6 +149,20 @@ internal object CoreRepresentations {
         return expr.getOrNull(index) as? Map<String, Any?>
     }
     fun expression(expr: List<Any?>): CoreRepresentation = parse(metadata(expr)?.get("rep"))
+    /** Narrow literals have intrinsic signed/unsigned identity, not merely a
+     * Long carrier. Missing legacy metadata is fine; a contradictory proof is not. */
+    fun narrow32LiteralProof(expr: List<Any?>): CoreRepresentation {
+        val expected = if (expr[1] == "int32") "Int32Rep" else "Word32Rep"
+        val proof = expression(expr)
+        // Export-only identity rewrites retain an explicit unconstrained proof.
+        // The literal still supplies its own exact representation; malformed
+        // records have already failed parse(), and retained constraints must match.
+        val unconstrained = proof.kind == CoreKind.UNKNOWN && proof.primReps == null && !proof.isTuple && !proof.isVector
+        if (proof.present && !unconstrained &&
+            (proof.kind != CoreKind.LONG || proof.primReps != listOf(expected) || proof.isTuple || proof.isVector))
+            throw RuntimeFault("${expr[1]} literal requires exact $expected metadata")
+        return CoreRepresentation(CoreKind.LONG, evaluated = true, present = true, primReps = listOf(expected))
+    }
     fun lambdaResult(expr: List<Any?>): CoreRepresentation = parse(metadata(expr)?.get("resultRep"))
     fun caseBinder(expr: List<Any?>): CoreRepresentation =
         (metadata(expr)?.get("binder") as? Map<String, Any?>)?.let(::binder) ?: CoreRepresentation.UNKNOWN
