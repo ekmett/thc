@@ -1,5 +1,35 @@
 # Local Int8X16 vectors
 
+The runtime uses sixteen final primitive `byte` fields for durable lanes
+(16 bytes of lane payload, not a 16-byte Java object). Transient
+`ByteVector.SPECIES_128` values perform arithmetic; no vector object, generic
+payload array or boxed lane is stored in the carrier. Pack reads sixteen
+primitive Long slots and narrows; unpack sign-extends each byte to a Long slot.
+AST and bytecode choose numeric operation dispatch while lowering Core.
+
+Canonical `int8` literals and literal alternatives are restricted to decimal
+-128 through 127. Intrinsic literals refine absent or genuinely unconstrained
+metadata to `Int8Rep`; contradictory kind/width proofs remain errors. Exact
+unlifted operand flags, sixteen recursive tuple-leaf proofs and vector identity
+are checked before execution. No vector ABI restrictions are relaxed.
+
+The pinned x86-64 compilers do not have a single packed byte multiply opcode.
+GHC uses byte unpacking, two packed word multiplies, low-byte masking and
+packing. Graal reinterprets adjacent byte pairs as eight words, computes low and
+high byte products with two packed word multiplies, and reconstructs sixteen
+bytes with masks, shifts and OR. This is a packed-word implementation of byte
+semantics, not `VPMULLB`; actual graph/final-LIR evidence is a separate gate.
+
+`SimdInt8VectorTest` exhaustively checks all 65,536 byte operand pairs in each
+of sixteen lanes, using independent scalar masks and signed decoding. The
+native corpus is exercised at each available Core stage on AST and bytecode,
+with Truffle inlining enabled and disabled. Every measured invocation requires
+an exact 1/2 compiled guest-entry delta, unchanged actual target identities,
+valid last-tier code and released argument/result handoff pools. With native
+pre/post fixtures this is 73,344 checked invocations and 76,128 guest entries per
+handoff mode. No post-compilation settling calls, retries or limit increases
+are part of these checks.
+
 This bounded contract covers exactly seven GHC 9.14.1 primitives:
 `packInt8X16#`, `unpackInt8X16#`, `broadcastInt8X16#`,
 `plusInt8X16#`, `minusInt8X16#`, `negateInt8X16#`, and

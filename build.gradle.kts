@@ -71,6 +71,7 @@ tasks.test {
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
             "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
             "simd-int16x8/**/*.json", "simd-int16x8/*.tsv", "simd-int16x8/native/int16x8-oracle",
+            "simd-int8x16/**/*.json", "simd-int8x16/*.tsv", "simd-int8x16/native/int8x16-oracle",
             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
@@ -86,6 +87,7 @@ tasks.test {
             "prepare-float-word-arrays.py", "test-float-word-array-model.py",
             "prepare-int16-arrays.py", "test-int16-array-model.py",
             "prepare-int16x8-audit.py", "int16x8_model.py", "test-int16x8-model.py",
+            "prepare-int8x16-audit.py", "int8x16_model.py", "test-int8x16-model.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
             "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py")
     })

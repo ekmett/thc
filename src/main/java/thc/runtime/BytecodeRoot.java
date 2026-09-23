@@ -819,6 +819,70 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class Vector8Pack {
+        @Specialization public static Int8X16 pack(long first, long second, long third, long fourth,
+                long fifth, long sixth, long seventh, long eighth,
+                long ninth, long tenth, long eleventh, long twelfth,
+                long thirteenth, long fourteenth, long fifteenth, long sixteenth) {
+            return new Int8X16((byte) first, (byte) second, (byte) third, (byte) fourth,
+                (byte) fifth, (byte) sixth, (byte) seventh, (byte) eighth,
+                (byte) ninth, (byte) tenth, (byte) eleventh, (byte) twelfth,
+                (byte) thirteenth, (byte) fourteenth, (byte) fifteenth, (byte) sixteenth);
+        }
+    }
+    @Operation public static final class Vector8Broadcast {
+        @Specialization public static Int8X16 broadcast(long value) { return Int8X16.broadcast((byte) value); }
+    }
+    @Operation public static final class Vector8Negate {
+        @Specialization public static Int8X16 negate(Int8X16 value) { return Int8X16.negate(value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class Vector8Binary {
+        @Specialization public static Int8X16 binary(int operation, Int8X16 first, Int8X16 second) {
+            return switch (operation) {
+                case 0 -> Int8X16.add(first, second);
+                case 1 -> Int8X16.subtract(first, second);
+                case 2 -> Int8X16.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid Int8X16 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    @ConstantOperand(type = LocalAccessor.class, name = "fifth")
+    @ConstantOperand(type = LocalAccessor.class, name = "sixth")
+    @ConstantOperand(type = LocalAccessor.class, name = "seventh")
+    @ConstantOperand(type = LocalAccessor.class, name = "eighth")
+    @ConstantOperand(type = LocalAccessor.class, name = "ninth")
+    @ConstantOperand(type = LocalAccessor.class, name = "tenth")
+    @ConstantOperand(type = LocalAccessor.class, name = "eleventh")
+    @ConstantOperand(type = LocalAccessor.class, name = "twelfth")
+    @ConstantOperand(type = LocalAccessor.class, name = "thirteenth")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourteenth")
+    @ConstantOperand(type = LocalAccessor.class, name = "fifteenth")
+    @ConstantOperand(type = LocalAccessor.class, name = "sixteenth")
+    public static final class Vector8Unpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second, LocalAccessor third,
+                LocalAccessor fourth, LocalAccessor fifth, LocalAccessor sixth,
+                LocalAccessor seventh, LocalAccessor eighth, LocalAccessor ninth,
+                LocalAccessor tenth, LocalAccessor eleventh, LocalAccessor twelfth,
+                LocalAccessor thirteenth, LocalAccessor fourteenth, LocalAccessor fifteenth,
+                LocalAccessor sixteenth,
+                Int8X16 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
+            third.setLong(bytecode, frame, value.third); fourth.setLong(bytecode, frame, value.fourth);
+            fifth.setLong(bytecode, frame, value.fifth); sixth.setLong(bytecode, frame, value.sixth);
+            seventh.setLong(bytecode, frame, value.seventh); eighth.setLong(bytecode, frame, value.eighth);
+            ninth.setLong(bytecode, frame, value.ninth); tenth.setLong(bytecode, frame, value.tenth);
+            eleventh.setLong(bytecode, frame, value.eleventh); twelfth.setLong(bytecode, frame, value.twelfth);
+            thirteenth.setLong(bytecode, frame, value.thirteenth); fourteenth.setLong(bytecode, frame, value.fourteenth);
+            fifteenth.setLong(bytecode, frame, value.fifteenth); sixteenth.setLong(bytecode, frame, value.sixteenth);
+        }
+    }
     @Operation public static final class Vector16Pack {
         @Specialization public static Int16X8 pack(long first, long second, long third, long fourth,
                 long fifth, long sixth, long seventh, long eighth) {

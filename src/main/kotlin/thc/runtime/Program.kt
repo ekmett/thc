@@ -1268,6 +1268,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "packInt16X8#" -> Vector16Pack(operands[0], IntArray(8) { scope.layout.bind("<int16 vector lane $it>") })
                     "unpackInt16X8#" -> Vector16Unpack(operands[0])
                     in CoreVectors.operations16 -> Vector16Operation(name, operands)
+                    "packInt8X16#" -> Vector8Pack(operands[0], IntArray(16) { scope.layout.bind("<int8 vector lane $it>") })
+                    "unpackInt8X16#" -> Vector8Unpack(operands[0])
+                    in CoreVectors.operations8 -> Vector8Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {

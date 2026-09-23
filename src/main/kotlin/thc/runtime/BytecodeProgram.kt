@@ -1113,6 +1113,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operations8 -> vector8Primitive(name, operands)
         in CoreVectors.operations16 -> vector16Primitive(name, operands)
         in CoreVectors.operationsDouble -> vectorDoublePrimitive(name, operands)
         in CoreVectors.operationsFloat -> vectorFloatPrimitive(name, operands)
@@ -1140,6 +1141,36 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof)
+    }
+
+    private fun vector8Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackInt8X16#" -> tupleExpression(CoreVectors.unpacked8) { e, destination ->
+            e.builder.beginVector8Unpack(destination[0], destination[1], destination[2], destination[3],
+                destination[4], destination[5], destination[6], destination[7],
+                destination[8], destination[9], destination[10], destination[11],
+                destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endVector8Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packInt8X16#" -> {
+                    b.beginBlock()
+                    val lanes = List(16) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVector8Pack(); lanes.forEach(b::emitLoadLocal); b.endVector8Pack()
+                    b.endBlock()
+                }
+                "broadcastInt8X16#" -> { b.beginVector8Broadcast(); operands[0].emit(e); b.endVector8Broadcast() }
+                "negateInt8X16#" -> { b.beginVector8Negate(); operands[0].emit(e); b.endVector8Negate() }
+                else -> {
+                    val operation = when (name) { "plusInt8X16#" -> 0; "minusInt8X16#" -> 1; "timesInt8X16#" -> 2; else -> error("Invalid Int8X16 operation") }
+                    b.beginVector8Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVector8Binary()
+                }
+            }
+        }, CoreVectors.proof8)
     }
 
     private fun vector16Primitive(name: String, operands: List<Expression>): Expression = when (name) {
