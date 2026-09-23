@@ -1,0 +1,2028 @@
+{
+  "schema": 1,
+  "scope": "Actual exported Core on production THC; fixed correctness rows, no timing",
+  "launch": {
+    "runtimeSourceCommit": "6764d208d8685e2e001a41a0d099ff0a79f723ca",
+    "runtimeSourceSha256": {
+      "build.gradle.kts": "528e829175cade74eb8963fea89b331b1588c1f9790c47d5ecd4a848871a0ae8",
+      "gradle.properties": "f38a9939f2ef20b9a128d5389c2600ffda875e4a86ccd1e9838b4716e021c4ea",
+      "gradle/wrapper/gradle-wrapper.jar": "7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d",
+      "gradle/wrapper/gradle-wrapper.properties": "d0bebe8133babb74ab29a31ee6616c56ef8985fc801e1fd16c61b5ed2189e907",
+      "gradlew": "a5a5c199ba02189ae8c46a334223371a20599d9c298ef65e7540ede4a3f72d59",
+      "gradlew.bat": "d539676c48b596afda64c963ec8f7ee56c7b3fe7e3b81d1dbe2d1a1e3dd9e9f8",
+      "settings.gradle.kts": "e380485e3d8c6b1fa35b73cd468f583be0cb864a4f0b2c0e5afc54348d0811a9",
+      "src/main/java/thc/runtime/BytecodeRoot.java": "390dc9fc904d0736721ecee8c69b175dff58b18258f3eea99b6cb6fd483c9df8",
+      "src/main/java/thc/runtime/Calls.java": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+      "src/main/java/thc/runtime/Int32X4.java": "5cac5b334384165f47965d3d1b55d571e5310db2572335d10242cc046764ee3a",
+      "src/main/java/thc/runtime/Int64X2.java": "ba9a429eb8a9eb03c66d1c8c19cbed2694b90385c7638aa33ee121c3c7d2c469",
+      "src/main/java/thc/runtime/RuntimeTypes.java": "7a743b5ffe597094d490605a56b0370044f10740f8b9818f1857ee1c413d9974",
+      "src/main/kotlin/thc/Json.kt": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80",
+      "src/main/kotlin/thc/Language.kt": "989d84beeb5a7081494f542c00fa16cf0dcead9112ce440814306b081d08d533",
+      "src/main/kotlin/thc/LibraryCheck.kt": "6972150be4500d6f439d127848f9da0a4cdebdbcefd5c372f94e30d5348e16f5",
+      "src/main/kotlin/thc/Main.kt": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6",
+      "src/main/kotlin/thc/MapCheck.kt": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11",
+      "src/main/kotlin/thc/Probe.kt": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7",
+      "src/main/kotlin/thc/runtime/Application.kt": "ab7f0537e307736876f9ec922acec72fa2f3cc2457ddc076308b7a6377cac91c",
+      "src/main/kotlin/thc/runtime/ArgumentLayout.kt": "121eb3aacc9768d51036d54555ac2b2ec52a283a09aa71886dbc145e0c773c7c",
+      "src/main/kotlin/thc/runtime/AstSelfCalls.kt": "a3c6e3af547c367ed6190c069458e1ad9a125343bbe4f24198b79d21c6926a57",
+      "src/main/kotlin/thc/runtime/BitPrimitives.kt": "59a2222779fea7a5ff55222f5ea09c8445c1c640e97cc1d6bad67b480c908f5e",
+      "src/main/kotlin/thc/runtime/BloomValue.kt": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879",
+      "src/main/kotlin/thc/runtime/BytecodeProgram.kt": "8238098bb83b87191fed1e0a9f2d73e0567d755c74de95e3fecdc0aa58858aca",
+      "src/main/kotlin/thc/runtime/CaseCategories.kt": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea",
+      "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094",
+      "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d",
+      "src/main/kotlin/thc/runtime/CoreCallDemands.kt": "e109bdefd49f9db539d418227794eb8763d40c0ad635c78a5a2328e64d0d9196",
+      "src/main/kotlin/thc/runtime/CoreEntries.kt": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268",
+      "src/main/kotlin/thc/runtime/CoreFields.kt": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c",
+      "src/main/kotlin/thc/runtime/CoreInputCalls.kt": "8f2eb06e49e6d89f14bae691614b2ed8829a7f1bd4f6ed805a87846662f9bfdc",
+      "src/main/kotlin/thc/runtime/CoreRepresentations.kt": "12b7caf5c90ca80a61aebf804d96551c3455a21e8eb354242db1e46df75820f4",
+      "src/main/kotlin/thc/runtime/CoreSources.kt": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948",
+      "src/main/kotlin/thc/runtime/CoreVectors.kt": "f4d97c7f660b7b8f7e30c736b6ee62aa2cf2c220af32e29e666813c4abd83f57",
+      "src/main/kotlin/thc/runtime/DataValues.kt": "3b668b1868f138f405fac46fa38900c0673b57d61d616028bf9939ca170f3d86",
+      "src/main/kotlin/thc/runtime/EntryArguments.kt": "f2bd0a24b1a9286d5d16c63e8b1c748b23694164e9f03edcb544ff32aeca07b0",
+      "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": "797bfd6afe21ca28b454007d9cc0bb1203baa3c397b504fcd9129e594910c293",
+      "src/main/kotlin/thc/runtime/Frames.kt": "1730379255ff11560a7746a05a3de4c7b6a90b468aa3e8b46397fa749365bd4d",
+      "src/main/kotlin/thc/runtime/GuestExceptions.kt": "91cb6c35d5ef04c3006dc3ff732fa2fa4786e121ec588f3e8362c96af4d82e37",
+      "src/main/kotlin/thc/runtime/GuestRoot.kt": "2de6ced36834212019781ee649e2ae5b36a85223c83d39159b05ff31784f9cb3",
+      "src/main/kotlin/thc/runtime/Handoff.kt": "18bc3f1728840dd7379fae7c05d00db6c97446b23a172b572838fb195de2bd43",
+      "src/main/kotlin/thc/runtime/LeadingCaseReturn.kt": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d",
+      "src/main/kotlin/thc/runtime/LiteralAddresses.kt": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69",
+      "src/main/kotlin/thc/runtime/LocalJoins.kt": "19e8a73bf271a6b0ace61edf2b75524105bec87ff2c20b0e2a19a68c4bb8c224",
+      "src/main/kotlin/thc/runtime/ManagedByteArrays.kt": "04c27cddb0bf349538b0cae28f18c32559802bf373720f2b2a50887353ced98d",
+      "src/main/kotlin/thc/runtime/ManagedMutVars.kt": "bf4f766cbc5b7af11cecae6c76d0101e162a0396918b838b1bc238c0cf3e6f4c",
+      "src/main/kotlin/thc/runtime/Program.kt": "9f651bf8f1c2990de111fe6d5c490825fa28441fe13dac4be69263741f269099",
+      "src/main/kotlin/thc/runtime/Scalar64Primitives.kt": "e39a7ba6a2409447fe5a519988badb8ffa9270fc08f58368bc421250d56a59f1",
+      "src/main/kotlin/thc/runtime/ScalarPrimitiveSignatures.kt": "ddcc0665f2cf855b358f83edf07c9c31252a41e234cceb798624a158ddb6bf2d",
+      "src/main/kotlin/thc/runtime/TupleArithmetic.kt": "af4fcfad9658e8908ecedae60f8ed34448f4f6c37b7bd03001d91098658459e6",
+      "src/main/kotlin/thc/runtime/TupleResults.kt": "5faecea7bca2273666e4380a31341456a6e33e07fb5e650c07803534c353970a",
+      "src/main/kotlin/thc/runtime/Vector32Expressions.kt": "859a021a585e60f9ca31e44519d0c911f1c83ce4acf30fbe9155305cc747316e",
+      "src/main/kotlin/thc/runtime/VectorExpressions.kt": "302658f2bd688ae05ff68f6de830884e9e58ae169c10f837930a31ae33fdb161",
+      "src/main/resources/thc/scalar-primop-signatures.json": "7c9c05e2e789d73ed3cd542a60a4fe87fde04e1eb0b1aa29744ea7b081c7756d"
+    },
+    "inputSha256": {
+      "/private/tmp/thc-empty-tuple-graphs/bench/experiments/empty-tuple-inputs/run.py": "b226a087fb53f2a119dffdba54a80624350e571d14b82296a92526782e5c5938",
+      "/private/tmp/thc-empty-tuple-graphs/bench/experiments/empty-tuple-inputs/run-one.py": "8a97df1c45fb658ace50c61431ba74940f8a785952fcd5ee265bd425eeae3b6c",
+      "/private/tmp/thc-empty-tuple-graphs/bench/experiments/empty-tuple-inputs/summarize.py": "09ad8b2ea69d4cf35991239470287a83f1367ca20ca65dd028e8a6edf566136e",
+      "/private/tmp/thc-empty-tuple-graphs/bench/experiments/empty-tuple-inputs/EmptyInputGraphProbe.java": "cec2ccf1e6a562c9e16de948d11c484fefdc3f4453580db2f2f92a9fdeb74f2f",
+      "/private/tmp/thc-empty-tuple-graphs/tools/GraphInspect.java": "b2715478c253debc1b58332a8f5f5207a46efc2a35ac1e801c26d11717839db4",
+      "/private/tmp/thc-empty-tuple-graphs/scripts/gradle.sh": "15dbcdadf5400baea636d22b8b89fecd76bebcfd120a7c1129e7de7ca8b695ef",
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/release": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/thc-0.1-experiment.jar": "73775c6b6e52fde786ca6aa0ea24856f3c51ed62e215e0eeec66f33201c8aa9f",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+      "/private/tmp/thc-empty-tuple-graphs/build/install/thc/lib/word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    "javaVersion": [
+      "java version \"25.0.4.1\" 2026-08-18 LTS",
+      "Java(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)",
+      "Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)"
+    ]
+  },
+  "nativeProvenance": {
+    "schema": 1,
+    "recordedAtUtc": "2026-09-23T17:32:46.776990+00:00",
+    "commands": [
+      {
+        "argv": [
+          "compiler/build.sh"
+        ],
+        "cwd": "/private/tmp/thc-empty-tuple-graphs",
+        "environment": {}
+      },
+      {
+        "argv": [
+          "/Users/ekmett/.ghcup/bin/ghc",
+          "--make",
+          "-O2",
+          "-fforce-recomp",
+          "-dcore-lint",
+          "-icompiler/test-fixtures",
+          "-odir",
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/native",
+          "-hidir",
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/native",
+          "-o",
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/native/empty-tuple-input",
+          "/private/tmp/thc-empty-tuple-graphs/compiler/test-fixtures/EmptyTupleInputAuditNative.hs"
+        ],
+        "cwd": "/private/tmp/thc-empty-tuple-graphs",
+        "environment": {}
+      },
+      {
+        "argv": [
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/native/empty-tuple-input"
+        ],
+        "stdout": "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/oracle.tsv"
+      },
+      {
+        "argv": [
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/native/empty-tuple-input",
+          "--pairs"
+        ],
+        "stdout": "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/oracle-pairs.tsv"
+      },
+      {
+        "argv": [
+          "compiler/export.sh",
+          "/private/tmp/thc-empty-tuple-graphs/compiler/test-fixtures/EmptyTupleInputAudit.hs"
+        ],
+        "cwd": "/private/tmp/thc-empty-tuple-graphs",
+        "environment": {
+          "THC_CORE_OUT": "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/pre-core",
+          "THC_GHC_OUT": "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/pre-ghc",
+          "THC_SOURCE_NOTES": "true"
+        }
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/audit-core.py",
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/pre-core/EmptyTupleInputAudit.json",
+          "--entry",
+          "scalarControl",
+          "--entry",
+          "beforeCase",
+          "--entry",
+          "betweenCase",
+          "--entry",
+          "afterCase",
+          "--entry",
+          "usedCase",
+          "--entry",
+          "papEmptyCase",
+          "--entry",
+          "papTwoEmptyCase",
+          "--entry",
+          "papMixedCase",
+          "--entry",
+          "overCase",
+          "--entry",
+          "lazyCase",
+          "--entry",
+          "pairCase",
+          "--entry",
+          "selfCase",
+          "--entry",
+          "mutualCase",
+          "--entry",
+          "selfDepth",
+          "--entry",
+          "mutualDepth",
+          "--entry",
+          "effectCase",
+          "--entry",
+          "effectPapCase",
+          "--entry",
+          "betweenInputs",
+          "--output",
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/pre-audit.json"
+        ],
+        "cwd": "/private/tmp/thc-empty-tuple-graphs",
+        "environment": {}
+      },
+      {
+        "argv": [
+          "compiler/export.sh",
+          "-fplugin-opt=Thc.Plugin:post-tidy",
+          "/private/tmp/thc-empty-tuple-graphs/compiler/test-fixtures/EmptyTupleInputAudit.hs"
+        ],
+        "cwd": "/private/tmp/thc-empty-tuple-graphs",
+        "environment": {
+          "THC_CORE_OUT": "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/post-core",
+          "THC_GHC_OUT": "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/post-ghc",
+          "THC_SOURCE_NOTES": "true"
+        }
+      },
+      {
+        "argv": [
+          "python3",
+          "scripts/audit-core.py",
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/post-core/EmptyTupleInputAudit.json",
+          "--entry",
+          "scalarControl",
+          "--entry",
+          "beforeCase",
+          "--entry",
+          "betweenCase",
+          "--entry",
+          "afterCase",
+          "--entry",
+          "usedCase",
+          "--entry",
+          "papEmptyCase",
+          "--entry",
+          "papTwoEmptyCase",
+          "--entry",
+          "papMixedCase",
+          "--entry",
+          "overCase",
+          "--entry",
+          "lazyCase",
+          "--entry",
+          "pairCase",
+          "--entry",
+          "selfCase",
+          "--entry",
+          "mutualCase",
+          "--entry",
+          "selfDepth",
+          "--entry",
+          "mutualDepth",
+          "--entry",
+          "effectCase",
+          "--entry",
+          "effectPapCase",
+          "--entry",
+          "betweenInputs",
+          "--output",
+          "/private/tmp/thc-empty-tuple-graphs/build/empty-tuple-input/post-audit.json"
+        ],
+        "cwd": "/private/tmp/thc-empty-tuple-graphs",
+        "environment": {}
+      }
+    ],
+    "sources": [
+      {
+        "path": "compiler/test-fixtures/EmptyTupleInputAudit.hs",
+        "sha256": "01b840087453073c60cfdfcedfa445709fa8b888e6f9f1f1852d6fec5a7cb74b"
+      },
+      {
+        "path": "compiler/test-fixtures/EmptyTupleInputAuditNative.hs",
+        "sha256": "2e5fdf39e3b277dc9e037f2128e32acc47bb6a04ff7a7d2e4e7b0fadbc47dbd4"
+      },
+      {
+        "path": "scripts/prepare-empty-tuple-input-audit.py",
+        "sha256": "fa40b622e994f5fb13c4d50d86aabbbb03824ba707d2bb8749325f3d6ef4400f"
+      },
+      {
+        "path": "compiler/build.sh",
+        "sha256": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb"
+      },
+      {
+        "path": "compiler/export.sh",
+        "sha256": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489"
+      },
+      {
+        "path": "compiler/toolchain.sh",
+        "sha256": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614"
+      },
+      {
+        "path": "compiler/Thc/Cbv.hs",
+        "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c"
+      },
+      {
+        "path": "compiler/Thc/Demands.hs",
+        "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a"
+      },
+      {
+        "path": "compiler/Thc/Plugin.hs",
+        "sha256": "0b83fa173b7a7d95d3c317393e2a1aeec22969c26762d7b9c463466f6a844577"
+      },
+      {
+        "path": "compiler/Thc/Sources.hs",
+        "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+      },
+      {
+        "path": "compiler/Thc/Wired.hs",
+        "sha256": "7f294ee018790266a571c9bf0f3b44e11d7732b3f07935d4f1ecf627157a81ea"
+      },
+      {
+        "path": "scripts/audit-core.py",
+        "sha256": "0050c19adad6df10452777315506c90ddbd73dadda6fa9c2a7e86defb302ca29"
+      },
+      {
+        "path": "scripts/core-capabilities.json",
+        "sha256": "57346aae587b16129e3b61122acb4eda01e53388c7dd89b43b93a35679a96aa4"
+      },
+      {
+        "path": "scripts/core_vectors.py",
+        "sha256": "4b8bee160047b5d7e605c6e1a0065345848a555d2e738adfb9c12d5d5747fefe"
+      },
+      {
+        "path": "src/main/resources/thc/scalar-primop-signatures.json",
+        "sha256": "7c9c05e2e789d73ed3cd542a60a4fe87fde04e1eb0b1aa29744ea7b081c7756d"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "build/empty-tuple-input/native/EmptyTupleInputAudit.hi",
+        "sha256": "90f1c7c6aab3361f7711de6ef71167eabb386209a450e8df4c57a6e109bc6402"
+      },
+      {
+        "path": "build/empty-tuple-input/native/EmptyTupleInputAudit.o",
+        "sha256": "4a770eac6ba456842b45d7364cfbd72d06c96707bf7f5d097ced9eb097cc94cf"
+      },
+      {
+        "path": "build/empty-tuple-input/native/Main.hi",
+        "sha256": "cfe73a9148ca7a78a6f2edb4da688b804804ff06b1273c035cf82130369cdd9e"
+      },
+      {
+        "path": "build/empty-tuple-input/native/Main.o",
+        "sha256": "41c3849b9192746d9463f07a7db40e0c193efef6c3b37ad54c84b707a5b9870a"
+      },
+      {
+        "path": "build/empty-tuple-input/native/empty-tuple-input",
+        "sha256": "eb7fb997e0945254b520979505c0b4d40cb26c8457ec3ee6e4976bd661e53422"
+      },
+      {
+        "path": "build/empty-tuple-input/pre-core/EmptyTupleInputAudit.json",
+        "sha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70"
+      },
+      {
+        "path": "build/empty-tuple-input/post-core/EmptyTupleInputAudit.json",
+        "sha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d"
+      },
+      {
+        "path": "build/empty-tuple-input/oracle.tsv",
+        "sha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b"
+      },
+      {
+        "path": "build/empty-tuple-input/oracle-pairs.tsv",
+        "sha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b"
+      },
+      {
+        "path": "build/empty-tuple-input/pre-audit.json",
+        "sha256": "a28759e0b8727df18ad2abb17814875f10a6776c4731e6b8e3ea6a4552ce6d1e"
+      },
+      {
+        "path": "build/empty-tuple-input/post-audit.json",
+        "sha256": "52469ff4fc00b5c9ef303aa1f0b7e5ed4625066300592281c2e9b62c72d95a6f"
+      }
+    ],
+    "toolchain": {
+      "ghc": {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-9.14.1",
+        "sha256": "41dee8bdd6fdfce5fe8cf198671e04ee9ca1a1898c39997f33a9748fae841f19"
+      },
+      "ghcPkg": {
+        "path": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-pkg-9.14.1",
+        "sha256": "92166d2d9174733a38f8d874d32ae7bcbf936b5f3136bcca808152e5fe14c766"
+      },
+      "info": "[(\"Project name\",\"The Glorious Glasgow Haskell Compilation System\")\n ,(\"C compiler command\",\"gcc\")\n ,(\"C compiler flags\",\"--target=arm64-apple-darwin  -Qunused-arguments\")\n ,(\"C++ compiler command\",\"g++\")\n ,(\"C++ compiler flags\",\"--target=arm64-apple-darwin \")\n ,(\"C compiler link flags\",\"--target=arm64-apple-darwin   -Wl,-no_fixup_chains -Wl,-no_warn_duplicate_libraries\")\n ,(\"C compiler supports -no-pie\",\"NO\")\n ,(\"CPP command\",\"gcc\")\n ,(\"CPP flags\",\"-E\")\n ,(\"Haskell CPP command\",\"gcc\")\n ,(\"Haskell CPP flags\",\"-E -undef -traditional -Wno-invalid-pp-token -Wno-unicode -Wno-trigraphs\")\n ,(\"JavaScript CPP command\",\"gcc\")\n ,(\"JavaScript CPP flags\",\"-E -CC -Wno-unicode -nostdinc\")\n ,(\"C-- CPP command\",\"gcc\")\n ,(\"C-- CPP flags\",\"-E\")\n ,(\"C-- CPP supports -g0\",\"YES\")\n ,(\"ld supports compact unwind\",\"YES\")\n ,(\"ld supports filelist\",\"YES\")\n ,(\"ld supports single module\",\"NO\")\n ,(\"ld is GNU ld\",\"NO\")\n ,(\"Merge objects command\",\"ld\")\n ,(\"Merge objects flags\",\"-r\")\n ,(\"Merge objects supports response files\",\"YES\")\n ,(\"ar command\",\"ar\")\n ,(\"ar flags\",\"qcls\")\n ,(\"ar supports at file\",\"NO\")\n ,(\"ar supports -L\",\"NO\")\n ,(\"ranlib command\",\"ranlib\")\n ,(\"otool command\",\"otool\")\n ,(\"install_name_tool command\",\"install_name_tool\")\n ,(\"windres command\",\"/bin/false\")\n ,(\"unlit command\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/../bin/unlit\")\n ,(\"cross compiling\",\"NO\")\n ,(\"target platform string\",\"aarch64-apple-darwin\")\n ,(\"target os\",\"OSDarwin\")\n ,(\"target arch\",\"ArchAArch64\")\n ,(\"target word size\",\"8\")\n ,(\"target word big endian\",\"NO\")\n ,(\"target has GNU nonexec stack\",\"NO\")\n ,(\"target has .ident directive\",\"YES\")\n ,(\"target has subsections via symbols\",\"NO\")\n ,(\"target has libm\",\"YES\")\n ,(\"Unregisterised\",\"NO\")\n ,(\"LLVM target\",\"arm64-apple-darwin\")\n ,(\"LLVM llc command\",\"llc\")\n ,(\"LLVM opt command\",\"opt\")\n ,(\"LLVM llvm-as command\",\"clang\")\n ,(\"LLVM llvm-as flags\",\"\")\n ,(\"Use inplace MinGW toolchain\",\"NO\")\n ,(\"target RTS linker only supports shared libraries\",\"NO\")\n ,(\"Use interpreter\",\"YES\")\n ,(\"Support SMP\",\"YES\")\n ,(\"RTS ways\",\"v thr thr_debug thr_debug_p thr_debug_p_dyn thr_debug_dyn thr_p thr_p_dyn thr_dyn debug debug_p debug_p_dyn debug_dyn p p_dyn dyn\")\n ,(\"Tables next to code\",\"YES\")\n ,(\"Leading underscore\",\"YES\")\n ,(\"Use LibFFI\",\"YES\")\n ,(\"RTS expects libdw\",\"NO\")\n ,(\"Relative Global Package DB\",\"package.conf.d\")\n ,(\"base unit-id\",\"base-4.22.0.0-1f90\")\n ,(\"Project version\",\"9.14.1\")\n ,(\"Project Git commit id\",\"902339d332fb4ce2b3c87dcac1ee6495d41ad886\")\n ,(\"Project Version Int\",\"914\")\n ,(\"Project Patch Level\",\"1\")\n ,(\"Project Patch Level1\",\"1\")\n ,(\"Project Patch Level2\",\"0\")\n ,(\"Project Unit Id\",\"ghc-9.14.1-bcbf\")\n ,(\"ghc-internal Unit Id\",\"ghc-internal-9.1401.0-0c3b\")\n ,(\"Booter version\",\"9.10.1\")\n ,(\"Stage\",\"2\")\n ,(\"Build platform\",\"aarch64-apple-darwin\")\n ,(\"Host platform\",\"aarch64-apple-darwin\")\n ,(\"Target platform\",\"aarch64-apple-darwin\")\n ,(\"target os string\",\"darwin\")\n ,(\"target arch string\",\"aarch64\")\n ,(\"target word size in bits\",\"64\")\n ,(\"Have interpreter\",\"YES\")\n ,(\"Object splitting supported\",\"NO\")\n ,(\"Have native code generator\",\"YES\")\n ,(\"target has RTS linker\",\"YES\")\n ,(\"Target default backend\",\"native code generator\")\n ,(\"Support dynamic-too\",\"YES\")\n ,(\"Support parallel --make\",\"YES\")\n ,(\"Support reexported-modules\",\"YES\")\n ,(\"Support thinning and renaming package flags\",\"YES\")\n ,(\"Support Backpack\",\"YES\")\n ,(\"Requires unified installed package IDs\",\"YES\")\n ,(\"Uses package keys\",\"YES\")\n ,(\"Uses unit IDs\",\"YES\")\n ,(\"GHC Dynamic\",\"YES\")\n ,(\"GHC Profiled\",\"NO\")\n ,(\"Debug on\",\"NO\")\n ,(\"LibDir\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\")\n ,(\"Global Package DB\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/package.conf.d\")\n ]",
+      "packages": "Cabal-3.16.0.0 Cabal-syntax-3.16.0.0 array-0.5.8.0 base-4.22.0.0 binary-0.8.9.3 bytestring-0.12.2.0 containers-0.8 deepseq-1.5.1.0 directory-1.3.10.0 exceptions-0.10.11 file-io-0.1.5 filepath-1.5.4.0 ghc-9.14.1 ghc-bignum-1.4 ghc-boot-9.14.1 ghc-boot-th-9.14.1 ghc-compact-0.1.0.0 ghc-experimental-9.1401.0 ghc-heap-9.14.1 ghc-internal-9.1401.0 ghc-platform-0.1.0.0 ghc-prim-0.13.1 ghc-toolchain-0.1.0.0 ghci-9.14.1 haddock-api-2.33.0 haddock-library-1.11.0 haskeline-0.8.3.0 hpc-0.7.0.2 integer-gmp-1.1 mtl-2.3.1 os-string-2.0.8 parsec-3.1.18.0 pretty-1.1.3.6 process-1.6.26.1 rts-1.0.3 semaphore-compat-1.0.0 stm-2.5.3.1 system-cxx-std-lib-1.0 template-haskell-2.24.0.0 template-haskell-lift-0.1.0.0 template-haskell-quasiquoter-0.1.0.0 terminfo-0.4.1.7 text-2.1.3 time-1.15 transformers-0.6.1.2 unix-2.8.8.0 xhtml-3000.2.2.1"
+    },
+    "claim": "Fresh native semantics and exact pre/post Core shape; compiled runtime execution is tested separately."
+  },
+  "results": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "mode": "inline",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 26,
+      "lowNodes": 114,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 1,
+        "ConstantNode": 6,
+        "FixedGuardNode": 1,
+        "FrameState": 1,
+        "IntegerEqualsNode": 1,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 3,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 2
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-beforeCase/graphs/TruffleHotSpotCompilation-1876[lambda_x].bgv",
+        "sha256": "435ff2fcc8066456e55ae30d478fa8e382fe6d235b7041d689e92bedb5b5e35d"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-beforeCase/graphs/TruffleHotSpotCompilation-1876[lambda_x].cfg",
+        "sha256": "4f8378b0e113ef2908aa374fd1fe9747c5b6822d673fa49faa3f46061853d3ae"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-beforeCase/run.log",
+        "sha256": "e87f9487c769304f9cfb5579b301e4cdfff3605d263c7e392f39532b46d177ab"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-beforeCase/final-lir.txt",
+        "sha256": "fb9a9e55d4e02b96f0a8458882fedc0ffe6dfed0048f609d7c6cdc154ba171c2"
+      },
+      "highSnapshotSha256": "55d14f286cff7c823f45c31e5c9520ffc321e235f8043014c40f336e0fb7c074",
+      "lowSnapshotSha256": "6e2ac506ae442d53e3be20948b1641208013f7ea9a11721288b0a0ca8eda7c90",
+      "check": "PASS entry=beforeCase backend=ast mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "mode": "inline",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 22,
+      "lowNodes": 97,
+      "highNodeCounts": {
+        "AddNode": 3,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 1,
+        "ConstantNode": 6,
+        "FrameState": 1,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 2,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 1
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 2,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 1
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-scalarControl/graphs/TruffleHotSpotCompilation-1831[lambda_x].bgv",
+        "sha256": "412a405b8959bbe880bacefd97fb22918af594617803365ae70d4069d3f26b1c"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-scalarControl/graphs/TruffleHotSpotCompilation-1831[lambda_x].cfg",
+        "sha256": "72ded2580a3a25db1d42a89ee21d71afa05573c3cfdc4215f0f39c0fd5765b27"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-scalarControl/run.log",
+        "sha256": "26a96fb54a200459104a529c4640d89ede2b3d42f74d50a7d6ed6d2071612939"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-scalarControl/final-lir.txt",
+        "sha256": "02994be94e6356baa6e644a1badc0d1341a7a339b52cc8c7c1466011b6bf51ab"
+      },
+      "highSnapshotSha256": "5231e7efbdc3e89322d1f82b693f7ad3e3d939eca2be85968c072551625c28d5",
+      "lowSnapshotSha256": "62eee985c45201177db01c1e06050afad87c5f903da507136e7a213a60c8b434",
+      "check": "PASS entry=scalarControl backend=ast mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "mode": "inline",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 33,
+      "lowNodes": 122,
+      "highNodeCounts": {
+        "AddNode": 4,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 1,
+        "ConstantNode": 7,
+        "FixedGuardNode": 1,
+        "FrameState": 1,
+        "IntegerEqualsNode": 1,
+        "LeftShiftNode": 2,
+        "LoadIndexedNode": 3,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 3
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1843[lambda_x,_y].bgv",
+        "sha256": "803a2b62a286cb3a4b319ab3d434325ce3a0d45057dcbc90f78ca32953e38dd8"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1843[lambda_x,_y].cfg",
+        "sha256": "309ed4a1ba785cef6ac78366f8350cafbca5f0e0747474e6ef2ab0c1c948be96"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-betweenInputs/run.log",
+        "sha256": "f2f1a355b4c40fd0ada41217800543cfaf231424e917b01af233a2537b4b7e38"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-inline-betweenInputs/final-lir.txt",
+        "sha256": "1c1bd4ea529d7a89fa1e0f0a6c37c090d4f8edd30521ac5465d9735301071270"
+      },
+      "highSnapshotSha256": "4afc2d3f39941369ebafe8442c5af08e7c46e31e553e4a68e01607aa8dcdd7f1",
+      "lowSnapshotSha256": "5f25f105e779fcc83162d2aab851ff784b4c2eb2ad4544ba48a4df291b48e40c",
+      "check": "PASS entry=betweenInputs backend=ast mode=inline nativeRows=7 arity=2 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "mode": "residual",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 66,
+      "lowNodes": 133,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 12,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "FrameState": 19,
+        "IntegerEqualsNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 2,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 3,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-beforeCase/graphs/TruffleHotSpotCompilation-1977[lambda_x].bgv",
+        "sha256": "34632cb594188c0937c87bfa368245a6496e2c57810aa9e4f16da4b8fba1f826"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-beforeCase/graphs/TruffleHotSpotCompilation-1977[lambda_x].cfg",
+        "sha256": "bed27068ca35660b078f9bdb43e005e4d2f0d65b6283f21db3982ba82a7c22c4"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-beforeCase/run.log",
+        "sha256": "c8bb3a39c866181b1551cc22f0c3af970b90e8fc7b731366b5179cd9e1a3da07"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-beforeCase/final-lir.txt",
+        "sha256": "c71625d5ff7df7a9b8b4dda91e0685b50ff2b147d779749c5d7e5ba6dfe4e540"
+      },
+      "highSnapshotSha256": "b90c7175617ae7f7a85c55acbacfc51f3bd89d90242367e6257bda7e664f4ddd",
+      "lowSnapshotSha256": "3208d7aaf30633f050dca811a06858a63c9fbdabd5d4e66125995b3c09107a1a",
+      "check": "PASS entry=beforeCase backend=ast mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "mode": "residual",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 78,
+      "lowNodes": 258,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$AllocatingBoxNode": 3,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 16,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FrameState": 22,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 5,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 3,
+        "TlabEnd": 3,
+        "TlabTop": 6,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-scalarControl/graphs/TruffleHotSpotCompilation-1967[lambda_x].bgv",
+        "sha256": "74c0cc1cc95f5f3774701dd5b3e0d4095e7bddeef4bda25be2c39b59082d7ad4"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-scalarControl/graphs/TruffleHotSpotCompilation-1967[lambda_x].cfg",
+        "sha256": "64cfadedaad8f0dac9874a0d3adca1cd1d57c33151a5af3f77e93d79f33d7770"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-scalarControl/run.log",
+        "sha256": "64c8e832989213f2a74423e4ade2331f7a9fe20b0247bddf6cf5d683d1b14fc1"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-scalarControl/final-lir.txt",
+        "sha256": "fdd57a696f17f941cf622e2bb5dee2b37da957db2d9b764b1feb64133e671ba5"
+      },
+      "highSnapshotSha256": "cba85edac1306097d2014a1f0cf9be8e9c616f7811aec906a2c51f2973e34f20",
+      "lowSnapshotSha256": "ce2f15a09879f70e9f3aabf28c822f3839438e2137a6b56b18272dff9afb7589",
+      "check": "PASS entry=scalarControl backend=ast mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "mode": "residual",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 71,
+      "lowNodes": 140,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 13,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "FrameState": 19,
+        "IntegerEqualsNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 3,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 5,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 4,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        3
+      ],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-betweenInputs/graphs/TruffleHotSpotCompilation-2004[lambda_x,_y].bgv",
+        "sha256": "30d46aa19de25bc81640e094ce8d0dac6babd4cd765bf24187f09776ff5b1753"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-betweenInputs/graphs/TruffleHotSpotCompilation-2004[lambda_x,_y].cfg",
+        "sha256": "c9aae5b5686055c83d4fbbdd8f071ce57a6420456c6ba9ef6627b3f00ce30675"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-betweenInputs/run.log",
+        "sha256": "6b09f45ce0eda6b00f62cdef1f3522b55d4ad00b695618e24e3c4f14da473e66"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-ast-residual-betweenInputs/final-lir.txt",
+        "sha256": "a2f9f873a5cc85ae4c71df680f365a203935027cf7eda39f74944c2ef0a858a2"
+      },
+      "highSnapshotSha256": "986d48733a7be705aea7ef71164ced71588d92c3219e6e459e518d8ee61c5bbd",
+      "lowSnapshotSha256": "8dc7b96605fd85bf02b1ba6032196953beebb3c0f829b4d0637e71bd8b6bdde3",
+      "check": "PASS entry=betweenInputs backend=ast mode=residual nativeRows=7 arity=2 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 54,
+      "lowNodes": 143,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "AndNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "ConstantNode": 14,
+        "FixedGuardNode": 2,
+        "FrameState": 6,
+        "IntegerEqualsNode": 2,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 3,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 4,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-beforeCase/graphs/TruffleHotSpotCompilation-1947[lambda_x].bgv",
+        "sha256": "c6856fac3264d8db74a34add98052c8b26642febdb74d708bb115239e26b825a"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-beforeCase/graphs/TruffleHotSpotCompilation-1947[lambda_x].cfg",
+        "sha256": "027df4ff024a4fdd5c4fdfb56dd9853e4e92b79f29983d07ee1e6652c4cee5f3"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-beforeCase/run.log",
+        "sha256": "5c534dfb19e016cf3268f2b0f7fce11c099ac9d5dcf412d0f2b11712bae12b50"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-beforeCase/final-lir.txt",
+        "sha256": "96e68dbbea0fbbf4f2b291007efbe50b35b542ca3c5ba6a6ad67200be97c8bbf"
+      },
+      "highSnapshotSha256": "43f4774b3ad18199737ba3fc588083f0229d306e58dd7cf694902098db7fd4a9",
+      "lowSnapshotSha256": "ef258f16e0b69ebd81467079934f92595ac1969c20bd4d4aad4c6b2ff0345ca7",
+      "check": "PASS entry=beforeCase backend=bytecode mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 47,
+      "lowNodes": 120,
+      "highNodeCounts": {
+        "AddNode": 3,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "ConstantNode": 13,
+        "FrameState": 6,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 3,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 1,
+        "VirtualArrayNode": 4,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 1
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-scalarControl/graphs/TruffleHotSpotCompilation-1948[lambda_x].bgv",
+        "sha256": "878e5d32ac0a300b6dc9a7be58fce8012ae341eaa096b02dacd865f71b3fd6b1"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-scalarControl/graphs/TruffleHotSpotCompilation-1948[lambda_x].cfg",
+        "sha256": "cc18f33ca4e3af528608b3f0f8588bb84ce1a00b30ba6ba3e5ef4f32616febf7"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-scalarControl/run.log",
+        "sha256": "0664d23d579a5cfa205a889c4417820f24d38995a1b5d80c0d3e62830d224ff9"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-scalarControl/final-lir.txt",
+        "sha256": "529cbbdf284274e5c120b599001df3dfba12990a1d63ec6dc7edc5d156bde68d"
+      },
+      "highSnapshotSha256": "a993e7f1651084f41404a675fbde497ab0b68e5d824a70b541962ca3109bb683",
+      "lowSnapshotSha256": "a014133820d65662d0136cd05c0d76e6308bcaa25c1a52dc5df07f0e57044c11",
+      "check": "PASS entry=scalarControl backend=bytecode mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 62,
+      "lowNodes": 151,
+      "highNodeCounts": {
+        "AddNode": 4,
+        "AndNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 3,
+        "ConstantNode": 15,
+        "FixedGuardNode": 2,
+        "FrameState": 6,
+        "IntegerEqualsNode": 2,
+        "LeftShiftNode": 2,
+        "LoadIndexedNode": 3,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 4,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1995[lambda_x,_y].bgv",
+        "sha256": "314c2b0680c64848157524cb24948f5b09be5f55fb3df2d9ff84d628693653a2"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1995[lambda_x,_y].cfg",
+        "sha256": "6cccb8567aa364316b8f3cd8e4ba4f55e0e65fdce6edeaf2029822ace64513a5"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-betweenInputs/run.log",
+        "sha256": "ddaca96c0592f91b81b3a676f643909a26bd626a7a639884b5a20f23bc248673"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-inline-betweenInputs/final-lir.txt",
+        "sha256": "dfdddb0c65206bc624897a3e598c2dd93c448aed031d41080f1dff3acddba32b"
+      },
+      "highSnapshotSha256": "7b2aea672027e2e059a26ab9b1613cddc341eec02d7050240fd5b75447169b33",
+      "lowSnapshotSha256": "b78d795a7ce289c4bfc2b463261d0c14777dd3f3a9b551229aaa6bec08515f90",
+      "check": "PASS entry=betweenInputs backend=bytecode mode=inline nativeRows=7 arity=2 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "mode": "residual",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 84,
+      "lowNodes": 156,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "AndNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 24,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 2,
+        "FrameState": 18,
+        "IntegerEqualsNode": 2,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 8
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 2,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 3,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-beforeCase/graphs/TruffleHotSpotCompilation-2083[lambda_x].bgv",
+        "sha256": "7a23a9618a4af7bae8f500af717318d4c26a6add497f15ed431a15496b211881"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-beforeCase/graphs/TruffleHotSpotCompilation-2083[lambda_x].cfg",
+        "sha256": "1857b4acbf9833881b96b808cf3743586fffad57647ef6d394e83417d6c103f5"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-beforeCase/run.log",
+        "sha256": "0284eac8bd7c20ef1a3ce097c3500d9411e5fae6fa573ca7227e02e37c9340fc"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-beforeCase/final-lir.txt",
+        "sha256": "77e22ee2b6a2cd240d88cf049e402a0e5dec3636d9e0ce947d598781fb981cf6"
+      },
+      "highSnapshotSha256": "df18595acc55279f64fee3b2881d631e1370757ca6158d789d665b657098eca5",
+      "lowSnapshotSha256": "e64cc624652d8dfb159a2c3e3fff6686da61e5060777468542bcd07ba75695f0",
+      "check": "PASS entry=beforeCase backend=bytecode mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "mode": "residual",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 83,
+      "lowNodes": 258,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$AllocatingBoxNode": 3,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 24,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FrameState": 18,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 7
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 5,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 3,
+        "TlabEnd": 3,
+        "TlabTop": 6,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-scalarControl/graphs/TruffleHotSpotCompilation-2038[lambda_x].bgv",
+        "sha256": "bea16703f60aff62fb8373442170c1c31f52919e1d12833ad342d6198cbb3a99"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-scalarControl/graphs/TruffleHotSpotCompilation-2038[lambda_x].cfg",
+        "sha256": "9109a1a62cfcd2820a4ed13f1b9d19fd554b1c03d07146f2315a71df5f4a1a68"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-scalarControl/run.log",
+        "sha256": "9a4fb4384d39ce88dc783089fb7d3afe1bce6131d6c5e276194f9ee0f5e1c426"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-scalarControl/final-lir.txt",
+        "sha256": "1b90d2137bcbcd63909e262e5034e673a7d89aacfbf3520e874d27e258034aab"
+      },
+      "highSnapshotSha256": "9a9ab269323daab03f9f2e89575925ab82af30527bf6f7764dfeb0de5a6017bb",
+      "lowSnapshotSha256": "29081012e025ada622feaad2c31fc3229a23addc6618bd2ad61fba28655fe71b",
+      "check": "PASS entry=scalarControl backend=bytecode mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "mode": "residual",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 89,
+      "lowNodes": 163,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "AndNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 25,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 2,
+        "FrameState": 18,
+        "IntegerEqualsNode": 2,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 3,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 5,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 8
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 4,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        3
+      ],
+      "moduleSha256": "93d022dd9e030ec4f73a811da40595e39c6aa80237674ac4b488e27584bffc70",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-betweenInputs/graphs/TruffleHotSpotCompilation-2077[lambda_x,_y].bgv",
+        "sha256": "b00645b11c7c0ebf149acaf338638c7a5655b4867b460f41138785fc5ca1c187"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-betweenInputs/graphs/TruffleHotSpotCompilation-2077[lambda_x,_y].cfg",
+        "sha256": "cea41c84439c8d37bec051d41e777fc2897a51cb1a3bcc20d06b96a8307b3785"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-betweenInputs/run.log",
+        "sha256": "78ed6cfe2951be4d2965f2f1f7d8cf1b1ef3552fe2a635386ff874bbd6c9427b"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/pre-bytecode-residual-betweenInputs/final-lir.txt",
+        "sha256": "4fd82fd856c0cab72862bf431bb83fc1b100f9680d798a006a8ddd6b25c21000"
+      },
+      "highSnapshotSha256": "8ef66d8ed70d9ef7a1ed938187c65d9525bb828b0eb84bbb20f4a7eea62868fc",
+      "lowSnapshotSha256": "a931b42941766b1072b7c250f3a3ada6fab8fd31f45a0394b13a725db3288c5b",
+      "check": "PASS entry=betweenInputs backend=bytecode mode=residual nativeRows=7 arity=2 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "mode": "inline",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 26,
+      "lowNodes": 114,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 1,
+        "ConstantNode": 6,
+        "FixedGuardNode": 1,
+        "FrameState": 1,
+        "IntegerEqualsNode": 1,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 3,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 2
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-beforeCase/graphs/TruffleHotSpotCompilation-1896[lambda_x].bgv",
+        "sha256": "2c11010cbdaddfe4c58413c9698169fed01b128256f351358b9c822cec1a1c1c"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-beforeCase/graphs/TruffleHotSpotCompilation-1896[lambda_x].cfg",
+        "sha256": "1db9b211b4924b89bb917eda871244b0bfa5bc5221dcd4d99d8268ed3fce9864"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-beforeCase/run.log",
+        "sha256": "6d8ebc23927c7a4f4083311a98bd9e023052db7b5b9b8c58c2b3a330bd46ce4f"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-beforeCase/final-lir.txt",
+        "sha256": "8f00478ba21b31a3b070e8d50118ca32b3afa1a3143e2ab20a4b2134b5c2c54d"
+      },
+      "highSnapshotSha256": "ce59f6a4a432be0cc62f6ebaf342a7de6e25811f74ed681f3c88739e936a223a",
+      "lowSnapshotSha256": "012decb8123e22441dd9ff680159e646ed402d106ddc5a2d8b540c6ef99b020c",
+      "check": "PASS entry=beforeCase backend=ast mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "mode": "inline",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 22,
+      "lowNodes": 97,
+      "highNodeCounts": {
+        "AddNode": 3,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 1,
+        "ConstantNode": 6,
+        "FrameState": 1,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 2,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 1
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 2,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 1
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-scalarControl/graphs/TruffleHotSpotCompilation-1888[lambda_x].bgv",
+        "sha256": "0a14695139893877c04607b8f4fea7bc6cf1cdde7aaf76052e1512223eafe972"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-scalarControl/graphs/TruffleHotSpotCompilation-1888[lambda_x].cfg",
+        "sha256": "9ab789e842e7b98b954d54162a52a1cf0c6deb814c6b945469678b1855f33bf9"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-scalarControl/run.log",
+        "sha256": "e1846cc1a5cfa9d6d0c4375858cf4edbbca9e101d595e2b01e59c580fd6a4077"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-scalarControl/final-lir.txt",
+        "sha256": "2bf52855bf768061a0df1ff1c868e49a2d5e36825dab5a25103c1a367b51f31c"
+      },
+      "highSnapshotSha256": "cff6176e9fb322d294af39db036b4bf9150d0d8a4aa2252a22d4701b02841313",
+      "lowSnapshotSha256": "689ce3665d338dedd067b80c82fd4c7077db1b0ad38aa231b19d9eeec56633fd",
+      "check": "PASS entry=scalarControl backend=ast mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "mode": "inline",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 33,
+      "lowNodes": 122,
+      "highNodeCounts": {
+        "AddNode": 4,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 1,
+        "ConstantNode": 7,
+        "FixedGuardNode": 1,
+        "FrameState": 1,
+        "IntegerEqualsNode": 1,
+        "LeftShiftNode": 2,
+        "LoadIndexedNode": 3,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 3
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1918[lambda_x,_y].bgv",
+        "sha256": "c4a97022fb0672568ebf960df6f9ad17d6e4d7094fcf356b64d2abd4470f39cc"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1918[lambda_x,_y].cfg",
+        "sha256": "4f0aba9cb345285ed4791f6febc5fa46db235cc0078d7e17e201854dbd5420c9"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-betweenInputs/run.log",
+        "sha256": "cb523d7c17d80cc5cf10b3230447979b7ba4b4bbef41a032a3277d9723848ebd"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-inline-betweenInputs/final-lir.txt",
+        "sha256": "b781d2e337605d3ce7464ef55fd06a1558cd8ee96608b339e9bb8c1f40f616e1"
+      },
+      "highSnapshotSha256": "c6a71ca0ef7e215a1248d5c19a94bbfbe7cd23e21b7791e5e556b97a5d7e8213",
+      "lowSnapshotSha256": "e546af7fe6608d3fd6e2f39d145d6a59346c72410b09093c1198b03d88d373c4",
+      "check": "PASS entry=betweenInputs backend=ast mode=inline nativeRows=7 arity=2 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "mode": "residual",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 66,
+      "lowNodes": 133,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 12,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "FrameState": 19,
+        "IntegerEqualsNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 2,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 3,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-beforeCase/graphs/TruffleHotSpotCompilation-1991[lambda_x].bgv",
+        "sha256": "dfd21a13cb1f6e3d63f3aee2a93e942ae53a13ed5e211f74f7c3c181def9a095"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-beforeCase/graphs/TruffleHotSpotCompilation-1991[lambda_x].cfg",
+        "sha256": "e496b67d58c4f0bf337c2ec399fa0ffa74584b520c2a58ee33dc5757e798b398"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-beforeCase/run.log",
+        "sha256": "b95cf9a6e7295919707d5261fd83b332076c1f3905fb7ba415b0e545aff75f57"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-beforeCase/final-lir.txt",
+        "sha256": "4cb6f54ac63fffca1f6ae2928223f554905e72df6510e6744303d3f7936801c7"
+      },
+      "highSnapshotSha256": "43e4aa4bba3584e168d29327b5426cec64a254d2206ab6c8865a197d2d38d1e2",
+      "lowSnapshotSha256": "89c015aeefc15bfe82da8a91dc60b8618d5a1d2beec73e97d85e5b27cd63a8c2",
+      "check": "PASS entry=beforeCase backend=ast mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "mode": "residual",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 78,
+      "lowNodes": 258,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$AllocatingBoxNode": 3,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 16,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FrameState": 22,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 5,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 3,
+        "TlabEnd": 3,
+        "TlabTop": 6,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-scalarControl/graphs/TruffleHotSpotCompilation-1996[lambda_x].bgv",
+        "sha256": "f7d3551f4b3bbf5d2a5a58b10698679046abd4f5b8086e753f50adceebb566c0"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-scalarControl/graphs/TruffleHotSpotCompilation-1996[lambda_x].cfg",
+        "sha256": "4ceba3cb0445ee58df76355c93f22329a99f607f990ff4c93ddf3b409a6dd3ec"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-scalarControl/run.log",
+        "sha256": "c5f81af9abf3da23c3eeed303dfe28a9b2d7894b4e4eb4e627e9e8296545c4a2"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-scalarControl/final-lir.txt",
+        "sha256": "c1837d038c13adc792cf90975682dfe64f8e1800608922f8aebeaacc9a92d657"
+      },
+      "highSnapshotSha256": "1b97ad34ff0678a971a18c71c3ce9d74d062777190396895371b4feb5b0773cf",
+      "lowSnapshotSha256": "9e687dc5ebf500e09e1b289a49a3b996b386f94ba56c31b06e27593814ca099f",
+      "check": "PASS entry=scalarControl backend=ast mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "mode": "residual",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 71,
+      "lowNodes": 140,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 13,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 1,
+        "FrameState": 19,
+        "IntegerEqualsNode": 1,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 3,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 5,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 4,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        3
+      ],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-betweenInputs/graphs/TruffleHotSpotCompilation-1991[lambda_x,_y].bgv",
+        "sha256": "17439a1fabe2406dee0ba3875b86857eae5c19488996e71352dc3ef3711d6d45"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-betweenInputs/graphs/TruffleHotSpotCompilation-1991[lambda_x,_y].cfg",
+        "sha256": "2616e7a9226e4953a0f462c3528a293b5de82cbd480d05967c9d419f1ce8e8ca"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-betweenInputs/run.log",
+        "sha256": "5ef605607256c60f713bb909b731de0ed66b04ccd0a48d47520461f47c388a72"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-ast-residual-betweenInputs/final-lir.txt",
+        "sha256": "dc9f9f7a79e325ab1b0612a6ac5d1d9ad44c1a5571d4b41aaa1cf2f9af63550d"
+      },
+      "highSnapshotSha256": "193bfe1910471002c0722cfe886a34562a536e8ff01dd1ce4693edc3b3ffd58b",
+      "lowSnapshotSha256": "3eb8d7f6ec58193f89a76d6573493780739eccc85a6b7a070f51f985d4e69360",
+      "check": "PASS entry=betweenInputs backend=ast mode=residual nativeRows=7 arity=2 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 54,
+      "lowNodes": 143,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "AndNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "ConstantNode": 14,
+        "FixedGuardNode": 2,
+        "FrameState": 6,
+        "IntegerEqualsNode": 2,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 3,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 4,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-beforeCase/graphs/TruffleHotSpotCompilation-1881[lambda_x].bgv",
+        "sha256": "46239dc8ad9b818c39e1f506b9e80390db61f214b14e6a196017b9a7dbed7858"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-beforeCase/graphs/TruffleHotSpotCompilation-1881[lambda_x].cfg",
+        "sha256": "8e139793a3a25ffda3f77811f1a71cc0a7b0d49371ba53723008cab1765f0b02"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-beforeCase/run.log",
+        "sha256": "9ea77ab5cfd07036f4828f5a68fa793674f5733b2ded68c0c0190c05f0fc928f"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-beforeCase/final-lir.txt",
+        "sha256": "f52dfe738daceb272e05e61f20c4d6afbc39484f2a33db4bd8305b66a28d70bb"
+      },
+      "highSnapshotSha256": "2021dc3867d8de4a28b7d540540728a236763e5fa9fe1a838e244d8762018f49",
+      "lowSnapshotSha256": "c5d707cab4dbd0706c9093101f961edecc869846101b364223a7c2898cf7b4c3",
+      "check": "PASS entry=beforeCase backend=bytecode mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 47,
+      "lowNodes": 120,
+      "highNodeCounts": {
+        "AddNode": 3,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "ConstantNode": 13,
+        "FrameState": 6,
+        "LeftShiftNode": 1,
+        "LoadIndexedNode": 2,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 3,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 1,
+        "VirtualArrayNode": 4,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 1
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-scalarControl/graphs/TruffleHotSpotCompilation-1837[lambda_x].bgv",
+        "sha256": "b6be91811ccc96326af7300b565a1d6f352dbab324f79c7e9bae1875e554877d"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-scalarControl/graphs/TruffleHotSpotCompilation-1837[lambda_x].cfg",
+        "sha256": "e0986feb73459786fa64dfbcfe7b60972c0a1172c0d82d0967148afc9c5d5653"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-scalarControl/run.log",
+        "sha256": "7ed8c117cf02745651eda9242ddfb96969a41f394f63503972551d80d9de11f5"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-scalarControl/final-lir.txt",
+        "sha256": "d6949207798ee907e4c079ac222bcd374b046d77a1eccd1ad28404a2845d41c4"
+      },
+      "highSnapshotSha256": "99d9a5b928423a91d6fef91af926cdbb2544c2d99d8ba98f68c4464493e2f729",
+      "lowSnapshotSha256": "4155bea46664ac35d8ddeeb1eb486e2ac75a43e0d0bbbe1e6565b15c0ff7a1a5",
+      "check": "PASS entry=scalarControl backend=bytecode mode=inline nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 62,
+      "lowNodes": 151,
+      "highNodeCounts": {
+        "AddNode": 4,
+        "AndNode": 1,
+        "BoxNode$AllocatingBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 3,
+        "ConstantNode": 15,
+        "FixedGuardNode": 2,
+        "FrameState": 6,
+        "IntegerEqualsNode": 2,
+        "LeftShiftNode": 2,
+        "LoadIndexedNode": 3,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 4,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 5
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "INIT_LOCATION": 1,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [],
+      "committedObjectPacketLengths": [],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1873[lambda_x,_y].bgv",
+        "sha256": "4000378eb696cff14d42dbb538e015d46f461850a162e8f2dc8d26fdfed11bdf"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-betweenInputs/graphs/TruffleHotSpotCompilation-1873[lambda_x,_y].cfg",
+        "sha256": "9d329cbd51b3e6412d219e67fc57c103cad3bd9aa22287522c7a8e1e194f7dcf"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-betweenInputs/run.log",
+        "sha256": "a4c2e048106665a1bd2a1a0f27e0badb1270bc8c13ab5de40a3a2d7fb1629b1a"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-inline-betweenInputs/final-lir.txt",
+        "sha256": "cd2d18ea3185c6d9da2242f9eff9ca56484820448067d4c5ca1ecd6231210ed7"
+      },
+      "highSnapshotSha256": "618a866d5d88444f8707d8f06031f269dc099d2ac12ecabb568cb8a979ba1963",
+      "lowSnapshotSha256": "5ec170c0a4a0c391555e14f975378939160beba21236916e0c228b2da544948d",
+      "check": "PASS entry=betweenInputs backend=bytecode mode=inline nativeRows=7 arity=2 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "mode": "residual",
+      "entry": "beforeCase",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 84,
+      "lowNodes": 156,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "AndNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 2,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 24,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 2,
+        "FrameState": 18,
+        "IntegerEqualsNode": 2,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 8
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 2,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 3,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-beforeCase/graphs/TruffleHotSpotCompilation-1996[lambda_x].bgv",
+        "sha256": "d37fa32778adf953f5f1740b2cd5017e04ab582a2991ee078c41c1b166c9287b"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-beforeCase/graphs/TruffleHotSpotCompilation-1996[lambda_x].cfg",
+        "sha256": "9aa2371d14f3a3f212be76145ab6cfa6fe427ac712188cd5ec326b04c5c7f849"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-beforeCase/run.log",
+        "sha256": "90977e5ca7f0c724156c83d06acfc9b5e6f3a764477dac78d6a8de9b81ba4b95"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-beforeCase/final-lir.txt",
+        "sha256": "3738306bdf3f66c643899afed4a5f8ea20b5d95475d05439efaf9df77e877cec"
+      },
+      "highSnapshotSha256": "80aa511a0c89d6490a807b23dcde3978c064be59451f0496fe1f268562a9a8a4",
+      "lowSnapshotSha256": "cc8a88127aa4b51e867e497c464ca92ebe142acc8167790a539f58428c8de67a",
+      "check": "PASS entry=beforeCase backend=bytecode mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "mode": "residual",
+      "entry": "scalarControl",
+      "nativeRows": 8,
+      "hostArity": 1,
+      "validAfterEveryRow": true,
+      "highNodes": 83,
+      "lowNodes": 258,
+      "highNodeCounts": {
+        "AddNode": 2,
+        "AllocatedObjectNode": 1,
+        "BeginNode": 1,
+        "BoxNode$AllocatingBoxNode": 3,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 24,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FrameState": 18,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 2,
+        "MethodCallTargetNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 4,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 2,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 7
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 4,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 5,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 3,
+        "TlabEnd": 3,
+        "TlabTop": 6,
+        "java.lang.Long.value": 2
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        2
+      ],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "28292b86d7eab31adcfc7173888f95dc7419ef6a0b9bd654af92dfe2c711b34b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-scalarControl/graphs/TruffleHotSpotCompilation-1973[lambda_x].bgv",
+        "sha256": "2cdfe9321ee9a740664be217adac8c7178f7ffffed5f8f029d38b8689e259a89"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-scalarControl/graphs/TruffleHotSpotCompilation-1973[lambda_x].cfg",
+        "sha256": "4266ce03bdec589c79d7f1348840d8681dcb8d335c4c0269fd08913718f15012"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-scalarControl/run.log",
+        "sha256": "51e28fc4306e9382bf6862ca95aed74988c8bb3f3989d415af1e69123990a881"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-scalarControl/final-lir.txt",
+        "sha256": "cbda4ed5599961e11eadb78b996e07002b901350cc7d6285c260f87490754ff3"
+      },
+      "highSnapshotSha256": "d71e341e1dbd4296732a8d5d973b2bf8b2c58747273cb9a29a51e2a67b6088ab",
+      "lowSnapshotSha256": "ec1bb999692974cce6fc05c93bb0ec34da5735db96c842202f9c7f11666e49cd",
+      "check": "PASS entry=scalarControl backend=bytecode mode=residual nativeRows=8 arity=1 validAfterEveryRow=true"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "mode": "residual",
+      "entry": "betweenInputs",
+      "nativeRows": 7,
+      "hostArity": 2,
+      "validAfterEveryRow": true,
+      "highNodes": 89,
+      "lowNodes": 163,
+      "highNodeCounts": {
+        "AllocatedObjectNode": 1,
+        "AndNode": 1,
+        "BeginNode": 1,
+        "BoxNode$TrustedBoxedValue": 3,
+        "CommitAllocationNode": 1,
+        "ConstantNode": 25,
+        "DeoptimizeNode": 1,
+        "ExceptionObjectNode": 1,
+        "FixedGuardNode": 2,
+        "FrameState": 18,
+        "IntegerEqualsNode": 2,
+        "InvokeWithExceptionNode": 1,
+        "LoadIndexedNode": 3,
+        "MethodCallTargetNode": 1,
+        "OrNode": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 5,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "TrufflePreserveFrameStateNode": 1,
+        "UnboxNode": 3,
+        "VirtualArrayNode": 5,
+        "VirtualInstanceNode": 1,
+        "VirtualObjectState": 8
+      },
+      "lowMemoryLocations": {
+        "Array: Object": 3,
+        "ExceptionOop": 2,
+        "ExceptionPc": 1,
+        "INIT_LOCATION": 4,
+        "JavaThread::_jvmci_reserved0": 1,
+        "MarkWord": 1,
+        "TlabEnd": 1,
+        "TlabTop": 2,
+        "java.lang.Long.value": 3
+      },
+      "guestCalls": [
+        "OptimizedCallTarget.callBoundary"
+      ],
+      "committedObjectPacketLengths": [
+        3
+      ],
+      "moduleSha256": "360bc2fd6b2ce8f9b49c2789364e199a24eed29cc66d2ed3c6329de550afb32d",
+      "oracleSha256": "3e7c319cd99a10bf3d34faf873b9ecc2ae4ccadbe527d2819e246ca2236eab5b",
+      "rawGraph": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-betweenInputs/graphs/TruffleHotSpotCompilation-2017[lambda_x,_y].bgv",
+        "sha256": "510dfe629d3442d7852c54e8a9dfac63ad6c1a14c2a223ef61c3dd1b37959591"
+      },
+      "rawCFG": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-betweenInputs/graphs/TruffleHotSpotCompilation-2017[lambda_x,_y].cfg",
+        "sha256": "88ed4d87a2e5a88c28d138b817c16a9a8426cbb5613bd2840bcd9654ead14b05"
+      },
+      "log": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-betweenInputs/run.log",
+        "sha256": "506dfd5b7c52907c5ee4e5106539a1585d0a7ebb1f06e189f4165d52eda44a10"
+      },
+      "finalLIR": {
+        "path": "/private/tmp/thc-empty-input-graphs-normalized/post-bytecode-residual-betweenInputs/final-lir.txt",
+        "sha256": "40f41981a47087660025816bf69509b8d4312c5c01b6d6fbb5a85132da0fad31"
+      },
+      "highSnapshotSha256": "4d79c56a27530d072cfc79e525a51617eb1d5904dd128d1b52d3634a3a4e75ac",
+      "lowSnapshotSha256": "202da06ecfe05b03a7b733752efa4d57b1be1a484648ebd914682b1b6527f019",
+      "check": "PASS entry=betweenInputs backend=bytecode mode=residual nativeRows=7 arity=2 validAfterEveryRow=true"
+    }
+  ],
+  "limitations": [
+    "Graph instrumentation is disabled; this harness checks native values and active target validity, not compiled-entry counters",
+    "Instrumented JVM tests separately require per-row compiled-entry increments",
+    "Incoming host Object[] arguments and final Long boxing remain",
+    "Residual calls use the regular Object[] ABI, not a multi-register machine-call ABI",
+    "Virtual frame/deoptimization metadata may remain without runtime materialization",
+    "Scalar control uses a non-tail call; empty beforeCase uses the existing tail-call protocol",
+    "AArch64 register allocation may spill; no timing/performance claim"
+  ]
+}

@@ -1,0 +1,119 @@
+=== pre-ast-inline-beforeCase: After FinalCodeAnalysisStage ===
+nr   24  <|@ instruction r0|QWORD = ADD (src1: r0|QWORD, src2: r0|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   26  <|@ instruction r3|QWORD = ADD a: r0|QWORD b: long[7|0x7] <|@ <|@
+nr   28  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[135|0x87] <|@ <|@
+nr   46  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  140  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@28f24eb3 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   66  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr   98  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== pre-ast-inline-scalarControl: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[1|0x1] <|@ <|@
+nr   10  <|@ instruction r0|QWORD = ADD (src1: r0|QWORD, src2: r0|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   12  <|@ instruction r1|QWORD = ADD a: r0|QWORD b: long[132|0x84] <|@ <|@
+nr   14  <|@ instruction r3|QWORD = ADD a: r0|QWORD b: long[4|0x4] <|@ <|@
+nr   32  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  132  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@2301ea07 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   58  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr   90  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== pre-ast-inline-betweenInputs: After FinalCodeAnalysisStage ===
+nr   30  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 2 <|@ <|@
+nr   32  <|@ instruction r0|QWORD = ADD (src1: r0|QWORD, src2: r0|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   34  <|@ instruction r0|QWORD = ADD (a: r0|QWORD, b: r1|QWORD) <|@ <|@
+nr   36  <|@ instruction r3|QWORD = ADD a: r0|QWORD b: long[11|0xb] <|@ <|@
+nr   38  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[139|0x8b] <|@ <|@
+nr   56  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  150  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@19dbd570 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   76  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr  108  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== pre-bytecode-inline-beforeCase: After FinalCodeAnalysisStage ===
+nr   48  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   50  <|@ instruction r3|QWORD = ADD a: r1|QWORD b: long[7|0x7] <|@ <|@
+nr   52  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[135|0x87] <|@ <|@
+nr   70  <|@ instruction r1|QWORD[.+] = ADD (src1: r3|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  178  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@1ba095e5 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   92  <|@ instruction r5|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr  130  <|@ instruction r4|QWORD = ADD (src1: r5|QWORD, src2: r4|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== pre-bytecode-inline-scalarControl: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[1|0x1] <|@ <|@
+nr   10  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   12  <|@ instruction r3|QWORD = ADD a: r1|QWORD b: long[132|0x84] <|@ <|@
+nr   14  <|@ instruction r4|QWORD = ADD a: r1|QWORD b: long[4|0x4] <|@ <|@
+nr   34  <|@ instruction r1|QWORD[.+] = ADD (src1: r3|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  146  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@286e5f98 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   60  <|@ instruction r5|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr   98  <|@ instruction r3|QWORD = ADD (src1: r5|QWORD, src2: r3|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== pre-bytecode-inline-betweenInputs: After FinalCodeAnalysisStage ===
+nr   58  <|@ instruction r4|QWORD = ADD (src1: r4|QWORD, src2: r4|QWORD) shiftType: LSL shiftAmt: 2 <|@ <|@
+nr   60  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   62  <|@ instruction r1|QWORD = ADD (a: r1|QWORD, b: r4|QWORD) <|@ <|@
+nr   64  <|@ instruction r4|QWORD = ADD a: r1|QWORD b: long[11|0xb] <|@ <|@
+nr   66  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[139|0x8b] <|@ <|@
+nr   84  <|@ instruction r1|QWORD[.+] = ADD (src1: r4|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  198  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@3813c4e1 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr  106  <|@ instruction r6|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr  148  <|@ instruction r5|QWORD = ADD (src1: r6|QWORD, src2: r5|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== post-ast-inline-beforeCase: After FinalCodeAnalysisStage ===
+nr   24  <|@ instruction r0|QWORD = ADD (src1: r0|QWORD, src2: r0|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   26  <|@ instruction r3|QWORD = ADD a: r0|QWORD b: long[7|0x7] <|@ <|@
+nr   28  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[135|0x87] <|@ <|@
+nr   46  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  140  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@77d9ab71 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   66  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr   98  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== post-ast-inline-scalarControl: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[1|0x1] <|@ <|@
+nr   10  <|@ instruction r0|QWORD = ADD (src1: r0|QWORD, src2: r0|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   12  <|@ instruction r1|QWORD = ADD a: r0|QWORD b: long[132|0x84] <|@ <|@
+nr   14  <|@ instruction r3|QWORD = ADD a: r0|QWORD b: long[4|0x4] <|@ <|@
+nr   32  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  132  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@12bb5cd4 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   58  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr   90  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== post-ast-inline-betweenInputs: After FinalCodeAnalysisStage ===
+nr   30  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 2 <|@ <|@
+nr   32  <|@ instruction r0|QWORD = ADD (src1: r0|QWORD, src2: r0|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   34  <|@ instruction r0|QWORD = ADD (a: r0|QWORD, b: r1|QWORD) <|@ <|@
+nr   36  <|@ instruction r3|QWORD = ADD a: r0|QWORD b: long[11|0xb] <|@ <|@
+nr   38  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[139|0x8b] <|@ <|@
+nr   56  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  150  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@33be0ea thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   76  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr  108  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== post-bytecode-inline-beforeCase: After FinalCodeAnalysisStage ===
+nr   48  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   50  <|@ instruction r3|QWORD = ADD a: r1|QWORD b: long[7|0x7] <|@ <|@
+nr   52  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[135|0x87] <|@ <|@
+nr   70  <|@ instruction r1|QWORD[.+] = ADD (src1: r3|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  178  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@27cc811e thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   92  <|@ instruction r5|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr  130  <|@ instruction r4|QWORD = ADD (src1: r5|QWORD, src2: r4|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== post-bytecode-inline-scalarControl: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[1|0x1] <|@ <|@
+nr   10  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   12  <|@ instruction r3|QWORD = ADD a: r1|QWORD b: long[132|0x84] <|@ <|@
+nr   14  <|@ instruction r4|QWORD = ADD a: r1|QWORD b: long[4|0x4] <|@ <|@
+nr   34  <|@ instruction r1|QWORD[.+] = ADD (src1: r3|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  146  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@483a2616 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   60  <|@ instruction r5|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr   98  <|@ instruction r3|QWORD = ADD (src1: r5|QWORD, src2: r3|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+
+=== post-bytecode-inline-betweenInputs: After FinalCodeAnalysisStage ===
+nr   58  <|@ instruction r4|QWORD = ADD (src1: r4|QWORD, src2: r4|QWORD) shiftType: LSL shiftAmt: 2 <|@ <|@
+nr   60  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   62  <|@ instruction r1|QWORD = ADD (a: r1|QWORD, b: r4|QWORD) <|@ <|@
+nr   64  <|@ instruction r4|QWORD = ADD a: r1|QWORD b: long[11|0xb] <|@ <|@
+nr   66  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[139|0x8b] <|@ <|@
+nr   84  <|@ instruction r1|QWORD[.+] = ADD (src1: r4|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  198  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@21268f8d thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr  106  <|@ instruction r6|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr  148  <|@ instruction r5|QWORD = ADD (src1: r6|QWORD, src2: r5|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
