@@ -27,8 +27,26 @@ separate-rounding witness belong to those tests, not these three finite graphs.
 The [x86-64 evidence](evidence-x86_64/evidence.json) records runtime source
 `41058d184c77596b9bfaf0f793924287f84a8f15`, Oracle GraalVM 25.3.4.1, and all
 12 successful captures on eak-quartus (Intel i9-12900K, AVX2). Final code uses
-physical XMM `VADDPS`, `VSUBPS`, and `VMULPS`. It does not establish SSE-only
-or AArch64 lowering, and makes no cross-device throughput claim.
+physical XMM `VADDPS`, `VSUBPS`, and `VMULPS`. That capture does not establish
+SSE-only lowering or make a cross-device throughput claim.
+
+The [AArch64 evidence](evidence-aarch64/evidence.json) records runtime source
+`792b7eaa42a0eaaae686172527d6c8f7fe670f97` and the same pinned GraalVM release.
+All twelve captures pass with physical `v0|V128_SINGLE` registers and packed
+`FADD`, `FSUB`, and `FMUL`. Both backends eliminate temporary vector carriers,
+lane boxes, field traffic and residual calls; the public Long result box remains.
+The five focused FloatX4 JVM tests also pass in each default and handoff run,
+requiring 8,784 positive per-input compiled-entry deltas in each configuration.
+These are focused test runs, separate from the full-suite results below.
+
+The AArch64 run consumes the exact x86 native oracle and pre/post-Tidy Core,
+with all sixteen source and seven artifact hashes verified before copying the
+inputs. The input archive has SHA-256
+`629ee9df95120099c8ae484242412159c24d6aa2114c2a8e9a73684fac690c71`.
+Its original native/input provenance is retained in the evidence. The native
+binary is retained only for its hash and is not executed on AArch64. This proves
+Graal's NEON lowering against those native results; it makes no native GHC
+AArch64 SIMD or throughput claim.
 
 Default and dense-handoff full suites each passed 355 tests across 72 suites,
 with zero failures, errors or skips. Each configuration separately requires

@@ -59,3 +59,10 @@ The [retained x86-64 graph checks](../bench/experiments/floatx4-foundation/READM
 pass all twelve pre/post-Tidy × backend × arithmetic captures with physical
 `VADDPS`/`VSUBPS`/`VMULPS`. Full default and handoff suites each pass 355 tests;
 the public scalar Long result box remains and is accounted for separately.
+
+The same twelve captures also pass on AArch64 using the identical x86 native
+oracle and exported Core. Final code contains packed 128-bit `FADD`, `FSUB`,
+and `FMUL`, with temporary vector/lane allocations eliminated. Five focused
+JVM tests pass in each default and handoff run, checking every native row's
+compiled guest entry on both backends and at both export stages. This verifies
+Graal's NEON lowering; it does not claim native GHC SIMD execution on AArch64.
