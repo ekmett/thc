@@ -116,6 +116,9 @@ public `UArray`/`STUArray` examples with native-endian, full-width values.
 [Double-array operations](docs/double-arrays.md) add typed floating storage,
 public Double arrays and native-checked bit movement through tuple-returning reads.
 
+Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
+while preserving lazy lifted elements and closures.
+
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 30 arithmetic/comparison/conversion primops, including square
 roots, checked against native GHC. Floating tuple results also execute genuine
