@@ -231,7 +231,7 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
 
 /** Residual calls return only the pooled completion token. The loop consumes it
  * directly in the caller frame, without storing a frame or carrier in a node. */
-private class TupleBounce(private val destination: TupleDestination, private val metrics: Metrics) : Node() {
+internal class TupleBounce(private val destination: TupleDestination, private val metrics: Metrics) : Node() {
     @Child private var call = IndirectCallNode.create()
     fun execute(frame: VirtualFrame, initial: TailCall) {
         var next = initial

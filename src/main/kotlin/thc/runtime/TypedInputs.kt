@@ -84,6 +84,10 @@ internal fun discardTypedInput(language: Language, input: HandoffStorage) {
 
 /** Compile-time source descriptors only: no activation frame or guest payload is retained. */
 internal abstract class InputSource(val layout: ArgumentLayout?) {
+    @field:CompilationFinal(dimensions = 1)
+    internal val physicalProofs = layout?.let { shape ->
+        (0 until shape.logicalArity).flatMap { ArgumentLayout.leaves(shape.proof(it)) }.toTypedArray()
+    }
     abstract fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long
     abstract fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float
     abstract fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double
@@ -117,9 +121,12 @@ internal class ScalarArrayInputSource(layout: ArgumentLayout?) : InputSource(lay
 
 internal class AstInputSource(layout: ArgumentLayout,
     @field:CompilationFinal(dimensions = 1) val slots: IntArray) : InputSource(layout) {
-    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = frame.getLong(slots[index])
-    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = frame.getFloat(slots[index])
-    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = frame.getDouble(slots[index])
+    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long =
+        if (frame.isLong(slots[index])) frame.getLong(slots[index]) else FrameAccess.read(frame, slots[index]) as? Long ?: fault("Expected primitive Long input")
+    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float =
+        if (frame.isFloat(slots[index])) frame.getFloat(slots[index]) else FrameAccess.read(frame, slots[index]) as? Float ?: fault("Expected primitive Float input")
+    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double =
+        if (frame.isDouble(slots[index])) frame.getDouble(slots[index]) else FrameAccess.read(frame, slots[index]) as? Double ?: fault("Expected primitive Double input")
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = FrameAccess.read(frame, slots[index])
     override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
         writeInputReference(frame, slots[index], value)
@@ -210,10 +217,13 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
     for (i in strictPositions) {
         val physical = input.logical.offset(i)
         if (i < prefixCount) {
-            val raw = function.typedSupplied?.let { input.prefix(prefixCount).getObject(it, physical) } ?: function.supplied[physical]
+            val supplied = function.typedSupplied
+            val raw = if (supplied != null) input.prefix(prefixCount).getObject(supplied, physical) else function.supplied[physical]
             overrides!![physical] = force.execute(frame, raw)
         } else {
             val position = ArgumentLayout.offset(source.layout, logicalOffset + i - prefixCount)
+            val actual = source.physicalProofs?.get(position)
+            if (actual?.isLong == true || actual?.isFloat == true || actual?.isDouble == true) continue
             source.setReference(frame, node, values, position, force.execute(frame, source.reference(frame, node, values, position)))
         }
     }
@@ -292,11 +302,12 @@ private class InputCallArm(private val source: InputSource, private val count: I
     @Child private var legacy = DirectCallerNode(target, metrics, prefixSize = prefixCount)
     @Child private var force = Force(metrics)
     @Child private var loop = TailCallLoop(metrics)
+    @Child private var tupleBounce: TupleBounce? = destination?.let { TupleBounce(it, metrics) }
     @Child private var remainder: InputDispatch? = if (arity < count)
         InputDispatch(source, count - arity, tail, metrics, destination, start + arity) else null
     init {
         ArgumentLayout.validate(root.inputLayout, prefixCount, source.layout, start, minOf(arity, count))
-        if (arity <= count) checkResult(root, destination, arity == count)
+        if (arity <= count) checkInputResult(root, destination, arity == count)
         if (metrics.enabled) metrics.directCacheMisses++
     }
     fun matches(function: Closure): Boolean = function.target === target && function.arity == arity &&
@@ -314,7 +325,11 @@ private class InputCallArm(private val source: InputSource, private val count: I
         } else {
             try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics, prefixCount, strictPositions) { packet ->
                 Calls.direct(direct, packet)
-            } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
+            } } catch (transfer: TailCall) {
+                if (isTail) throw transfer
+                if (tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
+                loop.execute(transfer)
+            }
         }
         if (arity < count) return remainder!!.execute(frame, requireClosure(force.execute(frame, result)), values)
         if (destination != null) { destination.consume(frame, this, result); return null }
@@ -328,6 +343,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
     @Child private var legacy = IndirectCallerNode(metrics)
     @Child private var force = Force(metrics)
     @Child private var loop = TailCallLoop(metrics)
+    @Child private var tupleBounce: TupleBounce? = destination?.let { TupleBounce(it, metrics) }
     fun execute(frame: VirtualFrame, initial: Closure, values: Array<Any?>?, initialOffset: Int = start): Any? {
         var function = initial
         var offset = initialOffset
@@ -337,23 +353,34 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             val root = target.rootNode as GuestRoot
             val input = root.typedInput
             val used = minOf(function.arity, remaining)
-            ArgumentLayout.validate(root.inputLayout, function.suppliedCount, source.layout, offset, used)
+            validateGenericInput(root, function.suppliedCount, source.layout, offset, used, destination, function.arity == remaining, function.arity > remaining)
             if (function.arity > remaining) {
                 if (destination != null) fault("Aggregate result application is under-saturated")
                 if (metrics.enabled) metrics.papAllocations++
-                return if (input != null) typedPap(function, input, source, frame, this, values, offset, remaining)
-                    else legacyPap(frame, this, function, source, values, offset, remaining)
+                return if (input != null) genericTypedPap(function, input, source, frame, this, values, count + start, offset, remaining)
+                    else legacyGenericPap(frame, this, function, source, values, count + start, offset, remaining)
             }
             val exact = function.arity == remaining
-            checkResult(root, destination, exact)
             val isTail = tail && exact
             val result = if (input == null) {
-                legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity), isTail)
+                legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity, count + start), isTail)
             } else {
                 if (metrics.enabled) metrics.indirectCalls++
-                try { callTypedInput(frame, this, function, input, source, values, offset, function.arity, force, isTail, metrics, function.suppliedCount, strictInputPositions(root, input)) { packet ->
-                    Calls.indirect(indirect, target, packet)
-                } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
+                try {
+                    val storage = prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force)
+                    val generation = storage.generation
+                    var transferred = false
+                    try {
+                        if (isTail) try { checkTypedTail(frame, this, target, storage, input.packet, metrics) }
+                        catch (transfer: TailCall) { transferred = transfer.input === storage; throw transfer }
+                        if (metrics.enabled) input.state().calls++
+                        Calls.indirect(indirect, target, arrayOf(storage))
+                    } finally { if (!transferred) releaseGenericInput(input, storage, generation) }
+                } catch (transfer: TailCall) {
+                    if (isTail) throw transfer
+                    if (tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
+                    loop.execute(transfer)
+                }
             }
             if (exact) {
                 if (destination != null) { destination.consume(frame, this, result); return null }
@@ -366,11 +393,11 @@ internal class GenericInputCall(private val source: InputSource, private val cou
 }
 
 @CompilerDirectives.TruffleBoundary
-private fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray =
+internal fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray =
     root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) &&
         input.packet.isObject(input.header + input.logical.offset(it)) }.toIntArray()
 
-private fun checkResult(root: GuestRoot, destination: TupleDestination?, exact: Boolean) {
+internal fun checkInputResult(root: GuestRoot, destination: TupleDestination?, exact: Boolean) {
     if (exact && destination == null && root.tupleResult != null)
         fault("Aggregate call target requires a typed result destination")
     if (exact && destination != null && root.tupleResult?.matches(destination.shape) != true)
@@ -408,9 +435,10 @@ private fun scalarValues(frame: VirtualFrame, node: Node, source: InputSource, v
     return result
 }
 private fun scalarPacket(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
-    values: Array<Any?>?, start: Int, count: Int): Array<Any?> {
+    values: Array<Any?>?, start: Int, count: Int, genericMaximum: Int = -1): Array<Any?> {
     check(function.typedSupplied == null)
-    val args = scalarValues(frame, node, source, values, start, count)
+    val args = if (genericMaximum >= 0) genericScalarValues(frame, node, source, values, genericMaximum, start, count)
+        else scalarValues(frame, node, source, values, start, count)
     val skip = if (function.environment == null) 1 else 2
     return arrayOfNulls<Any>(skip + function.supplied.size + args.size).also { packet ->
         if (function.environment != null) packet[1] = function.environment
@@ -421,6 +449,12 @@ private fun scalarPacket(frame: VirtualFrame, node: Node, function: Closure, sou
 private fun legacyPap(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
     values: Array<Any?>?, start: Int, count: Int): Closure {
     val args = scalarValues(frame, node, source, values, start, count)
+    return function.papCompact(args, 0, args.size, count)
+}
+
+private fun legacyGenericPap(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
+    values: Array<Any?>?, maximum: Int, offset: Int, count: Int): Closure {
+    val args = genericScalarValues(frame, node, source, values, maximum, offset, count)
     return function.papCompact(args, 0, args.size, count)
 }
 
