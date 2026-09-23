@@ -9,6 +9,7 @@
     "float",
     "double",
     "int",
+    "int16",
     "int32",
     "int64",
     "word64",
@@ -20,6 +21,10 @@
     "string-bytes"
   ],
   "integerLiteralRanges": {
+    "int16": [
+      -32768,
+      32767
+    ],
     "int32": [
       -2147483648,
       2147483647
@@ -383,7 +388,13 @@
     "indexFloatArray#": 2,
     "readWordArray#": 3,
     "writeWordArray#": 4,
-    "indexWordArray#": 2
+    "indexWordArray#": 2,
+    "readInt16Array#": 3,
+    "writeInt16Array#": 4,
+    "indexInt16Array#": 2,
+    "readWord16Array#": 3,
+    "writeWord16Array#": 4,
+    "indexWord16Array#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -1081,6 +1092,188 @@
       "result": {
         "kind": "void",
         "primReps": []
+      }
+    },
+    "readInt16Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Int16Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Int16Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeInt16Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Int16Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexInt16Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Int16Rep"
+        ]
+      }
+    },
+    "readWord16Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Word16Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word16Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord16Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word16Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord16Array#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Word16Rep"
+        ]
       }
     }
   },

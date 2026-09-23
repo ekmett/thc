@@ -50,6 +50,12 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     READ_DOUBLE("readDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_DOUBLE("writeDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("DoubleRep"), emptyList())),
     INDEX_DOUBLE("indexDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_INT16("readInt16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_INT16("writeInt16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int16Rep"), emptyList())),
+    INDEX_INT16("indexInt16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_WORD16("readWord16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_WORD16("writeWord16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word16Rep"), emptyList())),
+    INDEX_WORD16("indexWord16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_INT32("readInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_INT32("writeInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int32Rep"), emptyList())),
     INDEX_INT32("indexInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
@@ -74,6 +80,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             throw RuntimeFault("ByteArray primitive argument representation mismatch: $primitive")
         val payload = listOf(when (this) {
             READ_INT -> "IntRep"; READ_DOUBLE -> "DoubleRep"
+            READ_INT16 -> "Int16Rep"; READ_WORD16 -> "Word16Rep"
             READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"
             READ_FLOAT -> "FloatRep"; READ_WORD -> "WordRep"; else -> BYTE_ARRAY_REP
         })
@@ -81,8 +88,9 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY -> emptyList()
+            WRITE_INT16, WRITE_WORD16, WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY -> emptyList()
             SIZE, INDEX_INT -> listOf("IntRep")
+            INDEX_INT16 -> listOf("Int16Rep"); INDEX_WORD16 -> listOf("Word16Rep")
             INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
             INDEX_FLOAT -> listOf("FloatRep"); INDEX_WORD -> listOf("WordRep")
             INDEX_DOUBLE -> listOf("DoubleRep"); else -> listOf("Word8Rep")
@@ -111,6 +119,12 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.READ_FLOAT -> ReadFloatArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_FLOAT -> WriteFloatArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_FLOAT -> IndexFloatArrayExpression(operands[0], operands[1])
+        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> ReadInt16ArrayExpression(
+            operation == ByteArrayOp.READ_WORD16, operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16 -> WriteInt16ArrayExpression(
+            operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16 -> IndexInt16ArrayExpression(
+            operation == ByteArrayOp.INDEX_WORD16, operands[0], operands[1])
         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> ReadInt32ArrayExpression(
             operation == ByteArrayOp.READ_WORD32, operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> WriteInt32ArrayExpression(
@@ -262,6 +276,41 @@ private class IndexFloatArrayExpression(@field:Child private var array: Expr,
         val bytes = ManagedByteArray.require(array.execute(frame))
         val element = index.executeRequiredLong(frame)
         return ManagedFloatArray.read(bytes, element)
+    }
+}
+
+private class ReadInt16ArrayExpression(private val unsigned: Boolean,
+    @field:Child private var array: Expr, @field:Child private var index: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        val value = if (unsigned) ManagedInt16Array.readUnsigned(bytes, element) else ManagedInt16Array.readSigned(bytes, element)
+        FrameAccess.writeLong(frame, slots[offset], value)
+        return null
+    }
+}
+private class WriteInt16ArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var value: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        val integer = value.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedInt16Array.write(bytes, element, integer)
+        return Unit
+    }
+}
+private class IndexInt16ArrayExpression(private val unsigned: Boolean,
+    @field:Child private var array: Expr, @field:Child private var index: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        return if (unsigned) ManagedInt16Array.readUnsigned(bytes, element) else ManagedInt16Array.readSigned(bytes, element)
     }
 }
 
