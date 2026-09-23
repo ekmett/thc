@@ -361,6 +361,13 @@
     "plusInt32X4#": 2,
     "minusInt32X4#": 2,
     "negateInt32X4#": 1,
+    "packInt16X8#": 1,
+    "unpackInt16X8#": 1,
+    "broadcastInt16X8#": 1,
+    "plusInt16X8#": 2,
+    "minusInt16X8#": 2,
+    "negateInt16X8#": 1,
+    "timesInt16X8#": 2,
     "packFloatX4#": 1,
     "unpackFloatX4#": 1,
     "broadcastFloatX4#": 1,
@@ -430,6 +437,11 @@
     "unboxed-tuple"
   ],
   "vectorRepresentations": [
+    {
+      "lanes": 8,
+      "element": "Int16ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
     {
       "lanes": 2,
       "element": "Int64ElemRep",

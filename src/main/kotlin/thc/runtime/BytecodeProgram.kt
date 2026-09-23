@@ -757,7 +757,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
-                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
+                CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
@@ -1159,6 +1160,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operations16 -> vector16Primitive(name, operands)
         in CoreVectors.operationsDouble -> vectorDoublePrimitive(name, operands)
         in CoreVectors.operationsFloat -> vectorFloatPrimitive(name, operands)
         in CoreVectors.operations32 -> vector32Primitive(name, operands)
@@ -1185,6 +1187,34 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof)
+    }
+
+    private fun vector16Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackInt16X8#" -> tupleExpression(CoreVectors.unpacked16) { e, destination ->
+            e.builder.beginVector16Unpack(destination[0], destination[1], destination[2], destination[3],
+                destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endVector16Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packInt16X8#" -> {
+                    b.beginBlock()
+                    val lanes = List(8) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVector16Pack(); lanes.forEach(b::emitLoadLocal); b.endVector16Pack()
+                    b.endBlock()
+                }
+                "broadcastInt16X8#" -> { b.beginVector16Broadcast(); operands[0].emit(e); b.endVector16Broadcast() }
+                "negateInt16X8#" -> { b.beginVector16Negate(); operands[0].emit(e); b.endVector16Negate() }
+                else -> {
+                    val operation = when (name) { "plusInt16X8#" -> 0; "minusInt16X8#" -> 1; "timesInt16X8#" -> 2; else -> error("Invalid Int16X8 operation") }
+                    b.beginVector16Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVector16Binary()
+                }
+            }
+        }, CoreVectors.proof16)
     }
 
     private fun vector32Primitive(name: String, operands: List<Expression>): Expression = when (name) {

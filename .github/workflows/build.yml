@@ -104,6 +104,8 @@ jobs:
           assert proof['nativeRows'] == 2196 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           proof = json.loads(Path('build/simd-doublex2/provenance.json').read_text())
           assert proof['nativeRows'] == 3390 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-int16x8/provenance.json').read_text())
+          assert proof['nativeRows'] == 6032 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           PY
       - name: Test opt-in dense handoff
         env:
@@ -135,6 +137,7 @@ jobs:
           python3 scripts/test-core-vectors.py
           python3 scripts/test-floatx4-model.py
           python3 scripts/test-doublex2-model.py
+          python3 scripts/test-int16x8-model.py
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-arrays.py
           python3 scripts/test-address-fields.py
@@ -260,6 +263,7 @@ jobs:
             build/simd-int32x4/
             build/simd-floatx4/
             build/simd-doublex2/
+            build/simd-int16x8/
             build/signed-narrow-primops/manifest.json
             build/signed-narrow-primops/oracle.tsv
             build/signed-narrow-primops/*.audit.json

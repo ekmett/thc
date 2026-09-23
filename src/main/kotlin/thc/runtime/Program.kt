@@ -1253,7 +1253,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 TagToEnum(EnumFamily(ids.map { dataLayout(it).allocate() }.toTypedArray()), operand)
             } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
-                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
+                CoreVectors.validateFlags(flags)
                 val operands = args.map { compile(it, scope, false) }.toTypedArray()
                 when (name) {
                     "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })
@@ -1267,6 +1268,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "unpackFloatX4#" -> VectorFloatUnpack(operands[0])
                     in CoreVectors.operationsFloat -> VectorFloatOperation(name, operands)
                     in CoreVectors.operations32 -> Vector32Operation(name, operands)
+                    "packInt16X8#" -> Vector16Pack(operands[0], IntArray(8) { scope.layout.bind("<int16 vector lane $it>") })
+                    "unpackInt16X8#" -> Vector16Unpack(operands[0])
+                    in CoreVectors.operations16 -> Vector16Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import unittest
 from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_REP, VECTOR_FLOAT_REP, LANE_FLOAT_REP, TUPLE_FLOAT_REP, VECTOR_DOUBLE_REP, LANE_DOUBLE_REP, TUPLE_DOUBLE_REP, signature_matches
+from core_vectors import VECTOR16_REP, LANE16_REP, TUPLE16_REP, OPERATIONS, proof_error
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
 audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
@@ -21,6 +22,35 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def test_int16_exact_local_shape_and_signature_contracts(self):
+        m=fixture(); body=m['bindings'][0]['expr'][2]
+        body[1][1][1]='broadcastInt16X8#'
+        body[1][2][0]=['lit','int16','-32768',dict(rep=copy.deepcopy(LANE16_REP))]
+        body[1][6]['rep']=copy.deepcopy(VECTOR16_REP)
+        body[4]['binder']['rep']=copy.deepcopy(VECTOR16_REP)
+        self.assertTrue(run(m)['accepted'])
+        for flag in (True, None, 0, 'false'):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][3]=[flag]
+            self.assertFalse(run(bad)['accepted'],flag)
+        for wrong in (dict(LANE16_REP,kind='unknown'), LANE32_REP, LONG,
+                      dict(LANE16_REP,primReps=['Word16Rep'])):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2][0][3]['rep']=wrong
+            self.assertFalse(run(bad)['accepted'],wrong)
+            lanes=copy.deepcopy(TUPLE16_REP); lanes['components'][7]=wrong
+            self.assertFalse(signature_matches(TUPLE16_REP,lanes),wrong)
+        for wrong in (VECTOR_REP,VECTOR32_REP,TUPLE16_REP):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][6]['rep']=copy.deepcopy(wrong)
+            self.assertFalse(run(bad)['accepted'])
+        self.assertEqual(OPERATIONS['packInt16X8#'],([TUPLE16_REP],VECTOR16_REP))
+        self.assertEqual(OPERATIONS['unpackInt16X8#'],([VECTOR16_REP],TUPLE16_REP))
+        for name,(args,result) in OPERATIONS.items():
+            if 'Int16X8' in name:
+                self.assertEqual(CAP['primitives'][name],len(args))
+                self.assertTrue(signature_matches(result,result))
+        for lanes,element in ((4,'Int16ElemRep'),(8,'Word16ElemRep')):
+            bad=copy.deepcopy(VECTOR16_REP); bad['vector']=dict(lanes=lanes,element=element)
+            bad['primReps']=[f'VecRep {lanes} {element}']
+            self.assertIsNotNone(proof_error(bad))
     def test_double_local_shape_requires_exact_binary64_lanes(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastDoubleX2#'
@@ -46,6 +76,13 @@ class VectorAuditTest(unittest.TestCase):
         from doublex2_model import entries
         path=ROOT.parent/'build/simd-doublex2/pre-core/SimdDoubleX2.json'
         if not path.exists(): self.skipTest('Double SIMD Core export not generated')
+        m=json.loads(path.read_text())
+        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        self.assertFalse(run(m,'vectorArgument')['accepted'])
+    def test_real_int16_core_local_entries_and_formal_frontier(self):
+        from int16x8_model import entries
+        path=ROOT.parent/'build/simd-int16x8/pre-core/SimdInt16X8.json'
+        if not path.exists(): self.skipTest('Int16 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])

@@ -719,6 +719,8 @@ class Audit:
                 vector_operation = function[1] if function[0] == 'prim' and function[1] in VECTOR_OPERATIONS else None
                 if vector_operation:
                     expected, result = VECTOR_OPERATIONS[vector_operation]
+                    if not isinstance(flags, list) or len(flags) != len(arguments) or any(flag is not False for flag in flags):
+                        self.issue('vector-shape', owner, path, 'Vector primitive operands must be unlifted')
                     if len(arguments) != len(expected):
                         self.issue('vector-shape', owner, path, 'Vector primitive arity mismatch')
                     for index, (wanted, actual) in enumerate(zip(expected, arguments)):
