@@ -85,3 +85,14 @@ postcompile settling calls or retries. The suite is also run with dense handoff;
 result/argument slabs must be released without retained references. Native and
 static checks alone are not guest execution evidence. No throughput or
 allocation-elimination claim is made.
+
+Validation checkpoint (2026-09-23, eak-quartus x86_64, GHC 9.14.1,
+Oracle Graal 25.3.4.1): fresh complete fixture preparation and both full JVM
+suites pass, each with 378 tests in 79 suites and zero failures/errors/skips.
+Each handoff configuration checks 19,056 compiled invocations and exactly
+38,112 guest-root entries for this six-entry corpus. All 16 source and 24
+artifact fingerprints were rechecked after both runs. The seven independent
+model controls, eight ByteArray contract tests and 43 auditor tests also pass.
+Exact width/contracts, native models and compiled-target checks received
+independent source review; the reviewer independently reconstructed every native
+row. These results apply to runtime checkpoint `7912f6cebf073c07fc06765ba2fc8b6d54616e8a`.
