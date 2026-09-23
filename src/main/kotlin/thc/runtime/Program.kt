@@ -53,6 +53,13 @@ internal fun narrowWordLiteral(kind: String, value: String): Long {
         throw RuntimeFault("Invalid $kind literal: $value")
     return number
 }
+/** Int8 literals are canonical decimal signed 8-bit values, widened to Long. */
+internal fun int8Literal(value: String): Long {
+    val number = value.toLongOrNull()
+    if (number == null || number !in Byte.MIN_VALUE.toLong()..Byte.MAX_VALUE.toLong() || number.toString() != value)
+        throw RuntimeFault("Invalid int8 literal: $value")
+    return number
+}
 /** Int16 literals are canonical decimal signed 16-bit values, widened to Long. */
 internal fun int16Literal(value: String): Long {
     val number = value.toLongOrNull()
@@ -1177,6 +1184,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
         "int64" -> int64Literal(value)
@@ -1224,7 +1232,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> Literal(Unit)
         "lam" -> {
