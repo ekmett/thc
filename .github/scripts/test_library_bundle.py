@@ -6,6 +6,7 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -224,6 +225,20 @@ class LibraryBundleTest(unittest.TestCase):
         self.write_cases()
         with self.assertRaisesRegex(RuntimeError, "collides with verification receipt"):
             self.pack()
+
+    def test_fifo_runtime_or_cases_is_rejected_without_blocking(self):
+        for name in (bundle.LIB + "/extra.jar", bundle.CASES):
+            with self.subTest(name=name):
+                path = self.root / name
+                if path.exists():
+                    path.unlink()
+                os.mkfifo(path)
+                result = subprocess.run([sys.executable, bundle.__file__, "pack", "--output", str(self.archive)],
+                                        cwd=self.root, text=True, stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT, timeout=3)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("regular file", result.stdout)
+                path.unlink()
 
 
 if __name__ == "__main__":

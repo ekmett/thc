@@ -35,6 +35,7 @@ def digest_stream(stream):
 
 
 def digest(path):
+    require(path.is_file(), "Expected regular file: " + str(path))
     with path.open("rb") as stream:
         return digest_stream(stream)
 
@@ -58,6 +59,7 @@ def identity(root):
     require(host == os.environ["RUNNER_OS"] and arch == os.environ["RUNNER_ARCH"],
             "Runner OS/architecture does not match this host")
     release = Path(os.environ["JAVA_HOME"]) / "release"
+    require(release.is_file(), "JDK release is not a regular file")
     values = dict(line.split("=", 1) for line in release.read_text().splitlines() if "=" in line)
     require(values.get("GRAALVM_VERSION", "").strip('"') == "25.3.4.1"
             and values.get("JAVA_VERSION", "").strip('"').split(".")[0] == "25",
@@ -141,7 +143,9 @@ def check_files(root, hashes):
 
 def pack(root, output):
     build_identity = identity(root)
-    raw_cases = (root / CASES).read_bytes()
+    cases_path = file_path(root, CASES)
+    require(cases_path.is_file(), "Original cases manifest is not a regular file")
+    raw_cases = cases_path.read_bytes()
     cases = json.loads(raw_cases)
     jars = {}
     for path in sorted((root / LIB).iterdir()):
