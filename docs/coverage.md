@@ -59,6 +59,9 @@ signed/unsigned mismatch controls. There is no GHC unsigned vector negate primop
 The [Word16X8 foundation](word16x8.md) adds the corresponding six unsigned
 16-bit operations and 5,116 native/model rows. Word16 and Int16 proofs remain
 distinct; unpack widens all eight lanes to 0..65535 without changing vector ABIs.
+The [Word32X4 foundation](word32x4.md) adds six unsigned 32-bit operations and
+4,882 native/model rows. Four Word32 lanes retain distinct proofs from Int32,
+wrap modulo 2^32 and unpack to 0..4294967295; vector ABI limits remain unchanged.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

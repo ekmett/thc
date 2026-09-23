@@ -1,4 +1,4 @@
-# Local Word32X4 fixtures
+# Local Word32X4 vectors
 
 The bounded contract is exactly six pinned GHC 9.14.1 primitives:
 `packWord32X4#`, `unpackWord32X4#`, `broadcastWord32X4#`,
@@ -14,6 +14,21 @@ and low-32-bit multiplication. Unpacked lanes widen to 0..4,294,967,295;
 4,294,967,295 must not become -1. Vectors remain local: vector formals, function
 results, captures, heap fields and vector-containing tuple ABIs remain
 unsupported. Machine `Int#` inputs and scalar results require a 64-bit host.
+
+The runtime uses a distinct `Word32X4` carrier with four final primitive
+`int` fields: sixteen bytes of lane payload, not total object size. Transient
+`IntVector.SPECIES_128` values perform low-32-bit arithmetic. No vector object,
+payload array or lane box is stored in the carrier. Pack narrows four Long slots;
+both AST and bytecode unpack each field with `& 0xffff_ffffL`.
+
+Canonical Word32 literal and aggregate-aware guards are unchanged. JVM checks
+include 65,536 constructed samples covering each 16-bit half in every lane,
+independent Cartesian power-neighborhood pairs with a BigInteger product oracle,
+signedness mismatches, malformed literals and vector calling-frontier rejection.
+These samples do not exhaust the 32-bit value space. Native execution checks
+require exact per-call compiled guest-entry deltas, stable active target
+identities, valid last-tier code and empty argument/result pools. No retries,
+postcompile settling or compiler-limit changes are allowed.
 
 ## Genuine Core and independent observations
 
