@@ -65,8 +65,8 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
         fun flatten(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::flatten)
             ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
         fun compatible(left: CoreRepresentation, right: CoreRepresentation): Boolean = signature(left) == signature(right)
-        fun requireCompatible(expected: CoreRepresentation, actual: CoreRepresentation) {
-            if (actual.present && (expected.isTuple || actual.isTuple) && !compatible(expected, actual))
+        fun requireCompatible(expected: CoreRepresentation, actual: CoreRepresentation, component: Boolean = false) {
+            if (actual.present && (component || expected.isTuple || actual.isTuple) && !compatible(expected, actual))
                 throw RuntimeFault("Conflicting logical tuple representation proofs")
         }
         private fun signature(proof: CoreRepresentation): Any = if (proof.components != null)
