@@ -627,7 +627,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size) throw RuntimeFault("Tuple constructor arity mismatch")
                 val operands = args.mapIndexed { index, arg ->
-                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg))
+                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
                     if (shape.components[index].isTuple) compile(arg, scope, false)
                     else argument(arg, scope, flags[index] as? Boolean ?: throw UnsupportedCore("Unknown tuple field levity"))
                 }
@@ -870,7 +870,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val metadata = CoreRepresentations.alternativeBinders(alt)
             ids.forEachIndexed { index, id ->
                 val component = shape.components[index]
-                metadata.getOrNull(index)?.let { TupleShape.requireCompatible(component, CoreRepresentations.binder(it)) }
+                metadata.getOrNull(index)?.let { TupleShape.requireCompatible(component, CoreRepresentations.binder(it), component = true) }
                 val offset = shape.offsets[index]
                 val width = TupleShape.flatten(component).size
                 if (component.isTuple) scope.tuples[id] = component to fields.subList(offset, offset + width)

@@ -1029,7 +1029,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size)
                     throw RuntimeFault("Tuple constructor arity mismatch")
                 TupleConstruct(shape, args.mapIndexed { index, arg ->
-                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg))
+                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
                     if (shape.components[index].isTuple) compile(arg, scope, false)
                     else argument(arg, scope, flags[index] as? Boolean ?: throw UnsupportedCore("Unknown tuple field levity"))
                 }.toTypedArray())
@@ -1170,7 +1170,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             ids.forEachIndexed { index, id ->
                 val component = shape.components[index]
                 val raw = metadata.getOrNull(index)?.let(CoreRepresentations::binder) ?: component
-                TupleShape.requireCompatible(component, raw)
+                TupleShape.requireCompatible(component, raw, component = true)
                 val field = component.refine(raw)
                 val width = TupleShape.flatten(component).size
                 val offset = shape.offsets[index]

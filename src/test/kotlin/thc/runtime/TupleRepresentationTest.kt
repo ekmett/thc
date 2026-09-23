@@ -31,6 +31,8 @@ class TupleRepresentationTest {
             { m -> val p = map(map(map(list(expression(m, "tupleOutstanding")[2])[4])["binder"])["rep"]); val c = list(p["components"]); c[0] = wrap(c[0]) },
             { m -> val alt = list(list(list(expression(m, "tupleOutstanding")[2])[3])[0]); val b = map(list(map(alt[4])["binders"])[0]); b["rep"] = wrap(b["rep"]) },
             { m -> val app = list(expression(m, "pair")[2]); val con = list(app[1]); con[2] = 3L },
+            { m -> val app = list(expression(m, "pair")[2]); val arg = list(list(app[2])[0]); map(map(arg[6])["rep"])["primReps"] = listOf("WordRep") },
+            { m -> val alt = list(list(list(expression(m, "tupleOutstanding")[2])[3])[0]); val b = map(list(map(alt[4])["binders"])[0]); map(b["rep"])["primReps"] = listOf("WordRep") },
             { m -> val pair = expression(m, "pair"); val app = list(pair[2]); val p = map(map(app[6])["rep"]); list(p["components"])[0] = mutableMapOf("kind" to "unknown", "primReps" to listOf("IntRep"), "evaluated" to true) }
         )
         withLanguage { language ->

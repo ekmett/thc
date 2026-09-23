@@ -92,6 +92,9 @@ class TupleResultTest {
                         }
                     }
                     checkRows()
+                    // The shared host PIC becomes generic across these thirteen entries.
+                    // Warm every root through that settled ABI before compiling profiles.
+                    checkRows()
                     bindings.filter { (it["expr"] as List<*>)[0] == "lam" }.forEach {
                         compile(program.entryTarget(it["id"] as String), "$stage/$backend/${it["name"]}")
                     }
