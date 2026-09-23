@@ -161,7 +161,7 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: test-results-${{ runner.os }}
+          name: test-results-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/reports/tests/
             build/floating/core/
@@ -299,7 +299,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: library-results-${{ runner.os }}-${{ matrix.backend }}-handoff-${{ matrix.handoff }}
+          name: library-results-${{ runner.os }}-${{ matrix.backend }}-handoff-${{ matrix.handoff }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/library-transfer-verified.json
             build/libraries/check-*.log
