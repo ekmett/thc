@@ -130,7 +130,7 @@ def inventory(stage):
             check(expr[2][0] == 'var', f'{stage}/{name}: identity must remain constructor-free')
         report = audit_core.Audit([(str(path), module)], CAP).run([name])
         check(not report['accepted'], f'{stage}/{name}: aggregates must remain rejected')
-        check(any(i['code'] == 'aggregate-representation' for i in report['issues']),
+        check(any(i['code'] in ('aggregate-representation', 'aggregate-boundary') for i in report['issues']),
               f'{stage}/{name}: missing explicit aggregate rejection')
         check(not report['missingGlobals'], f'{stage}/{name}: unrelated missing globals')
         if name.endswith('Identity'):

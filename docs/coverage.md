@@ -135,18 +135,19 @@ Installed interfaces and sources remain unchanged.
 `map` and `filter` specialize/fuse into the tested pipeline; the test does not
 establish execution of separate library call targets with those names.
 
-Unboxed tuples and sums need an aggregate return convention. They remain
-outside the supported corpus. Exported representation evidence now preserves
-an explicit `aggregate` marker; physical register counts alone cannot distinguish
-an empty/singleton tuple from a state token/scalar. Strict loading rejects these
-boundaries even when there is no reachable constructor or the formal is unused.
-Diagnostic mode retains cold traps, including after compilation. Older exports
-without the marker should be regenerated.
+Exact unboxed tuple results now execute on both backends with scalar/reference
+inputs, including empty/singleton/nested results, lazy references, forwarding,
+PAPs and overapplication. The [result protocol](tuple-results.md) is independent
+of the optional input handoff experiment. Aggregate formal arguments, captures,
+ordinary let bindings, join parameters/results, sums, scalar void tuple components
+and unresolved layouts remain rejected, including unused and constructor-free
+boundaries. Physical register counts alone never establish an aggregate layout.
 
-The separate aggregate frontier retains genuine
-GHC producers, forwarders, multiple outstanding results, zero-width components,
-lazy payloads, cold alternatives and constructor-free identities. Its native
-results and rejection checks are reported separately from supported execution.
+The separate aggregate frontier reports three supported result-only entries and
+eight rejected entries at both native export stages. `TupleReturnAudit` supplies
+94 native rows for result-only boundary tests, including deep self/mutual tail
+calls. These semantic controls remain separate from the library corpus and
+provide no timing claim.
 
 Float/Double, Integer/Natural, mutable arrays, general IO and FFI remain major
 coverage work. The [coverage issue](https://github.com/ekmett/thc/issues/2) records concrete missing definitions and

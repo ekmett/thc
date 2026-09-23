@@ -1,9 +1,10 @@
 # Recursive aggregate representation evidence
 
 The exporter preserves logical unboxed tuple components and sum alternatives in
-addition to GHC 9.14.1's physical `primReps` vector. This is metadata groundwork:
-both runtime backends and the strict auditor still reject aggregate boundaries.
-These fixtures establish no aggregate execution support or benchmark claim.
+addition to GHC 9.14.1's physical `primReps` vector. Both runtime backends support
+[exact tuple results](tuple-results.md) with scalar/reference inputs. Aggregate
+arguments, joins, captures, sums and unresolved layouts remain explicit boundaries.
+The metadata fixtures below test these boundaries independently of execution.
 
 Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one
 `BoxedRep (Just Lifted)` carrier with ordinary `data` evidence. They have no

@@ -89,8 +89,12 @@ the suite; missing dependencies and unsupported constructs remain explicit.
 and `Data.IntSet` operations, bitmap primitives and unsigned word boundaries,
 checked against native GHC and independent models. `scripts/try-libraries.sh`
 runs those checks on both backends.
-The `Data.Set` example still stops at unboxed tuples and remaining cold-path
-dependencies; its native results are not counted as THC execution passes.
+Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
+scalar/reference inputs; aggregate arguments, joins, captures, sums and scalar
+void tuple components remain explicit boundaries.
+
+The `Data.Set` example remains a separate frontier until its full exported call
+graph passes; native results alone are not counted as THC execution passes.
 
 ## Where things stand
 

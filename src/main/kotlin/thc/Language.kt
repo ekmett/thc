@@ -129,12 +129,21 @@ class Language : TruffleLanguage<Language.State>() {
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
+        val selectedExpression = selected["expr"] as List<Any?>
+        val hostResultFault = try {
+            if (selectedExpression.firstOrNull() == "lam") thc.runtime.CoreRepresentations.requireScalar(
+                thc.runtime.CoreRepresentations.lambdaResult(selectedExpression), "host result")
+            null
+        } catch (gap: thc.runtime.UnsupportedCore) {
+            if (input["diagnosticUnsupported"] != true) throw gap
+            gap.message
+        }
         val program = when (val backend = input["backend"] ?: defaultBackend()) {
             "ast" -> Program(this, linked)
             "bytecode" -> BytecodeProgram(this, linked)
             else -> throw IllegalArgumentException("Unknown THC backend: $backend")
         }
-        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt())
+        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault)
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any = value
             override fun getName(): String = "THC load $entry"
@@ -143,12 +152,14 @@ class Language : TruffleLanguage<Language.State>() {
 }
 
 @ExportLibrary(InteropLibrary::class)
-class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int) : TruffleObject {
+class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int,
+                 private val hostResultFault: String? = null) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
     @ExportMessage fun isExecutable() = true
     @ExportMessage fun execute(arguments: Array<Any?>,
                                @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any? {
+        if (hostResultFault != null) throw thc.runtime.RuntimeFault("Diagnostic unsupported path reached: $hostResultFault")
         if (arguments.size != argumentCount) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
             throw IllegalArgumentException("Host kernel $entry expects $argumentCount arguments")

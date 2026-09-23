@@ -21,6 +21,7 @@ private object HandoffComplete
 open class HandoffStorage(val layout: HandoffLayout) {
     internal var generation = 0L
     internal var live = false
+    internal var completedGeneration = -1L
 }
 interface HandoffFactory { fun create(layout: HandoffLayout): HandoffStorage }
 
@@ -37,6 +38,7 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
     fun isLong(index: Int): Boolean = primitive[index]
     fun getLong(storage: HandoffStorage, index: Int): Long = fields[index].getLong(storage)
     fun getObject(storage: HandoffStorage, index: Int): Any? = fields[index].getObject(storage)
+    fun setObject(storage: HandoffStorage, index: Int, value: Any?) = fields[index].setObject(storage, value)
     fun setLong(storage: HandoffStorage, index: Int, value: Long) = fields[index].setLong(storage, value)
     @ExplodeLoop fun copyIn(storage: HandoffStorage, values: Array<Any?>) {
         check(values.size == fields.size)
@@ -105,6 +107,7 @@ internal class HandoffPool {
 
 internal class HandoffState {
     val arguments = HandoffPool()
+    val results = TupleResultPool()
     var pending: HandoffStorage? = null
     // Synchronous Long-only return register. Consume immediately after the completion token.
     var returnLong = 0L
@@ -141,7 +144,7 @@ internal class HandoffEntry(
         fun create(language: TruffleLanguage<*>?, layout: FrameLayout, argumentReps: List<CoreRepresentation>,
                    resultRep: CoreRepresentation, hasEnvironment: Boolean): HandoffEntry? {
             val thc = language as? Language ?: return null
-            if (!thc.handoffLayouts.enabled) return null
+            if (!thc.handoffLayouts.enabled || resultRep.isTuple) return null
             val resultReference = resultRep.primReps?.singleOrNull()?.startsWith("BoxedRep ") == true
             if (!resultRep.isLong && !resultReference) return null
             val reps = argumentReps.map { it.primReps?.singleOrNull() ?: return null }

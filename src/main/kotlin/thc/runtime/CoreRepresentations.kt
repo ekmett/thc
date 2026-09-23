@@ -8,8 +8,10 @@ internal data class CoreRepresentation(
     val kind: CoreKind,
     val evaluated: Boolean = false,
     val present: Boolean = false,
-    val primReps: List<String>? = null
+    val primReps: List<String>? = null,
+    val components: List<CoreRepresentation>? = null
 ) {
+    val isTuple: Boolean get() = components != null
     val isLong: Boolean get() = kind == CoreKind.LONG
     val isEvaluatedReference: Boolean get() = evaluated &&
         (kind == CoreKind.DATA || kind == CoreKind.CLOSURE || kind == CoreKind.ADDRESS)
@@ -21,6 +23,11 @@ internal data class CoreRepresentation(
         else -> null
     }
     fun refine(other: CoreRepresentation): CoreRepresentation {
+        if (isTuple && other.isTuple && !TupleShape.compatible(this, other))
+            throw RuntimeFault("Conflicting logical tuple representation proofs")
+        if (isTuple && other.present && !other.isTuple && other.kind != CoreKind.UNKNOWN ||
+            other.isTuple && present && !isTuple && kind != CoreKind.UNKNOWN)
+            throw RuntimeFault("Conflicting scalar and tuple representation proofs")
         val merged = when {
             kind == CoreKind.UNKNOWN -> other.kind
             other.kind == CoreKind.UNKNOWN || kind == other.kind -> kind
@@ -30,7 +37,7 @@ internal data class CoreRepresentation(
             else -> throw RuntimeFault("Conflicting Core representation proofs: $kind and ${other.kind}")
         }
         return CoreRepresentation(merged, evaluated || other.evaluated,
-            present || other.present, other.primReps ?: primReps)
+            present || other.present, other.primReps ?: primReps, other.components ?: components)
     }
     companion object { val UNKNOWN = CoreRepresentation(CoreKind.UNKNOWN) }
 }
@@ -38,20 +45,12 @@ internal data class CoreRepresentation(
 internal object CoreRepresentations {
     private val longs = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
         "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
-    private fun rejectAggregate(map: Map<*, *>) {
-        // This is logical type evidence, not an inference from physical width:
-        // empty and singleton tuples also require aggregate semantics.
-        if (map.containsKey("aggregate")) when (val aggregate = map["aggregate"]) {
-            "unboxed-tuple", "unboxed-sum" -> throw UnsupportedCore("Unsupported Core aggregate representation: $aggregate")
-            else -> throw RuntimeFault("Invalid Core aggregate representation: $aggregate")
-        }
-    }
-    /** Check reachable metadata before lowering can discard unused binders. */
+    /** Validate every retained proof, including cold branches and unused binders. */
     fun validateAggregates(bindings: List<Map<String, Any?>>) {
         fun visit(value: Any?) {
             when (value) {
                 is Map<*, *> -> value.forEach { (key, child) ->
-                    if (key in setOf("rep", "resultRep", "joinResultRep") && child is Map<*, *>) rejectAggregate(child)
+                    if (key in setOf("rep", "resultRep", "joinResultRep") && child is Map<*, *>) parse(child)
                     visit(child)
                 }
                 is List<*> -> value.forEach(::visit)
@@ -59,10 +58,19 @@ internal object CoreRepresentations {
         }
         visit(bindings)
     }
+    fun requireScalar(proof: CoreRepresentation, boundary: String) {
+        if (proof.isTuple) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple ($boundary)")
+    }
     fun parse(value: Any?): CoreRepresentation {
         if (value == null) return CoreRepresentation.UNKNOWN
         val map = value as? Map<String, Any?> ?: throw RuntimeFault("Invalid Core representation metadata")
-        rejectAggregate(map)
+        val components = when (val aggregate = map["aggregate"]) {
+            null -> null
+            "unboxed-sum" -> throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum")
+            "unboxed-tuple" -> (map["components"] as? List<*>)?.map(::parse)
+                ?: throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple lacks exact components")
+            else -> throw RuntimeFault("Invalid Core aggregate representation: $aggregate")
+        }
         val kind = when (map["kind"]) {
             "long" -> CoreKind.LONG; "address" -> CoreKind.ADDRESS; "void" -> CoreKind.VOID
             "data" -> CoreKind.DATA; "closure" -> CoreKind.CLOSURE; "object" -> CoreKind.OBJECT
@@ -83,7 +91,9 @@ internal object CoreRepresentations {
             (reps?.size != 1 || reps[0] !in setOf("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)", "BoxedRep Nothing")))
             throw RuntimeFault("Core reference proof lacks a single boxed representation")
         val evaluated = map["evaluated"] as? Boolean ?: throw RuntimeFault("Missing Core evaluatedness proof")
-        return CoreRepresentation(kind, evaluated, true, reps)
+        val proof = CoreRepresentation(kind, evaluated, true, reps, components)
+        if (components != null) TupleShape.validate(proof)
+        return proof
     }
     fun binder(binding: Map<String, Any?>): CoreRepresentation = parse(binding["rep"])
     fun metadata(expr: List<Any?>): Map<String, Any?>? {

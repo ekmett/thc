@@ -10,10 +10,11 @@ import thc.runtime.RuntimeFault
 import thc.runtime.UnsupportedCore
 import java.io.File
 
-/** An explicit unsupported frontier, never part of the supported native oracle corpus. */
+/** Result-only tuples execute; aggregate arguments and sums remain explicit boundaries. */
 class AggregateFrontierTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val constructors = listOf("tupleOutstanding", "tupleZeroLazy", "sumPayload", "sumZeroLazy", "coldTuple", "coldSum")
+    private val supported = setOf("tupleOutstanding", "tupleZeroLazy", "coldTuple")
     private val boundaries = mapOf("emptyIdentity" to "unboxed-tuple", "emptyDiscard" to "unboxed-tuple",
         "singletonIdentity" to "unboxed-tuple", "pairIdentity" to "unboxed-tuple", "sumIdentity" to "unboxed-sum")
     private fun exported(stage: String): Map<String, Any?> =
@@ -26,7 +27,7 @@ class AggregateFrontierTest {
         for (stage in listOf("aggregate-core", "aggregate-post-core")) {
             val module = exported(stage)
             for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-                for (entry in constructors + boundaries.keys) {
+                for (entry in (constructors - supported) + boundaries.keys) {
                     val error = assertThrows(PolyglotException::class.java) {
                         context.eval("thc", request(module, entry, backend))
                     }
@@ -63,7 +64,7 @@ class AggregateFrontierTest {
     @Test fun diagnosticModeKeepsColdAggregatePathsLazyAndTrapsWhenReached() {
         val module = exported("aggregate-core")
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-            for ((entry, expected) in listOf("coldTuple" to 5L, "coldSum" to -7L)) {
+            for ((entry, expected) in listOf("coldSum" to -7L)) {
                 val function = context.eval("thc", Json.stringify(mapOf("modules" to listOf(module),
                     "entry" to entry, "backend" to backend, "diagnosticUnsupported" to true)))
                 repeat(8) { assertEquals(expected, function.execute(0L).asLong()) }
@@ -99,7 +100,7 @@ class AggregateFrontierTest {
             assertEquals(CoreKind.UNKNOWN, CoreRepresentations.parse(proof).kind)
             for (aggregate in listOf("unboxed-tuple", "unboxed-sum")) {
                 val error = assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(proof + ("aggregate" to aggregate)) }
-                assertEquals("Unsupported Core aggregate representation: $aggregate", error.message)
+                assertTrue(error.message.orEmpty().startsWith("Unsupported Core aggregate representation: $aggregate"))
             }
             assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(proof + ("aggregate" to "guessed")) }
         }
