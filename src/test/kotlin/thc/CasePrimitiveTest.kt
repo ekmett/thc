@@ -119,7 +119,7 @@ class CasePrimitiveTest {
                 val hits = count(function, "thunkHits")
                 assertEquals(input * 4L + 2L, function.execute(input).asLong())
                 assertEquals(entered + 1L, evaluations(function, "shared"), "One evaluation despite two scrutinee demands")
-                assertEquals(hits + 1L, count(function, "thunkHits"), "The second case sees the same updated thunk")
+                assertEquals(hits, count(function, "thunkHits"), "The second case reads the answer written back to its local binding")
                 if (compiled) assertTrue(count(function, "compiledEntries") > compiledBefore,
                     "Repeated demand of a fresh shared thunk must keep entering installed code")
             }

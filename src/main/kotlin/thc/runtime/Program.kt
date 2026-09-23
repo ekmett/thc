@@ -39,7 +39,9 @@ internal class GlobalBinding(val name: String) {
         return value
     }
 }
-internal class Thunk(val target: RootCallTarget, var environment: CapturedFrame?) {
+internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
+    // Updated thunks retain only their answer (or memoized guest failure).
+    var target: RootCallTarget? = target
     var state = 0
     var value: Any? = null
 }
@@ -91,7 +93,7 @@ private class Literal(private val value: Any?) : Expr() {
     override fun execute(frame: VirtualFrame) = value
     override fun executeLong(frame: VirtualFrame) = RuntimeTypesGen.expectLong(value)
 }
-private class LocalRead(private val slot: Int) : Expr() {
+internal class LocalRead(private val slot: Int) : Expr() {
     override fun executeLong(frame: VirtualFrame): Long =
         if (frame.isLong(slot)) frame.getLong(slot) else super.executeLong(frame)
 
@@ -101,7 +103,19 @@ private class LocalRead(private val slot: Int) : Expr() {
         if (!value.initialized) fault("Recursive binding read before initialization")
         return value.value
     }
+
+    /** Recursive captures retain their cell identity until the whole group is published. */
+    fun writeForced(frame: VirtualFrame, original: Thunk, result: Any?) {
+        val binding = FrameAccess.read(frame, slot)
+        if (binding === original) FrameAccess.write(frame, slot, result)
+        else if (binding is RecCell) updateForcedCell(binding, original, result)
+    }
 }
+/** Replace only the successfully forced link; aliases may already have updated this cell. */
+internal fun updateForcedCell(cell: RecCell, original: Thunk, result: Any?) {
+    if (cell.initialized && cell.value === original) cell.value = result
+}
+
 private class GlobalRead(private val binding: GlobalBinding) : Expr() {
     override fun execute(frame: VirtualFrame) = binding.read()
 }
@@ -143,21 +157,23 @@ internal class Force(private val metrics: Metrics) : Node() {
                 1 -> { if (metrics.enabled) metrics.blackholes++; fault("Blackhole: cyclic thunk entered while evaluating") }
                 else -> {
                     val thunk = value
+                    val target = thunk.target ?: fault("Unevaluated thunk has no body")
                     thunk.state = 1
-                    if (metrics.enabled) { metrics.thunkEvaluations++; metrics.recordThunk(thunk.target.rootNode.name) }
                     try {
+                        if (metrics.enabled) { metrics.thunkEvaluations++; metrics.recordThunk(target.rootNode.name) }
                         val environment = thunk.environment
-                        val result = try { calls.call(thunk.target, environment) }
+                        val result = try { calls.call(target, environment) }
                         catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
                         if (result is Thunk) fault("Thunk target violated WHNF convention")
                         thunk.value = result
+                        thunk.target = null
                         thunk.environment = null
                         thunk.state = 2
                         value = result
                     } catch (e: GuestException) {
-                        thunk.value = e; thunk.environment = null; thunk.state = 3; throw e
+                        thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
                     } catch (e: RuntimeFault) {
-                        thunk.value = e; thunk.environment = null; thunk.state = 3; throw e
+                        thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
                     } catch (e: Throwable) {
                         thunk.value = null; thunk.state = 0; throw e
                     }
@@ -170,49 +186,55 @@ internal class Force(private val metrics: Metrics) : Node() {
 /** Typed execution widens per result kind; each fallback consumes the already evaluated value. */
 internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) : Expr() {
     @Child private var force = Force(metrics)
-    override fun execute(frame: VirtualFrame) = force.execute(frame, value.execute(frame))
+    private fun forceResult(frame: VirtualFrame, original: Any?): Any? {
+        val result = force.execute(frame, original)
+        // WHNF reads need no write. A failed force never reaches this point.
+        if (original is Thunk && value is LocalRead) (value as LocalRead).writeForced(frame, original, result)
+        return result
+    }
+    override fun execute(frame: VirtualFrame) = forceResult(frame, value.execute(frame))
     @CompilationFinal private var genericLong = false
     override fun executeLong(frame: VirtualFrame): Long {
-        if (genericLong) return RuntimeTypesGen.expectLong(force.execute(frame, value.execute(frame)))
+        if (genericLong) return RuntimeTypesGen.expectLong(forceResult(frame, value.execute(frame)))
         return try { value.executeLong(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
             // force its saved result without evaluating the child a second time.
             genericLong = true
-            RuntimeTypesGen.expectLong(force.execute(frame, unexpected.result))
+            RuntimeTypesGen.expectLong(forceResult(frame, unexpected.result))
         }
     }
     @CompilationFinal private var genericClosure = false
     override fun executeClosure(frame: VirtualFrame): Closure {
-        if (genericClosure) return RuntimeTypesGen.expectClosure(force.execute(frame, value.execute(frame)))
+        if (genericClosure) return RuntimeTypesGen.expectClosure(forceResult(frame, value.execute(frame)))
         return try { value.executeClosure(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
             // force its saved result without evaluating the child a second time.
             genericClosure = true
-            RuntimeTypesGen.expectClosure(force.execute(frame, unexpected.result))
+            RuntimeTypesGen.expectClosure(forceResult(frame, unexpected.result))
         }
     }
     @CompilationFinal private var genericDataValue = false
     override fun executeDataValue(frame: VirtualFrame): DataValue {
-        if (genericDataValue) return RuntimeTypesGen.expectDataValue(force.execute(frame, value.execute(frame)))
+        if (genericDataValue) return RuntimeTypesGen.expectDataValue(forceResult(frame, value.execute(frame)))
         return try { value.executeDataValue(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
             // force its saved result without evaluating the child a second time.
             genericDataValue = true
-            RuntimeTypesGen.expectDataValue(force.execute(frame, unexpected.result))
+            RuntimeTypesGen.expectDataValue(forceResult(frame, unexpected.result))
         }
     }
     @CompilationFinal private var genericAddress = false
     override fun executeAddress(frame: VirtualFrame): LiteralAddress {
-        if (genericAddress) return RuntimeTypesGen.expectLiteralAddress(force.execute(frame, value.execute(frame)))
+        if (genericAddress) return RuntimeTypesGen.expectLiteralAddress(forceResult(frame, value.execute(frame)))
         return try { value.executeAddress(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
             // force its saved result without evaluating the child a second time.
             genericAddress = true
-            RuntimeTypesGen.expectLiteralAddress(force.execute(frame, unexpected.result))
+            RuntimeTypesGen.expectLiteralAddress(forceResult(frame, unexpected.result))
         }
     }
 }
@@ -557,7 +579,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
         while (value is Thunk && value.state == 2) value = value.value
-        return when (value) { is Closure -> value.target; is Thunk -> value.target; else -> hostEntryTarget(0) }
+        return when (value) { is Closure -> value.target; is Thunk -> value.target ?: hostEntryTarget(0); else -> hostEntryTarget(0) }
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
         "backend" to "ast", "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),

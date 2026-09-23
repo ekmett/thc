@@ -42,6 +42,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         var continueLabel: BytecodeLabel? = null
     }
     private fun interface Expression { fun emit(emission: Emission) }
+    private class LocalExpression(val local: Local, val resolve: Boolean) : Expression {
+        override fun emit(emission: Emission) {
+            val b = emission.builder
+            if (resolve) b.beginReadCellIfNeeded()
+            b.emitLoadLocal(emission.locals.getValue(local.id))
+            if (resolve) b.endReadCellIfNeeded()
+        }
+    }
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
@@ -75,7 +83,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
         while (value is Thunk && value.state == 2) value = value.value
-        return when (value) { is Closure -> value.target; is Thunk -> value.target; else -> hostEntryTarget(0) }
+        return when (value) { is Closure -> value.target; is Thunk -> value.target ?: hostEntryTarget(0); else -> hostEntryTarget(0) }
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
         "backend" to "bytecode", "bytecodeRootCount" to roots.size,
@@ -156,9 +164,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 e.continueLabel = b.createLabel()
             }
             b.beginReturn()
-            if (forceResult) b.beginForceValue(metrics)
-            body.emit(e)
-            if (forceResult) b.endForceValue()
+            if (forceResult) force(body).emit(e) else body.emit(e)
             b.endReturn()
             if (context.mayLoop) {
                 b.emitLabel(e.continueLabel!!)
@@ -176,13 +182,17 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return root.callTarget
     }
 
-    private fun read(local: Local, resolve: Boolean = true) = Expression { e ->
-        if (resolve) e.builder.beginReadCellIfNeeded()
-        e.builder.emitLoadLocal(e.locals.getValue(local.id))
-        if (resolve) e.builder.endReadCellIfNeeded()
-    }
+    private fun read(local: Local, resolve: Boolean = true): Expression = LocalExpression(local, resolve)
     private fun force(value: Expression) = Expression { e ->
-        e.builder.beginForceValue(metrics); value.emit(e); e.builder.endForceValue()
+        val b = e.builder
+        if (value is LocalExpression && value.resolve) {
+            val local = e.locals.getValue(value.local.id)
+            b.beginForceLocal(metrics, local)
+            b.emitLoadLocal(local)
+            b.endForceLocal()
+        } else {
+            b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+        }
     }
     private fun requireClosure(value: Expression) = Expression { e ->
         e.builder.beginRequireClosure(); force(value).emit(e); e.builder.endRequireClosure()

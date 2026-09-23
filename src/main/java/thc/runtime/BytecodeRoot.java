@@ -4,6 +4,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.bytecode.BytecodeRootNode;
+import com.oracle.truffle.api.bytecode.BytecodeNode;
+import com.oracle.truffle.api.bytecode.LocalAccessor;
 import com.oracle.truffle.api.bytecode.ConstantOperand;
 import com.oracle.truffle.api.bytecode.GenerateBytecode;
 import com.oracle.truffle.api.bytecode.Operation;
@@ -140,6 +142,36 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Object force(VirtualFrame frame, Metrics metrics, Object value,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
             return force.execute(frame, value);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** A successful force updates this activation's mutable binding, not its final capture property. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class ForceLocal {
+        @Specialization public static long number(Metrics metrics, LocalAccessor local, long value) { return value; }
+        @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean value) { return value; }
+        @Specialization(replaces = {"number", "bool"})
+        public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, Object binding,
+                @Bind("$node") Node node,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            Object original = ReadCellIfNeeded.read(binding);
+            Object result = force.execute(frame, original);
+            if (original instanceof Thunk thunk) {
+                if (binding instanceof RecCell cell) {
+                    ProgramKt.updateForcedCell(cell, thunk, result);
+                } else {
+                    BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+                    if (local.getObject(bytecode, frame) == thunk) {
+                        if (result instanceof Long number) local.setLong(bytecode, frame, number);
+                        else if (result instanceof Boolean bool) local.setBoolean(bytecode, frame, bool);
+                        else local.setObject(bytecode, frame, result);
+                    }
+                }
+            }
+            return result;
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
