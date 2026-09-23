@@ -56,13 +56,15 @@ used the current generated GHC fixtures, independently of the archived
 experiment's test outputs.
 
 After selecting the pinned GHC 9.14.1 and GraalVM 25.3.4.1 toolchains, regenerate
-fixtures and run both configurations. `--rerun-tasks` is intentional: changing
-an external JVM property must not reuse another configuration's test result.
+fixtures and run both configurations. The handoff command uses task-specific
+`test --rerun`: changing an external JVM property must rerun the tests, while
+unchanged compilation tasks can remain up to date. `JAVA_TOOL_OPTIONS` is
+inherited by the forked test JVM.
 
 ```sh
 scripts/prepare-tests.sh
 scripts/gradle.sh --no-daemon test --rerun-tasks
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon test --rerun-tasks
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon test --rerun
 ```
 
 No new benchmarks or rollout decision accompany this integration. The frozen
