@@ -26,6 +26,31 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def test_int32_multiply_requires_two_exact_signed_vectors(self):
+        m=fixture(); body=m['bindings'][0]['expr'][2]
+        def broadcast(value):
+            return ['app',['prim','broadcastInt32X4#',dict(rep=CLOSURE)],
+                    [['lit','int32',str(value),dict(rep=LANE32_REP)]],[False],False,True,
+                    dict(rep=copy.deepcopy(VECTOR32_REP))]
+        body[1]=['app',['prim','timesInt32X4#',dict(rep=CLOSURE)],
+                 [broadcast(-2147483648),broadcast(-1)],[False,False],False,True,
+                 dict(rep=copy.deepcopy(VECTOR32_REP))]
+        body[4]['binder']['rep']=copy.deepcopy(VECTOR32_REP)
+        self.assertTrue(run(m)['accepted'])
+        self.assertEqual(CAP['primitives']['timesInt32X4#'],2)
+        self.assertEqual(OPERATIONS['timesInt32X4#'],([VECTOR32_REP,VECTOR32_REP],VECTOR32_REP))
+        for position in range(2):
+            for wrong in (VECTOR_WORD32_REP,VECTOR16_REP,VECTOR_REP):
+                bad=copy.deepcopy(m)
+                bad['bindings'][0]['expr'][2][1][2][position][-1]['rep']=copy.deepcopy(wrong)
+                self.assertFalse(run(bad)['accepted'])
+        for flag in (True,None,0,'false'):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][3]=[False,flag]
+            self.assertFalse(run(bad)['accepted'])
+        bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2].pop()
+        self.assertFalse(run(bad)['accepted'])
+        bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][-1]['rep']=copy.deepcopy(VECTOR_WORD32_REP)
+        self.assertFalse(run(bad)['accepted'])
     def test_word32_shape_and_unsigned_identity_are_independent_of_storage(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastWord32X4#'
