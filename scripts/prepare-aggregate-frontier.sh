@@ -14,3 +14,4 @@ mkdir -p build/aggregate-native
   -o build/aggregate-native/aggregate-frontier compiler/test-fixtures/AggregateFrontierNative.hs
 build/aggregate-native/aggregate-frontier > build/aggregate-native/oracle.tsv
 python3 scripts/check-aggregate-frontier.py
+python3 scripts/check-aggregate-layout.py --prepare
