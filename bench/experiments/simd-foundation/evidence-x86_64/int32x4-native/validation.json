@@ -1,0 +1,19 @@
+{
+  "sourceCommit": "090035f08b396502277d12739d766c431e69424e",
+  "host": "eak-quartus",
+  "architecture": "x86_64",
+  "nativeRows": 243,
+  "entryRows": {
+    "vectorCase": 81,
+    "subtractCase": 81,
+    "branchCase": 81
+  },
+  "stages": [
+    "pre",
+    "post"
+  ],
+  "sourceHashChecks": 8,
+  "artifactHashChecks": 3,
+  "allHashesMatch": true,
+  "runtimeSupportValidated": false
+}
