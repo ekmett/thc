@@ -110,6 +110,7 @@
     "==#": 2,
     "eqWord#": 2,
     "eqChar#": 2,
+    "reallyUnsafePtrEquality#": 2,
     "/=#": 2,
     "neWord#": 2,
     "neChar#": 2,

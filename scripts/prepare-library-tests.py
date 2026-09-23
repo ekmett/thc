@@ -213,9 +213,10 @@ def main():
             violations.append(group['id'] + ': required IntSet word primitives disappeared from reachable Core')
         if group['id'] == 'set':
             frontier = {(issue['code'], issue['detail']) for issue in audit['issues']}
-            if not {('aggregate-representation', 'unboxed-tuple'),
-                    ('unsupported-primitive', 'reallyUnsafePtrEquality#')} <= frontier:
-                violations.append('set: expected aggregate/pointer-identity frontier changed; review coverage')
+            if ('aggregate-representation', 'unboxed-tuple') not in frontier:
+                violations.append('set: expected aggregate frontier changed; review coverage')
+            if 'reallyUnsafePtrEquality#' not in primitives:
+                violations.append('set: required pointer-identity primitive disappeared from reachable Core')
             if any(item['id'].startswith('main:') for item in audit['missingGlobals']):
                 violations.append('set: source-library definitions must resolve at the post-Tidy boundary')
         group['audit'] = str(audit_path)

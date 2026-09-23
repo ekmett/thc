@@ -15,14 +15,20 @@ independent Python set model for all 1,041 inputs from -16 through 1024.
 This is **not currently an executable THC coverage claim**. Its strict reachable
 audit exposes these gaps:
 
-- `reallyUnsafePtrEquality#` is used by insertion, deletion, union and intersection.
 - Deletion reaches unboxed pairs through `glue` and min/max extraction workers.
   Union/difference use pairs in split workers; intersection uses triples in
   `splitMember`. These must retain their unboxed representation when supported.
 - Existing cold exception paths additionally reach `readMutVar#` and missing
   exception-construction, backtrace and call-stack bindings.
 
-The current post-Tidy source export has 71 reachable bindings, three missing
+Insertion, deletion, union and intersection retain the real
+`reallyUnsafePtrEquality#` primitive. It is now supported on both backends as
+non-strict reference identity, without following thunk indirections. Separate
+native-oracle fixtures test identity shortcuts with valid value-based fallbacks;
+they do not require GHC and THC to make identical allocation choices. This does
+not make the Set workload executable while its aggregate and cold-path gaps remain.
+
+The initial post-Tidy source export had 71 reachable bindings, three missing
 boot-library definitions and 210 capability issues, including 101 explicit
 aggregate-representation diagnostics. The original pre-Tidy export also missed
 the actual identity of `main:Data.Set.Internal.merge_$smerge1`; the post-Tidy

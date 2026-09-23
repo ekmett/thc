@@ -6,8 +6,8 @@ repeatable answer against native GHC, across both executable backends.
 
 Run `scripts/try.sh` from a fresh checkout. It builds the exporter, prepares the
 native oracles and runs the JVM tests. The additional corpus is described in
-[`examples/coverage.json`](../examples/coverage.json); it currently has 24 entries
-and 458 distinct entry/input pairs, alongside the original fixtures and Map.
+[`examples/coverage.json`](../examples/coverage.json); it currently has 26 entries
+and 484 distinct entry/input pairs, alongside the original fixtures and Map.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
@@ -18,6 +18,7 @@ and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
 | Group | What it exercises |
 |---|---|
 | Lists | Composed map/filter, Prelude append and reverse from original GHC sources, unused bottom heads/tails, productive streams, a dynamic cyclic spine, two consumers sharing a list |
+| Pointers | Non-strict reference-identity shortcuts with value-based equality fallbacks and untouched bottom-valued payloads |
 | Functions | Lists of captured closures, genuine overapplication, reused partial application with an unused bottom argument, a shared thunk captured by an escaping closure |
 | Trees | Three constructor layouts, recursive construction/folds, a captured higher-order map, selective traversal past bottom, shared subtrees |
 | Narrow integers | Ordinary `Data.Int` conversions, truncation/sign extension and unpacked `Int8Rep`/`Int16Rep`/`Int32Rep` fields |
@@ -150,3 +151,26 @@ results and rejection checks are reported separately from supported execution.
 Float/Double, Integer/Natural, mutable arrays, general IO and FFI remain major
 coverage work. The [coverage issue](https://github.com/ekmett/thc/issues/2) records concrete missing definitions and
 primops exposed by new programs.
+
+## Pointer identity
+
+`reallyUnsafePtrEquality#` compares the two current object references and returns
+an `Int#` represented by a JVM `long` containing zero or one. It does not force
+either lifted operand, compare fields, or follow an updated thunk's result.
+This follows GHC 9.14.1's [pointer comparison contract](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/Builtin/primops.txt.pp#L3618)
+and [direct Cmm pointer comparison](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/Prim.hs).
+
+The native corpus tests a sound identity shortcut followed by key equality when
+references differ. Its values therefore agree even when native GHC and the JVM
+allocate or share differently. Structural checks require the primitive to remain
+the first branch condition with two lifted operands, non-strict demand metadata,
+an `IntRep` result, and an intact fallback. A second fixture retains irrelevant
+bottom-valued payloads on both objects.
+
+Separate runtime controls cover same and distinct heap objects, objects whose
+host `equals` methods agree, bottom thunks on either side, updated thunk aliases,
+and full-width arithmetic on both outcomes. They check local forwarding before
+and after each alias is forced, selective forcing only in a chosen fallback,
+installed compiled execution, and strict arity rejection. These are identity
+controls, not cross-runtime allocation-identity claims. Set remains outside the
+supported execution corpus until its tuple and remaining cold paths are supported.

@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 
 
-FUNCTIONAL_GROUPS = ("lists", "functions", "trees")
+FUNCTIONAL_GROUPS = ("lists", "functions", "trees", "pointers")
 STRUCTURE_GROUPS = FUNCTIONAL_GROUPS + ("narrow-words",)
 LIST_CON = "ghc-internal:GHC.Internal.Types.:"
 
@@ -360,6 +360,33 @@ class CorpusChecks:
         self.fact("sharedUnpackedUnsignedRecords", entry=entry["id"], binding=records["id"],
                   consumers=2, constructor=sample["id"], fieldReps=expected)
 
+    def pointer_identity(self):
+        binding = self.binding("pointers", "sameKey")
+        parameters, body = lambda_parts(binding, 2)
+        require(body[0] == "case", "sameKey must branch on pointer equality before its fallback")
+        comparison = body[1]
+        require(comparison[0] == "app" and comparison[1][:2] == ["prim", "reallyUnsafePtrEquality#"],
+                "sameKey must retain the genuine pointer-equality primop")
+        require(comparison[3] == [True, True] and
+                [arg[:2] for arg in comparison[2]] == [["var", p["id"]] for p in parameters],
+                "Pointer equality must receive the two untouched lifted operands")
+        metadata = comparison[6]
+        require(metadata["callDemand"] == {"arity": 2, "strictArgs": [False, False]} and
+                metadata["rep"]["primReps"] == ["IntRep"],
+                "Pointer equality must retain GHC's non-strict argument and Int# result evidence")
+        shortcut = only((alt for alt in body[3] if alt[:2] == ["lit", ["int", "1"]]),
+                        "sameKey identity shortcut")
+        require(shortcut[3][:3] == ["lit", "int", "1"], "sameKey identity shortcut must return true")
+        fallback = only((alt for alt in body[3] if alt[0] == "default"), "sameKey equality fallback")
+        require(all(references(fallback[3], p["id"]) for p in parameters),
+                "sameKey must retain the value-based fallback for both operands")
+        lazy = self.binding("pointers", "pointerLazyPayload")
+        require(references(lazy["expr"], self.binding("support", "neverInt")["id"]),
+                "pointerLazyPayload must retain its irrelevant bottom-valued field")
+        self.fact("nonStrictPointerEquality", binding=binding["id"],
+                  argumentLifted=comparison[3], strictArgs=[False, False], resultReps=["IntRep"],
+                  valueFallback=True, unusedBottomPayload=True)
+
     def static_audits(self):
         for group_id, group in self.groups.items():
             directory = self.build / "groups" / group_id
@@ -397,6 +424,7 @@ class CorpusChecks:
         self.closure_transport()
         self.list_laziness()
         self.library_lists()
+        self.pointer_identity()
         self.recursive_trees()
         self.narrow_word_records()
 
