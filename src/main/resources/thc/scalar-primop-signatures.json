@@ -233,6 +233,30 @@
       ],
       "result": "Word64Rep"
     },
+    "castDoubleToWord64#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "Word64Rep"
+    },
+    "castFloatToWord32#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "Word32Rep"
+    },
+    "castWord32ToFloat#": {
+      "arguments": [
+        "Word32Rep"
+      ],
+      "result": "FloatRep"
+    },
+    "castWord64ToDouble#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "DoubleRep"
+    },
     "chr#": {
       "arguments": [
         "IntRep"

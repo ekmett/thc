@@ -1251,6 +1251,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleLessEqual { @Specialization public static long apply(double x, double y) { return x <= y ? 1L : 0L; } }
     @Operation public static final class DoubleGreater { @Specialization public static long apply(double x, double y) { return x > y ? 1L : 0L; } }
     @Operation public static final class DoubleGreaterEqual { @Specialization public static long apply(double x, double y) { return x >= y ? 1L : 0L; } }
+    @Operation public static final class CastFloatToWord32 { @Specialization public static long apply(float value) { return RawBitCasts.floatToWord32(value); } }
+    @Operation public static final class CastWord32ToFloat { @Specialization public static float apply(long value) { return RawBitCasts.word32ToFloat(value); } }
+    @Operation public static final class CastDoubleToWord64 { @Specialization public static long apply(double value) { return RawBitCasts.doubleToWord64(value); } }
+    @Operation public static final class CastWord64ToDouble { @Specialization public static double apply(long value) { return RawBitCasts.word64ToDouble(value); } }
     @Operation public static final class IntToFloat { @Specialization public static float apply(long x) { return (float) x; } }
     @Operation public static final class IntToDouble { @Specialization public static double apply(long x) { return (double) x; } }
     @Operation public static final class FloatToInt { @Specialization public static long apply(float x) { return (long) x; } }
