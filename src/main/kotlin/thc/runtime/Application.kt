@@ -52,6 +52,8 @@ internal class Closure @JvmOverloads constructor(
 
     @CompilerDirectives.TruffleBoundary
     fun papCompact(arguments: Array<out Any?>, offset: Int, count: Int, logicalCount: Int): Closure {
+        if ((target.rootNode as? GuestRoot)?.typedInput != null)
+            fault("Tuple-bearing PAP requires typed prefix storage")
         require(offset >= 0 && count >= 0 && offset + count <= arguments.size && logicalCount < arity)
         val combined = arrayOfNulls<Any>(supplied.size + count)
         System.arraycopy(supplied, 0, combined, 0, supplied.size)

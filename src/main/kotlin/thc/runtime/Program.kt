@@ -1196,6 +1196,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expr {
         val fn = function(label, emptyList(), expr, scope)
+        (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
         return Delay(fn.target, fn.captureLayout, fn.captures).proven(CoreRepresentations.expression(expr).copy(evaluated = false))
             .located(sources.expression(expr, currentSource))
     }
@@ -1203,6 +1204,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val proof = CoreRepresentations.expression(expr)
         fun check(value: CoreRepresentation) {
             if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
+            if (value.isTuple && declaredLifted) throw RuntimeFault("Tuple argument cannot be lifted")
         }
         check(proof)
         val lexical = if (expr[0] == "var") scope.locals[expr[1]]?.proof else null
@@ -1213,18 +1215,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 if (!it.representation.isTuple) throw RuntimeFault("Missing exact tuple argument proof")
             }
         }
-        if (!lifted) return Evaluate(compile(expr, scope, false).also {
-            CoreRepresentations.requireNoVector(it.representation, "argument")
-            CoreRepresentations.requireNoSum(it.representation, "argument")
-        }, metrics)
+        if (!lifted) return Evaluate(compile(expr, scope, false).also { check(it.representation) }, metrics)
         // GHC's context-aware exprOkForSpecEval certificate also covers total
         // primitive operands in constructors, without strictifying recursive
         // dictionary knots. Allocate these values directly instead of creating
         // an update thunk and captures. A false certificate overrides HNF.
         // Older exports fall back to exprIsHNF; missing proofs stay lazy.
         if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true)))
-            return compile(expr, scope, false).also { CoreRepresentations.requireNoSum(it.representation, "argument") }
-        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { CoreRepresentations.requireNoSum(it.representation, "argument") }
+            return compile(expr, scope, false).also { check(it.representation) }
+        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int16" -> int16Literal(value)

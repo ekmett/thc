@@ -198,6 +198,22 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
     } catch (failure: Throwable) { input.release(loan); throw failure }
 }
 
+private inline fun callTypedInput(frame: VirtualFrame, node: Node, function: Closure,
+    input: TypedInputLayout, source: InputSource, values: Array<Any?>?, start: Int, count: Int,
+    force: Force, tail: Boolean, metrics: Metrics, action: () -> Any?): Any? {
+    val loan = prepareInput(frame, node, function, input, source, values, start, count, force)
+    val generation = loan.generation
+    var transferred = false
+    try {
+        if (tail) try { checkTypedTail(frame, node, function.target, loan, metrics) }
+        catch (transfer: TailCall) { transferred = transfer.input === loan; throw transfer }
+        if (metrics.enabled) input.state().calls++
+        return invokeTypedInput(function.target, loan, action)
+    } finally {
+        if (!transferred && loan.live && loan.generation == generation) input.release(loan)
+    }
+}
+
 /** One call-site cache serves both scalar and aggregate results. Each arm consumes
  * aggregate completion before returning, so virtual results never merge in a PIC. */
 internal class InputDispatch(private val source: InputSource, private val count: Int, private val tail: Boolean,
@@ -234,29 +250,27 @@ private class InputCallArm(private val source: InputSource, private val count: I
     @Child private var loop = TailCallLoop(metrics)
     @Child private var remainder: InputDispatch? = if (arity < count)
         InputDispatch(source, count - arity, tail, metrics, destination, start + arity) else null
-    init { if (metrics.enabled) metrics.directCacheMisses++ }
+    init {
+        ArgumentLayout.validate(root.inputLayout, prefixCount, source.layout, start, minOf(arity, count))
+        if (arity <= count) checkResult(root, destination, arity == count)
+        if (metrics.enabled) metrics.directCacheMisses++
+    }
     fun matches(function: Closure): Boolean = function.target === target && function.arity == arity &&
         function.suppliedCount == prefixCount && (function.environment != null) == hasEnvironment
     fun execute(frame: VirtualFrame, function: Closure, values: Array<Any?>?): Any? {
-        val used = minOf(arity, count)
-        ArgumentLayout.validate(root.inputLayout, prefixCount, source.layout, start, used)
         if (arity > count) {
             if (destination != null) fault("Aggregate result application is under-saturated")
             if (metrics.enabled) metrics.papAllocations++
             return if (input != null) typedPap(function, input, source, frame, this, values, start, count)
             else legacyPap(frame, this, function, source, values, start, count)
         }
-        checkResult(root, destination, arity == count)
         val isTail = tail && arity == count
         val result = if (input == null) {
             legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity), isTail)
         } else {
-            val loan = prepareInput(frame, this, function, input, source, values, start, arity, force)
-            if (isTail) checkTypedTail(frame, this, target, loan, metrics)
-            if (metrics.enabled) input.state().calls++
-            if (isTail) invokeTypedInput(target, loan) { Calls.direct(direct, NO_PAP_ARGUMENTS) }
-            else try { invokeTypedInput(target, loan) { Calls.direct(direct, NO_PAP_ARGUMENTS) } }
-                catch (transfer: TailCall) { loop.execute(transfer) }
+            try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics) {
+                Calls.direct(direct, NO_PAP_ARGUMENTS)
+            } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
         }
         if (arity < count) return remainder!!.execute(frame, requireClosure(force.execute(frame, result)), values)
         if (destination != null) { destination.consume(frame, this, result); return null }
@@ -292,12 +306,10 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             val result = if (input == null) {
                 legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity), isTail)
             } else {
-                val loan = prepareInput(frame, this, function, input, source, values, offset, function.arity, force)
-                if (isTail) checkTypedTail(frame, this, target, loan, metrics)
-                if (metrics.enabled) { metrics.indirectCalls++; input.state().calls++ }
-                if (isTail) invokeTypedInput(target, loan) { Calls.indirect(indirect, target, NO_PAP_ARGUMENTS) }
-                else try { invokeTypedInput(target, loan) { Calls.indirect(indirect, target, NO_PAP_ARGUMENTS) } }
-                    catch (transfer: TailCall) { loop.execute(transfer) }
+                if (metrics.enabled) metrics.indirectCalls++
+                try { callTypedInput(frame, this, function, input, source, values, offset, function.arity, force, isTail, metrics) {
+                    Calls.indirect(indirect, target, NO_PAP_ARGUMENTS)
+                } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
             }
             if (exact) {
                 if (destination != null) { destination.consume(frame, this, result); return null }
