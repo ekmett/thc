@@ -12,6 +12,19 @@ OPERATIONS = {
     'minusInt64X2#': ([VECTOR_REP, VECTOR_REP], VECTOR_REP),
     'negateInt64X2#': ([VECTOR_REP], VECTOR_REP),
 }
+VECTOR32_REP = {'kind': 'vector', 'primReps': ['VecRep 4 Int32ElemRep'], 'evaluated': True,
+                'vector': {'lanes': 4, 'element': 'Int32ElemRep'}}
+LANE32_REP = {'kind': 'long', 'primReps': ['Int32Rep'], 'evaluated': True}
+TUPLE32_REP = {'kind': 'unknown', 'primReps': ['Int32Rep'] * 4, 'evaluated': True,
+               'aggregate': 'unboxed-tuple', 'components': [LANE32_REP] * 4}
+OPERATIONS.update({
+    'packInt32X4#': ([TUPLE32_REP], VECTOR32_REP),
+    'unpackInt32X4#': ([VECTOR32_REP], TUPLE32_REP),
+    'broadcastInt32X4#': ([LANE32_REP], VECTOR32_REP),
+    'plusInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
+    'minusInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
+    'negateInt32X4#': ([VECTOR32_REP], VECTOR32_REP),
+})
 def is_vector(rep): return isinstance(rep, dict) and rep.get('kind') == 'vector'
 def proof_error(rep):
     registers = rep.get('primReps')
@@ -23,6 +36,6 @@ def proof_error(rep):
         return 'Invalid Core vector shape'
     if registers != [f"VecRep {shape['lanes']} {shape['element']}"]:
         return 'Vector shape disagrees with primitive representation'
-    if shape != VECTOR_REP['vector']:
+    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector']):
         return 'Unsupported Core vector representation'
     return None

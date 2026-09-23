@@ -1,14 +1,17 @@
-# Bounded Int64X2 execution
+# Bounded Int64X2 and Int32X4 execution
 
-Both backends execute local `Int64X2#` pack, unpack, broadcast, addition,
+Both backends execute local `Int64X2#` and `Int32X4#` pack, unpack, broadcast, addition,
 subtraction and negation. Each operation requires exact GHC representation
-metadata; `VecRep 2 Int64ElemRep` has a vector identity distinct from a two-field
-unboxed tuple. Pack consumes the ordinary tuple writer into two typed local
-slots, and unpack writes two typed local slots. Neither operation allocates a
+metadata; `VecRep 2 Int64ElemRep` and `VecRep 4 Int32ElemRep` have vector identities
+distinct from each other and from unboxed tuples. Pack consumes the ordinary
+tuple writer into typed local slots, and unpack writes typed local slots. Neither operation allocates a
 tuple or a payload array.
 
-An interpreter/deoptimized vector value has two immutable primitive `long`
-fields. Arithmetic constructs transient JDK `LongVector` values with fixed
+An interpreter/deoptimized Int64X2 value has two immutable primitive `long`
+fields. Int32X4 has four immutable primitive `int` fields, also a 16-byte payload.
+Int32 tuple lanes use the existing primitive `long` local slots: pack narrows to
+32 bits, and unpack sign-extends each lane back to `long`. Arithmetic wraps at
+the lane width and constructs transient JDK `LongVector` or `IntVector` values with fixed
 128-bit species and immediately extracts the result into those primitive
 fields. JDK vector objects and their payload arrays are never stored in guest
 values. Partial evaluation can remove the temporary lane carriers and use
@@ -36,10 +39,14 @@ to provide one.
 ## Validation and architectures
 
 `prepare-simd-audit.py` produces genuine pre/post-Tidy Core and 147 GHC-native
-oracle rows on x86. JVM tests run the 98 positive rows (two entry points) and
-reject the 49-row vector-join frontier. They also run independent signed-long
-wraparound formulas, compile each exact entry, execute it again and require that
-its installed code remains valid. Metadata forgeries reject at load.
+Int64X2 oracle rows on x86. `--vector int32x4` prepares a separate
+`build/simd-int32x4` corpus with 243 native rows: four independent scalar inputs,
+including signed 32-bit boundaries and out-of-range 64-bit values. JVM tests run
+the two positive entries for each shape and reject the vector-let/join frontier;
+an isolated genuine join regression checks the formal boundary directly.
+Independent lane-width wraparound formulas validate results, and every measured
+postcompile input must increase the compiled-entry count by exactly one. Each
+entry must remain installed after execution. Metadata forgeries reject at load.
 
 Pinned GHC 9.14.1's AArch64 native code generator requires LLVM for SIMD. The
 macOS CI job explicitly uses `--export-only`: `-fno-code
@@ -50,9 +57,9 @@ native rows and both export stages. No model-generated rows are described as a
 native oracle. JVM tests select stages from hashed provenance, so stale files
 left by an earlier run cannot silently expand the claim.
 
-The separate Vector API mechanism probe has installed-code and final-register
+The existing Int64 Vector API mechanism probe has installed-code and final-register
 checks on AArch64 ASIMD and x86 SSE2/AVX. This mechanism evidence is distinct from
-the production Core graph controls: four on AArch64 using the source-matched
+the Int64 production Core graph controls: four on AArch64 using the source-matched
 x86 native oracle, and [eight on x86](../bench/experiments/simd-foundation/evidence-x86_64/runtime/README.md)
 using fresh pre/post-Tidy exports and native rows. Both backends emit packed
 ADD/SUB with no vector carrier allocation, field traffic or residual calls in
@@ -64,6 +71,14 @@ is disabled in those captures, so this is separate from per-call compiled-entry
 measurement. Each record identifies its tested source revision and runtime.
 Compact headers are enabled; the outer scalar `Long` box needed by the public
 `Object` result is accounted for separately.
+
+The production harness accepts a second `int32x4` argument, for example
+`bench/experiments/simd-foundation/run-runtime.sh build/int32-graphs int32x4`.
+It checks native rows, installed-target validity, packed 32-bit ADD/SUB
+instructions, and absence of carrier/array allocations and field traffic.
+Per-row compiled-entry assertions belong to the separate instrumented JVM tests.
+An accepted type or the earlier Int64 mechanism probe alone does not establish
+these Int32 production properties.
 
 The [JDK 25 Vector API documentation](https://docs.oracle.com/en/java/javase/25/docs/api/jdk.incubator.vector/jdk/incubator/vector/package-summary.html)
 explains its compiler-dependent SIMD lowering and scalar fallback. The pinned
