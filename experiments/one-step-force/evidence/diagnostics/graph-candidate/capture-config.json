@@ -1,0 +1,714 @@
+{
+  "recordedUtc": "2026-09-23T10:54:29.566534+00:00",
+  "scope": "Diagnostic graphs/allocation, not throughput; no graph/JFR timing may be used as benchmark results.",
+  "mode": "graph",
+  "jvmOptions": [
+    "-Xms4g",
+    "-Xmx4g",
+    "-XX:+UseCompactObjectHeaders",
+    "-Dpolyglot.compiler.InliningPolicy=Agnostic",
+    "-Dthc.classOwnedLayouts=true",
+    "-Dthc.typedCases=false",
+    "-Dthc.leadingCaseReturn=false",
+    "-Dthc.constructorClassIdentity=false",
+    "-Dthc.staticShapeUnchecked=false",
+    "-Dthc.boxedValueCache=false"
+  ],
+  "selectedWorker": true,
+  "backend": "bytecode",
+  "depth": 2,
+  "expansionBudget": 12000,
+  "inliningBudget": 12000,
+  "frozenManifest": {
+    "schema": 1,
+    "scope": "Immutable diagnostic aliases of the exact completed benchmark runtime/Core; original frozen source manifest retained separately.",
+    "originalManifest": {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/one-step-force-v1/manifest.json",
+      "sha256": "95d1b2cd22b9530580c450bf8d108bbabfac708602f8ecac5c128e5f5d6d129a"
+    },
+    "runtimeJarSha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2",
+    "files": [
+      {
+        "path": "lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+        "bytes": 17536
+      },
+      {
+        "path": "lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+        "bytes": 129475
+      },
+      {
+        "path": "lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+        "bytes": 281935
+      },
+      {
+        "path": "lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+        "bytes": 1853314
+      },
+      {
+        "path": "lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+        "bytes": 249788
+      },
+      {
+        "path": "lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+        "bytes": 537932
+      },
+      {
+        "path": "lib/thc-0.1-experiment.jar",
+        "sha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2",
+        "bytes": 731668
+      },
+      {
+        "path": "lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+        "bytes": 16991993
+      },
+      {
+        "path": "lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+        "bytes": 54592
+      },
+      {
+        "path": "lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+        "bytes": 935923
+      },
+      {
+        "path": "lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7",
+        "bytes": 73160
+      },
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "a52db255c126f189ed8b91a3f59def4908c7ae1a6dd19d727163fd927e79541f",
+        "bytes": 27623
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "8762f18267cdff84d392eed271b6d5bb8619d0884339721897a02cdafc098693",
+        "bytes": 748784
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "f100baefc7b16d90351e7b4f185696270143cd3ad1cb01b7da9ed6a0a88b4cb8",
+        "bytes": 7973
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "3b9b2cd3f8ea4b561a52391ca37913f004a3bdb10cdfa98b573156a3d097b63c",
+        "bytes": 17529
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "e08484e3b7302421b70d6fe72932619a2451cf6ac557ff875dc0a55943a4db64",
+        "bytes": 327743
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "3ad5daca858094936065dd66bbbb634d86e213cf74b32a2965e180837a11c574",
+        "bytes": 38319
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "17f3f296c92a18cf638aa1023153e15b5c058c25b8c7ce79521021f3fecdfb2b",
+        "bytes": 533551
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "ddd952748bde8512aae6220a640b26b1961f3332b4f56ee3c4fe5d2940741031",
+        "bytes": 13067894
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "642184a9ca6e833359794567066b1e01d6d6ceb2f84346b513d95dcf06dacb19",
+        "bytes": 26203610
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "04d0805720ab792ffc5e598030f42f202a267185266cd1e8e4ab5eac468de166",
+        "bytes": 870115
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "fc85814e44554592c4437a9c69c12db6616e31dc2430897cb0cbc0d8777f6ef0",
+        "bytes": 9166836
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "f173b812b02f26a56ae82c1842caece0b39ca2a152e3879535eb388d123ee480",
+        "bytes": 15791
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "19c7eca83907db7e29aa5cc63cdec474c61e53a72e85fb238e04d0e71043cbb2",
+        "bytes": 1003723
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+        "bytes": 1112
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23",
+        "bytes": 1348357
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b",
+        "bytes": 38447
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "8df1a931065b17bbe03fbe9730d08e8719d3043a3de002e0e5f0280aa663e91e",
+        "bytes": 65768
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "f7318ce6e2081114cb77becaea6627e6ba5cfacd7f1ead2754f0849ef1a8f208",
+        "bytes": 2319
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/thc-0.1-experiment.jar",
+      "sha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "a52db255c126f189ed8b91a3f59def4908c7ae1a6dd19d727163fd927e79541f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "8762f18267cdff84d392eed271b6d5bb8619d0884339721897a02cdafc098693"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "f100baefc7b16d90351e7b4f185696270143cd3ad1cb01b7da9ed6a0a88b4cb8"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "3b9b2cd3f8ea4b561a52391ca37913f004a3bdb10cdfa98b573156a3d097b63c"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "e08484e3b7302421b70d6fe72932619a2451cf6ac557ff875dc0a55943a4db64"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "3ad5daca858094936065dd66bbbb634d86e213cf74b32a2965e180837a11c574"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "17f3f296c92a18cf638aa1023153e15b5c058c25b8c7ce79521021f3fecdfb2b"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/07-Data.Set.Internal.json",
+      "sha256": "ddd952748bde8512aae6220a640b26b1961f3332b4f56ee3c4fe5d2940741031"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/08-Data.Map.Internal.json",
+      "sha256": "642184a9ca6e833359794567066b1e01d6d6ceb2f84346b513d95dcf06dacb19"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/09-Data.Map.Internal.Debug.json",
+      "sha256": "04d0805720ab792ffc5e598030f42f202a267185266cd1e8e4ab5eac468de166"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/10-Data.Map.Strict.Internal.json",
+      "sha256": "fc85814e44554592c4437a9c69c12db6616e31dc2430897cb0cbc0d8777f6ef0"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/11-Data.Map.Strict.json",
+      "sha256": "f173b812b02f26a56ae82c1842caece0b39ca2a152e3879535eb388d123ee480"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/12-THC.MapWorkload.json",
+      "sha256": "19c7eca83907db7e29aa5cc63cdec474c61e53a72e85fb238e04d0e71043cbb2"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/14-GHC.Internal.CString.json",
+      "sha256": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/15-GHC.Internal.Err.json",
+      "sha256": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/16-GHC.InterfaceClosure.json",
+      "sha256": "8df1a931065b17bbe03fbe9730d08e8719d3043a3de002e0e5f0280aa663e91e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/manifest.json",
+      "sha256": "2b85df13d82a090ee53d12955a9586b37a2b6583909d11f8fd5be78191a6bc96"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/modules.txt",
+      "sha256": "f7318ce6e2081114cb77becaea6627e6ba5cfacd7f1ead2754f0849ef1a8f208"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/results/one-step-force-agnostic/oracle.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/release",
+      "sha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/diagnose.py",
+      "sha256": "415c02dcc8028a2ea78ea5bc36034e170cc0804e656340642339a471aca1baf0"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/graph_roots.py",
+      "sha256": "cc904324fe1d0001f52dce345e800cb39b22f5a6a8595b3f0a3648c2aa3a2d39"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/MapProfile.java",
+      "sha256": "4de958783c187e9b142bb275f4e48bb15cd43a1013764d43953f5a245caf29b5"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/tools/audit-call-packets.py",
+      "sha256": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/summarize-graphs.py",
+      "sha256": "08b63925a36f39212c0b7c44fd5723019a2b1586f032f9475e0e28442df81181"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/typed-graph-review/compare.py",
+      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b"
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningPolicy=Agnostic",
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.typedCases=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.boxedValueCache=false",
+        "-Djdk.graal.Dump=Truffle:1",
+        "-Djdk.graal.PrintGraph=File",
+        "-Djdk.graal.PrintGraphWithSchedule=true",
+        "-Djdk.graal.PrintBackendCFG=false",
+        "-Djdk.graal.TrackNodeSourcePosition=true",
+        "-Djdk.graal.DumpPath=/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45",
+        "0.01",
+        "1",
+        "10000"
+      ],
+      "stdout": "run.out",
+      "stderr": "run.err",
+      "exitCode": 0,
+      "elapsedSeconds": 73.5799634809373
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/javac",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-d",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/classes",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/GraphInspect.java"
+      ],
+      "stdout": "javac-graph-reader.out",
+      "stderr": "javac-graph-reader.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.41514937102328986
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/classes",
+        "GraphInspect",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/parsed-TruffleHotSpotCompilation-3487[lambda_ww]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3487.out",
+      "stderr": "parse-3487.err",
+      "exitCode": 0,
+      "elapsedSeconds": 5.9758292170008644
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/tools/audit-call-packets.py",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate",
+        "--output",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/packet-audit.json"
+      ],
+      "stdout": "packet-audit.out",
+      "stderr": "packet-audit.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.4648499130271375
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/summarize-graphs.py",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate"
+      ],
+      "stdout": "graph-summary.out",
+      "stderr": "graph-summary.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.4652295788982883
+    }
+  ],
+  "parsedRootSelection": {
+    "included": [
+      {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3487,
+        "codeBytes": 180477,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+          "sha256": "71222419d2c6a159b1209dd22be0036d88292ca1517431b9b7a031fe3ac8c1f9",
+          "bytes": 65159022
+        }
+      }
+    ],
+    "excluded": [
+      {
+        "rootId": 10,
+        "name": "lambda k, x, l, r",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+        "compilationId": 3505,
+        "codeBytes": 1847,
+        "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 15,
+        "name": "lambda k, x, l, r",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+        "compilationId": 3525,
+        "codeBytes": 62213,
+        "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 17,
+        "name": "lambda def, ww, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "compilationId": 3452,
+        "codeBytes": 1663,
+        "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 18,
+        "name": "lambda ww, ds",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "compilationId": 3477,
+        "codeBytes": 4678,
+        "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 21,
+        "name": "lambda sc, x, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+        "compilationId": 3344,
+        "codeBytes": 67234,
+        "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 22,
+        "name": "lambda ww, ds2",
+        "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+        "compilationId": 3414,
+        "codeBytes": 25538,
+        "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 26,
+        "name": "lambda n",
+        "source": "examples/THC/MapWorkload.hs:30",
+        "compilationId": 3578,
+        "codeBytes": 856,
+        "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+        "roleAmbiguous": false
+      }
+    ],
+    "scope": "Only the uniquely named source-less worker is parsed; all original BGV files are retained."
+  },
+  "outputs": [
+    {
+      "path": "TruffleHotSpotCompilation-3032[lambda_sc,_x,_ds1].bgv",
+      "sha256": "ac73c4f69e8a733348b65413e9cb670b3655253befe4463029ac1c5169a3e941",
+      "bytes": 25161914
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3274[lambda_sc,_x,_ds1].bgv",
+      "sha256": "d0d2ecef0f1a87a4d0c76f6d54c45001f12bf84e0f34143e49c9c8de7800e4ce",
+      "bytes": 30896852
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3344[lambda_sc,_x,_ds1].bgv",
+      "sha256": "c86e2c6b8db8597d05713672246a1138a17be2b0e839df739a88772966b3216e",
+      "bytes": 28358671
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3414[lambda_ww,_ds2].bgv",
+      "sha256": "73cfa542216b449d78296bae32d73ab920caa61974b2e8fc4837cb3b906e8fd7",
+      "bytes": 8758417
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3452[lambda_def,_ww,_ds1].bgv",
+      "sha256": "f5b369d12402c15c99fbdb33d6cb0de3e029c52eba727f9f19cca717b751139a",
+      "bytes": 928439
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3477[lambda_ww,_ds].bgv",
+      "sha256": "e16e589139d64713f3a904745e9f52d494c771430995f89ac0d19bd7c8e42fab",
+      "bytes": 2470341
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+      "sha256": "71222419d2c6a159b1209dd22be0036d88292ca1517431b9b7a031fe3ac8c1f9",
+      "bytes": 65159022
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3505[lambda_k,_x,_l,_r].bgv",
+      "sha256": "5d46e14d0e37891cdc79c848cb9c0850aa269a0a4aee82c9f513d4c62500a3bb",
+      "bytes": 1097771
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3525[lambda_k,_x,_l,_r].bgv",
+      "sha256": "a7e4e7f9d443c5592ef045bbf7f72c0adc5a45a6d1500f75b9f6ad16c3e45446",
+      "bytes": 35730277
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3578[lambda_n].bgv",
+      "sha256": "3e9006f94fc4b50f65f6c4ce51f702322ff62f4149a84791d3c05a2a3ff4e3ca",
+      "bytes": 10266595
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3678[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "bf5920b853c34188f476a5b1e29410ead14a171f62c0e6f999c6a6d3f5a8cb67",
+      "bytes": 10963420
+    },
+    {
+      "path": "graph-summary.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "graph-summary.out",
+      "sha256": "1546c00b7f7b07552dc621a28b6bccd6d9d03f62229fb4c8d1ee8711635013c4",
+      "bytes": 411
+    },
+    {
+      "path": "javac-graph-reader.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "javac-graph-reader.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "packet-audit.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "packet-audit.json",
+      "sha256": "445bf939dc99bed4a1d80bd238bd206f945a6d2c96068c49a2c31e7ecbcfb692",
+      "bytes": 2506797
+    },
+    {
+      "path": "packet-audit.out",
+      "sha256": "b413ab94e47e20709590282c77d20dd3f88e4afa86e05178acbf35ccbc5fe107",
+      "bytes": 157
+    },
+    {
+      "path": "parse-3487.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3487.out",
+      "sha256": "bae8cd951c0e41d940479048dd1fd4a1f205675179316dc1aa8e6fd22aa99d7e",
+      "bytes": 192
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00000-cfg.dot",
+      "sha256": "225b71299715ac6257f8ba23d6642df671d4b2faed4d6321325528eb32d2d3af",
+      "bytes": 22849
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00000.json",
+      "sha256": "1f4f4ab0206cfa017e7693f988f2451189d582fec4591a2ba445b4e7926c5e42",
+      "bytes": 884546
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00002-cfg.dot",
+      "sha256": "9ebe1bce8f2bb12fa8f7c1d302f94081e3648feab46c358c8039609e4bc3d24e",
+      "bytes": 2435
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00002.json",
+      "sha256": "a111af80545f494668946a82fa4a84a876a9e773e06844ee986f8fbd2473916b",
+      "bytes": 239843
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00005-cfg.dot",
+      "sha256": "5e4aa3c60eaf796bf6fed2dfe91370b15dad928829309746758f5c99131c87d0",
+      "bytes": 265304
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00005.json",
+      "sha256": "8670419c058224f5c7736a1ef84179da5d757d34bbf1acb3942aefa685de827e",
+      "bytes": 91322959
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00007-cfg.dot",
+      "sha256": "0793b23f159dddebdb4525800b7884427b5966ecac544eabd6d436275c8dc680",
+      "bytes": 655926
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00007.json",
+      "sha256": "5b3671b2463b50f2b32f36175777330f0650020459492bf597c354ecd8ae20fa",
+      "bytes": 143250320
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3487[lambda_ww]/index.json",
+      "sha256": "39a4f7329a38ab2af5997e287134ea425debe87c426bba75479a0d1c61c45554",
+      "bytes": 942118
+    },
+    {
+      "path": "root-identities.json",
+      "sha256": "a34cbc808b2adac07d56678955f1f6f3fb433c42a8d217ef4ce43e430421a2c3",
+      "bytes": 3148
+    },
+    {
+      "path": "run.err",
+      "sha256": "85335f1726ea89ef8f9bd989c72042d843a6aceb7bb4bce2b23228ab35ab03eb",
+      "bytes": 9533
+    },
+    {
+      "path": "run.log",
+      "sha256": "85335f1726ea89ef8f9bd989c72042d843a6aceb7bb4bce2b23228ab35ab03eb",
+      "bytes": 9533
+    },
+    {
+      "path": "run.out",
+      "sha256": "d3986d8fba0fd53085adf5e865e39725914c87f55ebf84678e0564d7bb6b7596",
+      "bytes": 47
+    },
+    {
+      "path": "run.tsv",
+      "sha256": "d3986d8fba0fd53085adf5e865e39725914c87f55ebf84678e0564d7bb6b7596",
+      "bytes": 47
+    },
+    {
+      "path": "summary.json",
+      "sha256": "5777c07c09ef251be382522074e34cb4912df2ec72a0514c72eaf79f0a24a9d7",
+      "bytes": 720373
+    },
+    {
+      "path": "validation.json",
+      "sha256": "17219f95804a6a15f34eb68ef5a10a5e723a2a13178b52e532490cda86c21274",
+      "bytes": 1324
+    }
+  ]
+}

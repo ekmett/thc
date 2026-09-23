@@ -1,0 +1,11 @@
+{
+  "controlSha256": "5af987892c35fedc0f170d245574ad704609e9747c7993f970991191d71a773c",
+  "candidateSha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2",
+  "changedEntries": [
+    {
+      "entry": "thc/runtime/Force.class",
+      "control": "d9b56fecfee32ebf87071e881723e88255113389c39d96ed9f530b9eb53d71a9",
+      "candidate": "e5865eaa0ff87ddc96f1e7ce25157e63cc6fce5972dae0b76e3a78b0bfeadbe8"
+    }
+  ]
+}

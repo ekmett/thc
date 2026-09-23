@@ -1,0 +1,149 @@
+{
+  "archive": {
+    "path": "selected-worker-bgv.tar.xz",
+    "sha256": "f3b7a4c6c014c41d2a2c4d7cdf68e5c6e6b56133c3df70e7112b1f69816f9820",
+    "bytes": 3896732
+  },
+  "selected": [
+    {
+      "capture": "control",
+      "identity": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3481,
+        "codeBytes": 201202,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+          "sha256": "a5ba2a8341e5c84de7ee829d79b2304f6360e1a0a23f6971b3fc68b377ac2e12",
+          "bytes": 63517128
+        }
+      },
+      "originalPath": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+      "archiveMember": "control/TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+      "phases": [
+        {
+          "name": "0: After PE Tier",
+          "file": "graph-00000.json",
+          "bytes": 941488,
+          "sha256": "7516e176e44036bd965fdaffddd9a2b67f12fd22c5c8fad4426ca973ab938661",
+          "topology": {
+            "sha256": "7f72d5cbb7157cba058a75d634b76c3b37efc94f4bb3633f3a28d94d231e9f68",
+            "nodes": 660,
+            "edges": 2394,
+            "blocks": 56
+          }
+        },
+        {
+          "name": "1: After Inline",
+          "file": "graph-00002.json",
+          "bytes": 237064,
+          "sha256": "cb7615f78c0dfb7d5afc07f9b8c301d12c54bbc5ba9b1a9e1335ae53a035e28b",
+          "topology": {
+            "sha256": "d2544f0b7f3c6c968de7b55a72825e334cb7afa64b84291a8a33c24df09cecf7",
+            "nodes": 169,
+            "edges": 168,
+            "blocks": 1
+          }
+        },
+        {
+          "name": "2: Before phase HighTierLowering",
+          "file": "graph-00005.json",
+          "bytes": 87830912,
+          "sha256": "7a3b9064b88b6d8d5e75beb3e3e8cf1d7587d9eb931ba76ab98542b2b379e323",
+          "topology": {
+            "sha256": "c2cdc0e96be790f7bef511db45c7747bf7a9082aa5fabb1c95674a953101b170",
+            "nodes": 6789,
+            "edges": 23483,
+            "blocks": 506
+          }
+        },
+        {
+          "name": "4: After mid tier",
+          "file": "graph-00007.json",
+          "bytes": 152555047,
+          "sha256": "76a499cf5146f879915598850f97ed6c37a8df687fc4884d66febb5014d8a208",
+          "topology": {
+            "sha256": "6c25e6d0fc9237b533fed80892dfd82c6faab0821e90d1f70c2b0853e05a033e",
+            "nodes": 16925,
+            "edges": 43747,
+            "blocks": 1708
+          }
+        }
+      ]
+    },
+    {
+      "capture": "candidate",
+      "identity": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3487,
+        "codeBytes": 180477,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+          "sha256": "71222419d2c6a159b1209dd22be0036d88292ca1517431b9b7a031fe3ac8c1f9",
+          "bytes": 65159022
+        }
+      },
+      "originalPath": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+      "phases": [
+        {
+          "name": "0: After PE Tier",
+          "file": "graph-00000.json",
+          "bytes": 884546,
+          "sha256": "1f4f4ab0206cfa017e7693f988f2451189d582fec4591a2ba445b4e7926c5e42",
+          "topology": {
+            "sha256": "d7650c47ee82d5f0b9df110906342821c785cf49bdc1dc80613abc5aff3604aa",
+            "nodes": 624,
+            "edges": 2232,
+            "blocks": 51
+          }
+        },
+        {
+          "name": "1: After Inline",
+          "file": "graph-00002.json",
+          "bytes": 239843,
+          "sha256": "a111af80545f494668946a82fa4a84a876a9e773e06844ee986f8fbd2473916b",
+          "topology": {
+            "sha256": "22574c7abc1e39c7e270472af2765a7fff84719a2d8ae1997b5ceeceaa66b8f7",
+            "nodes": 171,
+            "edges": 170,
+            "blocks": 1
+          }
+        },
+        {
+          "name": "2: Before phase HighTierLowering",
+          "file": "graph-00005.json",
+          "bytes": 91322959,
+          "sha256": "8670419c058224f5c7736a1ef84179da5d757d34bbf1acb3942aefa685de827e",
+          "topology": {
+            "sha256": "028de9dd253645336ef00d57affd7afc14358e54cd16e76a291a6b3ff74044fd",
+            "nodes": 6956,
+            "edges": 23730,
+            "blocks": 519
+          }
+        },
+        {
+          "name": "4: After mid tier",
+          "file": "graph-00007.json",
+          "bytes": 143250320,
+          "sha256": "5b3671b2463b50f2b32f36175777330f0650020459492bf597c354ecd8ae20fa",
+          "topology": {
+            "sha256": "9c23a5275bed5dfd2609682ffa1a82c83f3796980a5700550f305169c91a678c",
+            "nodes": 16019,
+            "edges": 41575,
+            "blocks": 1735
+          }
+        }
+      ]
+    }
+  ],
+  "topologyScope": "Graph name/group/type, node IDs/classes/block membership, every edge and every block. Node properties and elapsed timings are excluded from the topology digest; full properties remain in original BGV and included call-tree JSON.",
+  "reparseStatus": "Verified: archive/raw digests and all eight phase topologies independently reparsed with pinned Graal; see reparse/topology-verification.json."
+}

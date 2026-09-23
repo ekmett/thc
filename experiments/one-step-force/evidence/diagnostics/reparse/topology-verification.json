@@ -1,0 +1,95 @@
+{
+  "passed": true,
+  "phasesVerified": 8,
+  "archiveSha256": "f3b7a4c6c014c41d2a2c4d7cdf68e5c6e6b56133c3df70e7112b1f69816f9820",
+  "results": [
+    {
+      "capture": "control",
+      "phase": "0: After PE Tier",
+      "topology": {
+        "sha256": "7f72d5cbb7157cba058a75d634b76c3b37efc94f4bb3633f3a28d94d231e9f68",
+        "nodes": 660,
+        "edges": 2394,
+        "blocks": 56
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "control",
+      "phase": "1: After Inline",
+      "topology": {
+        "sha256": "d2544f0b7f3c6c968de7b55a72825e334cb7afa64b84291a8a33c24df09cecf7",
+        "nodes": 169,
+        "edges": 168,
+        "blocks": 1
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "control",
+      "phase": "2: Before phase HighTierLowering",
+      "topology": {
+        "sha256": "c2cdc0e96be790f7bef511db45c7747bf7a9082aa5fabb1c95674a953101b170",
+        "nodes": 6789,
+        "edges": 23483,
+        "blocks": 506
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "control",
+      "phase": "4: After mid tier",
+      "topology": {
+        "sha256": "6c25e6d0fc9237b533fed80892dfd82c6faab0821e90d1f70c2b0853e05a033e",
+        "nodes": 16925,
+        "edges": 43747,
+        "blocks": 1708
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "phase": "0: After PE Tier",
+      "topology": {
+        "sha256": "d7650c47ee82d5f0b9df110906342821c785cf49bdc1dc80613abc5aff3604aa",
+        "nodes": 624,
+        "edges": 2232,
+        "blocks": 51
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "phase": "1: After Inline",
+      "topology": {
+        "sha256": "22574c7abc1e39c7e270472af2765a7fff84719a2d8ae1997b5ceeceaa66b8f7",
+        "nodes": 171,
+        "edges": 170,
+        "blocks": 1
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "phase": "2: Before phase HighTierLowering",
+      "topology": {
+        "sha256": "028de9dd253645336ef00d57affd7afc14358e54cd16e76a291a6b3ff74044fd",
+        "nodes": 6956,
+        "edges": 23730,
+        "blocks": 519
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "phase": "4: After mid tier",
+      "topology": {
+        "sha256": "9c23a5275bed5dfd2609682ffa1a82c83f3796980a5700550f305169c91a678c",
+        "nodes": 16019,
+        "edges": 41575,
+        "blocks": 1735
+      },
+      "matchesOriginal": true
+    }
+  ]
+}

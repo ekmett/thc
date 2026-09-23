@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.ThunkRetentionTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-23T10:29:08.853Z" hostname="eak-mba" time="0.057">
+  <properties/>
+  <testcase name="cafEntryTargetsRemainCompilableAfterValuesFunctionsAndFailuresAreMemoized()" classname="thc.ThunkRetentionTest" time="0.034"/>
+  <testcase name="aThunkReturningAnotherThunkFailsBeforeEitherCanPublishAnIndirection()" classname="thc.ThunkRetentionTest" time="0.005"/>
+  <testcase name="unexpectedFailuresKeepTheSuspensionForAnActualRetry()" classname="thc.ThunkRetentionTest" time="0.005"/>
+  <testcase name="nestedForcingThroughTheSameForceNodePublishesSeparateSharedAnswers()" classname="thc.ThunkRetentionTest" time="0.004"/>
+  <testcase name="successfulUpdatesReleaseSuspensionsAndRemainShared()" classname="thc.ThunkRetentionTest" time="0.004"/>
+  <testcase name="memoizedGuestAndRuntimeFailuresReleaseSuspensionsWithoutRepeatingEffects()" classname="thc.ThunkRetentionTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

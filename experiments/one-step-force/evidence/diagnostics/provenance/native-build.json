@@ -1,0 +1,25 @@
+{
+  "started": "2026-09-23T08:44:36.600810+00:00",
+  "finished": "2026-09-23T08:44:43.019348+00:00",
+  "argv": [
+    "bash",
+    "scripts/native-map-oracle.sh",
+    "mapAggregate",
+    "10000"
+  ],
+  "cwd": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native",
+  "versions": {
+    "ghc": "9.14.1",
+    "ghc-pkg": "GHC package manager version 9.14.1"
+  },
+  "returncode": 0,
+  "stdout": "mapAggregate\t10000\t56348923\n",
+  "sourceFilesVerified": 59,
+  "binary": {
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/native-oracle",
+    "sha256": "2657dd2c89fa63d94c68dc574a9f90128c2822f15a088c57fa3114f308685dec",
+    "bytes": 2208008,
+    "file": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/native-oracle: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=9a0573e746bc598371eaf79447d8218cf3cbbc2f, not stripped",
+    "ldd": "\tlinux-vdso.so.1 (0x00007ffede15c000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007ad9c0707000)\n\tlibgmp.so.10 => /lib/x86_64-linux-gnu/libgmp.so.10 (0x00007ad9c0685000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007ad9c0400000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007ad9c080b000)\n"
+  }
+}

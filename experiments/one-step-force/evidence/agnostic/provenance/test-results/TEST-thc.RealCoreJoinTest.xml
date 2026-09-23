@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.RealCoreJoinTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-23T10:29:06.695Z" hostname="eak-mba" time="0.222">
+  <properties/>
+  <testcase name="exportedRecursiveJoinIsALocalLoopBeforeAndAfterCompilation()" classname="thc.RealCoreJoinTest" time="0.098"/>
+  <testcase name="erasedTypeJoinAndFunctionReturningJoinPreserveTheirValueArity()" classname="thc.RealCoreJoinTest" time="0.124"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

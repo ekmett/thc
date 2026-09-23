@@ -1,0 +1,451 @@
+{
+  "recordedUtc": "2026-09-23T10:52:02.674678+00:00",
+  "scope": "Diagnostic graphs/allocation, not throughput; no graph/JFR timing may be used as benchmark results.",
+  "mode": "profile",
+  "jvmOptions": [
+    "-Xms4g",
+    "-Xmx4g",
+    "-XX:+UseCompactObjectHeaders",
+    "-Dpolyglot.compiler.InliningPolicy=Agnostic",
+    "-Dthc.classOwnedLayouts=true",
+    "-Dthc.typedCases=false",
+    "-Dthc.leadingCaseReturn=false",
+    "-Dthc.constructorClassIdentity=false",
+    "-Dthc.staticShapeUnchecked=false",
+    "-Dthc.boxedValueCache=false"
+  ],
+  "selectedWorker": true,
+  "backend": "bytecode",
+  "depth": 2,
+  "expansionBudget": 12000,
+  "inliningBudget": 12000,
+  "frozenManifest": {
+    "schema": 1,
+    "scope": "Immutable diagnostic aliases of the exact completed benchmark runtime/Core; original frozen source manifest retained separately.",
+    "originalManifest": {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/one-step-force-v1/manifest.json",
+      "sha256": "95d1b2cd22b9530580c450bf8d108bbabfac708602f8ecac5c128e5f5d6d129a"
+    },
+    "runtimeJarSha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2",
+    "files": [
+      {
+        "path": "lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+        "bytes": 17536
+      },
+      {
+        "path": "lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+        "bytes": 129475
+      },
+      {
+        "path": "lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+        "bytes": 281935
+      },
+      {
+        "path": "lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+        "bytes": 1853314
+      },
+      {
+        "path": "lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+        "bytes": 249788
+      },
+      {
+        "path": "lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+        "bytes": 537932
+      },
+      {
+        "path": "lib/thc-0.1-experiment.jar",
+        "sha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2",
+        "bytes": 731668
+      },
+      {
+        "path": "lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+        "bytes": 16991993
+      },
+      {
+        "path": "lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+        "bytes": 54592
+      },
+      {
+        "path": "lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+        "bytes": 935923
+      },
+      {
+        "path": "lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7",
+        "bytes": 73160
+      },
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "a52db255c126f189ed8b91a3f59def4908c7ae1a6dd19d727163fd927e79541f",
+        "bytes": 27623
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "8762f18267cdff84d392eed271b6d5bb8619d0884339721897a02cdafc098693",
+        "bytes": 748784
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "f100baefc7b16d90351e7b4f185696270143cd3ad1cb01b7da9ed6a0a88b4cb8",
+        "bytes": 7973
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "3b9b2cd3f8ea4b561a52391ca37913f004a3bdb10cdfa98b573156a3d097b63c",
+        "bytes": 17529
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "e08484e3b7302421b70d6fe72932619a2451cf6ac557ff875dc0a55943a4db64",
+        "bytes": 327743
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "3ad5daca858094936065dd66bbbb634d86e213cf74b32a2965e180837a11c574",
+        "bytes": 38319
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "17f3f296c92a18cf638aa1023153e15b5c058c25b8c7ce79521021f3fecdfb2b",
+        "bytes": 533551
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "ddd952748bde8512aae6220a640b26b1961f3332b4f56ee3c4fe5d2940741031",
+        "bytes": 13067894
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "642184a9ca6e833359794567066b1e01d6d6ceb2f84346b513d95dcf06dacb19",
+        "bytes": 26203610
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "04d0805720ab792ffc5e598030f42f202a267185266cd1e8e4ab5eac468de166",
+        "bytes": 870115
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "fc85814e44554592c4437a9c69c12db6616e31dc2430897cb0cbc0d8777f6ef0",
+        "bytes": 9166836
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "f173b812b02f26a56ae82c1842caece0b39ca2a152e3879535eb388d123ee480",
+        "bytes": 15791
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "19c7eca83907db7e29aa5cc63cdec474c61e53a72e85fb238e04d0e71043cbb2",
+        "bytes": 1003723
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+        "bytes": 1112
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23",
+        "bytes": 1348357
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b",
+        "bytes": 38447
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "8df1a931065b17bbe03fbe9730d08e8719d3043a3de002e0e5f0280aa663e91e",
+        "bytes": 65768
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "f7318ce6e2081114cb77becaea6627e6ba5cfacd7f1ead2754f0849ef1a8f208",
+        "bytes": 2319
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/thc-0.1-experiment.jar",
+      "sha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "a52db255c126f189ed8b91a3f59def4908c7ae1a6dd19d727163fd927e79541f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "8762f18267cdff84d392eed271b6d5bb8619d0884339721897a02cdafc098693"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "f100baefc7b16d90351e7b4f185696270143cd3ad1cb01b7da9ed6a0a88b4cb8"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "3b9b2cd3f8ea4b561a52391ca37913f004a3bdb10cdfa98b573156a3d097b63c"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "e08484e3b7302421b70d6fe72932619a2451cf6ac557ff875dc0a55943a4db64"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "3ad5daca858094936065dd66bbbb634d86e213cf74b32a2965e180837a11c574"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "17f3f296c92a18cf638aa1023153e15b5c058c25b8c7ce79521021f3fecdfb2b"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/07-Data.Set.Internal.json",
+      "sha256": "ddd952748bde8512aae6220a640b26b1961f3332b4f56ee3c4fe5d2940741031"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/08-Data.Map.Internal.json",
+      "sha256": "642184a9ca6e833359794567066b1e01d6d6ceb2f84346b513d95dcf06dacb19"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/09-Data.Map.Internal.Debug.json",
+      "sha256": "04d0805720ab792ffc5e598030f42f202a267185266cd1e8e4ab5eac468de166"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/10-Data.Map.Strict.Internal.json",
+      "sha256": "fc85814e44554592c4437a9c69c12db6616e31dc2430897cb0cbc0d8777f6ef0"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/11-Data.Map.Strict.json",
+      "sha256": "f173b812b02f26a56ae82c1842caece0b39ca2a152e3879535eb388d123ee480"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/12-THC.MapWorkload.json",
+      "sha256": "19c7eca83907db7e29aa5cc63cdec474c61e53a72e85fb238e04d0e71043cbb2"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/14-GHC.Internal.CString.json",
+      "sha256": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/15-GHC.Internal.Err.json",
+      "sha256": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/16-GHC.InterfaceClosure.json",
+      "sha256": "8df1a931065b17bbe03fbe9730d08e8719d3043a3de002e0e5f0280aa663e91e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/manifest.json",
+      "sha256": "2b85df13d82a090ee53d12955a9586b37a2b6583909d11f8fd5be78191a6bc96"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/modules.txt",
+      "sha256": "f7318ce6e2081114cb77becaea6627e6ba5cfacd7f1ead2754f0849ef1a8f208"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/results/one-step-force-agnostic/oracle.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/release",
+      "sha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/diagnose.py",
+      "sha256": "415c02dcc8028a2ea78ea5bc36034e170cc0804e656340642339a471aca1baf0"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/graph_roots.py",
+      "sha256": "cc904324fe1d0001f52dce345e800cb39b22f5a6a8595b3f0a3648c2aa3a2d39"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/MapProfile.java",
+      "sha256": "4de958783c187e9b142bb275f4e48bb15cd43a1013764d43953f5a245caf29b5"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/tools/audit-call-packets.py",
+      "sha256": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/summarize-graphs.py",
+      "sha256": "08b63925a36f39212c0b7c44fd5723019a2b1586f032f9475e0e28442df81181"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/typed-graph-review/compare.py",
+      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b"
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/javac",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/word-25.3.4.1.jar",
+        "-d",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/profile-candidate/classes",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/MapProfile.java"
+      ],
+      "stdout": "javac-profile.out",
+      "stderr": "javac-profile.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.4146384159103036
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningPolicy=Agnostic",
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.typedCases=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:FlightRecorderOptions=stackdepth=128",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/profile-candidate/classes:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/lib/word-25.3.4.1.jar",
+        "MapProfile",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/input-candidate/map/modules.txt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/results/one-step-force-agnostic/oracle.tsv",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/profile-candidate",
+        "bytecode"
+      ],
+      "stdout": "run.out",
+      "stderr": "run.err",
+      "exitCode": 0,
+      "elapsedSeconds": 63.820335850003175
+    }
+  ],
+  "outputs": [
+    {
+      "path": "allocation-classes.tsv",
+      "sha256": "0a98ed1d58be2fbfdf84729f643e51743a7de51b892f9655b5af6086d61d96ef",
+      "bytes": 359
+    },
+    {
+      "path": "allocation-sites.tsv",
+      "sha256": "8638dcd5fab6c743dd71417230c192a4cba58761f494ef2871025cd48951b563",
+      "bytes": 2270
+    },
+    {
+      "path": "cpu-sites.tsv",
+      "sha256": "ce7d94696eb2d3f204498c958fff069695eaa4b3e45e0c22c7c56a14137a0b63",
+      "bytes": 295
+    },
+    {
+      "path": "javac-profile.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "javac-profile.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "map.jfr",
+      "sha256": "5e737ab3ad0325e5c9b12e7c4ab7661e7291e15d6004908e3f843d7cb9518596",
+      "bytes": 362480
+    },
+    {
+      "path": "run.err",
+      "sha256": "69396c3c6c3e8ed79ba78c59969c294fd4c9be2ce98ff1fa77dab368aaf9d53f",
+      "bytes": 8629
+    },
+    {
+      "path": "run.log",
+      "sha256": "69396c3c6c3e8ed79ba78c59969c294fd4c9be2ce98ff1fa77dab368aaf9d53f",
+      "bytes": 8629
+    },
+    {
+      "path": "run.out",
+      "sha256": "d7ceefd722963153b8d325645ad528b4e952e76e43da112699893472b55d36e6",
+      "bytes": 105
+    },
+    {
+      "path": "run.tsv",
+      "sha256": "d7ceefd722963153b8d325645ad528b4e952e76e43da112699893472b55d36e6",
+      "bytes": 105
+    },
+    {
+      "path": "sample-window.txt",
+      "sha256": "2c977f922b7a69f4ec501473aa47b84744ced0b36aa14b829e46a6023788f49c",
+      "bytes": 62
+    },
+    {
+      "path": "validation.json",
+      "sha256": "848b6df9fe2a5f4810de44adf1d48f4d3f2211ae861c99489be6fde2c0a2806b",
+      "bytes": 1629
+    }
+  ]
+}

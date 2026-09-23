@@ -1,0 +1,75 @@
+{
+  "adaptedFor": "Linux correct caller-demand diagnostics; frozen input aliases, Default policy, warm45s/min30000calls; only main worker parsed. No throughput conclusions from diagnostic processes.",
+  "originals": [
+    {
+      "path": "work/boxed-value-diagnostics-tools/diagnose.py",
+      "sha256": "df8e19c241d3adb5a492309514871fd5c8ecb4d9a6334baa56d2c12ea44d9141"
+    },
+    {
+      "path": "work/boxed-value-diagnostics-tools/graph_roots.py",
+      "sha256": "cc904324fe1d0001f52dce345e800cb39b22f5a6a8595b3f0a3648c2aa3a2d39"
+    },
+    {
+      "path": "work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4"
+    },
+    {
+      "path": "work/perf-sprint-v2/MapProfile.java",
+      "sha256": "1f81b534f5fe940439ab2826021ef2aeb487d6a0bd92b6d523b71b6c5fb73ac3"
+    },
+    {
+      "path": "work/perf-sprint-v2/summarize-graphs.py",
+      "sha256": "08b63925a36f39212c0b7c44fd5723019a2b1586f032f9475e0e28442df81181"
+    },
+    {
+      "path": "work/typed-graph-review/compare.py",
+      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b"
+    },
+    {
+      "path": "tools/audit-call-packets.py",
+      "sha256": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e"
+    }
+  ],
+  "files": [
+    {
+      "path": "settings.gradle.kts",
+      "sha256": "5b0d58cf2560ea8db80bdddca3702036b137466c88d691714566d2c62d6b88e5",
+      "bytes": 71
+    },
+    {
+      "path": "tools/audit-call-packets.py",
+      "sha256": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e",
+      "bytes": 10855
+    },
+    {
+      "path": "work/boxed-value-diagnostics-tools/diagnose.py",
+      "sha256": "415c02dcc8028a2ea78ea5bc36034e170cc0804e656340642339a471aca1baf0",
+      "bytes": 8882
+    },
+    {
+      "path": "work/boxed-value-diagnostics-tools/graph_roots.py",
+      "sha256": "cc904324fe1d0001f52dce345e800cb39b22f5a6a8595b3f0a3648c2aa3a2d39",
+      "bytes": 2329
+    },
+    {
+      "path": "work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4",
+      "bytes": 9160
+    },
+    {
+      "path": "work/perf-sprint-v2/MapProfile.java",
+      "sha256": "4de958783c187e9b142bb275f4e48bb15cd43a1013764d43953f5a245caf29b5",
+      "bytes": 5533
+    },
+    {
+      "path": "work/perf-sprint-v2/summarize-graphs.py",
+      "sha256": "08b63925a36f39212c0b7c44fd5723019a2b1586f032f9475e0e28442df81181",
+      "bytes": 2542
+    },
+    {
+      "path": "work/typed-graph-review/compare.py",
+      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b",
+      "bytes": 8681
+    }
+  ]
+}

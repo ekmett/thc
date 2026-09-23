@@ -1,0 +1,4346 @@
+{
+  "scope": "Matched actual latest Map worker, explicit Agnostic, same release Core and caller demand absent. Force loop identification requires Force.execute as first source frame. Static materialization/call counts are not dynamic counts.",
+  "variants": [
+    {
+      "side": "control",
+      "identity": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3481,
+        "codeBytes": 201202,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+          "sha256": "a5ba2a8341e5c84de7ee829d79b2304f6360e1a0a23f6971b3fc68b377ac2e12",
+          "bytes": 63517128
+        }
+      },
+      "summary": {
+        "peNodes": 660,
+        "beforeHighNodes": 6789,
+        "afterMidNodes": 16925,
+        "guestCalls": 75,
+        "constantGuestTargets": 75,
+        "lateArrays": 75,
+        "lateLongArrayPackets": 0,
+        "allResidualReferenceArrayPackets": 75,
+        "lateLongBoxes": 40,
+        "materializedClasses": {
+          "java.lang.Long": 40,
+          "java.lang.Object[]": 75,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 213,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 57,
+          "thc.runtime.Thunk": 9,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 9
+        },
+        "frontierStateCounts": {
+          "Cutoff": 65,
+          "Expanded": 10
+        }
+      },
+      "exactAllocation": [
+        {
+          "bytes": 1703297536,
+          "calls": 256,
+          "bytesPerCall": 6653506.0
+        },
+        {
+          "bytes": 1703297536,
+          "calls": 256,
+          "bytesPerCall": 6653506.0
+        },
+        {
+          "bytes": 1703297536,
+          "calls": 256,
+          "bytesPerCall": 6653506.0
+        }
+      ],
+      "phases": [
+        {
+          "name": "2: Before phase HighTierLowering",
+          "parsedGraph": {
+            "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/parsed-TruffleHotSpotCompilation-3481[lambda_ww]/graph-00005.json",
+            "sha256": "7a3b9064b88b6d8d5e75beb3e3e8cf1d7587d9eb931ba76ab98542b2b379e323",
+            "bytes": 87830912
+          },
+          "nodes": 6789,
+          "allLoopBeginCount": 11,
+          "forceLoopCount": 5,
+          "forceLoops": [
+            {
+              "loop": {
+                "id": 3059,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "10",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 3060,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "10",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(2990, 3197, 44893, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 2990,
+                        "to": 3060,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 2990,
+                        "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+                        "block": "0",
+                        "properties": {
+                          "stamp": "a!# thc.runtime.Thunk",
+                          "value": "Object[Instance<thc.runtime.Thunk>]",
+                          "name": "C(Object[Instance<thc.runtime.Thunk>]) a java.lang.Object"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 3197,
+                        "to": 3060,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 3197,
+                        "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                        "block": "12",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "field": "thc.runtime.Thunk.value",
+                          "name": "LoadField#Thunk.value"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47) [bci:1]"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 44893,
+                        "to": 3060,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 44893,
+                        "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                        "block": "13",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "AllocatedObject"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6$$Factory.create((Unknown%20Source):-1) [bci:0]"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 4385,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "194",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 4386,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "194",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(2990, 4454, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 2990,
+                        "to": 4386,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 2990,
+                        "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+                        "block": "0",
+                        "properties": {
+                          "stamp": "a!# thc.runtime.Thunk",
+                          "value": "Object[Instance<thc.runtime.Thunk>]",
+                          "name": "C(Object[Instance<thc.runtime.Thunk>]) a java.lang.Object"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 4454,
+                        "to": 4386,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 4454,
+                        "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                        "block": "196",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "field": "thc.runtime.Thunk.value",
+                          "name": "LoadField#Thunk.value"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47) [bci:1]"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 18219,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "472",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 18220,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "472",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(18384, 18262, 45602, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 18384,
+                        "to": 18220,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 18384,
+                        "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                        "block": "471",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Phi(11909, 39143, 41930, a java.lang.Object)"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 18262,
+                        "to": 18220,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 18262,
+                        "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                        "block": "474",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "field": "thc.runtime.Thunk.value",
+                          "name": "LoadField#Thunk.value"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 45602,
+                        "to": 18220,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 45602,
+                        "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                        "block": "475",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "AllocatedObject"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6$$Factory.create((Unknown%20Source):-1)"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 22724,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "494",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 22725,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "494",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(22885, 22766, 45613, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 22885,
+                        "to": 22725,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 22885,
+                        "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                        "block": "493",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Phi(11909, 39160, 42147, a java.lang.Object)"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 22766,
+                        "to": 22725,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 22766,
+                        "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                        "block": "496",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "field": "thc.runtime.Thunk.value",
+                          "name": "LoadField#Thunk.value"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 45613,
+                        "to": 22725,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 45613,
+                        "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                        "block": "497",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "AllocatedObject"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6$$Factory.create((Unknown%20Source):-1)"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 41758,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "450",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 41759,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "450",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(41850, 41787, 45593, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 41850,
+                        "to": 41759,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 41850,
+                        "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                        "block": "449",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Phi(11909, 41864, a java.lang.Object)"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 41787,
+                        "to": 41759,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 41787,
+                        "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                        "block": "452",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "field": "thc.runtime.Thunk.value",
+                          "name": "LoadField#Thunk.value"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 45593,
+                        "to": 41759,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 45593,
+                        "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                        "block": "453",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "AllocatedObject"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6$$Factory.create((Unknown%20Source):-1)"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            }
+          ],
+          "thunkMaterializationCount": 0,
+          "materializedThunks": []
+        },
+        {
+          "name": "4: After mid tier",
+          "parsedGraph": {
+            "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/parsed-TruffleHotSpotCompilation-3481[lambda_ww]/graph-00007.json",
+            "sha256": "76a499cf5146f879915598850f97ed6c37a8df687fc4884d66febb5014d8a208",
+            "bytes": 152555047
+          },
+          "nodes": 16925,
+          "allLoopBeginCount": 12,
+          "forceLoopCount": 5,
+          "forceLoops": [
+            {
+              "loop": {
+                "id": 3059,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "17",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 3060,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "17",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(2990, 46673, 62933, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 2990,
+                        "to": 3060,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 2990,
+                        "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+                        "block": "2",
+                        "properties": {
+                          "stamp": "a!# thc.runtime.Thunk",
+                          "value": "Object[Instance<thc.runtime.Thunk>]",
+                          "name": "C(Object[Instance<thc.runtime.Thunk>]) a java.lang.Object"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 46673,
+                        "to": 3060,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 46673,
+                        "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                        "block": "19",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Uncompress"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47) [bci:1]"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 62933,
+                        "to": 3060,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 62933,
+                        "nodeClass": "jdk.graal.compiler.nodes.extended.PublishWritesNode",
+                        "block": "23",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "PublishWrites"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 4385,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "617",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 4386,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "617",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(2990, 45673, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 2990,
+                        "to": 4386,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 2990,
+                        "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+                        "block": "2",
+                        "properties": {
+                          "stamp": "a!# thc.runtime.Thunk",
+                          "value": "Object[Instance<thc.runtime.Thunk>]",
+                          "name": "C(Object[Instance<thc.runtime.Thunk>]) a java.lang.Object"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 45673,
+                        "to": 4386,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 45673,
+                        "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                        "block": "619",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Uncompress"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47) [bci:1]"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 18219,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "1606",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 18220,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "1606",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(18384, 46043, 51998, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 18384,
+                        "to": 18220,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 18384,
+                        "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                        "block": "1605",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Phi(11909, 46026, 46062, a java.lang.Object)"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 46043,
+                        "to": 18220,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 46043,
+                        "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                        "block": "1608",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Uncompress"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 51998,
+                        "to": 18220,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 51998,
+                        "nodeClass": "jdk.graal.compiler.nodes.extended.PublishWritesNode",
+                        "block": "1612",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "PublishWrites"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 22724,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "1644",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 22725,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "1644",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(22885, 46096, 52074, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 22885,
+                        "to": 22725,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 22885,
+                        "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                        "block": "1643",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Phi(11909, 46079, 46062, a java.lang.Object)"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 46096,
+                        "to": 22725,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 46096,
+                        "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                        "block": "1646",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Uncompress"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 52074,
+                        "to": 22725,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 52074,
+                        "nodeClass": "jdk.graal.compiler.nodes.extended.PublishWritesNode",
+                        "block": "1650",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "PublishWrites"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            },
+            {
+              "loop": {
+                "id": 41758,
+                "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+                "block": "1568",
+                "properties": {
+                  "stamp": "void",
+                  "name": "LoopBegin"
+                },
+                "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+              },
+              "phis": [
+                {
+                  "node": {
+                    "id": 41759,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "1568",
+                    "properties": {
+                      "stamp": "a java.lang.Object",
+                      "name": "Phi(41850, 45985, 51922, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)"
+                  },
+                  "values": [
+                    {
+                      "edge": {
+                        "from": 41850,
+                        "to": 41759,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 1,
+                        "listIndex": 0
+                      },
+                      "node": {
+                        "id": 41850,
+                        "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                        "block": "1567",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Phi(11909, 45968, a java.lang.Object)"
+                        },
+                        "sourceFirstFrame": null
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 45985,
+                        "to": 41759,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 0,
+                        "toIndex": 2,
+                        "listIndex": 1
+                      },
+                      "node": {
+                        "id": 45985,
+                        "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                        "block": "1570",
+                        "properties": {
+                          "stamp": "a java.lang.Object",
+                          "name": "Uncompress"
+                        },
+                        "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)"
+                      }
+                    },
+                    {
+                      "edge": {
+                        "from": 51922,
+                        "to": 41759,
+                        "label": "values",
+                        "type": "Value",
+                        "fromIndex": 1,
+                        "toIndex": 3,
+                        "listIndex": 2
+                      },
+                      "node": {
+                        "id": 51922,
+                        "nodeClass": "jdk.graal.compiler.nodes.extended.PublishWritesNode",
+                        "block": "1574",
+                        "properties": {
+                          "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                          "name": "PublishWrites"
+                        },
+                        "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "backedges": []
+            }
+          ],
+          "thunkMaterializationCount": 9,
+          "materializedThunks": [
+            {
+              "node": {
+                "id": 50544,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "713",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 50546,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50546,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 50545,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50545,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 50547,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50547,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 50549,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50549,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 50551,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50551,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 50566,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50566,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 50571,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 50571,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "715",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(50544, 50514, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50544,
+                    "to": 68618,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68618,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 51076,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "797",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 51078,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51078,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "797",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 51077,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51077,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "797",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 51079,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51079,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "797",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 51081,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51081,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "797",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 51083,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51083,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "797",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 51095,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51095,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "797",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 51100,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 51100,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "799",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(51076, 51050, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51076,
+                    "to": 68628,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68628,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "797",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 63622,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "117",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 63624,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63624,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "117",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 63623,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63623,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "117",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 63625,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63625,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "117",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 63627,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63627,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "117",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 63629,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63629,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "117",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 63641,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63641,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "117",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 63646,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 63646,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "119",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(63622, 63596, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63622,
+                    "to": 68926,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68926,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "117",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 64445,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "243",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 64447,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64447,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "243",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 64446,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64446,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "243",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 64448,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64448,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "243",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 64450,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64450,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "243",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 64452,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64452,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "243",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 64464,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64464,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "243",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 64469,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 64469,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "245",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(64445, 64419, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64445,
+                    "to": 68940,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68940,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "243",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 64663,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "274",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 64665,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64665,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "274",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 64664,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64664,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "274",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 64666,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64666,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "274",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 64668,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64668,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "274",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 64670,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64670,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "274",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 64682,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64682,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "274",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 64687,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 64687,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "276",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(64663, 64637, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64663,
+                    "to": 68946,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68946,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "274",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 65647,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "412",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 65649,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65649,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "412",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 65648,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65648,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "412",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 65650,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65650,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "412",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 65652,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65652,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "412",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 65654,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65654,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "412",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 65666,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65666,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "412",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 65671,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 65671,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "414",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(65647, 65621, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65647,
+                    "to": 68962,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68962,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "412",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 66470,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "538",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 66472,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66472,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "538",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 66471,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66471,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "538",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 66473,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66473,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "538",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 66475,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66475,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "538",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 66477,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66477,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "538",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 66489,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66489,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "538",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 66494,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 66494,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "540",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(66470, 66444, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66470,
+                    "to": 68976,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68976,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "538",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 66688,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "569",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 66690,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66690,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "569",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 66689,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66689,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "569",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 66691,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66691,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "569",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 66693,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66693,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "569",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 66695,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66695,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "569",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 66707,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66707,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "569",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 66712,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 66712,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "571",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(66688, 66662, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66688,
+                    "to": 68982,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68982,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "569",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 66906,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "600",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 66908,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66908,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "600",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 66907,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66907,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "600",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 66909,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66909,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "600",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 66911,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66911,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "600",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 66913,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66913,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "600",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 66925,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66925,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "600",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 66930,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 66930,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "602",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(66906, 66880, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66906,
+                    "to": 68988,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68988,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "600",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "side": "candidate",
+      "identity": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3487,
+        "codeBytes": 180477,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+          "sha256": "71222419d2c6a159b1209dd22be0036d88292ca1517431b9b7a031fe3ac8c1f9",
+          "bytes": 65159022
+        }
+      },
+      "summary": {
+        "peNodes": 624,
+        "beforeHighNodes": 6956,
+        "afterMidNodes": 16019,
+        "guestCalls": 76,
+        "constantGuestTargets": 76,
+        "lateArrays": 76,
+        "lateLongArrayPackets": 0,
+        "allResidualReferenceArrayPackets": 76,
+        "lateLongBoxes": 41,
+        "materializedClasses": {
+          "java.lang.Long": 41,
+          "java.lang.Object[]": 76,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 168,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 60,
+          "thc.runtime.Thunk": 9,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 9
+        },
+        "frontierStateCounts": {
+          "Cutoff": 67,
+          "Expanded": 9
+        }
+      },
+      "exactAllocation": [
+        {
+          "bytes": 1696920064,
+          "calls": 256,
+          "bytesPerCall": 6628594.0
+        },
+        {
+          "bytes": 1696920064,
+          "calls": 256,
+          "bytesPerCall": 6628594.0
+        },
+        {
+          "bytes": 1696920064,
+          "calls": 256,
+          "bytesPerCall": 6628594.0
+        }
+      ],
+      "phases": [
+        {
+          "name": "2: Before phase HighTierLowering",
+          "parsedGraph": {
+            "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00005.json",
+            "sha256": "8670419c058224f5c7736a1ef84179da5d757d34bbf1acb3942aefa685de827e",
+            "bytes": 91322959
+          },
+          "nodes": 6956,
+          "allLoopBeginCount": 6,
+          "forceLoopCount": 0,
+          "forceLoops": [],
+          "thunkMaterializationCount": 0,
+          "materializedThunks": []
+        },
+        {
+          "name": "4: After mid tier",
+          "parsedGraph": {
+            "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/parsed-TruffleHotSpotCompilation-3487[lambda_ww]/graph-00007.json",
+            "sha256": "5b3671b2463b50f2b32f36175777330f0650020459492bf597c354ecd8ae20fa",
+            "bytes": 143250320
+          },
+          "nodes": 16019,
+          "allLoopBeginCount": 8,
+          "forceLoopCount": 0,
+          "forceLoops": [],
+          "thunkMaterializationCount": 9,
+          "materializedThunks": [
+            {
+              "node": {
+                "id": 50997,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "713",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 50999,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50999,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 50998,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 50998,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 51000,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51000,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 51002,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51002,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 51004,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51004,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 51019,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51019,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 51024,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 51024,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "715",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(50997, 50967, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 50997,
+                    "to": 67947,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 67947,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "713",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 51653,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "812",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 51655,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51655,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "812",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 51654,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51654,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "812",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 51656,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51656,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "812",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 51658,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51658,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "812",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 51660,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51660,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "812",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 51672,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 51672,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "812",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 51677,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 51677,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "814",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(51653, 51627, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 51653,
+                    "to": 67959,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 67959,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "812",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 63107,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "127",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 63109,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63109,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "127",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 63108,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63108,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "127",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 63110,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63110,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "127",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 63112,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63112,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "127",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 63114,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63114,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "127",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 63126,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63126,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "127",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 63131,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 63131,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "129",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(63107, 63081, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63107,
+                    "to": 68169,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68169,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "127",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 63926,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "253",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 63928,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63928,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "253",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 63927,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63927,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "253",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 63929,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63929,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "253",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 63931,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63931,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "253",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 63933,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63933,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "253",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 63945,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 63945,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "253",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 63950,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 63950,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "255",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(63926, 63900, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 63926,
+                    "to": 68183,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68183,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "253",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 64142,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "284",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 64144,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64144,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "284",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 64143,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64143,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "284",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 64145,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64145,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "284",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 64147,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64147,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "284",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 64149,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64149,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "284",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 64161,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 64161,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "284",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 64166,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 64166,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "286",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(64142, 64116, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 64142,
+                    "to": 68189,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68189,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "284",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 65008,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "415",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 65010,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65010,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "415",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 65009,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65009,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "415",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 65011,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65011,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "415",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 65013,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65013,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "415",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 65015,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65015,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "415",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 65027,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65027,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "415",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 65032,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 65032,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "417",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(65008, 64982, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65008,
+                    "to": 68203,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68203,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "415",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 65827,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "541",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 65829,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65829,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "541",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 65828,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65828,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "541",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 65830,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65830,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "541",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 65832,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65832,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "541",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 65834,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65834,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "541",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 65846,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 65846,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "541",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 65851,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 65851,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "543",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(65827, 65801, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 65827,
+                    "to": 68217,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68217,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "541",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 66043,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "572",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 66045,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66045,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "572",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 66044,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66044,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "572",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 66046,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66046,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "572",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 66048,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66048,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "572",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 66050,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66050,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "572",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 66062,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66062,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "572",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 66067,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 66067,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "574",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(66043, 66017, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66043,
+                    "to": 68223,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68223,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "572",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            },
+            {
+              "node": {
+                "id": 66259,
+                "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+                "block": "603",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "New Thunk"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+              },
+              "uses": [
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 66261,
+                    "label": "next",
+                    "type": "Successor",
+                    "fromIndex": 0,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66261,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+                    "block": "603",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "Write#INIT_LOCATION"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 66260,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66260,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "603",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 66262,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66262,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "603",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 66264,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66264,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "603",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 66266,
+                    "label": "base",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66266,
+                    "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+                    "block": "603",
+                    "properties": {
+                      "stamp": "void*",
+                      "name": "OffsetAddress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 66278,
+                    "label": "value",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 0,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 66278,
+                    "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+                    "block": "603",
+                    "properties": {
+                      "stamp": "n!# thc.runtime.Thunk",
+                      "name": "Compress"
+                    },
+                    "sourceFirstFrame": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 66283,
+                    "label": "values",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 1,
+                    "listIndex": 0
+                  },
+                  "node": {
+                    "id": 66283,
+                    "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                    "block": "605",
+                    "properties": {
+                      "stamp": "a!# thc.runtime.Thunk",
+                      "name": "Phi(66259, 66233, a java.lang.Object)"
+                    },
+                    "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]"
+                  }
+                },
+                {
+                  "edge": {
+                    "from": 66259,
+                    "to": 68229,
+                    "label": "object",
+                    "type": "Value",
+                    "fromIndex": 1,
+                    "toIndex": 3,
+                    "listIndex": -1
+                  },
+                  "node": {
+                    "id": 68229,
+                    "nodeClass": "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode",
+                    "block": "603",
+                    "properties": {
+                      "stamp": "void",
+                      "name": "G1PostWriteBarrier"
+                    },
+                    "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

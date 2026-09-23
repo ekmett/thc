@@ -1,0 +1,352 @@
+{
+  "passed": true,
+  "totals": {
+    "tests": 179,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "files": [
+    {
+      "path": "build/test-results/test/TEST-thc.BloomHeaderTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6827c0efcd4228a0a2113a7715f96b74c192d063caf6ddf5168596774d132772"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.BytecodeBackendTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "264277e9cdd0f4854f834a1ede1596ef120fd11c517c773e0b4ee9f616011375"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.BytecodeCoreProofTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6078a8d0c7cbc6e69e1b5a0dcae7b21405dc0c6d534e0473d3cb934a9a9b7c7a"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.BytecodeSourceNotesTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "47ae0af0db1947a002ccfb9ce8742081ed5b2a6511fd2c69e546f840c5337774"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.CStringTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "95b5a7425b8fe5766088c051856fb19ae541ce3fb33e170daa5948cb785fa109"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.CasePrimitiveTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a0c70887b54fe59865fae0f837443064b415e1a01e6ffd8eac547f508ee8bc93"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.CoreLinkerTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5c8ddd9121be4b9da811e85c8114b6ee6465e5a6bcc73e253add2a0c56b0de0e"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.DiagnosticModeTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a7ce1e062810c6bc9ce53a5d95b9de35679b1402c4ef3edbbad7f32cb5f4dabe"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.FramesTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d7d3e19471ecbbd31a70afd6b086fccb45ef43a24a777c1a14018189f488b47c"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.GuestExceptionsTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "333576eb254fbaedcc9f548c53c5a8f2f1836f014a69fa312b631b0af19d2efc"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RealCoreCallDemandTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "34ed6d6b053883be6321cfa1396fda8bb7cd3fb54e3f53f487f877771ff2f582"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RealCoreEntryContractTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "46a3839a55e27b2135d33afc04fe6acbae523e04901108335af1e01780041b6c"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RealCoreJoinTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ec9ddc6628c90fbaf7c5a69241d49159125ec51c809b53a934967276cf36369a"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RuntimeTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "718fca21a0e40fc863da6d17406a32a3a24481725306dcc5b4d94c4184ce0ab3"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.SelfTailProfileTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "83fe53ba5592096b91a83ab71cf1ab39d81e5181d8cab5b56a41906959e99015"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.StrictFieldsTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e424f4dc823543181a131b66d8363f94a40be8f43810d3cbe217aaa4224a53d3"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.TailCycleTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d253f764f1cffa565af7b2bcc1832d046125b83cb0acb293d41fc0670f7ff5ca"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.ThunkDispatchTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ef44090f1bf72592c663384482e924978dd6bbcae0578df3f3ce1caa2e839fe2"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.ThunkRetentionTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7f5169515bc1a8c12c3751ea7fe9e0dfbf4ebcb51c39b80365f46283f0638af8"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.TypedApplicationTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8a0eb655783df61035ba6472ed0a6fde0873a5683f296c13321506c6722fd902"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.AstSelfCallTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "be77f091c5d718089eacee3ed032fd4c8c28a1a853a79189c3f8996642cc09f1"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.BindingCellMetadataTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c081a67b594489fe83d235e2af3ffc4ac19f7f9dd2dc8f722f45c19850b28d98"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.BloomValueTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "acd6fcd18000911a4cc3e29a63f662df54c6ff6f58f8b551267fb90b7dbd7352"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.BoxedValueCacheTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f3ce6235d17270af45b915c1292181ec248064f962b4339ae53e5ec35108c6a0"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.CallDemandTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "78a07b1fe7d16d282ecf2c14a17e5513af097b5ceb9b9d41309a2ef68d2801cf"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "14b92737d0feeb232fce53c4415ba9e3b9ed658b9523336080c10372f0a5c174"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "71aa1f465e8029cec6a2e00f02a19e08bc355ff9224fd56d5f9dc40df0d8a464"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.CoreProofJoinTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "841a4ad12bf4d321968ce59e4037ce150e3985f2c045be434fe7a018f117bc12"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.CoreSourceTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "63c7db436546450e2c0bca40f76afffdaa8a921b0047604e5c355d92ecd5e42b"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.EntryContractTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f9d488543a2dee702be540d01a1b8da31910e905b83a84116e6f8e819370728f"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.EntrySelfCallTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fd5858c47af4d0953525d01819533ec0fdd0772fd9e304c135824791e8387323"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ForcedBindingTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a3d5b0d2b9238612f9564b03030adf9d64c7e8c7527a6e999c936ca899fcbe9a"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.JoinWhnfProofTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "0acd9f7cb88052ae2d3ba1e3b7f2010076edae57b26ff1e8a056dbe748d8780c"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "573e247852180533d5e48b2d29fdb64e37d4b483bdc720186179d7bc2ecb133d"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.OperandRetentionTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5ab3879f82fd39ecb1fa03b4bcd059fd285294c0724ea6fa67f86ba543afa0ec"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ReferenceCaptureTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3c4d7f2bb26fec83b2164b07aabd331baefb09ad146ecf4039bf148c1572c808"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ReferenceFieldTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "60166307bf6bd4aa5674e04c0a77687089223c932fb30fa783d71873002daca5"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ReferenceFormalTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c231672bfdee124f953d392d707ecaa9c8b54a4ac46547c5b35d4c4427f6696c"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.SourceCloneTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "69393e0f06deca99660d1b95b8c8e6382989ad83d5f9fd6d50b986451ade8cbc"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "dd0062c594270e88b8fc20b13243e683f8c820c88524b9d3fc2bfac0d9183f36"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.TypedCaseTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "baf32a44bb27f23cc0aaf752ab6184277e457465da50d5c746ae654ec30ebf14"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.TypedExecutionTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "593e1f3bb5b62558b3eb3a03482e8665a493345189dca1fa421e63d3708f4448"
+    }
+  ],
+  "runtimeJar": {
+    "path": "/private/tmp/thc-one-step-force-v1/build/install/thc/lib/thc-0.1-experiment.jar",
+    "sha256": "c2c2d12e10beb636c830f45c77f7b8998fbb98109af7a74263d64835695b52d2",
+    "bytes": 731668
+  }
+}

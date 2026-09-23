@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.CallDemandTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-09-23T10:29:09.519Z" hostname="eak-mba" time="0.128">
+  <properties/>
+  <testcase name="demandedFunctionExpressionsAreForcedToClosureWhnf()" classname="thc.runtime.CallDemandTest" time="0.015"/>
+  <testcase name="overapplicationDemandsOnlyTheSignaturePrefix()" classname="thc.runtime.CallDemandTest" time="0.017"/>
+  <testcase name="strictVariableArgumentsForceOneSharedThunkAndKeepLazyEnclosingBindings()" classname="thc.runtime.CallDemandTest" time="0.019"/>
+  <testcase name="callerDemandIsOptInAndDoesNotChangeAnAlreadyLoweredProgram()" classname="thc.runtime.CallDemandTest" time="0.005"/>
+  <testcase name="localJoinDemandRetainsTheCoercionSlotWithoutAddingAnEntryContract()" classname="thc.runtime.CallDemandTest" time="0.012"/>
+  <testcase name="undersaturatedDemandKeepsThePapPrefixLazyAndSharesItAfterSaturation()" classname="thc.runtime.CallDemandTest" time="0.022"/>
+  <testcase name="ordinaryDemandEliminatesArgumentThunksWithoutChangingUnknownCallsOrFormalContracts()" classname="thc.runtime.CallDemandTest" time="0.035"/>
+  <testcase name="malformedCallDemandFailsClosedAndMissingMetadataRemainsConservative()" classname="thc.runtime.CallDemandTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

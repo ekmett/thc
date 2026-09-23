@@ -1,0 +1,285 @@
+{
+  "scope": "Actual selected latest worker graphs and separate exact allocated-byte counters; static sites are not dynamic execution counts. Agnostic policy both sides; caller demand absent.",
+  "variants": [
+    {
+      "side": "control",
+      "root": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3481,
+        "codeBytes": 201202,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+          "sha256": "a5ba2a8341e5c84de7ee829d79b2304f6360e1a0a23f6971b3fc68b377ac2e12",
+          "bytes": 63517128
+        }
+      },
+      "hotInsert": {
+        "id": 2,
+        "target": "lambda sc, x, ds1",
+        "state": "Inlined",
+        "frequency": 6666.333333333333,
+        "irNodes": 854,
+        "callDiff": null,
+        "recursionDepth": 0
+      },
+      "rootChildren": [
+        {
+          "id": 1,
+          "target": "lvl",
+          "state": "Inlined",
+          "frequency": 0.3333333333333333,
+          "irNodes": 10,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 2,
+          "target": "lambda sc, x, ds1",
+          "state": "Inlined",
+          "frequency": 6666.333333333333,
+          "irNodes": 854,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 3,
+          "target": "lambda sc, x, ds1",
+          "state": "Inlined",
+          "frequency": 0.6666666666666666,
+          "irNodes": 854,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 4,
+          "target": "lambda ww, ds2",
+          "state": "Inlined",
+          "frequency": 1666.0,
+          "irNodes": 333,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 5,
+          "target": "lambda ww, ds2",
+          "state": "Inlined",
+          "frequency": 0.6666666666666666,
+          "irNodes": 333,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 6,
+          "target": "lambda ww, ds",
+          "state": "Expanded",
+          "frequency": 0.6666666666666666,
+          "irNodes": 189,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 7,
+          "target": "lambda def, ww, ds1",
+          "state": "Inlined",
+          "frequency": 6666.333333333333,
+          "irNodes": 236,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 8,
+          "target": "lambda def, ww, ds1",
+          "state": "Inlined",
+          "frequency": 0.6666666666666666,
+          "irNodes": 236,
+          "callDiff": null,
+          "recursionDepth": 0
+        }
+      ],
+      "exactAllocationSamples": [
+        {
+          "bytes": 1703297536,
+          "calls": 256,
+          "bytesPerCall": 6653506.0
+        },
+        {
+          "bytes": 1703297536,
+          "calls": 256,
+          "bytesPerCall": 6653506.0
+        },
+        {
+          "bytes": 1703297536,
+          "calls": 256,
+          "bytesPerCall": 6653506.0
+        }
+      ],
+      "graph": {
+        "peNodes": 660,
+        "beforeHighNodes": 6789,
+        "afterMidNodes": 16925,
+        "guestCalls": 75,
+        "constantGuestTargets": 75,
+        "lateArrays": 75,
+        "lateLongArrayPackets": 0,
+        "allResidualReferenceArrayPackets": 75,
+        "lateLongBoxes": 40,
+        "materializedClasses": {
+          "java.lang.Long": 40,
+          "java.lang.Object[]": 75,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 213,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 57,
+          "thc.runtime.Thunk": 9,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 9
+        },
+        "frontierStateCounts": {
+          "Cutoff": 65,
+          "Expanded": 10
+        }
+      }
+    },
+    {
+      "side": "candidate",
+      "root": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3487,
+        "codeBytes": 180477,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+          "sha256": "71222419d2c6a159b1209dd22be0036d88292ca1517431b9b7a031fe3ac8c1f9",
+          "bytes": 65159022
+        }
+      },
+      "hotInsert": {
+        "id": 2,
+        "target": "lambda sc, x, ds1",
+        "state": "Inlined",
+        "frequency": 6666.333333333333,
+        "irNodes": 854,
+        "callDiff": null,
+        "recursionDepth": 0
+      },
+      "rootChildren": [
+        {
+          "id": 1,
+          "target": "lvl",
+          "state": "Inlined",
+          "frequency": 0.3333333333333333,
+          "irNodes": 10,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 2,
+          "target": "lambda sc, x, ds1",
+          "state": "Inlined",
+          "frequency": 6666.333333333333,
+          "irNodes": 854,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 3,
+          "target": "lambda sc, x, ds1",
+          "state": "Inlined",
+          "frequency": 0.6666666666666666,
+          "irNodes": 854,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 4,
+          "target": "lambda ww, ds2",
+          "state": "Inlined",
+          "frequency": 1666.0,
+          "irNodes": 333,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 5,
+          "target": "lambda ww, ds2",
+          "state": "Inlined",
+          "frequency": 0.6666666666666666,
+          "irNodes": 333,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 6,
+          "target": "lambda ww, ds",
+          "state": "Expanded",
+          "frequency": 0.6666666666666666,
+          "irNodes": 189,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 7,
+          "target": "lambda def, ww, ds1",
+          "state": "Inlined",
+          "frequency": 6666.333333333333,
+          "irNodes": 231,
+          "callDiff": null,
+          "recursionDepth": 0
+        },
+        {
+          "id": 8,
+          "target": "lambda def, ww, ds1",
+          "state": "Inlined",
+          "frequency": 0.6666666666666666,
+          "irNodes": 231,
+          "callDiff": null,
+          "recursionDepth": 0
+        }
+      ],
+      "exactAllocationSamples": [
+        {
+          "bytes": 1696920064,
+          "calls": 256,
+          "bytesPerCall": 6628594.0
+        },
+        {
+          "bytes": 1696920064,
+          "calls": 256,
+          "bytesPerCall": 6628594.0
+        },
+        {
+          "bytes": 1696920064,
+          "calls": 256,
+          "bytesPerCall": 6628594.0
+        }
+      ],
+      "graph": {
+        "peNodes": 624,
+        "beforeHighNodes": 6956,
+        "afterMidNodes": 16019,
+        "guestCalls": 76,
+        "constantGuestTargets": 76,
+        "lateArrays": 76,
+        "lateLongArrayPackets": 0,
+        "allResidualReferenceArrayPackets": 76,
+        "lateLongBoxes": 41,
+        "materializedClasses": {
+          "java.lang.Long": 41,
+          "java.lang.Object[]": 76,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 168,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 60,
+          "thc.runtime.Thunk": 9,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 9
+        },
+        "frontierStateCounts": {
+          "Cutoff": 67,
+          "Expanded": 9
+        }
+      }
+    }
+  ]
+}

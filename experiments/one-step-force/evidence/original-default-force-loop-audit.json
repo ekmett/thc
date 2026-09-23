@@ -1,0 +1,804 @@
+{
+  "scope": "Read-only original Linux Default control worker graph, before high-tier lowering. Force-loop simplification candidate, not a measured optimization.",
+  "bgv": {
+    "path": "TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+    "sha256": "0aab27c4d42c306a4715a200564cd2a06d299e60bc8bf6681f8ffcfbc8a57314",
+    "bytes": 28658363
+  },
+  "parsedGraph": {
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00005.json",
+    "sha256": "d4ac4f2218d685f80c66be62ab320f13d4cff0c8e59c06ce3fbd4a7790354702",
+    "phase": "2: Before phase HighTierLowering"
+  },
+  "forceLoops": [
+    {
+      "loop": {
+        "id": 3059,
+        "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+        "block": "10",
+        "properties": {
+          "stamp": "void",
+          "name": "LoopBegin"
+        },
+        "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+      },
+      "phis": [
+        {
+          "node": {
+            "id": 3060,
+            "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+            "block": "10",
+            "properties": {
+              "stamp": "a java.lang.Object",
+              "name": "Phi(2990, 3197, 28845, a java.lang.Object)"
+            },
+            "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+          },
+          "values": [
+            {
+              "edge": {
+                "from": 2990,
+                "to": 3060,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 1,
+                "listIndex": 0
+              },
+              "node": {
+                "id": 2990,
+                "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+                "block": "0",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "value": "Object[Instance<thc.runtime.Thunk>]",
+                  "name": "C(Object[Instance<thc.runtime.Thunk>]) a java.lang.Object"
+                },
+                "sourceFirstFrame": null
+              }
+            },
+            {
+              "edge": {
+                "from": 3197,
+                "to": 3060,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": 1
+              },
+              "node": {
+                "id": 3197,
+                "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                "block": "12",
+                "properties": {
+                  "stamp": "a java.lang.Object",
+                  "field": "thc.runtime.Thunk.value",
+                  "name": "LoadField#Thunk.value"
+                },
+                "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47) [bci:1]"
+              }
+            },
+            {
+              "edge": {
+                "from": 28845,
+                "to": 3060,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 3,
+                "listIndex": 2
+              },
+              "node": {
+                "id": 28845,
+                "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+                "block": "14",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                  "name": "Pi"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.injectReturnValueProfile(OptimizedCallTarget.java:1665) [bci:33]"
+              }
+            }
+          ]
+        }
+      ],
+      "backedges": []
+    },
+    {
+      "loop": {
+        "id": 4385,
+        "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+        "block": "264",
+        "properties": {
+          "stamp": "void",
+          "name": "LoopBegin"
+        },
+        "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+      },
+      "phis": [
+        {
+          "node": {
+            "id": 4386,
+            "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+            "block": "264",
+            "properties": {
+              "stamp": "a java.lang.Object",
+              "name": "Phi(2990, 4454, a java.lang.Object)"
+            },
+            "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175) [bci:26]"
+          },
+          "values": [
+            {
+              "edge": {
+                "from": 2990,
+                "to": 4386,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 1,
+                "listIndex": 0
+              },
+              "node": {
+                "id": 2990,
+                "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+                "block": "0",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "value": "Object[Instance<thc.runtime.Thunk>]",
+                  "name": "C(Object[Instance<thc.runtime.Thunk>]) a java.lang.Object"
+                },
+                "sourceFirstFrame": null
+              }
+            },
+            {
+              "edge": {
+                "from": 4454,
+                "to": 4386,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": 1
+              },
+              "node": {
+                "id": 4454,
+                "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                "block": "266",
+                "properties": {
+                  "stamp": "a java.lang.Object",
+                  "field": "thc.runtime.Thunk.value",
+                  "name": "LoadField#Thunk.value"
+                },
+                "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47) [bci:1]"
+              }
+            }
+          ]
+        }
+      ],
+      "backedges": []
+    },
+    {
+      "loop": {
+        "id": 19052,
+        "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+        "block": "359",
+        "properties": {
+          "stamp": "void",
+          "name": "LoopBegin"
+        },
+        "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649)(truffle:fe3ce5599c0627a99ec1121dedc"
+      },
+      "phis": [
+        {
+          "node": {
+            "id": 19053,
+            "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+            "block": "359",
+            "properties": {
+              "stamp": "a java.lang.Object",
+              "name": "Phi(19216, 19095, 32111, a java.lang.Object)"
+            },
+            "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649)(truffle:fe3ce5599c0627a99ec1121dedc"
+          },
+          "values": [
+            {
+              "edge": {
+                "from": 19216,
+                "to": 19053,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 1,
+                "listIndex": 0
+              },
+              "node": {
+                "id": 19216,
+                "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                "block": "358",
+                "properties": {
+                  "stamp": "a java.lang.Object",
+                  "name": "Phi(11909, 32221, 38627, a java.lang.Object)"
+                },
+                "sourceFirstFrame": null
+              }
+            },
+            {
+              "edge": {
+                "from": 19095,
+                "to": 19053,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": 1
+              },
+              "node": {
+                "id": 19095,
+                "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                "block": "361",
+                "properties": {
+                  "stamp": "a java.lang.Object",
+                  "field": "thc.runtime.Thunk.value",
+                  "name": "LoadField#Thunk.value"
+                },
+                "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649)(truffle:fe3ce5599c0627a99ec1121dedc"
+              }
+            },
+            {
+              "edge": {
+                "from": 32111,
+                "to": 19053,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 3,
+                "listIndex": 2
+              },
+              "node": {
+                "id": 32111,
+                "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+                "block": "363",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                  "name": "Pi"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.injectReturnValueProfile(OptimizedCallTarget.java:1665)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/"
+              }
+            }
+          ]
+        }
+      ],
+      "backedges": []
+    },
+    {
+      "loop": {
+        "id": 27137,
+        "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+        "block": "223",
+        "properties": {
+          "stamp": "void",
+          "name": "LoopBegin"
+        },
+        "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302)(truffle:fe3ce5599c0627a99ec1121ded"
+      },
+      "phis": [
+        {
+          "node": {
+            "id": 27138,
+            "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+            "block": "223",
+            "properties": {
+              "stamp": "a java.lang.Object",
+              "name": "Phi(41485, 27180, 41501, 41496, 41512, 41519, 30092, 29957, a java.lang.Object)"
+            },
+            "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302)(truffle:fe3ce5599c0627a99ec1121ded"
+          },
+          "values": [
+            {
+              "edge": {
+                "from": 41485,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 1,
+                "listIndex": 0
+              },
+              "node": {
+                "id": 41485,
+                "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                "block": "222",
+                "properties": {
+                  "stamp": "a!# thc.runtime.Thunk",
+                  "name": "AllocatedObject"
+                },
+                "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497)(truff"
+              }
+            },
+            {
+              "edge": {
+                "from": 27180,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": 1
+              },
+              "node": {
+                "id": 27180,
+                "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                "block": "225",
+                "properties": {
+                  "stamp": "a java.lang.Object",
+                  "field": "thc.runtime.Thunk.value",
+                  "name": "LoadField#Thunk.value"
+                },
+                "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302)(truffle:fe3ce5599c0627a99ec1121ded"
+              }
+            },
+            {
+              "edge": {
+                "from": 41501,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 3,
+                "listIndex": 2
+              },
+              "node": {
+                "id": 41501,
+                "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                "block": "238",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+                  "name": "AllocatedObject"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+              }
+            },
+            {
+              "edge": {
+                "from": 41496,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 4,
+                "listIndex": 3
+              },
+              "node": {
+                "id": 41496,
+                "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                "block": "232",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+                  "name": "AllocatedObject"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+              }
+            },
+            {
+              "edge": {
+                "from": 41512,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 5,
+                "listIndex": 4
+              },
+              "node": {
+                "id": 41512,
+                "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                "block": "243",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+                  "name": "AllocatedObject"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+              }
+            },
+            {
+              "edge": {
+                "from": 41519,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 6,
+                "listIndex": 5
+              },
+              "node": {
+                "id": 41519,
+                "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+                "block": "248",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+                  "name": "AllocatedObject"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+              }
+            },
+            {
+              "edge": {
+                "from": 30092,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 7,
+                "listIndex": 6
+              },
+              "node": {
+                "id": 30092,
+                "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+                "block": "234",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+                  "name": "Pi"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.injectReturnValueProfile(OptimizedCallTarget.java:1665)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/"
+              }
+            },
+            {
+              "edge": {
+                "from": 29957,
+                "to": 27138,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 8,
+                "listIndex": 7
+              },
+              "node": {
+                "id": 29957,
+                "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+                "block": "246",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+                  "name": "Pi"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.injectReturnValueProfile(OptimizedCallTarget.java:1665)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/"
+              }
+            }
+          ]
+        }
+      ],
+      "backedges": []
+    },
+    {
+      "loop": {
+        "id": 38443,
+        "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+        "block": "336",
+        "properties": {
+          "stamp": "void",
+          "name": "LoopBegin"
+        },
+        "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649)(truffle:fe3ce5599c0627a99ec1121dedc"
+      },
+      "phis": [
+        {
+          "node": {
+            "id": 38444,
+            "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+            "block": "336",
+            "properties": {
+              "stamp": "a java.lang.Object",
+              "name": "Phi(38541, 38478, 38556, a java.lang.Object)"
+            },
+            "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649)(truffle:fe3ce5599c0627a99ec1121dedc"
+          },
+          "values": [
+            {
+              "edge": {
+                "from": 38541,
+                "to": 38444,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 1,
+                "listIndex": 0
+              },
+              "node": {
+                "id": 38541,
+                "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+                "block": "335",
+                "properties": {
+                  "stamp": "a java.lang.Object",
+                  "name": "Phi(11909, 38564, a java.lang.Object)"
+                },
+                "sourceFirstFrame": null
+              }
+            },
+            {
+              "edge": {
+                "from": 38478,
+                "to": 38444,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": 1
+              },
+              "node": {
+                "id": 38478,
+                "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+                "block": "338",
+                "properties": {
+                  "stamp": "a java.lang.Object",
+                  "field": "thc.runtime.Thunk.value",
+                  "name": "LoadField#Thunk.value"
+                },
+                "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649)(truffle:fe3ce5599c0627a99ec1121dedc"
+              }
+            },
+            {
+              "edge": {
+                "from": 38556,
+                "to": 38444,
+                "label": "values",
+                "type": "Value",
+                "fromIndex": 0,
+                "toIndex": 3,
+                "listIndex": 2
+              },
+              "node": {
+                "id": 38556,
+                "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+                "block": "340",
+                "properties": {
+                  "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+                  "name": "Pi"
+                },
+                "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.injectReturnValueProfile(OptimizedCallTarget.java:1665)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/"
+              }
+            }
+          ]
+        }
+      ],
+      "backedges": []
+    }
+  ],
+  "freshThunk": {
+    "node": {
+      "id": 41485,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+      "block": "222",
+      "properties": {
+        "stamp": "a!# thc.runtime.Thunk",
+        "name": "AllocatedObject"
+      },
+      "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497)(truff"
+    },
+    "allUses": [
+      {
+        "edge": {
+          "from": 41485,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 1,
+          "listIndex": 0
+        },
+        "node": {
+          "id": 27138,
+          "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+          "block": "223",
+          "properties": {
+            "stamp": "a java.lang.Object",
+            "name": "Phi(41485, 27180, 41501, 41496, 41512, 41519, 30092, 29957, a java.lang.Object)"
+          },
+          "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302)(truffle:fe3ce5599c0627a99ec1121ded"
+        }
+      },
+      {
+        "edge": {
+          "from": 41485,
+          "to": 41488,
+          "label": "materializedValue",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 1,
+          "listIndex": -1
+        },
+        "node": {
+          "id": 41488,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.MaterializedObjectState",
+          "block": "222",
+          "properties": {
+            "name": "MaterializedObjectState"
+          },
+          "sourceFirstFrame": null
+        }
+      }
+    ]
+  },
+  "hotPhi": {
+    "node": {
+      "id": 27138,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "223",
+      "properties": {
+        "stamp": "a java.lang.Object",
+        "name": "Phi(41485, 27180, 41501, 41496, 41512, 41519, 30092, 29957, a java.lang.Object)"
+      },
+      "sourceFirstFrame": "thc.runtime.Force.execute(Program.kt:175)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302)(truffle:fe3ce5599c0627a99ec1121ded"
+    },
+    "values": [
+      {
+        "edge": {
+          "from": 41485,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 1,
+          "listIndex": 0
+        },
+        "node": {
+          "id": 41485,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "block": "222",
+          "properties": {
+            "stamp": "a!# thc.runtime.Thunk",
+            "name": "AllocatedObject"
+          },
+          "sourceFirstFrame": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497)(truff"
+        }
+      },
+      {
+        "edge": {
+          "from": 27180,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 1,
+          "toIndex": 2,
+          "listIndex": 1
+        },
+        "node": {
+          "id": 27180,
+          "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+          "block": "225",
+          "properties": {
+            "stamp": "a java.lang.Object",
+            "field": "thc.runtime.Thunk.value",
+            "name": "LoadField#Thunk.value"
+          },
+          "sourceFirstFrame": "thc.runtime.Thunk.getValue(Program.kt:47)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302)(truffle:fe3ce5599c0627a99ec1121ded"
+        }
+      },
+      {
+        "edge": {
+          "from": 41501,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 3,
+          "listIndex": 2
+        },
+        "node": {
+          "id": 41501,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "block": "238",
+          "properties": {
+            "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+            "name": "AllocatedObject"
+          },
+          "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+        }
+      },
+      {
+        "edge": {
+          "from": 41496,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 4,
+          "listIndex": 3
+        },
+        "node": {
+          "id": 41496,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "block": "232",
+          "properties": {
+            "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+            "name": "AllocatedObject"
+          },
+          "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+        }
+      },
+      {
+        "edge": {
+          "from": 41512,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 5,
+          "listIndex": 4
+        },
+        "node": {
+          "id": 41512,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "block": "243",
+          "properties": {
+            "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+            "name": "AllocatedObject"
+          },
+          "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+        }
+      },
+      {
+        "edge": {
+          "from": 41519,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 6,
+          "listIndex": 5
+        },
+        "node": {
+          "id": 41519,
+          "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+          "block": "248",
+          "properties": {
+            "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+            "name": "AllocatedObject"
+          },
+          "sourceFirstFrame": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4$$Factory.create((Unknown%20Source):-1)(truffle:af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Dat"
+        }
+      },
+      {
+        "edge": {
+          "from": 30092,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 7,
+          "listIndex": 6
+        },
+        "node": {
+          "id": 30092,
+          "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+          "block": "234",
+          "properties": {
+            "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+            "name": "Pi"
+          },
+          "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.injectReturnValueProfile(OptimizedCallTarget.java:1665)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/"
+        }
+      },
+      {
+        "edge": {
+          "from": 29957,
+          "to": 27138,
+          "label": "values",
+          "type": "Value",
+          "fromIndex": 0,
+          "toIndex": 8,
+          "listIndex": 7
+        },
+        "node": {
+          "id": 29957,
+          "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+          "block": "246",
+          "properties": {
+            "stamp": "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+            "name": "Pi"
+          },
+          "sourceFirstFrame": "com.oracle.truffle.runtime.OptimizedCallTarget.injectReturnValueProfile(OptimizedCallTarget.java:1665)(truffle:fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9//Users/ekmett/thc/vendor/containers-0.8/src/"
+        }
+      }
+    ]
+  }
+}

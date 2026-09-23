@@ -1,0 +1,86 @@
+[
+  {
+    "path": "build/core/StrictFields.json",
+    "sha256": "1c749cffa9e0ac90b82bf336007565056949c72b857f06fb2ca13d87f99ee26c"
+  },
+  {
+    "path": "build/core/RepresentationAudit.json",
+    "sha256": "fac7bcdf1257a0c7bf78832c110d45a0d0f5c1c2a17064ac9146cd13fe1f517c"
+  },
+  {
+    "path": "build/core/CbvAudit.json",
+    "sha256": "dd86e0e6e60ba1ba649e46435fb9e4d40228a52a7a676b0a7125e7249bd21f64"
+  },
+  {
+    "path": "build/core/CbvCoercionAudit.json",
+    "sha256": "38a5a5b892679a52268d55df90858649473b3d7c12cbfdb1e6eb3fee88eceb36"
+  },
+  {
+    "path": "build/core/CbvJoinAudit.json",
+    "sha256": "9d3313987d778fdedc595b856475ba3ced845092e4fe05ac521451bea42962af"
+  },
+  {
+    "path": "build/core/SpeculationAudit.json",
+    "sha256": "4de690ab04374cdcea1decd3f9a979b9a64eaf288f3b085b3d35a1f8d00165b1"
+  },
+  {
+    "path": "build/core/SourceNotes.json",
+    "sha256": "33417fd880ebc04c4f16feb7c87a63e7a1eea108184dfc21ee9af8ddd138303e"
+  },
+  {
+    "path": "build/core/ConstructorFieldAudit.json",
+    "sha256": "8c6422eb69c7149e01169e6a6a346d5cbbee66960b941d590d3cd7498d0d33d6"
+  },
+  {
+    "path": "build/core/THC.Prim.json",
+    "sha256": "f028c3d29859781b268d1f851de717c8af283f6dd3b42a251421a3ed4518084b"
+  },
+  {
+    "path": "build/core/THC.Fixtures.json",
+    "sha256": "9a4d0eb99d3dbfabf22bc0eafd2399464cab6100967b9c2cf815ef5f954feccc"
+  },
+  {
+    "path": "build/core/DemandAudit.json",
+    "sha256": "6e1237bdbb3c6318400da578596e708b3baf5f22bc588a9e889e11534d88866b"
+  },
+  {
+    "path": "build/source-core/RepresentationAudit.json",
+    "sha256": "b41c641d438b2d7bf7f6a8b33cacdc650912c3a8d5b39695a3073ef446289469"
+  },
+  {
+    "path": "build/source-core/SourceNotes.json",
+    "sha256": "5ee38f57b063789d18a4b679c840d90f0f1b6dcde6ae603c8592d182210cc7f3"
+  },
+  {
+    "path": "build/cbv-post-core/CbvAudit.json",
+    "sha256": "b932c72bc598778c2830f6c88a00fe625eef33b23147e3b760dc9c9e2eda2730"
+  },
+  {
+    "path": "build/cbv-post-core/CbvCoercionAudit.json",
+    "sha256": "0c935b1d1304e5ae2bbae09b5991ca675a99f87ded42f98a4d9ef54f37c232a7"
+  },
+  {
+    "path": "build/cbv-post-core/CbvJoinAudit.json",
+    "sha256": "82b6f78eaccf484b92f54dd4a70b7318ea70fc9120a1ba0a2a2b0d2b25420b8f"
+  },
+  {
+    "path": "build/map/boot-core/GHC.Internal.Classes.json",
+    "sha256": "384debdc0f7680027e51902a3acb429f08df1143ba12b11fc9c0d87cf3e3b98d"
+  },
+  {
+    "path": "build/map/boot-core/THC.InterfaceClosure.json",
+    "sha256": "57b13c4c6ccd38dbcd0773d04a1b25ab06f984743950688e0dffa215db4105a3"
+  },
+  {
+    "path": "build/map/boot-core/GHC.Internal.CString.json",
+    "sha256": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23"
+  },
+  {
+    "path": "build/map/boot-core/GHC.Internal.Err.json",
+    "sha256": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b"
+  },
+  {
+    "path": "build/native/oracle.tsv",
+    "sha256": "f6d896cb3541d9d20fdc9acdd2f7919492748b4407ad10e1f30d1ee3b9a2db0c"
+  }
+]

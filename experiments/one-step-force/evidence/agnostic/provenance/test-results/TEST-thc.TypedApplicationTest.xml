@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.TypedApplicationTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-23T10:29:08.910Z" hostname="eak-mba" time="0.054">
+  <properties/>
+  <testcase name="partialAndOverapplicationReachTheNumericResultAfterAnIntermediateCapturedFunction()" classname="thc.TypedApplicationTest" time="0.021"/>
+  <testcase name="aPolymorphicLiftedResultCanChangeFromDataToClosureAfterCompilation()" classname="thc.TypedApplicationTest" time="0.018"/>
+  <testcase name="closedAndCapturedLambdasForwardNumericCaseAndLetResultsToPrimitiveConsumers()" classname="thc.TypedApplicationTest" time="0.015"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

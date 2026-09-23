@@ -1,0 +1,139 @@
+{
+  "scope": "All original raw BGV files remain on the server. The two selected latest worker BGVs are archived here; profile JFRs are included directly.",
+  "files": [
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3473[lambda_ww,_ds].bgv",
+      "sha256": "c269dd87ce5196e80563db6b321cfc2a4765b2a5a0db3e5097aa57031b66920b",
+      "bytes": 2470333,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+      "sha256": "a5ba2a8341e5c84de7ee829d79b2304f6360e1a0a23f6971b3fc68b377ac2e12",
+      "bytes": 63517128,
+      "selected": true,
+      "archiveMember": "control/TruffleHotSpotCompilation-3481[lambda_ww].bgv"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3284[lambda_sc,_x,_ds1].bgv",
+      "sha256": "bc71a95f4c7eadbf7be98dd8cab7ca4d8ae3be15f150dc988f4af542ec1fbc9d",
+      "bytes": 27905408,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3455[lambda_def,_ww,_ds1].bgv",
+      "sha256": "be365d5714190035fa0ac5c03de751cb7df8ce0ba07b425e505b98493ba8b570",
+      "bytes": 936508,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3359[lambda_sc,_x,_ds1].bgv",
+      "sha256": "c2c06809bb970ec58eb11407a27f5d845cc1c8cf9196e52635559de539a381c6",
+      "bytes": 29784020,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3679[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "2782dd16e0a329c47379125b37bb430f6b4e11c182c4edc78ef01faeed9a1b14",
+      "bytes": 11021299,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3576[lambda_n].bgv",
+      "sha256": "b854e892609a7a49693a019d26c44d8ba34d2211bd8431aa482db92fde27a314",
+      "bytes": 10277958,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3421[lambda_ww,_ds2].bgv",
+      "sha256": "2cb3521f4e3d48f1e4b7e28bb9b7c7e2587b92ca27ecfe848711c0c39450dbbd",
+      "bytes": 8758430,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3500[lambda_k,_x,_l,_r].bgv",
+      "sha256": "b9868f98369a75ceae50294e11fd1f7fc1d7a74ce2a2c7a5b2ba6e3ce7b202db",
+      "bytes": 1097759,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3525[lambda_k,_x,_l,_r].bgv",
+      "sha256": "8b5b03e55771726894f731a7c49243994e495ddb02a7eec9cfbe04849ca21944",
+      "bytes": 38742939,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-control/TruffleHotSpotCompilation-3047[lambda_sc,_x,_ds1].bgv",
+      "sha256": "f790dcc4a21ff182053f34822228bf6e145ec646b1c923b4a88368ad64c05374",
+      "bytes": 27905453,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3274[lambda_sc,_x,_ds1].bgv",
+      "sha256": "d0d2ecef0f1a87a4d0c76f6d54c45001f12bf84e0f34143e49c9c8de7800e4ce",
+      "bytes": 30896852,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3578[lambda_n].bgv",
+      "sha256": "3e9006f94fc4b50f65f6c4ce51f702322ff62f4149a84791d3c05a2a3ff4e3ca",
+      "bytes": 10266595,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3032[lambda_sc,_x,_ds1].bgv",
+      "sha256": "ac73c4f69e8a733348b65413e9cb670b3655253befe4463029ac1c5169a3e941",
+      "bytes": 25161914,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3452[lambda_def,_ww,_ds1].bgv",
+      "sha256": "f5b369d12402c15c99fbdb33d6cb0de3e029c52eba727f9f19cca717b751139a",
+      "bytes": 928439,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3414[lambda_ww,_ds2].bgv",
+      "sha256": "73cfa542216b449d78296bae32d73ab920caa61974b2e8fc4837cb3b906e8fd7",
+      "bytes": 8758417,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3487[lambda_ww].bgv",
+      "sha256": "71222419d2c6a159b1209dd22be0036d88292ca1517431b9b7a031fe3ac8c1f9",
+      "bytes": 65159022,
+      "selected": true,
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3487[lambda_ww].bgv"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3678[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "bf5920b853c34188f476a5b1e29410ead14a171f62c0e6f999c6a6d3f5a8cb67",
+      "bytes": 10963420,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3505[lambda_k,_x,_l,_r].bgv",
+      "sha256": "5d46e14d0e37891cdc79c848cb9c0850aa269a0a4aee82c9f513d4c62500a3bb",
+      "bytes": 1097771,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3344[lambda_sc,_x,_ds1].bgv",
+      "sha256": "c86e2c6b8db8597d05713672246a1138a17be2b0e839df739a88772966b3216e",
+      "bytes": 28358671,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3525[lambda_k,_x,_l,_r].bgv",
+      "sha256": "a7e4e7f9d443c5592ef045bbf7f72c0adc5a45a6d1500f75b9f6ad16c3e45446",
+      "bytes": 35730277,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/one-step-force-agnostic/graph-candidate/TruffleHotSpotCompilation-3477[lambda_ww,_ds].bgv",
+      "sha256": "e16e589139d64713f3a904745e9f52d494c771430995f89ac0d19bd7c8e42fab",
+      "bytes": 2470341,
+      "selected": false
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+3487 TruffleIR.Tier2.lambda_ww() [rootId=23]: packets=76 lateArrays=76 lateLongBoxes=41 sources={'application-packet': 76} classes={'residual-call-abi': 76}

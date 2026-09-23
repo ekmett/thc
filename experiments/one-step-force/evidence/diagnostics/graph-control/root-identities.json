@@ -1,0 +1,98 @@
+{
+  "scope": "Latest successful compilation by within-run root ID; cross-run identities use name plus source; all original BGVs retained.",
+  "roots": [
+    {
+      "rootId": 23,
+      "name": "lambda ww",
+      "source": "n/a",
+      "compilationId": 3481,
+      "codeBytes": 201202,
+      "roleKey": "lambda ww @ n/a",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+        "sha256": "a5ba2a8341e5c84de7ee829d79b2304f6360e1a0a23f6971b3fc68b377ac2e12",
+        "bytes": 63517128
+      }
+    }
+  ],
+  "allCompiledRoots": [
+    {
+      "rootId": 10,
+      "name": "lambda k, x, l, r",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+      "compilationId": 3500,
+      "codeBytes": 1847,
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 15,
+      "name": "lambda k, x, l, r",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+      "compilationId": 3525,
+      "codeBytes": 65501,
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 17,
+      "name": "lambda def, ww, ds1",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "compilationId": 3455,
+      "codeBytes": 1844,
+      "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 18,
+      "name": "lambda ww, ds",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "compilationId": 3473,
+      "codeBytes": 4678,
+      "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 21,
+      "name": "lambda sc, x, ds1",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+      "compilationId": 3359,
+      "codeBytes": 72921,
+      "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 22,
+      "name": "lambda ww, ds2",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+      "compilationId": 3421,
+      "codeBytes": 25538,
+      "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 23,
+      "name": "lambda ww",
+      "source": "n/a",
+      "compilationId": 3481,
+      "codeBytes": 201202,
+      "roleKey": "lambda ww @ n/a",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3481[lambda_ww].bgv",
+        "sha256": "a5ba2a8341e5c84de7ee829d79b2304f6360e1a0a23f6971b3fc68b377ac2e12",
+        "bytes": 63517128
+      }
+    },
+    {
+      "rootId": 26,
+      "name": "lambda n",
+      "source": "examples/THC/MapWorkload.hs:30",
+      "compilationId": 3576,
+      "codeBytes": 856,
+      "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+      "roleAmbiguous": false
+    }
+  ]
+}
