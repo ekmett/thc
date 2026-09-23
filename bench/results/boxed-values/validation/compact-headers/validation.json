@@ -1,0 +1,178 @@
+{
+  "recordedUtc": "2026-09-23T08:00:20.367893+00:00",
+  "revision": "2dd61edee1f1f7425403f7ff261ee0fbea2e0d5a",
+  "javaToolOptions": [
+    "-XX:+UseCompactObjectHeaders"
+  ],
+  "otherOptions": "Runtime defaults; individual tests retain their explicit temporary property scopes. Cache tests exercise both enabled and disabled.",
+  "command": [
+    "scripts/gradle.sh",
+    "--no-daemon",
+    "test",
+    "--rerun-tasks"
+  ],
+  "passed": true,
+  "totals": {
+    "tests": 153,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "runtimeJarSha256": "a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d",
+  "sameAsFrozenV7": true,
+  "sourceMainMatchesFrozenV7": true,
+  "files": [
+    {
+      "path": "test.log",
+      "sha256": "66ac076859aff13258ea243538fc61938e374cb997da6356c1eb5bbaec69a43f"
+    },
+    {
+      "path": "xml/TEST-thc.BloomHeaderTest.xml",
+      "sha256": "9a0a949977c41cb48029f13dd470fd75c4c259075d55a4b6c79a82930f62f376"
+    },
+    {
+      "path": "xml/TEST-thc.BytecodeBackendTest.xml",
+      "sha256": "21456a3a2cabd12461f4b91447bfd0cac64c33a9d9f63e297311476450bc9d74"
+    },
+    {
+      "path": "xml/TEST-thc.BytecodeCoreProofTest.xml",
+      "sha256": "2fe10cc0edbe129e77e4e3a6d2ae95274e70e30620489fd653552f0d626fbe9c"
+    },
+    {
+      "path": "xml/TEST-thc.BytecodeSourceNotesTest.xml",
+      "sha256": "7e002c4d6f4164f2b301c06927d1c1763915a5a70d601ce6c11c980334303817"
+    },
+    {
+      "path": "xml/TEST-thc.CStringTest.xml",
+      "sha256": "231bac93584ebfc0b63d2dda5eda9105187ea7c61c1784870a062ae99d626b16"
+    },
+    {
+      "path": "xml/TEST-thc.CasePrimitiveTest.xml",
+      "sha256": "7f9a52b08afc98b1f38f70cb3dd5c5406f803ced9d1ce8c08c34d70475052c3b"
+    },
+    {
+      "path": "xml/TEST-thc.CoreLinkerTest.xml",
+      "sha256": "39012e7a72059db0355949cfa43b4bc5fc7bdbb3d85a834d62692655948b6b65"
+    },
+    {
+      "path": "xml/TEST-thc.DiagnosticModeTest.xml",
+      "sha256": "5c57a8e49888ae6140f6999c936946c67d57ba22504dc9b283908bd77b61e4fa"
+    },
+    {
+      "path": "xml/TEST-thc.FramesTest.xml",
+      "sha256": "3fe03ad77d9ed4b469e422e9102b8d4119df0aeb447bfc42cd94461b7373b1d5"
+    },
+    {
+      "path": "xml/TEST-thc.GuestExceptionsTest.xml",
+      "sha256": "e8c9218a487616aa6d3184a0232515da75aed7c6b20bb352b47aada9bcfd1023"
+    },
+    {
+      "path": "xml/TEST-thc.RealCoreEntryContractTest.xml",
+      "sha256": "e8739098094428c139125c2317956d6d66e9e70637dfeeb164eb6ba2bed53f1c"
+    },
+    {
+      "path": "xml/TEST-thc.RealCoreJoinTest.xml",
+      "sha256": "39abe02f47a4d8c6f6a469a0569e10357182ee0f71892fc5c6e44faf30984ed7"
+    },
+    {
+      "path": "xml/TEST-thc.RuntimeTest.xml",
+      "sha256": "cf4f5a613907f6edcfce4a7ce9a192f42403a09590953454fdffd2f1e24f23bf"
+    },
+    {
+      "path": "xml/TEST-thc.SelfTailProfileTest.xml",
+      "sha256": "898a80ed2dac9d7a42d169192a9e08d2a75e58539a49f70290d2586ab30fb707"
+    },
+    {
+      "path": "xml/TEST-thc.StrictFieldsTest.xml",
+      "sha256": "891c56571a0dfb811133391f505c9e2ec2c5a57aec6378baf82524936456ff8b"
+    },
+    {
+      "path": "xml/TEST-thc.TailCycleTest.xml",
+      "sha256": "81c79f228e3ad8421d07aac83ebab04b0e814d89a7ce368e6bc2ecdfe6da8ae5"
+    },
+    {
+      "path": "xml/TEST-thc.ThunkDispatchTest.xml",
+      "sha256": "03209abe292705f10149e05dac97de47009d9bd8dbbe8e2f73bda28e9d69fabc"
+    },
+    {
+      "path": "xml/TEST-thc.ThunkRetentionTest.xml",
+      "sha256": "a9c8690251988f216e9b03649e25b6ca2e8bdbb6223c946140fc59b1af784474"
+    },
+    {
+      "path": "xml/TEST-thc.TypedApplicationTest.xml",
+      "sha256": "7603b144499184446093a683a333fca5f9cba0cf0d11db6ebab3f3e8a4e35273"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.AstSelfCallTest.xml",
+      "sha256": "97eff74eab98ef51832b99d58a2cd8a30988c27bb922104e491a4c55b6bc8650"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.BindingCellMetadataTest.xml",
+      "sha256": "550ca1293d3bba2e81df482967ae8dd4d7515bc892be9dee134a5d54ba7ee02b"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.BloomValueTest.xml",
+      "sha256": "e5601ad95a01c2a9c3adb37c81051fcd83144af76b57b8273a960d299aa0255e"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.BoxedValueCacheTest.xml",
+      "sha256": "a5dafb5c3aa10da2dac683b22d05819c0cb15c5b04c737a0e502df54e52f5ef3"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+      "sha256": "72f09a8609310a439ccef4be6806aff73996dbd8fe89c331f75b9828850ccfc5"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.CoreProofJoinTest.xml",
+      "sha256": "99ac3d54bdafb7ff4a0fdd2c93a533b7c1cccd43d1ac766da4192b9c418133b4"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.CoreSourceTest.xml",
+      "sha256": "e36ac310f579216074cd27440d13d21de2e60f0cafffebeca058a2aac757a0e0"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.EntryContractTest.xml",
+      "sha256": "15e81204e8663e092cf14382fe6642641a6ea830f845aae933b7dd32072f946c"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.EntrySelfCallTest.xml",
+      "sha256": "f51ee59ee1fe44676b84e31d5eb3af5f6e76f967baedd4d7e14a5e4a6750810b"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.ForcedBindingTest.xml",
+      "sha256": "2da440ba18db081df91227cf7d57fb100dd153a8f7c25ceca26394c077f64480"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.JoinWhnfProofTest.xml",
+      "sha256": "3f0f307001c17592ae06c0e105f3f43f6c6a4c303f3b7bda6fa7df3d43e6ad8b"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.OperandRetentionTest.xml",
+      "sha256": "4770d101dcb000a92d63bbdfdc72192a6919d3995deb242ca00a8a676d4cef3c"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.ReferenceCaptureTest.xml",
+      "sha256": "bb116fbca1b38239881d0bea3972efe07751760bff233416b00600b6bee17c1e"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.ReferenceFieldTest.xml",
+      "sha256": "73042ea86b3d98ac704acbe2fcbd7ed9ccaa5b6978b783a6d7062c2a5706eb21"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.ReferenceFormalTest.xml",
+      "sha256": "5db527da81e635b9959b8c1894aae7422b0e37215b82e1b381da14fe3769efc5"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.SourceCloneTest.xml",
+      "sha256": "b07fa91eba27c8c2c31dc71bde24b681471148e9ab1e5c6611791a6a2ae3715d"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+      "sha256": "9c21955d77d28232ba58dcc2e07e04a1c4a4d842dcd46df8d6353f099c411697"
+    },
+    {
+      "path": "xml/TEST-thc.runtime.TypedExecutionTest.xml",
+      "sha256": "6fd540bab67a1403a1d199d9d8c997e784f5094b753396039c832c01d5df535e"
+    }
+  ]
+}

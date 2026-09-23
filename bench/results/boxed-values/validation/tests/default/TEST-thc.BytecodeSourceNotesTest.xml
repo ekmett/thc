@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.BytecodeSourceNotesTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:41:41.186Z" hostname="eak-mba" time="0.053">
+  <properties/>
+  <testcase name="sourceSectionsPreserveLocalJoinBackedgesAndTheirOuterContinuation()" classname="thc.BytecodeSourceNotesTest" time="0.031"/>
+  <testcase name="notesAttachToNativeBytecodeWithoutChangingInstructionsOrLocalWriteback()" classname="thc.BytecodeSourceNotesTest" time="0.016"/>
+  <testcase name="bytecodeKeepsSourceLocationsWhenOriginalFileContentIsUnavailable()" classname="thc.BytecodeSourceNotesTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

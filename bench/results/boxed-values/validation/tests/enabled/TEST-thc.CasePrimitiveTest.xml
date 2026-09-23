@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.CasePrimitiveTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:40:57.303Z" hostname="eak-mba" time="0.049">
+  <properties/>
+  <testcase name="nestedLiteralAndDefaultCasesFeedPrimitiveOperandsThroughLetAndEvaluation()" classname="thc.CasePrimitiveTest" time="0.016"/>
+  <testcase name="dataAndDefaultArmsPreserveFieldsAndWholeScrutineeBindingsInPrimitiveContext()" classname="thc.CasePrimitiveTest" time="0.012"/>
+  <testcase name="primitiveCaseForcesSharedScrutineesOnceAndKeepsUnselectedFailureLazy()" classname="thc.CasePrimitiveTest" time="0.02"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -68,8 +68,8 @@ support for the paths exercised; they don't make the gaps disappear.
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before
 and after requested compilation. A controlled macOS ARM64 comparison reduced
-bytecode's time from **2.34 ms to 1.54 ms**, against **1.25 ms for native GHC**:
-**34% less elapsed time**, or **1.23 times GHC's cost** on this workload.
+bytecode's time from **2.36 ms to 1.52 ms**, against **1.28 ms for native GHC**:
+**35% less elapsed time**, or **1.19 times GHC's cost** on this workload.
 No unsupported trap was entered.
 
 Core exports retain [representation evidence, worker entry contracts and local
@@ -83,6 +83,11 @@ per process, and at least 12,000 warmup workloads. The [entry-contract and
 type-preservation report](docs/entry-contracts.md) records the changes,
 measurements and remaining costs. These are results for this Map workload,
 not a claim about arbitrary Haskell programs.
+
+The [latest local comparison](bench/results/constructor-class/powered-default/)
+records the frozen runtime and fork variation. A separate
+[hosted comparison](bench/results/hosted-2026-09-23/) found a similar broad
+improvement, but was too noisy to settle the smaller storage experiments.
 
 The [typed execution and tail-cycle report](docs/typed-tail.md),
 [source-location report](docs/debug-locations.md),

@@ -1,0 +1,272 @@
+{
+  "scope": "Same frozen v7 bytecode runtime and Core, default inlining policy; only boxedValueCache differs. Static sites in separate diagnostic compilations, not dynamic execution or allocation counts.",
+  "rows": [
+    {
+      "role": "lookup",
+      "matchedName": "lambda def, ww, ds1",
+      "off": {
+        "compilationId": 3302,
+        "peNodes": 273,
+        "afterMidNodes": 375,
+        "guestCalls": 0,
+        "lateArrays": 0,
+        "lateLongBoxes": 0,
+        "materializedClasses": {
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 1
+        },
+        "frontierStateCounts": {},
+        "codeBytes": 2064,
+        "identity": {
+          "rootId": 17,
+          "name": "lambda def, ww, ds1",
+          "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+          "compilationId": 3302,
+          "codeBytes": 2064,
+          "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+          "roleAmbiguous": false,
+          "bgv": {
+            "path": "TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1].bgv",
+            "sha256": "c73eb6ae4d008538c85dee59872495fe528d305cfd808d9bae35e6dc1fc5b296",
+            "bytes": 471321
+          }
+        }
+      },
+      "on": {
+        "compilationId": 3288,
+        "peNodes": 273,
+        "afterMidNodes": 365,
+        "guestCalls": 0,
+        "lateArrays": 0,
+        "lateLongBoxes": 0,
+        "materializedClasses": {},
+        "frontierStateCounts": {},
+        "codeBytes": 1952,
+        "identity": {
+          "rootId": 17,
+          "name": "lambda def, ww, ds1",
+          "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+          "compilationId": 3288,
+          "codeBytes": 1952,
+          "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+          "roleAmbiguous": false,
+          "bgv": {
+            "path": "TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1].bgv",
+            "sha256": "71f10c9e256caae9070f9a2ddf1923b4a3e8444b93cb710a64b9c968af52eea8",
+            "bytes": 461739
+          }
+        }
+      }
+    },
+    {
+      "role": "fold",
+      "matchedName": "lambda ww, ds",
+      "off": {
+        "compilationId": 3320,
+        "peNodes": 223,
+        "afterMidNodes": 996,
+        "guestCalls": 1,
+        "lateArrays": 1,
+        "lateLongBoxes": 2,
+        "materializedClasses": {
+          "java.lang.Long": 2,
+          "java.lang.Object[]": 1
+        },
+        "frontierStateCounts": {
+          "Cutoff": 1
+        },
+        "codeBytes": 4616,
+        "identity": {
+          "rootId": 18,
+          "name": "lambda ww, ds",
+          "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+          "compilationId": 3320,
+          "codeBytes": 4616,
+          "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+          "roleAmbiguous": false,
+          "bgv": {
+            "path": "TruffleHotSpotCompilation-3320[lambda_ww,_ds].bgv",
+            "sha256": "bb03de5c1e61c2ae05ae8b7d431a11bf2e150648e27700630833c9f852a4bba2",
+            "bytes": 2183611
+          }
+        }
+      },
+      "on": {
+        "compilationId": 3304,
+        "peNodes": 223,
+        "afterMidNodes": 996,
+        "guestCalls": 1,
+        "lateArrays": 1,
+        "lateLongBoxes": 2,
+        "materializedClasses": {
+          "java.lang.Long": 2,
+          "java.lang.Object[]": 1
+        },
+        "frontierStateCounts": {
+          "Cutoff": 1
+        },
+        "codeBytes": 4616,
+        "identity": {
+          "rootId": 18,
+          "name": "lambda ww, ds",
+          "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+          "compilationId": 3304,
+          "codeBytes": 4616,
+          "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+          "roleAmbiguous": false,
+          "bgv": {
+            "path": "TruffleHotSpotCompilation-3304[lambda_ww,_ds].bgv",
+            "sha256": "e02c9f3b2d6e9617c898b5927fd41c26e73f02e2e477779c590205846405e178",
+            "bytes": 2183609
+          }
+        }
+      }
+    },
+    {
+      "role": "worker",
+      "matchedName": "lambda ww",
+      "off": {
+        "compilationId": 3358,
+        "peNodes": 684,
+        "afterMidNodes": 16864,
+        "guestCalls": 77,
+        "lateArrays": 77,
+        "lateLongBoxes": 37,
+        "materializedClasses": {
+          "java.lang.Long": 37,
+          "java.lang.Object[]": 77,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 136,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 57,
+          "thc.runtime.Thunk": 10,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 10
+        },
+        "frontierStateCounts": {
+          "Cutoff": 67,
+          "Expanded": 10
+        },
+        "codeBytes": 153340,
+        "identity": {
+          "rootId": 23,
+          "name": "lambda ww",
+          "source": "n/a",
+          "compilationId": 3358,
+          "codeBytes": 153340,
+          "roleKey": "lambda ww @ n/a",
+          "roleAmbiguous": false,
+          "bgv": {
+            "path": "TruffleHotSpotCompilation-3358[lambda_ww].bgv",
+            "sha256": "70c42ea00965813fa9a898c9a2ea37b213cf2d41a15208286ce5efc2223c6dea",
+            "bytes": 64747394
+          }
+        }
+      },
+      "on": {
+        "compilationId": 3341,
+        "peNodes": 684,
+        "afterMidNodes": 17362,
+        "guestCalls": 75,
+        "lateArrays": 75,
+        "lateLongBoxes": 35,
+        "materializedClasses": {
+          "java.lang.Long": 35,
+          "java.lang.Object[]": 75,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 156,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 50,
+          "thc.runtime.Thunk": 10,
+          "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 10
+        },
+        "frontierStateCounts": {
+          "Cutoff": 66,
+          "Expanded": 9
+        },
+        "codeBytes": 152316,
+        "identity": {
+          "rootId": 23,
+          "name": "lambda ww",
+          "source": "n/a",
+          "compilationId": 3341,
+          "codeBytes": 152316,
+          "roleKey": "lambda ww @ n/a",
+          "roleAmbiguous": false,
+          "bgv": {
+            "path": "TruffleHotSpotCompilation-3341[lambda_ww].bgv",
+            "sha256": "7b4741edf8b9d615ebd7178624bad64c8a840a4e38d75ac2fa14dd7fec940b4d",
+            "bytes": 63293867
+          }
+        }
+      }
+    }
+  ],
+  "dynamicCacheLoadCount": 50,
+  "dynamicCacheLoadStamps": {
+    "a thc.runtime.DataValue": 50
+  },
+  "cacheIdentityFlowAudit": {
+    "phase": "Before phase HighTierLowering",
+    "loads": [
+      18605,
+      18943,
+      19279,
+      19484,
+      19774,
+      19897,
+      20641,
+      20977,
+      21173,
+      21441,
+      21549,
+      22137,
+      22405,
+      22513,
+      23462,
+      23798,
+      24134,
+      24330,
+      24598,
+      24706,
+      25292,
+      25560,
+      25668,
+      26254,
+      26522,
+      26630,
+      27356,
+      27692,
+      28028,
+      28364,
+      28700,
+      29036,
+      29372,
+      29708,
+      30044,
+      30380,
+      30576,
+      30844,
+      30952,
+      31538,
+      31806,
+      31914,
+      32500,
+      32768,
+      32876,
+      33602,
+      33938,
+      34134,
+      34402,
+      34510
+    ],
+    "identityPreservingNodesVisited": 84,
+    "operationsFollowed": [
+      "ValuePhiNode",
+      "PiNode",
+      "ValueProxyNode",
+      "HotSpotCompressionNode"
+    ],
+    "directDownstreamNullTypeOrFieldChecks": [],
+    "scope": "Follows value identity through the listed operations only, without crossing stores, packet/call boundaries or rereading heap fields. It does not assert absence of checks in later callees."
+  },
+  "allocationSiteConvention": "materializedClasses counts NewInstanceNode/NewArrayNode as in the archived summary helper; FastInitializeInstance nodes are not interpreted as additional independent dynamic objects.",
+  "workerFastInitializeInstanceNodes": {
+    "off": 175,
+    "on": 147
+  }
+}

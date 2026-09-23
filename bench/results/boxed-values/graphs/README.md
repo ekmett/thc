@@ -1,0 +1,17 @@
+# Boxed-value cache: selected compiled graphs
+
+Both captures use frozen `work/boxed-value-cache-v7`, bytecode, source notes enabled, recursion depth 2 and expansion/inlining budgets 12,000. The only changed flag is `thc.boxedValueCache`; constructor class matching, unchecked storage and compact headers are explicitly disabled. Both captures pass native checksums, at least 12,000 warm calls and 15 seconds, installed guest code, zero traps and clean measured/final verification windows. These are graph diagnostics, not throughput runs.
+
+| Root | Mid-tier nodes off → on | Guest calls/packets off → on | JVM Long sites off → on | Native code bytes off → on |
+| --- | ---: | ---: | ---: | ---: |
+| lookup | 375 → 365 | 0 → 0 | 0 → 0 | 2,064 → 1,952 |
+| fold | 996 → 996 | 1 → 1 | 2 → 2 | 4,616 → 4,616 |
+| worker | 16,864 → 17,362 | 77 → 75 | 37 → 35 | 153,340 → 152,316 |
+
+Lookup's sole I# allocation folds to exact generated-carrier object constant 5338 in compilation 3288. That site has no residual allocation, range test or table access. Fold has the same observed node/call/allocation counts; topology equality was not asserted. The worker changes its inlining shape: Bin allocation sites rise 136 → 156 while I# sites fall 57 → 50. Its graph grows by 498 nodes, though emitted code is slightly smaller. Allocation-class site counts use the existing `NewInstanceNode`/`NewArrayNode` convention; Graal also emits fast initialization nodes, which must not be counted as independent dynamic objects. Static site counts do not determine the measured allocation reduction or a throughput effect.
+
+The worker compilation 3341 contains 50 dynamic loads from the constant `DataValue[]` table and 50 cache-miss constructor sites. Shared calculations leave 32 distinct cache-origin unsigned range conditions for those 50 branch sites. The concrete hit/miss proof is in `cache-ssa.json`: `(key + 16) unsigned< 272` chooses block 454, whose load 53330 returns the existing cache cell without allocating; block 455 instead allocates/initializes fresh I# node 68408. Both flow into phi 32774. Constant table base 18598 and primitive index arithmetic survive; there is no cache helper call at this path.
+
+The type-precision concern is real: all 50 before-high cache loads have nullable, nonexact `a thc.runtime.DataValue` stamps. The miss object has exact `a!# GeneratedStaticObject$$6`, but the hit/miss phi loses that carrier precision. At mid tier the cached narrow-reference read similarly has `n thc.runtime.DataValue`. However, following cache-result identity through phis, Pi/proxy nodes and compression finds no direct null/type/layout/field check in this worker graph: the values flow into stored fields and packets. This does not establish added shape guards or lost scalar replacement as the cause of the timing result, and it says nothing about checks beyond heap/call boundaries.
+
+`comparison.json` records counts and the scope of that identity-flow check. `cache-ssa.json` retains actual scheduled nodes, CFG blocks and indexed edges for the decisive paths. `provenance.json` identifies the frozen JAR, exact commands, original BGV hashes, selected roots and parsed-graph hash references. All raw BGVs remain in the original capture directories. The cached constant and dynamic table cases must not be conflated; neither static analysis nor the smaller dynamic allocation total proves a speedup.

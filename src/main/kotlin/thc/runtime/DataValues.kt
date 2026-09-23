@@ -14,6 +14,16 @@ import com.oracle.truffle.api.staticobject.StaticShape
  * recursive closure capture they need neither an object fallback nor a tag.
  */
 
+internal const val BOXED_VALUE_CACHE_PROPERTY = "thc.boxedValueCache"
+// Exact wired constructor identity in the pinned GHC 9.14.1 export, not a printed type/name match.
+internal const val BOXED_INT_CONSTRUCTOR_ID = "ghc-internal:GHC.Internal.Types.I#"
+internal const val BOXED_CHAR_CONSTRUCTOR_ID = "ghc-internal:GHC.Internal.Types.C#"
+// Pinned GHC 9.14.1 rts/Constants.h: MIN/MAX_INTLIKE and MIN/MAX_CHARLIKE.
+private const val INTLIKE_MIN = -16L
+private const val INTLIKE_MAX = 255L
+private const val CHARLIKE_MIN = 0L
+private const val CHARLIKE_MAX = 255L
+
 /** One immutable, constructor-specific layout shared by all values of that constructor. */
 class DataLayout(
     language: TruffleLanguage<*>,
@@ -38,6 +48,10 @@ class DataLayout(
     private val classIdentityEnabled = java.lang.Boolean.getBoolean(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
     private val constructorClass: ConstructorClassIdentity
     private val nullaryValue: DataValue?
+    @CompilationFinal(dimensions = 1)
+    private val boxedValues: Array<DataValue>?
+    private val boxedValueMinimum: Long
+    internal val hasBoxedValueCache: Boolean get() = boxedValues != null
 
     init {
         // Register checked/off-mode layouts too: a later enabled layout must
@@ -45,6 +59,23 @@ class DataLayout(
         val sample = shape.factory.create(this, allocationKey)
         constructorClass = ConstructorClassIdentity(sample.javaClass)
         nullaryValue = if (arity == 0) sample else null
+        val range = if (!java.lang.Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) || fieldReps.size != 1) null
+        else when {
+            id == BOXED_INT_CONSTRUCTOR_ID && name == "I#" && fieldReps[0] == "IntRep" -> INTLIKE_MIN..INTLIKE_MAX
+            id == BOXED_CHAR_CONSTRUCTOR_ID && name == "C#" && fieldReps[0] == "WordRep" -> CHARLIKE_MIN..CHARLIKE_MAX
+            else -> null
+        }
+        boxedValueMinimum = range?.first ?: 0L
+        boxedValues = range?.let {
+            // Neither the array nor any partially initialized value escapes this constructor.
+            // Every value owns its storage under both StaticShape strategies.
+            Array((it.last - it.first + 1).toInt()) { index ->
+                val value = shape.factory.create(this, allocationKey)
+                constructorClass.observe(value.javaClass)
+                fields[0].initializeLong(value, boxedValueMinimum + index)
+                value
+            }
+        }
     }
 
     fun matches(value: Any?): Boolean {
@@ -61,8 +92,21 @@ class DataLayout(
     @ExplodeLoop
     fun create(values: Array<Any?>): DataValue {
         if (values.size != arity) fault("Constructor field count does not match layout")
+        if (boxedValues != null)
+            return createLong(values[0] as? Long ?: fault("Expected primitive Long constructor field"))
         val value = allocate()
         for (index in fields.indices) fields[index].initialize(value, values[index])
+        return value
+    }
+
+    /** A one-field primitive constructor; the cache never receives later initialization writes. */
+    internal fun createLong(field: Long): DataValue {
+        if (arity != 1 || !fields[0].isLong()) fault("Expected one primitive Long constructor field")
+        val cached = boxedValues
+        if (cached != null && field >= boxedValueMinimum && field < boxedValueMinimum + cached.size)
+            return cached[(field - boxedValueMinimum).toInt()]
+        val value = allocate()
+        fields[0].initializeLong(value, field)
         return value
     }
 

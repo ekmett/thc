@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.EntrySelfCallTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:41:45.284Z" hostname="eak-mba" time="0.082">
+  <properties/>
+  <testcase name="directSelfPapPrefixForcesEvenUnusedStrictFormalsBeforeReentry()" classname="thc.runtime.EntrySelfCallTest" time="0.038"/>
+  <testcase name="ancestorReentryReceivesForcedArgumentsThroughUnknownCalls()" classname="thc.runtime.EntrySelfCallTest" time="0.044"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

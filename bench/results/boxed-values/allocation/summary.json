@@ -1,0 +1,18 @@
+{
+  "method": "Executing-JVM-thread ThreadMXBean allocated-byte delta after warmup, including host entry and excluding allocations on other threads; 3 separate batches of 256 varying-input workload calls per mode. JFR starts after these exact allocation samples.",
+  "samplesBytesPerCall": {
+    "off": [
+      8329466.5,
+      8329466.5,
+      8329466.5
+    ],
+    "on": [
+      8115653.5,
+      8115653.5,
+      8115653.5
+    ]
+  },
+  "differenceBytesPerCall": -213813.0,
+  "changePercent": -2.566947114800211,
+  "scope": "Per invocation of mapAggregate; not per inserted element. No generated-class attribution asserted."
+}

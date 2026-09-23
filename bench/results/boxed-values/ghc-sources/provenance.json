@@ -1,0 +1,113 @@
+{
+  "recordedUtc": "2026-09-23T07:40:34.822355+00:00",
+  "method": "Read official GitHub contents API at ghc-9.14.1-release; verify Git blob and SHA256 identities. Installed Constants.h matched release content byte-for-byte. Public record retains identities, locations and paraphrases, without copying raw source excerpts.",
+  "sources": [
+    {
+      "repository": "ghc/ghc",
+      "ref": "ghc-9.14.1-release",
+      "path": "compiler/GHC/StgToCmm/DataCon.hs",
+      "apiUrl": "https://api.github.com/repos/ghc/ghc/contents/compiler/GHC/StgToCmm/DataCon.hs?ref=ghc-9.14.1-release",
+      "sourceUrl": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/DataCon.hs",
+      "gitBlobSha": "d50f0295d84c9c8f3dca1459ec5a28fde448cec7",
+      "sha256": "693202b4f5939d98022e215df199195146e6f7f8765159f3204a9a7a7f3ee10e",
+      "bytes": 16002,
+      "locations": [
+        {
+          "startLine": 166,
+          "endLine": 171,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/DataCon.hs#L166-L171"
+        },
+        {
+          "startLine": 212,
+          "endLine": 216,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/DataCon.hs#L212-L216"
+        },
+        {
+          "startLine": 240,
+          "endLine": 243,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/DataCon.hs#L240-L243"
+        },
+        {
+          "startLine": 330,
+          "endLine": 341,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/DataCon.hs#L330-L341"
+        },
+        {
+          "startLine": 345,
+          "endLine": 349,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/DataCon.hs#L345-L349"
+        },
+        {
+          "startLine": 357,
+          "endLine": 368,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/DataCon.hs#L357-L368"
+        }
+      ]
+    },
+    {
+      "repository": "ghc/ghc",
+      "ref": "ghc-9.14.1-release",
+      "path": "rts/sm/Evac.c",
+      "apiUrl": "https://api.github.com/repos/ghc/ghc/contents/rts/sm/Evac.c?ref=ghc-9.14.1-release",
+      "sourceUrl": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/rts/sm/Evac.c",
+      "gitBlobSha": "25aac970f3b75c41d6cfcdd2a480062f26165790",
+      "sha256": "e87d861c1fdae09a72daea931fa55d7294d0348802b0fd03a4750f358950430e",
+      "bytes": 55560,
+      "locations": [
+        {
+          "startLine": 852,
+          "endLine": 879,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/rts/sm/Evac.c#L852-L879"
+        }
+      ]
+    },
+    {
+      "repository": "ghc/ghc",
+      "ref": "ghc-9.14.1-release",
+      "path": "rts/include/rts/Constants.h",
+      "apiUrl": "https://api.github.com/repos/ghc/ghc/contents/rts/include/rts/Constants.h?ref=ghc-9.14.1-release",
+      "sourceUrl": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/rts/include/rts/Constants.h",
+      "gitBlobSha": "63ee7a0ed993b653fb47f64ab43c1bcabbf4914f",
+      "sha256": "214839a5afe254b72e811b7f4ae8c03099d9969147acf932d6af2c6e6cb3526a",
+      "bytes": 12884,
+      "locations": [
+        {
+          "startLine": 59,
+          "endLine": 69,
+          "url": "https://github.com/ghc/ghc/blob/ghc-9.14.1-release/rts/include/rts/Constants.h#L59-L69"
+        }
+      ]
+    }
+  ],
+  "installedEvidence": [
+    {
+      "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/rts-1.0.3/include/rts/Constants.h",
+      "sha256": "214839a5afe254b72e811b7f4ae8c03099d9969147acf932d6af2c6e6cb3526a",
+      "matchesReleaseHeader": true
+    },
+    {
+      "path": "/Users/ekmett/.ghcup/ghc/9.14.1/share/doc/ghc-9.14.1/html/libraries/ghc-9.14.1-bcbf/src/GHC.StgToCmm.DataCon.html",
+      "sha256": "f353711968b422a8e2d2e308750e647a48be8372f97d78d53e98837758d0657d",
+      "sourceAnchors": [
+        "line-166",
+        "line-226",
+        "line-330",
+        "line-347"
+      ]
+    }
+  ],
+  "inclusiveRanges": {
+    "Int": [
+      -16,
+      255
+    ],
+    "Char": [
+      0,
+      255
+    ]
+  },
+  "behavior": {
+    "StgToCmm": "Literal Int/Char payloads in range may use precomputed static closures; variable payloads take the ordinary allocation path.",
+    "Evac": "The copying collector can redirect qualifying surviving Izh/Czh closures to the INTLIKE/CHARLIKE static tables."
+  }
+}

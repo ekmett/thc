@@ -1,0 +1,43 @@
+{
+  "runtimeJarUnchanged": "a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d",
+  "tests": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "files": [
+    {
+      "path": "compiler/test-fixtures/CbvAudit.hs",
+      "sha256": "651664c1955d3881ea21fe1a270cc94903991c04ead46c2cf84c5ffc0a4ba96a"
+    },
+    {
+      "path": "scripts/check-cbv-metadata.py",
+      "sha256": "c92941c4484577f77f38e46610fbb2d9737c35ef3107102981ecd80c903a6cfa"
+    },
+    {
+      "path": "src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt",
+      "sha256": "f90200ab8404c167c0b295a83e125711888f39b3fe47ec8adad907d8662d0b55"
+    },
+    {
+      "path": "build/core/CbvAudit.json",
+      "sha256": "2eda13018b62c5c94aeb19fdbf5dda59c42c9277389211f8385757148491e9c8"
+    },
+    {
+      "path": "build/cbv-post-core/CbvAudit.json",
+      "sha256": "26f7462553d71f832f5da8a4e30370a3717b6e5792b2ae5f5735e7199780ba3d"
+    },
+    {
+      "path": "work/boxed-value-cache-fixture.log",
+      "sha256": "87271c4a584ac0844b4b3f5c74fcde721a5dfe56837b968786f71c9d4f6aac98"
+    },
+    {
+      "path": "work/boxed-value-cache-fixture-test.log",
+      "sha256": "8cf1c260750248a56435e21e238d05610779ca1da34df0d14a5b476ee06c0c63"
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.BoxedValueCacheTest.xml",
+      "sha256": "421e833de65392301314a5a5e749f8df9620c306ece5f4912c873b713586ee47"
+    }
+  ]
+}

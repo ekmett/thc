@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.BindingCellMetadataTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:59:59.550Z" hostname="eak-mba" time="0.211">
+  <properties/>
+  <testcase name="recursiveCapturesKeepCellsWhileClosuresCreatedAfterPublicationCaptureValues()" classname="thc.runtime.BindingCellMetadataTest" time="0.156"/>
+  <testcase name="ordinaryObjectParametersFieldsAndCapturesNeedNoRecursiveCellReads()" classname="thc.runtime.BindingCellMetadataTest" time="0.02"/>
+  <testcase name="escapingRecursiveClosuresRetainCellsAfterCaseRefinementAndAcrossInvocations()" classname="thc.runtime.BindingCellMetadataTest" time="0.033"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

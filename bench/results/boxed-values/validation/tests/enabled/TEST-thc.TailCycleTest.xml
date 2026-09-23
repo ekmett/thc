@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.TailCycleTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:40:59.831Z" hostname="eak-mba" time="0.294">
+  <properties/>
+  <testcase name="twoRootCyclesReenterLocallyBeforeAndAfterCompilation()" classname="thc.TailCycleTest" time="0.041"/>
+  <testcase name="aNonTailEdgeRetainsEveryPendingAddition()" classname="thc.TailCycleTest" time="0.042"/>
+  <testcase name="aClonedRootConsumesTransfersTargetingItsOriginalBody()" classname="thc.TailCycleTest" time="0.031"/>
+  <testcase name="anInteriorRootHandlesABCDECReturnsAndCanRetargetOutwardToB()" classname="thc.TailCycleTest" time="0.056"/>
+  <testcase name="falsePositiveAncestryStillUsesTheTrampolineWhenNoActiveRootMatches()" classname="thc.TailCycleTest" time="0.009"/>
+  <testcase name="overapplicationAndNonTailWorkSurviveAnInnerTailCycle()" classname="thc.TailCycleTest" time="0.04"/>
+  <testcase name="reentryRestoresChangedCapturesAndPapPrefixesAcrossDifferentArities()" classname="thc.TailCycleTest" time="0.074"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

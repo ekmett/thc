@@ -1,0 +1,24 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "9c957340f3c14ccc38e8956da24e8e5f46b50c0a193afa3d0236035169dfb3d2",
+      "bytes": 3438
+    },
+    {
+      "path": "cache-ssa.json",
+      "sha256": "c61c0c9ebcb73c6dfa151de28a24ea3652bd6c7e4f94cf7bbee92eb0d80f9eeb",
+      "bytes": 73818
+    },
+    {
+      "path": "comparison.json",
+      "sha256": "570561f26c7e60fb98c749e90bf253cdd33e03d12435b7ab03b7ff18aecb21ba",
+      "bytes": 8111
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "34f30a0e3b67545698ece5f8c729c361a8863c73ce5f43706b02aadacb9e82d7",
+      "bytes": 39092
+    }
+  ]
+}

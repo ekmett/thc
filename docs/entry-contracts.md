@@ -12,6 +12,12 @@ for native GHC. That is **34.0% less elapsed time**, or **1.231 times GHC's cost
 These measurements describe the frozen `precise-fields-v3` candidate, before the
 subsequent frame and storage-check experiments.
 
+A later [powered local comparison](../bench/results/constructor-class/powered-default/README.md)
+tests the complete default runtime through `fab44ea`: **2.360546 ms to
+1.523473 ms**, against **1.279898 ms** for GHC. That is **35.46% less elapsed
+time**, or **1.1903 times GHC's cost**. Candidate fork medians range from 1.466
+to 1.630 ms; the result does not resolve small individual improvements.
+
 ## What changed
 
 GHC selects call-by-value entry marks for eligible workers and joins during
@@ -147,7 +153,7 @@ share a carrier class. Seven Map configurations also pass the full 18-input
 native oracle before and after compilation. The [validation record](../bench/results/constructor-class/validation.json)
 includes the frozen runtime hash and the compiled constructor audit.
 
-These experiments have no accepted throughput result yet. An initial storage
+Neither storage experiment has demonstrated a throughput win. An initial storage
 comparison suffered a roughly twofold slowdown in both native and JVM processes
 as the host battery reached 4%. A short native probe later returned to normal,
 but the next sustained JVM screen slowed again and was stopped. The
@@ -162,3 +168,17 @@ corpus, verifies the archived graphs, and runs the comparisons serially. It
 also tests compact JVM object headers before considering a timing comparison.
 Hosted results belong to that runner; their absolute times cannot be combined
 with the local M3 measurements above.
+
+The [completed hosted run](../bench/results/hosted-2026-09-23/README.md) passes
+all guards for 180 measured windows and reproduces all 18 archived graph phases. It also
+shows substantial fork variability. Constructor class matching and unchecked
+storage were slightly slower by the aggregate statistic; compact headers were
+slightly faster. Those small differences do not establish a winner, and neither
+storage option is enabled by default.
+
+The compact-header size probe establishes a narrower structural result: JVM
+`Long` shrinks from 24 to 16 bytes, and three-slot packets from 32 to 24. `Bin`
+and `I#` remain 40 and 24 bytes. Their per-instance layout field and alignment
+consume the header space saved by the VM. Moving the owner information to the
+carrier class needs permanent class ownership and a layout-carrying fallback;
+simply deleting the field would break shared-carrier storage.

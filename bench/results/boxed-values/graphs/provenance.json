@@ -1,0 +1,859 @@
+{
+  "recordedUtc": "2026-09-23T08:01:50.848050+00:00",
+  "captures": {
+    "off": {
+      "captureConfig": {
+        "path": "work/boxed-value-graph-off/capture-config.json",
+        "sha256": "f1ff2277cfbd0fab1f9fdee7ddee2d6ab84aa0cdab4bb42ac2f0e3b459ad4678"
+      },
+      "jvmOptions": [
+        "-Dthc.boxedValueCache=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-XX:-UseCompactObjectHeaders"
+      ],
+      "backend": "bytecode",
+      "depth": 2,
+      "budgets": [
+        12000,
+        12000
+      ],
+      "warmCalls": 12032,
+      "installedCode": true,
+      "unsupportedTraps": 0,
+      "forbiddenCompilationEvents": [],
+      "commands": [
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "--enable-native-access=ALL-UNNAMED",
+            "-Xss2m",
+            "-Dpolyglot.compiler.InliningRecursionDepth=2",
+            "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+            "-Dpolyglot.compiler.InliningInliningBudget=12000",
+            "-Dthc.traceCompilation=true",
+            "-Dthc.minimumWarmCalls=12000",
+            "-Dthc.backend=bytecode",
+            "-Dthc.diagnosticUnsupported=true",
+            "-Dthc.sourceNotesEnabled=true",
+            "-Dthc.boxedValueCache=false",
+            "-Dthc.constructorClassIdentity=false",
+            "-Dthc.staticShapeUnchecked=false",
+            "-XX:-UseCompactObjectHeaders",
+            "-Djdk.graal.Dump=Truffle:1",
+            "-Djdk.graal.PrintGraph=File",
+            "-Djdk.graal.PrintGraphWithSchedule=true",
+            "-Djdk.graal.PrintBackendCFG=false",
+            "-Djdk.graal.TrackNodeSourcePosition=true",
+            "-Djdk.graal.DumpPath=/Users/ekmett/thc/work/boxed-value-graph-off",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-cache-v7/lib/annotations-13.0.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/word-25.3.4.1.jar",
+            "thc.ProbeKt",
+            "/Users/ekmett/thc/work/boxed-value-cache-v7/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/16-GHC.InterfaceClosure.json",
+            "mapAggregate",
+            "--steady",
+            "15",
+            "0.01",
+            "1",
+            "10000"
+          ],
+          "stdout": "run.out",
+          "stderr": "run.err",
+          "exitCode": 0,
+          "elapsedSeconds": 54.12657216563821
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javac",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-d",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/classes",
+            "/Users/ekmett/thc/work/perf-sprint-v2/GraphInspect.java"
+          ],
+          "stdout": "javac-graph-reader.out",
+          "stderr": "javac-graph-reader.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.37897533271461725
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "-XX:-UseJVMCICompiler",
+            "-Xmx4g",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/classes",
+            "GraphInspect",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1].bgv",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1]",
+            "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+          ],
+          "stdout": "parse-3302.out",
+          "stderr": "parse-3302.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.1916533326730132
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "-XX:-UseJVMCICompiler",
+            "-Xmx4g",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/classes",
+            "GraphInspect",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/TruffleHotSpotCompilation-3320[lambda_ww,_ds].bgv",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3320[lambda_ww,_ds]",
+            "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+          ],
+          "stdout": "parse-3320.out",
+          "stderr": "parse-3320.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.6034774156287313
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "-XX:-UseJVMCICompiler",
+            "-Xmx4g",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/classes",
+            "GraphInspect",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/TruffleHotSpotCompilation-3358[lambda_ww].bgv",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3358[lambda_ww]",
+            "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+          ],
+          "stdout": "parse-3358.out",
+          "stderr": "parse-3358.err",
+          "exitCode": 0,
+          "elapsedSeconds": 5.8151028752326965
+        },
+        {
+          "argv": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "/Users/ekmett/thc/tools/audit-call-packets.py",
+            "/Users/ekmett/thc/work/boxed-value-graph-off",
+            "--output",
+            "/Users/ekmett/thc/work/boxed-value-graph-off/packet-audit.json"
+          ],
+          "stdout": "packet-audit.out",
+          "stderr": "packet-audit.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.5569697907194495
+        },
+        {
+          "argv": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "/Users/ekmett/thc/work/perf-sprint-v2/summarize-graphs.py",
+            "/Users/ekmett/thc/work/boxed-value-graph-off"
+          ],
+          "stdout": "graph-summary.out",
+          "stderr": "graph-summary.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.5026465831324458
+        }
+      ],
+      "selectedRoots": {
+        "scope": "Latest successful compilation by within-run root ID; cross-run identities use name plus source; all original BGVs retained.",
+        "roots": [
+          {
+            "rootId": 17,
+            "name": "lambda def, ww, ds1",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "compilationId": 3302,
+            "codeBytes": 2064,
+            "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1].bgv",
+              "sha256": "c73eb6ae4d008538c85dee59872495fe528d305cfd808d9bae35e6dc1fc5b296",
+              "bytes": 471321
+            }
+          },
+          {
+            "rootId": 18,
+            "name": "lambda ww, ds",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "compilationId": 3320,
+            "codeBytes": 4616,
+            "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3320[lambda_ww,_ds].bgv",
+              "sha256": "bb03de5c1e61c2ae05ae8b7d431a11bf2e150648e27700630833c9f852a4bba2",
+              "bytes": 2183611
+            }
+          },
+          {
+            "rootId": 23,
+            "name": "lambda ww",
+            "source": "n/a",
+            "compilationId": 3358,
+            "codeBytes": 153340,
+            "roleKey": "lambda ww @ n/a",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3358[lambda_ww].bgv",
+              "sha256": "70c42ea00965813fa9a898c9a2ea37b213cf2d41a15208286ce5efc2223c6dea",
+              "bytes": 64747394
+            }
+          }
+        ],
+        "allCompiledRoots": [
+          {
+            "rootId": 10,
+            "name": "lambda k, x, l, r",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+            "compilationId": 3377,
+            "codeBytes": 2636,
+            "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 15,
+            "name": "lambda k, x, l, r",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+            "compilationId": 3393,
+            "codeBytes": 57756,
+            "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 17,
+            "name": "lambda def, ww, ds1",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "compilationId": 3302,
+            "codeBytes": 2064,
+            "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1].bgv",
+              "sha256": "c73eb6ae4d008538c85dee59872495fe528d305cfd808d9bae35e6dc1fc5b296",
+              "bytes": 471321
+            }
+          },
+          {
+            "rootId": 18,
+            "name": "lambda ww, ds",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "compilationId": 3320,
+            "codeBytes": 4616,
+            "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3320[lambda_ww,_ds].bgv",
+              "sha256": "bb03de5c1e61c2ae05ae8b7d431a11bf2e150648e27700630833c9f852a4bba2",
+              "bytes": 2183611
+            }
+          },
+          {
+            "rootId": 21,
+            "name": "lambda sc, x, ds1",
+            "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "compilationId": 3186,
+            "codeBytes": 61736,
+            "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 22,
+            "name": "lambda ww, ds2",
+            "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+            "compilationId": 3252,
+            "codeBytes": 24644,
+            "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 23,
+            "name": "lambda ww",
+            "source": "n/a",
+            "compilationId": 3358,
+            "codeBytes": 153340,
+            "roleKey": "lambda ww @ n/a",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3358[lambda_ww].bgv",
+              "sha256": "70c42ea00965813fa9a898c9a2ea37b213cf2d41a15208286ce5efc2223c6dea",
+              "bytes": 64747394
+            }
+          },
+          {
+            "rootId": 26,
+            "name": "lambda n",
+            "source": "examples/THC/MapWorkload.hs:30",
+            "compilationId": 3432,
+            "codeBytes": 900,
+            "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+            "roleAmbiguous": false
+          }
+        ]
+      },
+      "runtimeJar": [
+        {
+          "path": "/Users/ekmett/thc/work/boxed-value-cache-v7/lib/thc-0.1-experiment.jar",
+          "sha256": "a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d"
+        }
+      ]
+    },
+    "on": {
+      "captureConfig": {
+        "path": "work/boxed-value-graph-on/capture-config.json",
+        "sha256": "f9d49abaf38b88501ebb48f7916a7681a6e50eb151e5a17f9f1cdf1a308c0c96"
+      },
+      "jvmOptions": [
+        "-Dthc.boxedValueCache=true",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-XX:-UseCompactObjectHeaders"
+      ],
+      "backend": "bytecode",
+      "depth": 2,
+      "budgets": [
+        12000,
+        12000
+      ],
+      "warmCalls": 12032,
+      "installedCode": true,
+      "unsupportedTraps": 0,
+      "forbiddenCompilationEvents": [],
+      "commands": [
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "--enable-native-access=ALL-UNNAMED",
+            "-Xss2m",
+            "-Dpolyglot.compiler.InliningRecursionDepth=2",
+            "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+            "-Dpolyglot.compiler.InliningInliningBudget=12000",
+            "-Dthc.traceCompilation=true",
+            "-Dthc.minimumWarmCalls=12000",
+            "-Dthc.backend=bytecode",
+            "-Dthc.diagnosticUnsupported=true",
+            "-Dthc.sourceNotesEnabled=true",
+            "-Dthc.boxedValueCache=true",
+            "-Dthc.constructorClassIdentity=false",
+            "-Dthc.staticShapeUnchecked=false",
+            "-XX:-UseCompactObjectHeaders",
+            "-Djdk.graal.Dump=Truffle:1",
+            "-Djdk.graal.PrintGraph=File",
+            "-Djdk.graal.PrintGraphWithSchedule=true",
+            "-Djdk.graal.PrintBackendCFG=false",
+            "-Djdk.graal.TrackNodeSourcePosition=true",
+            "-Djdk.graal.DumpPath=/Users/ekmett/thc/work/boxed-value-graph-on",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-cache-v7/lib/annotations-13.0.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/boxed-value-cache-v7/lib/word-25.3.4.1.jar",
+            "thc.ProbeKt",
+            "/Users/ekmett/thc/work/boxed-value-cache-v7/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/boxed-value-cache-v7/map/16-GHC.InterfaceClosure.json",
+            "mapAggregate",
+            "--steady",
+            "15",
+            "0.01",
+            "1",
+            "10000"
+          ],
+          "stdout": "run.out",
+          "stderr": "run.err",
+          "exitCode": 0,
+          "elapsedSeconds": 54.96522391680628
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javac",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-d",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/classes",
+            "/Users/ekmett/thc/work/perf-sprint-v2/GraphInspect.java"
+          ],
+          "stdout": "javac-graph-reader.out",
+          "stderr": "javac-graph-reader.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.3849218748509884
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "-XX:-UseJVMCICompiler",
+            "-Xmx4g",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/classes",
+            "GraphInspect",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1].bgv",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1]",
+            "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+          ],
+          "stdout": "parse-3288.out",
+          "stderr": "parse-3288.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.1939772078767419
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "-XX:-UseJVMCICompiler",
+            "-Xmx4g",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/classes",
+            "GraphInspect",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/TruffleHotSpotCompilation-3304[lambda_ww,_ds].bgv",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3304[lambda_ww,_ds]",
+            "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+          ],
+          "stdout": "parse-3304.out",
+          "stderr": "parse-3304.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.5947927078232169
+        },
+        {
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+            "-XX:-UseJVMCICompiler",
+            "-Xmx4g",
+            "--add-modules",
+            "jdk.graal.compiler",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+            "--add-exports",
+            "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+            "-cp",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/classes",
+            "GraphInspect",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/TruffleHotSpotCompilation-3341[lambda_ww].bgv",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3341[lambda_ww]",
+            "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+          ],
+          "stdout": "parse-3341.out",
+          "stderr": "parse-3341.err",
+          "exitCode": 0,
+          "elapsedSeconds": 5.6921241246163845
+        },
+        {
+          "argv": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "/Users/ekmett/thc/tools/audit-call-packets.py",
+            "/Users/ekmett/thc/work/boxed-value-graph-on",
+            "--output",
+            "/Users/ekmett/thc/work/boxed-value-graph-on/packet-audit.json"
+          ],
+          "stdout": "packet-audit.out",
+          "stderr": "packet-audit.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.5584320416674018
+        },
+        {
+          "argv": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "/Users/ekmett/thc/work/perf-sprint-v2/summarize-graphs.py",
+            "/Users/ekmett/thc/work/boxed-value-graph-on"
+          ],
+          "stdout": "graph-summary.out",
+          "stderr": "graph-summary.err",
+          "exitCode": 0,
+          "elapsedSeconds": 0.5024599591270089
+        }
+      ],
+      "selectedRoots": {
+        "scope": "Latest successful compilation by within-run root ID; cross-run identities use name plus source; all original BGVs retained.",
+        "roots": [
+          {
+            "rootId": 17,
+            "name": "lambda def, ww, ds1",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "compilationId": 3288,
+            "codeBytes": 1952,
+            "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1].bgv",
+              "sha256": "71f10c9e256caae9070f9a2ddf1923b4a3e8444b93cb710a64b9c968af52eea8",
+              "bytes": 461739
+            }
+          },
+          {
+            "rootId": 18,
+            "name": "lambda ww, ds",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "compilationId": 3304,
+            "codeBytes": 4616,
+            "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3304[lambda_ww,_ds].bgv",
+              "sha256": "e02c9f3b2d6e9617c898b5927fd41c26e73f02e2e477779c590205846405e178",
+              "bytes": 2183609
+            }
+          },
+          {
+            "rootId": 23,
+            "name": "lambda ww",
+            "source": "n/a",
+            "compilationId": 3341,
+            "codeBytes": 152316,
+            "roleKey": "lambda ww @ n/a",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3341[lambda_ww].bgv",
+              "sha256": "7b4741edf8b9d615ebd7178624bad64c8a840a4e38d75ac2fa14dd7fec940b4d",
+              "bytes": 63293867
+            }
+          }
+        ],
+        "allCompiledRoots": [
+          {
+            "rootId": 10,
+            "name": "lambda k, x, l, r",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+            "compilationId": 3362,
+            "codeBytes": 2644,
+            "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 15,
+            "name": "lambda k, x, l, r",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+            "compilationId": 3379,
+            "codeBytes": 56928,
+            "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 17,
+            "name": "lambda def, ww, ds1",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "compilationId": 3288,
+            "codeBytes": 1952,
+            "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1].bgv",
+              "sha256": "71f10c9e256caae9070f9a2ddf1923b4a3e8444b93cb710a64b9c968af52eea8",
+              "bytes": 461739
+            }
+          },
+          {
+            "rootId": 18,
+            "name": "lambda ww, ds",
+            "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "compilationId": 3304,
+            "codeBytes": 4616,
+            "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3304[lambda_ww,_ds].bgv",
+              "sha256": "e02c9f3b2d6e9617c898b5927fd41c26e73f02e2e477779c590205846405e178",
+              "bytes": 2183609
+            }
+          },
+          {
+            "rootId": 21,
+            "name": "lambda sc, x, ds1",
+            "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "compilationId": 3177,
+            "codeBytes": 53132,
+            "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 22,
+            "name": "lambda ww, ds2",
+            "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+            "compilationId": 3235,
+            "codeBytes": 26452,
+            "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+            "roleAmbiguous": false
+          },
+          {
+            "rootId": 23,
+            "name": "lambda ww",
+            "source": "n/a",
+            "compilationId": 3341,
+            "codeBytes": 152316,
+            "roleKey": "lambda ww @ n/a",
+            "roleAmbiguous": false,
+            "bgv": {
+              "path": "TruffleHotSpotCompilation-3341[lambda_ww].bgv",
+              "sha256": "7b4741edf8b9d615ebd7178624bad64c8a840a4e38d75ac2fa14dd7fec940b4d",
+              "bytes": 63293867
+            }
+          },
+          {
+            "rootId": 26,
+            "name": "lambda n",
+            "source": "examples/THC/MapWorkload.hs:30",
+            "compilationId": 3418,
+            "codeBytes": 908,
+            "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+            "roleAmbiguous": false
+          }
+        ]
+      },
+      "runtimeJar": [
+        {
+          "path": "/Users/ekmett/thc/work/boxed-value-cache-v7/lib/thc-0.1-experiment.jar",
+          "sha256": "a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d"
+        }
+      ]
+    }
+  },
+  "parsedSources": [
+    {
+      "mode": "off",
+      "role": "lookup",
+      "phase": "Before phase HighTierLowering",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1]/graph-00005.json",
+      "sha256": "384e364083096c81513a4354b40882a718eaa886496b872ece893c6481ec1c5d",
+      "bytes": 827417,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "off",
+      "role": "lookup",
+      "phase": "After mid tier",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1]/graph-00007.json",
+      "sha256": "5653b6c729893e2feee1ed3e098cd0eb22ba302f1054f57d85510e3b2730e0f2",
+      "bytes": 1359984,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "off",
+      "role": "fold",
+      "phase": "Before phase HighTierLowering",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3320[lambda_ww,_ds]/graph-00005.json",
+      "sha256": "253eede6643d7ec659ed3e48eb34ca12e227b87b6ca076117347c8cacbed0c0d",
+      "bytes": 8696669,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "off",
+      "role": "fold",
+      "phase": "After mid tier",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3320[lambda_ww,_ds]/graph-00007.json",
+      "sha256": "18babd510950051ae88acbe3f3b9613517b5d6306fe59a618eb7cf009036d6f9",
+      "bytes": 8686611,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "off",
+      "role": "worker",
+      "phase": "Before phase HighTierLowering",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3358[lambda_ww]/graph-00005.json",
+      "sha256": "e438a78a6de3c6d2771b4b838f31ce2616101ef617445aaa39f8ced8c3cc09f8",
+      "bytes": 97212426,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "off",
+      "role": "worker",
+      "phase": "After mid tier",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-off/parsed-TruffleHotSpotCompilation-3358[lambda_ww]/graph-00007.json",
+      "sha256": "b9866045a4e85c297107bc75979ffca53e7381fb18d3af889277e9aacc5b136a",
+      "bytes": 152227976,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "on",
+      "role": "lookup",
+      "phase": "Before phase HighTierLowering",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1]/graph-00005.json",
+      "sha256": "dd9af830c058c0e16bcb7671c7a2f06e1ac275ad188cec55e8fabf814ff7a525",
+      "bytes": 811740,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "on",
+      "role": "lookup",
+      "phase": "After mid tier",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1]/graph-00007.json",
+      "sha256": "1bf2e2d49bfe222cf92d488905f1735f08a6bac859196ed077713d6f7e86f127",
+      "bytes": 1277306,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "on",
+      "role": "fold",
+      "phase": "Before phase HighTierLowering",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3304[lambda_ww,_ds]/graph-00005.json",
+      "sha256": "4580c06ece524bcfa4adf57860dfd9964e7889d4d5d245e0d70124d0a646bf2a",
+      "bytes": 8696669,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "on",
+      "role": "fold",
+      "phase": "After mid tier",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3304[lambda_ww,_ds]/graph-00007.json",
+      "sha256": "b5049f9631ded3f744283c9be285bc942a134b5c744e18389079903c901ee257",
+      "bytes": 8686611,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "on",
+      "role": "worker",
+      "phase": "Before phase HighTierLowering",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3341[lambda_ww]/graph-00005.json",
+      "sha256": "0b109ec9498c1a23992b0aceba3ebe39d3a1f3d3b3bc857f618b46e0cbc72abf",
+      "bytes": 96950471,
+      "hashSource": "Completed capture-config.json output inventory"
+    },
+    {
+      "mode": "on",
+      "role": "worker",
+      "phase": "After mid tier",
+      "path": "/Users/ekmett/thc/work/boxed-value-graph-on/parsed-TruffleHotSpotCompilation-3341[lambda_ww]/graph-00007.json",
+      "sha256": "2241f6e1b3c2a695ab84627a4b4cc96fdf6159d6bdd68e14e59bd6b8febe95db",
+      "bytes": 156582420,
+      "hashSource": "Completed capture-config.json output inventory"
+    }
+  ],
+  "method": "Root launched all guest JVMs and BGV parsers serially. This audit read their successful selected-root captures and inspected scheduled node/edge/block data with Python. No new guest run, BGV reparse or performance timing was performed by the auditor.",
+  "nodeReferences": "Node and block IDs apply only to the recorded compilation, never across runs.",
+  "rawBgvs": [
+    {
+      "mode": "off",
+      "identity": {
+        "rootId": 17,
+        "name": "lambda def, ww, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "compilationId": 3302,
+        "codeBytes": 2064,
+        "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1].bgv",
+          "sha256": "c73eb6ae4d008538c85dee59872495fe528d305cfd808d9bae35e6dc1fc5b296",
+          "bytes": 471321
+        }
+      },
+      "originalPath": "/Users/ekmett/thc/work/boxed-value-graph-off/TruffleHotSpotCompilation-3302[lambda_def,_ww,_ds1].bgv"
+    },
+    {
+      "mode": "off",
+      "identity": {
+        "rootId": 18,
+        "name": "lambda ww, ds",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "compilationId": 3320,
+        "codeBytes": 4616,
+        "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3320[lambda_ww,_ds].bgv",
+          "sha256": "bb03de5c1e61c2ae05ae8b7d431a11bf2e150648e27700630833c9f852a4bba2",
+          "bytes": 2183611
+        }
+      },
+      "originalPath": "/Users/ekmett/thc/work/boxed-value-graph-off/TruffleHotSpotCompilation-3320[lambda_ww,_ds].bgv"
+    },
+    {
+      "mode": "off",
+      "identity": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3358,
+        "codeBytes": 153340,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3358[lambda_ww].bgv",
+          "sha256": "70c42ea00965813fa9a898c9a2ea37b213cf2d41a15208286ce5efc2223c6dea",
+          "bytes": 64747394
+        }
+      },
+      "originalPath": "/Users/ekmett/thc/work/boxed-value-graph-off/TruffleHotSpotCompilation-3358[lambda_ww].bgv"
+    },
+    {
+      "mode": "on",
+      "identity": {
+        "rootId": 17,
+        "name": "lambda def, ww, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "compilationId": 3288,
+        "codeBytes": 1952,
+        "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1].bgv",
+          "sha256": "71f10c9e256caae9070f9a2ddf1923b4a3e8444b93cb710a64b9c968af52eea8",
+          "bytes": 461739
+        }
+      },
+      "originalPath": "/Users/ekmett/thc/work/boxed-value-graph-on/TruffleHotSpotCompilation-3288[lambda_def,_ww,_ds1].bgv"
+    },
+    {
+      "mode": "on",
+      "identity": {
+        "rootId": 18,
+        "name": "lambda ww, ds",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "compilationId": 3304,
+        "codeBytes": 4616,
+        "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3304[lambda_ww,_ds].bgv",
+          "sha256": "e02c9f3b2d6e9617c898b5927fd41c26e73f02e2e477779c590205846405e178",
+          "bytes": 2183609
+        }
+      },
+      "originalPath": "/Users/ekmett/thc/work/boxed-value-graph-on/TruffleHotSpotCompilation-3304[lambda_ww,_ds].bgv"
+    },
+    {
+      "mode": "on",
+      "identity": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3341,
+        "codeBytes": 152316,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3341[lambda_ww].bgv",
+          "sha256": "7b4741edf8b9d615ebd7178624bad64c8a840a4e38d75ac2fa14dd7fec940b4d",
+          "bytes": 63293867
+        }
+      },
+      "originalPath": "/Users/ekmett/thc/work/boxed-value-graph-on/TruffleHotSpotCompilation-3341[lambda_ww].bgv"
+    }
+  ]
+}

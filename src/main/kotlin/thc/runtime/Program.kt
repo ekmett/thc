@@ -469,6 +469,7 @@ private class Construct(private val layout: DataLayout,
                         @field:Children private var fields: Array<Expr>) : Expr() {
     init { representation = CoreRepresentation(CoreKind.DATA, evaluated = true) }
     @ExplodeLoop override fun execute(frame: VirtualFrame): DataValue {
+        if (layout.hasBoxedValueCache) return layout.createLong(fields[0].executeRequiredLong(frame))
         val value = layout.allocate()
         for (i in fields.indices) {
             if (layout.isLong(i)) layout.initializeLong(value, i, fields[i].executeRequiredLong(frame))

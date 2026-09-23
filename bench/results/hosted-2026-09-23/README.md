@@ -38,8 +38,8 @@ compilation-event checks. Full Map checks passed all 18 inputs before and after
 requested compilation in six configurations. Default and compact-header test
 suites each passed **148 tests**, with no failures, errors, or skips.
 
-Both runtime builds used GHC 9.14.1, GraalVM 25.3.4.1/JDK 25 and one current
-exported Core/native corpus. Penalty-free recursion depth is 2 and both inlining
+The run used GHC 9.14.1 for the current Core/native corpus and
+GraalVM 25.3.4.1/JDK 25 for both runtime builds. Both runtimes use that one corpus. Penalty-free recursion depth is 2 and both inlining
 budgets are 12,000. Sources are enabled; unsupported paths trap explicitly.
 Original runtime source is `4c116a8493eafad4077a1c5eb9c046bff56fe3c4`; current source
 is `894648c26c99887b0227b70aab40758ce53dcd71`. All 19 original and 25 current

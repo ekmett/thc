@@ -1,0 +1,19 @@
+{
+  "scope": "Recorded identities only; raw JFR files are not bundled. Diagnostic elapsed times are not throughput measurements.",
+  "files": [
+    {
+      "mode": "off",
+      "originalPath": "work/boxed-value-profile-off/map.jfr",
+      "path": "map.jfr",
+      "sha256": "19c4b951b20b765a0ebea2919f0f8836ab08534ea35bedac64eecffe564a42bc",
+      "bytes": 368318
+    },
+    {
+      "mode": "on",
+      "originalPath": "work/boxed-value-profile-on/map.jfr",
+      "path": "map.jfr",
+      "sha256": "b6d95359e756296e3032177784137259cbc11325444738ce4835fc89221af386",
+      "bytes": 375056
+    }
+  ]
+}

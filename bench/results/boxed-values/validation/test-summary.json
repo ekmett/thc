@@ -1,0 +1,71 @@
+{
+  "tests": {
+    "focused": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "enabled": {
+      "tests": 153,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "default": {
+      "tests": 153,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "combined-array": {
+      "tests": 41,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "testOptions": {
+    "focused": "tests explicitly toggle cache, storage strategy and class identity",
+    "enabled": [
+      "-Dthc.boxedValueCache=true"
+    ],
+    "default": [],
+    "combined-array": [
+      "-Dthc.boxedValueCache=true",
+      "-Dthc.constructorClassIdentity=true",
+      "-Dthc.staticShapeUnchecked=true",
+      "-Dpolyglot.engine.StaticObjectStorageStrategy=array-based"
+    ]
+  },
+  "fixtureCleanup": {
+    "tests": 5,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "changes": "Only CbvAudit Char fixture, fixture metadata auditor, and cache test metadata path. Runtime JAR unchanged."
+  },
+  "runtimeJarSha256": "a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d",
+  "compactHeaders": {
+    "tests": 153,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "javaToolOptions": [
+      "-XX:+UseCompactObjectHeaders"
+    ],
+    "scope": "Compatibility check; runtime defaults except individual tests own scoped options. This is not a cache/compact combined throughput result."
+  },
+  "mapChecks": {
+    "configurations": [
+      "default",
+      "cache",
+      "class",
+      "compact"
+    ],
+    "rowsBeforeCompilation": 18,
+    "rowsAfterRequestedCompilation": 18,
+    "unsupportedTraps": 0,
+    "scope": "Independent correctness configurations; timing comparisons are separate."
+  }
+}
