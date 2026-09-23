@@ -27,6 +27,17 @@ contract, while its lifted fields remain lazy. The field is neither final nor
 their original identity. Every operation evaluates and validates its State
 operand before allocation, read publication, or mutation.
 
+Public `Eq (STRef s a)` compares cell identity, independent of the payload or
+its current value. GHC 9.14.1's [instance](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/libraries/ghc-internal/src/GHC/Internal/STRef.hs#L61)
+calls `sameMutVar#`. That name is a
+[library specialization](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/libraries/ghc-internal/src/GHC/Internal/Prim/PtrEq.hs#L119)
+of `unsafePtrEquality#`, which calls the existing `reallyUnsafePtrEquality#`
+primop. Genuine exported Core therefore uses the existing AST and bytecode
+reference-identity operation; no extra primitive alias or STRef builtin is added.
+Its two `MutVar#` arguments are unlifted boxed references and its `Int#` result
+is a full-width long. Comparing aliases returns true, while distinct cells
+with the same contents compare false. Equality does not force either payload.
+
 Both loaders and the static auditor require the exact boxed levity, scalar
 State, logical tuple layout, arity and saturated application. Partial and
 first-class primitives, unknown representations, atomics, concurrency and FFI
@@ -34,14 +45,21 @@ references remain outside this slice. The runtime follows its existing single
 guest thread policy.
 
 `compiler/test-fixtures/MutVarAudit.hs` uses public `runST`, `newSTRef`,
-`readSTRef`, `writeSTRef`, `modifySTRef`, and `modifySTRef'`. Six entry points
+`readSTRef`, `writeSTRef`, `modifySTRef`, `modifySTRef'`, and `(==)`. Eight entry points
 cover aliased and independent references, read snapshots, captured references,
 lazy bottom and closure payloads, an unlifted boxed product with a lazy field,
-explicit State sequencing, and a recursive local-join countdown. Preparation
-retains all three primitives in every reachable pre- and post-Tidy entry,
-requires strict acceptance, and compares 1,590 native GHC rows with an
+explicit State sequencing, and a recursive local-join countdown. Two equality
+entries add opaque aliases and dynamic reference selection, distinct cells
+sharing one payload, identity before and after writes, and bottom payloads with
+no `Eq` instance. Independent reads check which selected cell was modified.
+An opaque ST action keeps the post-write equality computation reachable instead
+of letting GHC share the caller's pre-write result.
+Preparation retains all expected operations in each reachable pre- and post-Tidy
+entry, verifies the pointer comparison's exact argument/result representations,
+requires strict acceptance, and compares 2,120 native GHC rows with an
 independent unbounded-integer model. Inputs include the signed endpoints,
-wrap boundaries, and every countdown length from zero through 32.
+wrap boundaries, both reference-selection branches, and every countdown length
+from zero through 32. The equality entries contribute 530 native rows.
 
 ```sh
 GHC=/path/to/ghc-9.14.1 GHC_PKG=/path/to/ghc-pkg \
@@ -76,7 +94,7 @@ zero-trip deoptimization, the one-trip probe can enter a compiled guest through
 an interpreted host. After both probes, it recompiles the host **at most once**,
 only if it invalidated. Every original corpus row must then keep the host and
 active guest compiled. There is no retry loop or relaxed steady-state assertion.
-The other five workloads and all tests with inlining disabled keep their
+The other seven workloads and all tests with inlining disabled keep their
 first-install stability checks.
 
 The [recorded graph evidence](mutvar-loop-speculation.json) includes both export

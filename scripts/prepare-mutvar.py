@@ -10,7 +10,9 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/mutvar'
 SOURCE = 'compiler/test-fixtures/MutVarAudit.hs'
-ENTRIES = ['stRef', 'lazyRef', 'closureRef', 'orderedRef', 'unliftedRef', 'stLoop']
+ENTRIES = ['stRef', 'lazyRef', 'closureRef', 'orderedRef', 'unliftedRef', 'stLoop',
+           'stRefEquality', 'lazyRefEquality']
+EQUALITY_ENTRIES = {'stRefEquality', 'lazyRefEquality'}
 PRIMITIVES = {'newMutVar#', 'readMutVar#', 'writeMutVar#'}
 
 
@@ -23,6 +25,12 @@ def signed(n):
 
 
 def mathematical(name, x):
+    if name in EQUALITY_ENTRIES:
+        score = 1 + (4 if x < 0 else 0)
+        if name == 'lazyRefEquality':
+            return signed(x + 17 * score)
+        left, right = (x + 17, x) if x < 0 else (x, x + 17)
+        return signed(left * 257 + right * 65537 + 17 * score)
     if name == 'lazyRef':
         return signed(x + 5)
     if name == 'closureRef':
@@ -36,6 +44,18 @@ def mathematical(name, x):
         return signed(value)
     last = (x + 17) * 3 if name == 'stRef' else x * 3
     return signed(x + (x + 17) * 257 + last * 65537 + (x + 71) * 16777259)
+
+
+def pointer_applications(value):
+    if isinstance(value, list):
+        if (value and value[0] == 'app' and isinstance(value[1], list)
+                and value[1][:2] == ['prim', 'reallyUnsafePtrEquality#']):
+            yield value
+        for child in value:
+            yield from pointer_applications(child)
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from pointer_applications(child)
 
 
 def main():
@@ -66,10 +86,27 @@ def main():
             report_path.write_text(json.dumps(report, indent=2) + '\n')
             artifacts.append(str(report_path.relative_to(ROOT)))
             assert report['accepted'], (stage, name, report['issues'], report['missingGlobals'])
-            assert PRIMITIVES <= {p['name'] for p in report['primitives']}, (stage, name, report['primitives'])
+            required = PRIMITIVES - ({'readMutVar#'} if name == 'lazyRefEquality' else set())
+            if name in EQUALITY_ENTRIES:
+                required |= {'reallyUnsafePtrEquality#'}
+            assert required <= {p['name'] for p in report['primitives']}, (stage, name, report['primitives'])
             closures[stage + '/' + name] = report['reachableBindings']
         # Public API lowering must retain the OPAQUE STRef operation used by stRef.
         assert any(b['id'].startswith('main:MutVarAudit.bump') for b in closures[stage + '/stRef'])
+        for name in EQUALITY_ENTRIES:
+            for helper in ('sameRef', 'writeAndScore'):
+                assert any(b['id'].startswith('main:MutVarAudit.' + helper) for b in closures[stage + '/' + name])
+        # GHC 9.14.1 sameMutVar# is a library specialization, not a new primop.
+        # Verify the genuine Eq STRef lowering compares two unlifted references
+        # and returns a full-width Int#, rather than comparing lifted wrappers.
+        comparisons = [app for _, module in modules for app in pointer_applications(module)]
+        assert comparisons, (stage, 'missing public STRef equality lowering')
+        for app in comparisons:
+            assert len(app[2]) == 2 and app[3] == [False, False], (stage, app)
+            for operand in app[2]:
+                assert operand[-1]['rep']['kind'] == 'object', (stage, operand)
+                assert operand[-1]['rep']['primReps'] == ['BoxedRep (Just Unlifted)'], (stage, operand)
+            assert app[-1]['rep']['kind'] == 'long' and app[-1]['rep']['primReps'] == ['IntRep'], (stage, app)
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where', 'import GHC.Exts (Int(I#), Int#)',
               'import qualified MutVarAudit as P',
               'emit :: String -> (Int# -> Int#) -> Int -> IO ()',
