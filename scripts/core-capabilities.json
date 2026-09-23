@@ -338,7 +338,12 @@
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
     "indexWord8Array#": 2,
-    "copyByteArray#": 6
+    "copyByteArray#": 6,
+    "newArray#": 3,
+    "readArray#": 3,
+    "writeArray#": 4,
+    "unsafeFreezeArray#": 2,
+    "indexArray#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -600,6 +605,58 @@
         "kind": "void",
         "primReps": []
       }
+    }
+  },
+  "managedArrayPrimitives": {
+    "newArray#": {
+      "arguments": [
+        "int",
+        "element",
+        "state"
+      ],
+      "result": [
+        "state",
+        "array"
+      ]
+    },
+    "readArray#": {
+      "arguments": [
+        "array",
+        "int",
+        "state"
+      ],
+      "result": [
+        "state",
+        "element"
+      ]
+    },
+    "writeArray#": {
+      "arguments": [
+        "array",
+        "int",
+        "element",
+        "state"
+      ],
+      "result": "state"
+    },
+    "unsafeFreezeArray#": {
+      "arguments": [
+        "array",
+        "state"
+      ],
+      "result": [
+        "state",
+        "array"
+      ]
+    },
+    "indexArray#": {
+      "arguments": [
+        "array",
+        "int"
+      ],
+      "result": [
+        "element"
+      ]
     }
   }
 }

@@ -422,6 +422,34 @@ class Audit:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact scalar arguments required')
                     if self.shape(proof) != expected_result:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact logical tuple result required')
+                array = self.cap.get('managedArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if array is not None:
+                    def array_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'int':
+                            return kind == 'long' and reps == ['IntRep']
+                        if role == 'array':
+                            return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        return kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
+                    expected = array['arguments']
+                    if (len(arguments) != len(expected) or flags != [r == 'element' for r in expected] or
+                            any(not array_role(self.expression_rep(a), r) for a, r in zip(arguments, expected))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact Array arguments required')
+                    result = array['result']
+                    if isinstance(result, list):
+                        fields = proof.get('components') if isinstance(proof, dict) else None
+                        valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                                 isinstance(fields, list) and len(fields) == len(result) and
+                                 all(array_role(rep, role) for rep, role in zip(fields, result)) and
+                                 proof.get('primReps') == [r for field in fields for r in field['primReps']])
+                    else:
+                        valid = array_role(proof, result)
+                    if not valid:
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact Array result required')
                 bytearray_primitive = self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if bytearray_primitive is not None:
                     def exact(actual, expected):

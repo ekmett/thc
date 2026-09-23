@@ -13,6 +13,7 @@ python3 scripts/prepare-tuple-join-audit.py
 python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py
 python3 scripts/prepare-bytearray.py
+python3 scripts/prepare-boxed-arrays.py
 # GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately
 # validates pre-Core/model execution; the x86 job also requires native + post-Tidy.
 for simd_vector in int64x2 int32x4; do

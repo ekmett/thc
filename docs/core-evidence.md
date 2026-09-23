@@ -188,3 +188,43 @@ comparisons collapse those paths; the separate [measurement](debug-locations.md#
 records the effect with source notes enabled throughout.
 
 Exact GHC `VecRep` evidence now carries a separate `vector` lane/element record. [Bounded Int64X2 lowering](simd.md) consumes it without conflating a vector with an unboxed tuple of equal spill width.
+
+
+## Lifted boxed Array# storage
+
+The five saturated operations `newArray#`, `readArray#`, `writeArray#`,
+`unsafeFreezeArray#`, and `indexArray#` support known lifted elements on both
+backends. A managed JVM `Object[]` is the array's actual storage; `byte[]`
+remains the distinct numeric ByteArray# carrier. Initial values and writes
+preserve the same guest reference or thunk. A read loads that reference at the
+sequenced operation, so subsequent writes cannot change an earlier snapshot;
+neither reading nor indexing enters the element.
+
+Exact GHC 9.14.1 proofs distinguish `(# State# s, a #)` from the singleton
+`(# a #)` returned by `indexArray#`. State is logically present but occupies no
+payload slot. Array# and MutableArray# are unlifted boxed references; ordinary
+Array/STArray wrappers are lifted data. Saturated tuple operations write one
+object directly into caller-frame locals, without a tuple carrier or result
+slab. State evaluation precedes effects/publication, managed Long bounds are
+checked before narrowing, and unsafe freeze preserves storage identity. Array
+contents are mutable and never marked compilation-final.
+
+The proof schema records representation, not nominal storage type:
+Array#/ByteArray#/MutVar# can all have `BoxedRep (Just Unlifted)`. Contradictory
+liftedness or logical layouts fail validation; a supplied byte[] masquerading
+as Array# additionally fails the runtime Object[] carrier guard. Unknown or
+unlifted element proofs, first-class/partial primitives, copying/thawing,
+small arrays and atomic operations remain unsupported.
+
+`prepare-boxed-arrays.py` compiles the genuine public fixed-bounds
+`runSTArray` example in `BoxedArrayAudit.hs`, retaining an unselected recursive
+bottom and an unused read of it. It also retains native snapshot, zero-length,
+and closure-element controls. Pre/post audits require every supported root to
+have no missing bindings or issues. The separate explicit-error and dynamic
+checked-index examples retain their missing Err/CString/Arr/Ix source bodies
+and remain strict-load failures; their native results do not count as guest
+coverage. The manifest pins source and artifact hashes, GHC/package provenance,
+independent wrapping-Int models, and expected public exceptions. JVM controls
+check both backends with and without inlining, per-row compiled guest entry,
+unchanged active target identity, and host/original/active validity; no recovery
+or settling calls are added.
