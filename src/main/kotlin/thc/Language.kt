@@ -194,7 +194,10 @@ class EntryValue(private val program: ExecutableProgram, private val entry: Stri
             .filter { it.callTarget === original }.map { it.currentCallTarget }.distinct()
             .ifEmpty { listOf(original) }
         val cls = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
-        for (target in targets) {
+        // The executable value enters through this stable bridge. Install it
+        // as well as its active guest callees so an explicit host compilation
+        // request covers the actual public call path.
+        for (target in (targets + guestTarget).distinct()) {
             require(cls.isInstance(target)) { "Graal optimizing Truffle runtime required" }
             cls.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
             check(cls.getMethod("isValidLastTier").invoke(target) == true) { "Guest code was not installed" }
