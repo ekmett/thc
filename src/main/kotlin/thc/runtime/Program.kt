@@ -1206,6 +1206,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "unpackInt64X2#" -> VectorUnpack(operands[0])
                     "packInt32X4#" -> Vector32Pack(operands[0], IntArray(4) { scope.layout.bind("<vector lane $it>") })
                     "unpackInt32X4#" -> Vector32Unpack(operands[0])
+                    "packFloatX4#" -> VectorFloatPack(operands[0], IntArray(4) { scope.layout.bind("<float vector lane $it>") })
+                    "unpackFloatX4#" -> VectorFloatUnpack(operands[0])
+                    in CoreVectors.operationsFloat -> VectorFloatOperation(name, operands)
                     in CoreVectors.operations32 -> Vector32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }

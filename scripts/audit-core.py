@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 import sys
 
-from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error
+from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error, signature_matches as vector_signature_matches
 
 
 # The identical checked-in resource is packaged in the JVM runtime jar.
@@ -471,7 +471,11 @@ class Audit:
                     if len(arguments) != len(expected):
                         self.issue('vector-shape', owner, path, 'Vector primitive arity mismatch')
                     for index, (wanted, actual) in enumerate(zip(expected, arguments)):
+                        if not vector_signature_matches(wanted, self.expression_rep(actual)):
+                            self.issue('vector-shape', owner, f'{path}/arguments/{index}', 'Exact vector primitive argument representation required')
                         self.compare_shapes(wanted, self.expression_rep(actual), owner, f'{path}/arguments/{index}', component=True)
+                    if not vector_signature_matches(result, proof):
+                        self.issue('vector-shape', owner, path + '/rep', 'Exact vector primitive result representation required')
                     self.compare_shapes(result, proof, owner, path + '/rep', component=True)
                 elif is_vector(proof):
                     self.issue('vector-boundary', owner, path, 'vector call result')

@@ -614,6 +614,39 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class VectorFloatPack {
+        @Specialization public static FloatX4 pack(float first, float second, float third, float fourth) {
+            return FloatX4.pack(first, second, third, fourth);
+        }
+    }
+    @Operation public static final class VectorFloatBroadcast {
+        @Specialization public static FloatX4 broadcast(float value) { return FloatX4.broadcast(value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorFloatBinary {
+        @Specialization public static FloatX4 binary(int operation, FloatX4 first, FloatX4 second) {
+            return switch (operation) {
+                case 0 -> FloatX4.add(first, second);
+                case 1 -> FloatX4.subtract(first, second);
+                case 2 -> FloatX4.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid FloatX4 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    public static final class VectorFloatUnpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, FloatX4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setFloat(bytecode, frame, value.lane(0)); second.setFloat(bytecode, frame, value.lane(1));
+            third.setFloat(bytecode, frame, value.lane(2)); fourth.setFloat(bytecode, frame, value.lane(3));
+        }
+    }
+
     /** Evaluates a zero-width field for effects while producing no destination value. */
     @Operation public static final class DiscardVoid {
         @Specialization public static void discard(Object value) { TupleResultsKt.requireVoidCarrier(value); }

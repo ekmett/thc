@@ -24,6 +24,10 @@ for simd_vector in int64x2 int32x4; do
     *) python3 scripts/prepare-simd-audit.py --vector "$simd_vector" ;;
   esac
 done
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-floatx4-audit.py --export-only ;;
+  *) python3 scripts/prepare-floatx4-audit.py ;;
+esac
 python3 scripts/prepare-tuple-arithmetic.py
 python3 scripts/prepare-signed-narrow-primops.py
 python3 scripts/prepare-explicit64-primops.py

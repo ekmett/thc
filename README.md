@@ -96,6 +96,8 @@ machine-word division and narrow-word comparisons, bitwise operations and shifts
 Local [Int64X2 and Int32X4 SIMD operations](docs/simd.md) run on both backends with exact
 vector metadata and primitive lane storage. Vector calls, returns, captures,
 fields and joins remain explicit boundaries.
+The [FloatX4 foundation](docs/floatx4.md) adds six local floating vector primops
+with primitive Float lanes, a fixed-width FloatVector carrier and native IEEE-edge checks.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
