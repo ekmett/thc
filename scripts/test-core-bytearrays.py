@@ -76,7 +76,8 @@ class ByteArrayContracts(unittest.TestCase):
 
     def test_state_is_not_an_empty_tuple_and_reference_is_not_lifted(self):
         for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#', 'readDoubleArray#',
-                     'readInt32Array#', 'readWord32Array#', 'readFloatArray#', 'readWordArray#'):
+                     'readInt32Array#', 'readWord32Array#', 'readFloatArray#', 'readWordArray#',
+                     'readInt16Array#', 'readWord16Array#'):
             for mutation in ('empty-tuple', 'missing-state', 'lifted-reference'):
                 module, app = fixture(name)
                 proof = app[6]['rep']
@@ -101,7 +102,9 @@ class ByteArrayContracts(unittest.TestCase):
                      'readInt32Array#', 'writeInt32Array#', 'indexInt32Array#',
                      'readWord32Array#', 'writeWord32Array#', 'indexWord32Array#',
                      'readFloatArray#', 'writeFloatArray#', 'indexFloatArray#',
-                     'readWordArray#', 'writeWordArray#', 'indexWordArray#'):
+                     'readWordArray#', 'writeWordArray#', 'indexWordArray#',
+                     'readInt16Array#', 'writeInt16Array#', 'indexInt16Array#',
+                     'readWord16Array#', 'writeWord16Array#', 'indexWord16Array#'):
             module, _ = fixture(name)
             parameter = module['bindings'][0]['expr'][1][0]
             parameter['rep']['primReps'] = ['BoxedRep (Just Lifted)']
@@ -135,11 +138,12 @@ class ByteArrayContracts(unittest.TestCase):
                 report = check(module)
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, kind, rep))
 
-    def test_32bit_arrays_require_exact_signedness_width_and_machine_index(self):
-        for family in ('Int32', 'Word32'):
+    def test_narrow_arrays_require_exact_signedness_width_and_machine_index(self):
+        for family in ('Int16', 'Word16', 'Int32', 'Word32'):
             for operation in ('read', 'write', 'index'):
                 name = operation + family + 'Array#'
-                for replacement in ('IntRep', 'WordRep', 'Int64Rep', 'Word64Rep', 'Int32Rep', 'Word32Rep'):
+                for replacement in ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep',
+                                    'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep'):
                     if replacement != 'IntRep':
                         module, app = fixture(name)
                         module['bindings'][0]['expr'][1][1]['rep']['primReps'] = [replacement]

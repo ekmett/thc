@@ -739,6 +739,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = boolean.class, name = "unsigned")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadInt16Array {
+        @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = unsigned ? ManagedInt16Array.readUnsigned(array, index) : ManagedInt16Array.readSigned(array, index);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteInt16Array {
+        @Specialization public static Object write(Object value, long index, long integer, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedInt16Array.write(array, index, integer);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "unsigned")
+    public static final class IndexInt16Array {
+        @Specialization public static long index(boolean unsigned, Object value, long index) {
+            byte[] array = ManagedByteArray.require(value);
+            return unsigned ? ManagedInt16Array.readUnsigned(array, index) : ManagedInt16Array.readSigned(array, index);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "unsigned")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadInt32Array {
         @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {

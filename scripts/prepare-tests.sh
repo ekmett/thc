@@ -23,6 +23,7 @@ python3 scripts/prepare-int-arrays.py
 python3 scripts/prepare-double-arrays.py
 python3 scripts/prepare-int32-arrays.py
 python3 scripts/prepare-float-word-arrays.py
+python3 scripts/prepare-int16-arrays.py
 # GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately
 # validates pre-Core/model execution; the x86 job also requires native + post-Tidy.
 for simd_vector in int64x2 int32x4; do
