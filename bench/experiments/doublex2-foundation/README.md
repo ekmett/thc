@@ -30,3 +30,18 @@ its original native toolchain provenance; executing that input on another JVM
 platform does not imply native GHC execution there. Movement/edge entries may
 legitimately scalarize because only one output lane is observed; they are strict
 bit-sensitive correctness controls, not packed-code evidence.
+
+For the frozen `69615799` source handoff, import the verified archive without
+executing its native binary, then use the same graph command above:
+
+```sh
+python3 bench/experiments/doublex2-foundation/import-native.py ARCHIVE.tar.gz \
+  --sha256 fe2c47ebd02e530facd2a8d83f26c6aef0fbe10e558de520be6b90c51c11b02e
+```
+
+The importer checks every payload hash, all ten fixture/exporter sources against
+the current checkout, exact Core inventories and strict audits for both stages,
+and every native row against the local integer model. It keeps the complete
+original native provenance, commands and inputs under `build/simd-doublex2/imported-native`.
+A new local provenance record identifies this as imported native data and records
+the current validation tools separately. It does not rerun GHC or the native binary.

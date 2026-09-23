@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import sys
 
 mode, root, out = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
@@ -19,7 +20,8 @@ def snapshot():
     sources += [p for p in sorted((root/'bench/experiments/doublex2-foundation').iterdir()) if p.suffix in ('.py', '.sh', '.java')]
     jars = sorted((root/'build/install/thc/lib').glob('*.jar'))
     assert jars, 'Build installDist first'
-    return dict(sources=[record(p) for p in sources], runtimeJars=[record(p) for p in jars])
+    return dict(sourceRevision=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+        sources=[record(p) for p in sources], runtimeJars=[record(p) for p in jars])
 
 if mode == 'prepare':
     assert not list(out.glob('*/graphs/*')), 'Use a fresh graph output directory'
