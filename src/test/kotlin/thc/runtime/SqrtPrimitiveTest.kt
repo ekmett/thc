@@ -135,6 +135,7 @@ class SqrtPrimitiveTest {
                     if (variant == "arity") {
                         (body[2] as MutableList<Any?>).clear()
                         (body[3] as MutableList<Any?>).clear()
+                        (body[6] as MutableMap<String, Any?>)["callDemand"] = mapOf("arity" to 0, "strictArgs" to emptyList<Boolean>())
                     } else if (variant == "argument") {
                         ((lambda[1] as List<MutableMap<String, Any?>>)[0])["rep"] = proof
                         (((body[2] as List<List<Any?>>)[0])[2] as MutableMap<String, Any?>)["rep"] = proof

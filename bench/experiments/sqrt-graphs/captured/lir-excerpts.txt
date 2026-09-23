@@ -1,0 +1,20 @@
+=== ast/floatCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r0|QWORD op: L2F <|@ <|@
+nr   10  <|@ instruction v0|SINGLE = FSQRT x: v0|SINGLE <|@ <|@
+nr   12  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr  132  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@51ae274e thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== ast/doubleCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r0|QWORD op: L2D <|@ <|@
+nr   10  <|@ instruction v0|DOUBLE = FSQRT x: v0|DOUBLE <|@ <|@
+nr   12  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr  132  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@33f45ba3 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== bytecode/floatCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r1|QWORD op: L2F <|@ <|@
+nr   10  <|@ instruction v0|SINGLE = FSQRT x: v0|SINGLE <|@ <|@
+nr   12  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr  146  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@6181be39 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== bytecode/doubleCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r1|QWORD op: L2D <|@ <|@
+nr   10  <|@ instruction v0|DOUBLE = FSQRT x: v0|DOUBLE <|@ <|@
+nr   12  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr  146  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@6b1d2f5b thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
