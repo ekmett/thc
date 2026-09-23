@@ -123,7 +123,7 @@ floating host arguments, arbitrary floating arithmetic, signaling-NaN identity,
 and non-native byte order on the current native host are not claimed. Existing
 `unsafeFreezeByteArray#` alias semantics are used, not broadened by this slice.
 
-## Verified checkpoint — 2026-09-23
+## Initial verified checkpoint — 2026-09-23
 
 On eak-quartus, Linux x86_64, using GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
 
@@ -143,10 +143,10 @@ On eak-quartus, Linux x86_64, using GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
   clean after the documented test-policy and wording corrections.
 
 Runtime/test revision: `95f056f60041e6b1abf8beab51e597cdd001b3f3`.
-This checkpoint is stacked on `70726466ad1f82f433e8aa7207094be3f95d0cd7`;
+That initial checkpoint is stacked on `70726466ad1f82f433e8aa7207094be3f95d0cd7`;
 the integration owner separately supplies the narrow-literal unknown-metadata
-correction `8536441f913225412b2c699255c9fd500effc8c0`. This Float/Word branch
-does not duplicate that prerequisite or claim validation of the combined tree.
+correction `8536441f913225412b2c699255c9fd500effc8c0`. The initial runs did
+not include it; the combined validation below supersedes that limitation.
 
 Retained local evidence is under `build/float-word-arrays/`,
 `build/prepare-all-float-word.log`, `build/test-default-float-word.log`,
@@ -154,3 +154,26 @@ Retained local evidence is under `build/float-word-arrays/`,
 and `float-word-handoff/`. The initial focused failure was an overbroad
 load-time expectation for diagnostic unknown tuple leaves; the corrected test
 requires their actual on-demand trap. No runtime workaround was introduced.
+
+## Combined literal-correction checkpoint — 2026-09-23
+
+The reviewed parent correction `8536441f913225412b2c699255c9fd500effc8c0`
+merged without conflicts at `9c9943c167c8f5e41d7d029388d33b170b7cb6e0`.
+No Float/Word implementation changes were needed. A second fresh complete
+preparation passed, including fourteen genuine `noinline` narrow-literal native
+rows and their exact unknown-metadata assertions before and after Tidy.
+
+The combined tree passed **390 tests in 82 suites in each mode**, with zero
+failures, errors or skips; both `installDist` builds passed and dense handoff
+again used a forced rebuild/rerun. This includes the unchanged Float/Word
+per-row compiled-entry gates and the new literal native/compiled regression.
+All eighteen Float/Word source plus thirty-four artifact hashes and sixteen
+Int32 source plus twenty-nine artifact hashes were rechecked afterward.
+All earlier Python suites passed again, now with 44 auditor tests.
+
+Combined logs use the `-corrected.log` suffix; preserved XML results are in
+`build/test-results/float-word-corrected-default/` and
+`build/test-results/float-word-corrected-handoff/`. Current generated fixtures
+and manifests describe this combined checkpoint; initial logs/XML remain as
+historical evidence. The feature does not reproduce or reimplement the parent
+correction, and PR/integration handling remains with the integration owner.
