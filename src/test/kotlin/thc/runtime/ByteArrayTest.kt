@@ -19,7 +19,7 @@ import java.security.MessageDigest
 
 class ByteArrayTest {
     private val root = File(System.getProperty("thc.projectRoot"))
-    private val names = listOf("shortBytes", "orderedBytes")
+    private val names = listOf("shortBytes", "orderedBytes", "shortUncons", "copiedBytes")
     private fun manifest() = Json.parse(File(root, "build/bytearray/manifest.json").readText()) as Map<String, Any?>
     private fun merged(paths: List<String>) = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
@@ -31,7 +31,20 @@ class ByteArrayTest {
             byte(x + BigInteger.valueOf(17)) * BigInteger.valueOf(257) +
             byte(x + BigInteger.TWO) * BigInteger.valueOf(65537) +
             byte(x + BigInteger.valueOf(71)) * BigInteger.valueOf(16777259)).toLong()
+        if (name == "copiedBytes") {
+            val source = listOf(byte(x), byte(x + BigInteger.valueOf(17)), BigInteger.ZERO, BigInteger.valueOf(255))
+            val destination = mutableListOf(11L, 22L, 33L, 44L, 55L, 66L).map { BigInteger.valueOf(it) }.toMutableList()
+            val key = x.mod(BigInteger.valueOf(1024)).toInt()
+            val start = key % 5; val end = key / 5 % 7
+            val count = minOf(key / 35 % 5, 4 - start, 6 - end)
+            repeat(count) { destination[end + it] = source[start + it] }
+            return (BigInteger.TEN + (source + destination).mapIndexed { i, b -> b * BigInteger.valueOf(257).pow(i) }
+                .fold(BigInteger.ZERO, BigInteger::add)).toLong()
+        }
         val size = x.abs().mod(BigInteger.valueOf(33)).toInt()
+        if (name == "shortUncons") return (0 until size).map { i ->
+            byte(x + BigInteger.valueOf(17L * i)) * BigInteger.valueOf(33).pow(i)
+        }.fold(BigInteger.ZERO, BigInteger::add).toLong()
         var value = BigInteger.ZERO
         for (index in 0 until size) value = value * BigInteger.valueOf(33) + byte(x + BigInteger.valueOf(17L * index))
         return (value + BigInteger.valueOf(size.toLong())).toLong()
@@ -39,7 +52,7 @@ class ByteArrayTest {
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
         Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target), label)
 
-    @Test fun installedShortByteStringAndOrderedWritesMatchNativeAndIndependentModel() {
+    @Test fun installedShortByteStringAndArrayEffectsMatchNativeAndIndependentModel() {
         val manifest = manifest()
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
@@ -80,7 +93,7 @@ class ByteArrayTest {
                         for (counter in listOf("unsupportedTraps", "blackholes"))
                             assertEquals(0L, (program.diagnostics().getValue(counter) as Number).toLong(), "$label/$counter")
                         assertEquals(0, language.handoffState.get().results.depth, "$label releases tuple results")
-                        if (name == "orderedBytes") assertEquals(0L, language.handoffState.get().results.allocations,
+                        if (name in listOf("orderedBytes", "copiedBytes")) assertEquals(0L, language.handoffState.get().results.allocations,
                             "$label saturated primitives write directly into locals")
                     } finally { context.leave() }
                 }
@@ -133,6 +146,106 @@ class ByteArrayTest {
         assertSame(marker, frame.getObject(slot))
     }
 
+    @Test fun copyRangesMatchAnIndependentModelAndRejectInvalidDomainsWithoutWriting() {
+        for (sourceSize in 0..6) for (destinationSize in 0..6) {
+            val source = ByteArray(sourceSize) { (it * 49 + 128).toByte() }
+            for (from in 0..sourceSize) for (to in 0..destinationSize)
+                for (count in 0..minOf(sourceSize - from, destinationSize - to)) {
+                    val destination = ByteArray(destinationSize) { (it + 17).toByte() }
+                    val expected = destination.copyOf()
+                    repeat(count) { expected[to + it] = source[from + it] }
+                    ManagedByteArray.copy(source, from.toLong(), destination, to.toLong(), count.toLong())
+                    assertArrayEquals(expected, destination)
+                    assertArrayEquals(ByteArray(sourceSize) { (it * 49 + 128).toByte() }, source)
+                }
+        }
+        val source = byteArrayOf(0, -1, 17, 33)
+        val destination = byteArrayOf(1, 2, 3, 4, 5, 6)
+        for (range in listOf(
+            listOf(-1L, 0L, 1L), listOf(5L, 0L, 0L), listOf(Long.MAX_VALUE, 0L, 1L),
+            listOf(0L, -1L, 1L), listOf(0L, 7L, 0L), listOf(0L, Long.MAX_VALUE, 1L),
+            listOf(0L, 0L, -1L), listOf(0L, 0L, 5L), listOf(0L, 3L, 4L),
+            listOf(1L, 1L, Long.MAX_VALUE), listOf(0L, 0L, Long.MIN_VALUE),
+            listOf(Int.MAX_VALUE.toLong() + 1, 0L, 0L), listOf(0L, Int.MAX_VALUE.toLong() + 1, 0L))) {
+            val before = destination.copyOf()
+            assertThrows(RuntimeFault::class.java) { ManagedByteArray.copy(source, range[0], destination, range[1], range[2]) }
+            assertArrayEquals(before, destination, "No partial write for $range")
+        }
+        // GHC forbids the same array in different states, even disjoint/empty ranges.
+        for (count in listOf(0L, 1L)) assertThrows(RuntimeFault::class.java) {
+            ManagedByteArray.copy(source, 0, ManagedByteArray.freeze(source), 2, count)
+        }
+    }
+
+    @Test fun copyEvaluatesAllSixOperandsBeforeTheEffectAndStateFailureDoesNotWrite() {
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+        val source = byteArrayOf(0, -1)
+        val destination = byteArrayOf(7, 8, 9)
+        val events = mutableListOf<String>()
+        fun operand(name: String, action: () -> Any?) = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any? { events.add(name); return action() }
+        }
+        fun expression(fail: Boolean) = byteArrayExpression(ByteArrayOp.COPY, CoreRepresentation.UNKNOWN, arrayOf(
+            operand("source") { source }, operand("sourceOffset") { 0L },
+            operand("destination") { destination }, operand("destinationOffset") { 1L },
+            operand("count") { 2L }, operand("state") {
+                assertArrayEquals(byteArrayOf(7, 8, 9), destination)
+                if (fail) throw RuntimeFault("state failed") else Unit
+            }))
+        assertThrows(RuntimeFault::class.java) { expression(true).execute(frame) }
+        assertArrayEquals(byteArrayOf(7, 8, 9), destination)
+        assertEquals(listOf("source", "sourceOffset", "destination", "destinationOffset", "count", "state"), events)
+        events.clear()
+        assertSame(Unit, expression(false).execute(frame))
+        assertArrayEquals(byteArrayOf(7, 0, -1), destination)
+        assertEquals(listOf("source", "sourceOffset", "destination", "destinationOffset", "count", "state"), events)
+    }
+
+    @Test fun copiedRangesAndAllOperandProofsAreCheckedInBothBackends() {
+        val paths = (manifest()["stages"] as Map<String, List<String>>).getValue("pre")
+        for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                fun fresh() = CoreModules.reachable(merged(paths), "copiedBytes")
+                fun copy(module: Map<String, Any?>) = applications(module).first {
+                    (it[1] as List<*>).take(2) == listOf("prim", "copyByteArray#")
+                }
+                for ((argument, values) in listOf(
+                    1 to listOf(-1L, 5L, Long.MAX_VALUE), 3 to listOf(-1L, 7L, Long.MAX_VALUE),
+                    4 to listOf(-1L, 5L, Long.MAX_VALUE))) for (value in values) {
+                    val module = fresh()
+                    val args = copy(module)[2] as MutableList<Any?>
+                    args[argument] = listOf("lit", "int", value.toString(), CoreRepresentations.metadata(args[argument] as List<Any?>))
+                    val function = context.asValue(EntryValue(program(language, module, backend), "copiedBytes", 1))
+                    val failure = assertThrows(PolyglotException::class.java) { function.execute(0L) }
+                    assertTrue(failure.message.orEmpty().contains("ByteArray# copy range"), "$backend/$argument/$value: $failure")
+                }
+                val aliasModule = fresh()
+                val aliasArgs = copy(aliasModule)[2] as MutableList<Any?>
+                aliasArgs[2] = aliasArgs[0]
+                val aliasFunction = context.asValue(EntryValue(program(language, aliasModule, backend), "copiedBytes", 1))
+                val aliasFailure = assertThrows(PolyglotException::class.java) { aliasFunction.execute(0L) }
+                assertTrue(aliasFailure.message.orEmpty().contains("requires distinct source and destination"), "$backend: $aliasFailure")
+                for (diagnostic in listOf(false, true)) {
+                    val module = fresh()
+                    val proof = CoreRepresentations.metadata(copy(module))!!["rep"] as MutableMap<String, Any?>
+                    proof["kind"] = "unknown"; proof["aggregate"] = "unboxed-tuple"; proof["components"] = emptyList<Any?>()
+                    assertThrows(RuntimeFault::class.java) { program(language, module + ("diagnosticUnsupported" to diagnostic), backend) }
+                }
+                for (argument in 0..5) for (diagnostic in listOf(false, true)) {
+                    val module = fresh()
+                    val args = copy(module)[2] as MutableList<Any?>
+                    val proof = CoreRepresentations.metadata(args[argument] as List<Any?>)!!["rep"] as MutableMap<String, Any?>
+                    proof["primReps"] = if (argument in listOf(0, 2)) listOf("BoxedRep (Just Lifted)") else listOf("WordRep")
+                    assertThrows(RuntimeFault::class.java, {
+                        program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                    }, "$backend/copy argument $argument/$diagnostic")
+                }
+            } finally { context.leave() }
+        }
+    }
+
     private fun applications(value: Any?): List<MutableList<Any?>> = when (value) {
         is List<*> -> (if (value.firstOrNull() == "app") listOf(value as MutableList<Any?>) else emptyList()) + value.flatMap(::applications)
         is Map<*, *> -> value.values.flatMap(::applications)
@@ -177,7 +290,7 @@ class ByteArrayTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for (operation in ByteArrayOp.entries) for (mutation in 0..6) for (diagnostic in listOf(false, true)) {
-                    val module = CoreModules.reachable(merged(paths), "orderedBytes")
+                    val module = CoreModules.reachable(merged(paths), if (operation == ByteArrayOp.COPY) "copiedBytes" else "orderedBytes")
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val args = app[2] as MutableList<Any?>
                     val flags = app[3] as MutableList<Any?>
@@ -207,7 +320,7 @@ class ByteArrayTest {
                     }, "$backend/${operation.primitive}/mutation$mutation/$diagnostic")
                 }
                 for (operation in ByteArrayOp.entries) {
-                    val module = CoreModules.reachable(merged(paths), "orderedBytes")
+                    val module = CoreModules.reachable(merged(paths), if (operation == ByteArrayOp.COPY) "copiedBytes" else "orderedBytes")
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val primitive = (app[1] as List<*>).toList(); app.clear(); app.addAll(primitive)
                     assertThrows(UnsupportedCore::class.java) { program(language, module, backend) }
