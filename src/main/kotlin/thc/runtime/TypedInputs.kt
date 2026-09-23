@@ -329,7 +329,7 @@ private class InputCallArm(private val source: InputSource, private val count: I
                 Calls.direct(direct, packet)
             } } catch (transfer: TailCall) {
                 if (isTail) throw transfer
-                if (tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
+                if (arity == count && tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
                 loop.execute(transfer)
             }
         }
@@ -380,7 +380,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                     } finally { if (!transferred) releaseGenericInput(input, storage, generation) }
                 } catch (transfer: TailCall) {
                     if (isTail) throw transfer
-                    if (tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
+                    if (exact && tupleBounce != null) { tupleBounce!!.execute(frame, transfer); return null }
                     loop.execute(transfer)
                 }
             }
