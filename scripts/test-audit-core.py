@@ -154,6 +154,15 @@ class AuditTest(unittest.TestCase):
                 result['components'][0]['kind'] = 'unknown'
             self.assertIn('aggregate-representation', {i['code'] for i in run_tuple(module)['issues']})
 
+    def test_malformed_host_lambda_metadata_is_reported_without_crashing(self):
+        for metadata in (42, [], None):
+            with self.subTest(metadata=metadata):
+                module = tuple_fixture()
+                module['bindings'][0]['expr'][3] = metadata
+                report = run_tuple(module)
+                self.assertFalse(report['accepted'])
+                self.assertIn('expression-metadata', {i['code'] for i in report['issues']})
+
     def test_scalar_shadow_of_tuple_binder_is_not_an_aggregate_argument(self):
         module = tuple_fixture()
         case = module['bindings'][0]['expr'][2]
