@@ -60,3 +60,11 @@ must satisfy GHC's actual supported version range; a misleading versioned symlin
 is not native-oracle provenance. An independently verified source-matched oracle
 and exports may be transferred for Graal validation without claiming local GHC
 native execution.
+
+The [retained native-backed production captures](../bench/experiments/doublex2-foundation/README.md)
+pass all twelve pre/post × backend × arithmetic controls on AArch64. Final
+allocated-register LIR contains packed 128-bit Double `FADD`, `FSUB` and `FMUL`,
+with temporary vector allocations and floating lane boxes eliminated. The
+public Long result box remains. The source-matched oracle was produced by
+supported x86 GHC, not the local unsupported LLVM configuration. Both focused
+JVM modes pass all native rows and strict compiled-entry/target checks.

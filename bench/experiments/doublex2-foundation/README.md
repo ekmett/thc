@@ -45,3 +45,30 @@ and every native row against the local integer model. It keeps the complete
 original native provenance, commands and inputs under `build/simd-doublex2/imported-native`.
 A new local provenance record identifies this as imported native data and records
 the current validation tools separately. It does not rerun GHC or the native binary.
+
+## Retained native-backed AArch64 capture
+
+`evidence-aarch64` records source revision
+`d1a46e933021dc730d7853d1df69b4db22170154`. Its runtime code is the tested
+`efede84` implementation; the later commits add import/provenance tooling.
+The captured source/JAR hashes, original imported native metadata, compact LIR,
+run logs and checksums are retained. Raw BGV/CFG hashes are in `evidence.json`;
+the local raw files remain under `build/doublex2-runtime-aarch64-native`.
+The native oracle came from the verified x86 GHC archive identified above.
+
+All twelve pre/post-Tidy × AST/bytecode × arithmetic controls pass. Each uses
+225 native rows in two postcompile passes: 5,400 result/active-target/validity
+comparisons total. Before lowering, every AST graph has 39 nodes and every
+bytecode graph has 64. Each final allocated-register LIR contains the required
+128-bit `FADD`, `FSUB` or `FMUL` on `V128_DOUBLE`, with independent dynamic lane
+inputs. No temporary vector/wrapper/array allocation, intermediate Double/Float
+box, vector field traffic or guest call remains. One public Long result box
+remains; this is not a zero-allocation Object ABI or a no-spill guarantee.
+
+Separately, all five native-backed JVM tests pass in both default and handoff
+runs. Each mode checks every one of the 3,390 native rows across both stages and
+backends (13,560 measured calls), asserting the exact stage-derived compiled
+entry delta, active target identity and installed entry validity after each.
+The retained helpers produce 45,732 compiled guest entries per mode; these are
+not 45,732 distinct inputs. No recompilation recovery or postcompile settling
+was used. These focused results do not claim a full-suite run on this branch.
