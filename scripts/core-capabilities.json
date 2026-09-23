@@ -355,7 +355,13 @@
     "indexIntArray#": 2,
     "readDoubleArray#": 3,
     "writeDoubleArray#": 4,
-    "indexDoubleArray#": 2
+    "indexDoubleArray#": 2,
+    "packDoubleX2#": 1,
+    "unpackDoubleX2#": 1,
+    "broadcastDoubleX2#": 1,
+    "plusDoubleX2#": 2,
+    "minusDoubleX2#": 2,
+    "timesDoubleX2#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -384,6 +390,11 @@
     {
       "lanes": 4,
       "element": "FloatElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 2,
+      "element": "DoubleElemRep",
       "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
     }
   ],

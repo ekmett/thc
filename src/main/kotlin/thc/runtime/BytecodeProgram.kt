@@ -1062,6 +1062,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operationsDouble -> vectorDoublePrimitive(name, operands)
         in CoreVectors.operationsFloat -> vectorFloatPrimitive(name, operands)
         in CoreVectors.operations32 -> vector32Primitive(name, operands)
         "unpackInt64X2#" -> tupleExpression(CoreVectors.unpacked) { e, destination ->
@@ -1139,6 +1140,32 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proofFloat)
+    }
+
+    private fun vectorDoublePrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackDoubleX2#" -> tupleExpression(CoreVectors.unpackedDouble) { e, destination ->
+            e.builder.beginVectorDoubleUnpack(destination[0], destination[1])
+            operands[0].emit(e)
+            e.builder.endVectorDoubleUnpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packDoubleX2#" -> {
+                    b.beginBlock()
+                    val lanes = List(2) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorDoublePack(); lanes.forEach(b::emitLoadLocal); b.endVectorDoublePack()
+                    b.endBlock()
+                }
+                "broadcastDoubleX2#" -> { b.beginVectorDoubleBroadcast(); operands[0].emit(e); b.endVectorDoubleBroadcast() }
+                else -> {
+                    val operation = when (name) { "plusDoubleX2#" -> 0; "minusDoubleX2#" -> 1; "timesDoubleX2#" -> 2; else -> error("Invalid DoubleX2 operation") }
+                    b.beginVectorDoubleBinary(operation)
+                    operands.forEach { it.emit(e) }; b.endVectorDoubleBinary()
+                }
+            }
+        }, CoreVectors.proofDouble)
     }
 
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {

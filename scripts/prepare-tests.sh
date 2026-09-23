@@ -31,6 +31,10 @@ case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-floatx4-audit.py --export-only ;;
   *) python3 scripts/prepare-floatx4-audit.py ;;
 esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-doublex2-audit.py --export-only ;;
+  *) python3 scripts/prepare-doublex2-audit.py ;;
+esac
 python3 scripts/prepare-tuple-arithmetic.py
 python3 scripts/prepare-signed-narrow-primops.py
 python3 scripts/prepare-explicit64-primops.py

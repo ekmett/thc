@@ -1,0 +1,39 @@
+Picked up JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :kaptGenerateStubsKotlin UP-TO-DATE
+> Task :kaptKotlin UP-TO-DATE
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :kaptGenerateStubsTestKotlin UP-TO-DATE
+> Task :kaptTestKotlin UP-TO-DATE
+> Task :compileTestKotlin UP-TO-DATE
+> Task :compileTestJava NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/private/tmp/thc-aggregate-shapes/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+Picked up JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SimdDoubleVectorTest > exactShapeAndVectorBackedStorageRemainDistinctFromDoubleTuple() PASSED
+
+SimdDoubleVectorTest > primitiveLanesPreserveMovementBitsAndBinary64Arithmetic() PASSED
+
+SimdDoubleVectorTest > genuineCoreMatchesAvailableOracleAndEntersCompiledCodeForEveryInput() PASSED
+
+SimdDoubleVectorTest > bothLoadersRejectForgedVectorProofsAndVectorFormalArguments() PASSED
+
+SimdDoubleVectorTest > unknownLaneKindCannotHideFloatLiteralInVectorBroadcast() PASSED
+
+BUILD SUCCESSFUL in 5s
+10 actionable tasks: 1 executed, 9 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

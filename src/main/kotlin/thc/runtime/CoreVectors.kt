@@ -6,6 +6,7 @@ internal data class CoreVector(val lanes: Int, val element: String) {
         val INT64X2 = CoreVector(2, "Int64ElemRep")
         val INT32X4 = CoreVector(4, "Int32ElemRep")
         val FLOATX4 = CoreVector(4, "FloatElemRep")
+        val DOUBLEX2 = CoreVector(2, "DoubleElemRep")
         fun parse(raw: Any?, kind: CoreKind, reps: List<String>?, components: List<CoreRepresentation>?): CoreVector? {
             if (kind != CoreKind.VECTOR) {
                 if (raw != null || components == null && reps?.any { it.startsWith("VecRep ") } == true)
@@ -19,7 +20,7 @@ internal data class CoreVector(val lanes: Int, val element: String) {
                 throw RuntimeFault("Invalid Core vector shape")
             val vector = CoreVector(lanes.toInt(), element)
             if (reps != listOf("VecRep ${vector.lanes} $element")) throw RuntimeFault("Vector shape disagrees with primitive representation")
-            if (vector != INT64X2 && vector != INT32X4 && vector != FLOATX4) throw UnsupportedCore("Unsupported Core vector representation: $vector")
+            if (vector != INT64X2 && vector != INT32X4 && vector != FLOATX4 && vector != DOUBLEX2) throw UnsupportedCore("Unsupported Core vector representation: $vector")
             return vector
         }
     }
@@ -36,8 +37,12 @@ internal object CoreVectors {
     private val laneFloat = CoreRepresentation(CoreKind.FLOAT, true, true, listOf("FloatRep"))
     val unpackedFloat = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(4) { "FloatRep" }, List(4) { laneFloat })
     val operationsFloat = setOf("packFloatX4#", "unpackFloatX4#", "broadcastFloatX4#", "plusFloatX4#", "minusFloatX4#", "timesFloatX4#")
+    val proofDouble = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 2 DoubleElemRep"), vector = CoreVector.DOUBLEX2)
+    private val laneDouble = CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))
+    val unpackedDouble = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(2) { "DoubleRep" }, List(2) { laneDouble })
+    val operationsDouble = setOf("packDoubleX2#", "unpackDoubleX2#", "broadcastDoubleX2#", "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#")
     val operations32 = setOf("packInt32X4#", "unpackInt32X4#", "broadcastInt32X4#", "plusInt32X4#", "minusInt32X4#", "negateInt32X4#")
-    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operationsFloat
+    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operationsFloat + operationsDouble
     fun requireVariableProof(binding: CoreRepresentation?, occurrence: CoreRepresentation) {
         if (occurrence.isVector && binding?.vector != occurrence.vector)
             throw RuntimeFault("Vector occurrence lacks a matching lexical binder proof")
@@ -63,6 +68,10 @@ internal object CoreVectors {
             "unpackInt32X4#", "negateInt32X4#" -> listOf(proof32)
             "broadcastInt32X4#" -> listOf(lane32)
             "plusInt32X4#", "minusInt32X4#" -> listOf(proof32, proof32)
+            "packDoubleX2#" -> listOf(unpackedDouble)
+            "unpackDoubleX2#" -> listOf(proofDouble)
+            "broadcastDoubleX2#" -> listOf(laneDouble)
+            "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#" -> listOf(proofDouble, proofDouble)
             "packFloatX4#" -> listOf(unpackedFloat)
             "unpackFloatX4#" -> listOf(proofFloat)
             "broadcastFloatX4#" -> listOf(laneFloat)
@@ -77,6 +86,8 @@ internal object CoreVectors {
         val expectedResult = when (name) {
             "unpackInt64X2#" -> unpacked
             "unpackInt32X4#" -> unpacked32
+            "unpackDoubleX2#" -> unpackedDouble
+            in operationsDouble -> proofDouble
             "unpackFloatX4#" -> unpackedFloat
             in operationsFloat -> proofFloat
             in operations32 -> proof32

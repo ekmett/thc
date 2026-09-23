@@ -45,7 +45,9 @@ packed arithmetic with temporary carriers eliminated on AArch64 and x86. Vector
 calling conventions and other shapes remain work.
 The [FloatX4 foundation](floatx4.md) adds another six local vector primops and
 2,196 native/model rows, including signed zeros, NaNs, exact subnormal ties and
-separate multiply/add rounding. Vector ABI boundaries remain unchanged.
+separate multiply/add rounding. The [DoubleX2 foundation](doublex2.md) adds the
+corresponding six binary64 operations, with an exact integer-significand model
+and bit-sensitive edge controls. Vector ABI boundaries remain unchanged.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

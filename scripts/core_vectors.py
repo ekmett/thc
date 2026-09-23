@@ -38,6 +38,19 @@ OPERATIONS.update({
     'minusFloatX4#': ([VECTOR_FLOAT_REP, VECTOR_FLOAT_REP], VECTOR_FLOAT_REP),
     'timesFloatX4#': ([VECTOR_FLOAT_REP, VECTOR_FLOAT_REP], VECTOR_FLOAT_REP),
 })
+VECTOR_DOUBLE_REP = {'kind': 'vector', 'primReps': ['VecRep 2 DoubleElemRep'], 'evaluated': True,
+                    'vector': {'lanes': 2, 'element': 'DoubleElemRep'}}
+LANE_DOUBLE_REP = {'kind': 'double', 'primReps': ['DoubleRep'], 'evaluated': True}
+TUPLE_DOUBLE_REP = {'kind': 'unknown', 'primReps': ['DoubleRep'] * 2, 'evaluated': True,
+                   'aggregate': 'unboxed-tuple', 'components': [LANE_DOUBLE_REP] * 2}
+OPERATIONS.update({
+    'packDoubleX2#': ([TUPLE_DOUBLE_REP], VECTOR_DOUBLE_REP),
+    'unpackDoubleX2#': ([VECTOR_DOUBLE_REP], TUPLE_DOUBLE_REP),
+    'broadcastDoubleX2#': ([LANE_DOUBLE_REP], VECTOR_DOUBLE_REP),
+    'plusDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
+    'minusDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
+    'timesDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
+})
 def is_vector(rep): return isinstance(rep, dict) and rep.get('kind') == 'vector'
 def signature_matches(expected, actual):
     """A primop signature requires concrete carriers, including every tuple lane."""
@@ -56,6 +69,6 @@ def proof_error(rep):
         return 'Invalid Core vector shape'
     if registers != [f"VecRep {shape['lanes']} {shape['element']}"]:
         return 'Vector shape disagrees with primitive representation'
-    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR_FLOAT_REP['vector']):
+    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
         return 'Unsupported Core vector representation'
     return None

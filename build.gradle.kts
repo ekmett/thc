@@ -60,6 +60,7 @@ tasks.test {
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
+            "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
@@ -68,7 +69,7 @@ tasks.test {
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
-            "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "core_vectors.py",
+            "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-double-arrays.py", "test-double-array-model.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
@@ -87,5 +88,5 @@ tasks.register<JavaExec>("probe") {
     workingDir(projectDir)
 }
 
-// Vector intrinsics are isolated in Java; FloatX4 retains a fixed-species FloatVector.
+// Vector intrinsics are isolated in Java; floating vectors retain fixed species.
 tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }
