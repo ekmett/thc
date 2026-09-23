@@ -34,7 +34,7 @@ internal class BytecodeTypedInputSlots(
     @ExplodeLoop private fun restore(frame: VirtualFrame, bytecode: BytecodeNode,
         input: HandoffStorage, initial: Boolean, mask: Long) {
         try {
-            entry.validate(input)
+            if (initial) entry.validate(input) else entry.validateTail(input)
             if (initial) bloom.setLong(bytecode, frame, entry.packet.getLong(input, 0) or mask)
             for (i in arguments.indices) {
                 val from = indices[i] + entry.header
