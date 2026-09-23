@@ -68,7 +68,8 @@ Reports are under `build/libraries/`: per-bundle source provenance and strict
 audits, `oracle.tsv`, `oracle-validation.json`, `cases.json`, and explicit AST
 and bytecode check logs. Input and artifact fingerprints reject stale examples,
 exporter/auditor implementations, capabilities, vendored sources, Core and
-native-oracle artifacts.
+native-oracle artifacts. The declared entries and manifest rows must also match
+the fingerprinted native oracle. CI runs the checks on Linux and macOS.
 
 The checker keeps strict rejection separate from execution passes and disables
 compilation for its interpreted phase. A fresh context warms only the declared

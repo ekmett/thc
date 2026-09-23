@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Standalone library checks; the generalized corpus/manifest has separate ownership.
+# Prepare and check ordinary containers workloads against native GHC.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"

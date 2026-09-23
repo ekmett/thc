@@ -25,7 +25,28 @@ fun main(args: Array<String>) {
         }
     }
     val groups = cases["groups"] as List<Map<String, Any?>>
-    require(groups.map { it["id"] }.toSet() == setOf("set", "intmap", "intmap-primops"))
+    val expectedEntries = mapOf(
+        "set" to setOf("setAggregate"),
+        "intmap" to setOf("intMapAggregate"),
+        "intmap-primops" to setOf("countLeadingZeros", "unsignedLessThanZero",
+            "unsignedLessThanMaxSigned", "unsignedLessThanSignBit", "unsignedLessThanAllOnes"))
+    require(groups.size == expectedEntries.size && groups.map { it["id"] }.toSet() == expectedEntries.keys)
+    val manifestRows = groups.flatMap { group ->
+        val entries = group["entries"] as List<Map<String, Any?>>
+        val names = entries.map { it["name"] as String }
+        require(names.size == names.toSet().size && names.toSet() == expectedEntries[group["id"]])
+        entries.flatMap { entry ->
+            listOf("warm", "cold").flatMap { phase ->
+                (entry[phase] as List<List<Number>>).map { row ->
+                    require(row.size == 2)
+                    "${entry["name"]}\t${row[0].toLong()}\t${row[1].toLong()}"
+                }
+            }
+        }
+    }
+    val oracle = File(File(args[0]).absoluteFile.parentFile, "oracle.tsv")
+    require((cases["artifactHashes"] as Map<String, String>).containsKey(oracle.path))
+    check(manifestRows == oracle.readLines()) { "Library manifest rows disagree with the fingerprinted native oracle" }
     fun diagnostics(function: Value) = Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
     fun count(function: Value, name: String) = (diagnostics(function)[name] as Number).toLong()
     for (group in groups) {

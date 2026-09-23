@@ -9,6 +9,12 @@ native oracles and runs the JVM tests. The additional corpus is described in
 [`examples/coverage.json`](../examples/coverage.json); it currently has 20 entries
 and 318 distinct entry/input pairs, alongside the original fixtures and Map.
 
+The separate [library suite](library-coverage.md), run by
+`scripts/try-libraries.sh`, adds six executable entries and 972 native-oracle
+pairs covering real `Data.IntMap.Strict` and unsigned word primitives. Its Set
+workload records a rejected frontier separately. CI runs both suites on Linux
+and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
+
 | Group | What it exercises |
 |---|---|
 | Lists | Composed map/filter, source-defined append and fold reversal, unused bottom heads/tails, productive streams, a dynamic cyclic spine, two consumers sharing a list |

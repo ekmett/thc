@@ -41,6 +41,22 @@ jobs:
           java --version
       - name: Build and test from source
         run: scripts/try.sh
+      - name: Test opt-in dense handoff
+        env:
+          JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
+        run: |
+          scripts/gradle.sh --no-daemon test --rerun-tasks
+          cp -R build/test-results/test build/test-results/handoff
+          cp -R build/reports/tests/test build/reports/tests/handoff
+      - name: Check real IntMap and the explicit Set frontier
+        shell: bash
+        run: |
+          python3 scripts/prepare-library-tests.py
+          for backend in ast bytecode; do
+            java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+              -cp 'build/install/thc/lib/*' thc.LibraryCheckKt build/libraries/cases.json "$backend" \
+              2>&1 | tee "build/libraries/check-$backend.log"
+          done
       - name: Check exact dependency auditor
         run: python3 scripts/test-audit-core.py
       - name: Check benchmark power provenance
@@ -69,6 +85,12 @@ jobs:
             build/corpus/oracle.tsv
             build/corpus/structure.json
             build/corpus/groups/**/*.audit.json
+            build/libraries/cases.json
+            build/libraries/oracle.tsv
+            build/libraries/oracle-validation.json
+            build/libraries/check-*.log
+            build/libraries/*/audit.json
+            build/libraries/*/provenance.json
             build/map/audit.json
             build/map/check.log
             build/map/check-ast.log

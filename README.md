@@ -84,6 +84,12 @@ evaluated once.
 `examples/coverage.json` describes the inputs. `scripts/try.sh` prepares and runs
 the suite; missing dependencies and unsupported constructs remain explicit.
 
+[Library coverage](docs/library-coverage.md) adds ordinary `Data.IntMap.Strict`
+operations and unsigned word boundaries, checked against native GHC and an
+independent model. `scripts/try-libraries.sh` runs those checks on both backends.
+The `Data.Set` example currently stops at the unboxed-tuple and pointer-identity
+frontier; its native results are not counted as THC execution passes.
+
 ## Where things stand
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before
