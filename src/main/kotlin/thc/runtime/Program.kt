@@ -1069,7 +1069,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     init {
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings)
-            CoreInputCalls.validate(bindings)
+            CoreInputCalls.validate(bindings, constructors)
         }
         val scope = Scope(FrameLayout())
         val initializers = bindings.map { binding ->
