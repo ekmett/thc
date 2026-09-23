@@ -355,7 +355,13 @@
     "indexInt32Array#": 2,
     "readWord32Array#": 3,
     "writeWord32Array#": 4,
-    "indexWord32Array#": 2
+    "indexWord32Array#": 2,
+    "readFloatArray#": 3,
+    "writeFloatArray#": 4,
+    "indexFloatArray#": 2,
+    "readWordArray#": 3,
+    "writeWordArray#": 4,
+    "indexWordArray#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -442,6 +448,188 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "readFloatArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "FloatRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "float",
+            "primReps": [
+              "FloatRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeFloatArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "float",
+          "primReps": [
+            "FloatRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexFloatArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "float",
+        "primReps": [
+          "FloatRep"
+        ]
+      }
+    },
+    "readWordArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWordArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWordArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
     "readInt32Array#": {
       "arguments": [
         {

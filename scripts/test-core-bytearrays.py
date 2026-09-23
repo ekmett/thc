@@ -60,7 +60,8 @@ class ByteArrayContracts(unittest.TestCase):
                 if mutation == 'missing':
                     app[6].pop('rep')
                 elif mutation == 'wrong-result':
-                    app[6]['rep'] = dict(kind='long', primReps=['WordRep'], evaluated=True)
+                    wrong = 'IntRep' if name == 'indexWordArray#' else 'WordRep'
+                    app[6]['rep'] = dict(kind='long', primReps=[wrong], evaluated=True)
                 elif mutation == 'unknown-argument':
                     app[2][0][2]['rep']['kind'] = 'unknown'
                 elif mutation == 'lifted':
@@ -75,7 +76,7 @@ class ByteArrayContracts(unittest.TestCase):
 
     def test_state_is_not_an_empty_tuple_and_reference_is_not_lifted(self):
         for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#', 'readDoubleArray#',
-                     'readInt32Array#', 'readWord32Array#'):
+                     'readInt32Array#', 'readWord32Array#', 'readFloatArray#', 'readWordArray#'):
             for mutation in ('empty-tuple', 'missing-state', 'lifted-reference'):
                 module, app = fixture(name)
                 proof = app[6]['rep']
@@ -84,8 +85,9 @@ class ByteArrayContracts(unittest.TestCase):
                 elif mutation == 'missing-state':
                     proof['components'].pop(0)
                 elif name.startswith('read'):
-                    proof['components'][1]['primReps'] = ['WordRep']
-                    proof['primReps'] = ['WordRep']
+                    wrong = 'IntRep' if name == 'readWordArray#' else 'WordRep'
+                    proof['components'][1]['primReps'] = [wrong]
+                    proof['primReps'] = [wrong]
                 else:
                     proof['components'][1]['primReps'] = ['BoxedRep (Just Lifted)']
                     proof['primReps'] = ['BoxedRep (Just Lifted)']
@@ -97,7 +99,9 @@ class ByteArrayContracts(unittest.TestCase):
                      'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#',
                      'readDoubleArray#', 'writeDoubleArray#', 'indexDoubleArray#',
                      'readInt32Array#', 'writeInt32Array#', 'indexInt32Array#',
-                     'readWord32Array#', 'writeWord32Array#', 'indexWord32Array#'):
+                     'readWord32Array#', 'writeWord32Array#', 'indexWord32Array#',
+                     'readFloatArray#', 'writeFloatArray#', 'indexFloatArray#',
+                     'readWordArray#', 'writeWordArray#', 'indexWordArray#'):
             module, _ = fixture(name)
             parameter = module['bindings'][0]['expr'][1][0]
             parameter['rep']['primReps'] = ['BoxedRep (Just Lifted)']
@@ -154,6 +158,33 @@ class ByteArrayContracts(unittest.TestCase):
                             app[6]['rep']['components'][1]['primReps'] = [replacement]
                     self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
                                   (name, 'payload', replacement))
+
+    def test_float_and_word_arrays_require_exact_payload_and_machine_index(self):
+        for family, exact in (('Float', 'FloatRep'), ('Word', 'WordRep')):
+            for operation in ('read', 'write', 'index'):
+                name = operation + family + 'Array#'
+                for rep in ('IntRep', 'Int32Rep', 'Int64Rep', 'WordRep', 'Word32Rep', 'Word64Rep', 'FloatRep', 'DoubleRep'):
+                    kind = {'FloatRep': 'float', 'DoubleRep': 'double'}.get(rep, 'long')
+                    wrong = dict(kind=kind, primReps=[rep], evaluated=True)
+                    if rep != 'IntRep':
+                        module, app = fixture(name)
+                        module['bindings'][0]['expr'][1][1]['rep'] = copy.deepcopy(wrong)
+                        app[2][1][2]['rep'] = copy.deepcopy(wrong)
+                        self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
+                                      (name, 'index', rep))
+                    if rep == exact:
+                        continue
+                    module, app = fixture(name)
+                    if operation == 'write':
+                        module['bindings'][0]['expr'][1][2]['rep'] = copy.deepcopy(wrong)
+                        app[2][2][2]['rep'] = wrong
+                    elif operation == 'read':
+                        app[6]['rep']['components'][1] = wrong
+                        app[6]['rep']['primReps'] = [rep]
+                    else:
+                        app[6]['rep'] = wrong
+                    self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
+                                  (name, 'payload', rep))
 
     def test_copy_requires_exact_proofs_for_both_references_offsets_count_and_state(self):
         for argument in range(6):
