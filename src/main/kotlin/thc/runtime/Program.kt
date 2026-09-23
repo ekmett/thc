@@ -1167,7 +1167,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val body = UnsupportedExpression(message, metrics).located(currentSource)
         val target = FunctionRoot(language, FrameLayout().build(), "unsupported: $message", null,
             intArrayOf(), intArrayOf(), intArrayOf(), body, metrics, coreSourceLocation = rootSource(body)).callTarget
-        Delay(target, null, intArrayOf())
+        DiagnosticUnavailable(target, message, metrics)
     }
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = when (expr[0]) {
         "var" -> {
@@ -1496,6 +1496,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         return Construct(dataLayout(id), fields)
     }
+}
+
+/** Unavailable scalars stay lazy; demanding a tuple traps before writing any destination. */
+private class DiagnosticUnavailable(private val target: RootCallTarget, message: String, metrics: Metrics) : Expr() {
+    @Child private var tupleTrap = UnsupportedExpression(message, metrics)
+    override fun execute(frame: VirtualFrame): Thunk = Thunk(target, null)
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Nothing = tupleTrap.execute(frame)
 }
 
 /** Explicit development mode only; execution never fabricates a guest result. */

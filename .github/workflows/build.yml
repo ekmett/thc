@@ -1,8 +1,45 @@
 name: Build
-on: [push, pull_request, merge_group, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Commit expected by the merge bot (empty for a manual run)
+        type: string
+        required: false
+
+concurrency:
+  group: build-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: test -z "$EXPECTED_SHA" || test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Test merge decisions and race handling
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Lint CI and merge workflows
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" .github/workflows/build.yml .github/workflows/merge.yml
   build:
     strategy:
       fail-fast: false
@@ -12,6 +49,12 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: test -z "$EXPECTED_SHA" || test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -41,6 +84,12 @@ jobs:
           java --version
       - name: Build and test from source
         run: scripts/try.sh
+      - name: Preserve default test results
+        if: always()
+        shell: bash
+        run: |
+          if [ -d build/test-results/test ]; then cp -R build/test-results/test build/test-results/default; fi
+          if [ -d build/reports/tests/test ]; then cp -R build/reports/tests/test build/reports/tests/default; fi
       - name: Require fresh native SIMD oracle and post-Tidy export on x86
         if: runner.os == 'Linux'
         run: |

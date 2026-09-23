@@ -348,16 +348,18 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun force(value: Expression): Expression {
         if (value.proof.isTuple) return value
         if (value.proof.evaluated) return value
-        return evaluated(Expression { e ->
-            val b = e.builder
-            val localValue = undecorated(value)
-            if (localValue is LocalExpression && localValue.resolve) {
-                val local = e.locals.getValue(localValue.local.id)
-                b.beginForceLocal(metrics, local, localValue.local.cell)
-                b.emitLoadLocal(local)
-                b.endForceLocal()
-            } else {
-                b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+        return evaluated(ResultExpression { e, destination ->
+            if (destination != null) value.emitTuple(e, destination) else {
+                val b = e.builder
+                val localValue = undecorated(value)
+                if (localValue is LocalExpression && localValue.resolve) {
+                    val local = e.locals.getValue(localValue.local.id)
+                    b.beginForceLocal(metrics, local, localValue.local.cell)
+                    b.emitLoadLocal(local)
+                    b.endForceLocal()
+                } else {
+                    b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+                }
             }
         }).let { sourced(ProvenExpression(it, value.proof.copy(evaluated = true)), value.source) }
     }
@@ -423,7 +425,21 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val body = sourced(Expression { it.builder.emitUnsupported(message, metrics) }, source)
             val target = build("unsupported: $message", FunctionContext(0), body)
             val template = BytecodeRoot.ClosureTemplate(target, 0, null)
-            Expression { e -> e.builder.beginMakeThunk(template); e.builder.endMakeThunk() }
+            object : Expression {
+                override fun emit(emission: Emission) {
+                    emission.builder.beginMakeThunk(template); emission.builder.endMakeThunk()
+                }
+                override fun emitTuple(emission: Emission, destination: List<BytecodeLocal>) {
+                    // Unsupported never returns. Discard its scalar operation result
+                    // locally, without inventing or touching a tuple destination.
+                    val b = emission.builder
+                    b.beginBlock()
+                    b.beginStoreLocal(b.createLocal("unsupported tuple", null))
+                    b.emitUnsupported(message, metrics)
+                    b.endStoreLocal()
+                    b.endBlock()
+                }
+            }
         }
         return sourced(value, source)
     }
