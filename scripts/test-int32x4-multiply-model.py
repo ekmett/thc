@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Independent signed lane arithmetic and exact structural-proof controls."""
 import copy
+from collections import Counter
+import gzip
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 import int32x4_multiply_model as model
@@ -61,6 +65,49 @@ def word_samples():
 
 
 class Int32X4MultiplyModelTest(unittest.TestCase):
+    def test_genuine_pre_post_signedness_controls_keep_exact_issue_profiles(self):
+        root = Path(__file__).resolve().parent.parent
+        retained = root / 'bench/experiments/int32x4-multiply/evidence-x86_64'
+        provenance = json.loads((retained / 'input-provenance.json').read_text())['core']
+        hashes = {item['path']: item['sha256'] for item in provenance['artifacts']}
+        spec = importlib.util.spec_from_file_location('int32x4_signedness_auditor', root / 'scripts/audit-core.py')
+        auditor = importlib.util.module_from_spec(spec); spec.loader.exec_module(auditor)
+        capabilities = json.loads((root / 'scripts/core-capabilities.json').read_text())
+        prepared = [root / f'build/simd-int32x4-multiply/{stage}-core/SimdInt32X4Multiply.json'
+                    for stage in ('pre', 'post')]
+        # ARM's export-only preparation may supply just pre-Tidy; retained
+        # native evidence above always supplies both stages without a skip.
+        inputs = []
+        for stage, fresh in zip(('pre', 'post'), prepared):
+            path = retained / f'{stage}-core.json.gz'
+            raw = gzip.decompress(path.read_bytes())
+            self.assertEqual(hashlib.sha256(raw).hexdigest(),
+                             hashes[f'build/simd-int32x4-multiply/{stage}-core/SimdInt32X4Multiply.json'])
+            inputs.append((stage, path, json.loads(raw)))
+            if fresh.exists():
+                inputs.append((stage, fresh, json.loads(fresh.read_text())))
+        expected = {
+            'unsignedLaneTuple': {'vector-shape': 1, 'aggregate-shape': 5, 'scalar-representation': 4},
+            'unsignedVectorOperand': {'vector-shape': 2, 'aggregate-shape': 2},
+        }
+        for stage, path, module in inputs:
+            with self.subTest(stage=stage, path=str(path)):
+                prepare.inventory(module, stage)
+                original = copy.deepcopy(module)
+                positive = auditor.Audit([(str(path), module)], capabilities).run(['timesCase'])
+                self.assertTrue(positive['accepted'])
+                self.assertEqual(positive['issues'], [])
+                self.assertEqual(positive['missingGlobals'], [])
+                controls = prepare.audit_unsigned_controls(module, path, auditor, capabilities)
+                self.assertEqual(set(controls), set(expected))
+                for variant, profile in expected.items():
+                    report = controls[variant]['report']
+                    self.assertFalse(report['accepted'])
+                    self.assertEqual(report['missingGlobals'], [])
+                    self.assertEqual(Counter(issue['code'] for issue in report['issues']), profile)
+                    self.assertEqual(len(report['issues']), 10 if variant == 'unsignedLaneTuple' else 4)
+                self.assertEqual(module, original, 'Signedness controls must not change genuine Core')
+
     def test_samples_cover_both_halves_and_extreme_arithmetic(self):
         samples = word_samples()
         self.assertEqual(len(set(samples)), 65536)

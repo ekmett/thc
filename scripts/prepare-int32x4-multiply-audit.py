@@ -140,7 +140,7 @@ def unsigned_control(module, variant):
 
 def audit_unsigned_controls(module, module_path, auditor, capabilities):
     argument = ('vector-shape', 'Exact vector primitive argument representation required')
-    aggregate = ('aggregate-shape', 'Conflicting or missing logical tuple representation proofs')
+    aggregate = ('aggregate-shape', 'Conflicting or missing logical aggregate representation proofs')
     expected = {
         'unsignedLaneTuple': {argument: 1, aggregate: 5,
                             ('scalar-representation', 'Conflicting exact scalar primitive representations'): 4},
