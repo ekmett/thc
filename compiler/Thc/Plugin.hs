@@ -8,7 +8,8 @@ import qualified Thc.Demands as Demands
 import Thc.Wired (wiredApplication, wiredRhs, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
-import GHC.Types.RepType (typePrimRep_maybe)
+import GHC.Types.RepType (typePrimRep_maybe, unwrapType)
+import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
 import GHC.Core.Utils (exprIsHNF, exprOkForSpecEval)
 import GHC.Builtin.PrimOps (primOpOcc)
@@ -134,23 +135,50 @@ unknownRepWithState evaluated = O [("primReps",Z),("kind",S "unknown"),("evaluat
 voidRep :: J
 voidRep = O [("primReps",A []),("kind",S "void"),("evaluated",B True)]
 
+-- In 9.14.1 the TupleRep/SumRep callbacks underneath typePrimRep_maybe
+-- still call partial runtimeRepPrimRep for their children. A valid Core type
+-- such as forall r (a :: TYPE r). Box -> (# a, Int# #) can therefore panic
+-- when its result is queried. Keep the entire unresolved physical vector
+-- unknown, even when some logical components have known representations.
+typePrimReps :: Type -> Maybe [PrimRep]
+typePrimReps ty
+  | Just (tc,_) <- splitTyConApp_maybe (getRuntimeRep ty)
+  , tc == tupleRepDataConTyCon || tc == sumRepDataConTyCon
+  , not (typeHasFixedRuntimeRep ty) = Nothing
+  | otherwise = typePrimRep_maybe ty
+
 typeRep :: Type -> Bool -> J
 typeRep ty evaluated = O $
   [("primReps",maybe Z (A . map (S . show)) reps),("kind",S kind),("evaluated",B evaluated)]
-  ++ maybe [] (\aggregate -> [("aggregate",S aggregate)]) aggregateKind
+  ++ aggregateFields
   where
-    reps = typePrimRep_maybe ty
+    reps = typePrimReps ty
     -- Type abstraction erases, but a newtype/family is not evidence for either
     -- a data object or a closure. isBoxedDataTyCon makes that distinction in GHC.
     (_,rho) = splitForAllTyVars ty
     -- Physical register counts do not distinguish a singleton/empty unboxed
     -- tuple from a scalar/state token. Preserve the logical GHC type evidence
     -- even where no constructor is reachable (for example an identity).
-    aggregateKind = case splitTyConApp_maybe rho of
-      Just (tc,_) | isUnboxedTupleTyCon tc -> Just "unboxed-tuple"
-                  | isUnboxedSumTyCon tc -> Just "unboxed-sum"
-      _ -> Nothing
-    kind | Just _ <- aggregateKind = "unknown"
+    -- GHC's cycle-checked representation view exposes newtype aliases as
+    -- well as synonyms/casts/foralls. Use it only for aggregate evidence:
+    -- a scalar newtype does not gain a boxed data/closure classification.
+    aggregateFields = case splitTyConApp_maybe (unwrapType ty) of
+      Just (tc,args)
+        | isUnboxedTupleTyCon tc -> aggregate "unboxed-tuple" "components" args
+        | isUnboxedSumTyCon tc -> aggregate "unboxed-sum" "alternatives" args
+      _ -> []
+    -- GHC's kind-aware helper removes the RuntimeRep arguments, including
+    -- representation variables. The remaining types are the ordered logical
+    -- components/alternatives, not the flattened physical register layout.
+    -- In particular an empty tuple and State# both use zero registers, but only
+    -- the former has an aggregate boundary. Nested aggregates keep that shape.
+    aggregate tag field args =
+      [("aggregate",S tag),(field,A (map component (dropRuntimeRepArgs args)))]
+    -- An evaluated tuple/sum does not evaluate its lifted payloads. This is a
+    -- type layout, so only an unlifted component supplies a WHNF guarantee;
+    -- unknown RuntimeRep/levity and lifted components stay conservative.
+    component ty = typeRep ty (case typeLevity_maybe ty of Just Unlifted -> True; _ -> False)
+    kind | not (null aggregateFields) = "unknown"
          | otherwise = case reps of
       Just [] -> "void"
       Just [r] | longRep r -> "long"
@@ -268,7 +296,7 @@ constructor d con = O
     marks = dataConRepStrictness con
     workerStrict = if length marks == length workerTypes then map isMarkedStrict marks else repeat False
     fieldType ty strict = typeRep ty (strict || case typeLevity_maybe ty of Just Unlifted -> True; _ -> False)
-    fieldReps ty = case typePrimRep_maybe ty of
+    fieldReps ty = case typePrimReps ty of
       Nothing -> Z
       Just reps -> A (map (S . show) reps)
 

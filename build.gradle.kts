@@ -37,6 +37,7 @@ tasks.test {
     inputs.files(fileTree(layout.buildDirectory) {
         include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
+            "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
