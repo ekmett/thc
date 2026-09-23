@@ -225,3 +225,11 @@ native rows agree with an independent arithmetic model. Lifted values remain
 lazy through storage and reads, including bottom and closure payloads.
 
 The [unsafe-equality case lowering](unsafe-equality-cases.md) follows GHC's exact late compiler rule. It removes matching proof-case dependencies without supplying a general proof value; full Typeable/ErrorCall fingerprint and FFI paths remain unsupported.
+
+## Public Show Int
+
+[Original-source Show Int coverage](show-int.md) supplies the exact missing
+installed decimal worker from the complete pinned GHC Show module. Public
+pre/post-Tidy consumers compare checksums and every character against fresh
+native GHC and an independent decimal model. This separate source-coverage
+slice does not close the Set/Sequence exception and Typeable frontiers above.

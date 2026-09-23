@@ -162,6 +162,7 @@ jobs:
           python3 scripts/test-float-word-array-model.py
           python3 scripts/test-int16-array-model.py
           python3 scripts/test-int8-array-model.py
+          python3 scripts/test-show-int-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -197,6 +198,13 @@ jobs:
             build/empty-tuple-input/
             build/sqrt/
             build/tag-to-enum/
+            build/show-int/manifest.json
+            build/show-int/*.tsv
+            build/show-int/*.audit.json
+            build/show-int/*-core/
+            build/show-int/boot/core/
+            build/show-int/boot/boot-provenance.json
+            build/show-int/native/show-int-oracle
             build/unsafe-equality/
             build/test-results/
             build/aggregate-frontier.json
