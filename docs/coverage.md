@@ -17,7 +17,7 @@ and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
 
 | Group | What it exercises |
 |---|---|
-| Lists | Composed map/filter, source-defined append and fold reversal, unused bottom heads/tails, productive streams, a dynamic cyclic spine, two consumers sharing a list |
+| Lists | Composed map/filter, Prelude append and reverse from original GHC sources, unused bottom heads/tails, productive streams, a dynamic cyclic spine, two consumers sharing a list |
 | Functions | Lists of captured closures, genuine overapplication, reused partial application with an unused bottom argument, a shared thunk captured by an escaping closure |
 | Trees | Three constructor layouts, recursive construction/folds, a captured higher-order map, selective traversal past bottom, shared subtrees |
 | Narrow integers | Ordinary `Data.Int` conversions, truncation/sign extension and unpacked `Int8Rep`/`Int16Rep`/`Int32Rep` fields |
@@ -73,10 +73,23 @@ for pushes, pull requests and merge groups.
 ## Boundaries found by the corpus
 
 The first ordinary list export found missing executable unfoldings for
-`GHC.Internal.Base.++` and `GHC.Internal.List.reverse1`. Complete source export
-is still needed for those library bodies. The supported fixture uses a
-source-defined recursive append and a fold reversal. Replacing append with
-`foldr (:)` was insufficient: GHC rewrote it to the same missing `(++)` binding.
+`GHC.Internal.Base.++` and `GHC.Internal.List.reverse1`. The list group now
+compiles the complete, unmodified, SHA256-verified `Base` and `List` sources
+from GHC's `ghc-9.14.1-release` tag under their original `ghc-internal` unit.
+Post-Tidy export preserves the exact identities referenced by the installed
+Prelude, so the fixtures use ordinary `(++)` and `reverse`. Both original
+recursive bodies must remain reachable in the strict structural audit.
+The missing-interface report is retained; the complete source modules resolve
+those identities without aliases or reconstructed algorithms. Sources, boot
+dependencies and `boot-provenance.json` join the corpus fingerprints.
+
+`compiler/export-boot.py --frontier lists --build-dir build/corpus/groups/lists`
+performs this source export using a private dynamic-interface overlay. It
+loads the compiled exporter with GHC's `-fplugin-library` option: normal plugin
+interface loading imports `GHC.Driver.Plugins` and its `Semigroup` instance,
+which would import the installed `Base` into the very unit being rebuilt.
+Installed interfaces and sources remain unchanged.
+
 `map` and `filter` specialize/fuse into the tested pipeline; the test does not
 establish execution of separate library call targets with those names.
 

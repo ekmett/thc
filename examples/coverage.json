@@ -5,6 +5,7 @@
       "id": "lists",
       "source": "examples/THC/ListCoverage.hs",
       "module": "THC.ListCoverage",
+      "sourceLibraryFrontier": "lists",
       "entries": [
         {
           "name": "listPipeline",
@@ -31,7 +32,7 @@
         },
         {
           "name": "listAppendReverse",
-          "focus": "source-defined append and fold reversal with independently input-sized lists",
+          "focus": "Prelude append and reverse with original ghc-internal source bodies and independently input-sized lists",
           "warmInputs": [
             2,
             7,

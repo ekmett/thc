@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import urllib.request
 
 ghc = os.environ.get('GHC', 'ghc')
@@ -19,18 +20,35 @@ root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build-dir', type=Path, default=root / 'build/map',
                     help='Private output directory (default: build/map)')
-build = parser.parse_args().build_dir.resolve()
+parser.add_argument('--frontier', choices=['exceptions', 'lists'], default='exceptions',
+                    help='Original ghc-internal modules to export (default: exceptions)')
+args = parser.parse_args()
+build = args.build_dir.resolve()
 (build / 'core').mkdir(parents=True, exist_ok=True)
 source_root = root / 'vendor/ghc-9.14.1'
 package_url = 'https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/'
 base_url = package_url + 'src/'
-sources = {
+exception_sources = {
     'GHC/Internal/CString.hs': '3b2e7a0fb2880d8f98cb002adfbaa36a8469667b7494f8f695fe1a6f181de573',
     'GHC/Internal/Err.hs': 'f109ac925928a0e7fed063bcfd03c93e3d8629d8054d984e600aab26c0122478',
     'GHC/Internal/Exception.hs-boot': '7422fa92308439db3c0ca034b02522c96e7961cff00754d0bdca964a4f98bc15',
     'GHC/Internal/Exception/Type.hs-boot': 'f2a0440d35e33a8688d692cf50e4d33e74e92f08e84b04ab8aec20fd4861d2e0',
     'LICENSE': '768c070bd0b7d820d169ee8153d5487acfc262cbbc10dfce18d05c0bb2d2800d',
 }
+list_sources = {
+    'GHC/Internal/Base.hs': 'bc38ea9356f90aeb38298ef1269fbdc2dee433528374948375da112b273a89e2',
+    'GHC/Internal/List.hs': 'ae9f56a758942b6e937e7b430ac1137e3ebea171762120ad9c31ef1f4904ba39',
+    'GHC/Internal/Exception/Type.hs-boot': exception_sources['GHC/Internal/Exception/Type.hs-boot'],
+    'GHC/Internal/IO.hs-boot': 'a687801a14b3b423d45bca16ea03facd5fa0a428f049bcf04c2d3726e272c702',
+    'GHC/Internal/Num.hs-boot': 'b765e848138b1d4a22710c45db2e446d3e2c5c07c6b774a8d5cf83a5c4a9b92f',
+    'GHC/Internal/Enum.hs-boot': '47353434d99287294958f62ae98303fa3cf6775dc416f95055bd41a2f95a8449',
+    'GHC/Internal/Real.hs-boot': '843ed3133589748fbc65e0d7ef7e5a5491dc131b55ff73b67f6e3c3516bb99f4',
+    'LICENSE': exception_sources['LICENSE'],
+}
+sources = list_sources if args.frontier == 'lists' else exception_sources
+source_modules = ['Base', 'List'] if args.frontier == 'lists' else ['CString', 'Err']
+boot_modules = (['Exception/Type', 'IO', 'Num', 'Enum', 'Real'] if args.frontier == 'lists'
+                else ['Exception/Type', 'Exception'])
 
 def source_url(name):
     return package_url + 'LICENSE' if name == 'LICENSE' else base_url + name
@@ -53,37 +71,53 @@ for interface in installed.rglob('*.dyn_hi'):
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.unlink(missing_ok=True)
     destination.symlink_to(interface)
-for name in ['CString', 'Err']:
+for name in source_modules:
     (overlay / 'GHC/Internal' / (name + '.hi')).unlink(missing_ok=True)
 common = [ghc, '-c', '-dynamic', '-fforce-recomp', '-this-unit-id', 'ghc-internal', '-package', 'ghc-internal',
           '-odir', str(overlay), '-hidir', str(overlay)]
-for name in ['GHC/Internal/Exception/Type.hs-boot', 'GHC/Internal/Exception.hs-boot']:
-    subprocess.run(common + [str(source_root / name)], cwd=root, check=True)
+for name in boot_modules:
+    subprocess.run(common + [str(source_root / 'GHC/Internal' / (name + '.hs-boot'))], cwd=root, check=True)
 plugin = ['-O2', '-dcore-lint', '-package-db', str(root / 'build/compiler/package.conf.d'),
           '-package', 'thc-core-plugin', '-fplugin=Thc.Plugin',
           '-fplugin-opt=Thc.Plugin:' + str(build / 'boot-core'), '-fplugin-opt=Thc.Plugin:post-tidy']
 if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
     plugin += ['-g', '-fplugin-opt=Thc.Plugin:source-notes']
-for name in ['CString', 'Err']:
+if args.frontier == 'lists':
+    # Loading the plugin's interface would import GHC.Driver.Plugins, including
+    # its Semigroup instance, into the Base unit being rebuilt. Load the already
+    # compiled plugin directly so the installed Base interface cannot introduce
+    # duplicate class instances into this compilation. Source remains unchanged.
+    suffix = 'dylib' if sys.platform == 'darwin' else 'so'
+    library = root / 'build/compiler' / ('libHSthc-core-plugin-0.1-ghc9.14.1.' + suffix)
+    options = [str(build / 'boot-core'), 'post-tidy']
+    plugin = ['-O2', '-dcore-lint']
+    if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
+        plugin += ['-g']
+        options += ['source-notes']
+    plugin += ['-fplugin-library=' + str(library) + ';thc-core-plugin-0.1;Thc.Plugin;' + json.dumps(options)]
+for name in source_modules:
     subprocess.run(common + plugin + [str(source_root / 'GHC/Internal' / (name + '.hs'))], cwd=root, check=True)
     shutil.copyfile(build / 'boot-core' / ('GHC.Internal.' + name + '.json'),
                     build / 'core' / ('GHC.Internal.' + name + '.json'))
 # This compiler-only source holds an actual installed-interface reference behind
 # GHC's noinline fence. The plugin then reads genuine non-boot unfoldings.
-env = os.environ.copy()
-env.update(GHC=ghc, GHC_PKG=ghc_pkg)
-env.update(THC_CORE_OUT=str(build / 'interface-core'), THC_GHC_OUT=str(build / 'interface-ghc'))
-subprocess.run([str(root / 'compiler/export.sh'), '-package', 'ghc-internal',
-                '-fplugin-opt=Thc.Plugin:closure=exceptionInterfaceRoot',
-                'compiler/package-roots/InterfaceRoots.hs'], cwd=root, env=env, check=True)
-shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
+if args.frontier == 'exceptions':
+    env = os.environ.copy()
+    env.update(GHC=ghc, GHC_PKG=ghc_pkg)
+    env.update(THC_CORE_OUT=str(build / 'interface-core'), THC_GHC_OUT=str(build / 'interface-ghc'))
+    subprocess.run([str(root / 'compiler/export.sh'), '-package', 'ghc-internal',
+                    '-fplugin-opt=Thc.Plugin:closure=exceptionInterfaceRoot',
+                    'compiler/package-roots/InterfaceRoots.hs'], cwd=root, env=env, check=True)
+    shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
 (build / 'boot-provenance.json').write_text(json.dumps({
-    'ghcTag': 'ghc-9.14.1-release', 'sourcePatches': [],
+    'ghcTag': 'ghc-9.14.1-release', 'sourcePatches': [], 'frontier': args.frontier,
     'sourceNotes': (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true',
     'sources': [{'url': source_url(name), 'path': str((source_root / name).relative_to(root)), 'sha256': digest}
                 for name, digest in sources.items()],
-    'boundary': 'Original CString/Err source after Tidy, before CorePrep; explicit dependency boundary',
+    'sourceModules': ['GHC.Internal.' + name for name in source_modules],
+    'boundary': 'Original source after Tidy, before CorePrep; explicit dependency boundary',
     'unitPolicy': 'Original wired ghc-internal unit, private dynamic-interface overlay, installed packages unmodified',
-    'interfaceRoot': 'compiler/package-roots/InterfaceRoots.hs',
+    'pluginLoading': 'direct-library' if args.frontier == 'lists' else 'package-interface',
+    'interfaceRoot': 'compiler/package-roots/InterfaceRoots.hs' if args.frontier == 'exceptions' else None,
     'interfacePolicy': 'Actual installed non-boot Core/DFun unfoldings; unsupported and missing paths remain explicit',
 }, indent=2) + '\n')

@@ -314,12 +314,43 @@ class CorpusChecks:
         self.fact("mixedConstructorLayout", constructor=tagged["id"],
                   fieldLifted=tagged["fieldLifted"], fieldReps=tagged["fieldReps"])
 
+    def library_lists(self):
+        directory = self.build / "groups/lists"
+        expected = {"Base": "++", "List": "reverse1"}
+        identities = []
+        for module, occurrence in expected.items():
+            source = read_json(directory / "core" / ("GHC.Internal." + module + ".json"))
+            require(source.get("unit") == "ghc-internal" and
+                    source.get("boundary") == "optimized-Core-after-Tidy-before-CorePrep",
+                    f"{module}: expected original ghc-internal post-Tidy source export")
+            identity = "ghc-internal:GHC.Internal." + module + "." + occurrence
+            body = only((b for b in source["bindings"] if b["id"] == identity), identity)
+            lambda_parts(body, 2)
+            require(calls(body["expr"], identity), f"{identity}: original recursive body must survive")
+            identities.append(identity)
+        for entry, required in (("listAppendReverse", identities), ("listTailLazy", identities[:1])):
+            report = read_json(directory / (entry + ".audit.json"))
+            reachable = {b["id"] for b in report["reachableBindings"]}
+            require(set(required) <= reachable,
+                    f"{entry}: actual append/reverse library bodies must remain reachable")
+        provenance = read_json(directory / "boot-provenance.json")
+        require(provenance.get("frontier") == "lists" and provenance.get("sourcePatches") == [],
+                "Lists must use the unmodified pinned source frontier")
+        self.fact("originalLibraryBodies", bindings=identities,
+                  ghcTag=provenance["ghcTag"], sourcePatches=[])
+
     def static_audits(self):
         for group_id, group in self.groups.items():
             directory = self.build / "groups" / group_id
             closure = read_json(directory / "core/THC.InterfaceClosure.json")
-            require(not closure["missingDefinitions"],
-                    f"{group_id}: interface closure contains missing definitions")
+            # Missing interface unfoldings remain recorded. Complete source
+            # exports may resolve those exact identities without changing them.
+            source_ids = {b["id"] for path in (directory / "core").glob("*.json")
+                          if path.name != "THC.InterfaceClosure.json"
+                          for b in read_json(path)["bindings"]}
+            missing = {b["id"] for b in closure["missingDefinitions"]}
+            require(missing <= source_ids,
+                    f"{group_id}: interface closure has unresolved source definitions: {sorted(missing - source_ids)}")
             entries = []
             for entry in group["entries"]:
                 name = entry["name"]
@@ -334,7 +365,8 @@ class CorpusChecks:
                         f"{group_id}/{name}: audit must have zero missing globals/issues")
                 entries.append(dict(name=name, reachableBindings=summary["reachableBindings"]))
             self.fact("fullStaticAudit", group=group_id, entries=entries,
-                      interfaceBindings=len(closure["bindings"]), interfaceMissing=0)
+                      interfaceBindings=len(closure["bindings"]), interfaceMissing=len(missing),
+                      sourceResolved=sorted(missing))
 
     def run(self):
         self.static_audits()
@@ -343,6 +375,7 @@ class CorpusChecks:
         self.cyclic_list()
         self.closure_transport()
         self.list_laziness()
+        self.library_lists()
         self.recursive_trees()
 
 
