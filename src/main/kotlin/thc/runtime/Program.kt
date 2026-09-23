@@ -510,11 +510,11 @@ private class Primitive(private val name: String, @field:Children private var ar
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
-            "negateInt#", "not#", "notI#", "int2Word#", "word2Int#", "ord#", "chr#",
+            "negateInt#", "not#", "notI#", "clz#", "int2Word#", "word2Int#", "ord#", "chr#",
             "narrow8Int#", "narrow16Int#", "narrow32Int#",
             "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
-            "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltChar#", "<=#", "leChar#",
+            "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leChar#",
             ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
             "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2
             else -> throw UnsupportedCore("Unsupported primitive $name")
@@ -536,6 +536,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "==#", "eqWord#", "eqChar#" -> b(x == y)
             "/=#", "neWord#", "neChar#" -> b(x != y)
             "<#", "ltChar#" -> b(x < y)
+            "ltWord#" -> b(java.lang.Long.compareUnsigned(x, y) < 0)
             "<=#", "leChar#" -> b(x <= y)
             ">#", "gtChar#" -> b(x > y)
             ">=#", "geChar#" -> b(x >= y)
@@ -543,6 +544,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "or#", "orI#" -> x or y
             "xor#", "xorI#" -> x xor y
             "not#", "notI#" -> x.inv()
+            "clz#" -> java.lang.Long.numberOfLeadingZeros(x).toLong()
             "uncheckedIShiftL#", "uncheckedShiftL#" -> x shl y.toInt()
             "uncheckedIShiftRA#" -> x shr y.toInt()
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> x ushr y.toInt()
