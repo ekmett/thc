@@ -144,8 +144,8 @@ Long tag and return the existing typed constructor value; missing family proofs
 and invalid full-width tags are rejected.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
-Double storage and 30 arithmetic/comparison/conversion primops, including square
-roots, checked against native GHC. Floating tuple results also execute genuine
+Double storage and 34 arithmetic/comparison/conversion primops, including square
+roots and raw Word32/Word64 bit casts, checked against native GHC. Floating tuple results also execute genuine
 `Data.Complex` workers; residual scalar floating inputs still use the existing
 Object call ABI.
 

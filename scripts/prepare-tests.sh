@@ -8,6 +8,7 @@ compiler/build.sh
 python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-sqrt-audit.py
+python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-unsafe-equality-audit.py
 sh scripts/prepare-aggregate-frontier.sh
