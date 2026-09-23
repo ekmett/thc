@@ -95,11 +95,24 @@ class AstSelfCallTest {
             }
             repeat(30) { check(a, 3_000_000_017, 8, 3_000_000_019, -7_000_000_005) }
             compile(a.target)
-            val compiled = count(p, "compiledEntries")
-            for (depth in listOf(0L, 1L, 2L, 1_000L, 1_001L)) {
+            // A counted-loop compilation warmed only at depth eight may speculate
+            // remaining >= 1. Check its cold deoptimization before recompiling;
+            // all captures and exact self-reentry counts must survive that path.
+            for (depth in listOf(0L, 1L)) {
                 check(b, -7_000_000_003, depth, Long.MIN_VALUE, Long.MAX_VALUE)
                 check(a, 3_000_000_017, depth, Long.MAX_VALUE, Long.MIN_VALUE)
             }
+            compile(a.target)
+            val compiled = count(p, "compiledEntries")
+            for (depth in listOf(0L, 1L, 2L, 1_000L, 1_001L)) {
+                val beforeB = count(p, "compiledEntries")
+                check(b, -7_000_000_003, depth, Long.MIN_VALUE, Long.MAX_VALUE)
+                assertTrue(count(p, "compiledEntries") > beforeB, "compiled B at depth $depth")
+                val beforeA = count(p, "compiledEntries")
+                check(a, 3_000_000_017, depth, Long.MAX_VALUE, Long.MIN_VALUE)
+                assertTrue(count(p, "compiledEntries") > beforeA, "compiled A at depth $depth")
+            }
+            assertEquals(true, a.target.javaClass.getMethod("isValidLastTier").invoke(a.target))
             assertTrue(count(p, "compiledEntries") > compiled)
             assertEquals(0L, count(p, "blackholes"))
             assertEquals(0L, count(p, "trampolineIterations"))

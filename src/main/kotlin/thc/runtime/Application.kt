@@ -300,6 +300,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
     @Child private var leadingCaseReturn: LeadingCaseReturnNode? = (target.rootNode as? GuestRoot)
         ?.leadingCaseReturn?.let { LeadingCaseReturnNode(it, metrics) }
     @Child private var callNode = DirectCallNode.create(target)
+    @Child private var handoff: HandoffCaller? = (target.rootNode as? FunctionRoot)?.handoff?.let { HandoffCaller(target, it, metrics) }
     @Child private var loop = TailCallLoop(metrics)
     @Child private var tailCheck = TailCheck(metrics)
     private val normalProfile = BranchProfile.create()
@@ -312,12 +313,14 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
         // All CBV marks (including unused formals and PAP prefixes) run before the shortcut.
         leadingCaseReturn?.execute(arguments)?.let { return it }
         if (tailCall) {
+            if (handoff != null && (rootNode as? FunctionRoot)?.handoffDestination(frame)?.let { it >= 0 } == true)
+                return handoff!!.call(frame, arguments, callNode, true)
             tailCheck.check(frame, target, arguments)
             return Calls.direct(callNode, arguments)
         }
         return try {
             arguments[0] = 0L
-            val result = Calls.direct(callNode, arguments)
+            val result = if (handoff != null) handoff!!.call(frame, arguments, callNode, false) else Calls.direct(callNode, arguments)
             normalProfile.enter()
             result
         } catch (tail: TailCall) {
