@@ -208,4 +208,27 @@ class EmptyArgumentRuntimeTest {
         }
     }
 
+    @Test fun emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow() = withLanguage { language ->
+        val pair = empty + mapOf("components" to listOf(integer, reference),
+            "primReps" to listOf("IntRep", "BoxedRep (Just Lifted)"))
+        val producer = bind("producer", lam(listOf(arg("u", empty), arg("x"), arg("ref", reference)),
+            app(listOf("con", "T", 2), listOf(v("x"), v("ref", reference)), pair, listOf(false, true)), pair))
+        val result = call("producer", listOf(call("effect", listOf(v("x")), empty), v("x"), v("ref", reference)),
+            pair, listOf(false, false, true))
+        val body: EmptyCore = listOf("case", result, "tuple", listOf(listOf("data", "T", listOf("a", "b"), v("a"),
+            mapOf("binders" to listOf(arg("a"), arg("b", reference))))), mapOf("rep" to integer, "binder" to arg("tuple", pair)))
+        val data = module(producer, bind("entry", lam(listOf(arg("effect", closure), arg("x"), arg("ref", reference)), body)))
+        for (backend in listOf("ast", "bytecode")) {
+            val p = program(language, backend, data); val events = arrayListOf<Long>()
+            val effect = Closure(null, arity = 1, target = EffectRoot(language, events, TupleShape(CoreRepresentations.parse(empty), language)).callTarget)
+            val bottom = Thunk(EffectRoot(language, events, null).callTarget, null)
+            assertEquals(17L, run(p, "entry", effect, 17L, bottom)); released(language)
+            assertTrue(language.handoffState.get().results.allocations > 0)
+            assertEquals(0, bottom.state, "Copying a lifted tuple leaf must not force it")
+            assertThrows(GuestException::class.java) { run(p, "entry", effect, -7L, bottom) }; released(language)
+            assertEquals(19L, run(p, "entry", effect, 19L, bottom)); released(language)
+            assertEquals(0, bottom.state)
+        }
+    }
+
 }
