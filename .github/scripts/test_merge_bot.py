@@ -45,6 +45,7 @@ class FakeAPI:
         self.before_run_read = lambda: None
         self.before_jobs_read = lambda: None
         self.merge_error = None
+        self.update_error = None
         self.delayed_update = False
 
     @property
@@ -56,9 +57,12 @@ class FakeAPI:
             self.mutations.append((method, path, body))
             if path.startswith("statuses/"):
                 self.statuses.insert(0, {**body, "creator": {"login": "github-actions[bot]"}})
-            if path.endswith("/update-branch") and not self.delayed_update:
-                self.pr["head"]["sha"] = "updated"
-                self.behind = 0
+            if path.endswith("/update-branch"):
+                if self.update_error:
+                    raise self.update_error
+                if not self.delayed_update:
+                    self.pr["head"]["sha"] = "updated"
+                    self.behind = 0
             if path.endswith("/merge"):
                 if self.merge_error:
                     raise self.merge_error
@@ -68,7 +72,8 @@ class FakeAPI:
         if path == "branches/main":
             return {"protected": self.protected, "commit": {"sha": self.base}, "protection": self.protection}
         if path.startswith("compare/"):
-            return {"behind_by": self.behind}
+            return {"behind_by": (self.behind.get(path.split("...")[-1], 0)
+                                  if isinstance(self.behind, dict) else self.behind)}
         if path.startswith("pulls/"):
             self.pr_reads += 1
             self.before_pr_read(self.pr_reads)
@@ -240,6 +245,85 @@ class MergeBotTest(unittest.TestCase):
         self.assertEqual(len(api.actions), 1)
         self.assertEqual(api.actions[0][1], "pulls/1/update-branch")
 
+    def test_forbidden_branch_update_needs_manual_fix_without_starving_queue(self):
+        for code in (403, 405):
+            with self.subTest(code=code):
+                api = FakeAPI()
+                api.behind = {"head": 1}
+                api.update_error = HTTPError("", code, "Do not echo response details", {}, None)
+                second = pull(2)
+                second["head"].update(sha="second", ref="codex/second")
+                api.prs.append(second)
+                api.runs.append({**build(2), "head_sha": "second"})
+                messages = self.run_bot(api)
+                self.assertEqual(api.actions, [
+                    ("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"}),
+                    ("PUT", "pulls/2/merge", {"sha": "second", "merge_method": "squash"})])
+                self.assertIn(f"HTTP {code}", messages[0])
+                self.assertIn("maintainer must update", messages[0])
+                self.assertNotIn("response details", "\n".join(messages))
+                self.assertEqual(api.pr["head"]["sha"], "head")
+
+    def test_branch_update_race_waits_and_later_dispatches_only_fresh_head(self):
+        for code in (409, 422):
+            with self.subTest(code=code):
+                api = FakeAPI()
+                api.behind = 1
+                api.update_error = HTTPError("", code, "Conflict", {}, None)
+                api.prs.append(pull(2))
+                messages = self.run_bot(api)
+                self.assertEqual(api.actions, [
+                    ("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"})])
+                self.assertIn("later run will recheck", messages[-1])
+                api.update_error = None
+                api.behind = 0
+                api.pr["head"]["sha"] = "externally-updated"
+                api.runs = []
+                self.run_bot(api)
+                self.assertEqual(api.actions[-1],
+                    ("POST", "actions/workflows/build.yml/dispatches",
+                     {"ref": "codex/change", "inputs": {"expected_sha": "externally-updated"}}))
+                self.assertEqual(len(api.actions), 2)
+
+    def test_successful_merge_is_reported_before_next_branch_update_is_forbidden(self):
+        api = FakeAPI()
+        second = pull(2)
+        second["head"].update(sha="second", ref="codex/second")
+        api.prs.append(second)
+        api.runs.append({**build(2), "head_sha": "second"})
+        api.behind = {"second": 1}
+        api.update_error = HTTPError("", 403, "Forbidden", {}, None)
+        messages = self.run_bot(api)
+        self.assertEqual(api.actions, [
+            ("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"}),
+            ("PUT", "pulls/2/update-branch", {"expected_head_sha": "second"})])
+        self.assertEqual(messages[0], "#1: merged head")
+        self.assertIn("#2: GitHub refused branch update (HTTP 403)", messages[1])
+
+    def test_branch_update_rate_limit_stops_until_later_run(self):
+        for headers in ({"Retry-After": "60"}, {"X-RateLimit-Remaining": "0"}):
+            with self.subTest(headers=headers):
+                api = FakeAPI()
+                api.behind = 1
+                api.update_error = HTTPError("", 403, "Forbidden", headers, None)
+                api.prs.append(pull(2))
+                messages = self.run_bot(api)
+                self.assertEqual(len(api.actions), 1)
+                self.assertIn("rate limited", messages[-1])
+                self.assertNotIn("maintainer", messages[-1])
+
+    def test_unexpected_branch_update_http_errors_are_not_hidden(self):
+        for code in (400, 401, 404, 408, 429, 500, 503):
+            with self.subTest(code=code):
+                api = FakeAPI()
+                api.behind = 1
+                api.update_error = HTTPError("", code, "Unexpected", {}, None)
+                self.addCleanup(api.update_error.close)
+                with self.assertRaises(HTTPError) as caught:
+                    self.run_bot(api)
+                self.assertIs(caught.exception, api.update_error)
+                self.assertEqual(len(api.actions), 1)
+
     def test_head_or_consent_changed_before_merge(self):
         for mutation in (lambda a: a.pr["head"].update(sha="new"),
                          lambda a: a.pr.update(labels=[]),
@@ -274,6 +358,7 @@ class MergeBotTest(unittest.TestCase):
     def test_server_rejection_does_not_retry_or_bypass(self):
         api = FakeAPI()
         api.merge_error = HTTPError("", 409, "Head changed", {}, None)
+        self.addCleanup(api.merge_error.close)
         messages = self.run_bot(api)
         self.assertEqual(len(api.actions), 1)
         self.assertIn("GitHub refused", messages[-1])
