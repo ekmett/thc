@@ -160,6 +160,16 @@ def main():
         audit = json.loads(audit_path.read_text())
         if audit['accepted'] != (group['execution'] == 'supported'):
             violations.append(group['id'] + ': declared support disagrees with ' + str(audit_path))
+        primitives = {primitive['name'] for primitive in audit['primitives']}
+        if group['id'] in ['intmap', 'intmap-primops'] and not {'clz#', 'ltWord#'} <= primitives:
+            violations.append(group['id'] + ': required word primitives disappeared from reachable Core')
+        if group['id'] == 'set':
+            frontier = {(issue['code'], issue['detail']) for issue in audit['issues']}
+            if not {('aggregate-representation', 'unboxed-tuple'),
+                    ('unsupported-primitive', 'reallyUnsafePtrEquality#')} <= frontier:
+                violations.append('set: expected aggregate/pointer-identity frontier changed; review coverage')
+            if any(item['id'].startswith('main:') for item in audit['missingGlobals']):
+                violations.append('set: source-library definitions must resolve at the post-Tidy boundary')
         group['audit'] = str(audit_path)
         write_json(output / 'provenance.json', {
             'source': CONTAINERS_URL, 'sha256': CONTAINERS_SHA, 'sourcePatches': [],
@@ -199,9 +209,26 @@ def main():
             group['entries'].append(entry)
         del group['warm'], group['cold']
     (BUILD / 'oracle.tsv').write_text('\n'.join(rows) + '\n')
-    write_json(BUILD / 'cases.json', dict(schema=1, groups=groups))
     write_json(BUILD / 'oracle-validation.json', dict(compiler='9.14.1', nativeRows=len(rows),
                allNativeResultsMatchIndependentModels=True, staticSupportViolations=violations))
+    inputs = {ROOT / group['source'] for group in groups} | {
+        ROOT / 'examples/LibraryOracle.hs', ROOT / 'scripts/prepare-library-tests.py',
+        ROOT / 'scripts/audit-core.py', ROOT / 'scripts/core-capabilities.json',
+        ROOT / 'src/main/kotlin/thc/LibraryCheck.kt', ROOT / 'compiler/build.sh',
+        ROOT / 'compiler/export.sh', ROOT / 'compiler/export-boot.py', ROOT / 'compiler/toolchain.sh',
+        ROOT / 'compiler/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
+    }
+    inputs.update((ROOT / 'compiler/Thc').glob('*.hs'))
+    inputs.update(path for path in containers.rglob('*') if path.is_file())
+    inputs.update(ROOT / item['path'] for item in
+                  json.loads((BUILD / 'boot/boot-provenance.json').read_text())['sources'])
+    artifacts = {BUILD / 'oracle.tsv', BUILD / 'oracle-validation.json', native / 'library-oracle'}
+    for group in groups:
+        artifacts.update(map(Path, group['modules']))
+        artifacts.update([Path(group['audit']), BUILD / group['id'] / 'provenance.json'])
+    write_json(BUILD / 'cases.json', dict(schema=1, groups=groups,
+               inputHashes={str(path): digest(path) for path in sorted(inputs)},
+               artifactHashes={str(path): digest(path) for path in sorted(artifacts)}))
     print(f'Native GHC agrees with independent models on {len(rows)} rows')
     if violations:
         raise RuntimeError('\n'.join(violations))

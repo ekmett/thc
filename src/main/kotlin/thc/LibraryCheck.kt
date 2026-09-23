@@ -4,6 +4,7 @@ import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Value
 import java.io.File
+import java.security.MessageDigest
 
 /** Real containers/primitive oracle checks. Unsupported frontiers are never execution passes. */
 @Suppress("UNCHECKED_CAST")
@@ -14,6 +15,15 @@ fun main(args: Array<String>) {
     val backend = args[1]
     val cases = Json.parse(File(args[0]).readText()) as Map<String, Any?>
     require((cases["schema"] as Number).toInt() == 1)
+    for (kind in listOf("inputHashes", "artifactHashes")) {
+        val hashes = cases[kind] as Map<String, String>
+        require(hashes.isNotEmpty())
+        for ((path, expected) in hashes) {
+            val actual = MessageDigest.getInstance("SHA-256").digest(File(path).readBytes())
+                .joinToString("") { "%02x".format(it) }
+            check(actual == expected) { "Stale library input/artifact: $path; run scripts/prepare-library-tests.py" }
+        }
+    }
     val groups = cases["groups"] as List<Map<String, Any?>>
     require(groups.map { it["id"] }.toSet() == setOf("set", "intmap", "intmap-primops"))
     fun diagnostics(function: Value) = Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
@@ -98,7 +108,14 @@ fun main(args: Array<String>) {
                 checkPolicy(function)
                 check(function.invokeMember("compile").asBoolean()) { "Failed guest compilation: $backend $name" }
                 checkRows(function, warm, "compiled-warm", compiled = true)
-                checkRows(function, cold, "compiled-cold", compiled = true)
+                // A previously unseen branch can legitimately invalidate installed code.
+                // Check cold results after compilation, then train every input and require
+                // installed-code entry for every input in the final replay.
+                checkRows(function, cold, "after-compilation-cold", compiled = false)
+                repeat(maxOf(40, all.size)) { index ->
+                    val (input, expected) = all[index % all.size]
+                    check(function.execute(input).asLong() == expected)
+                }
                 check(function.invokeMember("compile").asBoolean()) { "Failed post-cold compilation request: $backend $name" }
                 checkRows(function, all.reversed(), "post-cold-compiled", compiled = true)
                 println("LIBRARY_DIAGNOSTICS\t$backend\t$name\t${function.getMember("diagnostics").asString()}")
