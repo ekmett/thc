@@ -112,6 +112,73 @@ class MergeBotTest(unittest.TestCase):
         self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
         self.assertEqual(api.statuses[0]["state"], "success")
 
+    def test_required_names_cover_all_eight_library_modes_and_original_jobs(self):
+        self.assertEqual(CHECKS, {
+            "automation", "build (ubuntu-latest)", "build (macos-latest)",
+            "library (ubuntu-latest, ast, handoff=false)",
+            "library (ubuntu-latest, ast, handoff=true)",
+            "library (ubuntu-latest, bytecode, handoff=false)",
+            "library (ubuntu-latest, bytecode, handoff=true)",
+            "library (macos-latest, ast, handoff=false)",
+            "library (macos-latest, ast, handoff=true)",
+            "library (macos-latest, bytecode, handoff=false)",
+            "library (macos-latest, bytecode, handoff=true)",
+        })
+
+    def test_every_required_mode_is_mandatory_and_must_appear_exactly_once(self):
+        for name in CHECKS:
+            for duplicate in (False, True):
+                with self.subTest(name=name, duplicate=duplicate):
+                    api = FakeAPI()
+                    if duplicate:
+                        api.jobs.append(copy.deepcopy(next(job for job in api.jobs if job["name"] == name)))
+                    else:
+                        api.jobs = [job for job in api.jobs if job["name"] != name]
+                    self.run_bot(api)
+                    self.assertEqual(api.actions, [])
+                    self.assertEqual(api.statuses[0]["state"], "failure")
+
+    def test_pre_split_three_job_success_is_not_a_complete_build(self):
+        api = FakeAPI()
+        api.jobs = [job for job in api.jobs if not job["name"].startswith("library (")]
+        self.assertEqual(len(api.jobs), 3)
+        self.assertEqual(build_result(api, "head")[0], "failure")
+
+    def test_library_modes_cannot_be_skipped_pending_or_failed(self):
+        for name in sorted(name for name in CHECKS if name.startswith("library (")):
+            for status, conclusion in (("queued", None), ("in_progress", None),
+                                       ("completed", "skipped"), ("completed", "failure"),
+                                       ("completed", "cancelled")):
+                with self.subTest(name=name, status=status, conclusion=conclusion):
+                    api = FakeAPI()
+                    next(job for job in api.jobs if job["name"] == name).update(
+                        status=status, conclusion=conclusion)
+                    self.assertEqual(build_result(api, "head")[0], "failure")
+
+    def test_library_result_changes_during_final_merge_recheck_prevent_merge(self):
+        api = FakeAPI()
+        reads = 0
+
+        def changed():
+            nonlocal reads
+            reads += 1
+            if reads == 3:
+                next(job for job in api.jobs if job["name"] ==
+                     "library (macos-latest, bytecode, handoff=true)")["conclusion"] = "failure"
+
+        api.before_jobs_read = changed
+        messages = self.run_bot(api)
+        self.assertEqual(reads, 3)
+        self.assertEqual(api.actions, [])
+        self.assertEqual(api.statuses[0]["state"], "failure")
+        self.assertIn("Build changed before merging", messages[-1])
+
+    def test_library_rerun_cannot_reuse_completed_previous_attempt_jobs(self):
+        api = FakeAPI()
+        api.before_jobs_read = lambda: api.runs[0].update(run_attempt=2, status="in_progress", conclusion=None)
+        self.assertEqual(build_result(api, "head")[0], "pending")
+        self.assertEqual(api.actions, [])
+
     def test_green_fresh_unstable_head_attempts_protected_merge(self):
         api = FakeAPI()
         api.pr["mergeable_state"] = "blocked"
