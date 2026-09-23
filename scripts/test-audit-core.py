@@ -113,6 +113,21 @@ class AuditTest(unittest.TestCase):
         report = audit_core.Audit([('a.json', module), ('b.json', module)], CAP).run(['root'])
         self.assertEqual(report['issues'][0]['code'], 'duplicate-binding')
 
+    def test_narrow_unsigned_literals_enforce_ranges_in_values_and_alternatives(self):
+        for width in (8, 16, 32):
+            maximum = (1 << width) - 1
+            for text in ('0', str(maximum), '-1', str(maximum + 1), '+1', '01', '-0', '1.0', ' 1', ''):
+                valid = text in ('0', str(maximum))
+                literal = ['lit', f'word{width}', text]
+                alternative = ['case', lit(0), 'value', [
+                    ['lit', [f'word{width}', text], [], lit(1)], ['default', None, [], lit(0)]]]
+                for expr in (literal, alternative):
+                    with self.subTest(width=width, text=text, alternative=expr is alternative):
+                        report = run(expr)
+                        self.assertEqual(report['accepted'], valid)
+                        if not valid:
+                            self.assertEqual({i['code'] for i in report['issues']}, {'invalid-literal-value'})
+
 
 if __name__ == '__main__':
     unittest.main()

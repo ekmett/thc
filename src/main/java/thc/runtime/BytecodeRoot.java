@@ -426,6 +426,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class Narrow8 { @Specialization public static long apply(long x) { return (byte) x; } }
     @Operation public static final class Narrow16 { @Specialization public static long apply(long x) { return (short) x; } }
     @Operation public static final class Narrow32 { @Specialization public static long apply(long x) { return (int) x; } }
+    // Constant masks are at most 0xffffffffL: every narrow unsigned result is a nonnegative Long.
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class NarrowWord { @Specialization public static long apply(long mask, long x) { return x & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class AddNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x + y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class SubtractNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x - y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class MultiplyNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x * y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class LessThanNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) < (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class LessEqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) <= (y & mask) ? 1L : 0L; } }
     @Operation public static final class ToLong { @Specialization public static long apply(long x) { return x; } }
 
     private static RuntimeFault fail(String message) {

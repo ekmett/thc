@@ -14,6 +14,7 @@ import sys
 
 
 FUNCTIONAL_GROUPS = ("lists", "functions", "trees")
+STRUCTURE_GROUPS = FUNCTIONAL_GROUPS + ("narrow-words",)
 LIST_CON = "ghc-internal:GHC.Internal.Types.:"
 
 
@@ -126,7 +127,7 @@ class CorpusChecks:
         require(manifest.get("schema") == 1, "Expected coverage manifest schema 1")
         self.groups = {}
         self.modules = {}
-        for group_id in FUNCTIONAL_GROUPS:
+        for group_id in STRUCTURE_GROUPS:
             group = only((g for g in manifest["groups"] if g["id"] == group_id),
                          f"Manifest group {group_id}")
             self.groups[group_id] = group
@@ -339,6 +340,26 @@ class CorpusChecks:
         self.fact("originalLibraryBodies", bindings=identities,
                   ghcTag=provenance["ghcTag"], sourcePatches=[])
 
+    def narrow_word_records(self):
+        entry = self.binding("narrow-words", "narrowWordRecordChecksum")
+        records = local_binding(entry["expr"], "records")
+        require(len(references(entry["expr"], records["id"])) == 2,
+                "narrowWordRecordChecksum: both consumers must reference the shared records")
+        audit = read_json(self.build / "groups/narrow-words/narrowWordRecordChecksum.audit.json")
+        sample = only((c for c in audit["constructors"]
+                       if c["id"] == "main:THC.NarrowWordCoverage.Sample"), "Reachable narrow Sample")
+        expected = [["Word8Rep"], ["Word16Rep"], ["Word32Rep"]]
+        require(sample["metadata"]["fieldReps"] == expected
+                and sample["metadata"]["fieldLifted"] == [False, False, False],
+                "Sample: all three unsigned fields must remain unpacked")
+        require({use["operation"] for use in sample["uses"]} == {"construct", "match"},
+                "Sample: actual construction and consumption must remain reachable")
+        require(all(field["kind"] == "long" and field["evaluated"] is True
+                    for field in sample["metadata"]["fieldTypes"]),
+                "Sample: all fields must have evaluated primitive-long evidence")
+        self.fact("sharedUnpackedUnsignedRecords", entry=entry["id"], binding=records["id"],
+                  consumers=2, constructor=sample["id"], fieldReps=expected)
+
     def static_audits(self):
         for group_id, group in self.groups.items():
             directory = self.build / "groups" / group_id
@@ -377,6 +398,7 @@ class CorpusChecks:
         self.list_laziness()
         self.library_lists()
         self.recursive_trees()
+        self.narrow_word_records()
 
 
 def main():
@@ -387,7 +409,7 @@ def main():
     root = args.root.resolve()
     output = root / "build/corpus/structure.json"
     result = dict(schema=1, validation="optimized-core-structure", accepted=False,
-                  groups=list(FUNCTIONAL_GROUPS), facts=[])
+                  groups=list(STRUCTURE_GROUPS), facts=[])
     try:
         CorpusChecks(root, result["facts"]).run()
         result["accepted"] = True
