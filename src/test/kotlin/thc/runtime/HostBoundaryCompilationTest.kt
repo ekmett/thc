@@ -62,6 +62,7 @@ class HostBoundaryCompilationTest {
                 assertEquals(true, targetClass.getMethod("isValidLastTier").invoke(host))
             }
             fun entries() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            fun calls() = listOf(guest, host).map { targetClass.getMethod("getCallCount").invoke(it) }
 
             // Establish the control state, then retire only the shared boundary nmethod.
             // Always restore it: the JVM-wide stub is shared by the remaining tests.
@@ -73,10 +74,12 @@ class HostBoundaryCompilationTest {
                 assertEquals(false, hasCode.invoke(boundary), "Retire the boundary without executing another guest call")
                 validTargets()
                 val beforeCompile = entries()
+                val callsBeforeCompile = calls()
                 assertTrue(function.invokeMember("compile").asBoolean())
                 val restoredBeforeCall = hasCode.invoke(boundary)
                 validTargets()
-                assertEquals(beforeCompile, entries(), "Compilation must not execute or settle the guest")
+                assertEquals(beforeCompile, entries(), "Compilation must not execute compiled guest code")
+                assertEquals(callsBeforeCompile, calls(), "Compilation must not settle interpreted or first-tier calls")
 
                 val beforeCall = entries()
                 assertEquals(3_000_000_002L, function.execute(3_000_000_001L).asLong())
