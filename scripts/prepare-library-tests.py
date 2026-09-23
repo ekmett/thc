@@ -18,16 +18,15 @@ CONTAINERS_URL = 'https://hackage.haskell.org/package/containers-0.8/containers-
 CONTAINERS_SHA = 'b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8'
 WORD_MASK = (1 << 64) - 1
 
-# These are cold ghc-internal exception/state paths, not collection tuple
-# results. Exact owners, details and multiplicities make new gaps fail closed.
+# State# tuple components and collection tuple results are supported. The
+# remaining cold exception/interface gaps still require exact owners, details
+# and multiplicities so both new gaps and resolved gaps fail closed for review.
 SET_EXCEPTION = 'ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException'
 SET_BACKTRACE = 'ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1'
 SET_FRONTIER_ISSUES = Counter({
     ('constructor-kind', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple'): 1,
     ('constructor-field-representation', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#)[0]: None'): 1,
     ('constructor-field-representation', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#)[1]: None'): 1,
-    ('aggregate-representation', SET_EXCEPTION + '_$stoExceptionWithBacktrace', 'unboxed-tuple: unsupported component'): 6,
-    ('aggregate-representation', SET_BACKTRACE, 'unboxed-tuple: unsupported component'): 7,
     ('unsupported-primitive', SET_BACKTRACE, 'readMutVar#'): 1,
 })
 SET_FRONTIER_MISSING = {

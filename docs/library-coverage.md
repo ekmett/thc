@@ -15,18 +15,23 @@ independent Python set model for all 1,041 inputs from -16 through 1024.
 This is **not currently an executable THC coverage claim**. Its strict reachable
 audit exposes these gaps:
 
-- Deletion reaches unboxed pairs through `glue` and min/max extraction workers.
-  Union/difference use pairs in split workers; intersection uses triples in
-  `splitMember`. These must retain their unboxed representation when supported.
-- Existing cold exception paths additionally reach `readMutVar#` and missing
-  exception-construction, backtrace and call-stack bindings.
+- A cold exception interface unfolding still lacks the exact tuple case layout,
+  producing one constructor-kind and two constructor-field diagnostics.
+- Cold backtrace collection reaches unsupported `readMutVar#`. Three
+  exception-construction, backtrace and call-stack bindings remain missing.
+
+The current strict audit has 71 reachable bindings, four issues and three missing
+definitions. Collection tuple results and the two reachable min/max tuple-result
+joins now lower directly, and zero-width `State#` tuple components no longer add
+capability gaps. Preparation pins the exact remaining diagnostics; neither new
+gaps nor resolved gaps silently change the declared frontier.
 
 Insertion, deletion, union and intersection retain the real
 `reallyUnsafePtrEquality#` primitive. It is now supported on both backends as
 non-strict reference identity, without following thunk indirections. Separate
 native-oracle fixtures test identity shortcuts with valid value-based fallbacks;
 they do not require GHC and THC to make identical allocation choices. This does
-not make the Set workload executable while its aggregate and cold-path gaps remain.
+not make the Set workload strictly supported while its cold-path gaps remain.
 
 The initial post-Tidy source export had 71 reachable bindings, three missing
 boot-library definitions and 210 capability issues, including 101 explicit
