@@ -134,6 +134,7 @@ jobs:
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-mutvars.py
           python3 scripts/test-int-array-model.py
+          python3 scripts/test-double-array-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -198,6 +199,13 @@ jobs:
             build/int-arrays/native/int-array-oracle
             build/int-arrays/*/*.audit.json
             build/int-arrays/*/*/core/*.json
+            build/double-arrays/manifest.json
+            build/double-arrays/oracle.tsv
+            build/double-arrays/expected.tsv
+            build/double-arrays/NativeDoubleArray.hs
+            build/double-arrays/native/double-array-oracle
+            build/double-arrays/*/*.audit.json
+            build/double-arrays/*/*/core/*.json
             build/tuple-join/
             build/tuple-arithmetic/
             build/integer-primops/manifest.json

@@ -111,6 +111,8 @@ lazy reference storage and exact State sequencing on both backends.
 pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
 [Int-array operations](docs/int-arrays.md) extend the same byte storage to
 public `UArray`/`STUArray` examples with native-endian, full-width values.
+[Double-array operations](docs/double-arrays.md) add typed floating storage,
+public Double arrays and native-checked bit movement through tuple-returning reads.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 30 arithmetic/comparison/conversion primops, including square

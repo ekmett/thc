@@ -352,7 +352,10 @@
     "writeMutVar#": 3,
     "readIntArray#": 3,
     "writeIntArray#": 4,
-    "indexIntArray#": 2
+    "indexIntArray#": 2,
+    "readDoubleArray#": 3,
+    "writeDoubleArray#": 4,
+    "indexDoubleArray#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -447,6 +450,36 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "readDoubleArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["DoubleRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "double", "primReps": ["DoubleRep"] }
+        ]
+      }
+    },
+    "writeDoubleArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "double", "primReps": ["DoubleRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "indexDoubleArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] }
+      ],
+      "result": { "kind": "double", "primReps": ["DoubleRep"] }
+    },
     "readIntArray#": {
       "arguments": [
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },

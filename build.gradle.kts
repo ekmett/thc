@@ -53,6 +53,8 @@ tasks.test {
             "bytearray/**/*.json", "bytearray/oracle.tsv", "bytearray/NativeByteArray.hs",
             "int-arrays/**/*.json", "int-arrays/oracle.tsv", "int-arrays/expected.tsv",
             "int-arrays/NativeIntArray.hs", "int-arrays/native/int-array-oracle",
+            "double-arrays/**/*.json", "double-arrays/oracle.tsv", "double-arrays/expected.tsv",
+            "double-arrays/NativeDoubleArray.hs", "double-arrays/native/double-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
@@ -68,6 +70,7 @@ tasks.test {
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "core_*.py", "generate-scalar-signatures.py",
+            "prepare-double-arrays.py", "test-double-array-model.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)

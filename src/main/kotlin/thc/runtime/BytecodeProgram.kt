@@ -761,6 +761,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT -> e.builder.beginReadIntArray(destination[0])
+                        ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
                         else -> error("Scalar ByteArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -768,6 +769,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.NEW -> e.builder.endNewByteArray()
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT -> e.builder.endReadIntArray()
+                        ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
                         else -> error("Scalar ByteArray operation")
                     }
                 } else ProvenExpression(Expression { e ->
@@ -778,6 +780,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
                         ByteArrayOp.WRITE_INT -> e.builder.beginWriteIntArray()
                         ByteArrayOp.INDEX_INT -> e.builder.beginIndexIntArray()
+                        ByteArrayOp.WRITE_DOUBLE -> e.builder.beginWriteDoubleArray()
+                        ByteArrayOp.INDEX_DOUBLE -> e.builder.beginIndexDoubleArray()
                         else -> error("Tuple ByteArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -788,6 +792,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
                         ByteArrayOp.WRITE_INT -> e.builder.endWriteIntArray()
                         ByteArrayOp.INDEX_INT -> e.builder.endIndexIntArray()
+                        ByteArrayOp.WRITE_DOUBLE -> e.builder.endWriteDoubleArray()
+                        ByteArrayOp.INDEX_DOUBLE -> e.builder.endIndexDoubleArray()
                         else -> error("Tuple ByteArray operation")
                     }
                 }, tupleProof.copy(evaluated = true))

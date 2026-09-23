@@ -74,7 +74,7 @@ class ByteArrayContracts(unittest.TestCase):
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
 
     def test_state_is_not_an_empty_tuple_and_reference_is_not_lifted(self):
-        for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#'):
+        for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#', 'readDoubleArray#'):
             for mutation in ('empty-tuple', 'missing-state', 'lifted-reference'):
                 module, app = fixture(name)
                 proof = app[6]['rep']
@@ -82,7 +82,7 @@ class ByteArrayContracts(unittest.TestCase):
                     proof['components'][0].update(aggregate='unboxed-tuple', components=[], kind='unknown')
                 elif mutation == 'missing-state':
                     proof['components'].pop(0)
-                elif name == 'readIntArray#':
+                elif name in ('readIntArray#', 'readDoubleArray#'):
                     proof['components'][1]['primReps'] = ['WordRep']
                     proof['primReps'] = ['WordRep']
                 else:
@@ -93,7 +93,8 @@ class ByteArrayContracts(unittest.TestCase):
 
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
         for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',
-                     'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#'):
+                     'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#',
+                     'readDoubleArray#', 'writeDoubleArray#', 'indexDoubleArray#'):
             module, _ = fixture(name)
             parameter = module['bindings'][0]['expr'][1][0]
             parameter['rep']['primReps'] = ['BoxedRep (Just Lifted)']
@@ -110,6 +111,22 @@ class ByteArrayContracts(unittest.TestCase):
                     report = check(module)
                     self.assertIn('primitive-representation', {i['code'] for i in report['issues']},
                                   (name, operand, replacement))
+
+    def test_double_payload_cannot_be_float_integer_or_unknown(self):
+        for name in ('readDoubleArray#', 'writeDoubleArray#', 'indexDoubleArray#'):
+            for kind, rep in (('float', 'FloatRep'), ('long', 'IntRep'), ('unknown', 'DoubleRep')):
+                module, app = fixture(name)
+                wrong = dict(kind=kind, primReps=[rep], evaluated=True)
+                if name == 'writeDoubleArray#':
+                    module['bindings'][0]['expr'][1][2]['rep'] = copy.deepcopy(wrong)
+                    app[2][2][2]['rep'] = wrong
+                elif name == 'indexDoubleArray#':
+                    app[6]['rep'] = wrong
+                else:
+                    app[6]['rep']['components'][1] = wrong
+                    app[6]['rep']['primReps'] = [rep]
+                report = check(module)
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, kind, rep))
 
     def test_copy_requires_exact_proofs_for_both_references_offsets_count_and_state(self):
         for argument in range(6):
