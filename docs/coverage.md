@@ -98,6 +98,13 @@ compile each primitive family, and reject malformed arities and literal values.
 The general corpus checker supplies the held-out cold paths and requires
 installed-code entry for every input after broad warmup and recompilation.
 
+At this narrow-word checkpoint, Linux x86-64 with GHC 9.14.1 and GraalVM
+25.3.4.1 passed 256 JVM tests in both default and opt-in handoff modes, plus
+12 capability-auditor tests. Corpus preparation verified 24 strict entries,
+458 native rows and 20 retained-structure facts. Existing library regressions
+also passed 7,572 comparisons each on AST, bytecode and AST handoff, retaining
+strict rejection of the Set frontier and the existing compiled-entry checks.
+
 Preparation fingerprints its Haskell sources, compiler and preparation inputs,
 exported Core, structural report and native oracle. A local test against stale
 inputs fails with a request to prepare again. Reports live in `build/corpus/`;
