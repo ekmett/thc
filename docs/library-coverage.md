@@ -129,10 +129,11 @@ the full workload or stand in for fold/split/index support.
 The remaining seven entries deliberately retain their strict unsupported
 frontiers. Specialized `foldl'`/`foldr` workers pass genuine zero-width unboxed
 `(# #)` **arguments**, so supporting only aggregate results will not unblock
-them. Split, lookup, index and update additionally reach unboxed pair/triple
-workers after GHC's constructor-result optimization. Cold error paths reach
-`readMutVar#`, `quotRemInt#` and missing exception/backtrace/call-stack/Show
-definitions. No `main:` source-library binding is missing. Boxed pairs, triples,
+them. Scalar/reference tuple results and tuple-result joins are already supported;
+they do not remove those argument boundaries. Split, lookup, index and update
+also reach residual exception/state paths, including unsupported `State#` tuple
+components, `readMutVar#`, `quotRemInt#` and missing
+exception/backtrace/call-stack/Show definitions. No `main:` source-library binding is missing. Boxed pairs, triples,
 unit, views and finger-tree nodes are not themselves aggregate-ABI failures;
 lifted element payloads must stay lazy. Nothing is boxed or substituted to make
 a rejected operation appear supported.
@@ -150,13 +151,20 @@ library oracle to 2,964 rows. Of those, 152 new Sequence rows belong to the four
 strict-supported slices; the other 266 are native/model coverage of the retained
 frontiers, not THC execution claims.
 
-The host compilation API now follows active Truffle split targets beneath its
-stable host-entry dispatch tree. Compiling only the original target retained by
-a closure could leave the actually called clone interpreted. Dedicated tests
-force a real host-call split on both backends, verify the active clone is installed
-and require compiled entry for every 64-bit boundary input, while preserving the
-closure's original target identity. This changes neither the guest call ABI nor
-the compilation limits.
+The host compilation API follows active Truffle split targets and also compiles
+the stable public host-entry bridge. Compiling only the original target retained
+by a closure could leave the actually called clone interpreted. Dedicated tests
+force a real host-call split on both backends, verify that both the active clone
+and public bridge are installed, and require compiled entry for every 64-bit
+boundary input while preserving the closure's original target identity. This
+changes neither the guest call ABI nor the compilation limits.
+
+Investigation also observed site-dependent interpreted public calls despite
+valid installed guest code. The underlying HotSpot call-boundary bypass
+mechanism remains unresolved; compiling the public bridge is not a claim of
+an upstream VM fix. Post-compilation settling calls did not resolve the failure
+and have been removed. The checker retains its fixed warmup and mandatory
+per-call compiled-entry assertions, without retries or diagnostic JVM flags.
 
 ## Running the checks
 
@@ -183,16 +191,6 @@ blackholes must remain zero; no diagnostic unsupported mode is needed for
 IntMap, IntSet or the primitive entries. The existing Linux/macOS library CI step
 prepares all groups and runs both explicit backends; no separate opt-in is needed
 for the IntSet workload.
-
-After each explicit compilation request, one already-warm input is used for a
-bounded settling call, checked against the oracle and strict runtime policy.
-A compilation recheck follows. HotSpot's `interpreterCall` can
-observe valid guest code, attempt to repair a bypassed shared call-boundary stub,
-and still interpret that particular invocation. `LIBRARY_COMPILE_SETTLE` records
-this setup separately, including its actual compiled-entry delta. It is not
-counted as a measured compiled pass, does not use a cold input and never retries
-until success. Every subsequent measured warm and final replay call retains its
-mandatory positive compiled-entry delta, so persistent bypass still fails.
 
 To additionally exercise opt-in dense argument handoff transport, run
 `JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/try-libraries.sh --rerun-tasks`.
