@@ -2,6 +2,7 @@ package thc
 
 import com.oracle.truffle.api.dsl.Cached
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
@@ -213,6 +214,11 @@ class EntryValue(private val program: ExecutableProgram, private val entry: Stri
             cls.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
             check(cls.getMethod("isValidLastTier").invoke(target) == true) { "Guest code was not installed" }
         }
+        // HotSpot can retire the shared call-boundary stub while these guest
+        // targets remain valid. The pinned runtime hook restores that entry
+        // prerequisite without executing guest code or settling a public call.
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode", cls).invoke(runtime, guestTarget)
         return true
     }
 }

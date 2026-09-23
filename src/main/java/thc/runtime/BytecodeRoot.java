@@ -508,6 +508,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return kotlin.Unit.INSTANCE;
         }
     }
+    @Operation public static final class CopyByteArray {
+        @Specialization public static Object copy(Object source, long sourceOffset, Object destination,
+                long destinationOffset, long count, Object state) {
+            byte[] from = ManagedByteArray.require(source);
+            byte[] to = ManagedByteArray.require(destination);
+            ManagedByteArray.requireState(state);
+            ManagedByteArray.copy(from, sourceOffset, to, destinationOffset, count);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
     @Operation public static final class SizeByteArray {
         @Specialization public static long size(Object value) { return ManagedByteArray.size(ManagedByteArray.require(value)); }
     }
