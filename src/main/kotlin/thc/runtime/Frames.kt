@@ -63,6 +63,23 @@ internal object FrameAccess {
         else -> fault("Unsupported runtime frame slot tag")
     }
 
+    /** Keep a primitive producer unboxed until this slot actually requires object storage. */
+    fun writeLong(frame: Frame, slot: Int, value: Long) {
+        val descriptor = frame.frameDescriptor
+        val kind = descriptor.getSlotKind(slot)
+        if (kind == FrameSlotKind.Long || kind == FrameSlotKind.Illegal) {
+            if (kind == FrameSlotKind.Illegal) {
+                CompilerDirectives.transferToInterpreterAndInvalidate()
+                descriptor.setSlotKind(slot, FrameSlotKind.Long)
+            }
+            frame.setLong(slot, value)
+        } else {
+            // Another activation may already have widened the shared descriptor.
+            // Follow it even when this frame still has an older primitive tag.
+            write(frame, slot, value)
+        }
+    }
+
     fun write(frame: Frame, slot: Int, value: Any?) {
         val descriptor = frame.frameDescriptor
         val kind = descriptor.getSlotKind(slot)
@@ -174,7 +191,7 @@ class CaptureLayout(language: TruffleLanguage<*>, primitiveEligible: BooleanArra
             if (!primitiveEligible || !hasPrimitive.getBoolean(storage)) {
                 FrameAccess.write(frame, slot, objectValue.getObject(storage))
             } else {
-                FrameAccess.write(frame, slot, primitiveValue.getLong(storage))
+                FrameAccess.writeLong(frame, slot, primitiveValue.getLong(storage))
             }
         }
 

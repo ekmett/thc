@@ -82,7 +82,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
         "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
-        "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
+        "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces,
+        "selfTailReentries" to metrics.selfTailReentries, "trampolineIterations" to metrics.trampolineIterations,
+        "papAllocations" to metrics.papAllocations,
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "Bytecode DSL primitive locals; selective StaticShape captures",
@@ -228,9 +230,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
         val loop = tail && arguments.size <= context.formalArity && context.formalArity > 0
-        if (loop) context.mayLoop = true
+        // Even a root without a direct self-call can receive A -> B -> ... -> A.
+        if (tail) context.mayLoop = true
         return Expression { e ->
             val b = e.builder
+            val reentryResult = if (tail) {
+                b.beginBlock()
+                b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
+            } else null
             if (!loop) {
                 b.beginApply(arguments.size, tail, metrics)
                 requireClosure(function).emit(e)
@@ -272,6 +279,33 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.emitLoadLocal(fn)
                 args.forEach { b.emitLoadLocal(it) }
                 b.endApply()
+                b.endConditional()
+                b.endBlock()
+            }
+            if (reentryResult != null) {
+                b.endStoreLocal()
+                b.beginConditional()
+                b.beginIsTailReentry(); b.emitLoadLocal(reentryResult); b.endIsTailReentry()
+                b.beginBlock()
+                // The original activation retains its bloom ancestry. Only the new
+                // packet's environment and value arguments replace lexical locals.
+                context.captures.forEachIndexed { index, local ->
+                    b.beginStoreLocal(e.locals.getValue(local.id))
+                    b.beginCaptureRead(context.captureLayout!!, index)
+                    b.beginTailArgument(1); b.emitLoadLocal(reentryResult); b.endTailArgument()
+                    b.endCaptureRead()
+                    b.endStoreLocal()
+                }
+                val offset = if (context.captureLayout == null) 1 else 2
+                context.arguments.forEachIndexed { index, local -> if (local != null) {
+                    b.beginStoreLocal(e.locals.getValue(local.id))
+                    b.beginTailArgument(index + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
+                    b.endStoreLocal()
+                } }
+                b.emitBranch(e.continueLabel!!)
+                b.emitLoadConstant(Unit)
+                b.endBlock()
+                b.emitLoadLocal(reentryResult)
                 b.endConditional()
                 b.endBlock()
             }

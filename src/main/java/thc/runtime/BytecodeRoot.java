@@ -159,12 +159,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Apply {
         @Specialization public static Object apply(VirtualFrame frame, int arity, boolean tail,
                 Metrics metrics, Closure function, @Variadic Object[] arguments,
+                @Bind("$node") Node node,
                 @Cached(value = "createDispatch(arity, tail, metrics)", neverDefault = true) Dispatch dispatch) {
-            return dispatch.execute(frame, function, arguments);
+            try {
+                return dispatch.execute(frame, function, arguments);
+            } catch (TailCall call) {
+                // A -> B -> ... -> A unwinds to the owning activation. The compiler
+                // consumes this internal result and restores locals before a real
+                // bytecode backedge. Never intercept a call with pending non-tail work.
+                if (!tail || !((GuestRoot) node.getRootNode()).isSelf(call.getTarget())) throw call;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return call;
+            }
         }
         public static Dispatch createDispatch(int arity, boolean tail, Metrics metrics) {
             return DispatchNodeGen.create(arity, tail, metrics);
         }
+    }
+
+    /** Internal control result of a matching-root tail bounce, never a guest value. */
+    @Operation
+    public static final class IsTailReentry {
+        @Specialization public static boolean test(Object value) { return value instanceof TailCall; }
+    }
+
+    @Operation
+    @ConstantOperand(type = int.class, name = "index")
+    public static final class TailArgument {
+        @Specialization public static Object read(int index, TailCall call) { return call.getArgs()[index]; }
     }
 
     @Operation(forceCached = true)

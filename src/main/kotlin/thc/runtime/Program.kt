@@ -4,12 +4,14 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.dsl.TypeSystemReference
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.*
 import com.oracle.truffle.api.profiles.BranchProfile
+import com.oracle.truffle.api.profiles.CountingConditionProfile
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. Haskell thunks
@@ -53,18 +55,46 @@ internal class Metrics(val enabled: Boolean) {
     var directCacheMisses = 0L
     var indirectCalls = 0L
     var tailBounces = 0L
+    var selfTailReentries = 0L
+    var trampolineIterations = 0L
     var papAllocations = 0L
     var unsupportedTraps = 0L
 }
+@TypeSystemReference(RuntimeTypes::class)
 internal abstract class Expr : Node() {
     abstract fun execute(frame: VirtualFrame): Any?
-    open fun executeLong(frame: VirtualFrame): Long = execute(frame) as? Long ?: fault("Expected primitive Long")
+    @Throws(UnexpectedResultException::class)
+    open fun executeLong(frame: VirtualFrame): Long {
+        return RuntimeTypesGen.expectLong(execute(frame))
+    }
+
+    @Throws(UnexpectedResultException::class)
+    open fun executeClosure(frame: VirtualFrame): Closure = RuntimeTypesGen.expectClosure(execute(frame))
+
+    @Throws(UnexpectedResultException::class)
+    open fun executeDataValue(frame: VirtualFrame): DataValue = RuntimeTypesGen.expectDataValue(execute(frame))
+
+    @Throws(UnexpectedResultException::class)
+    open fun executeAddress(frame: VirtualFrame): LiteralAddress = RuntimeTypesGen.expectLiteralAddress(execute(frame))
+
+    /** Primitive consumers reject an unexpected value; forwarding nodes preserve it. */
+    fun executeRequiredLong(frame: VirtualFrame): Long = try { executeLong(frame) }
+    catch (_: UnexpectedResultException) { fault("Expected primitive Long") }
+
+    fun executeRequiredClosure(frame: VirtualFrame): Closure = try { executeClosure(frame) }
+    catch (_: UnexpectedResultException) { fault("Application of a non-function") }
+
+    fun executeRequiredAddress(frame: VirtualFrame): LiteralAddress = try { executeAddress(frame) }
+    catch (_: UnexpectedResultException) { fault("Expected a managed literal Addr#") }
 }
 private class Literal(private val value: Any?) : Expr() {
     override fun execute(frame: VirtualFrame) = value
-    override fun executeLong(frame: VirtualFrame) = value as? Long ?: fault("Expected primitive literal")
+    override fun executeLong(frame: VirtualFrame) = RuntimeTypesGen.expectLong(value)
 }
 private class LocalRead(private val slot: Int) : Expr() {
+    override fun executeLong(frame: VirtualFrame): Long =
+        if (frame.isLong(slot)) frame.getLong(slot) else super.executeLong(frame)
+
     override fun execute(frame: VirtualFrame): Any? {
         val value = FrameAccess.read(frame, slot)
         if (value !is RecCell) return value ?: fault("Uninitialized local binding")
@@ -80,12 +110,13 @@ private class MakeClosure(private val target: RootCallTarget, private val arity:
                           @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
     // Cadenza's closed-lambda optimization: immutable code needs no allocation.
     private val constantClosure = if (captureLayout == null) Closure(environment = null, arity = arity, target = target) else null
-    override fun execute(frame: VirtualFrame): Any = constantClosure ?: Closure(
+    override fun execute(frame: VirtualFrame): Closure = constantClosure ?: Closure(
         environment = captureLayout!!.capture(frame, captures), arity = arity, target = target)
+    override fun executeClosure(frame: VirtualFrame): Closure = execute(frame)
 }
 private class Delay(private val target: RootCallTarget, private val captureLayout: CaptureLayout?,
                     @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
-    override fun execute(frame: VirtualFrame): Any = Thunk(target, captureLayout?.capture(frame, captures))
+    override fun execute(frame: VirtualFrame): Thunk = Thunk(target, captureLayout?.capture(frame, captures))
 }
 internal class Force(private val metrics: Metrics) : Node() {
     @Child private var calls = ThunkTargetCache(metrics)
@@ -136,31 +167,113 @@ internal class Force(private val metrics: Metrics) : Node() {
         return value
     }
 }
-private class Evaluate(@field:Child private var value: Expr, metrics: Metrics) : Expr() {
+/** Typed execution widens per result kind; each fallback consumes the already evaluated value. */
+internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) : Expr() {
     @Child private var force = Force(metrics)
     override fun execute(frame: VirtualFrame) = force.execute(frame, value.execute(frame))
+    @CompilationFinal private var genericLong = false
+    override fun executeLong(frame: VirtualFrame): Long {
+        if (genericLong) return RuntimeTypesGen.expectLong(force.execute(frame, value.execute(frame)))
+        return try { value.executeLong(frame) }
+        catch (unexpected: UnexpectedResultException) {
+            // The exception already invalidated compiled code. Widen once, and
+            // force its saved result without evaluating the child a second time.
+            genericLong = true
+            RuntimeTypesGen.expectLong(force.execute(frame, unexpected.result))
+        }
+    }
+    @CompilationFinal private var genericClosure = false
+    override fun executeClosure(frame: VirtualFrame): Closure {
+        if (genericClosure) return RuntimeTypesGen.expectClosure(force.execute(frame, value.execute(frame)))
+        return try { value.executeClosure(frame) }
+        catch (unexpected: UnexpectedResultException) {
+            // The exception already invalidated compiled code. Widen once, and
+            // force its saved result without evaluating the child a second time.
+            genericClosure = true
+            RuntimeTypesGen.expectClosure(force.execute(frame, unexpected.result))
+        }
+    }
+    @CompilationFinal private var genericDataValue = false
+    override fun executeDataValue(frame: VirtualFrame): DataValue {
+        if (genericDataValue) return RuntimeTypesGen.expectDataValue(force.execute(frame, value.execute(frame)))
+        return try { value.executeDataValue(frame) }
+        catch (unexpected: UnexpectedResultException) {
+            // The exception already invalidated compiled code. Widen once, and
+            // force its saved result without evaluating the child a second time.
+            genericDataValue = true
+            RuntimeTypesGen.expectDataValue(force.execute(frame, unexpected.result))
+        }
+    }
+    @CompilationFinal private var genericAddress = false
+    override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+        if (genericAddress) return RuntimeTypesGen.expectLiteralAddress(force.execute(frame, value.execute(frame)))
+        return try { value.executeAddress(frame) }
+        catch (unexpected: UnexpectedResultException) {
+            // The exception already invalidated compiled code. Widen once, and
+            // force its saved result without evaluating the child a second time.
+            genericAddress = true
+            RuntimeTypesGen.expectLiteralAddress(force.execute(frame, unexpected.result))
+        }
+    }
 }
-private class Application(@field:Child private var function: Expr,
+private class Application(function: Expr,
                           @field:Children private var arguments: Array<Expr>, tail: Boolean, metrics: Metrics) : Expr() {
-    @Child private var force = Force(metrics)
+    @Child private var function = Evaluate(function, metrics)
     @Child private var dispatch = Dispatch.create(arguments.size, tail, metrics)
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
-        val fn = force.execute(frame, function.execute(frame)) as? Closure ?: fault("Application of a non-function")
+        val fn = function.executeRequiredClosure(frame)
         val values = arrayOfNulls<Any>(arguments.size)
         for (i in arguments.indices) values[i] = arguments[i].execute(frame)
         return dispatch.execute(frame, fn, values)
     }
 }
+/** Each cloned root owns its widening state; recursive RHSs stay raw until publication. */
+private class LocalBinding(private val slot: Int, @field:Child private var value: Expr,
+                           preferLong: Boolean) : Node() {
+    @CompilationFinal private var generic = !preferLong
+    fun evaluate(frame: VirtualFrame): Any? = value.execute(frame)
+    fun write(frame: VirtualFrame) {
+        if (generic) { FrameAccess.write(frame, slot, value.execute(frame)); return }
+        try { FrameAccess.writeLong(frame, slot, value.executeLong(frame)) }
+        catch (unexpected: UnexpectedResultException) {
+            generic = true
+            FrameAccess.write(frame, slot, unexpected.result)
+        }
+    }
+}
 private class Let(@field:CompilationFinal(dimensions = 1) private val slots: IntArray,
-                  @field:Children private var rhs: Array<Expr>, @field:Child private var body: Expr,
-                  private val recursive: Boolean) : Expr() {
-    @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
+                  rhs: Array<Expr>, primitiveEligible: BooleanArray,
+                  @field:Child private var body: Expr, private val recursive: Boolean) : Expr() {
+    @Children private var bindings = Array(rhs.size) { index ->
+        LocalBinding(slots[index], rhs[index], !recursive && primitiveEligible[index])
+    }
+    override fun execute(frame: VirtualFrame): Any? {
+        initialize(frame)
+        return body.execute(frame)
+    }
+    override fun executeLong(frame: VirtualFrame): Long {
+        initialize(frame)
+        return body.executeLong(frame)
+    }
+    override fun executeClosure(frame: VirtualFrame): Closure {
+        initialize(frame)
+        return body.executeClosure(frame)
+    }
+    override fun executeDataValue(frame: VirtualFrame): DataValue {
+        initialize(frame)
+        return body.executeDataValue(frame)
+    }
+    override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+        initialize(frame)
+        return body.executeAddress(frame)
+    }
+    @ExplodeLoop private fun initialize(frame: VirtualFrame) {
         if (recursive) {
             // A closure captures these cells, never a mutable activation frame.
             for (slot in slots) FrameAccess.write(frame, slot, RecCell())
             for (i in slots.indices) {
                 val cell = FrameAccess.read(frame, slots[i]) as? RecCell ?: fault("Invalid recursive cell")
-                cell.value = rhs[i].execute(frame)
+                cell.value = bindings[i].evaluate(frame)
                 cell.initialized = true
             }
             // Existing recursive captures retain the cells; the let body and
@@ -170,8 +283,7 @@ private class Let(@field:CompilationFinal(dimensions = 1) private val slots: Int
                 val cell = FrameAccess.read(frame, slot) as? RecCell ?: fault("Invalid recursive cell")
                 FrameAccess.write(frame, slot, cell.value)
             }
-        } else for (i in slots.indices) FrameAccess.write(frame, slots[i], rhs[i].execute(frame))
-        return body.execute(frame)
+        } else for (binding in bindings) binding.write(frame)
     }
 }
 private const val DEFAULT_ALTERNATIVE = 0
@@ -180,41 +292,107 @@ private const val LITERAL_ALTERNATIVE = 2
 
 private class Alternative(val kind: Int, val value: Any?,
                           @field:CompilationFinal(dimensions = 1) val fields: IntArray,
-                          @field:Child var body: Expr) : Node()
-private class Case(@field:Child private var scrutinee: Expr, private val binderSlot: Int,
+                          @field:Child var body: Expr) : Node() {
+    private val matchProfile = CountingConditionProfile.create()
+    fun matches(frame: VirtualFrame, slot: Int): Boolean = matchProfile.profile(when (kind) {
+        DATA_ALTERNATIVE -> if (frame.isObject(slot)) {
+            val scrutinee = frame.getObject(slot)
+            scrutinee is DataValue && scrutinee.layout === value
+        } else false
+        LITERAL_ALTERNATIVE -> if (value is Long && frame.isLong(slot)) frame.getLong(slot) == value
+            else FrameAccess.read(frame, slot) == value
+        else -> false
+    })
+}
+private class Case(scrutinee: Expr, private val binderSlot: Int,
                    @field:Children private var alternatives: Array<Alternative>, metrics: Metrics) : Expr() {
-    @Child private var force = Force(metrics)
+    // Preserve primitive scrutinees through their frame write and literal comparisons.
+    @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics), true)
+
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
-        val value = force.execute(frame, scrutinee.execute(frame))
-        FrameAccess.write(frame, binderSlot, value)
+        scrutinee.write(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
-            val matches = when (alt.kind) {
-                DATA_ALTERNATIVE -> value is DataValue && value.layout === alt.value
-                LITERAL_ALTERNATIVE -> value == alt.value
-                else -> false
+            if (alt.matches(frame, binderSlot)) {
+                restoreFields(frame, alt)
+                return alt.body.execute(frame)
             }
-            if (matches) return runAlternative(frame, value, alt)
         }
-        return runAlternative(frame, value, fallback ?: fault("Non-exhaustive Core case"))
+        return (fallback ?: fault("Non-exhaustive Core case")).body.execute(frame)
     }
-    @ExplodeLoop private fun runAlternative(frame: VirtualFrame, value: Any?, alt: Alternative): Any? {
+
+    @ExplodeLoop override fun executeLong(frame: VirtualFrame): Long {
+        scrutinee.write(frame)
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (alt.matches(frame, binderSlot)) {
+                restoreFields(frame, alt)
+                return alt.body.executeLong(frame)
+            }
+        }
+        return (fallback ?: fault("Non-exhaustive Core case")).body.executeLong(frame)
+    }
+
+    @ExplodeLoop override fun executeClosure(frame: VirtualFrame): Closure {
+        scrutinee.write(frame)
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (alt.matches(frame, binderSlot)) {
+                restoreFields(frame, alt)
+                return alt.body.executeClosure(frame)
+            }
+        }
+        return (fallback ?: fault("Non-exhaustive Core case")).body.executeClosure(frame)
+    }
+
+    @ExplodeLoop override fun executeDataValue(frame: VirtualFrame): DataValue {
+        scrutinee.write(frame)
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (alt.matches(frame, binderSlot)) {
+                restoreFields(frame, alt)
+                return alt.body.executeDataValue(frame)
+            }
+        }
+        return (fallback ?: fault("Non-exhaustive Core case")).body.executeDataValue(frame)
+    }
+
+    @ExplodeLoop override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+        scrutinee.write(frame)
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (alt.matches(frame, binderSlot)) {
+                restoreFields(frame, alt)
+                return alt.body.executeAddress(frame)
+            }
+        }
+        return (fallback ?: fault("Non-exhaustive Core case")).body.executeAddress(frame)
+    }
+
+    @ExplodeLoop private fun restoreFields(frame: VirtualFrame, alt: Alternative) {
         if (alt.kind == DATA_ALTERNATIVE) {
-            val data = value as? DataValue ?: fault("Invalid constructor case")
+            val data = frame.getObject(binderSlot) as? DataValue ?: fault("Invalid constructor case")
             val layout = alt.value as? DataLayout ?: fault("Invalid constructor alternative")
             for (i in alt.fields.indices) layout.restore(data, i, frame, alt.fields[i])
         }
-        return alt.body.execute(frame)
     }
 }
 private class Construct(private val layout: DataLayout,
                         @field:Children private var fields: Array<Expr>) : Expr() {
-    @ExplodeLoop override fun execute(frame: VirtualFrame): Any {
-        val values = arrayOfNulls<Any>(fields.size)
-        for (i in fields.indices) values[i] = fields[i].execute(frame)
-        return layout.create(values)
+    @ExplodeLoop override fun execute(frame: VirtualFrame): DataValue {
+        val value = layout.allocate()
+        for (i in fields.indices) {
+            if (layout.isLong(i)) layout.initializeLong(value, i, fields[i].executeRequiredLong(frame))
+            else layout.initialize(value, i, fields[i].execute(frame))
+        }
+        return value
     }
+    override fun executeDataValue(frame: VirtualFrame): DataValue = execute(frame)
 }
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     init {
@@ -231,8 +409,8 @@ private class Primitive(private val name: String, @field:Children private var ar
     }
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val x = arguments[0].executeLong(frame)
-        val y = if (arguments.size == 2) arguments[1].executeLong(frame) else 0L
+        val x = arguments[0].executeRequiredLong(frame)
+        val y = if (arguments.size == 2) arguments[1].executeRequiredLong(frame) else 0L
         fun b(value: Boolean) = if (value) 1L else 0L
         return when (name) {
             "+#", "plusWord#" -> x + y
@@ -262,17 +440,28 @@ private class Primitive(private val name: String, @field:Children private var ar
         }
     }
 }
-private class FunctionBody(@field:Child private var expression: Expr, metrics: Metrics) : Node() {
-    @Child private var force = Force(metrics)
-    fun execute(frame: VirtualFrame): Any? = force.execute(frame, expression.execute(frame))
+private class FunctionBody(expression: Expr, metrics: Metrics) : Node() {
+    @Child private var value = Evaluate(expression, metrics)
+    @CompilationFinal private var genericResult = false
+
+    /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
+    fun execute(frame: VirtualFrame): Any? {
+        if (genericResult) return value.execute(frame)
+        return try { value.executeLong(frame) }
+        catch (unexpected: UnexpectedResultException) {
+            genericResult = true
+            return unexpected.result
+        }
+    }
 }
-private class SelfRepeater(@field:Child private var body: FunctionBody) : Node(), RepeatingNode {
+private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
     fun once(frame: VirtualFrame): Any? = body.execute(frame)
     override fun executeRepeating(frame: VirtualFrame): Boolean = error("value loop")
     override fun executeRepeatingWithValue(frame: VirtualFrame): Any? = try { once(frame) }
     catch (tail: TailCall) {
         val root = rootNode as FunctionRoot
         if (!root.isSelf(tail.target)) throw tail
+        if (metrics.enabled) metrics.selfTailReentries++
         root.buildFrame(tail.args, frame)
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
@@ -285,7 +474,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             body: Expr, private val metrics: Metrics) : GuestRoot(language, descriptor) {
     @field:CompilationFinal private var hasSelfTail = false
     private val tailCallProfile = BranchProfile.create()
-    @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics)))
+    @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics), metrics))
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
         val offset = if (captureLayout == null) 1 else 2
@@ -306,6 +495,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         catch (tail: TailCall) {
             tailCallProfile.enter()
             if (!isSelf(tail.target)) throw tail
+            if (metrics.enabled) metrics.selfTailReentries++
             CompilerDirectives.transferToInterpreterAndInvalidate()
             hasSelfTail = true
             // Keep this frame's bloom ancestry and restore the new captures.
@@ -374,6 +564,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
+        "selfTailReentries" to metrics.selfTailReentries, "trampolineIterations" to metrics.trampolineIterations,
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "indexed primitive slots; selective StaticShape captures",
@@ -490,7 +681,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, local, it["name"].toString())
                 else argument(rhsExpr, if (recursive) local else scope, lifted, it["name"].toString())
             }.toTypedArray()
-            Let(slots, rhs, compile(expr[3] as List<Any?>, local, tail), recursive)
+            Let(slots, rhs, group.map { !representation(it) }.toBooleanArray(),
+                compile(expr[3] as List<Any?>, local, tail), recursive)
         }
         "case" -> {
             val local = scope.child(); val binder = local.bind(expr[2] as String, true).slot

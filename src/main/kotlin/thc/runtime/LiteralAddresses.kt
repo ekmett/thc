@@ -52,17 +52,18 @@ internal class LiteralAddress private constructor(
 
 internal class PlusLiteralAddress(@field:Child private var address: Expr,
                                   @field:Child private var displacement: Expr) : Expr() {
-    override fun execute(frame: VirtualFrame): Any {
-        val value = address.execute(frame) as? LiteralAddress ?: fault("Expected a managed literal Addr#")
-        return value.plus(displacement.executeLong(frame))
+    override fun execute(frame: VirtualFrame): LiteralAddress {
+        val value = address.executeRequiredAddress(frame)
+        return value.plus(displacement.executeRequiredLong(frame))
     }
+    override fun executeAddress(frame: VirtualFrame): LiteralAddress = execute(frame)
 }
 
 internal class IndexLiteralChar(@field:Child private var address: Expr,
                                 @field:Child private var displacement: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val value = address.execute(frame) as? LiteralAddress ?: fault("Expected a managed literal Addr#")
-        return value.indexChar(displacement.executeLong(frame))
+        val value = address.executeRequiredAddress(frame)
+        return value.indexChar(displacement.executeRequiredLong(frame))
     }
 }

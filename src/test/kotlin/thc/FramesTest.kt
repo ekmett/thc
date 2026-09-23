@@ -42,6 +42,55 @@ class FramesTest {
         }
     }
 
+    @Test fun typedLongWritesRespectDescriptorWideningAcrossActivations() {
+        val descriptor = newDescriptor()
+        val outer = frame(descriptor)
+        for (value in longArrayOf(Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_000L)) {
+            FrameAccess.writeLong(outer, 0, value)
+            assertEquals(FrameSlotKind.Long, descriptor.getSlotKind(0))
+            assertTrue(outer.isLong(0))
+            assertEquals(value, outer.getLong(0))
+        }
+
+        val inner = frame(descriptor)
+        val marker = Any()
+        FrameAccess.write(inner, 0, marker)
+        assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(0))
+        assertTrue(outer.isLong(0), "Widening the descriptor must not erase a suspended primitive value")
+        assertEquals(3_000_000_000L, FrameAccess.read(outer, 0))
+
+        FrameAccess.writeLong(outer, 0, Long.MIN_VALUE)
+        assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(0))
+        assertTrue(outer.isObject(0), "A later typed write must obey the widened descriptor")
+        assertEquals(Long.MIN_VALUE, FrameAccess.read(outer, 0))
+        assertSame(marker, FrameAccess.read(inner, 0))
+
+        FrameAccess.writeLong(inner, 0, Long.MAX_VALUE)
+        assertTrue(inner.isObject(0))
+        assertEquals(Long.MAX_VALUE, FrameAccess.read(inner, 0))
+        assertEquals(Long.MIN_VALUE, FrameAccess.read(outer, 0))
+    }
+
+    @Test fun typedLongWritesWidenBooleanSlotsWithoutChangingSuspendedFrames() {
+        val descriptor = newDescriptor()
+        val outer = frame(descriptor)
+        FrameAccess.write(outer, 0, true)
+        assertEquals(FrameSlotKind.Boolean, descriptor.getSlotKind(0))
+
+        val inner = frame(descriptor)
+        FrameAccess.writeLong(inner, 0, Long.MIN_VALUE)
+        assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(0))
+        assertTrue(inner.isObject(0))
+        assertEquals(Long.MIN_VALUE, FrameAccess.read(inner, 0))
+        assertTrue(outer.isBoolean(0))
+        assertEquals(true, FrameAccess.read(outer, 0))
+
+        FrameAccess.writeLong(outer, 0, Long.MAX_VALUE)
+        assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(0))
+        assertTrue(outer.isObject(0))
+        assertEquals(Long.MAX_VALUE, FrameAccess.read(outer, 0))
+    }
+
     @Test fun supportedTagsAndUnwrittenNullRetainTheirValues() {
         val descriptor = newDescriptor()
         val local = frame(descriptor)

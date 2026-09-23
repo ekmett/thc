@@ -358,7 +358,7 @@ internal class TailCallLoop(metrics: Metrics) : Node() {
     }
 }
 
-internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, metrics: Metrics) : Node(), RepeatingNode {
+internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private val metrics: Metrics) : Node(), RepeatingNode {
     @Child private var dispatch = TargetCache(metrics)
 
     fun setNext(frame: VirtualFrame, call: TailCall) {
@@ -367,6 +367,7 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, metrics: M
     }
 
     override fun executeRepeating(frame: VirtualFrame): Boolean = try {
+        if (metrics.enabled) metrics.trampolineIterations++
         val target = frame.getObject(FrameLayout.TAIL_FUNCTION) as RootCallTarget
         @Suppress("UNCHECKED_CAST")
         val arguments = frame.getObject(FrameLayout.TAIL_ARGUMENTS) as Array<Any?>

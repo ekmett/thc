@@ -35,11 +35,25 @@ class DataLayout(
     @ExplodeLoop
     fun create(values: Array<Any?>): DataValue {
         if (values.size != arity) fault("Constructor field count does not match layout")
-        val constant = nullaryValue
-        if (constant != null) return constant
-        val value = shape.factory.create(this)
+        val value = allocate()
         for (index in fields.indices) fields[index].initialize(value, values[index])
         return value
+    }
+
+    /** Keep the value private until every final field has been initialized exactly once. */
+    internal fun allocate(): DataValue = nullaryValue ?: shape.factory.create(this)
+
+    internal fun initialize(value: DataValue, index: Int, field: Any?) {
+        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        fields[index].initialize(value, field)
+    }
+
+    /** A primitive producer can initialize its property without an Object-array bridge. */
+    internal fun initializeLong(value: DataValue, index: Int, field: Long) {
+        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        fields[index].initializeLong(value, field)
     }
 
     fun read(value: DataValue, index: Int): Any? {
@@ -103,6 +117,11 @@ class DataLayout(
             }
         }
 
+        fun initializeLong(value: DataValue, field: Long) {
+            if (kind != LONG) fault("Constructor field is not primitive Long")
+            property.setLong(value, field)
+        }
+
         fun read(value: DataValue): Any? = when (kind) {
             LONG -> property.getLong(value)
             OBJECT -> property.getObject(value)
@@ -118,7 +137,7 @@ class DataLayout(
 
         fun restore(value: DataValue, frame: Frame, slot: Int) {
             when (kind) {
-                LONG -> FrameAccess.write(frame, slot, property.getLong(value))
+                LONG -> FrameAccess.writeLong(frame, slot, property.getLong(value))
                 OBJECT -> FrameAccess.write(frame, slot, property.getObject(value))
                 VOID -> FrameAccess.write(frame, slot, Unit)
             }
