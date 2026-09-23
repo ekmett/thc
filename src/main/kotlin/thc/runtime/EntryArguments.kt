@@ -30,10 +30,10 @@ internal class IndirectEntryArguments(metrics: Metrics) : Node() {
     @Child private var force = Force(metrics)
     fun execute(frame: VirtualFrame, target: RootCallTarget, packet: Array<Any?>) {
         val root = target.rootNode as? GuestRoot ?: return
-        val marks = root.entryStrict
-        for (index in marks.indices) if (marks[index] && root.inputLayout?.isEmpty(index) != true) {
-            val position = ArgumentLayout.offset(root.inputLayout, index) + root.entryArgumentOffset
-            packet[position] = force.execute(frame, packet[position])
-        }
+        // These positions are physical and already exclude zero-storage logical
+        // inputs. Iterating logical arity here also invites speculative range
+        // checks against a shorter compact packet before any marked operand runs.
+        val positions = root.strictArgumentPositions
+        for (position in positions) packet[position] = force.execute(frame, packet[position])
     }
 }
