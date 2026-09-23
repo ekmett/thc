@@ -66,6 +66,14 @@ def main():
         assert any(n[:2] == ['data', constructors['Packet']['id']] for n in walk(bindings['readPacket']['expr']))
         assert sum(n[:1] == ['lam'] for n in walk(bindings['captured']['expr'])) >= 2
         assert sum(n[:1] == ['lam'] for n in walk(bindings['partial']['expr'])) >= 2
+        captured_case = bindings['captured']['expr'][2]
+        assert captured_case[0] == 'case'
+        captured_lambda = next(n for n in walk(captured_case) if n[:1] == ['lam'])
+        assert any(n[:2] == ['var', captured_case[2]] and n[2]['rep']['kind'] == 'data' and
+                   n[2]['rep']['evaluated'] is True for n in walk(captured_lambda)), 'Evaluated constructor capture vanished'
+        partial_lambda = list(n for n in walk(bindings['partial']['expr']) if n[:1] == ['lam'])[1]
+        assert any(n[:1] == ['var'] and len(n) > 2 and n[2]['rep']['kind'] == 'address'
+                   for n in walk(partial_lambda)), 'Address capture in eta-expanded constructor vanished'
         for name in ENTRIES + ['tupleFrontier']:
             report = audit.Audit([(str(path.relative_to(ROOT)), module)], cap).run([name])
             dest = directory/(name+'.audit.json'); dest.write_text(json.dumps(report, indent=2)+'\n'); artifacts.append(dest)
