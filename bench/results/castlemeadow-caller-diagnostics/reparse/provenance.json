@@ -1,0 +1,16 @@
+{
+  "scope": "Independent archive extraction/reparse after capture. Graph reader and original verifier retained; the final publication verifier adds full bundle and native-preflight checks without changing the topology algorithm.",
+  "originalVerifier": {
+    "path": "reparse/capture-verifier.py",
+    "sha256": "de53a187482ee5e300143599f110d90bc10c3f9c0a1fb1f376c827072a4f2542"
+  },
+  "reader": {
+    "path": "tools/capture/work/perf-sprint-v2/GraphInspect.java",
+    "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4"
+  },
+  "driver": {
+    "path": "tools/reparse.py",
+    "sha256": "0b6e17c87e867e1e27a7094401bde4001b0ccc4c43aedb2166f2cf3aea30997a"
+  },
+  "archiveSha256": "b84504f9e4bd560c0e3d6e14252a7bb2ffa3389757d876c100aa7d6918968422"
+}

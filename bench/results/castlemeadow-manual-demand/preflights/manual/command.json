@@ -1,0 +1,33 @@
+{
+  "kind": "manual",
+  "argv": [
+    "taskset",
+    "-c",
+    "0-15",
+    "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xss2m",
+    "-Xms4g",
+    "-Xmx4g",
+    "-XX:+UseCompactObjectHeaders",
+    "-Dpolyglot.compiler.InliningRecursionDepth=2",
+    "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+    "-Dpolyglot.compiler.InliningInliningBudget=12000",
+    "-Dthc.classOwnedLayouts=true",
+    "-Dthc.typedCases=false",
+    "-Dthc.leadingCaseReturn=false",
+    "-Dthc.constructorClassIdentity=false",
+    "-Dthc.staticShapeUnchecked=false",
+    "-Dthc.boxedValueCache=false",
+    "-Dthc.backend=bytecode",
+    "-Dthc.diagnosticUnsupported=true",
+    "-Dthc.sourceNotesEnabled=true",
+    "-Dthc.traceCompilation=true",
+    "-cp",
+    "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-defaults-v1/lib/*",
+    "thc.MapCheckKt",
+    "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/demand-manual-map/modules.txt",
+    "/home/ekmett/thc-benchmarks/2026-09-23-083914/provenance/linux-oracle.tsv"
+  ],
+  "returncode": 0
+}

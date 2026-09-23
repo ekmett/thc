@@ -1,0 +1,733 @@
+{
+  "recordedUtc": "2026-09-23T09:58:38.793919+00:00",
+  "scope": "Diagnostic graphs/allocation, not throughput; no graph/JFR timing may be used as benchmark results.",
+  "mode": "graph",
+  "jvmOptions": [
+    "-Xms4g",
+    "-Xmx4g",
+    "-XX:+UseCompactObjectHeaders",
+    "-Dpolyglot.compiler.InliningPolicy=Default",
+    "-Dthc.classOwnedLayouts=true",
+    "-Dthc.typedCases=false",
+    "-Dthc.leadingCaseReturn=false",
+    "-Dthc.constructorClassIdentity=false",
+    "-Dthc.staticShapeUnchecked=false",
+    "-Dthc.boxedValueCache=false"
+  ],
+  "selectedWorker": true,
+  "backend": "bytecode",
+  "depth": 2,
+  "expansionBudget": 12000,
+  "inliningBudget": 12000,
+  "frozenManifest": {
+    "schema": 1,
+    "scope": "Immutable diagnostic aliases of the exact completed benchmark runtime/Core; original frozen source manifest retained separately.",
+    "originalManifest": {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/call-demand-control-v1/manifest.json",
+      "sha256": "53b32ca4c15334c8e5a5189c2037ccdbd1d8b83ed6577cde6bb2fac50c9202fd"
+    },
+    "runtimeJarSha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+    "files": [
+      {
+        "path": "lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+        "bytes": 17536
+      },
+      {
+        "path": "lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+        "bytes": 129475
+      },
+      {
+        "path": "lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+        "bytes": 281935
+      },
+      {
+        "path": "lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+        "bytes": 1853314
+      },
+      {
+        "path": "lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+        "bytes": 249788
+      },
+      {
+        "path": "lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+        "bytes": 537932
+      },
+      {
+        "path": "lib/thc-0.1-experiment.jar",
+        "sha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+        "bytes": 730646
+      },
+      {
+        "path": "lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+        "bytes": 16991993
+      },
+      {
+        "path": "lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+        "bytes": 54592
+      },
+      {
+        "path": "lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+        "bytes": 935923
+      },
+      {
+        "path": "lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7",
+        "bytes": 73160
+      },
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa",
+        "bytes": 26769
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010",
+        "bytes": 735603
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059",
+        "bytes": 7617
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f",
+        "bytes": 16949
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856",
+        "bytes": 320920
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3",
+        "bytes": 36811
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e",
+        "bytes": 523167
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da",
+        "bytes": 12853904
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9",
+        "bytes": 25760966
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f",
+        "bytes": 839209
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19",
+        "bytes": 9012261
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d",
+        "bytes": 14294
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30",
+        "bytes": 966402
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+        "bytes": 1112
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8",
+        "bytes": 1331801
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f",
+        "bytes": 37089
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b",
+        "bytes": 64118
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "537e105e01383190f05ff55af70d3f88c15535191b9c98917332c0e7e9042d09",
+        "bytes": 2251
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/thc-0.1-experiment.jar",
+      "sha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/07-Data.Set.Internal.json",
+      "sha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/08-Data.Map.Internal.json",
+      "sha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/09-Data.Map.Internal.Debug.json",
+      "sha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/10-Data.Map.Strict.Internal.json",
+      "sha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/11-Data.Map.Strict.json",
+      "sha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/12-THC.MapWorkload.json",
+      "sha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/14-GHC.Internal.CString.json",
+      "sha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/15-GHC.Internal.Err.json",
+      "sha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/16-GHC.InterfaceClosure.json",
+      "sha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/manifest.json",
+      "sha256": "ffae9107ed246a6684f3923788a221022c7117907c2d488b953bbf085ccd8921"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/modules.txt",
+      "sha256": "537e105e01383190f05ff55af70d3f88c15535191b9c98917332c0e7e9042d09"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/results/caller-demand-default/oracle.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/release",
+      "sha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/diagnose.py",
+      "sha256": "415c02dcc8028a2ea78ea5bc36034e170cc0804e656340642339a471aca1baf0"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/graph_roots.py",
+      "sha256": "cc904324fe1d0001f52dce345e800cb39b22f5a6a8595b3f0a3648c2aa3a2d39"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/MapProfile.java",
+      "sha256": "4de958783c187e9b142bb275f4e48bb15cd43a1013764d43953f5a245caf29b5"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/tools/audit-call-packets.py",
+      "sha256": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/summarize-graphs.py",
+      "sha256": "08b63925a36f39212c0b7c44fd5723019a2b1586f032f9475e0e28442df81181"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/typed-graph-review/compare.py",
+      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b"
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningPolicy=Default",
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.typedCases=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.boxedValueCache=false",
+        "-Djdk.graal.Dump=Truffle:1",
+        "-Djdk.graal.PrintGraph=File",
+        "-Djdk.graal.PrintGraphWithSchedule=true",
+        "-Djdk.graal.PrintBackendCFG=false",
+        "-Djdk.graal.TrackNodeSourcePosition=true",
+        "-Djdk.graal.DumpPath=/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45",
+        "0.01",
+        "1",
+        "10000"
+      ],
+      "stdout": "run.out",
+      "stderr": "run.err",
+      "exitCode": 0,
+      "elapsedSeconds": 82.00664022995625
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/javac",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-d",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/classes",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/GraphInspect.java"
+      ],
+      "stdout": "javac-graph-reader.out",
+      "stderr": "javac-graph-reader.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.4144365380052477
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/classes",
+        "GraphInspect",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/parsed-TruffleHotSpotCompilation-3479[lambda_ww]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3479.out",
+      "stderr": "parse-3479.err",
+      "exitCode": 0,
+      "elapsedSeconds": 3.1704013409325853
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/tools/audit-call-packets.py",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control",
+        "--output",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/packet-audit.json"
+      ],
+      "stdout": "packet-audit.out",
+      "stderr": "packet-audit.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.3147034540306777
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/summarize-graphs.py",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control"
+      ],
+      "stdout": "graph-summary.out",
+      "stderr": "graph-summary.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.2653020640136674
+    }
+  ],
+  "parsedRootSelection": {
+    "included": [
+      {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3479,
+        "codeBytes": 98401,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+          "sha256": "0aab27c4d42c306a4715a200564cd2a06d299e60bc8bf6681f8ffcfbc8a57314",
+          "bytes": 28658363
+        }
+      }
+    ],
+    "excluded": [
+      {
+        "rootId": 10,
+        "name": "lambda k, x, l, r",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+        "compilationId": 3509,
+        "codeBytes": 2468,
+        "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 15,
+        "name": "lambda k, x, l, r",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+        "compilationId": 3550,
+        "codeBytes": 63483,
+        "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 17,
+        "name": "lambda def, ww, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "compilationId": 3444,
+        "codeBytes": 1844,
+        "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 18,
+        "name": "lambda ww, ds",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "compilationId": 3466,
+        "codeBytes": 2937,
+        "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 20,
+        "name": "argument thunk",
+        "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:501",
+        "compilationId": 3538,
+        "codeBytes": 65824,
+        "roleKey": "argument thunk @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:501",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 21,
+        "name": "lambda sc, x, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+        "compilationId": 3343,
+        "codeBytes": 69395,
+        "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 22,
+        "name": "lambda ww, ds2",
+        "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+        "compilationId": 3390,
+        "codeBytes": 13169,
+        "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+        "roleAmbiguous": false
+      },
+      {
+        "rootId": 26,
+        "name": "lambda n",
+        "source": "examples/THC/MapWorkload.hs:30",
+        "compilationId": 3596,
+        "codeBytes": 97361,
+        "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+        "roleAmbiguous": false
+      }
+    ],
+    "scope": "Only the uniquely named source-less worker is parsed; all original BGV files are retained."
+  },
+  "outputs": [
+    {
+      "path": "TruffleHotSpotCompilation-3034[lambda_sc,_x,_ds1].bgv",
+      "sha256": "1e5db96b9cd87aec0f71c1cc50329c6782d428d8e678d16db3162ff2fb6559bf",
+      "bytes": 29708152
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3262[lambda_sc,_x,_ds1].bgv",
+      "sha256": "50cfdf28d334df0b89450a8c7723d4e3509f128de9e94b62eb3a562d5b7d7ada",
+      "bytes": 29708096
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3309[lambda_sc,_x,_ds1].bgv",
+      "sha256": "673eee24482fcb704b02428f133ae5d408a44f2127400568efd1b9b0c821ce06",
+      "bytes": 29708175
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3343[lambda_sc,_x,_ds1].bgv",
+      "sha256": "332031dc829762bc8a08b1879648af22e48021a8124c85a60cf9d7d26e597ed7",
+      "bytes": 27974636
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3390[lambda_ww,_ds2].bgv",
+      "sha256": "6b78f87b6ca86d9ade0a86e7a72d0486028df8900a5731ba1ee0d35283dfe286",
+      "bytes": 3317827
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3444[lambda_def,_ww,_ds1].bgv",
+      "sha256": "1b40d7e4cb39db1b31c06d2738b2676dd6879b7846daab21e17c4dbe9df4bbea",
+      "bytes": 935844
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3466[lambda_ww,_ds].bgv",
+      "sha256": "3ae829814de270f75468f1cd245bab4eb8d26a8ba5477d66f76e6e0635f0b8e5",
+      "bytes": 837885
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+      "sha256": "0aab27c4d42c306a4715a200564cd2a06d299e60bc8bf6681f8ffcfbc8a57314",
+      "bytes": 28658363
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3509[lambda_k,_x,_l,_r].bgv",
+      "sha256": "59d0dd3831704007133896b6a164999dc1ae04f5b259368373c41411548afb87",
+      "bytes": 585485
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3538[argument_thunk].bgv",
+      "sha256": "ee8e92d36affb2eea50cf84b62eeae852dfcc5fd42d1341903dddee3d58e321d",
+      "bytes": 34726227
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3550[lambda_k,_x,_l,_r].bgv",
+      "sha256": "44396f200f2e5f5097eb2b9fa4a8c200285256e58da338552df5c48459c68d68",
+      "bytes": 39214699
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3596[lambda_n].bgv",
+      "sha256": "8836b0907152dc93ace1c396f3289544c8a7a24ad8b7363e1cf91d439e0dbdca",
+      "bytes": 49063990
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3686[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "a6c0eeb224a813bd9eca488a3f2b78ea02a4f97585c6e0ae5ab504c5f6bdfdf8",
+      "bytes": 47530528
+    },
+    {
+      "path": "graph-summary.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "graph-summary.out",
+      "sha256": "30e6dff587be817711169896705cd9acaa64fbe6c806155ff10346d2525c6c8c",
+      "bytes": 417
+    },
+    {
+      "path": "javac-graph-reader.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "javac-graph-reader.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "packet-audit.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "packet-audit.json",
+      "sha256": "f6f219c80c73bb67c476a04564d77d1aca88d9310dd67a41118613d88706a816",
+      "bytes": 1460999
+    },
+    {
+      "path": "packet-audit.out",
+      "sha256": "127281ac978c944addf1ac9592fca21d7913cc5c0202ba0a6d08f177b2257d67",
+      "bytes": 157
+    },
+    {
+      "path": "parse-3479.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3479.out",
+      "sha256": "a06924f3f2b18c605c25d3d3fec3023dc42505c2f6aed1a958bb20da9fffbd6d",
+      "bytes": 188
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00000-cfg.dot",
+      "sha256": "a0dfc819d26502a55331f999ed3c2d4d0a085f08c1cec805dfdb02359fe658c6",
+      "bytes": 24026
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00000.json",
+      "sha256": "db720c5a9a2f89626e44d781e18e300c220baf0563378efddb80488be4f80711",
+      "bytes": 941488
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00002-cfg.dot",
+      "sha256": "e8f0e60299da225f090eee33adfb86150782e155e8c0ad6ade79cfdd5ac8195c",
+      "bytes": 1103
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00002.json",
+      "sha256": "cb4512240f71fc3a007f59411376e9a0aea0b57b027a0527cb40fb88d077f9ce",
+      "bytes": 82080
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00005-cfg.dot",
+      "sha256": "87331ec688f5fc2c6935b1792207688c5da7c8dfa0a974358b69219f9da56ea1",
+      "bytes": 171934
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00005.json",
+      "sha256": "d4ac4f2218d685f80c66be62ab320f13d4cff0c8e59c06ce3fbd4a7790354702",
+      "bytes": 51012526
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00007-cfg.dot",
+      "sha256": "c95d9615d9ad02fd9acfbb64138da1a5c8ab646f320c84cbb9cdafc6100a4a09",
+      "bytes": 397765
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/graph-00007.json",
+      "sha256": "41f0971e454f7b64aefe7a5f3ab08415a31f73775ddf7e0f773986533f7f88a4",
+      "bytes": 85854290
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3479[lambda_ww]/index.json",
+      "sha256": "f95cda718bfd46d42c871db2ef9cc4d39f90a355709b1d1ad901ce2ad7eff743",
+      "bytes": 510781
+    },
+    {
+      "path": "root-identities.json",
+      "sha256": "dd64fc18529501e96ba9b0d6f7e7394a466699f09a8463f0a258705d92852986",
+      "bytes": 3469
+    },
+    {
+      "path": "run.err",
+      "sha256": "2cad7f926bce4aee0bf387c37a0f3ac08e4755642f04aec7f90d839a6bb9b3cc",
+      "bytes": 10434
+    },
+    {
+      "path": "run.log",
+      "sha256": "2cad7f926bce4aee0bf387c37a0f3ac08e4755642f04aec7f90d839a6bb9b3cc",
+      "bytes": 10434
+    },
+    {
+      "path": "run.out",
+      "sha256": "3feed3714556e6c184c1ac030352cf7f9a882f21dc0ae3926cbfa6c23d7f2b91",
+      "bytes": 47
+    },
+    {
+      "path": "run.tsv",
+      "sha256": "3feed3714556e6c184c1ac030352cf7f9a882f21dc0ae3926cbfa6c23d7f2b91",
+      "bytes": 47
+    },
+    {
+      "path": "summary.json",
+      "sha256": "cbc029b033876de2b30448ef54db8adf854fd9ec11f8129eecb316df214984a2",
+      "bytes": 404633
+    },
+    {
+      "path": "validation.json",
+      "sha256": "17219f95804a6a15f34eb68ef5a10a5e723a2a13178b52e532490cda86c21274",
+      "bytes": 1324
+    }
+  ]
+}

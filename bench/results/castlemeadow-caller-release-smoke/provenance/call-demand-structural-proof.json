@@ -1,0 +1,120 @@
+{
+  "passed": true,
+  "verifiedAt": "2026-09-23T09:46:48.909405+00:00",
+  "runtimeSha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+  "counts": {
+    "certificates": 7742,
+    "strictPositions": 7686
+  },
+  "balanceREntryStrictUnchanged": [
+    false,
+    false,
+    false,
+    false
+  ],
+  "modules": [
+    {
+      "file": "00-Utils.Containers.Internal.BitUtil.json",
+      "on": "a52db255c126f189ed8b91a3f59def4908c7ae1a6dd19d727163fd927e79541f",
+      "off": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "01-Utils.Containers.Internal.BitQueue.json",
+      "on": "8762f18267cdff84d392eed271b6d5bb8619d0884339721897a02cdafc098693",
+      "off": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "02-Utils.Containers.Internal.Prelude.json",
+      "on": "f100baefc7b16d90351e7b4f185696270143cd3ad1cb01b7da9ed6a0a88b4cb8",
+      "off": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "03-Utils.Containers.Internal.PtrEquality.json",
+      "on": "3b9b2cd3f8ea4b561a52391ca37913f004a3bdb10cdfa98b573156a3d097b63c",
+      "off": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "04-Utils.Containers.Internal.StrictMaybe.json",
+      "on": "e08484e3b7302421b70d6fe72932619a2451cf6ac557ff875dc0a55943a4db64",
+      "off": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "05-Utils.Containers.Internal.StrictPair.json",
+      "on": "3ad5daca858094936065dd66bbbb634d86e213cf74b32a2965e180837a11c574",
+      "off": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "06-Utils.Containers.Internal.EqOrdUtil.json",
+      "on": "17f3f296c92a18cf638aa1023153e15b5c058c25b8c7ce79521021f3fecdfb2b",
+      "off": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "07-Data.Set.Internal.json",
+      "on": "ddd952748bde8512aae6220a640b26b1961f3332b4f56ee3c4fe5d2940741031",
+      "off": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "08-Data.Map.Internal.json",
+      "on": "642184a9ca6e833359794567066b1e01d6d6ceb2f84346b513d95dcf06dacb19",
+      "off": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "09-Data.Map.Internal.Debug.json",
+      "on": "04d0805720ab792ffc5e598030f42f202a267185266cd1e8e4ab5eac468de166",
+      "off": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "10-Data.Map.Strict.Internal.json",
+      "on": "fc85814e44554592c4437a9c69c12db6616e31dc2430897cb0cbc0d8777f6ef0",
+      "off": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "11-Data.Map.Strict.json",
+      "on": "f173b812b02f26a56ae82c1842caece0b39ca2a152e3879535eb388d123ee480",
+      "off": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "12-THC.MapWorkload.json",
+      "on": "19c7eca83907db7e29aa5cc63cdec474c61e53a72e85fb238e04d0e71043cbb2",
+      "off": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "13-THC.InterfaceClosure.json",
+      "on": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+      "off": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "14-GHC.Internal.CString.json",
+      "on": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23",
+      "off": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "15-GHC.Internal.Err.json",
+      "on": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b",
+      "off": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f",
+      "onlyCallDemandRemoved": true
+    },
+    {
+      "file": "16-GHC.InterfaceClosure.json",
+      "on": "8df1a931065b17bbe03fbe9730d08e8719d3043a3de002e0e5f0280aa663e91e",
+      "off": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b",
+      "onlyCallDemandRemoved": true
+    }
+  ],
+  "nativeReusedFromMatchingUnchangedSource": true
+}

@@ -1,0 +1,1 @@
+TruffleIR.Tier2.lambda_ww() [rootId=22] 3457 PE/mid 660 9731 calls 60 arrays/Long 57 29 alloc {'java.lang.Long': 29, 'java.lang.Object[]': 57, 'java.lang.Long[]': 3, 'com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4': 88, 'com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6': 31} frontier {'Cutoff': 59}

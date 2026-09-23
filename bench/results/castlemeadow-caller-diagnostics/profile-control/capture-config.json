@@ -1,0 +1,451 @@
+{
+  "recordedUtc": "2026-09-23T09:56:29.625002+00:00",
+  "scope": "Diagnostic graphs/allocation, not throughput; no graph/JFR timing may be used as benchmark results.",
+  "mode": "profile",
+  "jvmOptions": [
+    "-Xms4g",
+    "-Xmx4g",
+    "-XX:+UseCompactObjectHeaders",
+    "-Dpolyglot.compiler.InliningPolicy=Default",
+    "-Dthc.classOwnedLayouts=true",
+    "-Dthc.typedCases=false",
+    "-Dthc.leadingCaseReturn=false",
+    "-Dthc.constructorClassIdentity=false",
+    "-Dthc.staticShapeUnchecked=false",
+    "-Dthc.boxedValueCache=false"
+  ],
+  "selectedWorker": true,
+  "backend": "bytecode",
+  "depth": 2,
+  "expansionBudget": 12000,
+  "inliningBudget": 12000,
+  "frozenManifest": {
+    "schema": 1,
+    "scope": "Immutable diagnostic aliases of the exact completed benchmark runtime/Core; original frozen source manifest retained separately.",
+    "originalManifest": {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/call-demand-control-v1/manifest.json",
+      "sha256": "53b32ca4c15334c8e5a5189c2037ccdbd1d8b83ed6577cde6bb2fac50c9202fd"
+    },
+    "runtimeJarSha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+    "files": [
+      {
+        "path": "lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+        "bytes": 17536
+      },
+      {
+        "path": "lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+        "bytes": 129475
+      },
+      {
+        "path": "lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+        "bytes": 281935
+      },
+      {
+        "path": "lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+        "bytes": 1853314
+      },
+      {
+        "path": "lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+        "bytes": 249788
+      },
+      {
+        "path": "lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+        "bytes": 537932
+      },
+      {
+        "path": "lib/thc-0.1-experiment.jar",
+        "sha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+        "bytes": 730646
+      },
+      {
+        "path": "lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+        "bytes": 16991993
+      },
+      {
+        "path": "lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+        "bytes": 54592
+      },
+      {
+        "path": "lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+        "bytes": 935923
+      },
+      {
+        "path": "lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7",
+        "bytes": 73160
+      },
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa",
+        "bytes": 26769
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010",
+        "bytes": 735603
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059",
+        "bytes": 7617
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f",
+        "bytes": 16949
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856",
+        "bytes": 320920
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3",
+        "bytes": 36811
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e",
+        "bytes": 523167
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da",
+        "bytes": 12853904
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9",
+        "bytes": 25760966
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f",
+        "bytes": 839209
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19",
+        "bytes": 9012261
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d",
+        "bytes": 14294
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30",
+        "bytes": 966402
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+        "bytes": 1112
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8",
+        "bytes": 1331801
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f",
+        "bytes": 37089
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b",
+        "bytes": 64118
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "537e105e01383190f05ff55af70d3f88c15535191b9c98917332c0e7e9042d09",
+        "bytes": 2251
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/thc-0.1-experiment.jar",
+      "sha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/07-Data.Set.Internal.json",
+      "sha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/08-Data.Map.Internal.json",
+      "sha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/09-Data.Map.Internal.Debug.json",
+      "sha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/10-Data.Map.Strict.Internal.json",
+      "sha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/11-Data.Map.Strict.json",
+      "sha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/12-THC.MapWorkload.json",
+      "sha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/14-GHC.Internal.CString.json",
+      "sha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/15-GHC.Internal.Err.json",
+      "sha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/16-GHC.InterfaceClosure.json",
+      "sha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/manifest.json",
+      "sha256": "ffae9107ed246a6684f3923788a221022c7117907c2d488b953bbf085ccd8921"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/modules.txt",
+      "sha256": "537e105e01383190f05ff55af70d3f88c15535191b9c98917332c0e7e9042d09"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/results/caller-demand-default/oracle.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/release",
+      "sha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/diagnose.py",
+      "sha256": "415c02dcc8028a2ea78ea5bc36034e170cc0804e656340642339a471aca1baf0"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/boxed-value-diagnostics-tools/graph_roots.py",
+      "sha256": "cc904324fe1d0001f52dce345e800cb39b22f5a6a8595b3f0a3648c2aa3a2d39"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/MapProfile.java",
+      "sha256": "4de958783c187e9b142bb275f4e48bb15cd43a1013764d43953f5a245caf29b5"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/tools/audit-call-packets.py",
+      "sha256": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/summarize-graphs.py",
+      "sha256": "08b63925a36f39212c0b7c44fd5723019a2b1586f032f9475e0e28442df81181"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/typed-graph-review/compare.py",
+      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b"
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/javac",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/word-25.3.4.1.jar",
+        "-d",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/profile-control/classes",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-tools/work/perf-sprint-v2/MapProfile.java"
+      ],
+      "stdout": "javac-profile.out",
+      "stderr": "javac-profile.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.41439472301863134
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningPolicy=Default",
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.typedCases=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:FlightRecorderOptions=stackdepth=128",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/profile-control/classes:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/lib/word-25.3.4.1.jar",
+        "MapProfile",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/input-control/map/modules.txt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/results/caller-demand-default/oracle.tsv",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/profile-control",
+        "bytecode"
+      ],
+      "stdout": "run.out",
+      "stderr": "run.err",
+      "exitCode": 0,
+      "elapsedSeconds": 64.57132291398011
+    }
+  ],
+  "outputs": [
+    {
+      "path": "allocation-classes.tsv",
+      "sha256": "bd95a282e654bbc3ec1907ed3e4734c56eb2a8e4712fcd21eb80b01e9e0e8f7b",
+      "bytes": 322
+    },
+    {
+      "path": "allocation-sites.tsv",
+      "sha256": "fb3cf8aa57bea3d8c9152b8293dbce334b7956ea5baacc561e46c2508cb317c0",
+      "bytes": 2320
+    },
+    {
+      "path": "cpu-sites.tsv",
+      "sha256": "48639c29becb733f872b24a422a5da85bcd237dfc7715c73e9500a47f768d233",
+      "bytes": 328
+    },
+    {
+      "path": "javac-profile.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "javac-profile.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "map.jfr",
+      "sha256": "adf2270951407cf6850ee24812e6ae42df4199083619be21ce36287eb56a5595",
+      "bytes": 343053
+    },
+    {
+      "path": "run.err",
+      "sha256": "a96b53412deb9fa9431dc52f3315e3b893a39de97f45e799f07295b24eb6ce27",
+      "bytes": 9682
+    },
+    {
+      "path": "run.log",
+      "sha256": "a96b53412deb9fa9431dc52f3315e3b893a39de97f45e799f07295b24eb6ce27",
+      "bytes": 9682
+    },
+    {
+      "path": "run.out",
+      "sha256": "15d2ce4b17e98bc20f1d538dcd296300c4c238dcd34cb1dfab4130b6894c42e7",
+      "bytes": 105
+    },
+    {
+      "path": "run.tsv",
+      "sha256": "15d2ce4b17e98bc20f1d538dcd296300c4c238dcd34cb1dfab4130b6894c42e7",
+      "bytes": 105
+    },
+    {
+      "path": "sample-window.txt",
+      "sha256": "56e3944f5b02f05c685d368735fa40994cf2321084bf1944b167f7eac7449eef",
+      "bytes": 62
+    },
+    {
+      "path": "validation.json",
+      "sha256": "2029f07f99e8843f100cb66b5d6e3b212c079f8c26015713d1d907797c5398c0",
+      "bytes": 1629
+    }
+  ]
+}

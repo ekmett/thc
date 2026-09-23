@@ -2,7 +2,7 @@
 """Compare executable Core after lexical alpha renaming, ignoring source/debug text.
 
 Accept module JSON, a directory of modules, or a modules.txt manifest. Runtime
-representation/WHNF/speculation/strict-field/join certificates remain included.
+representation/WHNF/speculation/strict-field/join/call-demand certificates remain included.
 This is a structural check, not a general proof of equivalence of different Core.
 """
 import argparse
@@ -20,6 +20,7 @@ parser.add_argument('--strip-snapshot-prefix', action='store_true', help='ignore
 parser.add_argument('--exclude', action='append', default=[], help='explicit module filename to omit from both sides')
 parser.add_argument('--ignore-entry-contracts', action='store_true', help='explicitly omit newly added entryStrict metadata when comparing with an older export')
 parser.add_argument('--ignore-field-types', action='store_true', help='explicitly omit newly added constructor fieldTypes when comparing with an older export')
+parser.add_argument('--ignore-call-demands', action='store_true', help='explicitly omit caller-demand certificates when comparing with an older export or a demand-disabled control')
 args = parser.parse_args()
 
 
@@ -49,7 +50,7 @@ def canonical(modules):
     def binder(b):
         return {k: b[k] for k in ['lifted', 'coercion', 'rep'] if k in b}
     def metadata(raw):
-        keys = ['rep', 'resultRep'] + ([] if args.ignore_entry_contracts else ['entryStrict'])
+        keys = ['rep', 'resultRep'] + ([] if args.ignore_entry_contracts else ['entryStrict']) + ([] if args.ignore_call_demands else ['callDemand'])
         return {k: raw[k] for k in keys if k in raw}
     def binding_info(b):
         keys = ['lifted', 'arity', 'rep', 'joinValueArity', 'joinResultRep'] + ([] if args.ignore_entry_contracts else ['entryStrict'])
@@ -138,7 +139,8 @@ if args.entry:
 changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
 hash_value = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 summary = {'equal': not changed, 'excludedModules': args.exclude, 'ignoredEntryContracts': args.ignore_entry_contracts,
-           'ignoredFieldTypes': args.ignore_field_types, 'entry': args.entry, 'reachableBindings': reachable_counts,
+           'ignoredFieldTypes': args.ignore_field_types, 'ignoredCallDemands': args.ignore_call_demands,
+           'entry': args.entry, 'reachableBindings': reachable_counts,
            'changedModules': changed, 'beforeSha256': hash_value(before), 'afterSha256': hash_value(after)}
 if changed:
     changes = {}

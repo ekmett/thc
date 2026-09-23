@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "independentlyRevalidatedWindows": 45,
+  "sameSummaryFromRawTsv": true,
+  "exactFlagVectorsVerified": true,
+  "zeroMeasuredTruffleEvents": true,
+  "instrumented": false,
+  "harnessSha256": "01936c494e89b2321c10a30fa2758105c2b62d93b8ca6abd1ad18c212fcf0182",
+  "hostSamples": 95,
+  "load1Range": [
+    0.42,
+    1.36
+  ],
+  "maxPackageTempC": 62.0,
+  "governors": [
+    "powersave"
+  ],
+  "limits": "Host JIT/GC effects are not ruled out; this is frozen macOS-exported Core on Linux Graal versus Linux native GHC from matching source."
+}

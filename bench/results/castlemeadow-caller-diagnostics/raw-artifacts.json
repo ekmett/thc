@@ -1,0 +1,157 @@
+{
+  "scope": "All original raw BGV files remain on the server. The two selected latest worker BGVs are archived here; profile JFRs are included directly.",
+  "files": [
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3466[lambda_ww,_ds].bgv",
+      "sha256": "3ae829814de270f75468f1cd245bab4eb8d26a8ba5477d66f76e6e0635f0b8e5",
+      "bytes": 837885,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3034[lambda_sc,_x,_ds1].bgv",
+      "sha256": "1e5db96b9cd87aec0f71c1cc50329c6782d428d8e678d16db3162ff2fb6559bf",
+      "bytes": 29708152,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3550[lambda_k,_x,_l,_r].bgv",
+      "sha256": "44396f200f2e5f5097eb2b9fa4a8c200285256e58da338552df5c48459c68d68",
+      "bytes": 39214699,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3390[lambda_ww,_ds2].bgv",
+      "sha256": "6b78f87b6ca86d9ade0a86e7a72d0486028df8900a5731ba1ee0d35283dfe286",
+      "bytes": 3317827,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3262[lambda_sc,_x,_ds1].bgv",
+      "sha256": "50cfdf28d334df0b89450a8c7723d4e3509f128de9e94b62eb3a562d5b7d7ada",
+      "bytes": 29708096,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3309[lambda_sc,_x,_ds1].bgv",
+      "sha256": "673eee24482fcb704b02428f133ae5d408a44f2127400568efd1b9b0c821ce06",
+      "bytes": 29708175,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3538[argument_thunk].bgv",
+      "sha256": "ee8e92d36affb2eea50cf84b62eeae852dfcc5fd42d1341903dddee3d58e321d",
+      "bytes": 34726227,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+      "sha256": "0aab27c4d42c306a4715a200564cd2a06d299e60bc8bf6681f8ffcfbc8a57314",
+      "bytes": 28658363,
+      "selected": true,
+      "archiveMember": "control/TruffleHotSpotCompilation-3479[lambda_ww].bgv"
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3343[lambda_sc,_x,_ds1].bgv",
+      "sha256": "332031dc829762bc8a08b1879648af22e48021a8124c85a60cf9d7d26e597ed7",
+      "bytes": 27974636,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3596[lambda_n].bgv",
+      "sha256": "8836b0907152dc93ace1c396f3289544c8a7a24ad8b7363e1cf91d439e0dbdca",
+      "bytes": 49063990,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3444[lambda_def,_ww,_ds1].bgv",
+      "sha256": "1b40d7e4cb39db1b31c06d2738b2676dd6879b7846daab21e17c4dbe9df4bbea",
+      "bytes": 935844,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3509[lambda_k,_x,_l,_r].bgv",
+      "sha256": "59d0dd3831704007133896b6a164999dc1ae04f5b259368373c41411548afb87",
+      "bytes": 585485,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-control/TruffleHotSpotCompilation-3686[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "a6c0eeb224a813bd9eca488a3f2b78ea02a4f97585c6e0ae5ab504c5f6bdfdf8",
+      "bytes": 47530528,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3447[lambda_ww,_ds].bgv",
+      "sha256": "34e9490f319b90dfd7ecd1aa4b2dffdbe2b9f739885a45493e55c349e2219588",
+      "bytes": 837886,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3292[lambda_sc,_x,_ds1].bgv",
+      "sha256": "3c83e67c69596c03a08f2dc8bb156b1b29a89d6e54240dfb7cd347155e12e83f",
+      "bytes": 26739814,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3429[lambda_def,_ww,_ds1].bgv",
+      "sha256": "90f025d91772d11b099758aaf0fe1e3cb0cb57f7589134f27c9fa3a4cd204337",
+      "bytes": 935840,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3643[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "d63b133c948a9c890adf17a3a5daa77664088f5f58154d3727d8925627ce8253",
+      "bytes": 52214003,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3009[lambda_sc,_x,_ds1].bgv",
+      "sha256": "0560654c7ced4c4f4c0aa02e039c050f5163f3ce11e932a2766049ce3f41129d",
+      "bytes": 26739841,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3527[lambda_n].bgv",
+      "sha256": "e6217f75f59f5dba083929e6c8e2434db6bbb344e67e6c57f5f69b699207ef03",
+      "bytes": 46934529,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3238[lambda_sc,_x,_ds1].bgv",
+      "sha256": "339305fa216afdb4f817da00c8c455e30aacda9cd59293a46f975bd28004d696",
+      "bytes": 26739746,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3480[lambda_k,_x,_l,_r].bgv",
+      "sha256": "d2f347e95662915650ec11cb4fdd6458bc661d3b3afcde2c4002d8e62be14a4f",
+      "bytes": 585484,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3326[lambda_sc,_x,_ds1].bgv",
+      "sha256": "9f636a2b36e36c4af0cb00b18af9445d8f9ba23191965475c806bb8eb90d0219",
+      "bytes": 27978210,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3492[lambda_k,_x,_l,_r].bgv",
+      "sha256": "e7d2a4712b17a5d9d758f5bff7e9111f4aa9da036796ec243fef228c7b12a277",
+      "bytes": 773693,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3388[lambda_ww,_ds2].bgv",
+      "sha256": "53a106cc271b3a0b09548cf9c0006199c2bbc8a128e8b7c3f335936fe7d84c04",
+      "bytes": 3317821,
+      "selected": false
+    },
+    {
+      "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default/graph-enabled/TruffleHotSpotCompilation-3457[lambda_ww].bgv",
+      "sha256": "b63197c6c4773facc0576b53fe848bab4776fd3c5daa2a61c2226533cca19501",
+      "bytes": 28385519,
+      "selected": true,
+      "archiveMember": "enabled/TruffleHotSpotCompilation-3457[lambda_ww].bgv"
+    }
+  ]
+}

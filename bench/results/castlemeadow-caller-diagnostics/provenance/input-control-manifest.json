@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "scope": "Immutable diagnostic aliases of the exact completed benchmark runtime/Core; original frozen source manifest retained separately.",
+  "originalManifest": {
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/call-demand-control-v1/manifest.json",
+    "sha256": "53b32ca4c15334c8e5a5189c2037ccdbd1d8b83ed6577cde6bb2fac50c9202fd"
+  },
+  "runtimeJarSha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+  "files": [
+    {
+      "path": "lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "bytes": 17536
+    },
+    {
+      "path": "lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+      "bytes": 129475
+    },
+    {
+      "path": "lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+      "bytes": 281935
+    },
+    {
+      "path": "lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "bytes": 1853314
+    },
+    {
+      "path": "lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+      "bytes": 249788
+    },
+    {
+      "path": "lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+      "bytes": 537932
+    },
+    {
+      "path": "lib/thc-0.1-experiment.jar",
+      "sha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+      "bytes": 730646
+    },
+    {
+      "path": "lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+      "bytes": 16991993
+    },
+    {
+      "path": "lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+      "bytes": 54592
+    },
+    {
+      "path": "lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+      "bytes": 935923
+    },
+    {
+      "path": "lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7",
+      "bytes": 73160
+    },
+    {
+      "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa",
+      "bytes": 26769
+    },
+    {
+      "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010",
+      "bytes": 735603
+    },
+    {
+      "path": "map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059",
+      "bytes": 7617
+    },
+    {
+      "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f",
+      "bytes": 16949
+    },
+    {
+      "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856",
+      "bytes": 320920
+    },
+    {
+      "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3",
+      "bytes": 36811
+    },
+    {
+      "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e",
+      "bytes": 523167
+    },
+    {
+      "path": "map/07-Data.Set.Internal.json",
+      "sha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da",
+      "bytes": 12853904
+    },
+    {
+      "path": "map/08-Data.Map.Internal.json",
+      "sha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9",
+      "bytes": 25760966
+    },
+    {
+      "path": "map/09-Data.Map.Internal.Debug.json",
+      "sha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f",
+      "bytes": 839209
+    },
+    {
+      "path": "map/10-Data.Map.Strict.Internal.json",
+      "sha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19",
+      "bytes": 9012261
+    },
+    {
+      "path": "map/11-Data.Map.Strict.json",
+      "sha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d",
+      "bytes": 14294
+    },
+    {
+      "path": "map/12-THC.MapWorkload.json",
+      "sha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30",
+      "bytes": 966402
+    },
+    {
+      "path": "map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+      "bytes": 1112
+    },
+    {
+      "path": "map/14-GHC.Internal.CString.json",
+      "sha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8",
+      "bytes": 1331801
+    },
+    {
+      "path": "map/15-GHC.Internal.Err.json",
+      "sha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f",
+      "bytes": 37089
+    },
+    {
+      "path": "map/16-GHC.InterfaceClosure.json",
+      "sha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b",
+      "bytes": 64118
+    },
+    {
+      "path": "map/modules.txt",
+      "sha256": "537e105e01383190f05ff55af70d3f88c15535191b9c98917332c0e7e9042d09",
+      "bytes": 2251
+    }
+  ]
+}

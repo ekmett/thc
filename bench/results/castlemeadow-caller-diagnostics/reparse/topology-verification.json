@@ -1,0 +1,95 @@
+{
+  "passed": true,
+  "phasesVerified": 8,
+  "archiveSha256": "b84504f9e4bd560c0e3d6e14252a7bb2ffa3389757d876c100aa7d6918968422",
+  "results": [
+    {
+      "capture": "control",
+      "phase": "0: After PE Tier",
+      "topology": {
+        "sha256": "7f72d5cbb7157cba058a75d634b76c3b37efc94f4bb3633f3a28d94d231e9f68",
+        "nodes": 660,
+        "edges": 2394,
+        "blocks": 56
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "control",
+      "phase": "1: After Inline",
+      "topology": {
+        "sha256": "ccbb48efdbcb3534917d6bd72240ae614ed3376a8c5774dbf2e5b3109765b509",
+        "nodes": 74,
+        "edges": 73,
+        "blocks": 1
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "control",
+      "phase": "2: Before phase HighTierLowering",
+      "topology": {
+        "sha256": "b4854589bfedfc9d7a5f8c2025bbeee6cee24b8fe354f46babd899e7fa1c93a8",
+        "nodes": 4487,
+        "edges": 15435,
+        "blocks": 380
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "control",
+      "phase": "4: After mid tier",
+      "topology": {
+        "sha256": "002ec8c180867b407a5e24712bc36e144862f1c127b4c8db7ad2ad81bab180ab",
+        "nodes": 9896,
+        "edges": 26010,
+        "blocks": 1106
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "enabled",
+      "phase": "0: After PE Tier",
+      "topology": {
+        "sha256": "7f72d5cbb7157cba058a75d634b76c3b37efc94f4bb3633f3a28d94d231e9f68",
+        "nodes": 660,
+        "edges": 2394,
+        "blocks": 56
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "enabled",
+      "phase": "1: After Inline",
+      "topology": {
+        "sha256": "76efca4e15432744e448d8e73459f86075d821083e0384b4c98b096c8382f6cb",
+        "nodes": 80,
+        "edges": 79,
+        "blocks": 1
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "enabled",
+      "phase": "2: Before phase HighTierLowering",
+      "topology": {
+        "sha256": "e8682e568e8b81fc249b06dbde119761902f4742b570982d9ec4965852b081e6",
+        "nodes": 4521,
+        "edges": 15615,
+        "blocks": 396
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "enabled",
+      "phase": "4: After mid tier",
+      "topology": {
+        "sha256": "d7408328ea9c17ad8bb0e1460e55e9ec3cf15413334204a025b7c3ee151c489f",
+        "nodes": 9731,
+        "edges": 25999,
+        "blocks": 1139
+      },
+      "matchesOriginal": true
+    }
+  ]
+}

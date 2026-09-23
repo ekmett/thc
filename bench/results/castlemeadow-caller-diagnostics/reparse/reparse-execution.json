@@ -1,0 +1,93 @@
+{
+  "startedUtc": "2026-09-23T10:09:14.239585+00:00",
+  "scope": "Archive reparse only; no guest execution.",
+  "javaReleaseSha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96",
+  "graphReaderSha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4",
+  "commands": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-publication/tools/verify.py",
+        "extract",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse"
+      ],
+      "exitCode": 0,
+      "stdout": "PASS: archive extracted and both BGV hashes verified.\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/javac",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-d",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/classes",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-publication/tools/capture/work/perf-sprint-v2/GraphInspect.java"
+      ],
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/classes",
+        "GraphInspect",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/control/TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/control/parsed-TruffleHotSpotCompilation-3479[lambda_ww]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "exitCode": 0,
+      "stdout": "Read 9 graphs; selected 4. Index: /home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/control/parsed-TruffleHotSpotCompilation-3479[lambda_ww]/index.json\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/classes",
+        "GraphInspect",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/enabled/TruffleHotSpotCompilation-3457[lambda_ww].bgv",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/enabled/parsed-TruffleHotSpotCompilation-3457[lambda_ww]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "exitCode": 0,
+      "stdout": "Read 9 graphs; selected 4. Index: /home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse/enabled/parsed-TruffleHotSpotCompilation-3457[lambda_ww]/index.json\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-publication/tools/verify.py",
+        "verify-reparse",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/diagnostics/caller-demand-default-reparse"
+      ],
+      "exitCode": 0,
+      "stdout": "PASS: 8 reparsed phase topologies match original captures.\n",
+      "stderr": ""
+    }
+  ],
+  "finishedUtc": "2026-09-23T10:09:21.754299+00:00",
+  "passed": true
+}

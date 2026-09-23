@@ -1,0 +1,107 @@
+{
+  "scope": "Latest successful compilation by within-run root ID; cross-run identities use name plus source; all original BGVs retained.",
+  "roots": [
+    {
+      "rootId": 23,
+      "name": "lambda ww",
+      "source": "n/a",
+      "compilationId": 3479,
+      "codeBytes": 98401,
+      "roleKey": "lambda ww @ n/a",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+        "sha256": "0aab27c4d42c306a4715a200564cd2a06d299e60bc8bf6681f8ffcfbc8a57314",
+        "bytes": 28658363
+      }
+    }
+  ],
+  "allCompiledRoots": [
+    {
+      "rootId": 10,
+      "name": "lambda k, x, l, r",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+      "compilationId": 3509,
+      "codeBytes": 2468,
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 15,
+      "name": "lambda k, x, l, r",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+      "compilationId": 3550,
+      "codeBytes": 63483,
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 17,
+      "name": "lambda def, ww, ds1",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "compilationId": 3444,
+      "codeBytes": 1844,
+      "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 18,
+      "name": "lambda ww, ds",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "compilationId": 3466,
+      "codeBytes": 2937,
+      "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 20,
+      "name": "argument thunk",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:501",
+      "compilationId": 3538,
+      "codeBytes": 65824,
+      "roleKey": "argument thunk @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:501",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 21,
+      "name": "lambda sc, x, ds1",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+      "compilationId": 3343,
+      "codeBytes": 69395,
+      "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 22,
+      "name": "lambda ww, ds2",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+      "compilationId": 3390,
+      "codeBytes": 13169,
+      "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+      "roleAmbiguous": false
+    },
+    {
+      "rootId": 23,
+      "name": "lambda ww",
+      "source": "n/a",
+      "compilationId": 3479,
+      "codeBytes": 98401,
+      "roleKey": "lambda ww @ n/a",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3479[lambda_ww].bgv",
+        "sha256": "0aab27c4d42c306a4715a200564cd2a06d299e60bc8bf6681f8ffcfbc8a57314",
+        "bytes": 28658363
+      }
+    },
+    {
+      "rootId": 26,
+      "name": "lambda n",
+      "source": "examples/THC/MapWorkload.hs:30",
+      "compilationId": 3596,
+      "codeBytes": 97361,
+      "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+      "roleAmbiguous": false
+    }
+  ]
+}

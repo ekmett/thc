@@ -1,0 +1,126 @@
+{
+  "recordedUtc": "2026-09-23T10:17:50.694858+00:00",
+  "scope": "Four-way Linux release correctness smoke; no throughput experiment. Earlier evidence untouched.",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "64a3d8cb1b9b41a65f93d66721bc734978acbe757b7a11512fd346852bcc5295",
+      "bytes": 2971
+    },
+    {
+      "path": "ast-enabled/command.json",
+      "sha256": "3ade7be885ac6ea8a40670f7410a98fa26e8ef8dbe826e402cf5e157d0d4507f",
+      "bytes": 2596
+    },
+    {
+      "path": "ast-enabled/stderr.log",
+      "sha256": "c95148575c99b1f68498fb7c128f8ce1714747b784bf8dfd462dbb45185934f9",
+      "bytes": 5688
+    },
+    {
+      "path": "ast-enabled/stdout.log",
+      "sha256": "8f699c75c84f48104cbe7def70487af894ce5e040b5c99cbf9bccb5a13b4d3df",
+      "bytes": 2885
+    },
+    {
+      "path": "ast-property-absent/command.json",
+      "sha256": "c9a946188cc548935075bf198f104c8694d6e8b1ba03c47ef403c140a3484693",
+      "bytes": 2614
+    },
+    {
+      "path": "ast-property-absent/stderr.log",
+      "sha256": "6d53ad17f0b0d81549a510513fd3c73eec6206e1d7ba9966e058ccddbe790c44",
+      "bytes": 5688
+    },
+    {
+      "path": "ast-property-absent/stdout.log",
+      "sha256": "41d02cd31f06e393678b6b351a5fe1c09190da275f34e753b1bfc32baa862488",
+      "bytes": 2912
+    },
+    {
+      "path": "bytecode-enabled/command.json",
+      "sha256": "b9778cdd51631392a24cf0729409fc62d40fc9aa455ad436b009ddf61b5e0f77",
+      "bytes": 2666
+    },
+    {
+      "path": "bytecode-enabled/stderr.log",
+      "sha256": "350123470af050e12cfa61ebed644498a2e6bcb60970812d1b4c3679d84f1ad9",
+      "bytes": 6723
+    },
+    {
+      "path": "bytecode-enabled/stdout.log",
+      "sha256": "8d4768926b73ef863c449b0edfbe4b28f6bf81d829676e528c2f6ad86d1f6f90",
+      "bytes": 2933
+    },
+    {
+      "path": "bytecode-property-absent/command.json",
+      "sha256": "8039987ab52ac1c65467a0a220c2b4c789762ac3740158353ea269d5675dc6e5",
+      "bytes": 2684
+    },
+    {
+      "path": "bytecode-property-absent/stderr.log",
+      "sha256": "c55dfee9be963c14ae061b0ab04c7dcc3513048249ee6b33c7999ae487d9635f",
+      "bytes": 6723
+    },
+    {
+      "path": "bytecode-property-absent/stdout.log",
+      "sha256": "da9d916bbaf9259523815f2cf6eca5debe3e03e6c26c9d9a27d16e1131127e41",
+      "bytes": 2960
+    },
+    {
+      "path": "input-manifest.json",
+      "sha256": "3c065c62bbb43b296bf2ecc809a212097a983a59ad0adbac000b07a097a2d0d2",
+      "bytes": 8471
+    },
+    {
+      "path": "linux-oracle.tsv",
+      "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea",
+      "bytes": 420
+    },
+    {
+      "path": "local-proof.json",
+      "sha256": "091a9dc106b32a1329f170de6ea92be1df390320f08b51bd9f0b8f6c2562248c",
+      "bytes": 2116
+    },
+    {
+      "path": "provenance/call-demand-structural-proof.json",
+      "sha256": "baaeffd9025811cd149b268072ddd1934066efbfa2389f292f54109747a52385",
+      "bytes": 4831
+    },
+    {
+      "path": "provenance/graal-install.json",
+      "sha256": "a082eb36424ba7a94907543fbe066d3475229bff386390727eee78a3c3f503eb",
+      "bytes": 69260
+    },
+    {
+      "path": "provenance/local-test-inventory.json",
+      "sha256": "e00ccab9fc4575b75d632999f5668e3489db27a6e6758b9b3bbe9655078d457a",
+      "bytes": 10772
+    },
+    {
+      "path": "provenance/native-build.json",
+      "sha256": "c5176f90ff08c55d3883b417a9a236c56cbb703aa7c8fb3e3471e828b5173c23",
+      "bytes": 1322
+    },
+    {
+      "path": "provenance/native-source-manifest.json",
+      "sha256": "c9321358920aec7dcdfc40c1290ddb36ef9d2c5c83a3065021e5e8cbfba99112",
+      "bytes": 11015
+    },
+    {
+      "path": "tools/run.py",
+      "sha256": "d9ae8686c417943db13a894aa9b2c538e8dd9d4133e5763210ea25df1a390058",
+      "bytes": 5509
+    },
+    {
+      "path": "tools/verify.py",
+      "sha256": "978decd562f44e9dcd406fb19e03fcc515ff9a34cef16eab45ea158e045bce3d",
+      "bytes": 4313
+    },
+    {
+      "path": "validation.json",
+      "sha256": "9f8cb74829bbec4613571da59522dc0b627414a3241c36b81803f222df08da87",
+      "bytes": 12184
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Core evidence and local joins
 
-THC uses GHC 9.14.1's optimized Core directly. The exporter carries structured evidence about runtime representation, already evaluated values, requested call-by-value entry contracts, and local join points. Both backends consume the same evidence parser and join validator. Printed demand signatures remain diagnostic text: they do not authorize skipping evaluation.
+THC uses GHC 9.14.1's optimized Core directly. The exporter carries structured evidence about runtime representation, already evaluated values, requested call-by-value entry contracts, caller-side demand permissions, and local join points. Both backends consume the same evidence parser and join validator. Printed demand signatures remain diagnostic text: they do not authorize skipping evaluation.
 
 ## Representation and evaluatedness
 
@@ -46,6 +46,24 @@ Each guest target records an immutable copy of its entry marks and argument offs
 
 Native GHC additionally requires an evaluated pointer to be properly tagged. THC's corresponding contract carries the direct WHNF object; it does not tag JVM references. The optimization can eliminate repeated thunk resolution where the calling convention is known. It does not remove every constructor/layout check, specialize arbitrary polymorphic arguments, or eliminate the object ABI at residual call boundaries. PAP laziness, failures and sharing retain their existing semantics.
 
+## Caller-side demand permissions
+
+Application metadata can carry `callDemand: {arity: N, strictArgs: [...]}`. The
+exporter obtains these marks from GHC's original structured `DmdSig`, using its
+own saturation threshold and strict-and-used predicate. Coercions keep their
+positions; PAP prefixes, absent arguments, surplus arguments and `lazy`
+barriers remain conservative. A marked argument may be evaluated when this
+application executes. It does not strengthen the callee's entry convention or
+claim that its formal parameter was already evaluated.
+
+Both backends validate this optional evidence. Lowering is opt-in with
+`-Dthc.callDemands=true`, read once per program; the default remains off because
+of the measured inlining regression. [The compiler protocol](../compiler/README.md)
+describes the exact rules, and [the demand experiment](demand-probe.md) records
+the results. Genuine GHC fixtures check precise-exception branch/scrutinee
+weakening as well as strict pure calls. Unsupported IO in those audit fixtures
+is inspected as metadata, never executed by THC.
+
 ## Physical recursive cells
 
 Whether a local slot can contain a `RecCell` is a separate lowering fact from both type and WHNF. Ordinary parameters, pattern fields, nonrecursive lets and captures of published values do not need recursive-cell resolution. A successful case or force can establish WHNF without changing the physical identity of an older recursive capture.
@@ -62,7 +80,10 @@ An evaluated data field can be a final Java `DataValue` field, and an evaluated 
 
 Closure environments apply the same rule to proven evaluated data, function and managed-address captures. Precise reference captures need neither an adaptive primitive arm nor a tag. Captures that can hold a recursive cell remain generic even if forcing has established WHNF for the cell's contents. Older exports without these proofs retain the previous storage layout.
 
-This uses Truffle's supported `StaticShape` property types. Constructor identity still comes from the layout: generated Java class identity is not a portable substitute, since Truffle's array storage strategy can share a class between shapes.
+This uses Truffle's supported `StaticShape` property types. With class-owned
+layouts enabled, an exclusively owned generated class identifies its constructor.
+Shared carrier classes retain an explicit layout field and comparison; Truffle's
+array strategy can share one class between shapes.
 
 The same reference proof is restored at function entry and after self, ancestor
 and local-join transfers. A checked `DataValue`, `Closure` or `LiteralAddress`
@@ -73,6 +94,31 @@ generated storage class. Lazy formals and cell-bearing captures still take the
 generic path. Primitive `long` restoration remains separate.
 
 ## Owned static storage
+
+Class-owned constructor layouts are enabled by default
+(`-Dthc.classOwnedLayouts=true`). Each layout reserves its generated carrier class
+before publishing values. An exclusive carrier uses the fieldless `DataValue`
+base and obtains its cold layout metadata through a `ClassValue`; hot paths use
+an expected-class check. If a carrier is already shared, construction switches
+to `LayoutDataValue` with an explicit owner field. See the
+[class-owned layout measurements](../bench/results/class-owned-layouts/).
+
+On the pinned JVM, StaticShape's field strategy generates a storage subclass and
+factory with ASM and defines them through runtime class loaders. Each declared
+property becomes a real primitive or reference field. A shared `StaticProperty`
+records its type, shape and JVM field offset; typed accessors use typed Unsafe
+loads/stores, and constant descriptors let Graal fold the metadata. The field
+strategy adds no backing arrays or shape pointer to each storage object beyond
+fields requested by the language and its base class. JVM alignment still decides
+the actual object size.
+
+StaticShape shares class loaders but does not intern equal field layouts. A
+reusable handoff design must intern physical representation vectors itself;
+mutable handoff fields must also be registered as non-final. Existing immutable
+constructor/capture properties use final fields and must be initialized once
+before escape. [Truffle's Static Object Model guide](https://www.graalvm.org/latest/graalvm-as-a-platform/language-implementation-framework/StaticObjectModel/)
+describes that contract. Other storage strategies may share classes, so physical
+layout and nominal constructor identity remain distinct concepts.
 
 `-Dthc.staticShapeUnchecked=true` is an opt-in experiment that disables Truffle's storage-class and shape checks for THC-owned constructor and capture layouts. It defaults to false; checked storage remains the default. `engine.ForceStaticObjectSafetyChecks=true` overrides the experiment and restores Truffle's checks.
 

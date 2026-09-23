@@ -1,0 +1,8 @@
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5192	249	0
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5209	219	0
+thc.runtime.Calls.direct:10	99	0
+thc.runtime.Force.execute:211	44	0
+thc.runtime.Force.execute:175	24	0
+thc.runtime.Thunk.setState:46	4	0
+no THC frame	1	0
+thc.runtime.DataLayout.owns:105	1	0

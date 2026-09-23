@@ -1,0 +1,64 @@
+{
+  "releaseJar": {
+    "path": "/Users/ekmett/thc/build/install/thc/lib/thc-0.1-experiment.jar",
+    "sha256": "5af987892c35fedc0f170d245574ad704609e9747c7993f970991191d71a773c",
+    "bytes": 731689
+  },
+  "dependencyJars": [
+    {
+      "name": "annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "bytes": 17536
+    },
+    {
+      "name": "collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+      "bytes": 129475
+    },
+    {
+      "name": "jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+      "bytes": 281935
+    },
+    {
+      "name": "kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "bytes": 1853314
+    },
+    {
+      "name": "nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+      "bytes": 249788
+    },
+    {
+      "name": "polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+      "bytes": 537932
+    },
+    {
+      "name": "truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+      "bytes": 16991993
+    },
+    {
+      "name": "truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+      "bytes": 54592
+    },
+    {
+      "name": "truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+      "bytes": 935923
+    },
+    {
+      "name": "word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7",
+      "bytes": 73160
+    }
+  ],
+  "frozenCoreManifest": {
+    "path": "/Users/ekmett/thc/work/call-demand-v1/manifest.json",
+    "sha256": "753fe535cef97846e68082f4597bc77221d6a53016b32bd526c63bc8dbace1ae"
+  },
+  "scope": "Release smoke staging: new JAR only, unchanged frozen dependencies and call-demand Core."
+}

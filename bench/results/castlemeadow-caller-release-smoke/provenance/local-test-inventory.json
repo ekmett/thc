@@ -1,0 +1,347 @@
+{
+  "scope": "Read-only local Gradle XML inventory supplied with release smoke; Linux native-oracle checks are independent.",
+  "totals": {
+    "tests": 177,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "files": [
+    {
+      "path": "build/test-results/test/TEST-thc.BloomHeaderTest.xml",
+      "sha256": "e35c764a9217d60e9036ba24a099949ec480128ecdbd09878a5fd69a36bd369a",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.BytecodeBackendTest.xml",
+      "sha256": "e7c4b067465ce6e7c9ffb2e6346ae691547a62a0010890199aa7fc787ffd20df",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.BytecodeCoreProofTest.xml",
+      "sha256": "8425ba9ec9f5337e1054214624668f334643b3c1dadf674ee5a5e8e00f15a27c",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.BytecodeSourceNotesTest.xml",
+      "sha256": "5e0b76345ab717b241373c0987267c898aeb5f1aab592de1a2d54ca8e858ce7e",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.CStringTest.xml",
+      "sha256": "71b6c351dab3f3ee96572775c757e75390ba468609a3654c1d30cfedcaaa3375",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.CasePrimitiveTest.xml",
+      "sha256": "2ccc94528b6d7a913bb251696cfb4631107499cd09184bb22530b3b5a2b1e651",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.CoreLinkerTest.xml",
+      "sha256": "0a0de8d365cba1b1c386b351234e92c980cadfe78180fe3d29ac2c43d20a5cf3",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.DiagnosticModeTest.xml",
+      "sha256": "df2c28556b7f8aa108391f8d977fcb1de4d312c9258b50164375824b7695f2cb",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.FramesTest.xml",
+      "sha256": "1e35917f0c93b002e7863c1ff8f2c5540d63e23fef2ca2763406e9dcbb210270",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.GuestExceptionsTest.xml",
+      "sha256": "a46a2e98b0a9e9320eb2928d34d158f1fd3b85b136ebc0e351ff56c931b9fd8e",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RealCoreCallDemandTest.xml",
+      "sha256": "0e3aa4caf6cce8bfc345270090249c315ab00268355628c736924ee93a142f6e",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RealCoreEntryContractTest.xml",
+      "sha256": "f05d0dbffb2fb495da62fd44a01fe4bd53a9b39a06bec65fa4b4934c62cc96be",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RealCoreJoinTest.xml",
+      "sha256": "f5f07da9a8c9e065b6ff66e7e55e5f3bb29a38946313ae29d2ffd31419527947",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.RuntimeTest.xml",
+      "sha256": "036c441ef64724f28bae1c54974c7aba3c859e7be2942356d24f40b28afcd126",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.SelfTailProfileTest.xml",
+      "sha256": "5fbc4aa6a6b3ac653e68f2c4e16a100f4f7bc935022807d152fa3071d520d8f8",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.StrictFieldsTest.xml",
+      "sha256": "05ec0c8954e8e4a84e76515183e2233f7702e7383a46908c0fb36b78af976e22",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.TailCycleTest.xml",
+      "sha256": "a44a8e36c5521904069de83329d1e117ecbc9db2a891415457bad9973d549551",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.ThunkDispatchTest.xml",
+      "sha256": "f87b437e41f8633504d8aebe54b5288c8bdb33ca25721af94d918c12e0d85cc5",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.ThunkRetentionTest.xml",
+      "sha256": "bfa49c28efd6f5f1f5122e52ac203957880200af571c14aec5921c07c72a8e71",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.TypedApplicationTest.xml",
+      "sha256": "230d568ee99ba29f5f605c6bff8c4c6ccee3a43050a8a3600ebf311237f82d3f",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.AstSelfCallTest.xml",
+      "sha256": "97f90c94ca00e8c43082bb3d7185a192414f996a4a54fee88ca112a6663ee045",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.BindingCellMetadataTest.xml",
+      "sha256": "cabbe1a3998610f3411667af82190aa97aa9e8673377c40e5e2c74443a64a403",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.BloomValueTest.xml",
+      "sha256": "92dbf71fda7e188958a75709c8180ac67f91031f33f540419b2a095c1e954a4c",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.BoxedValueCacheTest.xml",
+      "sha256": "9da038e6adfb67afec8a47973194dcf4f9bf97f62860db188be704ac327aa407",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.CallDemandTest.xml",
+      "sha256": "cb75ab04ef44c5fe3bfe477bd530e5624b0fb0cd7c11427b530bc0ec4c2916e9",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+      "sha256": "d0892761f9b2cf52eb654c34e37355371c9436c79d0d9e5d8c65cc6e00167c86",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+      "sha256": "97391463fb2fa02ef8fe6aa395ca54262d2f11c3450da8975a282c2fd70aa117",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.CoreProofJoinTest.xml",
+      "sha256": "7a06edac598ccd68c3fae53988ce44a20bd39228c86707ec07e7746428cb8968",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.CoreSourceTest.xml",
+      "sha256": "990edf5121ed54f27a28cf89df37deef5adbcb47497159c6728cd741572583fb",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.EntryContractTest.xml",
+      "sha256": "ecf9205e9e21880a3a281b8f4187ce4d8bdfb777eaa86c69b55844f669cc5b82",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.EntrySelfCallTest.xml",
+      "sha256": "791f4bda2b0f851a5ba77f1df072941bb44a8b7a65910d7fbf3ffcc49a618241",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ForcedBindingTest.xml",
+      "sha256": "8a4931af1cdb1cfb16aa54ee350fd7f0f3c3f8dc7a3161e43b0dbe31f597203e",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.JoinWhnfProofTest.xml",
+      "sha256": "1c648f2af3b63443419ac5669b600af0732152970860714d424820d4544bbd5c",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+      "sha256": "d5656476a33eb6597ead390abb159de29bd6ecf389bf2d417955124f23fa0b2f",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.OperandRetentionTest.xml",
+      "sha256": "7d9b8c43fd16b0df6b0af8fc9879c28144fdcadca4b1c0cdd02458777510f172",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ReferenceCaptureTest.xml",
+      "sha256": "8c4692e1b6a5d1767a06451ee59362722e16af2321cad4833e016307fea8c16c",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ReferenceFieldTest.xml",
+      "sha256": "63e62968419397a6b183ebe49ec3e81a52a883fac3359391a2566d64186c1be0",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.ReferenceFormalTest.xml",
+      "sha256": "a78b46f91e4490afa30bfe2bb37e55b24bb38342da645610c12bf5fa24b83ab8",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.SourceCloneTest.xml",
+      "sha256": "d7f8a2dfde473111d15c18890e308ced49f886f4237d5e8f31e977822729f5e9",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+      "sha256": "7b13782118ef44c04b1de60d6cca3e589953d3f7c4ba3fc4929345a4851e8d38",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.TypedCaseTest.xml",
+      "sha256": "754a9ee7667927a17817a38fb64aaf347993bec818d834a7e3cf12ad798128cd",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "build/test-results/test/TEST-thc.runtime.TypedExecutionTest.xml",
+      "sha256": "7378ab6fe16a827201457a2dd96d39abe289e954c2c14b63382858044948618c",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

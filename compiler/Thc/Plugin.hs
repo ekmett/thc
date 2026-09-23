@@ -4,6 +4,7 @@ module Thc.Plugin (plugin) where
 import GHC.Plugins
 import qualified Thc.Sources as Sources
 import qualified Thc.Cbv as Cbv
+import qualified Thc.Demands as Demands
 import Thc.Wired (wiredApplication, wiredRhs, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
@@ -289,12 +290,15 @@ exprRaw d original = case original of
   Lit l -> let (k,v) = literal d l in node [S "lit",S k,S v] []
   a@App{} -> let (f,args) = collectArgs a
                  vals = filter (not . isTypeArg) args
+                 demand = case if canCertify d then Demands.callDemand f args else Nothing of
+                   Just (arity,strict) -> [("callDemand",O [("arity",num arity),("strictArgs",A (map B strict))])]
+                   Nothing -> []
              -- Analyse the original Core application, before erasing type or
              -- coercion information. A false result is conservative.
              in if null vals then withRep (exprRep d a) (expr d f) else node
                [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals)
                ,B (canCertify d && exprIsHNF a)
-               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] []
+               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] demand
   l@Lam{} -> let (bs,body) = collectBinders l
                  vals = filter (not . isTyVar) bs
              in if null vals then withRep (exprRep d l) (expr d body)

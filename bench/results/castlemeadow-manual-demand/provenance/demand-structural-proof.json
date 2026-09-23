@@ -1,0 +1,32 @@
+{
+  "verifiedAt": "2026-09-23T09:18:44.597499+00:00",
+  "runtimeSha256": "a74e616f540def7af2afa821e3856c7377d472ad23b7926e4b7bb6251e07fe9c",
+  "changedCoreSha256": "fa7cfcff91ccd1708839e720ef90b6e3098627a5c518a4805cd53bd76348e05f",
+  "runtimeFilesVerified": 52,
+  "changes": [
+    {
+      "path": [
+        "bindings",
+        311,
+        "entryStrict",
+        3
+      ],
+      "before": false,
+      "after": true
+    },
+    {
+      "path": [
+        "bindings",
+        311,
+        "expr",
+        3,
+        "entryStrict",
+        3
+      ],
+      "before": false,
+      "after": true
+    }
+  ],
+  "onlyTwoBooleanEntryMetadataChanges": true,
+  "allOtherModulesByteIdentical": true
+}

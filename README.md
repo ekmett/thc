@@ -112,8 +112,9 @@ per-object layout pointers. The remaining call packets are a separate cost.
 The [typed execution and tail-cycle report](docs/typed-tail.md),
 [source-location report](docs/debug-locations.md),
 [initial bytecode report](docs/bytecode.md), [original Map report](docs/map-example.md),
-[call-packet follow-up](docs/call-packets.md), and [inlining report](docs/map-inlining.md)
-record the preceding experiments. There is plenty left to do.
+[call-packet follow-up](docs/call-packets.md), [inlining report](docs/map-inlining.md),
+and [demand probe](docs/demand-probe.md) record the preceding experiments.
+There is plenty left to do.
 
 The first attempt at compiling Map was particularly useful: generic frame reads
 and string comparisons in case dispatch blew up partial evaluation. Fixing those

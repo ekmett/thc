@@ -1,0 +1,484 @@
+{
+  "revision": "a53aee40c84c039cb12d1d17f018d00453e713ca",
+  "createdAt": "2026-09-23T09:33:59.934982+00:00",
+  "status": "Caller-side demand implementation; entryStrict/WHNF unchanged. Control differs only by removing callDemand certificates from identical freshly exported Core. No throughput claim.",
+  "jarSha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+  "certificateControl": true,
+  "certificates": 7742,
+  "strictPositions": 7686,
+  "modules": [
+    {
+      "file": "00-Utils.Containers.Internal.BitUtil.json",
+      "withSha256": "a52db255c126f189ed8b91a3f59def4908c7ae1a6dd19d727163fd927e79541f",
+      "withoutSha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa"
+    },
+    {
+      "file": "01-Utils.Containers.Internal.BitQueue.json",
+      "withSha256": "8762f18267cdff84d392eed271b6d5bb8619d0884339721897a02cdafc098693",
+      "withoutSha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010"
+    },
+    {
+      "file": "02-Utils.Containers.Internal.Prelude.json",
+      "withSha256": "f100baefc7b16d90351e7b4f185696270143cd3ad1cb01b7da9ed6a0a88b4cb8",
+      "withoutSha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059"
+    },
+    {
+      "file": "03-Utils.Containers.Internal.PtrEquality.json",
+      "withSha256": "3b9b2cd3f8ea4b561a52391ca37913f004a3bdb10cdfa98b573156a3d097b63c",
+      "withoutSha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f"
+    },
+    {
+      "file": "04-Utils.Containers.Internal.StrictMaybe.json",
+      "withSha256": "e08484e3b7302421b70d6fe72932619a2451cf6ac557ff875dc0a55943a4db64",
+      "withoutSha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856"
+    },
+    {
+      "file": "05-Utils.Containers.Internal.StrictPair.json",
+      "withSha256": "3ad5daca858094936065dd66bbbb634d86e213cf74b32a2965e180837a11c574",
+      "withoutSha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3"
+    },
+    {
+      "file": "06-Utils.Containers.Internal.EqOrdUtil.json",
+      "withSha256": "17f3f296c92a18cf638aa1023153e15b5c058c25b8c7ce79521021f3fecdfb2b",
+      "withoutSha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e"
+    },
+    {
+      "file": "07-Data.Set.Internal.json",
+      "withSha256": "ddd952748bde8512aae6220a640b26b1961f3332b4f56ee3c4fe5d2940741031",
+      "withoutSha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da"
+    },
+    {
+      "file": "08-Data.Map.Internal.json",
+      "withSha256": "642184a9ca6e833359794567066b1e01d6d6ceb2f84346b513d95dcf06dacb19",
+      "withoutSha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9"
+    },
+    {
+      "file": "09-Data.Map.Internal.Debug.json",
+      "withSha256": "04d0805720ab792ffc5e598030f42f202a267185266cd1e8e4ab5eac468de166",
+      "withoutSha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f"
+    },
+    {
+      "file": "10-Data.Map.Strict.Internal.json",
+      "withSha256": "fc85814e44554592c4437a9c69c12db6616e31dc2430897cb0cbc0d8777f6ef0",
+      "withoutSha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19"
+    },
+    {
+      "file": "11-Data.Map.Strict.json",
+      "withSha256": "f173b812b02f26a56ae82c1842caece0b39ca2a152e3879535eb388d123ee480",
+      "withoutSha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d"
+    },
+    {
+      "file": "12-THC.MapWorkload.json",
+      "withSha256": "19c7eca83907db7e29aa5cc63cdec474c61e53a72e85fb238e04d0e71043cbb2",
+      "withoutSha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30"
+    },
+    {
+      "file": "13-THC.InterfaceClosure.json",
+      "withSha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+      "withoutSha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "file": "14-GHC.Internal.CString.json",
+      "withSha256": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23",
+      "withoutSha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8"
+    },
+    {
+      "file": "15-GHC.Internal.Err.json",
+      "withSha256": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b",
+      "withoutSha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f"
+    },
+    {
+      "file": "16-GHC.InterfaceClosure.json",
+      "withSha256": "8df1a931065b17bbe03fbe9730d08e8719d3043a3de002e0e5f0280aa663e91e",
+      "withoutSha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b"
+    }
+  ],
+  "tests": {
+    "tests": 176,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "files": [
+    {
+      "path": "lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "bytes": 17536
+    },
+    {
+      "path": "lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+      "bytes": 129475
+    },
+    {
+      "path": "lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+      "bytes": 281935
+    },
+    {
+      "path": "lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "bytes": 1853314
+    },
+    {
+      "path": "lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+      "bytes": 249788
+    },
+    {
+      "path": "lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+      "bytes": 537932
+    },
+    {
+      "path": "lib/thc-0.1-experiment.jar",
+      "sha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+      "bytes": 730646
+    },
+    {
+      "path": "lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+      "bytes": 16991993
+    },
+    {
+      "path": "lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+      "bytes": 54592
+    },
+    {
+      "path": "lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+      "bytes": 935923
+    },
+    {
+      "path": "lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7",
+      "bytes": 73160
+    },
+    {
+      "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa",
+      "bytes": 26769
+    },
+    {
+      "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010",
+      "bytes": 735603
+    },
+    {
+      "path": "map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059",
+      "bytes": 7617
+    },
+    {
+      "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f",
+      "bytes": 16949
+    },
+    {
+      "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856",
+      "bytes": 320920
+    },
+    {
+      "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3",
+      "bytes": 36811
+    },
+    {
+      "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e",
+      "bytes": 523167
+    },
+    {
+      "path": "map/07-Data.Set.Internal.json",
+      "sha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da",
+      "bytes": 12853904
+    },
+    {
+      "path": "map/08-Data.Map.Internal.json",
+      "sha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9",
+      "bytes": 25760966
+    },
+    {
+      "path": "map/09-Data.Map.Internal.Debug.json",
+      "sha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f",
+      "bytes": 839209
+    },
+    {
+      "path": "map/10-Data.Map.Strict.Internal.json",
+      "sha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19",
+      "bytes": 9012261
+    },
+    {
+      "path": "map/11-Data.Map.Strict.json",
+      "sha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d",
+      "bytes": 14294
+    },
+    {
+      "path": "map/12-THC.MapWorkload.json",
+      "sha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30",
+      "bytes": 966402
+    },
+    {
+      "path": "map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+      "bytes": 1112
+    },
+    {
+      "path": "map/14-GHC.Internal.CString.json",
+      "sha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8",
+      "bytes": 1331801
+    },
+    {
+      "path": "map/15-GHC.Internal.Err.json",
+      "sha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f",
+      "bytes": 37089
+    },
+    {
+      "path": "map/16-GHC.InterfaceClosure.json",
+      "sha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b",
+      "bytes": 64118
+    },
+    {
+      "path": "map/modules.txt",
+      "sha256": "d94a84946b581ed82165112662fae0f627cda9a6bb6854cd50acb0aaf667656d",
+      "bytes": 1435
+    },
+    {
+      "path": "map/native-oracle",
+      "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf",
+      "bytes": 21244128
+    },
+    {
+      "path": "map/oracle.tsv",
+      "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea",
+      "bytes": 420
+    },
+    {
+      "path": "validation/map-export.log",
+      "sha256": "689f749267a7ec38c71e18c48cbeda09a952729dd7de1349197a34de9a1d3096",
+      "bytes": 3410
+    },
+    {
+      "path": "validation/prepare.log",
+      "sha256": "b296aa0cd0765e6e5042f33d8c196821bb17e6d7a28ab10f740b2110b3b0cec3",
+      "bytes": 5549
+    },
+    {
+      "path": "validation/tests/TEST-thc.BloomHeaderTest.xml",
+      "sha256": "8ab7e532042cf9ff9abf79ad73715c1857f8c33950e342aa3059a2d471c93090",
+      "bytes": 565
+    },
+    {
+      "path": "validation/tests/TEST-thc.BytecodeBackendTest.xml",
+      "sha256": "4c911087c70fdd767199beaf966c9554935fba9d899a3a902878e5a609019958",
+      "bytes": 1798
+    },
+    {
+      "path": "validation/tests/TEST-thc.BytecodeCoreProofTest.xml",
+      "sha256": "cf0bc9119ae7bb16c05ad6f3ab7e2aa67ba8d20bb060ed6afb9a32efbc9127f9",
+      "bytes": 1605
+    },
+    {
+      "path": "validation/tests/TEST-thc.BytecodeSourceNotesTest.xml",
+      "sha256": "ee026e4edefbbba5af5edcfec383d55f7f91d23b52295b463a86425cb864203e",
+      "bytes": 740
+    },
+    {
+      "path": "validation/tests/TEST-thc.CStringTest.xml",
+      "sha256": "80b108edcb74abdd94a3215d304195a28ee39354222e3802ee2910f864e5c82b",
+      "bytes": 814
+    },
+    {
+      "path": "validation/tests/TEST-thc.CasePrimitiveTest.xml",
+      "sha256": "8f8106248436f7cbe8a70e3c64f00bc916a232f4811a09e10447d35f58dcaea6",
+      "bytes": 732
+    },
+    {
+      "path": "validation/tests/TEST-thc.CoreLinkerTest.xml",
+      "sha256": "ed1db16ad749708b1f871cdb409daa3c41d4499a69c074c937dcc3ace2d3d045",
+      "bytes": 819
+    },
+    {
+      "path": "validation/tests/TEST-thc.DiagnosticModeTest.xml",
+      "sha256": "1e4f83b708acf2cb7a21059c8c0820f45b0d02f8f47e92d590d7430eb2cc3645",
+      "bytes": 692
+    },
+    {
+      "path": "validation/tests/TEST-thc.FramesTest.xml",
+      "sha256": "959b6d8cb69435bc14d47efe201bd9c96a7aa6cc64938e08f1e0e6de4946d4cb",
+      "bytes": 899
+    },
+    {
+      "path": "validation/tests/TEST-thc.GuestExceptionsTest.xml",
+      "sha256": "e70f350cb9c7231d59cc58023b2fd525837561945fd1ad7acb23f99b8f8cc747",
+      "bytes": 704
+    },
+    {
+      "path": "validation/tests/TEST-thc.RealCoreCallDemandTest.xml",
+      "sha256": "4477aeebd3be56095b2318f41710371f9f82217b5dfe40c4b98ede54d51c8023",
+      "bytes": 588
+    },
+    {
+      "path": "validation/tests/TEST-thc.RealCoreEntryContractTest.xml",
+      "sha256": "7614e2b104d4c726d5062d77116b53fc6b70bf5a3121d5e7dc45c1990cbfbca1",
+      "bytes": 868
+    },
+    {
+      "path": "validation/tests/TEST-thc.RealCoreJoinTest.xml",
+      "sha256": "a9b8babecc9b62a73ce266ea1a2f49bf40418a81f63409c5e761d85c39ef3e7d",
+      "bytes": 562
+    },
+    {
+      "path": "validation/tests/TEST-thc.RuntimeTest.xml",
+      "sha256": "6c06b925cd9e1eebc87d86ab316c5b337a227ab6909ae767ade62a97c119f842",
+      "bytes": 15028
+    },
+    {
+      "path": "validation/tests/TEST-thc.SelfTailProfileTest.xml",
+      "sha256": "30664bca0d1d81c9b57a4f89d80fd986d018eb742aafb7371ed57cd48e8eb932",
+      "bytes": 573
+    },
+    {
+      "path": "validation/tests/TEST-thc.StrictFieldsTest.xml",
+      "sha256": "15228173b3407d96a3c39739ae70f7a015dac150290b49b787f8359750a29d67",
+      "bytes": 1099
+    },
+    {
+      "path": "validation/tests/TEST-thc.TailCycleTest.xml",
+      "sha256": "64906c692a961acaeefca1b90fba8b8fe6cd7e86ecd69197eca475954c24ba39",
+      "bytes": 1152
+    },
+    {
+      "path": "validation/tests/TEST-thc.ThunkDispatchTest.xml",
+      "sha256": "26502c18623aaea11cfdc41932e6394d6720a57cb01171a6a0733de9c372623c",
+      "bytes": 563
+    },
+    {
+      "path": "validation/tests/TEST-thc.ThunkRetentionTest.xml",
+      "sha256": "b3537944a80d1798c04162bf6e178b43ac9b87f580384d78ef9645b85edb9ab8",
+      "bytes": 839
+    },
+    {
+      "path": "validation/tests/TEST-thc.TypedApplicationTest.xml",
+      "sha256": "5531c93b1ee2cdd4467c371c14779b452703b0e630750568b3b3ef821fe83a4a",
+      "bytes": 750
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.AstSelfCallTest.xml",
+      "sha256": "915820f5516ba34d321b68601e18f16e2d9f4b9a0399a3683e5869fd2e411cf7",
+      "bytes": 892
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.BindingCellMetadataTest.xml",
+      "sha256": "93094695d63266d521db4e6bbd079904c13efd248e9fb51d19ed6bafb4f41611",
+      "bytes": 787
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.BloomValueTest.xml",
+      "sha256": "f48d7ac80cf09626b50519530c57cae9271a86eb5219fea82d35762cafa25b77",
+      "bytes": 847
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.BoxedValueCacheTest.xml",
+      "sha256": "5de20202d3e2707327e43db48af602dbcbd60f2a691e3ad251323ed168c4712e",
+      "bytes": 1060
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.CallDemandTest.xml",
+      "sha256": "7f4b8c970024baf6c553afbb1f20a8fb50a81d8be8971de0bb25db779702ef5e",
+      "bytes": 1285
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+      "sha256": "8a68258ba7f4b703daaeccbfc35e126153fb5f9b53005025db059fd9fb8012f1",
+      "bytes": 1039
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+      "sha256": "e3c0b54ae989b3bfb77347330c29380de8235ba0ba2342bf06a7bf8af14a153d",
+      "bytes": 941
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.CoreProofJoinTest.xml",
+      "sha256": "bd47f675e075b83b0f336eb84932d334aa2af3a8e0470b1f2824783ed8f626a1",
+      "bytes": 1161
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.CoreSourceTest.xml",
+      "sha256": "909825e9561b7e6d736e4725fad06bba73e7495696c08b382065d8f7557cb392",
+      "bytes": 967
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.EntryContractTest.xml",
+      "sha256": "d0f635f23a0539917adcbe946879ebe4bc7c8ea57a926623bcedfd24e0aff76a",
+      "bytes": 1140
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.EntrySelfCallTest.xml",
+      "sha256": "036785091a76f4a96abec9ab51017902656ec2bbcf15ee772492ad124935132a",
+      "bytes": 588
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.ForcedBindingTest.xml",
+      "sha256": "b4439509488d0a69dea18991f700da489348691030d9ae0e6ab25dd5372e37af",
+      "bytes": 1041
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.JoinWhnfProofTest.xml",
+      "sha256": "ce96ee14be21b0349b234cd8b6b590e03c83b4c2f8d71c8bebaa81b27ce94084",
+      "bytes": 450
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+      "sha256": "78fc599639e06e24d64d0761e587d673b4590efd3e95c3a785b7ac664440dc27",
+      "bytes": 1364
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.OperandRetentionTest.xml",
+      "sha256": "a7d4f8425f5dc463e77557139518176466b0a32fa5118fb65af68f9609c0c095",
+      "bytes": 627
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.ReferenceCaptureTest.xml",
+      "sha256": "697d7ca11c3268442091b4c98ed6d251c5f25e33352030412fcce059de9cfb12",
+      "bytes": 762
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.ReferenceFieldTest.xml",
+      "sha256": "c0ac66a5e95fea438a6fff261030a5d48154f42c1153ec32a326405a3003ebf4",
+      "bytes": 747
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.ReferenceFormalTest.xml",
+      "sha256": "35dbf0b42732fa8af81f546dfb3aab546cfa8a51bbf57541688c20f59c0ee6f6",
+      "bytes": 595
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.SourceCloneTest.xml",
+      "sha256": "c2d4354be3c4851856d203ab40356599099a4a4aa6386a767022ad5dce093634",
+      "bytes": 458
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+      "sha256": "792569072a2c89932543c37c34f113cb71b5de27445c2dadfa6a539433def56a",
+      "bytes": 595
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.TypedCaseTest.xml",
+      "sha256": "47b2164fa33ec2d2bb0877213a6a3fea63be4118b7c671f11cf1aea7640c6f16",
+      "bytes": 589
+    },
+    {
+      "path": "validation/tests/TEST-thc.runtime.TypedExecutionTest.xml",
+      "sha256": "d4819a733af8ece583f0124cd599c538d5b2e93c84a66d2f88a970f67519f8ea",
+      "bytes": 609
+    },
+    {
+      "path": "validation/tests-repaired.log",
+      "sha256": "952e22cf8afee5a1c50d992434d5db288761ef5781fb002d71ed7d1de21ba558",
+      "bytes": 18028
+    }
+  ]
+}

@@ -1,0 +1,272 @@
+{
+  "runtimeRoot": "/Users/ekmett/thc/work/combined-defaults-v1",
+  "runtimeJarSha256": "a74e616f540def7af2afa821e3856c7377d472ad23b7926e4b7bb6251e07fe9c",
+  "runtimeFiles": [
+    {
+      "path": "manifest.json",
+      "bytes": 55214,
+      "sha256": "02216490fa0c40a652e7cd499e3dc7d9b9b908c5422419cdbf23e3c114b0af03"
+    },
+    {
+      "path": "combined.patch",
+      "bytes": 99352,
+      "sha256": "2b488c4498baaab3014b34f7d6f183529969007061623d4d5cbdc3baeb3e9827"
+    },
+    {
+      "path": "defaults.patch",
+      "bytes": 14040,
+      "sha256": "e545013b9076e9ab69e44545852b1785fb95997b5d067cbdedc84985c3023814"
+    },
+    {
+      "path": "src/main/kotlin/thc/Probe.kt",
+      "bytes": 3543,
+      "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+    },
+    {
+      "path": "src/main/kotlin/thc/Language.kt",
+      "bytes": 11440,
+      "sha256": "0bcf93c9d7b3757b982d459823658094a2d6d0f8f95fd656f1bb9b6876991bf5"
+    },
+    {
+      "path": "src/main/kotlin/thc/Json.kt",
+      "bytes": 5554,
+      "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+    },
+    {
+      "path": "src/main/kotlin/thc/Main.kt",
+      "bytes": 1831,
+      "sha256": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6"
+    },
+    {
+      "path": "src/main/kotlin/thc/MapCheck.kt",
+      "bytes": 1891,
+      "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreFields.kt",
+      "bytes": 3310,
+      "sha256": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Program.kt",
+      "bytes": 66452,
+      "sha256": "7dd5bbdc735fc3c388587533028f3727c0b580f8275b8d9b07ee235ed5b79956"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+      "bytes": 2061,
+      "sha256": "df27ac8e8ff41f180a30df708033505bfc875cb6b3ba8d3de11427946afd6b54"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Application.kt",
+      "bytes": 19166,
+      "sha256": "ace8f255f0a369828d5dfd1fbf55df90ccd0bf3afad8ac900e7f880650aa2118"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Frames.kt",
+      "bytes": 12689,
+      "sha256": "6846ac154751c3d8485d82a1adc0939ae8ca596774189f1d44c0446b3fae7185"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CaseCategories.kt",
+      "bytes": 803,
+      "sha256": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/BloomValue.kt",
+      "bytes": 1141,
+      "sha256": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+      "bytes": 9765,
+      "sha256": "578b57e67f93c61f498ad503c078299c5c269e3f966efabbb4ff6b4ee78b8d30"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+      "bytes": 6700,
+      "sha256": "404f83c6e543764458bb426ceb7188226372485a2f91b4f0a0f342c3c75ea9b7"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/EntryArguments.kt",
+      "bytes": 1840,
+      "sha256": "9c7af82a990fe84121de81070323258cd1654b86c3d00ebc494b5923d468e1ce"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt",
+      "bytes": 1842,
+      "sha256": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt",
+      "bytes": 2210,
+      "sha256": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+      "bytes": 1478,
+      "sha256": "91cb6c35d5ef04c3006dc3ff732fa2fa4786e121ec588f3e8362c96af4d82e37"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+      "bytes": 6182,
+      "sha256": "7c6102b8852f5db93e07abd5ac05583a85f241c42eddf8736d070c4db0c5c1da"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+      "bytes": 3141,
+      "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+      "bytes": 5626,
+      "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+      "bytes": 50929,
+      "sha256": "ba0b17e1e3c254de51ee3d68c943153bc17c75c3257166baecbf10942a32fbfa"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LeadingCaseReturn.kt",
+      "bytes": 4073,
+      "sha256": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreEntries.kt",
+      "bytes": 1561,
+      "sha256": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+      "bytes": 13540,
+      "sha256": "5af2f5b0b9f716cd979d0f840760e71c30e3e571930be3515415b0d435222db0"
+    },
+    {
+      "path": "src/main/java/thc/runtime/Calls.java",
+      "bytes": 625,
+      "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+    },
+    {
+      "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+      "bytes": 22313,
+      "sha256": "15f605a87d408b53557a647c145be170cc21ab963e10d1d55930932d2f744be8"
+    },
+    {
+      "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+      "bytes": 917,
+      "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+    },
+    {
+      "path": "compiler/reproduction-provenance.py",
+      "bytes": 9370,
+      "sha256": "62be82def72fee8823bf1bd9a4952611cf82d89caa686d6c6ad0ec543237d44e"
+    },
+    {
+      "path": "compiler/toolchain.sh",
+      "bytes": 394,
+      "sha256": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614"
+    },
+    {
+      "path": "compiler/README.md",
+      "bytes": 24325,
+      "sha256": "c722c277b542afb93ca2e6fd24ca2aebcfab70d4ce109543c1aaaa689ead612c"
+    },
+    {
+      "path": "compiler/build.sh",
+      "bytes": 1184,
+      "sha256": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb"
+    },
+    {
+      "path": "compiler/export-map.sh",
+      "bytes": 3750,
+      "sha256": "6679c9f242450146e3485c57dbaa204c1ec87fc20c4f0c47c9a9941cf2106fa3"
+    },
+    {
+      "path": "compiler/export-boot.py",
+      "bytes": 5080,
+      "sha256": "1a75235176dd25013300cda3ac740598860e5f620f9c565b8e81b9d09720253b"
+    },
+    {
+      "path": "compiler/export.sh",
+      "bytes": 696,
+      "sha256": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489"
+    },
+    {
+      "path": "compiler/Thc/Plugin.hs",
+      "bytes": 25524,
+      "sha256": "df5fb73dbd79a1bef0ef71e7a419b2b64e826f4031a10052f30be92fe6dee07b"
+    },
+    {
+      "path": "compiler/Thc/Sources.hs",
+      "bytes": 5014,
+      "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+    },
+    {
+      "path": "compiler/Thc/Cbv.hs",
+      "bytes": 1517,
+      "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c"
+    },
+    {
+      "path": "compiler/Thc/Wired.hs",
+      "bytes": 3548,
+      "sha256": "0fa673b5e3cd94e1398b69843644f8170d153819f45135a4d3913a10bdbfc48b"
+    },
+    {
+      "path": "compiler/test-fixtures/CbvJoinAudit.hs",
+      "bytes": 1399,
+      "sha256": "089bbfc67e22883f5e0978b447e2746a282b038654611c295dbedb60724417c0"
+    },
+    {
+      "path": "compiler/test-fixtures/SpeculationAudit.hs",
+      "bytes": 1281,
+      "sha256": "7a6445a8fc418f3f8d0007c5ddbb351ff32a9a86559d9b4e6f3db12047cb321d"
+    },
+    {
+      "path": "compiler/test-fixtures/SourceNotes.hs",
+      "bytes": 447,
+      "sha256": "bda8a8aa7b64b93c0ed5b2553b0aa8a602e22f3263d8c41c036ca4090e124271"
+    },
+    {
+      "path": "compiler/test-fixtures/CbvAudit.hs",
+      "bytes": 1041,
+      "sha256": "651664c1955d3881ea21fe1a270cc94903991c04ead46c2cf84c5ffc0a4ba96a"
+    },
+    {
+      "path": "compiler/test-fixtures/StrictFields.hs",
+      "bytes": 358,
+      "sha256": "e6caa8723bdcbcb3d8c530ed464b1309d16ebfa04c4e412ff17d88820635ee8e"
+    },
+    {
+      "path": "compiler/test-fixtures/RepresentationAudit.hs",
+      "bytes": 2324,
+      "sha256": "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037"
+    },
+    {
+      "path": "compiler/test-fixtures/ConstructorFieldAudit.hs",
+      "bytes": 475,
+      "sha256": "54d6ddd90fed95228d07c6af05e1cfb84dc3347a684f963e4fe411fcae9ad09e"
+    },
+    {
+      "path": "compiler/test-fixtures/CbvCoercionAudit.hs",
+      "bytes": 624,
+      "sha256": "e008d36f00eb7560c6a1ebd7e0e574d8198741b2b4af83874153e010a33591de"
+    },
+    {
+      "path": "compiler/package-roots/InterfaceRoots.hs",
+      "bytes": 407,
+      "sha256": "9dcc070e8243ff7fbe51431d0bcaf6f35379ff467d301a4e590ae4ab6aef29f9"
+    },
+    {
+      "path": "lib/thc-0.1-experiment.jar",
+      "bytes": 728482,
+      "sha256": "a74e616f540def7af2afa821e3856c7377d472ad23b7926e4b7bb6251e07fe9c"
+    }
+  ],
+  "manualCore": {
+    "path": "08-Data.Map.Internal.json",
+    "bytes": 25760964,
+    "sha256": "fa7cfcff91ccd1708839e720ef90b6e3098627a5c518a4805cd53bd76348e05f"
+  },
+  "parentProbeSha256": "64fe328670d74f3d92ee924cd0f0fd08a001dd038eb6a16cacd2133963607212"
+}

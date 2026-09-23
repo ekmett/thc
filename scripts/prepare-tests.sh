@@ -3,9 +3,10 @@
 set -eu
 cd "$(dirname "$0")/.."
 compiler/build.sh
-compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs
+compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs
 python3 scripts/check-speculation-metadata.py
 python3 scripts/check-representation-metadata.py
+python3 scripts/check-demand-metadata.py --ghc-api
 # Compare pre-Tidy contract proposals with the real native Tidy result.
 THC_CORE_OUT="$PWD/build/cbv-post-core" THC_GHC_OUT="$PWD/build/cbv-post-ghc" \
   compiler/export.sh -fplugin-opt=Thc.Plugin:post-tidy compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs

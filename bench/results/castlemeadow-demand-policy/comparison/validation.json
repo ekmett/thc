@@ -1,0 +1,293 @@
+{
+  "passed": true,
+  "validatedWindows": 45,
+  "inputsUnchanged": true,
+  "minimumWindowNs": 2028886917,
+  "processes": [
+    {
+      "engine": "baseline",
+      "fork": 1,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 30208,
+        "elapsedNs": 52548218977,
+        "checksum": 1703154837024
+      },
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "localJoinCount": 10,
+        "localJoinTransfers": 0,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    },
+    {
+      "engine": "candidate",
+      "fork": 1,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 30208,
+        "elapsedNs": 49084140194,
+        "checksum": 1703154837024
+      },
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "localJoinCount": 10,
+        "localJoinTransfers": 0,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    },
+    {
+      "engine": "native",
+      "fork": 1,
+      "nativeProcessSucceeded": true
+    },
+    {
+      "engine": "candidate",
+      "fork": 2,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 30208,
+        "elapsedNs": 49072824649,
+        "checksum": 1703154837024
+      },
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "localJoinCount": 10,
+        "localJoinTransfers": 0,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    },
+    {
+      "engine": "native",
+      "fork": 2,
+      "nativeProcessSucceeded": true
+    },
+    {
+      "engine": "baseline",
+      "fork": 2,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 30208,
+        "elapsedNs": 52338987195,
+        "checksum": 1703154837024
+      },
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "localJoinCount": 10,
+        "localJoinTransfers": 0,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    },
+    {
+      "engine": "native",
+      "fork": 3,
+      "nativeProcessSucceeded": true
+    },
+    {
+      "engine": "baseline",
+      "fork": 3,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 30208,
+        "elapsedNs": 52560640504,
+        "checksum": 1703154837024
+      },
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "localJoinCount": 10,
+        "localJoinTransfers": 0,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    },
+    {
+      "engine": "candidate",
+      "fork": 3,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 30208,
+        "elapsedNs": 49212190025,
+        "checksum": 1703154837024
+      },
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "localJoinCount": 10,
+        "localJoinTransfers": 0,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    }
+  ]
+}

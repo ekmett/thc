@@ -1,0 +1,15 @@
+{
+  "equal": true,
+  "excludedModules": [],
+  "ignoredEntryContracts": false,
+  "ignoredFieldTypes": false,
+  "ignoredCallDemands": true,
+  "entry": "mapAggregate",
+  "reachableBindings": [
+    52,
+    52
+  ],
+  "changedModules": [],
+  "beforeSha256": "eed2a55db97a7809ec6348c57d0654ac05eafa3900e40bb63c811ea5f4f46ac6",
+  "afterSha256": "eed2a55db97a7809ec6348c57d0654ac05eafa3900e40bb63c811ea5f4f46ac6"
+}

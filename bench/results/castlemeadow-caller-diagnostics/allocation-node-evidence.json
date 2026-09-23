@@ -1,0 +1,1325 @@
+{
+  "scope": "Node IDs refer to each capture's After mid tier graph; all are static materialization sites, not execution counts. Full source stacks and CFG/SSA remain in archived BGVs.",
+  "variants": [
+    {
+      "side": "control",
+      "compilationId": 3479,
+      "thunkAndCaptureAllocations": [
+        {
+          "node": 48308,
+          "block": "118",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411",
+            "af8e4a0ba255d2209851f0f50229526 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681"
+          ]
+        },
+        {
+          "node": 48317,
+          "block": "118",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d220 [source-note detail truncated]\nthc.runtime.CaptureLayout.captureValues(Frames.kt:159",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e5 [source-note detail truncated]\nthc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411"
+          ]
+        },
+        {
+          "node": 49280,
+          "block": "251",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411",
+            "af8e4a0ba255d2209851f0f50229526 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681"
+          ]
+        },
+        {
+          "node": 49289,
+          "block": "251",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d220 [source-note detail truncated]\nthc.runtime.CaptureLayout.captureValues(Frames.kt:159",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e5 [source-note detail truncated]\nthc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411"
+          ]
+        },
+        {
+          "node": 49498,
+          "block": "282",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411",
+            "af8e4a0ba255d2209851f0f50229526 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681"
+          ]
+        },
+        {
+          "node": 49507,
+          "block": "282",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d220 [source-note detail truncated]\nthc.runtime.CaptureLayout.captureValues(Frames.kt:159",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e5 [source-note detail truncated]\nthc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411"
+          ]
+        },
+        {
+          "node": 50494,
+          "block": "420",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411",
+            "af8e4a0ba255d2209851f0f50229526 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681"
+          ]
+        },
+        {
+          "node": 50503,
+          "block": "420",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d220 [source-note detail truncated]\nthc.runtime.CaptureLayout.captureValues(Frames.kt:159",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e5 [source-note detail truncated]\nthc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411"
+          ]
+        },
+        {
+          "node": 51317,
+          "block": "546",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411",
+            "af8e4a0ba255d2209851f0f50229526 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681"
+          ]
+        },
+        {
+          "node": 51326,
+          "block": "546",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d220 [source-note detail truncated]\nthc.runtime.CaptureLayout.captureValues(Frames.kt:159",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e5 [source-note detail truncated]\nthc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411"
+          ]
+        },
+        {
+          "node": 51535,
+          "block": "577",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411",
+            "af8e4a0ba255d2209851f0f50229526 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681"
+          ]
+        },
+        {
+          "node": 51544,
+          "block": "577",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d220 [source-note detail truncated]\nthc.runtime.CaptureLayout.captureValues(Frames.kt:159",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e5 [source-note detail truncated]\nthc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411"
+          ]
+        },
+        {
+          "node": 51723,
+          "block": "605",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497"
+          ]
+        },
+        {
+          "node": 51732,
+          "block": "605",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497"
+          ]
+        },
+        {
+          "node": 52373,
+          "block": "682",
+          "class": "thc.runtime.Thunk",
+          "origin": "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+          "source": [
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:135)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:501",
+            "af8e4a0ba255d2209851f0f50229526 [source-note detail truncated]\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689"
+          ]
+        },
+        {
+          "node": 52382,
+          "block": "682",
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "origin": "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+          "source": [
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7$$Factory.create((Unknown%20Source):-1)",
+            "thc.runtime.CaptureLayout.captureValues(Frames.kt:159)",
+            "thc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134)",
+            "thc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684)",
+            "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411)",
+            "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1689)",
+            "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1681)"
+          ],
+          "guestLocations": [
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb//Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+            "af8e4a0ba255d220 [source-note detail truncated]\nthc.runtime.CaptureLayout.captureValues(Frames.kt:159",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e5 [source-note detail truncated]\nthc.runtime.BytecodeRoot$MakeThunk.create(BytecodeRoot.java:134",
+            "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f535 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$MakeThunk_Node.execute(BytecodeRootGen.java:24045",
+            "af8e4a0ba255d2209851f0f5022952612d351 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMakeThunk_(BytecodeRootGen.java:6684",
+            "af8e4a0ba255d2209851f0f50 [source-note detail truncated]\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5411"
+          ]
+        }
+      ],
+      "packetAllocations": [
+        {
+          "node": 44680,
+          "block": "755",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 44726,
+          "block": "982",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 44737,
+          "block": "983",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 44803,
+          "block": "1008",
+          "class": "java.lang.Long[]",
+          "origin": "thc.runtime.DispatchThunkTarget.direct(Application.kt:110)"
+        },
+        {
+          "node": 44892,
+          "block": "1047",
+          "class": "java.lang.Long[]",
+          "origin": "thc.runtime.DispatchThunkTarget.direct(Application.kt:110)"
+        },
+        {
+          "node": 44951,
+          "block": "1059",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 45125,
+          "block": "791",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45456,
+          "block": "813",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45780,
+          "block": "840",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46103,
+          "block": "862",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46429,
+          "block": "894",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46755,
+          "block": "916",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47079,
+          "block": "943",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47402,
+          "block": "965",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47610,
+          "block": "23",
+          "class": "java.lang.Long[]",
+          "origin": "thc.runtime.DispatchThunkTarget.direct(Application.kt:110) [bci:37]"
+        },
+        {
+          "node": 47866,
+          "block": "53",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47932,
+          "block": "62",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47985,
+          "block": "71",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 48172,
+          "block": "98",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 48212,
+          "block": "104",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 48341,
+          "block": "118",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 48440,
+          "block": "139",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 48847,
+          "block": "186",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 48912,
+          "block": "195",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 48963,
+          "block": "204",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 49149,
+          "block": "231",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 49188,
+          "block": "237",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 49310,
+          "block": "251",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 49406,
+          "block": "269",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 49528,
+          "block": "282",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 49627,
+          "block": "303",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50061,
+          "block": "355",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50126,
+          "block": "364",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50177,
+          "block": "373",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50363,
+          "block": "400",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50402,
+          "block": "406",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50524,
+          "block": "420",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50634,
+          "block": "441",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50685,
+          "block": "450",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50884,
+          "block": "481",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 50949,
+          "block": "490",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51000,
+          "block": "499",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51186,
+          "block": "526",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51225,
+          "block": "532",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51347,
+          "block": "546",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51443,
+          "block": "564",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51565,
+          "block": "577",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51661,
+          "block": "595",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51900,
+          "block": "629",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 51980,
+          "block": "641",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 52228,
+          "block": "668",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 52403,
+          "block": "682",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        }
+      ],
+      "boxingAllocations": [
+        {
+          "node": 44655,
+          "block": "754",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBitAnd$Apply_(BytecodeRootGen.java:8420) [bci:89]"
+        },
+        {
+          "node": 44706,
+          "block": "981",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBitAnd$Apply_(BytecodeRootGen.java:8420) [bci:89]"
+        },
+        {
+          "node": 44930,
+          "block": "1058",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBitAnd$Apply_(BytecodeRootGen.java:8420) [bci:89]"
+        },
+        {
+          "node": 45001,
+          "block": "1066",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:6089) [bci:28]"
+        },
+        {
+          "node": 45106,
+          "block": "790",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 45438,
+          "block": "812",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 45761,
+          "block": "839",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 46085,
+          "block": "861",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 46410,
+          "block": "893",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 46737,
+          "block": "915",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 47060,
+          "block": "942",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 47384,
+          "block": "964",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 47843,
+          "block": "52",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 48151,
+          "block": "97",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 48825,
+          "block": "185",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 49128,
+          "block": "230",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 50039,
+          "block": "354",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 50342,
+          "block": "399",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 50862,
+          "block": "480",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 51165,
+          "block": "525",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 51877,
+          "block": "628",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 52207,
+          "block": "667",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        }
+      ]
+    },
+    {
+      "side": "enabled",
+      "compilationId": 3457,
+      "thunkAndCaptureAllocations": [],
+      "packetAllocations": [
+        {
+          "node": 39772,
+          "block": "788",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 39818,
+          "block": "1015",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 39829,
+          "block": "1016",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 39895,
+          "block": "1041",
+          "class": "java.lang.Long[]",
+          "origin": "thc.runtime.DispatchThunkTarget.direct(Application.kt:110)"
+        },
+        {
+          "node": 39984,
+          "block": "1080",
+          "class": "java.lang.Long[]",
+          "origin": "thc.runtime.DispatchThunkTarget.direct(Application.kt:110)"
+        },
+        {
+          "node": 40043,
+          "block": "1092",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263) [bci:6]"
+        },
+        {
+          "node": 40217,
+          "block": "824",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 40548,
+          "block": "846",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 40872,
+          "block": "873",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 41195,
+          "block": "895",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 41521,
+          "block": "927",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 41847,
+          "block": "949",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 42171,
+          "block": "976",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 42494,
+          "block": "998",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 42702,
+          "block": "23",
+          "class": "java.lang.Long[]",
+          "origin": "thc.runtime.DispatchThunkTarget.direct(Application.kt:110) [bci:37]"
+        },
+        {
+          "node": 42958,
+          "block": "53",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43024,
+          "block": "62",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43077,
+          "block": "71",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43264,
+          "block": "98",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43304,
+          "block": "104",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43409,
+          "block": "118",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43437,
+          "block": "122",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43536,
+          "block": "144",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 43943,
+          "block": "191",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44008,
+          "block": "200",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44059,
+          "block": "209",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44245,
+          "block": "236",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44284,
+          "block": "242",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44389,
+          "block": "256",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44416,
+          "block": "260",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44512,
+          "block": "279",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44617,
+          "block": "294",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44644,
+          "block": "298",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 44743,
+          "block": "320",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45189,
+          "block": "372",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45254,
+          "block": "381",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45305,
+          "block": "390",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45491,
+          "block": "417",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45530,
+          "block": "423",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45635,
+          "block": "437",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45662,
+          "block": "441",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 45761,
+          "block": "463",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46168,
+          "block": "510",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46233,
+          "block": "519",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46284,
+          "block": "528",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46470,
+          "block": "555",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46509,
+          "block": "561",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46614,
+          "block": "575",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46641,
+          "block": "579",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46737,
+          "block": "598",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46842,
+          "block": "613",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46869,
+          "block": "617",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 46953,
+          "block": "636",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47071,
+          "block": "654",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47136,
+          "block": "663",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47187,
+          "block": "672",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47373,
+          "block": "699",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47412,
+          "block": "705",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47517,
+          "block": "719",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        },
+        {
+          "node": 47544,
+          "block": "723",
+          "class": "java.lang.Object[]",
+          "origin": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)"
+        }
+      ],
+      "boxingAllocations": [
+        {
+          "node": 39747,
+          "block": "787",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBitAnd$Apply_(BytecodeRootGen.java:8420) [bci:89]"
+        },
+        {
+          "node": 39798,
+          "block": "1014",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBitAnd$Apply_(BytecodeRootGen.java:8420) [bci:89]"
+        },
+        {
+          "node": 40022,
+          "block": "1091",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBitAnd$Apply_(BytecodeRootGen.java:8420) [bci:89]"
+        },
+        {
+          "node": 40093,
+          "block": "1099",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:6089) [bci:28]"
+        },
+        {
+          "node": 40198,
+          "block": "823",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 40530,
+          "block": "845",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 40853,
+          "block": "872",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 41177,
+          "block": "894",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 41502,
+          "block": "926",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 41829,
+          "block": "948",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 42152,
+          "block": "975",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 42476,
+          "block": "997",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 42935,
+          "block": "52",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 43243,
+          "block": "97",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 43388,
+          "block": "117",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 43921,
+          "block": "190",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 44224,
+          "block": "235",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 44368,
+          "block": "255",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 44596,
+          "block": "293",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 45167,
+          "block": "371",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 45470,
+          "block": "416",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 45614,
+          "block": "436",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 46146,
+          "block": "509",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 46449,
+          "block": "554",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 46593,
+          "block": "574",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 46821,
+          "block": "612",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 47049,
+          "block": "653",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 47352,
+          "block": "698",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        },
+        {
+          "node": 47496,
+          "block": "718",
+          "origin": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9179)"
+        }
+      ]
+    }
+  ]
+}

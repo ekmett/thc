@@ -1,0 +1,229 @@
+{
+  "scope": "Manual single-callee fourth-argument CBV experiment from its strict-used demand, not a new compiler feature. Binding and lambda entry metadata only; executable Core unchanged.",
+  "startedUtc": "2026-09-23T09:13:41.699885+00:00",
+  "runtimeJarSha256": "a74e616f540def7af2afa821e3856c7377d472ad23b7926e4b7bb6251e07fe9c",
+  "changes": [
+    {
+      "id": "main:Data.Map.Internal.balanceR_",
+      "before": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "after": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "signature": "<SL><L><1L><1L>"
+    }
+  ],
+  "modules": [
+    {
+      "file": "00-Utils.Containers.Internal.BitUtil.json",
+      "beforeSha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49",
+      "afterSha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49"
+    },
+    {
+      "file": "01-Utils.Containers.Internal.BitQueue.json",
+      "beforeSha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1",
+      "afterSha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1"
+    },
+    {
+      "file": "02-Utils.Containers.Internal.Prelude.json",
+      "beforeSha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e",
+      "afterSha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e"
+    },
+    {
+      "file": "03-Utils.Containers.Internal.PtrEquality.json",
+      "beforeSha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452",
+      "afterSha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452"
+    },
+    {
+      "file": "04-Utils.Containers.Internal.StrictMaybe.json",
+      "beforeSha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352",
+      "afterSha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352"
+    },
+    {
+      "file": "05-Utils.Containers.Internal.StrictPair.json",
+      "beforeSha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef",
+      "afterSha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef"
+    },
+    {
+      "file": "06-Utils.Containers.Internal.EqOrdUtil.json",
+      "beforeSha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925",
+      "afterSha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925"
+    },
+    {
+      "file": "07-Data.Set.Internal.json",
+      "beforeSha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac",
+      "afterSha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac"
+    },
+    {
+      "file": "08-Data.Map.Internal.json",
+      "beforeSha256": "8fe30a776467f3cf86391aa03a470a6c554c9382b09f5d8a377cbf2c717225fc",
+      "afterSha256": "fa7cfcff91ccd1708839e720ef90b6e3098627a5c518a4805cd53bd76348e05f"
+    },
+    {
+      "file": "09-Data.Map.Internal.Debug.json",
+      "beforeSha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d",
+      "afterSha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d"
+    },
+    {
+      "file": "10-Data.Map.Strict.Internal.json",
+      "beforeSha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b",
+      "afterSha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b"
+    },
+    {
+      "file": "11-Data.Map.Strict.json",
+      "beforeSha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0",
+      "afterSha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0"
+    },
+    {
+      "file": "12-THC.MapWorkload.json",
+      "beforeSha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7",
+      "afterSha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7"
+    },
+    {
+      "file": "13-THC.InterfaceClosure.json",
+      "beforeSha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+      "afterSha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "file": "14-GHC.Internal.CString.json",
+      "beforeSha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e",
+      "afterSha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e"
+    },
+    {
+      "file": "15-GHC.Internal.Err.json",
+      "beforeSha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16",
+      "afterSha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16"
+    },
+    {
+      "file": "16-GHC.InterfaceClosure.json",
+      "beforeSha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438",
+      "afterSha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438"
+    }
+  ],
+  "checks": [
+    {
+      "backend": "ast",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.backend=ast",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/ekmett/thc/work/combined-defaults-v1/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/demand-signatures-review/manual-balanceR-fourth/modules.txt",
+        "/Users/ekmett/thc/work/combined-defaults-v1/map/oracle.tsv"
+      ],
+      "returncode": 0,
+      "beforeRows": 18,
+      "afterRows": 18,
+      "diagnostics": {
+        "backend": "ast",
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3
+        },
+        "compiledEntries": 5957906,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 3,
+        "thunkHits": 588723,
+        "blackholes": 0,
+        "directCacheMisses": 24,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "papAllocations": 0,
+        "localJoinTransfers": 874750,
+        "selfTailReentries": 4158622,
+        "trampolineIterations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "indexed primitive slots; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    },
+    {
+      "backend": "bytecode",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:+UseCompactObjectHeaders",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/ekmett/thc/work/combined-defaults-v1/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/demand-signatures-review/manual-balanceR-fourth/modules.txt",
+        "/Users/ekmett/thc/work/combined-defaults-v1/map/oracle.tsv"
+      ],
+      "returncode": 0,
+      "beforeRows": 18,
+      "afterRows": 18,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 14,
+        "localJoinCount": 10,
+        "localJoinTransfers": 874750,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3
+        },
+        "compiledEntries": 5958876,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 3,
+        "thunkHits": 588723,
+        "blackholes": 0,
+        "directCacheMisses": 24,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    }
+  ],
+  "passed": true
+}

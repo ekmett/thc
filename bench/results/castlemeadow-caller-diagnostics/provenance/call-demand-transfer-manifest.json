@@ -1,0 +1,1142 @@
+{
+  "call-demand-v1": {
+    "files": [
+      {
+        "path": "compiler/README.md",
+        "sha256": "5e5a597e1d27a153c6db9ceafbfb55d7d9b43960886a2ad8cb14302ba22e91d3",
+        "bytes": 26641
+      },
+      {
+        "path": "compiler/Thc/Cbv.hs",
+        "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c",
+        "bytes": 1517
+      },
+      {
+        "path": "compiler/Thc/Demands.hs",
+        "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a",
+        "bytes": 1538
+      },
+      {
+        "path": "compiler/Thc/Plugin.hs",
+        "sha256": "86064bab62af2017a3ecbdc2a481d817d0965a6b625805473449f9ddaa4de5c9",
+        "bytes": 25810
+      },
+      {
+        "path": "compiler/Thc/Sources.hs",
+        "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861",
+        "bytes": 5014
+      },
+      {
+        "path": "compiler/Thc/Wired.hs",
+        "sha256": "0fa673b5e3cd94e1398b69843644f8170d153819f45135a4d3913a10bdbfc48b",
+        "bytes": 3548
+      },
+      {
+        "path": "compiler/build.sh",
+        "sha256": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb",
+        "bytes": 1184
+      },
+      {
+        "path": "compiler/export-boot.py",
+        "sha256": "1a75235176dd25013300cda3ac740598860e5f620f9c565b8e81b9d09720253b",
+        "bytes": 5080
+      },
+      {
+        "path": "compiler/export-map.sh",
+        "sha256": "6679c9f242450146e3485c57dbaa204c1ec87fc20c4f0c47c9a9941cf2106fa3",
+        "bytes": 3750
+      },
+      {
+        "path": "compiler/export.sh",
+        "sha256": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489",
+        "bytes": 696
+      },
+      {
+        "path": "compiler/package-roots/InterfaceRoots.hs",
+        "sha256": "9dcc070e8243ff7fbe51431d0bcaf6f35379ff467d301a4e590ae4ab6aef29f9",
+        "bytes": 407
+      },
+      {
+        "path": "compiler/reproduction-provenance.py",
+        "sha256": "62be82def72fee8823bf1bd9a4952611cf82d89caa686d6c6ad0ec543237d44e",
+        "bytes": 9370
+      },
+      {
+        "path": "compiler/test-fixtures/CbvAudit.hs",
+        "sha256": "651664c1955d3881ea21fe1a270cc94903991c04ead46c2cf84c5ffc0a4ba96a",
+        "bytes": 1041
+      },
+      {
+        "path": "compiler/test-fixtures/CbvCoercionAudit.hs",
+        "sha256": "e008d36f00eb7560c6a1ebd7e0e574d8198741b2b4af83874153e010a33591de",
+        "bytes": 624
+      },
+      {
+        "path": "compiler/test-fixtures/CbvJoinAudit.hs",
+        "sha256": "089bbfc67e22883f5e0978b447e2746a282b038654611c295dbedb60724417c0",
+        "bytes": 1399
+      },
+      {
+        "path": "compiler/test-fixtures/ConstructorFieldAudit.hs",
+        "sha256": "54d6ddd90fed95228d07c6af05e1cfb84dc3347a684f963e4fe411fcae9ad09e",
+        "bytes": 475
+      },
+      {
+        "path": "compiler/test-fixtures/DemandAudit.hs",
+        "sha256": "9846c28d47573fe74e29c292697d6cf59548e8fbda590d425a3be753225c7fdd",
+        "bytes": 2057
+      },
+      {
+        "path": "compiler/test-fixtures/RepresentationAudit.hs",
+        "sha256": "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037",
+        "bytes": 2324
+      },
+      {
+        "path": "compiler/test-fixtures/SourceNotes.hs",
+        "sha256": "bda8a8aa7b64b93c0ed5b2553b0aa8a602e22f3263d8c41c036ca4090e124271",
+        "bytes": 447
+      },
+      {
+        "path": "compiler/test-fixtures/SpeculationAudit.hs",
+        "sha256": "7a6445a8fc418f3f8d0007c5ddbb351ff32a9a86559d9b4e6f3db12047cb321d",
+        "bytes": 1281
+      },
+      {
+        "path": "compiler/test-fixtures/StrictFields.hs",
+        "sha256": "e6caa8723bdcbcb3d8c530ed464b1309d16ebfa04c4e412ff17d88820635ee8e",
+        "bytes": 358
+      },
+      {
+        "path": "compiler/toolchain.sh",
+        "sha256": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614",
+        "bytes": 394
+      },
+      {
+        "path": "lib/thc-0.1-experiment.jar",
+        "sha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+        "bytes": 730646
+      },
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "a52db255c126f189ed8b91a3f59def4908c7ae1a6dd19d727163fd927e79541f",
+        "bytes": 27623
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "8762f18267cdff84d392eed271b6d5bb8619d0884339721897a02cdafc098693",
+        "bytes": 748784
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "f100baefc7b16d90351e7b4f185696270143cd3ad1cb01b7da9ed6a0a88b4cb8",
+        "bytes": 7973
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "3b9b2cd3f8ea4b561a52391ca37913f004a3bdb10cdfa98b573156a3d097b63c",
+        "bytes": 17529
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "e08484e3b7302421b70d6fe72932619a2451cf6ac557ff875dc0a55943a4db64",
+        "bytes": 327743
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "3ad5daca858094936065dd66bbbb634d86e213cf74b32a2965e180837a11c574",
+        "bytes": 38319
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "17f3f296c92a18cf638aa1023153e15b5c058c25b8c7ce79521021f3fecdfb2b",
+        "bytes": 533551
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "ddd952748bde8512aae6220a640b26b1961f3332b4f56ee3c4fe5d2940741031",
+        "bytes": 13067894
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "642184a9ca6e833359794567066b1e01d6d6ceb2f84346b513d95dcf06dacb19",
+        "bytes": 26203610
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "04d0805720ab792ffc5e598030f42f202a267185266cd1e8e4ab5eac468de166",
+        "bytes": 870115
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "fc85814e44554592c4437a9c69c12db6616e31dc2430897cb0cbc0d8777f6ef0",
+        "bytes": 9166836
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "f173b812b02f26a56ae82c1842caece0b39ca2a152e3879535eb388d123ee480",
+        "bytes": 15791
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "19c7eca83907db7e29aa5cc63cdec474c61e53a72e85fb238e04d0e71043cbb2",
+        "bytes": 1003723
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+        "bytes": 1112
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "a5286b4cd6f99c05a7c3fe6139c4e960ae5b9a2876a74990081624b694409d23",
+        "bytes": 1348357
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "d7a1d0f277ebbb06a99e4387218c6763b8795dee958b86a00471f650c54fe84b",
+        "bytes": 38447
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "8df1a931065b17bbe03fbe9730d08e8719d3043a3de002e0e5f0280aa663e91e",
+        "bytes": 65768
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "60d1fc78b6dd631b354ff4f4ef594c2d3a9cc582d552a597322ea83ec1d7cb80",
+        "bytes": 1299
+      },
+      {
+        "path": "map/oracle.tsv",
+        "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea",
+        "bytes": 420
+      },
+      {
+        "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "15f605a87d408b53557a647c145be170cc21ab963e10d1d55930932d2f744be8",
+        "bytes": 22313
+      },
+      {
+        "path": "src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+        "bytes": 625
+      },
+      {
+        "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+        "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08",
+        "bytes": 917
+      },
+      {
+        "path": "src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80",
+        "bytes": 5554
+      },
+      {
+        "path": "src/main/kotlin/thc/Language.kt",
+        "sha256": "0bcf93c9d7b3757b982d459823658094a2d6d0f8f95fd656f1bb9b6876991bf5",
+        "bytes": 11440
+      },
+      {
+        "path": "src/main/kotlin/thc/Main.kt",
+        "sha256": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6",
+        "bytes": 1831
+      },
+      {
+        "path": "src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11",
+        "bytes": 1891
+      },
+      {
+        "path": "src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7",
+        "bytes": 3543
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "ace8f255f0a369828d5dfd1fbf55df90ccd0bf3afad8ac900e7f880650aa2118",
+        "bytes": 19166
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+        "sha256": "7c6102b8852f5db93e07abd5ac05583a85f241c42eddf8736d070c4db0c5c1da",
+        "bytes": 6182
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/BloomValue.kt",
+        "sha256": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879",
+        "bytes": 1141
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "c4a3e401d09b371665fee4328ac2960d4dd00d4351b5e40682dbf7fab03b958c",
+        "bytes": 51014
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CaseCategories.kt",
+        "sha256": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea",
+        "bytes": 803
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt",
+        "sha256": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094",
+        "bytes": 1842
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt",
+        "sha256": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d",
+        "bytes": 2210
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreCallDemands.kt",
+        "sha256": "38377208ebb9ebed8d67cfe5046abd36f3a1d7549d99c3ce0c2745e609c378b1",
+        "bytes": 1506
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreEntries.kt",
+        "sha256": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268",
+        "bytes": 1561
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreFields.kt",
+        "sha256": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c",
+        "bytes": 3310
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+        "sha256": "578b57e67f93c61f498ad503c078299c5c269e3f966efabbb4ff6b4ee78b8d30",
+        "bytes": 9765
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+        "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948",
+        "bytes": 5626
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "5af2f5b0b9f716cd979d0f840760e71c30e3e571930be3515415b0d435222db0",
+        "bytes": 13540
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/EntryArguments.kt",
+        "sha256": "9c7af82a990fe84121de81070323258cd1654b86c3d00ebc494b5923d468e1ce",
+        "bytes": 1840
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "6846ac154751c3d8485d82a1adc0939ae8ca596774189f1d44c0446b3fae7185",
+        "bytes": 12689
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "91cb6c35d5ef04c3006dc3ff732fa2fa4786e121ec588f3e8362c96af4d82e37",
+        "bytes": 1478
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "df27ac8e8ff41f180a30df708033505bfc875cb6b3ba8d3de11427946afd6b54",
+        "bytes": 2061
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LeadingCaseReturn.kt",
+        "sha256": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d",
+        "bytes": 4073
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69",
+        "bytes": 3141
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+        "sha256": "404f83c6e543764458bb426ceb7188226372485a2f91b4f0a0f342c3c75ea9b7",
+        "bytes": 6700
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "afe97d54ad5d5ec5f9f63c5182e7ff6feba8ea0110e87e567e78cfb75adfd32f",
+        "bytes": 66644
+      },
+      {
+        "path": "src/test/kotlin/thc/BloomHeaderTest.kt",
+        "sha256": "82d5d8b175d771cb3214872ebd213321c88d58513b5055fea2ccfdcc9ece131a",
+        "bytes": 4553
+      },
+      {
+        "path": "src/test/kotlin/thc/BytecodeBackendTest.kt",
+        "sha256": "aaa0a950ed3296475a0c595666912024a6f7475176077e2cea98f10cb74199fb",
+        "bytes": 22312
+      },
+      {
+        "path": "src/test/kotlin/thc/BytecodeCoreProofTest.kt",
+        "sha256": "420b266a6401a9f92f7b2e79c20d6edf6ddbef3f72d2891559d0ad63d0fe0217",
+        "bytes": 14109
+      },
+      {
+        "path": "src/test/kotlin/thc/BytecodeSourceNotesTest.kt",
+        "sha256": "95eec19d5ed5aa39e37b96c450d4ddc829a5eccb7ac01a985210d2b9aa6ba111",
+        "bytes": 8244
+      },
+      {
+        "path": "src/test/kotlin/thc/CStringTest.kt",
+        "sha256": "fd874bcefdaa87172d6c84deb31ad1c6b7bdd462337fdcb2cf8aed5854ed3123",
+        "bytes": 7197
+      },
+      {
+        "path": "src/test/kotlin/thc/CasePrimitiveTest.kt",
+        "sha256": "cfd14c599d8c1ded194b783224bf0d6330d1fcc217e05b668a02f2aecbe65260",
+        "bytes": 10566
+      },
+      {
+        "path": "src/test/kotlin/thc/CoreLinkerTest.kt",
+        "sha256": "4aa1cf6a302291bbc7c1f6be41c505ee2663cff7888a51a510354fcce0671c79",
+        "bytes": 3107
+      },
+      {
+        "path": "src/test/kotlin/thc/DiagnosticModeTest.kt",
+        "sha256": "b349bf43273f5e6a34735db7e36798b92820bb53bc193cfadf7c14dcb4f8d40b",
+        "bytes": 3344
+      },
+      {
+        "path": "src/test/kotlin/thc/FramesTest.kt",
+        "sha256": "a173084bee55203a8dde330d9c3c1384670f0b58682fa0d7226029d9adee4639",
+        "bytes": 5750
+      },
+      {
+        "path": "src/test/kotlin/thc/GuestExceptionsTest.kt",
+        "sha256": "47c191ab4dbf1d248b0e2101887f07e1aa99ccb19b23f0f9355fe1fb07135dad",
+        "bytes": 4999
+      },
+      {
+        "path": "src/test/kotlin/thc/RealCoreCallDemandTest.kt",
+        "sha256": "6d55e922d06d9ed8f1f7acbc991d763c470cd76143e5cad944115e1428ead551",
+        "bytes": 4726
+      },
+      {
+        "path": "src/test/kotlin/thc/RealCoreEntryContractTest.kt",
+        "sha256": "2d23c107616964162bdfb3fc50581a45b13b3cbc4709392ba52432089d122901",
+        "bytes": 5112
+      },
+      {
+        "path": "src/test/kotlin/thc/RealCoreJoinTest.kt",
+        "sha256": "72caff621575a10f0da951146a61fbdc5c4a685aabcc759e90cccf5a7a82aa52",
+        "bytes": 4995
+      },
+      {
+        "path": "src/test/kotlin/thc/RuntimeTest.kt",
+        "sha256": "8d0251d5bdaf2d8efd502730847e8cdccf67517f3a82bc9563a021d0312f2f56",
+        "bytes": 20995
+      },
+      {
+        "path": "src/test/kotlin/thc/SelfTailProfileTest.kt",
+        "sha256": "c2f46463cd8b6531b7962851a11d7e05f462d311105de4f5f08eb42df2096da4",
+        "bytes": 3123
+      },
+      {
+        "path": "src/test/kotlin/thc/StrictFieldsTest.kt",
+        "sha256": "db2cce99bf7d9d34a85882740b8b14c8c87a130de4c2b0e680a49a181d6f86a9",
+        "bytes": 11596
+      },
+      {
+        "path": "src/test/kotlin/thc/TailCycleTest.kt",
+        "sha256": "90b614adae33dde28f9d37ce2436946834b68f03d455ab9fb879dcc35a903f13",
+        "bytes": 15785
+      },
+      {
+        "path": "src/test/kotlin/thc/ThunkDispatchTest.kt",
+        "sha256": "78909f1649e895e68c0bf2b448f5fd1768b3571a3565223e348a1c4a536f81ad",
+        "bytes": 4464
+      },
+      {
+        "path": "src/test/kotlin/thc/ThunkRetentionTest.kt",
+        "sha256": "68af72fe738066f53b343c1eb71a83cef643af6e34622b1aabf6a7771f9dbe07",
+        "bytes": 8465
+      },
+      {
+        "path": "src/test/kotlin/thc/TypedApplicationTest.kt",
+        "sha256": "56f660de53527a483e7e9bd533414ceb9117b64bff1e8dcc90574c552fc2b314",
+        "bytes": 9129
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/AstSelfCallTest.kt",
+        "sha256": "c072c02fde8c38067b629c9e4766f1922a5030c0a3635b051644b5f606be5f0b",
+        "bytes": 11003
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/BindingCellMetadataTest.kt",
+        "sha256": "bf2831d4fa2846a3d9c270bb25b16328aa3c3e4642a09d6e2086b1d446465d8e",
+        "bytes": 9535
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/BloomValueTest.kt",
+        "sha256": "283b47b0114920e2df1b897d5d30f79bce81bc3749963ec4dfa6539d793b3c46",
+        "bytes": 8721
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt",
+        "sha256": "6e2f880c4aea9ad334d59b328d1370965d11f544b93c353be59e09d761dc6698",
+        "bytes": 10940
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/CallDemandTest.kt",
+        "sha256": "d24841bfc757a492fb53a749bc85c6f05f0544738044c06f5fa95ea71d1d41a2",
+        "bytes": 14888
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt",
+        "sha256": "b57e973c886d85a2e1961bcd41b377b936df7ed2e8118e81ef8a308e3c12a148",
+        "bytes": 11505
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt",
+        "sha256": "ae3ee0d764e247073a0740f7f8aada667ff6aa30642ea2c94579d4a23dd0a37f",
+        "bytes": 10616
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/CoreProofJoinTest.kt",
+        "sha256": "0067e57d1431c9021eea6a64a1d7c29eb14bb8afdc0139e5b37a99035d068ecd",
+        "bytes": 9649
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/CoreSourceTest.kt",
+        "sha256": "1fabeba2ebd8cbb6a15bf53f93eb29f95148e44df0885ab9728a06cc369c05e7",
+        "bytes": 10426
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/EntryContractTest.kt",
+        "sha256": "7de8b6aaa24ad4e61de6a6cb7f3bbdc278dbeb529f53ab2dddf87edaf6f7b390",
+        "bytes": 12142
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/EntrySelfCallTest.kt",
+        "sha256": "5d981ff6f9f05c9a5aacf559eb2c7c4433f4a27f7ee173b0dfa9a3b54ad8ba19",
+        "bytes": 8889
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ForcedBindingTest.kt",
+        "sha256": "4d9fb0b506e3b5d8983618894866f2ea8df917b2ead0c061eb59e411937a022c",
+        "bytes": 11853
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/JoinWhnfProofTest.kt",
+        "sha256": "711c4590e4bc2a24c516d04d0b75c6e8bdb0f0fadd7b48d468bc7f301c2c85c6",
+        "bytes": 7273
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/LeadingCaseReturnTest.kt",
+        "sha256": "9a30a65c693b689dc9f69a64d4085a889f0b0c742e688d98cc24c33b058132b5",
+        "bytes": 19453
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/OperandRetentionTest.kt",
+        "sha256": "0619241ed32733e61db2a66dbb90741f7a35cf6bbd0a9aaaabc0894dd354aeb0",
+        "bytes": 5475
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ReferenceCaptureTest.kt",
+        "sha256": "2276897ba0dd9eab20707ae2cc295120b1ae65f6d69edea932c45470f8d09d94",
+        "bytes": 11464
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ReferenceFieldTest.kt",
+        "sha256": "ecd8087ee1620c321f18e67196d3cd71253bdb5f4bd54ed9a5df82a5d29fa0fa",
+        "bytes": 8800
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ReferenceFormalTest.kt",
+        "sha256": "9b45b33d1464aeb0f3f396ea8525ad4f2c082f3301fcabb3974316796f0e4f41",
+        "bytes": 9767
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/SourceCloneTest.kt",
+        "sha256": "b16a10e3ca92e0938b4d0190e61433fc22f633337d7782b5fc1ae53c13f627f8",
+        "bytes": 6234
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt",
+        "sha256": "77cc1b5205387999708abf10e7c5e6786b0f12c0edb1703a45c67d968672adc8",
+        "bytes": 9743
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/TypedCaseTest.kt",
+        "sha256": "c64df6a1f7191dbee7332e85c7d884c1dce754ee7b5bc985ac68c30e2955cda4",
+        "bytes": 10072
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/TypedExecutionTest.kt",
+        "sha256": "a76f3858f51a2d4f17049b8efae798f11c2120dfb2d146c2cd9626813280a823",
+        "bytes": 5651
+      },
+      {
+        "path": "validation/map-export.log",
+        "sha256": "689f749267a7ec38c71e18c48cbeda09a952729dd7de1349197a34de9a1d3096",
+        "bytes": 3410
+      },
+      {
+        "path": "validation/prepare.log",
+        "sha256": "b296aa0cd0765e6e5042f33d8c196821bb17e6d7a28ab10f740b2110b3b0cec3",
+        "bytes": 5549
+      },
+      {
+        "path": "validation/tests/TEST-thc.BloomHeaderTest.xml",
+        "sha256": "8ab7e532042cf9ff9abf79ad73715c1857f8c33950e342aa3059a2d471c93090",
+        "bytes": 565
+      },
+      {
+        "path": "validation/tests/TEST-thc.BytecodeBackendTest.xml",
+        "sha256": "4c911087c70fdd767199beaf966c9554935fba9d899a3a902878e5a609019958",
+        "bytes": 1798
+      },
+      {
+        "path": "validation/tests/TEST-thc.BytecodeCoreProofTest.xml",
+        "sha256": "cf0bc9119ae7bb16c05ad6f3ab7e2aa67ba8d20bb060ed6afb9a32efbc9127f9",
+        "bytes": 1605
+      },
+      {
+        "path": "validation/tests/TEST-thc.BytecodeSourceNotesTest.xml",
+        "sha256": "ee026e4edefbbba5af5edcfec383d55f7f91d23b52295b463a86425cb864203e",
+        "bytes": 740
+      },
+      {
+        "path": "validation/tests/TEST-thc.CStringTest.xml",
+        "sha256": "80b108edcb74abdd94a3215d304195a28ee39354222e3802ee2910f864e5c82b",
+        "bytes": 814
+      },
+      {
+        "path": "validation/tests/TEST-thc.CasePrimitiveTest.xml",
+        "sha256": "8f8106248436f7cbe8a70e3c64f00bc916a232f4811a09e10447d35f58dcaea6",
+        "bytes": 732
+      },
+      {
+        "path": "validation/tests/TEST-thc.CoreLinkerTest.xml",
+        "sha256": "ed1db16ad749708b1f871cdb409daa3c41d4499a69c074c937dcc3ace2d3d045",
+        "bytes": 819
+      },
+      {
+        "path": "validation/tests/TEST-thc.DiagnosticModeTest.xml",
+        "sha256": "1e4f83b708acf2cb7a21059c8c0820f45b0d02f8f47e92d590d7430eb2cc3645",
+        "bytes": 692
+      },
+      {
+        "path": "validation/tests/TEST-thc.FramesTest.xml",
+        "sha256": "959b6d8cb69435bc14d47efe201bd9c96a7aa6cc64938e08f1e0e6de4946d4cb",
+        "bytes": 899
+      },
+      {
+        "path": "validation/tests/TEST-thc.GuestExceptionsTest.xml",
+        "sha256": "e70f350cb9c7231d59cc58023b2fd525837561945fd1ad7acb23f99b8f8cc747",
+        "bytes": 704
+      },
+      {
+        "path": "validation/tests/TEST-thc.RealCoreCallDemandTest.xml",
+        "sha256": "4477aeebd3be56095b2318f41710371f9f82217b5dfe40c4b98ede54d51c8023",
+        "bytes": 588
+      },
+      {
+        "path": "validation/tests/TEST-thc.RealCoreEntryContractTest.xml",
+        "sha256": "7614e2b104d4c726d5062d77116b53fc6b70bf5a3121d5e7dc45c1990cbfbca1",
+        "bytes": 868
+      },
+      {
+        "path": "validation/tests/TEST-thc.RealCoreJoinTest.xml",
+        "sha256": "a9b8babecc9b62a73ce266ea1a2f49bf40418a81f63409c5e761d85c39ef3e7d",
+        "bytes": 562
+      },
+      {
+        "path": "validation/tests/TEST-thc.RuntimeTest.xml",
+        "sha256": "6c06b925cd9e1eebc87d86ab316c5b337a227ab6909ae767ade62a97c119f842",
+        "bytes": 15028
+      },
+      {
+        "path": "validation/tests/TEST-thc.SelfTailProfileTest.xml",
+        "sha256": "30664bca0d1d81c9b57a4f89d80fd986d018eb742aafb7371ed57cd48e8eb932",
+        "bytes": 573
+      },
+      {
+        "path": "validation/tests/TEST-thc.StrictFieldsTest.xml",
+        "sha256": "15228173b3407d96a3c39739ae70f7a015dac150290b49b787f8359750a29d67",
+        "bytes": 1099
+      },
+      {
+        "path": "validation/tests/TEST-thc.TailCycleTest.xml",
+        "sha256": "64906c692a961acaeefca1b90fba8b8fe6cd7e86ecd69197eca475954c24ba39",
+        "bytes": 1152
+      },
+      {
+        "path": "validation/tests/TEST-thc.ThunkDispatchTest.xml",
+        "sha256": "26502c18623aaea11cfdc41932e6394d6720a57cb01171a6a0733de9c372623c",
+        "bytes": 563
+      },
+      {
+        "path": "validation/tests/TEST-thc.ThunkRetentionTest.xml",
+        "sha256": "b3537944a80d1798c04162bf6e178b43ac9b87f580384d78ef9645b85edb9ab8",
+        "bytes": 839
+      },
+      {
+        "path": "validation/tests/TEST-thc.TypedApplicationTest.xml",
+        "sha256": "5531c93b1ee2cdd4467c371c14779b452703b0e630750568b3b3ef821fe83a4a",
+        "bytes": 750
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.AstSelfCallTest.xml",
+        "sha256": "915820f5516ba34d321b68601e18f16e2d9f4b9a0399a3683e5869fd2e411cf7",
+        "bytes": 892
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.BindingCellMetadataTest.xml",
+        "sha256": "93094695d63266d521db4e6bbd079904c13efd248e9fb51d19ed6bafb4f41611",
+        "bytes": 787
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.BloomValueTest.xml",
+        "sha256": "f48d7ac80cf09626b50519530c57cae9271a86eb5219fea82d35762cafa25b77",
+        "bytes": 847
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.BoxedValueCacheTest.xml",
+        "sha256": "5de20202d3e2707327e43db48af602dbcbd60f2a691e3ad251323ed168c4712e",
+        "bytes": 1060
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.CallDemandTest.xml",
+        "sha256": "7f4b8c970024baf6c553afbb1f20a8fb50a81d8be8971de0bb25db779702ef5e",
+        "bytes": 1285
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+        "sha256": "8a68258ba7f4b703daaeccbfc35e126153fb5f9b53005025db059fd9fb8012f1",
+        "bytes": 1039
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+        "sha256": "e3c0b54ae989b3bfb77347330c29380de8235ba0ba2342bf06a7bf8af14a153d",
+        "bytes": 941
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.CoreProofJoinTest.xml",
+        "sha256": "bd47f675e075b83b0f336eb84932d334aa2af3a8e0470b1f2824783ed8f626a1",
+        "bytes": 1161
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.CoreSourceTest.xml",
+        "sha256": "909825e9561b7e6d736e4725fad06bba73e7495696c08b382065d8f7557cb392",
+        "bytes": 967
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.EntryContractTest.xml",
+        "sha256": "d0f635f23a0539917adcbe946879ebe4bc7c8ea57a926623bcedfd24e0aff76a",
+        "bytes": 1140
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.EntrySelfCallTest.xml",
+        "sha256": "036785091a76f4a96abec9ab51017902656ec2bbcf15ee772492ad124935132a",
+        "bytes": 588
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ForcedBindingTest.xml",
+        "sha256": "b4439509488d0a69dea18991f700da489348691030d9ae0e6ab25dd5372e37af",
+        "bytes": 1041
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.JoinWhnfProofTest.xml",
+        "sha256": "ce96ee14be21b0349b234cd8b6b590e03c83b4c2f8d71c8bebaa81b27ce94084",
+        "bytes": 450
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+        "sha256": "78fc599639e06e24d64d0761e587d673b4590efd3e95c3a785b7ac664440dc27",
+        "bytes": 1364
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.OperandRetentionTest.xml",
+        "sha256": "a7d4f8425f5dc463e77557139518176466b0a32fa5118fb65af68f9609c0c095",
+        "bytes": 627
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ReferenceCaptureTest.xml",
+        "sha256": "697d7ca11c3268442091b4c98ed6d251c5f25e33352030412fcce059de9cfb12",
+        "bytes": 762
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ReferenceFieldTest.xml",
+        "sha256": "c0ac66a5e95fea438a6fff261030a5d48154f42c1153ec32a326405a3003ebf4",
+        "bytes": 747
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ReferenceFormalTest.xml",
+        "sha256": "35dbf0b42732fa8af81f546dfb3aab546cfa8a51bbf57541688c20f59c0ee6f6",
+        "bytes": 595
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.SourceCloneTest.xml",
+        "sha256": "c2d4354be3c4851856d203ab40356599099a4a4aa6386a767022ad5dce093634",
+        "bytes": 458
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+        "sha256": "792569072a2c89932543c37c34f113cb71b5de27445c2dadfa6a539433def56a",
+        "bytes": 595
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.TypedCaseTest.xml",
+        "sha256": "47b2164fa33ec2d2bb0877213a6a3fea63be4118b7c671f11cf1aea7640c6f16",
+        "bytes": 589
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.TypedExecutionTest.xml",
+        "sha256": "d4819a733af8ece583f0124cd599c538d5b2e93c84a66d2f88a970f67519f8ea",
+        "bytes": 609
+      },
+      {
+        "path": "validation/tests-repaired.log",
+        "sha256": "952e22cf8afee5a1c50d992434d5db288761ef5781fb002d71ed7d1de21ba558",
+        "bytes": 18028
+      },
+      {
+        "path": "manifest.json",
+        "bytes": 40788,
+        "sha256": "753fe535cef97846e68082f4597bc77221d6a53016b32bd526c63bc8dbace1ae"
+      }
+    ],
+    "jarSha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+    "originalMacNativeExcluded": true
+  },
+  "call-demand-control-v1": {
+    "files": [
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "0af3eb3cc2cd65aed373c7989ec698590b5aab07c6e4fda6a2e57e81efb11cfa",
+        "bytes": 26769
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "73d69518794de8360eb08870f29e4f63df5340b6cf868d774b3d0685437e8010",
+        "bytes": 735603
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "ecfaaabbfe55eb5f3c9214dc19216b3510bcb1e03a5936086f325c448d07f059",
+        "bytes": 7617
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "af9b8516b3e7e2c7077da143981a01c2b749d4624b77b35d65f8220ccff9d45f",
+        "bytes": 16949
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "38b8781787a3c14612dc0618a72ec6954cd09da88d569e0e9fdcc63202701856",
+        "bytes": 320920
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "b16bfaf0664eb3f6d0816bf97c30f1c204dfce6ffef4686b060e96bb07ec6cc3",
+        "bytes": 36811
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "f2a5946da1003a295240b208a1e33fd508bb2f3355e21d0006e9bfcd9fe7fd5e",
+        "bytes": 523167
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "6ba053dcae8d6bf03ab3dd994abccaf5b43acdb2cd086ccb0446d80092fd29da",
+        "bytes": 12853904
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "009d26bbcaabd8fa180ffc142a090bd7b35e90af0144268e7aa36117d24563c9",
+        "bytes": 25760966
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "e3c2dbb2c428abe6cf497aad32d69b3973a3802181392be060bdb7bd8de0801f",
+        "bytes": 839209
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "a9b961818694520c4bed35d1debbb3ca8641d4acee144e7fb67082935cdc6d19",
+        "bytes": 9012261
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "9afd0d9801ce57ced8c20f38a61c2f3b1a0cc2f7959526b384daf9d47d9f834d",
+        "bytes": 14294
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "6b1da1245bbd6ea060ad3c793f792b6eb3e29c248359bc63b4a0ba04c74e9b30",
+        "bytes": 966402
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89",
+        "bytes": 1112
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "6aaad63727411c6bfebf570eae6af21932b7db3f71a764bea41ba6eb72bb17c8",
+        "bytes": 1331801
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "a0483c4e1b7824554197585aef8116b208414b226a707aee082c717d07bc361f",
+        "bytes": 37089
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "10e05791ea3f4a512eed79eed06c62275f305b7c79e15496931903a0cfeddb0b",
+        "bytes": 64118
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "d94a84946b581ed82165112662fae0f627cda9a6bb6854cd50acb0aaf667656d",
+        "bytes": 1435
+      },
+      {
+        "path": "map/oracle.tsv",
+        "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea",
+        "bytes": 420
+      },
+      {
+        "path": "validation/map-export.log",
+        "sha256": "689f749267a7ec38c71e18c48cbeda09a952729dd7de1349197a34de9a1d3096",
+        "bytes": 3410
+      },
+      {
+        "path": "validation/prepare.log",
+        "sha256": "b296aa0cd0765e6e5042f33d8c196821bb17e6d7a28ab10f740b2110b3b0cec3",
+        "bytes": 5549
+      },
+      {
+        "path": "validation/tests/TEST-thc.BloomHeaderTest.xml",
+        "sha256": "8ab7e532042cf9ff9abf79ad73715c1857f8c33950e342aa3059a2d471c93090",
+        "bytes": 565
+      },
+      {
+        "path": "validation/tests/TEST-thc.BytecodeBackendTest.xml",
+        "sha256": "4c911087c70fdd767199beaf966c9554935fba9d899a3a902878e5a609019958",
+        "bytes": 1798
+      },
+      {
+        "path": "validation/tests/TEST-thc.BytecodeCoreProofTest.xml",
+        "sha256": "cf0bc9119ae7bb16c05ad6f3ab7e2aa67ba8d20bb060ed6afb9a32efbc9127f9",
+        "bytes": 1605
+      },
+      {
+        "path": "validation/tests/TEST-thc.BytecodeSourceNotesTest.xml",
+        "sha256": "ee026e4edefbbba5af5edcfec383d55f7f91d23b52295b463a86425cb864203e",
+        "bytes": 740
+      },
+      {
+        "path": "validation/tests/TEST-thc.CStringTest.xml",
+        "sha256": "80b108edcb74abdd94a3215d304195a28ee39354222e3802ee2910f864e5c82b",
+        "bytes": 814
+      },
+      {
+        "path": "validation/tests/TEST-thc.CasePrimitiveTest.xml",
+        "sha256": "8f8106248436f7cbe8a70e3c64f00bc916a232f4811a09e10447d35f58dcaea6",
+        "bytes": 732
+      },
+      {
+        "path": "validation/tests/TEST-thc.CoreLinkerTest.xml",
+        "sha256": "ed1db16ad749708b1f871cdb409daa3c41d4499a69c074c937dcc3ace2d3d045",
+        "bytes": 819
+      },
+      {
+        "path": "validation/tests/TEST-thc.DiagnosticModeTest.xml",
+        "sha256": "1e4f83b708acf2cb7a21059c8c0820f45b0d02f8f47e92d590d7430eb2cc3645",
+        "bytes": 692
+      },
+      {
+        "path": "validation/tests/TEST-thc.FramesTest.xml",
+        "sha256": "959b6d8cb69435bc14d47efe201bd9c96a7aa6cc64938e08f1e0e6de4946d4cb",
+        "bytes": 899
+      },
+      {
+        "path": "validation/tests/TEST-thc.GuestExceptionsTest.xml",
+        "sha256": "e70f350cb9c7231d59cc58023b2fd525837561945fd1ad7acb23f99b8f8cc747",
+        "bytes": 704
+      },
+      {
+        "path": "validation/tests/TEST-thc.RealCoreCallDemandTest.xml",
+        "sha256": "4477aeebd3be56095b2318f41710371f9f82217b5dfe40c4b98ede54d51c8023",
+        "bytes": 588
+      },
+      {
+        "path": "validation/tests/TEST-thc.RealCoreEntryContractTest.xml",
+        "sha256": "7614e2b104d4c726d5062d77116b53fc6b70bf5a3121d5e7dc45c1990cbfbca1",
+        "bytes": 868
+      },
+      {
+        "path": "validation/tests/TEST-thc.RealCoreJoinTest.xml",
+        "sha256": "a9b8babecc9b62a73ce266ea1a2f49bf40418a81f63409c5e761d85c39ef3e7d",
+        "bytes": 562
+      },
+      {
+        "path": "validation/tests/TEST-thc.RuntimeTest.xml",
+        "sha256": "6c06b925cd9e1eebc87d86ab316c5b337a227ab6909ae767ade62a97c119f842",
+        "bytes": 15028
+      },
+      {
+        "path": "validation/tests/TEST-thc.SelfTailProfileTest.xml",
+        "sha256": "30664bca0d1d81c9b57a4f89d80fd986d018eb742aafb7371ed57cd48e8eb932",
+        "bytes": 573
+      },
+      {
+        "path": "validation/tests/TEST-thc.StrictFieldsTest.xml",
+        "sha256": "15228173b3407d96a3c39739ae70f7a015dac150290b49b787f8359750a29d67",
+        "bytes": 1099
+      },
+      {
+        "path": "validation/tests/TEST-thc.TailCycleTest.xml",
+        "sha256": "64906c692a961acaeefca1b90fba8b8fe6cd7e86ecd69197eca475954c24ba39",
+        "bytes": 1152
+      },
+      {
+        "path": "validation/tests/TEST-thc.ThunkDispatchTest.xml",
+        "sha256": "26502c18623aaea11cfdc41932e6394d6720a57cb01171a6a0733de9c372623c",
+        "bytes": 563
+      },
+      {
+        "path": "validation/tests/TEST-thc.ThunkRetentionTest.xml",
+        "sha256": "b3537944a80d1798c04162bf6e178b43ac9b87f580384d78ef9645b85edb9ab8",
+        "bytes": 839
+      },
+      {
+        "path": "validation/tests/TEST-thc.TypedApplicationTest.xml",
+        "sha256": "5531c93b1ee2cdd4467c371c14779b452703b0e630750568b3b3ef821fe83a4a",
+        "bytes": 750
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.AstSelfCallTest.xml",
+        "sha256": "915820f5516ba34d321b68601e18f16e2d9f4b9a0399a3683e5869fd2e411cf7",
+        "bytes": 892
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.BindingCellMetadataTest.xml",
+        "sha256": "93094695d63266d521db4e6bbd079904c13efd248e9fb51d19ed6bafb4f41611",
+        "bytes": 787
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.BloomValueTest.xml",
+        "sha256": "f48d7ac80cf09626b50519530c57cae9271a86eb5219fea82d35762cafa25b77",
+        "bytes": 847
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.BoxedValueCacheTest.xml",
+        "sha256": "5de20202d3e2707327e43db48af602dbcbd60f2a691e3ad251323ed168c4712e",
+        "bytes": 1060
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.CallDemandTest.xml",
+        "sha256": "7f4b8c970024baf6c553afbb1f20a8fb50a81d8be8971de0bb25db779702ef5e",
+        "bytes": 1285
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ClassOwnedLayoutTest.xml",
+        "sha256": "8a68258ba7f4b703daaeccbfc35e126153fb5f9b53005025db059fd9fb8012f1",
+        "bytes": 1039
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ConstructorClassIdentityTest.xml",
+        "sha256": "e3c0b54ae989b3bfb77347330c29380de8235ba0ba2342bf06a7bf8af14a153d",
+        "bytes": 941
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.CoreProofJoinTest.xml",
+        "sha256": "bd47f675e075b83b0f336eb84932d334aa2af3a8e0470b1f2824783ed8f626a1",
+        "bytes": 1161
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.CoreSourceTest.xml",
+        "sha256": "909825e9561b7e6d736e4725fad06bba73e7495696c08b382065d8f7557cb392",
+        "bytes": 967
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.EntryContractTest.xml",
+        "sha256": "d0f635f23a0539917adcbe946879ebe4bc7c8ea57a926623bcedfd24e0aff76a",
+        "bytes": 1140
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.EntrySelfCallTest.xml",
+        "sha256": "036785091a76f4a96abec9ab51017902656ec2bbcf15ee772492ad124935132a",
+        "bytes": 588
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ForcedBindingTest.xml",
+        "sha256": "b4439509488d0a69dea18991f700da489348691030d9ae0e6ab25dd5372e37af",
+        "bytes": 1041
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.JoinWhnfProofTest.xml",
+        "sha256": "ce96ee14be21b0349b234cd8b6b590e03c83b4c2f8d71c8bebaa81b27ce94084",
+        "bytes": 450
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.LeadingCaseReturnTest.xml",
+        "sha256": "78fc599639e06e24d64d0761e587d673b4590efd3e95c3a785b7ac664440dc27",
+        "bytes": 1364
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.OperandRetentionTest.xml",
+        "sha256": "a7d4f8425f5dc463e77557139518176466b0a32fa5118fb65af68f9609c0c095",
+        "bytes": 627
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ReferenceCaptureTest.xml",
+        "sha256": "697d7ca11c3268442091b4c98ed6d251c5f25e33352030412fcce059de9cfb12",
+        "bytes": 762
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ReferenceFieldTest.xml",
+        "sha256": "c0ac66a5e95fea438a6fff261030a5d48154f42c1153ec32a326405a3003ebf4",
+        "bytes": 747
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.ReferenceFormalTest.xml",
+        "sha256": "35dbf0b42732fa8af81f546dfb3aab546cfa8a51bbf57541688c20f59c0ee6f6",
+        "bytes": 595
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.SourceCloneTest.xml",
+        "sha256": "c2d4354be3c4851856d203ab40356599099a4a4aa6386a767022ad5dce093634",
+        "bytes": 458
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.StaticShapeSafetyTest.xml",
+        "sha256": "792569072a2c89932543c37c34f113cb71b5de27445c2dadfa6a539433def56a",
+        "bytes": 595
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.TypedCaseTest.xml",
+        "sha256": "47b2164fa33ec2d2bb0877213a6a3fea63be4118b7c671f11cf1aea7640c6f16",
+        "bytes": 589
+      },
+      {
+        "path": "validation/tests/TEST-thc.runtime.TypedExecutionTest.xml",
+        "sha256": "d4819a733af8ece583f0124cd599c538d5b2e93c84a66d2f88a970f67519f8ea",
+        "bytes": 609
+      },
+      {
+        "path": "validation/tests-repaired.log",
+        "sha256": "952e22cf8afee5a1c50d992434d5db288761ef5781fb002d71ed7d1de21ba558",
+        "bytes": 18028
+      },
+      {
+        "path": "manifest.json",
+        "bytes": 18236,
+        "sha256": "53b32ca4c15334c8e5a5189c2037ccdbd1d8b83ed6577cde6bb2fac50c9202fd"
+      }
+    ],
+    "jarSha256": "4e4568c2bdb19bba7a69cf366966bdac0f987d02c30f0ee46ed42aa03abf79bf",
+    "originalMacNativeExcluded": true
+  },
+  "core-equivalence.json": {
+    "sha256": "db68c840de87bd44dedf197bcee38f233aa9bbe9a7f9becd0c04437bf1c9d42c",
+    "bytes": 406
+  },
+  "map-checks.json": {
+    "sha256": "97ef0f0d9cd4bc60580066fa5e8733d9b4f06b59726766c4134b6a95758fdd8e",
+    "bytes": 9510
+  }
+}

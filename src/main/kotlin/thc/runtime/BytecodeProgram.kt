@@ -15,6 +15,7 @@ import thc.Language
  * same selective captures, lazy update protocol and PAP convention as the AST backend.
  */
 class BytecodeProgram(private val language: Language, moduleData: Map<String, Any?>) : ExecutableProgram {
+    private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val sources = CoreSources(moduleData)
     private val metrics = Metrics(moduleData["instrument"] != false)
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
@@ -573,6 +574,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val fn = expr[1] as List<Any?>; val args = expr[2] as List<List<Any?>>
             val flags = expr.getOrNull(3) as? List<*> ?: throw RuntimeFault("Application lacks representation flags")
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
+            val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val strict = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size) strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
                 "lam" -> CoreEntries.lambda(fn)
@@ -583,7 +585,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }?.takeIf { args.size >= it.size }
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
-                argument(arg, scope, lifted && strict?.get(index) != true && entryStrict?.getOrNull(index) != true)
+                argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true)
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
