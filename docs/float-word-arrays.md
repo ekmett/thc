@@ -18,7 +18,7 @@ freeze identity. Float accesses use a native-order four-byte `VarHandle` view
 and primitive Float expressions, frame slots and bytecode locals. Word accesses
 reuse the eight-byte raw-Long storage operations, preserving every bit, while
 the loader separately requires the exact `WordRep` contract. This reuse does
-not reinterpret machine Word as `Word64Rep` or permit `IntRep` arguments.
+not reinterpret machine Word as `Word64Rep` or permit `IntRep` payloads.
 
 Each full-width element index is checked against the complete-element count
 before narrowing or multiplication; partial trailing bytes are inaccessible.
@@ -122,3 +122,35 @@ General dynamic checked bounds, library error paths, copying/freezing via FFI,
 floating host arguments, arbitrary floating arithmetic, signaling-NaN identity,
 and non-native byte order on the current native host are not claimed. Existing
 `unsafeFreezeByteArray#` alias semantics are used, not broadened by this slice.
+
+## Verified checkpoint — 2026-09-23
+
+On eak-quartus, Linux x86_64, using GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
+
+- Fresh complete fixture preparation passed; all 3,165 native/model rows and
+  fourteen strict pre/post audits passed. All eighteen source and thirty-four
+  artifact hashes were rechecked after both full suites.
+- All ten focused JVM tests passed. Full default and dense-handoff suites each
+  passed 388 tests in 82 suites with zero failures, errors or skips; `installDist`
+  passed in both modes. Dense handoff used a forced rebuild/rerun.
+- Each handoff configuration passed all 25,320 measured compiled invocations and
+  exact 60,080 guest-root entries described above, with no weakened entry gates.
+- Python tests passed without skips: 13 Float/Word model, 5 Int model, 9 Double
+  model, 7 Int32 model, 9 ByteArray contracts, 43 auditor and 4 primop inventory.
+- Independent xhigh review covered runtime, JVM tests, build inputs and CI.
+  Ultra review independently reconstructed every native result, checked actual
+  Core call counts, all 52 hashes and the diagnostic-trap controls. Both were
+  clean after the documented test-policy and wording corrections.
+
+Runtime/test revision: `95f056f60041e6b1abf8beab51e597cdd001b3f3`.
+This checkpoint is stacked on `70726466ad1f82f433e8aa7207094be3f95d0cd7`;
+the integration owner separately supplies the narrow-literal unknown-metadata
+correction `8536441f913225412b2c699255c9fd500effc8c0`. This Float/Word branch
+does not duplicate that prerequisite or claim validation of the combined tree.
+
+Retained local evidence is under `build/float-word-arrays/`,
+`build/prepare-all-float-word.log`, `build/test-default-float-word.log`,
+`build/test-handoff-float-word.log`, and `build/test-results/float-word-default/`
+and `float-word-handoff/`. The initial focused failure was an overbroad
+load-time expectation for diagnostic unknown tuple leaves; the corrected test
+requires their actual on-demand trap. No runtime workaround was introduced.
