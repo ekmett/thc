@@ -11,6 +11,7 @@ python3 scripts/prepare-sqrt-audit.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/prepare-tuple-return-audit.py
 python3 scripts/prepare-state-tuple-audit.py
+python3 scripts/prepare-empty-tuple-input-audit.py
 python3 scripts/prepare-tuple-join-audit.py
 python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py

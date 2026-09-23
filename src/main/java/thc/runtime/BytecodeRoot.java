@@ -273,6 +273,43 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = ArgumentLayout.class, name = "layout")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyCompactTuple {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics,
+                Closure function, @Variadic Object[] arguments,
+                @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            dispatch.execute(frame, function, arguments);
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, layout.getLogicalArity(), false, layout);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = ArgumentLayout.class, name = "layout")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class TailApplyCompactTuple {
+        @Specialization public static Object apply(VirtualFrame frame, BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics,
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            try {
+                dispatch.execute(frame, function, arguments);
+                return null;
+            } catch (TailCall transfer) {
+                if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return transfer;
+            }
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, layout.getLogicalArity(), true, layout);
+        }
+    }
+
     @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "source")
     public static final class FinishTuple {
@@ -330,6 +367,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         public static Dispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
             return Dispatch.Companion.create(arity, tail, metrics, evaluatedArguments);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = ArgumentLayout.class, name = "layout")
+    @ConstantOperand(type = boolean.class, name = "tail")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean[].class, name = "evaluatedArguments")
+    public static final class ApplyCompact {
+        @Specialization public static Object apply(VirtualFrame frame, ArgumentLayout layout, boolean tail,
+                Metrics metrics, boolean[] evaluatedArguments, Closure function, @Variadic Object[] arguments,
+                @Bind("$node") Node node,
+                @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
+            try {
+                return dispatch.execute(frame, function, arguments);
+            } catch (TailCall call) {
+                // A -> B -> ... -> A unwinds to the owning activation. The compiler
+                // consumes this internal result and restores locals before a real
+                // bytecode backedge. Never intercept a call with pending non-tail work.
+                if (!tail || !((GuestRoot) node.getRootNode()).isSelf(call.getTarget())) throw call;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return call;
+            }
+        }
+        public static Dispatch createDispatch(ArgumentLayout layout, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
+            return Dispatch.Companion.create(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout);
         }
     }
 

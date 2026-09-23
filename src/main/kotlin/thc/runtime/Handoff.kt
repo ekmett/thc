@@ -170,7 +170,7 @@ internal class HandoffEntry(
             if (!thc.handoffLayouts.enabled || resultRep.isTuple) return null
             val resultReference = resultRep.primReps?.singleOrNull()?.startsWith("BoxedRep ") == true
             if (!resultRep.isLong && !resultReference) return null
-            val reps = argumentReps.map { it.primReps?.singleOrNull() ?: return null }
+            val reps = argumentReps.filterNot { it.isEmptyTuple }.map { it.primReps?.singleOrNull() ?: return null }
             if (!reps.all(HandoffLayout::supports)) return null
             val packetReps = listOf("WordRep") + (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps
             return HandoffEntry(thc, thc.handoffLayouts.intern(packetReps), resultRep.isLong,

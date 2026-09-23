@@ -1,0 +1,562 @@
+{
+  "runtimeCommit": "48655de7baf5fbd54ec171aacd546148ad70fd3f",
+  "entries": [
+    "sequenceBuild",
+    "sequenceEnds",
+    "sequenceAppend",
+    "sequenceLazyPayloads"
+  ],
+  "equivalentRemoteExports": true,
+  "recoveryOrSettlingCallsAdded": false,
+  "modes": {
+    "ast-default": {
+      "interpretedNativeRows": 152,
+      "compiledWarmRows": 12,
+      "compiledReplayRows": 152,
+      "hostOriginalActiveIdentityValid": true,
+      "logSha256": "385febf774088bdc4add5022050f042efdebebe65acb68eb2b854ad77cff9dfe"
+    },
+    "bytecode-default": {
+      "interpretedNativeRows": 152,
+      "compiledWarmRows": 12,
+      "compiledReplayRows": 152,
+      "hostOriginalActiveIdentityValid": true,
+      "logSha256": "fa5ac32bbfdbd2e91ed3a992f7257adf8cca3092082afcfed843f16e5de6b27b"
+    },
+    "ast-handoff": {
+      "interpretedNativeRows": 152,
+      "compiledWarmRows": 12,
+      "compiledReplayRows": 152,
+      "hostOriginalActiveIdentityValid": true,
+      "logSha256": "1231c234ca490e927bb9ce875d8eec81d0b18174210abfeb0a47053e74197304"
+    },
+    "bytecode-handoff": {
+      "interpretedNativeRows": 152,
+      "compiledWarmRows": 12,
+      "compiledReplayRows": 152,
+      "hostOriginalActiveIdentityValid": true,
+      "logSha256": "fa5ac32bbfdbd2e91ed3a992f7257adf8cca3092082afcfed843f16e5de6b27b"
+    }
+  },
+  "loader": {
+    "modules": "11 genuine GHC 9.14.1 Core modules; direct Json.parse, CoreModules.merge, then CoreModules.reachable",
+    "instrument": true,
+    "diagnosticUnsupported": false,
+    "host": "context.asValue(EntryValue(program, name, 1))",
+    "firstCompilationWarmup": "40 calls cycling native inputs 1, 8, 64",
+    "replay": "35 cold rows, then 40 calls cycling all 38 rows, one normal post-cold compilation, strict reversed replay"
+  },
+  "artifacts": [
+    {
+      "path": "build/libraries/sequence/core/Utils.Containers.Internal.Prelude.json",
+      "sha256": "3610856d3f22c42e303727cf8d79fdc8e4a2433caadd1a8a6721ff1189409d75"
+    },
+    {
+      "path": "build/libraries/sequence/core/Utils.Containers.Internal.State.json",
+      "sha256": "96fe52a26a15aa09c7fa89f3518a030b9cd562c238ae37eb0523f6ccde13552d"
+    },
+    {
+      "path": "build/libraries/sequence/core/Utils.Containers.Internal.StrictPair.json",
+      "sha256": "20599fae412196882d4a9bfb9815eae7f996a367d0aa0e17ca27fecb4a2b7df5"
+    },
+    {
+      "path": "build/libraries/sequence/core/Data.Sequence.Internal.json",
+      "sha256": "2505706d383b7cd659ef985b108f425a50ff7777eec20111b767022619d999ca"
+    },
+    {
+      "path": "build/libraries/sequence/core/Data.Sequence.Internal.Sorting.json",
+      "sha256": "a1cdd0ec261f7209bd51de4ad27b847a002c7095c43d41a6c2f2903282efef21"
+    },
+    {
+      "path": "build/libraries/sequence/core/Data.Sequence.json",
+      "sha256": "f38af066fb7349ae0ae76cdbe0b409bc2083061219aaa201d15ce2f36cd10998"
+    },
+    {
+      "path": "build/libraries/sequence/core/THC.SequenceWorkload.json",
+      "sha256": "28a06a8f87cb5034382118eb05c0628df2f3b8262ccf509f5b7b1a9be9903319"
+    },
+    {
+      "path": "build/libraries/sequence/core/THC.InterfaceClosure.json",
+      "sha256": "48957ee411a22621fc30abb5a8f72f11e7902d7a16d7997048d2584db1ed19a4"
+    },
+    {
+      "path": "build/libraries/boot/core/GHC.Internal.CString.json",
+      "sha256": "d39eb4c2ff9cad200685d8567f36e9a7dcec4cd1ed3276dbb1c16f41eeed701c"
+    },
+    {
+      "path": "build/libraries/boot/core/GHC.Internal.Err.json",
+      "sha256": "13433b0eb4dac60fa9805847fed141932b0b0f840c5461e6da7c60500b698021"
+    },
+    {
+      "path": "build/libraries/boot/core/GHC.InterfaceClosure.json",
+      "sha256": "75222651c7d7e0727525b6f6605e0e8c5fe4f1752c088865e17679fb21531f5b"
+    }
+  ],
+  "nativeOracle": {
+    "path": "build/libraries/oracle.tsv",
+    "sha256": "01fabd9fdc09bcf68a7fac03ecf0c93504ac3ef458a8c0ca521a460348ac2cd7",
+    "rows": 2964,
+    "selectedRows": 152
+  },
+  "nativeCasesSha256": "2f4681be2e6cc24316ffcd3e9d8e2baf488621bf5f64b90c455338232de2307d",
+  "audits": {
+    "sequenceEnds": {
+      "accepted": true,
+      "summary": {
+        "suppliedBindings": 1754,
+        "reachableBindings": 29,
+        "missingGlobals": 0,
+        "issues": 0
+      },
+      "issues": [],
+      "missingGlobals": []
+    },
+    "sequenceAggregate": {
+      "accepted": false,
+      "summary": {
+        "suppliedBindings": 1754,
+        "reachableBindings": 109,
+        "missingGlobals": 4,
+        "issues": 3
+      },
+      "issues": [
+        {
+          "code": "constructor-kind",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceAggregate",
+            "main:THC.SequenceWorkload.sequenceAggregate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        },
+        {
+          "code": "constructor-field-representation",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#)[0]: None",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceAggregate",
+            "main:THC.SequenceWorkload.sequenceAggregate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        },
+        {
+          "code": "constructor-field-representation",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#)[1]: None",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceAggregate",
+            "main:THC.SequenceWorkload.sequenceAggregate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        }
+      ],
+      "missingGlobals": [
+        {
+          "id": "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceAggregate",
+            "main:THC.SequenceWorkload.sequenceAggregate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+              "path": "/expr/body/alternatives/0/body/alternatives/0/body/arguments/1/scrutinee/function"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceAggregate",
+            "main:THC.SequenceWorkload.sequenceAggregate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+              "path": "/expr/body/scrutinee"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceAggregate",
+            "main:THC.SequenceWorkload.sequenceAggregate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Show.itos",
+            "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/0/body/function"
+            },
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/1/body/alternatives/0/body/arguments/1/function"
+            },
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/function"
+            },
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/arguments/1/function"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceAggregate",
+            "main:THC.SequenceWorkload.sequenceAggregate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+            "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+              "path": "/expr/body/arguments/0/arguments/0/alternatives/0/body"
+            }
+          ]
+        }
+      ]
+    },
+    "sequenceIndexUpdate": {
+      "accepted": false,
+      "summary": {
+        "suppliedBindings": 1754,
+        "reachableBindings": 79,
+        "missingGlobals": 4,
+        "issues": 3
+      },
+      "issues": [
+        {
+          "code": "constructor-kind",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceIndexUpdate",
+            "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        },
+        {
+          "code": "constructor-field-representation",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#)[0]: None",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceIndexUpdate",
+            "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        },
+        {
+          "code": "constructor-field-representation",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#)[1]: None",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceIndexUpdate",
+            "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        }
+      ],
+      "missingGlobals": [
+        {
+          "id": "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceIndexUpdate",
+            "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+              "path": "/expr/body/alternatives/0/body/alternatives/0/body/arguments/1/scrutinee/function"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceIndexUpdate",
+            "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+              "path": "/expr/body/scrutinee"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceIndexUpdate",
+            "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Show.itos",
+            "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/0/body/function"
+            },
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/1/body/alternatives/0/body/arguments/1/function"
+            },
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/function"
+            },
+            {
+              "owner": "ghc-internal:GHC.Internal.Show.itos",
+              "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/arguments/1/function"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceIndexUpdate",
+            "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+            "main:THC.SequenceWorkload.$windexUpdateScore",
+            "main:Data.Sequence.Internal.$wlvl",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+            "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+              "path": "/expr/body/arguments/0/arguments/0/alternatives/0/body"
+            }
+          ]
+        }
+      ]
+    },
+    "sequenceSplit": {
+      "accepted": false,
+      "summary": {
+        "suppliedBindings": 1754,
+        "reachableBindings": 64,
+        "missingGlobals": 3,
+        "issues": 3
+      },
+      "issues": [
+        {
+          "code": "constructor-kind",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceSplit",
+            "main:THC.SequenceWorkload.sequenceSplit2",
+            "main:THC.SequenceWorkload.$wsplitScore",
+            "main:Data.Sequence.Internal.$wsplitTreeE",
+            "main:Data.Sequence.Internal.$wsplitTreeN_rwz2",
+            "main:Data.Sequence.Internal.lvl84_rwz1",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        },
+        {
+          "code": "constructor-field-representation",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#)[0]: None",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceSplit",
+            "main:THC.SequenceWorkload.sequenceSplit2",
+            "main:THC.SequenceWorkload.$wsplitScore",
+            "main:Data.Sequence.Internal.$wsplitTreeE",
+            "main:Data.Sequence.Internal.$wsplitTreeN_rwz2",
+            "main:Data.Sequence.Internal.lvl84_rwz1",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        },
+        {
+          "code": "constructor-field-representation",
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "path": "/expr/body/function/body/alternatives/0",
+          "detail": "ghc-internal:GHC.Internal.Types.(#,#)[1]: None",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceSplit",
+            "main:THC.SequenceWorkload.sequenceSplit2",
+            "main:THC.SequenceWorkload.$wsplitScore",
+            "main:Data.Sequence.Internal.$wsplitTreeE",
+            "main:Data.Sequence.Internal.$wsplitTreeN_rwz2",
+            "main:Data.Sequence.Internal.lvl84_rwz1",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException"
+          ]
+        }
+      ],
+      "missingGlobals": [
+        {
+          "id": "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceSplit",
+            "main:THC.SequenceWorkload.sequenceSplit2",
+            "main:THC.SequenceWorkload.$wsplitScore",
+            "main:Data.Sequence.Internal.$wsplitTreeE",
+            "main:Data.Sequence.Internal.$wsplitTreeN_rwz2",
+            "main:Data.Sequence.Internal.lvl84_rwz1",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+              "path": "/expr/body/alternatives/0/body/alternatives/0/body/arguments/1/scrutinee/function"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceSplit",
+            "main:THC.SequenceWorkload.sequenceSplit2",
+            "main:THC.SequenceWorkload.$wsplitScore",
+            "main:Data.Sequence.Internal.$wsplitTreeE",
+            "main:Data.Sequence.Internal.$wsplitTreeN_rwz2",
+            "main:Data.Sequence.Internal.lvl84_rwz1",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+            "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+              "path": "/expr/body/scrutinee"
+            }
+          ]
+        },
+        {
+          "id": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "reachableVia": [
+            "main:THC.SequenceWorkload.sequenceSplit",
+            "main:THC.SequenceWorkload.sequenceSplit2",
+            "main:THC.SequenceWorkload.$wsplitScore",
+            "main:Data.Sequence.Internal.$wsplitTreeE",
+            "main:Data.Sequence.Internal.$wsplitTreeN_rwz2",
+            "main:Data.Sequence.Internal.lvl84_rwz1",
+            "ghc-internal:GHC.Internal.Err.error",
+            "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+            "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+            "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+          ],
+          "references": [
+            {
+              "owner": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+              "path": "/expr/body/arguments/0/arguments/0/alternatives/0/body"
+            }
+          ]
+        }
+      ]
+    },
+    "sequenceLazyPayloads": {
+      "accepted": true,
+      "summary": {
+        "suppliedBindings": 1754,
+        "reachableBindings": 18,
+        "missingGlobals": 0,
+        "issues": 0
+      },
+      "issues": [],
+      "missingGlobals": []
+    },
+    "sequenceBuild": {
+      "accepted": true,
+      "summary": {
+        "suppliedBindings": 1754,
+        "reachableBindings": 23,
+        "missingGlobals": 0,
+        "issues": 0
+      },
+      "issues": [],
+      "missingGlobals": []
+    },
+    "sequenceAppend": {
+      "accepted": true,
+      "summary": {
+        "suppliedBindings": 1754,
+        "reachableBindings": 27,
+        "missingGlobals": 0,
+        "issues": 0
+      },
+      "issues": [],
+      "missingGlobals": []
+    }
+  },
+  "probeSourceSha256": "8d35c52d1db5139ce878138a497c3376c5fbcb3abcf863fe839b2659963e8327",
+  "installedRuntimeJarSha256": "9cf981800ed1ae526b1b68f4fce25ea64f0049fb51a37454bfb8e2f2e288e16e"
+}

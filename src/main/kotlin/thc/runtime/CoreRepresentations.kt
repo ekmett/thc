@@ -14,6 +14,7 @@ internal data class CoreRepresentation(
 ) {
     val isVector: Boolean get() = vector != null
     val isTuple: Boolean get() = components != null
+    val isEmptyTuple: Boolean get() = present && kind == CoreKind.UNKNOWN && components?.isEmpty() == true && primReps?.isEmpty() == true
     val isLong: Boolean get() = kind == CoreKind.LONG
     val isFloat: Boolean get() = kind == CoreKind.FLOAT
     val isDouble: Boolean get() = kind == CoreKind.DOUBLE
@@ -87,6 +88,9 @@ internal object CoreRepresentations {
             }
         }
         visit(bindings)
+    }
+    fun requireInput(proof: CoreRepresentation) {
+        if (!proof.isEmptyTuple) requireScalar(proof, "argument")
     }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {
         requireNoVector(proof, boundary)

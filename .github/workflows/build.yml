@@ -165,6 +165,7 @@ jobs:
             build/floating/checks.json
             build/floating/oracle.tsv
             build/floating-tuple/
+            build/empty-tuple-input/
             build/sqrt/
             build/test-results/
             build/aggregate-frontier.json
