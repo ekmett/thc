@@ -194,6 +194,48 @@ class AuditTest(unittest.TestCase):
                           dict(kind='unknown', primReps=[], evaluated=False, aggregate='unboxed-tuple', components=[])):
                 self.assertFalse(run(['lit', kind, '1', dict(rep=proof)])['accepted'], proof)
 
+    def test_int16_literals_and_alternatives_require_canonical_signed_range(self):
+        for text in ('-32768', '-1', '0', '1', '32767', '-32769', '32768',
+                     '', '+1', '01', '-0', ' 1', '1.0', '18446744073709551616'):
+            valid = text in ('-32768', '-1', '0', '1', '32767')
+            literal = ['lit', 'int16', text]
+            alternative = ['case', lit(0), 'x', [['lit', ['int16', text], [], lit(1)], ['default', None, [], lit(2)]]]
+            for expression in (literal, alternative):
+                report = run(expression)
+                self.assertEqual(valid, report['accepted'], text)
+                if not valid:
+                    self.assertIn('invalid-literal-value', {i['code'] for i in report['issues']})
+
+    def test_narrow_16bit_literals_cannot_change_exact_rep_or_hide_it_with_unknown_kind(self):
+        for kind, expected in (('int16', 'Int16Rep'), ('word16', 'Word16Rep')):
+            for rep in ('Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep', 'IntRep', 'WordRep', 'Int64Rep', 'Word64Rep'):
+                for carrier in ('long', 'unknown'):
+                    proof = dict(kind=carrier, primReps=[rep], evaluated=True)
+                    report = run(['lit', kind, '1', dict(rep=proof)])
+                    self.assertEqual(carrier == 'long' and rep == expected, report['accepted'], (kind, proof))
+                    if not report['accepted']:
+                        self.assertIn('scalar-representation', {i['code'] for i in report['issues']})
+
+    def test_narrow_16bit_literals_refine_unconstrained_but_not_malformed_metadata(self):
+        for kind in ('int16', 'word16'):
+            for evaluated in (False, True):
+                for registers in ({}, {'primReps': None}):
+                    proof = dict(kind='unknown', evaluated=evaluated, **registers)
+                    self.assertTrue(run(['lit', kind, '1', dict(rep=proof)])['accepted'])
+                    for operation, expected, result in (('int16ToInt#', 'int16', 'IntRep'),
+                                                        ('word16ToWord#', 'word16', 'WordRep')):
+                        expression = ['app', ['prim', operation], [['lit', kind, '1', dict(rep=proof)]],
+                                      [False], False, False, dict(rep=dict(kind='long', primReps=[result], evaluated=True))]
+                        report = run(expression)
+                        self.assertEqual(kind == expected, report['accepted'])
+                        if kind != expected:
+                            self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
+            for proof in ([], 'unknown', dict(kind='unknown', primReps=None),
+                          dict(kind='unknown', primReps=None, evaluated='false'),
+                          dict(kind='unknown', primReps=[], evaluated=False),
+                          dict(kind='unknown', primReps=[], evaluated=False, aggregate='unboxed-tuple', components=[])):
+                self.assertFalse(run(['lit', kind, '1', dict(rep=proof)])['accepted'], proof)
+
     def test_floating_literal_carriers_cannot_be_overridden_by_metadata(self):
         carriers = [(['lit', 'float', '1.0'], dict(kind='float', primReps=['FloatRep'], evaluated=True)),
                     (['lit', 'double', '1.0'], dict(kind='double', primReps=['DoubleRep'], evaluated=True)),

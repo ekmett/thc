@@ -256,15 +256,16 @@ class Audit:
 
     @staticmethod
     def literal_rep(expr):
-        # New int32 and existing word32 literals retain exact narrow identity.
+        # Signed/unsigned 16- and 32-bit literals retain exact narrow identity.
         # Other legacy literal forms keep their historical carrier-only proof.
         if not isinstance(expr, list) or not expr:
             return None
         if expr[0] == 'void':
             return dict(kind='void', evaluated=True)
         if expr[0] == 'lit' and len(expr) >= 3:
-            if expr[1] in ('int32', 'word32'):
-                return dict(kind='long', primReps=['Int32Rep' if expr[1] == 'int32' else 'Word32Rep'], evaluated=True)
+            narrow = {'int16': 'Int16Rep', 'word16': 'Word16Rep', 'int32': 'Int32Rep', 'word32': 'Word32Rep'}
+            if expr[1] in narrow:
+                return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
                     **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
                                      'word8', 'word16', 'word32', 'word64'), 'long')}.get(expr[1])
@@ -388,11 +389,11 @@ class Audit:
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
-                if expr[1] in ('int32', 'word32'):
+                if expr[1] in ('int16', 'word16', 'int32', 'word32'):
                     proof, intrinsic = self.expression_rep(expr), self.literal_rep(expr)
                     if (not isinstance(proof, dict) or proof.get('kind') != 'long' or
                             proof.get('primReps') != intrinsic['primReps'] or self.is_tuple(proof) or is_vector(proof)):
-                        self.issue('scalar-representation', owner, path + '/rep', '32-bit literal requires exact narrow identity')
+                        self.issue('scalar-representation', owner, path + '/rep', 'Narrow literal requires exact signed/unsigned identity')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':

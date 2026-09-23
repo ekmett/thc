@@ -394,6 +394,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
         "int64" -> int64Literal(value)
         "word64" -> word64Literal(value)
@@ -682,7 +683,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int32", "word32")) ProvenExpression(it, CoreRepresentations.narrow32LiteralProof(expr)) else it
+            if (expr[1] in listOf("int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
