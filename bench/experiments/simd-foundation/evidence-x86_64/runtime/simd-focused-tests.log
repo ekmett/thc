@@ -1,0 +1,40 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :kaptGenerateStubsKotlin UP-TO-DATE
+> Task :kaptKotlin UP-TO-DATE
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :processResources NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :processTestResources NO-SOURCE
+> Task :kaptGenerateStubsTestKotlin
+> Task :kaptTestKotlin
+
+> Task :compileTestKotlin
+w: file:///home/ekmett/ai/thc-simd-x86-validation-01a0cdeb/src/test/kotlin/thc/RealCoreCallDemandTest.kt:19:71 Cast is redundant.
+w: file:///home/ekmett/ai/thc-simd-x86-validation-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:91:13 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/ekmett/ai/thc-simd-x86-validation-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:91:52 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-simd-x86-validation-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SimdVectorTest > vectorCallAndResultBoundariesStayExplicitlyUnsupported() PASSED
+
+SimdVectorTest > realCoreVectorArithmeticRemainsInstalledAfterCompiledExecution() PASSED
+
+SimdVectorTest > exactVectorMetadataAndDurableStorageAreDistinctFromTuples() PASSED
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/thc-simd-x86-validation-01a0cdeb/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 25s
+9 actionable tasks: 4 executed, 5 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html
