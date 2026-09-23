@@ -14,6 +14,27 @@ and unsigned subtraction underflow. Widened lanes are 0..255: a high byte such
 as 255 must not become -1. Vectors remain local; vector formals, function results,
 captures, heap fields, and vector-containing tuple ABIs remain unsupported.
 
+The runtime stores exactly sixteen final primitive `byte` fields in a distinct
+`Word8X16` carrier: 16 bytes of lane payload, not total object size. Transient
+`ByteVector.SPECIES_128` values implement bitwise-equivalent wrapping arithmetic;
+there are no stored vector objects, generic payload arrays or per-lane boxes.
+Pack narrows sixteen Long slots to raw bytes; both AST and bytecode unpack each
+field with `& 0xffL`. Numeric operation dispatch is selected while lowering Core.
+
+Canonical `word8` values and alternatives are decimal 0..255. Intrinsic unsigned
+identity refines absent or genuine UNKNOWN/null metadata, but signed, wrong-width
+and aggregate metadata remain errors. Exact unlifted flags and all sixteen tuple
+leaf proofs are checked before execution; byte storage never licenses an Int8
+operand or result in a Word8 operation.
+
+The JVM tests independently cover all 65,536 byte pairs in every lane and signed/
+unsigned mismatch controls in both loaders and diagnostic modes. The native corpus
+runs at both Core stages on AST/bytecode with inlining on/off. Every measured
+invocation requires its exact 1/2 compiled guest-entry delta, stable actual target
+identities, valid last-tier code and released argument/result handoff pools. With
+the full native package this is 61,696 compiled calls and 64,512 guest entries per
+handoff mode. No settling, retries or compiler-limit changes are part of the tests.
+
 ## Genuine Core and independent observations
 
 `compiler/test-fixtures/SimdWord8X16.hs` uses the real pinned primops.

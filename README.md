@@ -104,6 +104,8 @@ operations with exact typed lanes and bit-sensitive correctness gates.
 The [Int16X8](docs/int16x8.md) and [Int8X16](docs/int8x16.md) foundations
 each add seven local narrow-integer vector operations, including wrapping
 multiplication, with primitive lane carriers and native/model edge checks.
+The [Word8X16 foundation](docs/word8x16.md) adds six unsigned counterparts with
+distinct proofs, zero-extended lanes and native/model high-bit checks.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;

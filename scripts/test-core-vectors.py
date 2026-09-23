@@ -162,6 +162,13 @@ class VectorAuditTest(unittest.TestCase):
         m=json.loads(path.read_text())
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])
+    def test_real_word8_core_local_entries_and_formal_frontier(self):
+        from word8x16_model import entries
+        path=ROOT.parent/'build/simd-word8x16/pre-core/SimdWord8X16.json'
+        if not path.exists(): self.skipTest('Word8 SIMD Core export not generated')
+        m=json.loads(path.read_text())
+        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_float_local_shape_requires_concrete_float_lanes(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastFloatX4#'
