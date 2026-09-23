@@ -99,22 +99,24 @@ internal object CoreRepresentations {
         }
         visit(bindings)
     }
-    /** Sum host results remain unsupported through known aliases and PAP prefixes. */
-    fun knownFunctionResult(expression: List<Any?>, bindings: List<Map<String, Any?>>): CoreRepresentation? {
+    /** Known host aliases and partial applications retain their remaining ABI. */
+    fun knownFunctionSignature(expression: List<Any?>, bindings: List<Map<String, Any?>>): Pair<List<CoreRepresentation>, CoreRepresentation>? {
         val globals = bindings.associateBy { it["id"] as String }
-        fun resolve(expr: List<Any?>, seen: Set<String>): Pair<Int, CoreRepresentation>? = when (expr.firstOrNull()) {
-            "lam" -> (expr[1] as List<*>).size to lambdaResult(expr)
+        fun resolve(expr: List<Any?>, seen: Set<String>): Pair<List<CoreRepresentation>, CoreRepresentation>? = when (expr.firstOrNull()) {
+            "lam" -> (expr[1] as List<Map<String, Any?>>).map(::binder) to lambdaResult(expr)
             "var" -> (expr[1] as String).let { id ->
                 if (id in seen) null else (globals[id]?.get("expr") as? List<Any?>)?.let { resolve(it, seen + id) }
             }
-            "app" -> resolve(expr[1] as List<Any?>, seen)?.let { (arity, result) ->
+            "app" -> resolve(expr[1] as List<Any?>, seen)?.let { (inputs, result) ->
                 val supplied = (expr[2] as List<*>).size
-                if (supplied < arity) arity - supplied to result else null
+                if (supplied < inputs.size) inputs.drop(supplied) to result else null
             }
             else -> null
         }
-        return resolve(expression, emptySet())?.second
+        return resolve(expression, emptySet())
     }
+    fun knownFunctionResult(expression: List<Any?>, bindings: List<Map<String, Any?>>): CoreRepresentation? =
+        knownFunctionSignature(expression, bindings)?.second
     fun requireInput(proof: CoreRepresentation) {
         if (proof.isTuple) {
             TupleShape.validate(proof)

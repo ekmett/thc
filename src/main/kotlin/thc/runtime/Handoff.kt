@@ -22,6 +22,9 @@ open class HandoffStorage(val layout: HandoffLayout) {
     internal var generation = 0L
     internal var live = false
     internal var completedGeneration = -1L
+    // Input ownership only: 0 = not an incoming carrier (including durable PAP
+    // prefixes), 1 = reusable argument-pool loan, 2 = fresh compiled ingress.
+    internal var inputMode = 0
 }
 interface HandoffFactory { fun create(layout: HandoffLayout): HandoffStorage }
 

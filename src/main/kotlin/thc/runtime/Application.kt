@@ -434,7 +434,7 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private va
         val input = transfer.input
         val result = if (input != null) {
             input.layout.setLong(input, 0, 0L)
-            invokeTypedInput(target, input) { dispatch.call(target, NO_PAP_ARGUMENTS) }
+            invokeTypedInput(target, input) { packet -> dispatch.call(target, packet) }
         } else {
             arguments[0] = 0L
             dispatch.call(target, arguments)

@@ -236,14 +236,17 @@ private class TupleBounce(private val destination: TupleDestination, private val
     fun execute(frame: VirtualFrame, initial: TailCall) {
         var next = initial
         while (true) {
-            val root = next.target.rootNode as? GuestRoot ?: fault("Invalid tuple tail target")
-            if (root.tupleResult?.matches(destination.shape) != true) fault("Tuple tail target result shape mismatch")
+            val root = next.target.rootNode as? GuestRoot
+            if (root == null || root.tupleResult?.matches(destination.shape) != true) {
+                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                fault("Tuple tail target result shape mismatch")
+            }
             try {
                 if (metrics.enabled) metrics.trampolineIterations++
                 val input = next.input
                 val result = if (input != null) {
                     input.layout.setLong(input, 0, 0L)
-                    invokeTypedInput(next.target, input) { Calls.indirect(call, next.target, NO_PAP_ARGUMENTS) }
+                    invokeTypedInput(next.target, input) { packet -> Calls.indirect(call, next.target, packet) }
                 } else {
                     next.args[0] = 0L
                     Calls.indirect(call, next.target, next.args)

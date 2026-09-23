@@ -24,19 +24,39 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
     }
     fun state(): HandoffState = language.handoffState.get()
     fun prefix(count: Int): HandoffLayout = prefixes[count]
-    fun take(): HandoffStorage {
-        val state = state()
-        val input = state.pending ?: fault("Missing typed input loan")
-        state.pending = null
-        if (input.layout !== packet || !input.live) {
-            if (input.live) releaseUnexpected(input)
-            fault("Conflicting typed input layout")
-        }
+    fun take(arguments: Array<Any?>): HandoffStorage {
+        if (arguments.size != 1) fault("Tuple input entry requires one typed carrier")
+        val input = arguments[0] as? HandoffStorage ?: fault("Tuple input entry requires a typed carrier")
+        validate(input)
         return input
     }
-    fun release(input: HandoffStorage) = state().arguments.release(input, packet)
-    @CompilerDirectives.TruffleBoundary
-    private fun releaseUnexpected(input: HandoffStorage) = state().arguments.release(input)
+    fun validate(input: HandoffStorage) {
+        if (input.layout !== packet || input.inputMode !in 1..2 || input.live != (input.inputMode == 1)) {
+            releaseUnexpected(input)
+            fault("Conflicting typed input layout or ownership")
+        }
+        // The caller, not the callee, owns the incoming transport choice. An
+        // inlined fresh ingress must disappear; a residual edge may materialize.
+        if (CompilerDirectives.inCompiledCode() && !CompilerDirectives.inCompilationRoot() && input.inputMode == 2)
+            CompilerDirectives.ensureVirtualizedHere(input)
+    }
+    fun release(input: HandoffStorage) {
+        check(input.layout === packet)
+        when (input.inputMode) {
+            1 -> state().arguments.release(input, packet)
+            2 -> packet.clearReferences(input)
+            else -> fault("Typed input carrier was already consumed")
+        }
+        input.inputMode = 0
+    }
+    fun releaseChecked(input: HandoffStorage) {
+        if (input.inputMode == 0) return
+        if (input.layout === packet) release(input) else releaseUnexpected(input)
+    }
+    fun releaseIfOwned(input: HandoffStorage, generation: Long) {
+        if (input.generation == generation) releaseChecked(input)
+    }
+    private fun releaseUnexpected(input: HandoffStorage) = discardTypedInput(language, input)
 
     /** A scalar State#/unknown/address retains one reference field in the old ABI;
      * only fields recursively inside an exact tuple are erased or flattened. */
@@ -50,6 +70,16 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
         fun create(language: Language, logical: ArgumentLayout?, hasEnvironment: Boolean): TypedInputLayout? =
             logical?.takeIf { it.requiresTyped }?.let { TypedInputLayout(language, it, hasEnvironment) }
     }
+}
+
+/** Failure cleanup may see a different layout and must not explode its dynamic fields. */
+@CompilerDirectives.TruffleBoundary
+internal fun discardTypedInput(language: Language, input: HandoffStorage) {
+    when (input.inputMode) {
+        1 -> language.handoffState.get().arguments.release(input)
+        2 -> input.layout.clearReferences(input)
+    }
+    input.inputMode = 0
 }
 
 /** Compile-time source descriptors only: no activation frame or guest payload is retained. */
@@ -154,21 +184,17 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
 
 /** The loan is consumed by entry before any guest continuation. Failed entry and
  * deoptimization still have one generation-checked owner in the caller. */
-internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarget, input: HandoffStorage, action: () -> Any?): Any? {
+internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarget, input: HandoffStorage,
+    action: (Array<Any?>) -> Any?): Any? {
     val layout = (target.rootNode as GuestRoot).typedInput ?: fault("Target has no typed input entry")
     return invokeTypedInput(layout, input, action)
 }
 
-internal inline fun invokeTypedInput(layout: TypedInputLayout, input: HandoffStorage, action: () -> Any?): Any? {
-    val state = layout.state()
+internal inline fun invokeTypedInput(layout: TypedInputLayout, input: HandoffStorage,
+    action: (Array<Any?>) -> Any?): Any? {
     val generation = input.generation
-    check(state.pending == null)
-    state.pending = input
-    try { return action() }
-    finally {
-        state.pending = null
-        if (input.live && input.generation == generation) layout.release(input)
-    }
+    try { return action(arrayOf(input)) }
+    finally { layout.releaseIfOwned(input, generation) }
 }
 
 /** All operand evaluation and strict scalar-prefix forcing happens before the
@@ -192,7 +218,8 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
             source.setReference(frame, node, values, position, force.execute(frame, source.reference(frame, node, values, position)))
         }
     }
-    val loan = input.state().arguments.acquire(input.packet)
+    val loan = if (CompilerDirectives.inCompiledCode()) input.packet.create().also { it.inputMode = 2 }
+        else input.state().arguments.acquire(input.packet).also { it.inputMode = 1 }
     try {
         input.packet.setLong(loan, 0, 0L)
         if (input.hasEnvironment) input.packet.setObject(loan, 1, function.environment)
@@ -216,7 +243,7 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
 private inline fun callTypedInput(frame: VirtualFrame, node: Node, function: Closure,
     input: TypedInputLayout, source: InputSource, values: Array<Any?>?, start: Int, count: Int,
     force: Force, tail: Boolean, metrics: Metrics, prefixCount: Int, strictPositions: IntArray,
-    action: () -> Any?): Any? {
+    action: (Array<Any?>) -> Any?): Any? {
     val loan = prepareInput(frame, node, function, input, source, values, start, count, force, prefixCount, strictPositions)
     val generation = loan.generation
     var transferred = false
@@ -226,7 +253,7 @@ private inline fun callTypedInput(frame: VirtualFrame, node: Node, function: Clo
         if (metrics.enabled) input.state().calls++
         return invokeTypedInput(input, loan, action)
     } finally {
-        if (!transferred && loan.live && loan.generation == generation) input.release(loan)
+        if (!transferred) input.releaseIfOwned(loan, generation)
     }
 }
 
@@ -286,8 +313,8 @@ private class InputCallArm(private val source: InputSource, private val count: I
         val result = if (input == null) {
             legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity), isTail)
         } else {
-            try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics, prefixCount, strictPositions) {
-                Calls.direct(direct, NO_PAP_ARGUMENTS)
+            try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics, prefixCount, strictPositions) { packet ->
+                Calls.direct(direct, packet)
             } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
         }
         if (arity < count) return remainder!!.execute(frame, requireClosure(force.execute(frame, result)), values)
@@ -325,8 +352,8 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                 legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity), isTail)
             } else {
                 if (metrics.enabled) metrics.indirectCalls++
-                try { callTypedInput(frame, this, function, input, source, values, offset, function.arity, force, isTail, metrics, function.suppliedCount, strictInputPositions(root, input)) {
-                    Calls.indirect(indirect, target, NO_PAP_ARGUMENTS)
+                try { callTypedInput(frame, this, function, input, source, values, offset, function.arity, force, isTail, metrics, function.suppliedCount, strictInputPositions(root, input)) { packet ->
+                    Calls.indirect(indirect, target, packet)
                 } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
             }
             if (exact) {

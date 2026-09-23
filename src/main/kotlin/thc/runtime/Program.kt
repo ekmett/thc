@@ -476,7 +476,9 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
             kinds.isNotEmpty() && kinds.all { it in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) } -> CoreKind.OBJECT
             else -> CoreKind.UNKNOWN
         }
-        representation = CoreVectors.caseResult(proofs)
+        val aggregate = proofs.firstOrNull()?.takeIf { first -> first.isAggregate &&
+            proofs.all { it.isAggregate && TupleShape.compatible(first, it) } }
+        representation = aggregate?.copy(evaluated = proofs.all { it.evaluated }) ?: CoreVectors.caseResult(proofs)
             ?: CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
     }
     // Preserve primitive scrutinees through their frame write and literal comparisons.
@@ -892,7 +894,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     @ExplodeLoop private fun restoreTypedInput(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
         val entry = typedInput ?: fault("Target does not support typed tuple inputs")
         try {
-            if (input.layout !== entry.packet || !input.live) fault("Conflicting typed input layout")
+            entry.validate(input)
             if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entry.packet.getLong(input, 0) or mask)
             for (i in argumentSlots.indices) {
                 val from = argumentIndices[i] + entry.header
@@ -910,7 +912,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 val environment = entry.packet.getObject(input, 1) as? CapturedFrame ?: fault("Invalid captured frame")
                 for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
             }
-        } finally { entry.release(input) }
+        } finally { entry.releaseChecked(input) }
     }
 
     @ExplodeLoop internal fun restoreHandoff(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
@@ -945,8 +947,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         val entry = handoff
         val typed = typedInput
         if (typed != null) {
-            if (frame.arguments.isNotEmpty()) fault("Tuple input entry requires typed transport")
-            restoreTypedInput(frame, typed.take(), true)
+            restoreTypedInput(frame, typed.take(frame.arguments), true)
         } else if (entry != null && frame.arguments.isEmpty()) {
             val state = entry.state()
             val input = state.pending ?: fault("Missing typed argument loan")
@@ -1461,6 +1462,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail))
             }.toTypedArray()
+            if (!CoreRepresentations.expression(expr).isAggregate && alternatives.any { it.body.representation.isAggregate } &&
+                alternatives.any { !it.body.representation.isAggregate })
+                throw RuntimeFault("Missing exact aggregate case result proof")
             CoreRepresentations.validateAggregateCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateFloatingCaseResult(CoreRepresentations.expression(expr),
                 alternatives.map { it.body.representation })
