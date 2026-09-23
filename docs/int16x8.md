@@ -14,6 +14,17 @@ function result, capture, heap field, or vector-containing tuple ABI is enabled
 by these fixtures. The explicit `vectorArgument` negative control must be
 rejected specifically for its vector formal.
 
+The AST and bytecode loaders use a durable carrier with eight final primitive
+`short` fields (16 bytes of lane payload, not a 16-byte Java object). Arithmetic
+constructs transient `ShortVector.SPECIES_128` values with constant lane indices,
+then reconstructs the short fields. No durable vector object, generic payload
+array, or boxed lane is stored. The interpreted JDK fallback may allocate private
+`short[]` arrays; compiled allocation elimination is a separate evidence gate.
+Operation dispatch is selected numerically while lowering Core. Unpack writes
+eight sign-extended primitive Long frame slots. Exact unlifted operand flags and
+recursive lane proofs are mandatory; intrinsic narrow literals may refine absent
+or genuinely unconstrained metadata without relaxing variable or tuple proofs.
+
 ## Scalar signatures and independent observations
 
 The fixture `compiler/test-fixtures/SimdInt16X8.hs` keeps vectors local.
@@ -106,3 +117,20 @@ The mode removes an older oracle/provenance claim before starting.
 Native and static evidence does not claim JVM execution, packed hardware code,
 allocation elimination, throughput, or timing improvement. Those require the
 separate runtime tests and retained graph/final-LIR evidence.
+
+`SimdInt16VectorTest` checks dense storage and all 65,536 lane encodings, rejects
+malformed proofs/flags and unsupported vector formals, and runs the full corpus
+on each available Core stage and both AST/bytecode backends. It tests Truffle
+inlining enabled and disabled separately, installing actual residual callees
+before callers. Every measured invocation requires exactly one or two compiled
+guest entries, unchanged active target identities and valid last-tier code;
+there are no post-compilation settling calls or retries. Both result and argument
+handoff pools must be released after every call. With native pre/post inputs this
+is 48,256 checked invocations and 52,544 guest entries per handoff mode.
+
+The separate [packed graph harness](../bench/experiments/int16x8-foundation/README.md)
+checks actual result-connected i16x8 arithmetic, all eight observed output lanes,
+and allocated XMM word instructions. It disallows surviving vector/carrier/array
+allocations, lane boxing, field traffic and fallback calls, while allowing the
+public host Long result box. Instrumentation is disabled only for these graph
+captures, not for the correctness tests above.
