@@ -205,7 +205,11 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
 internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarget, input: HandoffStorage,
     action: (Array<Any?>) -> Any?): Any? {
     val layout = (target.rootNode as GuestRoot).typedInput ?: fault("Target has no typed input entry")
-    return invokeTypedInput(layout, input, action)
+    val generation = input.generation
+    try { return action(arrayOf(input)) }
+    // Trampoline targets vary at runtime. Cleanup receives only storage and
+    // metadata; it must not explode a dynamic layout or retain a caller frame.
+    finally { releaseGenericInput(layout, input, generation) }
 }
 
 internal inline fun invokeTypedInput(layout: TypedInputLayout, input: HandoffStorage,
