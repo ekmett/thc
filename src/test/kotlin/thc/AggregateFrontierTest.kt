@@ -10,7 +10,7 @@ import thc.runtime.RuntimeFault
 import thc.runtime.UnsupportedCore
 import java.io.File
 
-/** Supported tuple and binary-sum results execute; aggregate arguments remain explicit boundaries. */
+/** Supported aggregate guest results execute; public host aggregate boundaries still reject. */
 class AggregateFrontierTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val constructors = listOf("tupleOutstanding", "tupleZeroLazy", "sumPayload", "sumZeroLazy", "coldTuple", "coldSum")

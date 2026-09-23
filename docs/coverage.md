@@ -177,14 +177,13 @@ Installed interfaces and sources remain unchanged.
 establish execution of separate library call targets with those names.
 
 Exact unboxed tuple results now execute on both backends with scalar/reference
-inputs, including empty/singleton/nested results, lazy references, forwarding,
+or [typed tuple inputs](tuple-inputs.md), including empty/singleton/nested results, lazy references, forwarding,
 PAPs and overapplication. The [result protocol](tuple-results.md) is independent
-of the optional input handoff experiment. Aggregate formal arguments, captures,
-ordinary let bindings, join parameters/captures, sums
+of input storage. Aggregate captures, ordinary let bindings, join parameters/captures, sum arguments
 and unresolved layouts remain rejected, including unused and constructor-free
 boundaries. Physical register counts alone never establish an aggregate layout.
 
-The separate aggregate frontier reports three supported result-only entries and
+The earlier separate aggregate frontier reported three supported result-only entries and
 eight rejected entries at both native export stages. `TupleReturnAudit` supplies
 94 native rows for result-only boundary tests, including deep self/mutual tail
 calls. These semantic controls remain separate from the library corpus and
