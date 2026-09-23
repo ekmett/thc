@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/home/ekmett/ai/thc-int8x16-foundation-01a0cdeb/bench/experiments/int8x16-foundation/runtime-audit.py", line 423, in <module>
+    main()
+  File "/home/ekmett/ai/thc-int8x16-foundation-01a0cdeb/bench/experiments/int8x16-foundation/runtime-audit.py", line 419, in main
+    check_capture(args.root.resolve(), args.out.resolve(), args.java_home.resolve(), args.recheck_after_checker_fix)
+  File "/home/ekmett/ai/thc-int8x16-foundation-01a0cdeb/bench/experiments/int8x16-foundation/runtime-audit.py", line 384, in check_capture
+    lir, instructions = inspect_lir(cfgs[0].read_text(), target['root'], entry, arch)
+  File "/home/ekmett/ai/thc-int8x16-foundation-01a0cdeb/bench/experiments/int8x16-foundation/runtime-audit.py", line 292, in inspect_lir
+    require(all(not re.search(r'\b(?:YMM|ZMM|V256_\w+|V512_\w+)\b', line) for line in operations), 'Wrong packed width')
+  File "/home/ekmett/ai/thc-int8x16-foundation-01a0cdeb/bench/experiments/int8x16-foundation/runtime-audit.py", line 22, in require
+    raise AssertionError(message)
+AssertionError: Wrong packed width

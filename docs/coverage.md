@@ -48,6 +48,11 @@ The [FloatX4 foundation](floatx4.md) adds another six local vector primops and
 separate multiply/add rounding. The [DoubleX2 foundation](doublex2.md) adds the
 corresponding six binary64 operations, with an exact integer-significand model
 and bit-sensitive edge controls. Vector ABI boundaries remain unchanged.
+The [Int16X8](int16x8.md) and [Int8X16](int8x16.md) foundations each support
+pack, unpack, broadcast, add, subtract, negate and multiply with exact narrow
+lane proofs. Their native/model corpora contain 6,032 and 9,168 rows respectively,
+including independently observable lanes and residual scalar/tuple calls.
+Both use dense primitive carriers and retain the same local-only vector boundary.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

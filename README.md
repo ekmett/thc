@@ -101,6 +101,9 @@ The [FloatX4 foundation](docs/floatx4.md) adds six local floating vector primops
 with primitive Float lanes, a fixed-width FloatVector carrier and native IEEE-edge checks.
 The [DoubleX2 foundation](docs/doublex2.md) adds the corresponding six binary64
 operations with exact typed lanes and bit-sensitive correctness gates.
+The [Int16X8](docs/int16x8.md) and [Int8X16](docs/int8x16.md) foundations
+each add seven local narrow-integer vector operations, including wrapping
+multiplication, with primitive lane carriers and native/model edge checks.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;

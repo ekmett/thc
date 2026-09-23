@@ -1,0 +1,351 @@
+  name "After FinalCodeAnalysisStage"
+  begin_block
+    name "B0"
+    from_bci -1
+    to_bci -1
+    predecessors
+    successors "B1" "B4"
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr    0  <|@ instruction [rsi|QWORD[.], rdx|QWORD[.], rbp|QWORD] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr    2  <|@ instruction stack:16|QWORD = MOVE input: rbp|QWORD moveKind: QWORD <|@ <|@
+      nr    4  <|@ instruction [] = HOTSPOTLOCKSTACK frameMapBuilder: jdk.graal.compiler.hotspot.amd64.AMD64HotSpotFrameMapBuilder@456c5278 slotKind: QWORD <|@ <|@
+      nr    6  <|@ instruction rax|DWORD[_] = MOV input: [rdx|QWORD[.] + 20] size: DWORD <|@ <|@
+      nr    8  <|@ instruction rax|QWORD = MOV input: [rax|DWORD[_] * 8 + 8] size: QWORD <|@ <|@
+      nr   10  <|@ instruction rsi|DWORD[_] = MOV input: [rdx|QWORD[.] + 16] size: DWORD <|@ <|@
+      nr   12  <|@ instruction rsi|QWORD = MOV input: [rsi|DWORD[_] * 8 + 8] size: QWORD <|@ <|@
+      nr   14  <|@ instruction r10|DWORD = MOV value: rsi|QWORD size: DWORD <|@ <|@
+      nr   16  <|@ instruction xmm0|V128_BYTE = INTTOVECTOR value: r10|DWORD encoding: VEX <|@ <|@
+      nr   18  <|@ instruction xmm0|V128_BYTE = VPBROADCASTB (input: xmm0|V128_BYTE, opmask: -) size: XMM z: 0 b: 0 <|@ <|@
+      nr   20  <|@ instruction r10|DWORD = MOV value: rax|QWORD size: DWORD <|@ <|@
+      nr   22  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 1 encoding: VEX <|@ <|@
+      nr   24  <|@ instruction r10|QWORD = INC value: rsi|QWORD size: QWORD <|@ <|@
+      nr   26  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   28  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 2 encoding: VEX <|@ <|@
+      nr   30  <|@ instruction r10|QWORD = DEC value: rax|QWORD size: QWORD <|@ <|@
+      nr   32  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   34  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 3 encoding: VEX <|@ <|@
+      nr   36  <|@ instruction r10|QWORD = LEA address: [rsi|QWORD + 127] size: QWORD <|@ <|@
+      nr   38  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   40  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 4 encoding: VEX <|@ <|@
+      nr   42  <|@ instruction r10|QWORD = LEA address: [rax|QWORD - 128] size: QWORD <|@ <|@
+      nr   44  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   46  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 5 encoding: VEX <|@ <|@
+      nr   48  <|@ instruction r10|QWORD = SHL value: rsi|QWORD size: QWORD <|@ <|@
+      nr   50  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rsi|QWORD) size: QWORD <|@ <|@
+      nr   52  <|@ instruction r10|QWORD = LEA address: [r10|QWORD + 7] size: QWORD <|@ <|@
+      nr   54  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   56  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 6 encoding: VEX <|@ <|@
+      nr   58  <|@ instruction r10|QWORD = SHL x: rax|QWORD size: QWORD y: 2 <|@ <|@
+      nr   60  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr   62  <|@ instruction r10|QWORD = LEA address: [r10|QWORD - 11] size: QWORD <|@ <|@
+      nr   64  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   66  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 7 encoding: VEX <|@ <|@
+      nr   68  <|@ instruction r10|QWORD = SHL x: rsi|QWORD size: QWORD y: 3 <|@ <|@
+      nr   70  <|@ instruction r10|QWORD = SUB (x: r10|QWORD, ~y: rsi|QWORD) size: QWORD <|@ <|@
+      nr   72  <|@ instruction r10|QWORD = LEA address: [r10|QWORD + 29] size: QWORD <|@ <|@
+      nr   74  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   76  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 8 encoding: VEX <|@ <|@
+      nr   78  <|@ instruction r10|QWORD = SHL x: rax|QWORD size: QWORD y: 3 <|@ <|@
+      nr   80  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr   82  <|@ instruction r10|QWORD = LEA address: [r10|QWORD - 31] size: QWORD <|@ <|@
+      nr   84  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   86  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 9 encoding: VEX <|@ <|@
+      nr   88  <|@ instruction r10|QWORD = IMUL x: rsi|QWORD size: QWORD y: 11 <|@ <|@
+      nr   90  <|@ instruction r10|QWORD = LEA address: [r10|QWORD + 37] size: QWORD <|@ <|@
+      nr   92  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr   94  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 10 encoding: VEX <|@ <|@
+      nr   96  <|@ instruction r10|QWORD = IMUL x: rax|QWORD size: QWORD y: 13 <|@ <|@
+      nr   98  <|@ instruction r10|QWORD = LEA address: [r10|QWORD - 41] size: QWORD <|@ <|@
+      nr  100  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr  102  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 11 encoding: VEX <|@ <|@
+      nr  104  <|@ instruction r10|QWORD = SHL x: rsi|QWORD size: QWORD y: 4 <|@ <|@
+      nr  106  <|@ instruction r10|QWORD = SUB (x: r10|QWORD, ~y: rsi|QWORD) size: QWORD <|@ <|@
+      nr  108  <|@ instruction r10|QWORD = LEA address: [r10|QWORD + 43] size: QWORD <|@ <|@
+      nr  110  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr  112  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 12 encoding: VEX <|@ <|@
+      nr  114  <|@ instruction r10|QWORD = SHL x: rax|QWORD size: QWORD y: 4 <|@ <|@
+      nr  116  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  118  <|@ instruction r10|QWORD = LEA address: [r10|QWORD - 47] size: QWORD <|@ <|@
+      nr  120  <|@ instruction r10|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr  122  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: r10|DWORD) offset: 13 encoding: VEX <|@ <|@
+      nr  124  <|@ instruction rsi|QWORD = IMUL x: rsi|QWORD size: QWORD y: 19 <|@ <|@
+      nr  126  <|@ instruction rsi|QWORD = LEA address: [rsi|QWORD + 53] size: QWORD <|@ <|@
+      nr  128  <|@ instruction rsi|DWORD = MOV value: rsi|QWORD size: DWORD <|@ <|@
+      nr  130  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: rsi|DWORD) offset: 14 encoding: VEX <|@ <|@
+      nr  132  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 21 <|@ <|@
+      nr  134  <|@ instruction rax|QWORD = LEA address: [rax|QWORD - 59] size: QWORD <|@ <|@
+      nr  136  <|@ instruction rax|DWORD = MOV value: rax|QWORD size: DWORD <|@ <|@
+      nr  138  <|@ instruction xmm0|V128_BYTE = INSERT (vec: xmm0|V128_BYTE, val: rax|DWORD) offset: 15 encoding: VEX <|@ <|@
+      nr  140  <|@ instruction xmm1|V256_BYTE = AVXCLEARVECTORCONSTANT encoding: VEX input: SIMD<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0> <|@ <|@
+      nr  142  <|@ instruction xmm0|V128_BYTE = VPSUBB (x: xmm1|V128_BYTE(V256_BYTE), y: xmm0|V128_BYTE) size: XMM <|@ <|@
+      nr  144  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 1 encoding: VEX <|@ <|@
+      nr  146  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  148  <|@ instruction rsi|QWORD = SHL x: rax|QWORD size: QWORD y: 2 <|@ <|@
+      nr  150  <|@ instruction rsi|QWORD = ADD (x: rsi|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  152  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 0 encoding: VEX <|@ <|@
+      nr  154  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  156  <|@ instruction r10|QWORD = SHL value: rax|QWORD size: QWORD <|@ <|@
+      nr  158  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  160  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rsi|QWORD) size: QWORD <|@ <|@
+      nr  162  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 2 encoding: VEX <|@ <|@
+      nr  164  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  166  <|@ instruction rsi|QWORD = SHL x: rax|QWORD size: QWORD y: 3 <|@ <|@
+      nr  168  <|@ instruction rsi|QWORD = SUB (x: rsi|QWORD, ~y: rax|QWORD) size: QWORD <|@ <|@
+      nr  170  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rsi|QWORD) size: QWORD <|@ <|@
+      nr  172  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 3 encoding: VEX <|@ <|@
+      nr  174  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  176  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 11 <|@ <|@
+      nr  178  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  180  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 4 encoding: VEX <|@ <|@
+      nr  182  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  184  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 13 <|@ <|@
+      nr  186  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  188  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 5 encoding: VEX <|@ <|@
+      nr  190  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  192  <|@ instruction rsi|QWORD = SHL x: rax|QWORD size: QWORD y: 4 <|@ <|@
+      nr  194  <|@ instruction rsi|QWORD = ADD (x: rsi|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  196  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rsi|QWORD) size: QWORD <|@ <|@
+      nr  198  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 6 encoding: VEX <|@ <|@
+      nr  200  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  202  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 19 <|@ <|@
+      nr  204  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  206  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 7 encoding: VEX <|@ <|@
+      nr  208  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  210  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 23 <|@ <|@
+      nr  212  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  214  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 8 encoding: VEX <|@ <|@
+      nr  216  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  218  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 29 <|@ <|@
+      nr  220  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  222  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 9 encoding: VEX <|@ <|@
+      nr  224  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  226  <|@ instruction rsi|QWORD = SHL x: rax|QWORD size: QWORD y: 5 <|@ <|@
+      nr  228  <|@ instruction rsi|QWORD = SUB (x: rsi|QWORD, ~y: rax|QWORD) size: QWORD <|@ <|@
+      nr  230  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rsi|QWORD) size: QWORD <|@ <|@
+      nr  232  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 10 encoding: VEX <|@ <|@
+      nr  234  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  236  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 37 <|@ <|@
+      nr  238  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  240  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 11 encoding: VEX <|@ <|@
+      nr  242  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  244  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 41 <|@ <|@
+      nr  246  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  248  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 12 encoding: VEX <|@ <|@
+      nr  250  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  252  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 43 <|@ <|@
+      nr  254  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  256  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 13 encoding: VEX <|@ <|@
+      nr  258  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  260  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 47 <|@ <|@
+      nr  262  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  264  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 14 encoding: VEX <|@ <|@
+      nr  266  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  268  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 53 <|@ <|@
+      nr  270  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  272  <|@ instruction rax|DWORD = EXTRACTBYTE vector: xmm0|V128_BYTE selector: 15 encoding: VEX <|@ <|@
+      nr  274  <|@ instruction rax|QWORD = MOVSXB value: rax|DWORD size: QWORD <|@ <|@
+      nr  276  <|@ instruction rax|QWORD = IMUL x: rax|QWORD size: QWORD y: 59 <|@ <|@
+      nr  278  <|@ instruction r10|QWORD = ADD (x: r10|QWORD, y: rax|QWORD) size: QWORD <|@ <|@
+      nr  280  <|@ instruction rax|QWORD = LEA address: [r10|QWORD + 128] size: QWORD <|@ <|@
+      nr  282  <|@ instruction CMPCONSTBRANCH x: rax|QWORD condition: |<| trueDestination: B0 -> B1 falseDestination: B0 -> B4 trueDestinationProbability: 0.9 size: QWORD y: 256 inlinedY: null <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B1"
+    from_bci -1
+    to_bci -1
+    predecessors "B0"
+    successors "B2" "B3"
+    xhandlers
+    flags
+    probability 4606281698874543309
+    begin_IR
+      LIR
+      nr  284  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  286  <|@ instruction rax|DWORD = MOV value: r10|QWORD size: DWORD <|@ <|@
+      nr  288  <|@ instruction rax|DWORD = LEA address: [rax|DWORD + 128] size: DWORD <|@ <|@
+      nr  290  <|@ instruction CMPCONSTBRANCH x: rax|DWORD condition: |<| trueDestination: B1 -> B2 falseDestination: B1 -> B3 trueDestinationProbability: 1.0 size: DWORD y: 256 inlinedY: null <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B2"
+    from_bci -1
+    to_bci -1
+    predecessors "B1"
+    successors "B8"
+    xhandlers
+    flags
+    probability 4606281698874543309
+    begin_IR
+      LIR
+      nr  292  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  294  <|@ instruction rsi|QWORD[.] = HOTSPOTLOADOBJECTCONSTANT input: Object[Instance<java.lang.Long[]>] <|@ <|@
+      nr  296  <|@ instruction rax|DWORD[_] = MOV input: [rsi|QWORD[.] + rax|DWORD * 4 + 12] size: DWORD <|@ <|@
+      nr  298  <|@ instruction rax|QWORD[.] = UNCOMPRESSPOINTER (input: rax|DWORD[_], ~baseRegister: r12|ILLEGAL) lirKindTool: jdk.graal.compiler.vector.lir.hotspot.amd64.AMD64HotSpotSimdLIRKindTool@3ed4df41 encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr  300  <|@ instruction JUMP ~outgoingValues: [] destination: B2 -> B8 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B8"
+    from_bci -1
+    to_bci -1
+    predecessors "B7" "B2"
+    successors "B11" "B10"
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr  358  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@
+      nr  360  <|@ instruction CMPCONSTBRANCH x: [r15|QWORD + 1416] condition: = trueDestination: B8 -> B11 falseDestination: B8 -> B10 trueDestinationProbability: 0.999 size: DWORD y: 0 inlinedY: null <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B11"
+    from_bci -1
+    to_bci -1
+    predecessors "B10" "B8"
+    successors
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr  380  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  382  <|@ instruction RETURN (savedRbp: stack:16|QWORD, value: rax|QWORD[.], additionalReturns: []) isStub: false thread: r15 scratchForSafepointOnReturn: rcx config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@4f4d601d requiresReservedStackAccessCheck: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B4"
+    from_bci -1
+    to_bci -1
+    predecessors "B0"
+    successors "B5" "B6"
+    xhandlers
+    flags
+    probability 4591870180066957720
+    begin_IR
+      LIR
+      nr  310  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  312  <|@ instruction rax|QWORD = MOV input: [r15|QWORD + 456] size: QWORD <|@ <|@
+      nr  314  <|@ instruction rsi|QWORD = LEA address: [rax|QWORD + 16] size: QWORD <|@ <|@
+      nr  316  <|@ instruction CMPBRANCH (x: rsi|QWORD, y: [r15|QWORD + 472]) condition: |>| trueDestination: B4 -> B5 falseDestination: B4 -> B6 trueDestinationProbability: 0.010000000000000009 size: QWORD <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B6"
+    from_bci -1
+    to_bci -1
+    predecessors "B4"
+    successors "B7"
+    xhandlers
+    flags
+    probability 4591798122472919792
+    begin_IR
+      LIR
+      nr  332  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  334  <|@ instruction MOV (x: [r15|QWORD + 456], y: rsi|QWORD) size: QWORD <|@ <|@
+      nr  336  <|@ instruction AMD64PREFETCH ~address: [rax|QWORD + 208] instr: 3 <|@ <|@
+      nr  338  <|@ instruction rsi|DWORD = HOTSPOTLOADMETASPACECONSTANT input: meta{HotSpotType<Ljava/lang/Long;, resolved>;compressed} <|@ <|@
+      nr  340  <|@ instruction rsi|QWORD = MOVE input: rsi|DWORD moveKind: DWORD <|@ <|@
+      nr  342  <|@ instruction rsi|QWORD = SHL x: rsi|QWORD size: QWORD y: 42 <|@ <|@
+      nr  344  <|@ instruction rsi|QWORD = INC value: rsi|QWORD size: QWORD <|@ <|@
+      nr  346  <|@ instruction MOV (x: [rax|QWORD], y: rsi|QWORD) size: QWORD <|@ <|@
+      nr  348  <|@ instruction rax|QWORD[.] = MOVE input: rax|QWORD moveKind: QWORD <|@ <|@
+      nr  350  <|@ instruction JUMP ~outgoingValues: [] destination: B6 -> B7 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B7"
+    from_bci -1
+    to_bci -1
+    predecessors "B5" "B6"
+    successors "B8"
+    xhandlers
+    flags
+    probability 4591870180066957720
+    begin_IR
+      LIR
+      nr  352  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@
+      nr  354  <|@ instruction MOV (x: [rax|QWORD[.] + 8], y: r10|QWORD) size: QWORD <|@ <|@
+      nr  356  <|@ instruction JUMP ~outgoingValues: [] destination: B7 -> B8 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B10"
+    from_bci -1
+    to_bci -1
+    predecessors "B8"
+    successors "B11"
+    xhandlers
+    flags
+    probability 4562254508917369344
+    begin_IR
+      LIR
+      nr  366  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  368  <|@ instruction stack:40|QWORD[.] = MOVE input: rax|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  370  <|@ instruction stack:32|QWORD[.] = MOVE input: rdx|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  372  <|@ instruction rsi|QWORD[.] = HOTSPOTLOADOBJECTCONSTANT input: Object[Instance<thc.runtime.FunctionRoot>] <|@ <|@
+      nr  374  <|@ st <@st|@reference-map: [stack:8, stack:16]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] stack:32|QWORD[.] - -
+>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [rsi|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@4f4d601d state [bci:0] <|@ <|@
+      nr  376  <|@ instruction rax|QWORD[.] = MOVE input: stack:40|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  378  <|@ instruction JUMP ~outgoingValues: [] destination: B10 -> B11 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B5"
+    from_bci -1
+    to_bci -1
+    predecessors "B4"
+    successors "B7"
+    xhandlers
+    flags
+    probability 4562254508917369343
+    begin_IR
+      LIR
+      nr  318  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  320  <|@ instruction stack:32|QWORD[.] = MOVE input: rdx|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  322  <|@ instruction rsi|QWORD = HOTSPOTLOADMETASPACECONSTANT input: meta{HotSpotType<Ljava/lang/Long;, resolved>} <|@ <|@
+      nr  324  <|@ st <@st|@reference-map: [stack:16]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] stack:32|QWORD[.] - -
+>@ <|@ instruction (result: rax|QWORD[.], additionalReturns: []) = NEAR_FOREIGN_CALL parameters: [rsi|QWORD] temps: [rax|ILLEGAL, xmm0|ILLEGAL, xmm1|ILLEGAL, xmm2|ILLEGAL, xmm3|ILLEGAL, xmm4|ILLEGAL, xmm5|ILLEGAL, xmm6|ILLEGAL, xmm7|ILLEGAL, xmm8|ILLEGAL, xmm9|ILLEGAL, xmm10|ILLEGAL, xmm11|ILLEGAL, xmm12|ILLEGAL, xmm13|ILLEGAL, xmm14|ILLEGAL, xmm15|ILLEGAL] callTarget: Stub<new_instance_or_null(KlassPointer)Object>@0x71dac9be92e0:CallingConvention[rsi|QWORD -> rax|QWORD[.]]:CallingConvention[rsi|QWORD -> rax|QWORD[.]]; temps=rax|ILLEGAL,xmm0|ILLEGAL,xmm1|ILLEGAL,xmm2|ILLEGAL,xmm3|ILLEGAL,xmm4|ILLEGAL,xmm5|ILLEGAL,xmm6|ILLEGAL,xmm7|ILLEGAL,xmm8|ILLEGAL,xmm9|ILLEGAL,xmm10|ILLEGAL,xmm11|ILLEGAL,xmm12|ILLEGAL,xmm13|ILLEGAL,xmm14|ILLEGAL,xmm15|ILLEGAL state [bci:0] <|@ <|@
+      nr  326  <|@ st <@st|@reference-map: [rax:0, stack:16]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] stack:32|QWORD[.] - -
+>@ <|@ instruction NULLCHECK address: [rax|QWORD[.]] state [bci:0] <|@ <|@
+      nr  328  <|@ instruction rdx|QWORD[.] = MOVE input: stack:32|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  330  <|@ instruction JUMP ~outgoingValues: [] destination: B5 -> B7 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B3"
+    from_bci -1
+    to_bci -1
+    predecessors "B1"
+    successors
+    xhandlers
+    flags
+    probability 2355382605114769408
+    begin_IR
+      LIR
+      nr  302  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  304  <|@ instruction MOV x: [r15|QWORD + 1376] size: DWORD y: -8219 <|@ <|@
+      nr  306  <|@ instruction MOV x: [r15|QWORD + 1384] size: QWORD y: 0 <|@ <|@
+      nr  308  <|@ st <@st|@reference-map: [rdx:0]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] rdx|QWORD[.] - -
+>@ <|@ instruction DEOPT info [bci:0] <|@ <|@
+    end_IR
+  end_block
+end_cfg

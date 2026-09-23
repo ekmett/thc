@@ -61,6 +61,15 @@ instructions of kind `V128_WORD`. It does not require or claim an `i8x16 MulNode
 or a nonexistent `VPMULLB`. A different genuine compiler expansion must be
 reviewed explicitly; this source-pinned recognizer deliberately fails closed.
 
+The reader distinguishes eliminated frame metadata from vector payloads. A byte
+array is exempted only when its complete virtual owner/field/use chain proves it
+is `FrameWithoutBoxing.indexedTags`, with matching frame arrays, constant initial
+tags and deoptimization-state-only consumers. Materialization, escape, unknown
+owners and actual vector payload references still fail. Likewise, negation may
+consume `V128_BYTE(V256_BYTE)` only as an XMM view of the immediately preceding
+matching-register 32-byte zero definition; the operation and both operands must
+still be exactly XMM/128-bit. Actual wider arithmetic is rejected.
+
 This bounded gate currently supports x86-64 only. It does not claim a globally
 allocation-free ABI, a throughput improvement, vector function/formal/capture/join
 support, or no spills. In particular, interpreted JDK `ByteVector` fallbacks
@@ -77,8 +86,11 @@ hashes remain frozen. The evidence stores `physicalPackedInstructions` as a list
 of one byte instruction or two word-product instructions, alongside the graph
 expansion details.
 
-This harness has no captured Int8X16 runtime evidence yet. Parser mutation tests
-use synthetic graph/LIR data and produce no SIMD evidence:
+The retained [x86-64 evidence](evidence-x86_64/README.md) passes all sixteen
+actual captures on frozen runtime `7f175a3`. The two metadata distinctions above
+were corrected offline at `e019a6d`, preserving the original failure and checker
+sources without repeating guest execution. The separate parser mutation tests
+use synthetic graph/LIR data and are not themselves SIMD evidence:
 
 ```sh
 python3 bench/experiments/int8x16-foundation/test-runtime-audit.py

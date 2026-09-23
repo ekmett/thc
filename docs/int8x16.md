@@ -154,3 +154,25 @@ execution, allocation elimination, packed machine instructions, or performance.
 Those require the separate runtime tests and retained graph/final-LIR evidence.
 In particular, byte multiplication may lower through wider lanes or scalar
 operations; the presence of `timesInt8X16#` is not proof of packed byte multiply.
+
+## Retained x86-64 runtime evidence
+
+The [graph harness](../bench/experiments/int8x16-foundation/README.md) and
+[retained evidence](../bench/experiments/int8x16-foundation/evidence-x86_64/README.md)
+verify this slice on the pinned x86-64 host. Both full JVM modes pass 460 tests
+in 96 suites, with zero failures, errors or skips. All sixteen pre/post ×
+AST/bytecode × arithmetic captures pass with 5,568 postcompile native comparisons.
+
+Actual graphs retain all sixteen result-connected byte lanes. Final allocated
+LIR uses XMM `VPADDB`/`VPSUBB`, and multiplication uses exactly two XMM `VPMULLW`
+instructions plus the verified masks, shifts and OR reconstruction. Temporary
+carrier/vector/payload allocations and lane boxing are eliminated in those
+inlined graphs; the public Long result box remains allowed. This is not a
+throughput, globally allocation-free, no-spill or non-x86 execution claim.
+
+Two diagnostic-reader false positives were corrected using the same immutable
+captures: virtual bytecode frame tags were mistaken for vector payload arrays,
+and a 128-bit view of a wider zero register was mistaken for wider arithmetic.
+The exact frame ownership/state-only use and zero-definition proofs are now
+checked explicitly. Original reader sources and failure status are retained;
+no guest execution, compilation, settling calls or compiler limits changed.
