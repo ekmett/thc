@@ -31,7 +31,7 @@ class EnumTests(unittest.TestCase):
     def test_disabled_capability(self):
         cap=copy.deepcopy(CAP);cap.pop('tagToEnum');self.assertFalse(run(fixture(),cap)['accepted'])
     def test_missing_incomplete_contradictory_family(self):
-        for variant in ['missing','type','empty','duplicate','reverse','missing-con','wrong-family','arity','fields','tag','floating-tag','newtype']:
+        for variant in ['missing','type','empty','duplicate','reverse','missing-con','wrong-family','arity','fields','tag','floating-tag','newtype','truncated-family','extra-family-member']:
             with self.subTest(variant=variant):
                 m=fixture();app=m['bindings'][0]['expr'][2];family=app[6]['enumFamily'];con=m['constructors'][0]
                 if variant=='missing':app[6].pop('enumFamily')
@@ -46,7 +46,13 @@ class EnumTests(unittest.TestCase):
                 elif variant=='tag':con['tag']=2
                 elif variant=='floating-tag':con['tag']=1.0
                 elif variant=='newtype':con['kind']='newtype'
+                elif variant=='truncated-family':
+                    family['constructors']=['A'];con['enumFamily']=copy.deepcopy(family)
+                elif variant=='extra-family-member':
+                    extra=copy.deepcopy(con);extra['id']='C';m['constructors'].append(extra)
                 result=run(m);self.assertFalse(result['accepted']);self.assertTrue(any(x['code']=='enum-family' for x in result['issues']))
+                if variant in ['truncated-family','extra-family-member']:
+                    self.assertTrue(any('contradictory supplied family record' in x['detail'] for x in result['issues']))
     def test_bare_partial_overapplied_and_invalid_proofs(self):
         for variant in ['bare','zero','two','lifted','word','unknown','malformed','function-proof','result','aggregate']:
             with self.subTest(variant=variant):

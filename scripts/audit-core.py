@@ -378,6 +378,11 @@ class Audit:
         if not isinstance(ids, list) or not ids or any(not isinstance(k, str) or not k for k in ids) or len(set(ids)) != len(ids):
             reject('invalid ordered constructors')
             return
+        for key, con in self.constructors.items():
+            declared = con.get('enumFamily')
+            if (isinstance(declared, dict) and declared.get('typeConstructor') == family['typeConstructor'] and
+                    (declared != family or key not in ids)):
+                reject('contradictory supplied family record ' + key)
         for index, key in enumerate(ids):
             con = self.constructors.get(key, {})
             if (con.get('enumFamily') != family or con.get('kind') != 'boxed' or

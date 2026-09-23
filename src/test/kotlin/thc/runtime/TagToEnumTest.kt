@@ -132,7 +132,7 @@ class TagToEnumTest {
         }
     }
     @Test fun malformedOrUnsaturatedEnumProofsRejectAtLoad() {
-        for (backend in listOf("ast", "bytecode")) for (variant in listOf("missing", "family", "empty", "reverse", "duplicate", "missing-con", "wrong-tag", "float-tag", "fields", "newtype", "word", "unknown", "aggregate", "function-proof", "result", "lifted", "zero", "two", "bare")) context().use { context ->
+        for (backend in listOf("ast", "bytecode")) for (variant in listOf("missing", "family", "empty", "reverse", "duplicate", "missing-con", "wrong-tag", "float-tag", "fields", "newtype", "truncated-family", "extra-family-member", "word", "unknown", "aggregate", "function-proof", "result", "lifted", "zero", "two", "bare")) context().use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -153,6 +153,11 @@ class TagToEnumTest {
                     "float-tag" -> con["tag"] = 1.0
                     "fields" -> con["fieldTypes"] = listOf(mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true))
                     "newtype" -> con["kind"] = "newtype"
+                    "truncated-family" -> {
+                        family["constructors"] = listOf(ids[0])
+                        con["enumFamily"] = family.toMap()
+                    }
+                    "extra-family-member" -> cons.add(con.toMutableMap().apply { put("id", "Extra") })
                     "word" -> ((app[2] as List<List<Any?>>)[0][2] as MutableMap<String, Any?>)["rep"] = mapOf("kind" to "long", "primReps" to listOf("WordRep"), "evaluated" to true)
                     "unknown" -> app[2] = listOf(listOf("lit", "int", "0"))
                     "aggregate" -> metadata["rep"] = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "components" to emptyList<Any?>(), "primReps" to emptyList<String>(), "evaluated" to true)
@@ -165,6 +170,8 @@ class TagToEnumTest {
                 }
                 val failure = assertThrows(RuntimeException::class.java, { program(language, linked, backend) }, "$backend/$variant")
                 assertTrue(failure is RuntimeFault || failure is UnsupportedCore, "$backend/$variant ${failure.javaClass}")
+                if (variant == "truncated-family" || variant == "extra-family-member")
+                    assertTrue(failure.message.orEmpty().contains("Contradictory family record"), "$backend/$variant ${failure.message}")
             } finally { context.leave() }
         }
     }

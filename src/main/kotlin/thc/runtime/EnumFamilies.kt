@@ -28,6 +28,13 @@ internal object CoreEnums {
         val ids = family["constructors"] as? List<*> ?: bad("Missing ordered constructors")
         if (ids.isEmpty() || ids.any { it !is String || it.isEmpty() } || ids.distinct().size != ids.size)
             bad("Invalid ordered constructors")
+        // A supplied record cannot name this same nominal family while
+        // contradicting or extending its complete ordered constructor list.
+        for ((id, con) in constructors) {
+            val declared = con["enumFamily"] as? Map<*, *> ?: continue
+            if (declared["typeConstructor"] == family["typeConstructor"] && (declared != family || id !in ids))
+                bad("Contradictory family record $id")
+        }
         return ids.mapIndexed { index, value ->
             val id = value as String
             val con = constructors[id] ?: bad("Missing family constructor $id")
