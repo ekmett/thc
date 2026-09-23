@@ -974,6 +974,7 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
         Local(-1, false, proof, false, tupleSlots = slots).also { locals[id] = it; joins.remove(id) }
     fun bindVoid(id: String, proof: CoreRepresentation): Local =
         Local(-1, false, proof.copy(evaluated = true), false).also { locals[id] = it; joins.remove(id) }
+    fun bindSlot(id: String, local: Local) { locals[id] = local; joins.remove(id) }
     fun refine(id: String, proof: CoreRepresentation) { locals[id]?.let { locals[id] = it.copy(proof = proof, primitive = if (proof.present) proof.isLong else it.primitive) } }
     fun publish(id: String, proof: CoreRepresentation) {
         refine(id, proof)
@@ -1156,6 +1157,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         if (!lifted) return Evaluate(compile(expr, scope, false).also {
             CoreRepresentations.requireNoVector(it.representation, "argument")
+            CoreRepresentations.requireNoSum(it.representation, "argument")
         }, metrics)
         // GHC's context-aware exprOkForSpecEval certificate also covers total
         // primitive operands in constructors, without strictifying recursive
@@ -1163,8 +1165,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         // an update thunk and captures. A false certificate overrides HNF.
         // Older exports fall back to exprIsHNF; missing proofs stay lazy.
         if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true)))
-            return compile(expr, scope, false)
-        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
+            return compile(expr, scope, false).also { CoreRepresentations.requireNoSum(it.representation, "argument") }
+        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { CoreRepresentations.requireNoSum(it.representation, "argument") }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int64" -> int64Literal(value)
@@ -1425,7 +1427,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val child = scope.child()
             val ids = alt[2] as List<String>
             if (alt[0] == "default") {
-                if (fallback >= 0 || ids.isNotEmpty()) throw RuntimeFault("Invalid sum DEFAULT alternative")
+                if (fallback >= 0 || ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
+                    throw RuntimeFault("Invalid sum DEFAULT alternative")
                 fallback = index
             } else {
                 if (alt[0] != "data" || ids.size != 1) throw RuntimeFault("Invalid sum alternative")
@@ -1441,7 +1444,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val projection = proof.alternativeSlots!![tag - 1].map { slots[it] }.toIntArray()
                 if (component.isTuple) child.bindTuple(ids[0], field, projection)
                 else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], field)
-                else child.locals[ids[0]] = Local(projection[0], component.isLong, field, false)
+                else child.bindSlot(ids[0], Local(projection[0], component.isLong, field, false))
             }
             compile(alt[3] as List<Any?>, child, tail)
         }.toTypedArray()
@@ -1478,7 +1481,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val offset = shape.offsets[index]
                 if (component.isTuple) local.bindTuple(id, component.copy(evaluated = true), slots.copyOfRange(offset, offset + width))
                 else if (component.kind == CoreKind.VOID) local.bindVoid(id, field)
-                else local.locals[id] = Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false)
+                else local.bindSlot(id, Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false))
             }
         } else if (alt[0] != "default" || ids.isNotEmpty()) throw RuntimeFault("Invalid tuple alternative")
         return TupleCase(scrutinee, slots, compile(alt[3] as List<Any?>, local, tail))

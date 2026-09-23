@@ -52,7 +52,8 @@ rows. Six retained-sum consumers plus a GHC-eliminated scalar control are accept
 all other roots remain explicit frontiers. `prepare-sum-result-audit.py` adds
 110 fresh native unary rows and seven independent input pairs, checks independent
 wraparound formulas, and strict-audits all 12 scalar entry roots before and after
-Tidy. It retains opaque producer boundaries, tuple payloads, lazy lifted bottoms,
+Tidy. The original `AggregateFrontier` sumPayload, sumZeroLazy and coldSum
+consumers now also execute their 24 native rows through the same strict gates. It retains opaque producer boundaries, tuple payloads, lazy lifted bottoms,
 State/empty effects, two outstanding results, direct exceptions and self/mutual
 forwarding. Both preparations record source, exporter, auditor, toolchain, native
 and Core hashes; JVM tests reject stale evidence.

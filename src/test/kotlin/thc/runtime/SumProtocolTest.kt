@@ -75,7 +75,7 @@ class SumProtocolTest {
     }
 
     @Test fun malformedColdConstructorAndCaseProofsRejectOnBothBackends() = withLanguage { language ->
-        for (backend in listOf("ast","bytecode")) for (mode in 0..8) {
+        for (backend in listOf("ast","bytecode")) for (mode in 0..9) {
             val module=module()
             val worker=binding(module,"returnedSum")["expr"] as List<Any?>
             val constructors=module["constructors"] as List<MutableMap<String,Any?>>
@@ -93,6 +93,7 @@ class SumProtocolTest {
                     alternatives[1][3]=listOf("lit","word","1",mapOf("rep" to mapOf("kind" to "long","primReps" to listOf("WordRep"),"evaluated" to true)))
                 }
                 6 -> alternatives[1][3]=listOf("void",mapOf("rep" to mapOf("kind" to "void","primReps" to emptyList<String>(),"evaluated" to true)))
+                9 -> { alternatives[1][0]="default"; alternatives[1][2]=emptyList<String>() }
                 8 -> alternatives[1][3]=listOf("var", binding(module,"lazySum")["id"], mapOf("rep" to mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)))
                 7 -> {
                     val app=walk(worker).first { it.firstOrNull()=="app" && (it[1] as? List<*>)?.firstOrNull()=="con" } as MutableList<Any?>
@@ -180,6 +181,106 @@ class SumProtocolTest {
             (module["bindings"] as MutableList<Any?>).add(alias)
             val error=assertThrows(PolyglotException::class.java) { context.eval("thc",Json.stringify(mapOf("modules" to listOf(module),"entry" to "sumAlias","backend" to backend))) }
             assertTrue(error.message.orEmpty().contains("unboxed-sum (host result)"),error.message)
+        }
+    }
+    @Test fun sumAndTuplePayloadBindingsShadowOuterJoinWithoutChangingProjectionSlots() = withLanguage { language ->
+        for (backend in listOf("ast", "bytecode")) for (tuple in listOf(false, true)) {
+            val module=module(tuple)
+            val name=if(tuple) "pairedInputs" else "sumCase"
+            val lambda=binding(module,name)["expr"] as MutableList<Any?>
+            val body=lambda[2] as MutableList<Any?>
+            val sumArm=(body[3] as List<List<Any?>>)[0]
+            val bindingArm=if(tuple) ((sumArm[3] as List<Any?>)[3] as List<List<Any?>>)[0] else sumArm
+            val binder=(bindingArm[4] as Map<String,Any?>)["binders"] as List<Map<String,Any?>>
+            val id=(bindingArm[2] as List<String>)[0]
+            val proof=binder[0]["rep"]
+            if(!tuple) (bindingArm as MutableList<Any?>)[3]=listOf("var",id,mapOf("rep" to proof))
+            val join=mapOf("id" to id,"name" to "shadowedJoin","lifted" to false,"rep" to proof,
+                "expr" to listOf("lit","int","99",mapOf("rep" to proof)),"joinValueArity" to 0L,
+                "joinResultRep" to proof,"info" to mapOf("joinArity" to 0L))
+            lambda[2]=listOf("let",false,listOf(join),body,mapOf("rep" to proof))
+            val program=program(language,module,name,backend)
+            val target=program.entryTarget(binding(module,name)["id"] as String)
+            val actual=Calls.target(target,if(tuple) arrayOf(0L,1L,3L) else arrayOf(0L,-1L))
+            assertEquals(if(tuple) 24L else -1L,actual,"$backend/tuple=$tuple")
+            released(language)
+        }
+    }
+    @Test fun inferredSumCannotCrossOrdinaryArgumentBoundaryWhenOuterProofIsOmitted() = withLanguage { language ->
+        for(backend in listOf("ast","bytecode")) for(explicitUnknown in listOf(false,true)) {
+            val module=module()
+            val lambda=binding(module,"sumCase")["expr"] as MutableList<Any?>
+            val body=lambda[2] as MutableList<Any?>
+            val sum=shape(module,"returnedSum")
+            val scalar=sum["alternatives"].let { it as List<Any?> }[0]
+            val closure=binding(module,"returnedSum")["rep"]
+            val constructor=(module["constructors"] as List<Map<String,Any?>>).single {
+                it["kind"]=="unboxed-sum" && it["tag"]==1L && it["sumArity"]==2L
+            }["id"]
+            val literal=listOf("lit","int","1",mapOf("rep" to scalar))
+            val constructed=listOf("app",listOf("con",constructor,1L,mapOf("rep" to closure)),
+                listOf(literal),listOf(false),true,true,mapOf("rep" to sum))
+            for(arm in body[3] as List<MutableList<Any?>>) arm[3]=constructed
+            val metadata=body[4] as MutableMap<String,Any?>
+            if(explicitUnknown) metadata["rep"]=mapOf("kind" to "unknown","primReps" to null,"evaluated" to false)
+            else metadata.remove("rep")
+            val function=listOf("lam",listOf(mapOf("id" to "ignored","lifted" to false,"rep" to scalar)),literal,
+                mapOf("rep" to closure,"resultRep" to scalar))
+            lambda[2]=listOf("app",function,listOf(body),listOf(false),false,false,mapOf("rep" to scalar))
+            val error=assertThrows(UnsupportedCore::class.java) { program(language,module,"sumCase",backend) }
+            assertTrue(error.message.orEmpty().contains("unboxed-sum (argument)"),"$backend/$explicitUnknown: ${error.message}")
+        }
+    }
+    @Test fun intrinsicScalarColdArmCannotSatisfyAggregateResultWithoutMetadata() = withLanguage { language ->
+        for(backend in listOf("ast","bytecode")) for(genericCase in listOf(false,true)) {
+            val module=module()
+            val sum=shape(module,"returnedSum")
+            val name=if(genericCase) "returnedSum" else "sumCase"
+            val lambda=binding(module,name)["expr"] as MutableList<Any?>
+            val body=lambda[2] as MutableList<Any?>
+            val alternatives=body[3] as List<MutableList<Any?>>
+            if(!genericCase) {
+                val scalar=(sum["alternatives"] as List<Any?>)[0]
+                val closure=binding(module,"returnedSum")["rep"]
+                val constructor=(module["constructors"] as List<Map<String,Any?>>).single {
+                    it["kind"]=="unboxed-sum" && it["tag"]==1L && it["sumArity"]==2L
+                }["id"]
+                alternatives[0][3]=listOf("app",listOf("con",constructor,1L,mapOf("rep" to closure)),
+                    listOf(listOf("lit","int","1",mapOf("rep" to scalar))),listOf(false),true,true,mapOf("rep" to sum))
+                (body[4] as MutableMap<String,Any?>)["rep"]=sum
+                (lambda[3] as MutableMap<String,Any?>)["resultRep"]=sum
+            }
+            alternatives[1][3]=listOf("lit","int","99")
+            val error=assertThrows(RuntimeFault::class.java) { program(language,module,name,backend) }
+            assertTrue(error.message.orEmpty().contains("scalar and aggregate"),"$backend/generic=$genericCase: ${error.message}")
+        }
+        val proof=CoreRepresentations.parse(shape(module(),"returnedSum"))
+        assertEquals(proof,proof.refine(CoreRepresentation.UNKNOWN),"A genuinely unknown legacy proof adds no constraint")
+    }
+    @Test fun defaultAndNonExhaustiveSumCasesConsumeAndReleaseResults() = withLanguage { language ->
+        for(backend in listOf("ast","bytecode")) for(default in listOf(false,true)) {
+            val module=module()
+            val lambda=binding(module,"sumCase")["expr"] as List<Any?>
+            val body=lambda[2] as List<Any?>
+            val alternatives=body[3] as MutableList<List<Any?>>
+            if(default) {
+                val scalar=(shape(module,"returnedSum")["alternatives"] as List<Any?>)[0]
+                alternatives[1]=listOf("default",null,emptyList<String>(),
+                    listOf("lit","int","77",mapOf("rep" to scalar)),mapOf("binders" to emptyList<Any>()))
+            } else alternatives.removeAt(1)
+            val program=program(language,module,"sumCase",backend)
+            val target=program.entryTarget(binding(module,"sumCase")["id"] as String)
+            fun call(x: Long)=Calls.target(target,arrayOf(0L,x))
+            assertEquals(-4L,call(-1))
+            if(default) {
+                assertEquals(77L,call(1));compile(target)
+                assertEquals(-4L,call(-1));valid(target)
+                assertEquals(77L,call(1));valid(target)
+            } else {
+                val failure=assertThrows(RuntimeFault::class.java) { call(1) }
+                assertTrue(failure.message.orEmpty().contains("Non-exhaustive"),failure.message)
+            }
+            released(language)
         }
     }
 }

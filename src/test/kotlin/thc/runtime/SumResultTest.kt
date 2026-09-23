@@ -27,7 +27,7 @@ class SumResultTest {
         target.javaClass.getMethod("isValidLastTier").invoke(target), label)
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-        valid(target, "initial compilation")
+        valid(target, "initial compilation: $target")
     }
     private fun activeTargets(host: RootCallTarget): List<RootCallTarget> {
         val visited = linkedSetOf<RootCallTarget>()
@@ -50,15 +50,18 @@ class SumResultTest {
     @Test fun nativeResultsResidual() = native(false)
     @Test fun extendedNativeResultsInline() = native(true, true)
     @Test fun extendedNativeResultsResidual() = native(false, true)
-    private fun native(inlining: Boolean, extended: Boolean = false) {
+    @Test fun originalFrontierResultsInline() = native(true, frontier = true)
+    @Test fun originalFrontierResultsResidual() = native(false, frontier = true)
+    private fun native(inlining: Boolean, extended: Boolean = false, frontier: Boolean = false) {
         val supported = setOf("sumCase", "directCase", "lazyCase", "zeroCase", "unitCase", "boxedKindsCase", "floatDoubleCase")
-        val rows = File(root, "build/${if (extended) "sum-result" else "sum-layout"}/oracle.tsv").readLines().map { it.split('\t') }.filter { extended || it[0] in supported }.groupBy { it[0] }
+        val rows = File(root, "build/${if (frontier) "aggregate-native" else if (extended) "sum-result" else "sum-layout"}/oracle.tsv").readLines().map { it.split('\t') }.filter { if (frontier) it[0] in setOf("sumPayload", "sumZeroLazy", "coldSum") else extended || it[0] in supported }.groupBy { it[0] }
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for ((name, inputs) in rows) {
-                    val linked = CoreModules.reachable(module(stage, extended), name)
+                    val source = if (frontier) Json.parse(File(root, "build/${if (stage == "pre") "aggregate-core" else "aggregate-post-core"}/AggregateFrontier.json").readText()) as Map<String, Any?> else module(stage, extended)
+                    val linked = CoreModules.reachable(source, name)
                     val bindings = linked["bindings"] as List<Map<String, Any?>>
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                     val target = program.entryTarget(bindings.single { it["name"] == name }["id"] as String)
@@ -80,7 +83,8 @@ class SumResultTest {
                                 assertEquals(active, activeTargets(host), "$label active target identity")
                                 active.forEach { valid(it, label) }
                                 val expected = when (name) {
-                                    "directCase" -> 1L
+                                    "directCase", "coldSum" -> 1L
+                                    "sumPayload" -> 2L // The strict Box Int# is constructed in the producer root.
                                     "zeroCase", "forwardCase", "pairedCase", "mixedCase", "selfCase", "effectStateCase", "effectEmptyCase", "throwCase" -> 3L
                                     "outstandingCase" -> 5L
                                     "mutualCase" -> 6L // Two A reentries reuse its frame; B enters three times.
@@ -102,7 +106,7 @@ class SumResultTest {
                     check(false)
                     active = activeTargets(host)
                     assertTrue(active.size > 1, "Missing observed host guest-call target")
-                    (bindings.filter { (it["expr"] as List<*>)[0] == "lam" }.map { program.entryTarget(it["id"] as String) } + active).distinct().forEach(::compile)
+                    (listOf(target) + active).distinct().forEach(::compile)
                     check(true)
                     inputs.firstOrNull { it[2] == "throws" }?.let { row ->
                         assertThrows(GuestException::class.java) { invoke(row[1].toLong()) }

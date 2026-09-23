@@ -412,9 +412,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }
         if (!lifted) return force(compile(expr, scope, false).also {
             CoreRepresentations.requireNoVector(it.proof, "argument")
+            CoreRepresentations.requireNoSum(it.proof, "argument")
         })
-        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false)
-        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
+        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false).also { CoreRepresentations.requireNoSum(it.proof, "argument") }
+        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { CoreRepresentations.requireNoSum(it.proof, "argument") }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int64" -> int64Literal(value)
@@ -1240,7 +1241,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val child = scope.child()
             val ids = alt[2] as List<String>
             val tag = if (alt[0] == "default") {
-                if (ids.isNotEmpty()) throw RuntimeFault("Invalid sum DEFAULT alternative")
+                if (ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
+                    throw RuntimeFault("Invalid sum DEFAULT alternative")
                 null
             } else {
                 if (alt[0] != "data" || ids.size != 1) throw RuntimeFault("Invalid sum alternative")

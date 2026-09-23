@@ -46,8 +46,8 @@ internal data class CoreRepresentation(
             throw RuntimeFault("Conflicting Core vector representation proofs")
         if (isAggregate && other.isAggregate && !TupleShape.compatible(this, other))
             throw RuntimeFault("Conflicting logical aggregate representation proofs")
-        if (isAggregate && other.present && !other.isAggregate && (other.kind != CoreKind.UNKNOWN || other.primReps != null) ||
-            other.isAggregate && present && !isAggregate && (kind != CoreKind.UNKNOWN || primReps != null))
+        if (isAggregate && !other.isAggregate && (other.kind != CoreKind.UNKNOWN || other.primReps != null) ||
+            other.isAggregate && !isAggregate && (kind != CoreKind.UNKNOWN || primReps != null))
             throw RuntimeFault("Conflicting scalar and aggregate representation proofs")
         val merged = when {
             kind == CoreKind.UNKNOWN -> other.kind
@@ -84,7 +84,7 @@ internal object CoreRepresentations {
     }
     fun validateAggregateCaseResult(declared: CoreRepresentation, alternatives: List<CoreRepresentation>) {
         val aggregate = (listOf(declared) + alternatives).firstOrNull { it.isAggregate } ?: return
-        (listOf(declared) + alternatives).forEach { TupleShape.requireCompatible(aggregate, it) }
+        (listOf(declared) + alternatives).forEach { aggregate.refine(it) }
     }
     /** Validate every retained proof, including cold branches and unused binders. */
     fun validateAggregates(bindings: List<Map<String, Any?>>) {

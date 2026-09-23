@@ -10,11 +10,11 @@ import thc.runtime.RuntimeFault
 import thc.runtime.UnsupportedCore
 import java.io.File
 
-/** Result-only tuples execute; aggregate arguments and sums remain explicit boundaries. */
+/** Supported tuple and binary-sum results execute; aggregate arguments remain explicit boundaries. */
 class AggregateFrontierTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val constructors = listOf("tupleOutstanding", "tupleZeroLazy", "sumPayload", "sumZeroLazy", "coldTuple", "coldSum")
-    private val supported = setOf("tupleOutstanding", "tupleZeroLazy", "coldTuple")
+    private val supported = constructors.toSet()
     private val boundaries = mapOf("emptyIdentity" to "unboxed-tuple", "emptyDiscard" to "unboxed-tuple",
         "singletonIdentity" to "unboxed-tuple", "pairIdentity" to "unboxed-tuple", "sumIdentity" to "unboxed-sum")
     private fun exported(stage: String): Map<String, Any?> =
@@ -61,8 +61,8 @@ class AggregateFrontierTest {
         }
     }
 
-    @Test fun diagnosticModeKeepsColdAggregatePathsLazyAndTrapsWhenReached() {
-        val module = exported("aggregate-core")
+    @Test fun diagnosticModeKeepsLegacyColdAggregatePathsLazyAndTrapsWhenReached() {
+        val module = withoutMarkers(exported("aggregate-core")) as Map<String, Any?>
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for ((entry, expected) in listOf("coldSum" to -7L)) {
                 val function = context.eval("thc", Json.stringify(mapOf("modules" to listOf(module),
@@ -75,7 +75,7 @@ class AggregateFrontierTest {
                 assertEquals(expected, function.execute(0L).asLong())
                 assertTrue(compiledEntries() > before, "$backend/$entry: must enter compiled code before the cold trap")
                 val error = assertThrows(PolyglotException::class.java) { function.execute(31337L) }
-                assertTrue(error.message.orEmpty().contains("Diagnostic unsupported path reached: Unsupported Core aggregate representation:"), "$backend/$entry: ${error.message}")
+                assertTrue(error.message.orEmpty().contains("Diagnostic unsupported path reached: Unsupported constructor representation unboxed-sum"), "$backend/$entry: ${error.message}")
             }
         }
     }
