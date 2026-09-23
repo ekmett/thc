@@ -1,0 +1,34 @@
+NOTE	Shallow bytes include headers/alignment; referenced storage is not included. No Map workload executed.
+VM	Java HotSpot(TM) 64-Bit Server VM	25.0.4.1+1-LTS-jvmci-25.3-b22
+VM_OPTION	UseCompressedOops	true
+VM_OPTION	UseCompressedClassPointers	true
+VM_OPTION	ObjectAlignmentInBytes	8
+VM_OPTION	UseCompactObjectHeaders	false
+SIZE	JVM	boxed Long.MAX_VALUE	java.lang.Long	24	Long.value:long	
+SIZE	PACKET	Object[3]	[Ljava.lang.Object;	32		payload references only
+SIZE	PACKET	Object[4]	[Ljava.lang.Object;	32		payload references only
+SIZE	PACKET	Object[5]	[Ljava.lang.Object;	40		payload references only
+SIZE	DATA	ghc-internal:GHC.Internal.Stack.Types.SrcLoc	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1	64	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$1.field__0:java.lang.Object,GeneratedStaticObject$$1.field__1:java.lang.Object,GeneratedStaticObject$$1.field__2:java.lang.Object,GeneratedStaticObject$$1.field__3:long,GeneratedStaticObject$$1.field__4:long,GeneratedStaticObject$$1.field__5:long,GeneratedStaticObject$$1.field__6:long	SrcLoc;arity=7
+SIZE	DATA	ghc-internal:GHC.Internal.Stack.Types.EmptyCallStack	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2	16	DataValue.layout:thc.runtime.DataLayout	EmptyCallStack;arity=0
+SIZE	DATA	ghc-internal:GHC.Internal.Stack.Types.PushCallStack	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$3	32	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$3.field__0:java.lang.Object,GeneratedStaticObject$$3.field__1:java.lang.Object,GeneratedStaticObject$$3.field__2:java.lang.Object	PushCallStack;arity=3
+SIZE	DATA	main:Data.Map.Internal.Bin	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4	40	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$4.field__0:long,GeneratedStaticObject$$4.field__1:java.lang.Object,GeneratedStaticObject$$4.field__2:java.lang.Object,GeneratedStaticObject$$4.field__3:thc.runtime.DataValue,GeneratedStaticObject$$4.field__4:thc.runtime.DataValue	Bin;arity=5
+SIZE	DATA	main:Data.Map.Internal.Tip	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$5	16	DataValue.layout:thc.runtime.DataLayout	Tip;arity=0
+SIZE	DATA	ghc-internal:GHC.Internal.Types.I#	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6	24	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$6.field__0:long	I#;arity=1
+SIZE	DATA	ghc-internal:GHC.Internal.Types.C#	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$8	24	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$8.field__0:long	C#;arity=1
+SIZE	DATA	ghc-internal:GHC.Internal.Types.:	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$10	24	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$10.field__0:java.lang.Object,GeneratedStaticObject$$10.field__1:java.lang.Object	:;arity=2
+SIZE	DATA	ghc-internal:GHC.Internal.Types.[]	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$11	16	DataValue.layout:thc.runtime.DataLayout	[];arity=0
+SIZE	DATA	ghc-internal:GHC.Internal.Stack.Types.FreezeCallStack	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$15	24	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$15.field__0:java.lang.Object	FreezeCallStack;arity=1
+SIZE	DATA	ghc-internal:GHC.Internal.Exception.ErrorCall	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$19	24	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$19.field__0:java.lang.Object	ErrorCall;arity=1
+SIZE	DATA	ghc-internal:GHC.Internal.STRef.STRef	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$23	24	DataValue.layout:thc.runtime.DataLayout,GeneratedStaticObject$$23.field__0:java.lang.Object	STRef;arity=1
+SIZE	CAPTURE	capture-1	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7	32	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$7.capture__0__primitive:long,GeneratedStaticObject$$7.capture__1__object:thc.runtime.DataValue,GeneratedStaticObject$$7.capture__2__object:thc.runtime.DataValue	root:argument thunk/UncachedBytecodeNode.constants[6]
+SIZE	CAPTURE	capture-2	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$9	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$9.capture__0__object:thc.runtime.LiteralAddress	root:argument thunk/UncachedBytecodeNode.constants[3]
+SIZE	CAPTURE	capture-3	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$12	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$12.capture__0__object:java.lang.Object,GeneratedStaticObject$$12.capture__1__object:java.lang.Object	root:argument thunk/UncachedBytecodeNode.constants[4]
+SIZE	CAPTURE	capture-4	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$14	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$14.capture__0__object:java.lang.Object	root:argument thunk/UncachedBytecodeNode.constants[3]
+SIZE	CAPTURE	capture-5	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$17	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$17.capture__0__object:java.lang.Object	root:argument thunk/UncachedBytecodeNode.constants[3]
+SIZE	CAPTURE	capture-6	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$18	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$18.capture__0__object:java.lang.Object	root:argument thunk/UncachedBytecodeNode.constants[3]
+SIZE	CAPTURE	capture-7	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$16	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$16.capture__0__object:java.lang.Object	root:lambda $dIP, eta/UncachedBytecodeNode.constants[5]
+SIZE	CAPTURE	capture-8	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$13	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$13.capture__0__object:java.lang.Object,GeneratedStaticObject$$13.capture__1__object:java.lang.Object	root:lambda s1/UncachedBytecodeNode.constants[5]
+SIZE	CAPTURE	capture-9	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$21	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$21.capture__0__object:java.lang.Object	root:argument thunk/UncachedBytecodeNode.constants[3]
+SIZE	CAPTURE	capture-10	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$20	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$20.capture__0__object:java.lang.Object	root:argument thunk/UncachedBytecodeNode.constants[3]
+SIZE	CAPTURE	capture-11	com.oracle.truffle.api.staticobject.GeneratedStaticObject$$22	24	CapturedFrame.layout:thc.runtime.CaptureLayout,GeneratedStaticObject$$22.capture__0__object:java.lang.Object	root:argument thunk/UncachedBytecodeNode.constants[3]
+COUNT	dataLayouts=12	captureLayouts=11

@@ -1,0 +1,102 @@
+{
+  "startedUtc": "2026-09-23T06:30:12.829088+00:00",
+  "native": "/Users/ekmett/thc/work/constructor-class-v6/map/native-oracle",
+  "nativeSha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf",
+  "oracle": "/Users/ekmett/thc/work/perf-sprint-owned-storage/oracle16.tsv",
+  "oracleSha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277",
+  "helperSha256": "94569f7180a57323d089ef16ec1ff489c7192d2ff503f76f78d6e450a46b8fcf",
+  "scope": "Host health screen only, not a throughput comparison. Conservative stop threshold1.875ms is1.5x historical1.25ms; no causal inference about battery.",
+  "before": {
+    "recordedUtc": "2026-09-23T06:30:12.838745+00:00",
+    "battery": {
+      "argv": [
+        "pmset",
+        "-g",
+        "batt"
+      ],
+      "exitCode": 0,
+      "raw": "before-battery.txt"
+    },
+    "thermal": {
+      "argv": [
+        "pmset",
+        "-g",
+        "therm"
+      ],
+      "exitCode": 0,
+      "raw": "before-thermal.txt"
+    },
+    "cpu": {
+      "argv": [
+        "ps",
+        "-axo",
+        "pid,pcpu,comm",
+        "-r"
+      ],
+      "exitCode": 0,
+      "publishedAggregate": "cpu-summary.json",
+      "omittedRaw": {
+        "originalRepositoryPath": "work/perf-sprint-constructor-class/health/before-cpu.txt",
+        "sha256": "0663f14d7ebdfede86ea951ef8d3542dd7df2b36dfba09cac4cb6b0e9658846d",
+        "bytes": 73944,
+        "published": false,
+        "reason": "Full process COMM inventory omitted from public artifacts; original local capture retained unchanged."
+      }
+    }
+  },
+  "argv": [
+    "/Users/ekmett/thc/work/constructor-class-v6/map/native-oracle",
+    "--bench-steady",
+    "mapAggregate",
+    "1",
+    "2",
+    "2",
+    "10000"
+  ],
+  "exitCode": 0,
+  "after": {
+    "recordedUtc": "2026-09-23T06:30:18.860278+00:00",
+    "battery": {
+      "argv": [
+        "pmset",
+        "-g",
+        "batt"
+      ],
+      "exitCode": 0,
+      "raw": "after-battery.txt"
+    },
+    "thermal": {
+      "argv": [
+        "pmset",
+        "-g",
+        "therm"
+      ],
+      "exitCode": 0,
+      "raw": "after-thermal.txt"
+    },
+    "cpu": {
+      "argv": [
+        "ps",
+        "-axo",
+        "pid,pcpu,comm",
+        "-r"
+      ],
+      "exitCode": 0,
+      "publishedAggregate": "cpu-summary.json",
+      "omittedRaw": {
+        "originalRepositoryPath": "work/perf-sprint-constructor-class/health/after-cpu.txt",
+        "sha256": "c505bc76619eac1ce0789a0d368c92aea1062fb77958bd6dc4cdeed5481303db",
+        "bytes": 74071,
+        "published": false,
+        "reason": "Full process COMM inventory omitted from public artifacts; original local capture retained unchanged."
+      }
+    }
+  },
+  "windowNsPerCall": [
+    1236494.9776785714,
+    1219957.03125
+  ],
+  "medianNsPerCall": 1228226.0044642857,
+  "errors": [],
+  "healthy": true
+}

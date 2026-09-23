@@ -10,7 +10,7 @@ mkdir -p "$OUT" build/graph-tools
 OUT="$(cd "$OUT" && pwd)"
 "$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m \
   -Dthc.traceCompilation=true -Dthc.minimumWarmCalls=256 \
-  "-Dthc.backend=${THC_BACKEND:-ast}" \
+  "-Dthc.backend=${THC_BACKEND:-bytecode}" \
   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \
   -Djdk.graal.Dump=Truffle:1 -Djdk.graal.PrintGraph=File \
   -Djdk.graal.PrintGraphWithSchedule=true -Djdk.graal.PrintBackendCFG=false \

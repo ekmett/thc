@@ -43,17 +43,19 @@ jobs:
         run: scripts/try.sh
       - name: Check exact dependency auditor
         run: python3 scripts/test-audit-core.py
+      - name: Check benchmark power provenance
+        run: python3 tools/test-compare-map-runtimes.py
       - name: Run ordinary Map workload with explicit unsupported-path traps
         env:
           THC_DIAGNOSTIC_UNSUPPORTED: 'true'
         run: scripts/try-map.sh
-      - name: Check Map through the bytecode backend
+      - name: Check Map through the AST backend
         shell: bash
         run: |
           java --enable-native-access=ALL-UNNAMED -Xss2m \
-            -Dthc.backend=bytecode -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
+            -Dthc.backend=ast -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
             -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
-            2>&1 | tee build/map/check-bytecode.log
+            2>&1 | tee build/map/check-ast.log
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
@@ -63,6 +65,6 @@ jobs:
             build/test-results/
             build/map/audit.json
             build/map/check.log
-            build/map/check-bytecode.log
+            build/map/check-ast.log
             build/map/provenance.json
             build/map/reproduction-provenance.json

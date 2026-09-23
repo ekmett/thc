@@ -106,7 +106,7 @@ object CoreModules {
 
     @Suppress("UNCHECKED_CAST")
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
-                backend: String = "ast", sourceNotesEnabled: Boolean = true): String = Json.stringify(mapOf(
+                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true): String = Json.stringify(mapOf(
         "modules" to paths.map { Json.parse(File(it).readText()) as Map<String, Any?> },
         "entry" to entry, "instrument" to instrument, "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend, "sourceNotesEnabled" to sourceNotesEnabled))
 }
@@ -127,7 +127,7 @@ class Language : TruffleLanguage<Language.State>() {
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
-        val program = when (val backend = input["backend"] ?: "ast") {
+        val program = when (val backend = input["backend"] ?: defaultBackend()) {
             "ast" -> Program(this, linked)
             "bytecode" -> BytecodeProgram(this, linked)
             else -> throw IllegalArgumentException("Unknown THC backend: $backend")

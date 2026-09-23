@@ -1,0 +1,220 @@
+{
+  "scope": "Public compact evidence with documented local-only process inventories; excludes this manifest itself. Original local capture manifest has a different scope.",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "1b3c34e89318043ebb44b90dfdb6e6da4e1e0aa101df7f0e1de53890ff617bb4",
+      "bytes": 4038
+    },
+    {
+      "path": "health/after-battery.txt",
+      "sha256": "462b9b71cfcc16933f999337b72576443007c5be1ed3433bb0900576b2cf685d",
+      "bytes": 137
+    },
+    {
+      "path": "health/after-thermal.txt",
+      "sha256": "96de6076213225f787270bff80efd2011e0ad142953c37697dc547f77d302892",
+      "bytes": 146
+    },
+    {
+      "path": "health/before-battery.txt",
+      "sha256": "462b9b71cfcc16933f999337b72576443007c5be1ed3433bb0900576b2cf685d",
+      "bytes": 137
+    },
+    {
+      "path": "health/before-thermal.txt",
+      "sha256": "96de6076213225f787270bff80efd2011e0ad142953c37697dc547f77d302892",
+      "bytes": 146
+    },
+    {
+      "path": "health/cpu-summary.json",
+      "sha256": "1cf4b019fa800ea9a93becef21a38a38d6dd7303efb4d75466dbe31b4e35e14c",
+      "bytes": 999
+    },
+    {
+      "path": "health/native.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "health/native.tsv",
+      "sha256": "d62819a379182e3285a6d80ee0cf3810f5c3766e5df527c64373a30833ab044b",
+      "bytes": 100
+    },
+    {
+      "path": "health/summary.json",
+      "sha256": "05cc35c2ccbc44f7428f687ba66b18f25b988d2455d65e140bab99634c31e458",
+      "bytes": 2836
+    },
+    {
+      "path": "matrix/ast-checked-classoff-argson/config.json",
+      "sha256": "e7502f70ee7f9eb0943b54bed6adedcf52417f81e9d83103511595435e54af1f",
+      "bytes": 10193
+    },
+    {
+      "path": "matrix/ast-checked-classoff-argson/d2-b12000.log",
+      "sha256": "d9f6d445fd2cd481895238d283da07f82e4be3281481e729095f1da1d2c2e21b",
+      "bytes": 5828
+    },
+    {
+      "path": "matrix/ast-checked-classoff-argson/d2-b12000.tsv",
+      "sha256": "5cb0c9ad1687a63b04b717eb3c98336fc0e3dde01e807a1be636497f683423c3",
+      "bytes": 144
+    },
+    {
+      "path": "matrix/ast-checked-classoff-argson/option-descriptors.txt",
+      "sha256": "82683ec2ec194b9137c1a85825fcc2dee4cc96957eba68d3d708307521dc9ce5",
+      "bytes": 1073
+    },
+    {
+      "path": "matrix/ast-checked-classoff-argson/summary.json",
+      "sha256": "7ddb5e0aab11eaab2c1f8f08e8196e22bbc46d0095cac6b668b0242e2f1a5e32",
+      "bytes": 2267
+    },
+    {
+      "path": "matrix/ast-checked-classon-argson/config.json",
+      "sha256": "4410f0e381ac1218c6412663e75f05bbbcb75e2005420674ea8c2ce91e8ab098",
+      "bytes": 10191
+    },
+    {
+      "path": "matrix/ast-checked-classon-argson/d2-b12000.log",
+      "sha256": "74c5d1e97c9f76462f65dbe0784cf08b259cede1815632dcf24df2d4b9f6a841",
+      "bytes": 4350
+    },
+    {
+      "path": "matrix/ast-checked-classon-argson/d2-b12000.tsv",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "matrix/ast-checked-classon-argson/option-descriptors.txt",
+      "sha256": "82683ec2ec194b9137c1a85825fcc2dee4cc96957eba68d3d708307521dc9ce5",
+      "bytes": 1073
+    },
+    {
+      "path": "matrix/check-ast-checked-classoff-argson.log",
+      "sha256": "bf015875432b23ebeb5a07acef63456562010a54610ccbf119c2dfd451551495",
+      "bytes": 484
+    },
+    {
+      "path": "matrix/check-ast-checked-classoff-argson.tsv",
+      "sha256": "b55ef95df4052cecc173db434abbe8dca494ab3ac52a3bdfdada389cf218a8af",
+      "bytes": 2889
+    },
+    {
+      "path": "matrix/check-ast-checked-classon-argson.log",
+      "sha256": "bf015875432b23ebeb5a07acef63456562010a54610ccbf119c2dfd451551495",
+      "bytes": 484
+    },
+    {
+      "path": "matrix/check-ast-checked-classon-argson.tsv",
+      "sha256": "0c427e98483e6c2126162074b1c35a40d5011cf99397d9ad50b0d63322e230d0",
+      "bytes": 2889
+    },
+    {
+      "path": "matrix/check-ast-unchecked-classon-argson.log",
+      "sha256": "bf015875432b23ebeb5a07acef63456562010a54610ccbf119c2dfd451551495",
+      "bytes": 484
+    },
+    {
+      "path": "matrix/check-ast-unchecked-classon-argson.tsv",
+      "sha256": "690ec5ea4666c50f4659c19782f62debd0145b34036a0f59ad55927d55057e76",
+      "bytes": 2889
+    },
+    {
+      "path": "matrix/check-bytecode-checked-classoff-argson.log",
+      "sha256": "bf015875432b23ebeb5a07acef63456562010a54610ccbf119c2dfd451551495",
+      "bytes": 484
+    },
+    {
+      "path": "matrix/check-bytecode-checked-classoff-argson.tsv",
+      "sha256": "af1b9232b09145a6cbc2395358c12951b3a6bedaec13212ff6f51d22c7e25f45",
+      "bytes": 2937
+    },
+    {
+      "path": "matrix/check-bytecode-checked-classon-argsoff.log",
+      "sha256": "bf015875432b23ebeb5a07acef63456562010a54610ccbf119c2dfd451551495",
+      "bytes": 484
+    },
+    {
+      "path": "matrix/check-bytecode-checked-classon-argsoff.tsv",
+      "sha256": "af1b9232b09145a6cbc2395358c12951b3a6bedaec13212ff6f51d22c7e25f45",
+      "bytes": 2937
+    },
+    {
+      "path": "matrix/check-bytecode-checked-classon-argson.log",
+      "sha256": "bf015875432b23ebeb5a07acef63456562010a54610ccbf119c2dfd451551495",
+      "bytes": 484
+    },
+    {
+      "path": "matrix/check-bytecode-checked-classon-argson.tsv",
+      "sha256": "af1b9232b09145a6cbc2395358c12951b3a6bedaec13212ff6f51d22c7e25f45",
+      "bytes": 2937
+    },
+    {
+      "path": "matrix/check-bytecode-unchecked-classon-argson.log",
+      "sha256": "bf015875432b23ebeb5a07acef63456562010a54610ccbf119c2dfd451551495",
+      "bytes": 484
+    },
+    {
+      "path": "matrix/check-bytecode-unchecked-classon-argson.tsv",
+      "sha256": "af1b9232b09145a6cbc2395358c12951b3a6bedaec13212ff6f51d22c7e25f45",
+      "bytes": 2937
+    },
+    {
+      "path": "matrix/matrix.json",
+      "sha256": "b7326a935dd675c67c12e8d968f07225b6f2ba02b46bbd5597989a31aca8e64f",
+      "bytes": 9566
+    },
+    {
+      "path": "omitted-local-evidence.json",
+      "sha256": "b1df783d2981088914cf421a5198b47cb279eeed72dc65994e707a757b4c5df7",
+      "bytes": 1260
+    },
+    {
+      "path": "original-artifacts.json",
+      "sha256": "2da648efde20fd6c093927a16d9a3b4778d8713c0fb2c559207ea1a0acad65cf",
+      "bytes": 7137
+    },
+    {
+      "path": "performance-rejected.json",
+      "sha256": "ce2b103368321923883a753cc95655b3821b56c3b844d6177377f7b56bc77c28",
+      "bytes": 2498
+    },
+    {
+      "path": "power-observations.jsonl",
+      "sha256": "3523a1f4c12911bf906e0def1cbe39eb91fabd700386f87a0027b3f45dee3739",
+      "bytes": 469
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "22882f48ceba2dbc10ee98fea7ca1df1a46b0452fe69b4cf7443d725bf0a9d88",
+      "bytes": 5560
+    },
+    {
+      "path": "stop-anomaly.json",
+      "sha256": "76ec62986864e2426bdba2d446a86651bbc1f3746fb70ee6fdb26aa28938280b",
+      "bytes": 4607
+    },
+    {
+      "path": "tools/RuntimeIntrospection.java",
+      "sha256": "7347e581277ccbc5247d8aa00bf95115f8e8f383a0427c97e887bbf4fad8e911",
+      "bytes": 5053
+    },
+    {
+      "path": "tools/health.py",
+      "sha256": "94569f7180a57323d089ef16ec1ff489c7192d2ff503f76f78d6e450a46b8fcf",
+      "bytes": 3198
+    },
+    {
+      "path": "tools/matrix.py",
+      "sha256": "b5ac6a8755b2cf83e8753864fb1f0473de06a602840c631aaf8c520a1ea8184b",
+      "bytes": 3876
+    },
+    {
+      "path": "tools/sweep.py",
+      "sha256": "81d31df48f448e96598a1d4fcf4fe9544b80acb270e567199d6961b44b5090da",
+      "bytes": 7732
+    }
+  ]
+}

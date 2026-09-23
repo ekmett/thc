@@ -1,0 +1,560 @@
+{
+  "schema": 1,
+  "recordedAtUtc": "2026-09-23T05:38:38.319304+00:00",
+  "entry": "mapAggregate",
+  "baselineCommit": "4c116a8493eafad4077a1c5eb9c046bff56fe3c4",
+  "backends": {
+    "baseline": "bytecode",
+    "candidate": "bytecode"
+  },
+  "inputBase": 10000,
+  "forks": 3,
+  "samples": 5,
+  "sampleSeconds": 2,
+  "jvmWarmSeconds": 15,
+  "nativeWarmSeconds": 1,
+  "minimumJvmWarmCalls": 12000,
+  "diagnosticUnsupported": true,
+  "instrumented": false,
+  "moduleManifests": {
+    "baseline": "/Users/ekmett/thc/work/precise-fields-v3/map/modules.txt",
+    "candidate": "/Users/ekmett/thc/work/precise-fields-v3/map/modules.txt"
+  },
+  "sourceNotesModes": {
+    "baseline": "on",
+    "candidate": "on"
+  },
+  "protocol": "serialized rotated engine order; median of per-fork window medians; signed64 checksums",
+  "candidateSourceNote": "Recorded source hashes identify the supplied tree; the caller must build these runtime JARs from that tree.",
+  "commands": [
+    {
+      "fork": 1,
+      "position": 1,
+      "engine": "baseline",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/Users/ekmett/thc/work/source-notes-v2/lib/annotations-13.0.jar:/Users/ekmett/thc/work/source-notes-v2/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/source-notes-v2/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/work/precise-fields-v3/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/precise-fields-v3/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/precise-fields-v3/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/precise-fields-v3/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/precise-fields-v3/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/precise-fields-v3/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/precise-fields-v3/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/precise-fields-v3/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/precise-fields-v3/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/precise-fields-v3/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/precise-fields-v3/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/precise-fields-v3/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 2,
+      "engine": "candidate",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/Users/ekmett/thc/work/precise-fields-v3/lib/annotations-13.0.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/work/precise-fields-v3/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/precise-fields-v3/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/precise-fields-v3/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/precise-fields-v3/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/precise-fields-v3/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/precise-fields-v3/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/precise-fields-v3/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/precise-fields-v3/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/precise-fields-v3/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/precise-fields-v3/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/precise-fields-v3/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/precise-fields-v3/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 3,
+      "engine": "native",
+      "argv": [
+        "/Users/ekmett/thc/work/precise-fields-v3/map/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 1,
+      "engine": "candidate",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/Users/ekmett/thc/work/precise-fields-v3/lib/annotations-13.0.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/work/precise-fields-v3/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/precise-fields-v3/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/precise-fields-v3/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/precise-fields-v3/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/precise-fields-v3/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/precise-fields-v3/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/precise-fields-v3/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/precise-fields-v3/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/precise-fields-v3/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/precise-fields-v3/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/precise-fields-v3/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/precise-fields-v3/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 2,
+      "engine": "native",
+      "argv": [
+        "/Users/ekmett/thc/work/precise-fields-v3/map/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 3,
+      "engine": "baseline",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/Users/ekmett/thc/work/source-notes-v2/lib/annotations-13.0.jar:/Users/ekmett/thc/work/source-notes-v2/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/source-notes-v2/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/work/precise-fields-v3/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/precise-fields-v3/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/precise-fields-v3/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/precise-fields-v3/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/precise-fields-v3/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/precise-fields-v3/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/precise-fields-v3/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/precise-fields-v3/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/precise-fields-v3/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/precise-fields-v3/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/precise-fields-v3/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/precise-fields-v3/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 1,
+      "engine": "native",
+      "argv": [
+        "/Users/ekmett/thc/work/precise-fields-v3/map/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "1",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 2,
+      "engine": "baseline",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/Users/ekmett/thc/work/source-notes-v2/lib/annotations-13.0.jar:/Users/ekmett/thc/work/source-notes-v2/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/source-notes-v2/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/source-notes-v2/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/work/precise-fields-v3/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/precise-fields-v3/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/precise-fields-v3/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/precise-fields-v3/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/precise-fields-v3/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/precise-fields-v3/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/precise-fields-v3/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/precise-fields-v3/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/precise-fields-v3/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/precise-fields-v3/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/precise-fields-v3/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/precise-fields-v3/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 3,
+      "engine": "candidate",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/Users/ekmett/thc/work/precise-fields-v3/lib/annotations-13.0.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/precise-fields-v3/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/work/precise-fields-v3/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/precise-fields-v3/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/precise-fields-v3/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/precise-fields-v3/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/precise-fields-v3/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/precise-fields-v3/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/precise-fields-v3/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/precise-fields-v3/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/precise-fields-v3/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/precise-fields-v3/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/precise-fields-v3/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/precise-fields-v3/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/precise-fields-v3/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/precise-fields-v3/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "2",
+        "5",
+        "10000"
+      ]
+    }
+  ],
+  "provenance": {
+    "runtimeJars": {
+      "baseline": [
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/thc-0.1-experiment.jar",
+          "sha256": "8f4d77ad37da5bd4d21295e625d43067bc114e085d7af1df25204e74b77fc23a"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/source-notes-v2/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        }
+      ],
+      "candidate": [
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/thc-0.1-experiment.jar",
+          "sha256": "fed255a7c399c7fedf33968e781fd2bd1f6fc961d9c578abf70050a8fc4a5a77"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/Users/ekmett/thc/work/precise-fields-v3/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        }
+      ]
+    },
+    "nativeBinary": [
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/native-oracle",
+        "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf"
+      }
+    ],
+    "moduleManifest": [
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/modules.txt",
+        "sha256": "ad16e98cddb21593e1726b888b3ee98f67732dd40e040a1256f087f89015bf8b"
+      }
+    ],
+    "modules": [
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/07-Data.Set.Internal.json",
+        "sha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/08-Data.Map.Internal.json",
+        "sha256": "8fe30a776467f3cf86391aa03a470a6c554c9382b09f5d8a377cbf2c717225fc"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/09-Data.Map.Internal.Debug.json",
+        "sha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/10-Data.Map.Strict.Internal.json",
+        "sha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/11-Data.Map.Strict.json",
+        "sha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/12-THC.MapWorkload.json",
+        "sha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/14-GHC.Internal.CString.json",
+        "sha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/15-GHC.Internal.Err.json",
+        "sha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/map/16-GHC.InterfaceClosure.json",
+        "sha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438"
+      }
+    ],
+    "candidateSources": [
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "a8601b73fb944a4cffa5d3767928259d3a21c14d45576d29f3da1ab4636c5ef0"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/java/thc/runtime/RuntimeTypes.java",
+        "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/Language.kt",
+        "sha256": "6f04e547c64c40a0b6062aa5fcd2086d25bc59883f095c9fd587d635fe983fd8"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/Main.kt",
+        "sha256": "ec9468fae080a4ec23866769c66fbd7660110cb26d1b4cc71769af225c92fd5d"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "983555586726fb402891770d8e348d9348fb2657d7260773a1ee1387fd7b6078"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+        "sha256": "cc6780705a1006167805eefd4198f42a35b084a4e1f15d1d630002e94ba70c50"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/BloomValue.kt",
+        "sha256": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "d50ceeda00afa9f829128b53031536d1dbd6d4fbb0c7433371117248a69cc0f2"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/CoreEntries.kt",
+        "sha256": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/CoreFields.kt",
+        "sha256": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+        "sha256": "98c16df631c2f1914a1255ab9795cad078d994009e17769fb86b43d106e736fc"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/CoreSources.kt",
+        "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "69dd577cde5f674ed28e18f75c00c44d7efc22efffe2393d60447a63ef15b19a"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/EntryArguments.kt",
+        "sha256": "9c7af82a990fe84121de81070323258cd1654b86c3d00ebc494b5923d468e1ce"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "463d68351f21226f277924141bdedf25fb155e7511680cc9ccab47ca88a573ea"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "95d26f02c73e26857461e42350b1b14a535153647d588582002c26d3dab312c3"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/LocalJoins.kt",
+        "sha256": "b5399a4a86bb1a1dc54cc789b57b88efb4e2abd235c4af25faf7c44c22971ff9"
+      },
+      {
+        "path": "/Users/ekmett/thc/work/precise-fields-v3/src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "877657239e52c30cf1ae51fa04fef9c6437b0f56b6bf1e64f41ab16a071d3972"
+      }
+    ],
+    "java": [
+      {
+        "path": "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "sha256": "9e8bdaa48f05fd17a8f591bef68f759f2b16d4c7e2d237a669f114c89ba28b0a"
+      },
+      {
+        "path": "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/release",
+        "sha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05"
+      }
+    ],
+    "harness": [
+      {
+        "path": "/Users/ekmett/thc/tools/compare-map-runtimes.py",
+        "sha256": "2baec8e4f13d6cb42c31954431428f582a0a1b4204fe585950262d21c4611d10"
+      }
+    ]
+  },
+  "oracle": {
+    "values": [
+      56348923,
+      56349446,
+      56349569,
+      56353391,
+      56359652,
+      56362669,
+      56365275,
+      56367476,
+      56392339,
+      56393734,
+      56394726,
+      56395324,
+      56410122,
+      56414010,
+      56417496,
+      56420571
+    ],
+    "cycleChecksumSigned64": 902094723,
+    "rows": [
+      {
+        "path": "/Users/ekmett/thc/bench/results/precise-fields/bytecode/oracle.tsv",
+        "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+      }
+    ]
+  }
+}

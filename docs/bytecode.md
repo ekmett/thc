@@ -1,7 +1,7 @@
 # Core to bytecode
 
-THC has two interpreters for the same exported GHC Core. The AST interpreter
-remains the default. The experimental bytecode interpreter uses Truffle's
+THC has two interpreters for the same exported GHC Core. Bytecode is now the
+default; the AST interpreter remains available. The bytecode interpreter uses Truffle's
 Bytecode DSL, with primitive `long` and `boolean` stack values and locals. On the
 initial measured Map workload it takes **16.3% less elapsed time** and allocates **8.1% less**
 than the AST backend in the same build.
@@ -18,8 +18,9 @@ The Core request also accepts an explicit `backend` field, so requests for both
 backends can coexist in one context. Diagnostics report the selected backend.
 
 The measurements below describe the initial bytecode implementation at
-`0ef73a0`. The [typed execution and tail-cycle follow-up](typed-tail.md) records
-the subsequent changes and current comparison.
+`0ef73a0`. The [entry-contract and type-preservation report](entry-contracts.md)
+records the current work; the [typed execution and tail-cycle follow-up](typed-tail.md)
+records the intervening changes.
 
 ## What changes
 
@@ -164,8 +165,8 @@ the complete run.
 
 Bytecode's window times range from **2.315 to 2.593 ms**, versus **2.762 to 2.907 ms**
 for AST. This supports a gain for this workload on the measured desktop; it is
-not a general result for Haskell programs. The AST backend remains the default
-while the bytecode backend is experimental.
+not a general result for Haskell programs. At that point AST remained the default
+while the bytecode backend was experimental.
 
 Current-thread allocation falls from **10,647,717.0 to 9,784,348.5 bytes per Map
 workload**, an **8.108%** reduction. All three 256-call samples agree after 12,000

@@ -109,23 +109,42 @@ internal object FrameAccess {
     }
 }
 
+/** Construction-time experiment; checked StaticShape storage remains the default. */
+internal const val STATIC_SHAPE_UNCHECKED_PROPERTY = "thc.staticShapeUnchecked"
+
+/** The check is evaluated before Object initialization, so a rejected subclass
+ * cannot resurrect an unauthenticated object from a finalizer. No key is stored. */
+abstract class ValidatedStorage protected constructor(@Suppress("UNUSED_PARAMETER") checked: Unit)
+
 /** A closure/thunk's selective capture representation, fixed during root compilation. */
 class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, primitiveEligible: BooleanArray,
-                                              exactLong: BooleanArray = BooleanArray(primitiveEligible.size)) {
+                                              exactLong: BooleanArray = BooleanArray(primitiveEligible.size),
+                                              exactReference: Array<Class<*>?> = arrayOfNulls(primitiveEligible.size)) {
     init {
-        require(exactLong.size == primitiveEligible.size)
-        require(exactLong.indices.all { !exactLong[it] || primitiveEligible[it] })
+        require(exactLong.size == primitiveEligible.size && exactReference.size == primitiveEligible.size)
+        require(exactLong.indices.all { !exactLong[it] || primitiveEligible[it] && exactReference[it] == null })
+        require(exactReference.all { it == null || !it.isPrimitive })
     }
     @CompilationFinal(dimensions = 1)
-    private val fields = Array(primitiveEligible.size) { CaptureField(it, primitiveEligible[it], exactLong[it]) }
+    private val fields = Array(primitiveEligible.size) {
+        // Internally inferred WHNF kinds can refine a legacy adaptive capture.
+        // A proven reference needs neither the primitive arm nor its tag.
+        CaptureField(it, primitiveEligible[it] && exactReference[it] == null, exactLong[it], exactReference[it])
+    }
+    private val allocationKey = Any()
     private val shape = StaticShape.newBuilder(language).also { builder ->
+        builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
         fields.forEach { it.register(builder) }
     }.build(CapturedFrame::class.java, CapturedFrameFactory::class.java)
+
+    internal fun checkAllocationKey(key: Any?) {
+        if (key !== allocationKey) fault("Invalid capture allocation key")
+    }
 
     @ExplodeLoop
     fun capture(frame: VirtualFrame, sourceSlots: IntArray): CapturedFrame {
         check(sourceSlots.size == fields.size)
-        val environment = shape.factory.create(this)
+        val environment = shape.factory.create(this, allocationKey)
         for (index in fields.indices) {
             if (fields[index].exactLong) fields[index].initializeLong(environment, frame.getLong(sourceSlots[index]))
             else fields[index].initialize(environment, FrameAccess.read(frame, sourceSlots[index]))
@@ -137,35 +156,38 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
     @ExplodeLoop
     fun captureValues(values: Array<Any?>): CapturedFrame {
         check(values.size == fields.size)
-        val environment = shape.factory.create(this)
+        val environment = shape.factory.create(this, allocationKey)
         for (index in fields.indices) fields[index].initialize(environment, values[index])
         return environment
     }
 
-    /** The call site's constant layout lets Graal fold StaticProperty offsets. */
-    fun read(environment: CapturedFrame, index: Int): Any? {
-        assert(environment.layout === this)
-        return fields[index].read(environment)
+    private fun checkedField(environment: CapturedFrame, index: Int): CaptureField {
+        if (environment.layout !== this) fault("Captured frame does not match layout")
+        if (index < 0 || index >= fields.size) fault("Invalid capture field index")
+        return fields[index]
     }
+
+    /** The call site's constant layout lets Graal fold StaticProperty offsets. */
+    fun read(environment: CapturedFrame, index: Int): Any? = checkedField(environment, index).read(environment)
 
     /** Primitive reads and writes stay together so temporary boxes can disappear. */
     fun restore(environment: CapturedFrame, index: Int, frame: Frame, slot: Int) {
-        assert(environment.layout === this)
-        fields[index].restore(environment, frame, slot)
+        checkedField(environment, index).restore(environment, frame, slot)
     }
 
-    fun isLong(environment: CapturedFrame, index: Int): Boolean = fields[index].isLong(environment)
-    fun isObject(environment: CapturedFrame, index: Int): Boolean = fields[index].isObject(environment)
-    fun readLong(environment: CapturedFrame, index: Int): Long = fields[index].readLong(environment)
-    fun readObject(environment: CapturedFrame, index: Int): Any? = fields[index].readObject(environment)
+    fun isLong(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).isLong(environment)
+    fun isObject(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).isObject(environment)
+    fun readLong(environment: CapturedFrame, index: Int): Long = checkedField(environment, index).readLong(environment)
+    fun readObject(environment: CapturedFrame, index: Int): Any? = checkedField(environment, index).readObject(environment)
 
-    private class CaptureField(private val index: Int, private val primitiveEligible: Boolean, val exactLong: Boolean) {
+    private class CaptureField(private val index: Int, private val primitiveEligible: Boolean, val exactLong: Boolean,
+                               private val exactReference: Class<*>?) {
         private val objectValue = DefaultStaticProperty("capture_${index}_object")
         private val primitiveValue = DefaultStaticProperty("capture_${index}_primitive")
         private val hasPrimitive = DefaultStaticProperty("capture_${index}_tag")
 
         fun register(builder: StaticShape.Builder) {
-            if (!exactLong) builder.property(objectValue, Any::class.java, true)
+            if (!exactLong) builder.property(objectValue, exactReference ?: Any::class.java, true)
             if (primitiveEligible) {
                 builder.property(primitiveValue, Long::class.javaPrimitiveType, true)
                 if (!exactLong) builder.property(hasPrimitive, Boolean::class.javaPrimitiveType, true)
@@ -217,7 +239,8 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
 }
 
 /** Public superclass and constructor for Truffle's generated StaticShape subclasses. */
-open class CapturedFrame(val layout: CaptureLayout) {
+open class CapturedFrame(val layout: CaptureLayout, allocationKey: Any?) :
+    ValidatedStorage(layout.checkAllocationKey(allocationKey)) {
     fun getValue(index: Int): Any? = layout.read(this, index)
     fun getLong(index: Int): Long = layout.readLong(this, index)
     fun isLong(index: Int): Boolean = layout.isLong(this, index)
@@ -227,5 +250,5 @@ open class CapturedFrame(val layout: CaptureLayout) {
 
 /** Signature matches the CapturedFrame superclass constructor exactly. */
 interface CapturedFrameFactory {
-    fun create(layout: CaptureLayout): CapturedFrame
+    fun create(layout: CaptureLayout, allocationKey: Any?): CapturedFrame
 }

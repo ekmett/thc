@@ -1,0 +1,467 @@
+{
+  "scope": "Compact exact counters from original summary; complete materialization lists and inlining edges remain in original capture (hash in capture-config).",
+  "roots": [
+    {
+      "root": "TruffleIR.Tier2.lambda_sc,_x,_ds1() [rootId=21]",
+      "compilationId": 3111,
+      "bgv": "TruffleHotSpotCompilation-3111[lambda_sc,_x,_ds1].bgv",
+      "peNodes": 923,
+      "beforeHighNodes": 3815,
+      "afterMidNodes": 7861,
+      "lateArrays": 42,
+      "lateLongBoxes": 11,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_": 11
+      },
+      "lateArraysBySource": {
+        "application-packet": 42
+      },
+      "methodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 42
+      },
+      "guestCalls": 42,
+      "constantGuestTargets": 42,
+      "instanceOfChecks": {
+        "a! thc.runtime.DataValue": 1,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 9,
+        "a!# thc.runtime.Thunk": 1,
+        "a!# java.lang.Long": 1,
+        "a!# java.lang.Boolean": 1,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 1,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 50,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 23,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 1
+      },
+      "boxingOperationsBeforeHigh": {
+        "UnboxNode": 9
+      },
+      "packetsByClassification": {
+        "residual-call-abi": 42
+      },
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 42,
+      "materializedClasses": {
+        "java.lang.Long": 11,
+        "java.lang.Object[]": 42,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 47,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 27,
+        "thc.runtime.Thunk": 9,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 9
+      },
+      "frontierStateCounts": {
+        "Cutoff": 43,
+        "Expanded": 1
+      },
+      "identity": {
+        "rootId": 21,
+        "name": "lambda sc, x, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+        "compilationId": 3111,
+        "codeBytes": 62668,
+        "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3111[lambda_sc,_x,_ds1].bgv",
+          "sha256": "710cf1526d6ef7c3bc020f30c847e0c02c573e707d987f7effe8a39a94380d47",
+          "bytes": 27480456
+        }
+      },
+      "inlinedCallCount": 12,
+      "activeFrontierCount": 44
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds2() [rootId=22]",
+      "compilationId": 3169,
+      "bgv": "TruffleHotSpotCompilation-3169[lambda_ww,_ds2].bgv",
+      "peNodes": 345,
+      "beforeHighNodes": 1864,
+      "afterMidNodes": 3517,
+      "lateArrays": 16,
+      "lateLongBoxes": 16,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_": 16
+      },
+      "lateArraysBySource": {
+        "application-packet": 16
+      },
+      "methodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 16
+      },
+      "guestCalls": 16,
+      "constantGuestTargets": 16,
+      "instanceOfChecks": {
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 14,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 16,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 30
+      },
+      "boxingOperationsBeforeHigh": {
+        "UnboxNode": 3
+      },
+      "packetsByClassification": {
+        "residual-call-abi": 16
+      },
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 16,
+      "materializedClasses": {
+        "java.lang.Long": 16,
+        "java.lang.Object[]": 16,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 15,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 15
+      },
+      "frontierStateCounts": {
+        "Cutoff": 16
+      },
+      "identity": {
+        "rootId": 22,
+        "name": "lambda ww, ds2",
+        "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+        "compilationId": 3169,
+        "codeBytes": 24644,
+        "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3169[lambda_ww,_ds2].bgv",
+          "sha256": "806e8291ea6e7a8a87faa594821d72f893f2e744fb03c544c379fe9d2d69ec52",
+          "bytes": 9107176
+        }
+      },
+      "inlinedCallCount": 14,
+      "activeFrontierCount": 16
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_def,_ww,_ds1() [rootId=17]",
+      "compilationId": 3219,
+      "bgv": "TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "peNodes": 272,
+      "beforeHighNodes": 273,
+      "afterMidNodes": 375,
+      "lateArrays": 0,
+      "lateLongBoxes": 0,
+      "lateLongBoxesByOrigin": {},
+      "lateArraysBySource": {},
+      "methodTargets": {},
+      "guestCalls": 0,
+      "constantGuestTargets": 0,
+      "instanceOfChecks": {
+        "a!# thc.runtime.Thunk": 1,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 3,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 1
+      },
+      "boxingOperationsBeforeHigh": {
+        "UnboxNode": 1
+      },
+      "packetsByClassification": {},
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 0,
+      "materializedClasses": {
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 1
+      },
+      "frontierStateCounts": {},
+      "identity": {
+        "rootId": 17,
+        "name": "lambda def, ww, ds1",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "compilationId": 3219,
+        "codeBytes": 2068,
+        "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+          "sha256": "f81588d804397aea199e1a8fdcc53e97c8d54daecb96ca0333bb8db7902339db",
+          "bytes": 470452
+        }
+      },
+      "inlinedCallCount": 1,
+      "activeFrontierCount": 0
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww,_ds() [rootId=18]",
+      "compilationId": 3236,
+      "bgv": "TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "peNodes": 221,
+      "beforeHighNodes": 568,
+      "afterMidNodes": 996,
+      "lateArrays": 1,
+      "lateLongBoxes": 2,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_": 1,
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMergeConditional$Long": 1
+      },
+      "lateArraysBySource": {
+        "application-packet": 1
+      },
+      "methodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+      },
+      "guestCalls": 1,
+      "constantGuestTargets": 1,
+      "instanceOfChecks": {
+        "a! thc.runtime.DataValue": 1,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 6,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 12
+      },
+      "boxingOperationsBeforeHigh": {
+        "UnboxNode": 2
+      },
+      "packetsByClassification": {
+        "residual-call-abi": 1
+      },
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 1,
+      "materializedClasses": {
+        "java.lang.Long": 2,
+        "java.lang.Object[]": 1
+      },
+      "frontierStateCounts": {
+        "Cutoff": 1
+      },
+      "identity": {
+        "rootId": 18,
+        "name": "lambda ww, ds",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "compilationId": 3236,
+        "codeBytes": 4616,
+        "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+          "sha256": "aa8c3518f730ca47741367d3c45a404b060ecd2acf1fcbaf7d7062de9a4033be",
+          "bytes": 2158764
+        }
+      },
+      "inlinedCallCount": 5,
+      "activeFrontierCount": 1
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_ww() [rootId=23]",
+      "compilationId": 3270,
+      "bgv": "TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+      "peNodes": 682,
+      "beforeHighNodes": 7340,
+      "afterMidNodes": 16859,
+      "lateArrays": 77,
+      "lateLongBoxes": 37,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_": 36,
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long": 1
+      },
+      "lateArraysBySource": {
+        "application-packet": 77
+      },
+      "methodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 77
+      },
+      "guestCalls": 77,
+      "constantGuestTargets": 77,
+      "instanceOfChecks": {
+        "a!# thc.runtime.Thunk": 5,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 33,
+        "a! thc.runtime.DataValue": 2,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 2,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 114,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 44
+      },
+      "boxingOperationsBeforeHigh": {
+        "UnboxNode": 2
+      },
+      "packetsByClassification": {
+        "residual-call-abi": 77
+      },
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 77,
+      "materializedClasses": {
+        "java.lang.Long": 37,
+        "java.lang.Object[]": 77,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 136,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 57,
+        "thc.runtime.Thunk": 10,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 10
+      },
+      "frontierStateCounts": {
+        "Cutoff": 67,
+        "Expanded": 10
+      },
+      "identity": {
+        "rootId": 23,
+        "name": "lambda ww",
+        "source": "n/a",
+        "compilationId": 3270,
+        "codeBytes": 153856,
+        "roleKey": "lambda ww @ n/a",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+          "sha256": "4540410d56c42eefd7231157e1de3ded9e98445be1b2e076e87639c385c21a03",
+          "bytes": 64288928
+        }
+      },
+      "inlinedCallCount": 37,
+      "activeFrontierCount": 77
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=10]",
+      "compilationId": 3286,
+      "bgv": "TruffleHotSpotCompilation-3286[lambda_k,_x,_l,_r].bgv",
+      "peNodes": 629,
+      "beforeHighNodes": 156,
+      "afterMidNodes": 396,
+      "lateArrays": 0,
+      "lateLongBoxes": 0,
+      "lateLongBoxesByOrigin": {},
+      "lateArraysBySource": {},
+      "methodTargets": {},
+      "guestCalls": 0,
+      "constantGuestTargets": 0,
+      "instanceOfChecks": {
+        "a!# thc.runtime.Thunk": 1,
+        "a! thc.runtime.DataValue": 1,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 4
+      },
+      "boxingOperationsBeforeHigh": {},
+      "packetsByClassification": {},
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 0,
+      "materializedClasses": {
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 5
+      },
+      "frontierStateCounts": {},
+      "identity": {
+        "rootId": 10,
+        "name": "lambda k, x, l, r",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+        "compilationId": 3286,
+        "codeBytes": 2644,
+        "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3286[lambda_k,_x,_l,_r].bgv",
+          "sha256": "b2aa354bdc550b3740a1fad16dea85f794f21aa1e9476cb46521f2321b051d5a",
+          "bytes": 1158407
+        }
+      },
+      "inlinedCallCount": 0,
+      "activeFrontierCount": 0
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_k,_x,_l,_r() [rootId=15]",
+      "compilationId": 3297,
+      "bgv": "TruffleHotSpotCompilation-3297[lambda_k,_x,_l,_r].bgv",
+      "peNodes": 1083,
+      "beforeHighNodes": 3961,
+      "afterMidNodes": 7653,
+      "lateArrays": 35,
+      "lateLongBoxes": 10,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_": 10
+      },
+      "lateArraysBySource": {
+        "application-packet": 35
+      },
+      "methodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 35
+      },
+      "guestCalls": 35,
+      "constantGuestTargets": 35,
+      "instanceOfChecks": {
+        "a!# thc.runtime.Thunk": 4,
+        "a!# java.lang.Long": 2,
+        "a!# java.lang.Boolean": 2,
+        "a! thc.runtime.DataValue": 1,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 8,
+        "a# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 2,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 43,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 29,
+        "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 2
+      },
+      "boxingOperationsBeforeHigh": {
+        "UnboxNode": 4
+      },
+      "packetsByClassification": {
+        "residual-call-abi": 35
+      },
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 35,
+      "materializedClasses": {
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4": 43,
+        "java.lang.Long": 10,
+        "java.lang.Object[]": 35,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6": 24,
+        "thc.runtime.Thunk": 8,
+        "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7": 8
+      },
+      "frontierStateCounts": {
+        "Cutoff": 35,
+        "Expanded": 3
+      },
+      "identity": {
+        "rootId": 15,
+        "name": "lambda k, x, l, r",
+        "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+        "compilationId": 3297,
+        "codeBytes": 56912,
+        "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3297[lambda_k,_x,_l,_r].bgv",
+          "sha256": "23f4dc9dea9ba6b89cc542b924e5c74f12d1459409f9514941c7860643eb5a61",
+          "bytes": 40732129
+        }
+      },
+      "inlinedCallCount": 14,
+      "activeFrontierCount": 38
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_n() [rootId=26]",
+      "compilationId": 3331,
+      "bgv": "TruffleHotSpotCompilation-3331[lambda_n].bgv",
+      "peNodes": 87,
+      "beforeHighNodes": 128,
+      "afterMidNodes": 191,
+      "lateArrays": 1,
+      "lateLongBoxes": 1,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long": 1
+      },
+      "lateArraysBySource": {
+        "application-packet": 1
+      },
+      "methodTargets": {
+        "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+      },
+      "guestCalls": 1,
+      "constantGuestTargets": 1,
+      "instanceOfChecks": {},
+      "boxingOperationsBeforeHigh": {
+        "UnboxNode": 3
+      },
+      "packetsByClassification": {
+        "residual-call-abi": 1
+      },
+      "lateLongArrayPackets": 0,
+      "allResidualReferenceArrayPackets": 1,
+      "materializedClasses": {
+        "java.lang.Long": 1,
+        "java.lang.Object[]": 1
+      },
+      "frontierStateCounts": {
+        "Expanded": 1
+      },
+      "identity": {
+        "rootId": 26,
+        "name": "lambda n",
+        "source": "examples/THC/MapWorkload.hs:30",
+        "compilationId": 3331,
+        "codeBytes": 900,
+        "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+        "roleAmbiguous": false,
+        "bgv": {
+          "path": "TruffleHotSpotCompilation-3331[lambda_n].bgv",
+          "sha256": "9c928fd9471edb16438ca6519cab9381d1d5c3fb3b9e67e1cb63ff1a7a878668",
+          "bytes": 9656872
+        }
+      },
+      "inlinedCallCount": 1,
+      "activeFrontierCount": 1
+    }
+  ]
+}

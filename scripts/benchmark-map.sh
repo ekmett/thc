@@ -12,7 +12,7 @@ SAMPLE_SECONDS="${THC_BENCH_SAMPLE_SECONDS:-2}"
 SAMPLES="${THC_BENCH_SAMPLES:-5}"
 FORKS="${THC_BENCH_FORKS:-3}"
 DIAGNOSTIC="${THC_DIAGNOSTIC_UNSUPPORTED:-false}"
-BACKEND="${THC_BACKEND:-ast}"
+BACKEND="${THC_BACKEND:-bytecode}"
 case "$BACKEND" in ast|bytecode) ;; *) echo 'THC_BACKEND must be ast or bytecode' >&2; exit 2;; esac
 case "$DIAGNOSTIC" in true|false) ;; *) echo 'THC_DIAGNOSTIC_UNSUPPORTED must be true or false' >&2; exit 2;; esac
 MODULES="$(paste -sd, build/map/modules.txt)"

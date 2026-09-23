@@ -1,6 +1,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -8,6 +9,16 @@ import com.oracle.truffle.api.nodes.RootNode
 
 /** The calling convention is independent of the interpreter's frame layout. */
 abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescriptor) : RootNode(language, descriptor) {
+    @field:CompilationFinal(dimensions = 1) internal var entryStrict: BooleanArray = booleanArrayOf()
+        private set
+    @field:CompilationFinal internal var entryArgumentOffset: Int = 1
+        private set
+
+    /** Fixed before publishing the target; all saturated application paths enforce these marks. */
+    internal fun configureEntry(strict: BooleanArray, hasEnvironment: Boolean) {
+        entryStrict = strict.copyOf()
+        entryArgumentOffset = if (hasEnvironment) 2 else 1
+    }
     // Clones retain identity, so self calls through a cloned target still loop.
     private val bodyIdentity = Any()
     @JvmField val mask = System.identityHashCode(bodyIdentity).let { h ->

@@ -1,0 +1,24 @@
+{
+  "generatedSourcePath": "/Users/ekmett/thc/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java",
+  "generatedSourceSha256": "925768ae7bebc42ab24b5d9417bd304cbfeb7ffda4d11d2c63495da99552bd87",
+  "buildJarSha256": "df636064bc4f104fd5755d2f23416405790df9efd7da16ee6cf342fb12a98d44",
+  "frozenJarSha256": "df636064bc4f104fd5755d2f23416405790df9efd7da16ee6cf342fb12a98d44",
+  "scope": "Generated-source excerpts recorded while build JAR equaled frozen candidate4 JAR; hot sample locations are source attribution, not proof these directives/dispatch execute in optimized code.",
+  "excerpts": [
+    {
+      "firstLine": 5149,
+      "lastLine": 5177,
+      "text": "        @EarlyEscapeAnalysis\n        long continueAt(BytecodeRootGen $root, FrameWithoutBoxing frame_, long startState) {\n            boolean wasCompiled = CompilerDirectives.inCompiledCode();\n            if (wasCompiled && CompilerDirectives.inCompilationRoot()) {\n                CompilerDirectives.preserveFrameStateHere();\n            }\n            if (wasCompiled && CompilerDirectives.inInterpreter()) {\n                // Leave slow deoptimized method and reenter continueAt for faster execution\n                return startState;\n            }\n            FrameWithoutBoxing frame = ACCESS.uncheckedCast(frame_, FrameWithoutBoxing.class);\n            byte[] bc = ACCESS.uncheckedCast(this.bytecodes, byte[].class);\n            int counter = 0;\n            LoopCounter loopCounter = null;\n            if (CompilerDirectives.inCompiledCode() && CompilerDirectives.hasNextTier()) {\n                // Using a class for the loop counter is a workaround to prevent PE from merging it at the end of the loop.\n                // We need to use a class with PE, in the interpreter we can use a regular counter.\n                loopCounter = LoopCounter.create();\n            }\n            long bci = (int) startState;\n            long sp = ((int) (startState >>> 32));\n            FRAMES.setLong(frame, BCI_INDEX, -1);\n            loop: while (true) {\n                CompilerAsserts.partialEvaluationConstant(bci);\n                try {\n                    switch (HostCompilerDirectives.markThreadedSwitch(BYTES.getShort(bc, bci))) {\n                        case Instructions.LOAD_ARGUMENT :\n                            bci = handleLoadArgument(frame, bc, bci, sp);\n                            sp += 1;"
+    },
+    {
+      "firstLine": 6039,
+      "lastLine": 6052,
+      "text": "            handleLoadLocal$slow(frame, bc, bci, sp);\n            return bci + 6;\n        }\n\n        private long handleLoadLocal$Long(FrameWithoutBoxing frame, byte[] bc, long bci, long sp) {\n            try {\n                long slot = (BYTES.getShort(bc, bci + 2 /* imm frame_index */) & 0xffff);\n                Object result = FRAMES.expectLong(frame, slot);\n                FRAMES.setObject(frame, sp, result);\n            } catch (UnexpectedResultException ex) {\n                CompilerDirectives.transferToInterpreterAndInvalidate();\n                handleLoadLocal$slow(frame, bc, bci, sp);\n            }\n            return bci + 6;"
+    },
+    {
+      "firstLine": 9102,
+      "lastLine": 9120,
+      "text": "        }\n\n        private long handleToLong$Apply_(FrameWithoutBoxing frame, byte[] bc, long bci, long sp) {\n            try {\n                long x_ = FRAMES.expectLong(frame, sp - 1);\n                if (CompilerDirectives.inCompiledCode()) {\n                    FRAMES.clear(frame, sp - 1);\n                }\n                ToLong_Node node = ToLong_Node.SINGLETON;\n                long result = node.executeApply(x_, this, bc, bci);\n                FRAMES.setObject(frame, sp - 1, result);\n            } catch (UnexpectedResultException ex) {\n                CompilerDirectives.transferToInterpreterAndInvalidate();\n                handleToLong_$slow(frame, bc, bci, sp, ex.getResult());\n            }\n            return bci + 6;\n        }\n\n        private long handleToLong$Apply$unboxed_(FrameWithoutBoxing frame, byte[] bc, long bci, long sp) {"
+    }
+  ]
+}

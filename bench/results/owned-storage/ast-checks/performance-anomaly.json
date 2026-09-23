@@ -1,0 +1,37 @@
+{
+  "recordedUtc": "2026-09-23T06:22:48.581739+00:00",
+  "performanceAccepted": false,
+  "correctnessAndCompilationValidationPassed": true,
+  "reason": "Material system-wide slowdown in third fork; read-only pmset showed Battery Power at 4%, discharging, estimated 31 minutes, Early Battery Warning. No recorded thermal/performance warning. Timing is not accepted as a clean controlled result.",
+  "measurementsNsPerCall": {
+    "baseline": [
+      2172813.7607421875,
+      2203702.3515625,
+      4274048.013671875
+    ],
+    "candidate": [
+      2072328.4091796875,
+      2071619.1806640625,
+      4139501.953125
+    ],
+    "native": [
+      1283454.2410714286,
+      1253108.2589285714,
+      2493970.703125
+    ]
+  },
+  "hostStateObservations": {
+    "cpuSnapshotUtc": "2026-09-23 06:20:13 UTC",
+    "activeGuestJvmCpuPercent": 98.5,
+    "otherHeavyJvmOrGhcObserved": false,
+    "codexCpuPercent": 32.2,
+    "logicalCpus": 8,
+    "powerSource": "Battery Power",
+    "batteryPercent": 4,
+    "batteryDischarging": true,
+    "thermalWarningRecorded": false,
+    "performanceWarningRecorded": false
+  },
+  "limits": "Battery state is observed; causal attribution is plausible but not proven. The CPU snapshot was after native fork 3 and cannot exclude earlier transient contention. No process was killed and no power setting changed. Raw results retained; full repeat deferred until stable external power.",
+  "remainingTasks": "ArgumentTypeSpeculation=false full Map preflight and unchecked bytecode ON/OFF screens were not run; no extra JVMs were started after the final fork."
+}

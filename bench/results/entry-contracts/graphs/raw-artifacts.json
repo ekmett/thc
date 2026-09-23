@@ -1,0 +1,241 @@
+{
+  "status": "Raw BGV/JFR files retained in work; publication archives pending. Hashes copied from completed immutable capture configs, not recomputed during CPU pause. No archive is claimed to exist.",
+  "captures": [
+    {
+      "publishedPath": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs",
+      "originalCaptureConfigSha256": "5dde48ea2a700cf7c225e50097d704dc4ced156cee7cc28130afe475f0e3142f",
+      "recordedUtc": "2026-09-23T05:53:41.096644+00:00"
+    },
+    {
+      "publishedPath": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs",
+      "originalCaptureConfigSha256": "8fb40ef129d8ae9a98fe9865f4b489a26ab473fd84147b1ead5a1b1d00d157c6",
+      "recordedUtc": "2026-09-23T05:58:49.561663+00:00"
+    },
+    {
+      "publishedPath": "candidate/allocation",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-allocation",
+      "originalCaptureConfigSha256": "46074fec339afb241a28ca2f4c93a9bcb770524cbcda2032f55ed0e77ad0ec56",
+      "recordedUtc": "2026-09-23T05:55:07.477311+00:00"
+    },
+    {
+      "publishedPath": "baseline/allocation",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-allocation",
+      "originalCaptureConfigSha256": "86d94cc4e4b99859edcb936bdc9b8d0e462448ab70256d7a6f24e96310523ba0",
+      "recordedUtc": "2026-09-23T06:00:49.249876+00:00"
+    }
+  ],
+  "files": [
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-2798[lambda_sc,_x,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-2798[lambda_sc,_x,_ds1].bgv",
+      "sha256": "8ad5b3001e84578a01521cb912fd86f045c6502bfe013e8ccbf45e3335e0e1fc",
+      "bytes": 26011923,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3027[lambda_sc,_x,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-3027[lambda_sc,_x,_ds1].bgv",
+      "sha256": "c66d6d94023da9dffc8d52b27bf3122324154dc5554436e6298dac78760e92fc",
+      "bytes": 26011825,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3071[lambda_sc,_x,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-3071[lambda_sc,_x,_ds1].bgv",
+      "sha256": "2131a48d4d60cc257cba6abd29b4084e2d83b08abb70c079319539a143d777f1",
+      "bytes": 26011897,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3111[lambda_sc,_x,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-3111[lambda_sc,_x,_ds1].bgv",
+      "sha256": "710cf1526d6ef7c3bc020f30c847e0c02c573e707d987f7effe8a39a94380d47",
+      "bytes": 27480456,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3169[lambda_ww,_ds2].bgv",
+      "path": "TruffleHotSpotCompilation-3169[lambda_ww,_ds2].bgv",
+      "sha256": "806e8291ea6e7a8a87faa594821d72f893f2e744fb03c544c379fe9d2d69ec52",
+      "bytes": 9107176,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "sha256": "f81588d804397aea199e1a8fdcc53e97c8d54daecb96ca0333bb8db7902339db",
+      "bytes": 470452,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "path": "TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "sha256": "aa8c3518f730ca47741367d3c45a404b060ecd2acf1fcbaf7d7062de9a4033be",
+      "bytes": 2158764,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3243[lambda_ww].bgv",
+      "path": "TruffleHotSpotCompilation-3243[lambda_ww].bgv",
+      "sha256": "3a9a5b7a835d7e613640c5674ce5089916578520b3302c71212ae0db9617a79b",
+      "bytes": 67730801,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+      "path": "TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+      "sha256": "4540410d56c42eefd7231157e1de3ded9e98445be1b2e076e87639c385c21a03",
+      "bytes": 64288928,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3286[lambda_k,_x,_l,_r].bgv",
+      "path": "TruffleHotSpotCompilation-3286[lambda_k,_x,_l,_r].bgv",
+      "sha256": "b2aa354bdc550b3740a1fad16dea85f794f21aa1e9476cb46521f2321b051d5a",
+      "bytes": 1158407,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3297[lambda_k,_x,_l,_r].bgv",
+      "path": "TruffleHotSpotCompilation-3297[lambda_k,_x,_l,_r].bgv",
+      "sha256": "23f4dc9dea9ba6b89cc542b924e5c74f12d1459409f9514941c7860643eb5a61",
+      "bytes": 40732129,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3331[lambda_n].bgv",
+      "path": "TruffleHotSpotCompilation-3331[lambda_n].bgv",
+      "sha256": "9c928fd9471edb16438ca6519cab9381d1d5c3fb3b9e67e1cb63ff1a7a878668",
+      "bytes": 9656872,
+      "archived": false
+    },
+    {
+      "capture": "candidate/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3428[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "path": "TruffleHotSpotCompilation-3428[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "d4063b0d4edfc6c344a5e36c2fa026bd7291f525e42e0051ff748d8d24774fce",
+      "bytes": 11248284,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-2795[lambda_sc,_x,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-2795[lambda_sc,_x,_ds1].bgv",
+      "sha256": "b395c1696907a84c401f133ea5d6ba2532063f2fadc7e213102c51e5e00bb4ae",
+      "bytes": 30929909,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1].bgv",
+      "sha256": "532a4bd782f13e474ef99cd067b9e8cf35a86b33ffc7b6c739198f39073d0600",
+      "bytes": 30672766,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3161[lambda_ww,_ds2].bgv",
+      "path": "TruffleHotSpotCompilation-3161[lambda_ww,_ds2].bgv",
+      "sha256": "39ce128545bddef84c4bc3b473f3dd1e24a70b4f62297cf4270e9274002d2d34",
+      "bytes": 20521008,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "path": "TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "sha256": "15b00c3ab811ce5c0e6a3acf669e3d820b573aca0fd59cab753f30a86e860c79",
+      "bytes": 786584,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3238[argument_thunk].bgv",
+      "path": "TruffleHotSpotCompilation-3238[argument_thunk].bgv",
+      "sha256": "d1278c319eca9d42ec6854bca0b158a0f459ad86a5088b426ceabbd2cfcfd1bd",
+      "bytes": 38928848,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "path": "TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "sha256": "4389bb9207cfdb21d67f9febec33fd1af4b3a49c19eb065af62245e9aafb0b21",
+      "bytes": 41738130,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "path": "TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "sha256": "7ff63dd1cb11a83493530d4518eb1e9be1cb7685cbe7b35d8447a2f061d914ca",
+      "bytes": 77445930,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r].bgv",
+      "path": "TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r].bgv",
+      "sha256": "ac2ae898cc6aa5b244980ac85ae57a996234dbf8d154fb489561d296c1ee0e8c",
+      "bytes": 1499943,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r].bgv",
+      "path": "TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r].bgv",
+      "sha256": "c041e1ecc6ca07cdbbda3ae16cd34081cb1e7e3132123533e10857247545c87e",
+      "bytes": 47471240,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3353[lambda_n].bgv",
+      "path": "TruffleHotSpotCompilation-3353[lambda_n].bgv",
+      "sha256": "75f5964834c7413616f89049bd6edd579a5f53372c195950f99031b9a979e52b",
+      "bytes": 9250114,
+      "archived": false
+    },
+    {
+      "capture": "baseline/graphs",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3450[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "path": "TruffleHotSpotCompilation-3450[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "74bcf92a26560bdb972b19b02e8e6235b7f1871502c2996349952de1ffebc350",
+      "bytes": 10791708,
+      "archived": false
+    },
+    {
+      "capture": "candidate/allocation",
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-allocation/map.jfr",
+      "path": "map.jfr",
+      "sha256": "870a16ad7bd1886c2b09214d2f3a1ac5da3368dda5d2d096a8d3dbbe40603add",
+      "bytes": 351455,
+      "archived": false
+    },
+    {
+      "capture": "baseline/allocation",
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-allocation/map.jfr",
+      "path": "map.jfr",
+      "sha256": "07234a588d4ddfb287c866ac6db3de5535134e80c0d2bb24172a7c7f1990f28f",
+      "bytes": 628397,
+      "archived": false
+    }
+  ],
+  "rawBgvCount": 24,
+  "rawBgvBytes": 622104094
+}

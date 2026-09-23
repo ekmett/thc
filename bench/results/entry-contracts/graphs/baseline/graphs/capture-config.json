@@ -1,0 +1,1296 @@
+{
+  "recordedUtc": "2026-09-23T05:58:49.561663+00:00",
+  "scope": "Diagnostic graphs/allocation, not throughput; no graph/JFR timing may be used as benchmark results.",
+  "mode": "graph",
+  "backend": "bytecode",
+  "depth": 2,
+  "expansionBudget": 12000,
+  "inliningBudget": 12000,
+  "frozenManifest": {
+    "revision": "90acd610bc254f8367e23eb16dbb969e8fc73cc3",
+    "status": "Diagnostic composite: original source-notes-v2 bytecode runtime and source, unchanged typed-frames-v4 Map Core/native corpus; created explicitly for same-corpus baseline/current comparisons. Original frozen directories remain unchanged.",
+    "recordedUtc": "2026-09-23T05:58:49.439117+00:00",
+    "origins": {
+      "runtime": "/Users/ekmett/thc/work/source-notes-v2",
+      "runtimeManifestSha256": "54ac187dca8efd68933bf738d773679a943ba43432e3cfb67b62ac74060a7beb",
+      "corpus": "/Users/ekmett/thc/work/typed-frames-v4",
+      "corpusManifestSha256": "e5f0558d4b88a02f8c2f8ceb58ba9beeff3fcc375a41a04c117ee32bee397bff"
+    },
+    "files": [
+      {
+        "path": "corpus-manifest.json",
+        "sha256": "e5f0558d4b88a02f8c2f8ceb58ba9beeff3fcc375a41a04c117ee32bee397bff"
+      },
+      {
+        "path": "lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+      },
+      {
+        "path": "lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+      },
+      {
+        "path": "lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+      },
+      {
+        "path": "lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+      },
+      {
+        "path": "lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+      },
+      {
+        "path": "lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+      },
+      {
+        "path": "lib/thc-0.1-experiment.jar",
+        "sha256": "8f4d77ad37da5bd4d21295e625d43067bc114e085d7af1df25204e74b77fc23a"
+      },
+      {
+        "path": "lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+      },
+      {
+        "path": "lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+      },
+      {
+        "path": "lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+      },
+      {
+        "path": "lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+      },
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49"
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1"
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e"
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452"
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352"
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef"
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925"
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac"
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "8fe30a776467f3cf86391aa03a470a6c554c9382b09f5d8a377cbf2c717225fc"
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d"
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b"
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0"
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7"
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e"
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16"
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438"
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "583d944d993c31e1c3053db396d7c7612d95f6e38884c0f370d1949cf09e2133"
+      },
+      {
+        "path": "map/native-oracle",
+        "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf"
+      },
+      {
+        "path": "map/oracle.tsv",
+        "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea"
+      },
+      {
+        "path": "original-runtime-manifest.json",
+        "sha256": "54ac187dca8efd68933bf738d773679a943ba43432e3cfb67b62ac74060a7beb"
+      },
+      {
+        "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "2a6847f8e65a49a70e9b13c689a586f14c55f212a6df59d84cafe3f43b3887d0"
+      },
+      {
+        "path": "src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+      },
+      {
+        "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+        "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+      },
+      {
+        "path": "src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+      },
+      {
+        "path": "src/main/kotlin/thc/Language.kt",
+        "sha256": "6f04e547c64c40a0b6062aa5fcd2086d25bc59883f095c9fd587d635fe983fd8"
+      },
+      {
+        "path": "src/main/kotlin/thc/Main.kt",
+        "sha256": "ec9468fae080a4ec23866769c66fbd7660110cb26d1b4cc71769af225c92fd5d"
+      },
+      {
+        "path": "src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+      },
+      {
+        "path": "src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "b85a7188fa80226680cecd32a1324c727907aee15ec1d86c4537d3ff7db1dc5c"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "6c023bcb91d7db54b895b877b9a7e14a5fef0f3516be22664dd304c3d2c846dd"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+        "sha256": "463ee9a842c630e9f27eeaddbcb4568c7051fbbd52de23de7c060579629380b7"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+        "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "f041aa7be387d947af945a64919529aeaee54a9bda3b1b164150806fa003bdd3"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "d6e27e494396da7182591ac863dfcd403918af6a4af7240756f09864f57c6a75"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "30e246ea31ff26828b31e23da0b29bf774d17798320469fe1d228d3cfed44860"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+        "sha256": "5a0f27fd1e3bc1bf30da93347aaf20a704826afbaaa04e2f3e2c9a774343fd10"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "b1c8653d30eec6fa797b6ff6d461ad1e55dc3a72d0cacfb7a6feb20df9483e3f"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/thc-0.1-experiment.jar",
+      "sha256": "8f4d77ad37da5bd4d21295e625d43067bc114e085d7af1df25204e74b77fc23a"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/07-Data.Set.Internal.json",
+      "sha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/08-Data.Map.Internal.json",
+      "sha256": "8fe30a776467f3cf86391aa03a470a6c554c9382b09f5d8a377cbf2c717225fc"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/09-Data.Map.Internal.Debug.json",
+      "sha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/10-Data.Map.Strict.Internal.json",
+      "sha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/11-Data.Map.Strict.json",
+      "sha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/12-THC.MapWorkload.json",
+      "sha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/14-GHC.Internal.CString.json",
+      "sha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/15-GHC.Internal.Err.json",
+      "sha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/16-GHC.InterfaceClosure.json",
+      "sha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/manifest.json",
+      "sha256": "92b0ee712e4899bb3711c8b0267fe1f5b30a6cd10d4613efc4fa860391c09d4b"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/modules.txt",
+      "sha256": "583d944d993c31e1c3053db396d7c7612d95f6e38884c0f370d1949cf09e2133"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/perf-sprint-typed-frames/oracle16.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+    },
+    {
+      "path": "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/release",
+      "sha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/perf-sprint-call-paths/tools/diagnose.py",
+      "sha256": "29f8e5ae41481c394630b14aed6f77ee2bc222eeabc0b01c308bbb37437a3a5a"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/perf-sprint-call-paths/tools/graph_roots.py",
+      "sha256": "cc904324fe1d0001f52dce345e800cb39b22f5a6a8595b3f0a3648c2aa3a2d39"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/perf-sprint-v2/MapProfile.java",
+      "sha256": "1f81b534f5fe940439ab2826021ef2aeb487d6a0bd92b6d523b71b6c5fb73ac3"
+    },
+    {
+      "path": "/Users/ekmett/thc/tools/audit-call-packets.py",
+      "sha256": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/perf-sprint-v2/summarize-graphs.py",
+      "sha256": "08b63925a36f39212c0b7c44fd5723019a2b1586f032f9475e0e28442df81181"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/typed-graph-review/compare.py",
+      "sha256": "b68047d01f49271210f01bea61d47665751a1363a4b83b8865ccad4c8b95ee5b"
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.minimumWarmCalls=12000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Djdk.graal.Dump=Truffle:1",
+        "-Djdk.graal.PrintGraph=File",
+        "-Djdk.graal.PrintGraphWithSchedule=true",
+        "-Djdk.graal.PrintBackendCFG=false",
+        "-Djdk.graal.TrackNodeSourcePosition=true",
+        "-Djdk.graal.DumpPath=/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs",
+        "-cp",
+        "/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/annotations-13.0.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/bytecode-baseline-current-core/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/Users/ekmett/thc/work/bytecode-baseline-current-core/map/00-Utils.Containers.Internal.BitUtil.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/01-Utils.Containers.Internal.BitQueue.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/02-Utils.Containers.Internal.Prelude.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/03-Utils.Containers.Internal.PtrEquality.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/04-Utils.Containers.Internal.StrictMaybe.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/05-Utils.Containers.Internal.StrictPair.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/06-Utils.Containers.Internal.EqOrdUtil.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/07-Data.Set.Internal.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/08-Data.Map.Internal.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/09-Data.Map.Internal.Debug.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/10-Data.Map.Strict.Internal.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/11-Data.Map.Strict.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/12-THC.MapWorkload.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/13-THC.InterfaceClosure.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/14-GHC.Internal.CString.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/15-GHC.Internal.Err.json,/Users/ekmett/thc/work/bytecode-baseline-current-core/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "15",
+        "0.01",
+        "1",
+        "10000"
+      ],
+      "stdout": "run.out",
+      "stderr": "run.err",
+      "exitCode": 0,
+      "elapsedSeconds": 63.926538458094
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javac",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-d",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "/Users/ekmett/thc/work/perf-sprint-v2/GraphInspect.java"
+      ],
+      "stdout": "javac-graph-reader.out",
+      "stderr": "javac-graph-reader.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.3863488333299756
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3301.out",
+      "stderr": "parse-3301.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.31093025021255016
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3311.out",
+      "stderr": "parse-3311.err",
+      "exitCode": 0,
+      "elapsedSeconds": 6.882145042531192
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3224.out",
+      "stderr": "parse-3224.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.25531183276325464
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3269.out",
+      "stderr": "parse-3269.err",
+      "exitCode": 0,
+      "elapsedSeconds": 7.709066749550402
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3077.out",
+      "stderr": "parse-3077.err",
+      "exitCode": 0,
+      "elapsedSeconds": 3.1537320418283343
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3161[lambda_ww,_ds2].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3161.out",
+      "stderr": "parse-3161.err",
+      "exitCode": 0,
+      "elapsedSeconds": 4.138490416109562
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3238[argument_thunk].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3238[argument_thunk]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3238.out",
+      "stderr": "parse-3238.err",
+      "exitCode": 0,
+      "elapsedSeconds": 4.696336833760142
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3281[lambda_ww]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3281.out",
+      "stderr": "parse-3281.err",
+      "exitCode": 0,
+      "elapsedSeconds": 9.439803209155798
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-XX:-UseJVMCICompiler",
+        "-Xmx4g",
+        "--add-modules",
+        "jdk.graal.compiler",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+        "--add-exports",
+        "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+        "-cp",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/classes",
+        "GraphInspect",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3353[lambda_n].bgv",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3353[lambda_n]",
+        "(?i)After PE Tier|After Inline|Before phase HighTierLowering|After mid tier"
+      ],
+      "stdout": "parse-3353.out",
+      "stderr": "parse-3353.err",
+      "exitCode": 0,
+      "elapsedSeconds": 0.4202420422807336
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/tools/audit-call-packets.py",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs",
+        "--output",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/packet-audit.json"
+      ],
+      "stdout": "packet-audit.out",
+      "stderr": "packet-audit.err",
+      "exitCode": 0,
+      "elapsedSeconds": 2.4454889995977283
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/work/perf-sprint-v2/summarize-graphs.py",
+        "/Users/ekmett/thc/work/perf-sprint-typed-frames/baseline-bytecode-default-graphs"
+      ],
+      "stdout": "graph-summary.out",
+      "stderr": "graph-summary.err",
+      "exitCode": 0,
+      "elapsedSeconds": 2.2424428751692176
+    }
+  ],
+  "outputs": [
+    {
+      "path": "TruffleHotSpotCompilation-2795[lambda_sc,_x,_ds1].bgv",
+      "sha256": "b395c1696907a84c401f133ea5d6ba2532063f2fadc7e213102c51e5e00bb4ae",
+      "bytes": 30929909
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1].bgv",
+      "sha256": "532a4bd782f13e474ef99cd067b9e8cf35a86b33ffc7b6c739198f39073d0600",
+      "bytes": 30672766
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3161[lambda_ww,_ds2].bgv",
+      "sha256": "39ce128545bddef84c4bc3b473f3dd1e24a70b4f62297cf4270e9274002d2d34",
+      "bytes": 20521008
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "sha256": "15b00c3ab811ce5c0e6a3acf669e3d820b573aca0fd59cab753f30a86e860c79",
+      "bytes": 786584
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3238[argument_thunk].bgv",
+      "sha256": "d1278c319eca9d42ec6854bca0b158a0f459ad86a5088b426ceabbd2cfcfd1bd",
+      "bytes": 38928848
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "sha256": "4389bb9207cfdb21d67f9febec33fd1af4b3a49c19eb065af62245e9aafb0b21",
+      "bytes": 41738130
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "sha256": "7ff63dd1cb11a83493530d4518eb1e9be1cb7685cbe7b35d8447a2f061d914ca",
+      "bytes": 77445930
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r].bgv",
+      "sha256": "ac2ae898cc6aa5b244980ac85ae57a996234dbf8d154fb489561d296c1ee0e8c",
+      "bytes": 1499943
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r].bgv",
+      "sha256": "c041e1ecc6ca07cdbbda3ae16cd34081cb1e7e3132123533e10857247545c87e",
+      "bytes": 47471240
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3353[lambda_n].bgv",
+      "sha256": "75f5964834c7413616f89049bd6edd579a5f53372c195950f99031b9a979e52b",
+      "bytes": 9250114
+    },
+    {
+      "path": "TruffleHotSpotCompilation-3450[org.graalvm.polyglot.Value<EntryValue>.execute].bgv",
+      "sha256": "74bcf92a26560bdb972b19b02e8e6235b7f1871502c2996349952de1ffebc350",
+      "bytes": 10791708
+    },
+    {
+      "path": "graph-summary.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "graph-summary.out",
+      "sha256": "5578e8c311658bc6d3dafeed664be17586e528fb04d4042403c409f3f05faae3",
+      "bytes": 3197
+    },
+    {
+      "path": "javac-graph-reader.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "javac-graph-reader.out",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "packet-audit.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "packet-audit.json",
+      "sha256": "77c254f940e9f1c2343e40ff21196abac0ac4a95b6ae61cba9044bb067a9bd9d",
+      "bytes": 6583588
+    },
+    {
+      "path": "packet-audit.out",
+      "sha256": "37d08578997f1e65e5a8b6c1425dc1ad17caaf2d68d7283573583e0ae422153a",
+      "bytes": 1355
+    },
+    {
+      "path": "parse-3077.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3077.out",
+      "sha256": "82fc2414f47e57b2e3fd54cb5dfd7a4f86b525db14e2106d68480edf1d4b3c0e",
+      "bytes": 183
+    },
+    {
+      "path": "parse-3161.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3161.out",
+      "sha256": "efc70779cb82cb67c450a55163e15015d12d7f0074b2614fa93ab3b1d27acd98",
+      "bytes": 180
+    },
+    {
+      "path": "parse-3224.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3224.out",
+      "sha256": "72697ec72e2daad7966e8a56e57e4ba540069bd4a02a4302c630facd5d3f78d5",
+      "bytes": 185
+    },
+    {
+      "path": "parse-3238.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3238.out",
+      "sha256": "17a2fa8f0297bf08abb15bab47e3f155b93bfa0bf0f0979633ed5fefb66b07ed",
+      "bytes": 180
+    },
+    {
+      "path": "parse-3269.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3269.out",
+      "sha256": "825a2ecccc4809065967c09bedae7cb915453b89e5dc4c3887c2bf821d4c8eb8",
+      "bytes": 179
+    },
+    {
+      "path": "parse-3281.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3281.out",
+      "sha256": "67e091416d90fe06f282dc282de3b98e4846ce99641a602e6ee5481f5ba65c80",
+      "bytes": 175
+    },
+    {
+      "path": "parse-3301.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3301.out",
+      "sha256": "1d7389004ee047d9c3f81bc7ede4fde5cda213f80aba432c9db41996eac36df9",
+      "bytes": 183
+    },
+    {
+      "path": "parse-3311.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3311.out",
+      "sha256": "fe737d4ee9d4663420e3b4419f7bc009e4accfe001434e757d86f88451b424f6",
+      "bytes": 183
+    },
+    {
+      "path": "parse-3353.err",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "parse-3353.out",
+      "sha256": "175274eb5a2518cadbe51b94124f59ae1ca8931bd4630bc6a39475ed7a79b5d7",
+      "bytes": 174
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00000-cfg.dot",
+      "sha256": "1b02064b1a48711cd239687577e98c9419b578be3f25f73c67fbca52468d9287",
+      "bytes": 59470
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00000.json",
+      "sha256": "20d237be6eaf2f2bc6cd9ffd681218ae6d264531e6deea43c3c05fbd51e7b1d9",
+      "bytes": 6842384
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00002-cfg.dot",
+      "sha256": "a2295d7839b5b036a7347547e665c723ac4cef8c169e87075a2edf41ca287493",
+      "bytes": 1116
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00002.json",
+      "sha256": "782242ccbbc12ee03374bb70367544d6edb1af0781f07d19a45b3923d2cbcffb",
+      "bytes": 104964
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00005-cfg.dot",
+      "sha256": "54b6ae1edaa750f37d93bfc95e7660f24f999aed5f8125808e14a168660f9a78",
+      "bytes": 198521
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00005.json",
+      "sha256": "90d1b23f03f81dfde70e293d343d5a60a1f9a280a63fdbf719869e61dcd22786",
+      "bytes": 64075415
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00007-cfg.dot",
+      "sha256": "a83e197911af04fa1f92579d64dfd70c0640a7844dafa8ac2b5bc6a121946c86",
+      "bytes": 406756
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/graph-00007.json",
+      "sha256": "37ce21d00b66768131b77993f37d0b414ae1ce82b156794bd066d00fe6432216",
+      "bytes": 98695215
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3077[lambda_sc,_x,_ds1]/index.json",
+      "sha256": "156b746a9ff77af7ec0a58180b46bb839d388cc14f6d197c2de5aab962fa838f",
+      "bytes": 1258057
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00000-cfg.dot",
+      "sha256": "6441c40d2a9d57a2e2d4530c9e30c72bdc7e3ef49b31a896c4276a157dce4bde",
+      "bytes": 17868
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00000.json",
+      "sha256": "9d6a84a8b673ea448edd438252a70d259decdba08dcd4ab7e3a8d70ca7209795",
+      "bytes": 1884611
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00002-cfg.dot",
+      "sha256": "9b653363dbccc286ba55b305633d03cdbec5b444f13c0da6aa967c2476d7f485",
+      "bytes": 544
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00002.json",
+      "sha256": "31234f6609b01287173f52da6607d5eab0d95c67a3e07290d5cb54acbcc0cca6",
+      "bytes": 43785
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00005-cfg.dot",
+      "sha256": "c0bc1a7671bb2a653ed1a03c07bc2ba814294b50aa39c55d186df1d7a3719a6d",
+      "bytes": 177726
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00005.json",
+      "sha256": "988b031377ee655a94720dff14560c8dfd04042be05c458e1d6de2ed5e0889db",
+      "bytes": 83141708
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00007-cfg.dot",
+      "sha256": "e19ef08bd9270c5056257f3a8f7776fd7b3e841a1909ea99250ae959872984f0",
+      "bytes": 403166
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/graph-00007.json",
+      "sha256": "6bc8f129e24b36caca66e33899d06796589104a9565275c46656787032847d08",
+      "bytes": 97718969
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3161[lambda_ww,_ds2]/index.json",
+      "sha256": "02f305fe0db6b5d3621583c3280e0e75cb83b80c213e3c875b11b2ac38ddf2b5",
+      "bytes": 1019299
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00000-cfg.dot",
+      "sha256": "8eb128b632ccf2aef618af01dd4d04d154fa502912aeec1b3905bdbd7f5f8766",
+      "bytes": 18793
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00000.json",
+      "sha256": "3199a83714fd1369e5734ca0792087ed4aa2d799d82eeeda5f248b2978bac4e6",
+      "bytes": 1981955
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00002-cfg.dot",
+      "sha256": "172894aefcfa13039c8c1a29cf10d8fed53e22ddc1024aa7dd8d6f3f8f4973c3",
+      "bytes": 175
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00002.json",
+      "sha256": "cae8edfa9bc2744e41d3453c47eb7b017c7686da4bb4a2acc5575d6c9ec0abc7",
+      "bytes": 3072
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00005-cfg.dot",
+      "sha256": "b9fc1009a6336a07cfb9d17ac614a4ede4bb159fbbf63a3977bbd5bce1f9182a",
+      "bytes": 16854
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00005.json",
+      "sha256": "a7741ed6d9acf8f7659cc5bd1b484f1dc2f2dff5e6ccf84c32397dfed0379960",
+      "bytes": 1661470
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00007-cfg.dot",
+      "sha256": "d6bed47190781894981dafb2016fc01d1f9579e9572fe605f301fa4c8b9a2ec5",
+      "bytes": 30636
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00007.json",
+      "sha256": "38f2fb00ca548193b0663de11440a337c2ade7e50b777e16ad81bd675ab40043",
+      "bytes": 2962280
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/index.json",
+      "sha256": "2814fc547b4a88954d323f8d4d7137043341d872a5ee86a1f4a7e081b0515d08",
+      "bytes": 158246
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00000-cfg.dot",
+      "sha256": "7533d56f00e6e7241d93bb22f4cc0fda39d44700cb594254c605a3a6b44a38c4",
+      "bytes": 4440
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00000.json",
+      "sha256": "b034ee5798eaf0fb6b0fc32330a5f88c7b4ee926b9999106d7153dbe270386da",
+      "bytes": 356469
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00002-cfg.dot",
+      "sha256": "4d9fc9099e837be47ee8d97d189b2da093b8a4544dd08d299203dacce2e5a400",
+      "bytes": 1012
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00002.json",
+      "sha256": "c3a6e1af48c4f50df4d2e725a43d18395e6b584166f42bc5fda6cc277c7c1651",
+      "bytes": 93806
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00005-cfg.dot",
+      "sha256": "8d8dc9db7e55125a8eb90a5a901bfa1d591072fce81183ee4defdd5869f1a2fc",
+      "bytes": 197867
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00005.json",
+      "sha256": "9bde87ba998ab484f787b8b33eca9282997cf76822a003278618151a9ac257af",
+      "bytes": 88425236
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00007-cfg.dot",
+      "sha256": "1fa9e2f260244d8bd1f6e86c92dd0b57dd717d7879e221902f017308131914fb",
+      "bytes": 404957
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/graph-00007.json",
+      "sha256": "599d8f515e23c08312388eee1e6dc9756ffbbf4ef49d11f889d696f37429bd61",
+      "bytes": 107855074
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3238[argument_thunk]/index.json",
+      "sha256": "8e5a72fd5f2926c8134a48dc7b426a478cdbcc01ad2b38bd98f388ec3a29dec9",
+      "bytes": 321398
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00000-cfg.dot",
+      "sha256": "3ff76d41284f277af4f114632c374008ee79e4c4ec98213ff474c95b93ad0698",
+      "bytes": 17041
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00000.json",
+      "sha256": "45f14b77ed73ddf4ddfd249968f875a286c1a9c17867dad59133c712a5774edc",
+      "bytes": 1968893
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00002-cfg.dot",
+      "sha256": "05dfef25fc80bd2aa44ee9a3286231dd97467241e612ef34a23c5cfaa009368a",
+      "bytes": 882
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00002.json",
+      "sha256": "70a21fe3d1b9e7742ead2b36b854f1a56a5162f4aede3bfb3c8a124937076730",
+      "bytes": 80484
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00005-cfg.dot",
+      "sha256": "27b4ffb706e99ed562c0a85191de1e230e4fc5e7319fd6465e40f276012d046e",
+      "bytes": 211911
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00005.json",
+      "sha256": "addb624de4591cbf37455107dd420b6933c51d173f53297270651c0843aca7b8",
+      "bytes": 142679786
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00007-cfg.dot",
+      "sha256": "8cad6d9040254736476d05311a3d2abb8d0f064180b5198206a871b1fb591f42",
+      "bytes": 469992
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00007.json",
+      "sha256": "7d99276f8eb71d1f7d88d8820d3b41a5677c535b48c5c6d214aaf3b2a3f68e4e",
+      "bytes": 115328613
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/index.json",
+      "sha256": "5a2e69794862f4398efec180c57daf72af9f5a8d62b616f7482e6feebe5c7f3c",
+      "bytes": 669994
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00000-cfg.dot",
+      "sha256": "fc55ef10aa2277783422223c0fc913c32d37b4f45a7a900fc34086ce67d6f131",
+      "bytes": 31733
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00000.json",
+      "sha256": "866896ed59836778189023738cf3f27b51b88277b9e6d629509154f96590a51f",
+      "bytes": 1253904
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00002-cfg.dot",
+      "sha256": "5f9f46bcf820001eb811276d65f67d84ddd34a452e3b5c84c2f053bb44e682e4",
+      "bytes": 1497
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00002.json",
+      "sha256": "23da981c2f7f75ab2dc83867eff42050836ab496f1de6f7a412e3f69305de4f8",
+      "bytes": 145251
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00005-cfg.dot",
+      "sha256": "38a432fddbc8b433bff1815401822f72b08c239496b91b10b353878d85c8684c",
+      "bytes": 394798
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00005.json",
+      "sha256": "d2784efccb83ed0738091a5bdeeca741be9e23a2d4027e6f9743dd3cde5e017d",
+      "bytes": 173015376
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00007-cfg.dot",
+      "sha256": "c13ba8437a4841e23d3f64063220a398f9547143e024ddbfb59c8a8b901f49e4",
+      "bytes": 902136
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00007.json",
+      "sha256": "63ac6b53b50c5f70163680ff7ea218405995a4b9e1565475288f1ca9aae238f8",
+      "bytes": 199968329
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3281[lambda_ww]/index.json",
+      "sha256": "0a542fad9ea8ebda430732e2d4a171f3e242640bd3214d2d5559d23fc9defd8a",
+      "bytes": 726838
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00000-cfg.dot",
+      "sha256": "b155f23caa6be6307ef1e7edc31e502b5feb605ae51caecfc3afe55eefa8216c",
+      "bytes": 29535
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00000.json",
+      "sha256": "e98fef6d77e58620b8a6f6cb5381d02b211c9836d8a09a3591616cf0989adb5f",
+      "bytes": 3419605
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00002-cfg.dot",
+      "sha256": "f2cbc108d91e56bd01e832f85496e8597be56e8ce6a661047febd73d0ad20167",
+      "bytes": 163
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00002.json",
+      "sha256": "d1b2b70c71bd51113ad17c678aad40bd74aba70a4c543305de9311a8cb1f4e9d",
+      "bytes": 1648
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00005-cfg.dot",
+      "sha256": "8fce5c7dbda15d36d5e2957b429ead6b2efd707d674f16bc09c60947a6a252cc",
+      "bytes": 15010
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00005.json",
+      "sha256": "54622357e6cc3a7b431032a71b55a9711749146c41533036ea7cc2e228758384",
+      "bytes": 1603605
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00007-cfg.dot",
+      "sha256": "4fd43e06d9b935e8748c1e55baa4676f812265ec501d9c4d668cdca881a3528b",
+      "bytes": 34552
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/graph-00007.json",
+      "sha256": "9719eafc280c82cddd7190ef7d12e714b27c837f18cc648c7e5de321b405ec19",
+      "bytes": 3384431
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3301[lambda_k,_x,_l,_r]/index.json",
+      "sha256": "e92d7f52872010da56fe84d9fe6c6abf02ba17cd79a59f13081dbac420a656d3",
+      "bytes": 655398
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00000-cfg.dot",
+      "sha256": "16fa162fcd7e0d561e5d7906802c718ae0b818ade15551f3d5185ee0889456ea",
+      "bytes": 55886
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00000.json",
+      "sha256": "d75cdf325b3c209d5f422647e76169283a15c4735b6725c1bcbf358948e21c6e",
+      "bytes": 6365739
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00002-cfg.dot",
+      "sha256": "324bbbc9ff2f4ef8968b8ff97837348694963141d50063eb3274b99b7423d06a",
+      "bytes": 1025
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00002.json",
+      "sha256": "36c9eb47d29e2eb7e00f148c3667751643dfb2c99b558b493c4121d035e4d45e",
+      "bytes": 95160
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00005-cfg.dot",
+      "sha256": "07c1e30f437a1e9aa2590b7a35668e14d7420aeb035dfb687f38baab4bfd22ac",
+      "bytes": 230395
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00005.json",
+      "sha256": "ab869000622b64a477a317203a21ae7a25c316fe626ac4515da32fc5c90d637b",
+      "bytes": 117741014
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00007-cfg.dot",
+      "sha256": "3ed1b194391a31eaec42766a67b876b054e4365ef40c09809a6e0eb3a73503c0",
+      "bytes": 501436
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/graph-00007.json",
+      "sha256": "dd1e9f9ce5ad2939fb568b9b1123424f256819a58afb48bd74b7dbbb66343c7d",
+      "bytes": 115633021
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3311[lambda_k,_x,_l,_r]/index.json",
+      "sha256": "7b9aff7a4e3e9695b84ef8d002fbaeac7b49a300648253c97d7b26a2b5f99baa",
+      "bytes": 366825
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00000-cfg.dot",
+      "sha256": "f9171097dd8b2d0984fbdfc72e2b82562f772ecbd1ffa89a102c7b8c1090b6b1",
+      "bytes": 3396
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00000.json",
+      "sha256": "bff91605e20fe4f4d1b6e5b55febb63ce7173c7dc5f571714a0891660b6cff33",
+      "bytes": 214094
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00002-cfg.dot",
+      "sha256": "5d696eacc1d476b0fe8ee2364b1c42f70cdb53b6cde481510805a3fa28ed3630",
+      "bytes": 1861
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00002.json",
+      "sha256": "1dee21d9064cd478bebc8d307a246edf2ba156da9259ca5d30c9efe530df9aa1",
+      "bytes": 180580
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00005-cfg.dot",
+      "sha256": "0e8b28d49c29071aeb9bb53783bce520922f80f2d1b9061534dc9a99f792aac4",
+      "bytes": 5214
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00005.json",
+      "sha256": "d6935f3bd19e984181adc957907b1f4034655848a4a0350a9aec0dc666989a56",
+      "bytes": 735268
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00007-cfg.dot",
+      "sha256": "a43bdd4b516ec022137900b156ce221c0988c39f76a33a7d0c381808742d8723",
+      "bytes": 9078
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/graph-00007.json",
+      "sha256": "5ba7f3e3124d8f77d521d9f7686b71680eb14452d4ea9da9ac5a16aa84db2c16",
+      "bytes": 1753674
+    },
+    {
+      "path": "parsed-TruffleHotSpotCompilation-3353[lambda_n]/index.json",
+      "sha256": "53a46762bc40f5257fb35aac91eeb9fd6ac48f77ff3880a77e46fa6da7efbcbc",
+      "bytes": 599186
+    },
+    {
+      "path": "root-identities.json",
+      "sha256": "0952090681947c1c7a1e90a2f4192d8e60ba1b3d29f279f8f9cc8150901d5adc",
+      "bytes": 4689
+    },
+    {
+      "path": "run.err",
+      "sha256": "3f023bfff3ec00f6b519d1539aad9b2180c6c454bb6f5332b4155e2b60c7681d",
+      "bytes": 8517
+    },
+    {
+      "path": "run.log",
+      "sha256": "3f023bfff3ec00f6b519d1539aad9b2180c6c454bb6f5332b4155e2b60c7681d",
+      "bytes": 8517
+    },
+    {
+      "path": "run.out",
+      "sha256": "4b8dd458dcd3f1e50561743298d5a85fa4b86e306fe537fe429c29f6f087a8ae",
+      "bytes": 47
+    },
+    {
+      "path": "run.tsv",
+      "sha256": "4b8dd458dcd3f1e50561743298d5a85fa4b86e306fe537fe429c29f6f087a8ae",
+      "bytes": 47
+    },
+    {
+      "path": "summary.json",
+      "sha256": "ef0409d9db829e1e959c873c720c5d8b58295467f8285f0ee6fd1349e93c4cc3",
+      "bytes": 1559804
+    },
+    {
+      "path": "validation.json",
+      "sha256": "60bba723e272d909cc42f6f5807c470b5eab340feca91957ef3827ee5a039d81",
+      "bytes": 1295
+    }
+  ]
+}

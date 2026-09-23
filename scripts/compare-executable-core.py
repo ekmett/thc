@@ -18,6 +18,8 @@ parser.add_argument('--output', type=Path)
 parser.add_argument('--entry', help='compare only globals syntactically reachable from this unambiguous occurrence')
 parser.add_argument('--strip-snapshot-prefix', action='store_true', help='ignore numeric NN- archive prefixes on module filenames')
 parser.add_argument('--exclude', action='append', default=[], help='explicit module filename to omit from both sides')
+parser.add_argument('--ignore-entry-contracts', action='store_true', help='explicitly omit newly added entryStrict metadata when comparing with an older export')
+parser.add_argument('--ignore-field-types', action='store_true', help='explicitly omit newly added constructor fieldTypes when comparing with an older export')
 args = parser.parse_args()
 
 
@@ -47,9 +49,11 @@ def canonical(modules):
     def binder(b):
         return {k: b[k] for k in ['lifted', 'coercion', 'rep'] if k in b}
     def metadata(raw):
-        return {k: raw[k] for k in ['rep', 'resultRep'] if k in raw}
+        keys = ['rep', 'resultRep'] + ([] if args.ignore_entry_contracts else ['entryStrict'])
+        return {k: raw[k] for k in keys if k in raw}
     def binding_info(b):
-        return {k: b[k] for k in ['lifted', 'arity', 'rep', 'joinValueArity', 'joinResultRep'] if k in b}
+        keys = ['lifted', 'arity', 'rep', 'joinValueArity', 'joinResultRep'] + ([] if args.ignore_entry_contracts else ['entryStrict'])
+        return {k: b[k] for k in keys if k in b}
     def binding(b, env):
         return [binding_info(b), expression(b['expr'], env)]
     def extend(env, ids):
@@ -88,7 +92,8 @@ def canonical(modules):
     for filename, module in sorted(modules.items()):
         result[filename] = {
             'bindings': [(globals[b['id']], binding(b, {})) for b in module['bindings']],
-            'constructors': [{k: c[k] for k in ['id', 'name', 'arity', 'tag', 'kind', 'strictFields', 'fieldLifted', 'fieldReps'] if k in c}
+            'constructors': [{k: c[k] for k in ['id', 'name', 'arity', 'tag', 'kind', 'strictFields', 'fieldLifted', 'fieldReps'] +
+                             ([] if args.ignore_field_types else ['fieldTypes']) if k in c}
                              for c in module['constructors']],
             'groups': [[g['recursive'], [globals.get(key, key) for key in g['ids']]] for g in module['groups']],
         }
@@ -132,7 +137,9 @@ if args.entry:
     reachable_counts = [old_count, new_count]
 changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
 hash_value = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-summary = {'equal': not changed, 'excludedModules': args.exclude, 'entry': args.entry, 'reachableBindings': reachable_counts, 'changedModules': changed, 'beforeSha256': hash_value(before), 'afterSha256': hash_value(after)}
+summary = {'equal': not changed, 'excludedModules': args.exclude, 'ignoredEntryContracts': args.ignore_entry_contracts,
+           'ignoredFieldTypes': args.ignore_field_types, 'entry': args.entry, 'reachableBindings': reachable_counts,
+           'changedModules': changed, 'beforeSha256': hash_value(before), 'afterSha256': hash_value(after)}
 if changed:
     changes = {}
     for name in changed:

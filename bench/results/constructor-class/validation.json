@@ -1,0 +1,40 @@
+{
+  "candidate": "constructor-class-v6",
+  "jarSha256": "4829e1da3c877c3fd985c2f4d1c3a8eba15a4b7e4199f3dbc158b1e4138c5afd",
+  "defaults": {
+    "backend": "bytecode",
+    "thc.constructorClassIdentity": false,
+    "thc.staticShapeUnchecked": false
+  },
+  "suites": {
+    "default": {
+      "tests": 148,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "both-enabled": {
+      "tests": 148,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "both-enabled-array": {
+      "tests": 36,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "commands": [
+    "JAVA_HOME=<pinned GraalVM> GHC=<GHC 9.14.1> GHC_PKG=<ghc-pkg 9.14.1> ./gradlew --offline test --rerun",
+    "JAVA_TOOL_OPTIONS='-Dthc.constructorClassIdentity=true -Dthc.staticShapeUnchecked=true' ./gradlew --offline test --rerun",
+    "JAVA_TOOL_OPTIONS='-Dthc.constructorClassIdentity=true -Dthc.staticShapeUnchecked=true -Dpolyglot.engine.StaticObjectStorageStrategy=array-based' ./gradlew --offline test --rerun --tests thc.RuntimeTest --tests thc.BytecodeBackendTest --tests thc.runtime.EntryContractTest --tests thc.RealCoreEntryContractTest"
+  ],
+  "bytecodeAudit": "ConstructorClassOwners extends Object, owns a private static final ClassValue, and has no getter exposing it. DataValue/CapturedFrame key validation precedes ValidatedStorage and Object initialization.",
+  "notes": [
+    "Flags are sampled when each layout is created. The same full suite passed with both flags disabled and both enabled.",
+    "ConstructorClassIdentityTest also explicitly checks both storage strategies, mixed flag modes and compiled-assumption invalidation.",
+    "Correctness tests do not establish throughput. Power affected a separate prior timing run; that run remains rejected."
+  ]
+}

@@ -31,14 +31,20 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         binding["id"] as String to if (diagnosticUnsupported) CoreRepresentation.UNKNOWN
         else proof.copy(evaluated = binding["lifted"] == false || rhs[0] in listOf("lam", "lit", "con", "void"))
     }
+    private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val roots = arrayListOf<BytecodeRoot>()
     private var nextLocal = 0
     private var localJoinCount = 0
 
     private data class Local(val id: Int, val name: String, val primitive: Boolean,
-                             val proof: CoreRepresentation = CoreRepresentation.UNKNOWN)
-    private class FunctionContext(val formalArity: Int) {
+                             val proof: CoreRepresentation = CoreRepresentation.UNKNOWN,
+                             val cell: Boolean = false, val entry: BooleanArray? = null) {
+        // The denoted value can be primitive while a pre-publication capture
+        // still holds its recursive cell. Raw captures must retain that cell.
+        val directLong: Boolean get() = !cell && proof.isLong && proof.evaluated
+    }
+    private class FunctionContext(val formalArity: Int, val entryStrict: BooleanArray = BooleanArray(formalArity)) {
         var arguments: List<Local?> = emptyList()
         var captures: List<Local> = emptyList()
         var captureLayout: CaptureLayout? = null
@@ -51,7 +57,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         fun withSource(location: CoreSourceLocation?) = Scope(function, locals, joins, location)
     }
     private class JoinRegion
-    private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>, val locals: List<Local>)
+    private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
+                             val locals: List<Local>, val entryStrict: BooleanArray)
     private class JoinEmission(val selector: BytecodeLocal, val next: BytecodeLabel, val labels: List<BytecodeLabel>) {
         var emittedIndex = -1
     }
@@ -85,11 +92,12 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         override val proof get() = local.proof
         override fun emit(emission: Emission) {
             val b = emission.builder
-            if (local.proof.isLong && local.proof.evaluated) b.beginToLong()
-            else if (resolve) b.beginReadCellIfNeeded()
+            val integer = local.directLong || resolve && local.proof.isLong && local.proof.evaluated
+            if (integer) b.beginToLong()
+            if (resolve && local.cell) b.beginReadCellIfNeeded()
             b.emitLoadLocal(emission.locals.getValue(local.id))
-            if (local.proof.isLong && local.proof.evaluated) b.endToLong()
-            else if (resolve) b.endReadCellIfNeeded()
+            if (resolve && local.cell) b.endReadCellIfNeeded()
+            if (integer) b.endToLong()
         }
     }
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
@@ -148,8 +156,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     fun bytecodeDump(): String = roots.joinToString("\n\n") { "${it.name}\n${it.bytecodeNode.dump()}" }
 
     private fun bind(scope: Scope, name: String, primitive: Boolean,
-                     proof: CoreRepresentation = CoreRepresentation.UNKNOWN): Local =
-        Local(nextLocal++, name, if (proof.present) proof.isLong else primitive, proof).also { scope.locals[name] = it; scope.joins.remove(name) }
+                     proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
+                     entry: BooleanArray? = null): Local =
+        Local(nextLocal++, name, !cell && (if (proof.present) proof.isLong else primitive), proof, cell, entry).also { scope.locals[name] = it; scope.joins.remove(name) }
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
@@ -169,19 +178,22 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
-                         resultProof: CoreRepresentation = CoreRepresentations.expression(expression)): FunctionSpec {
-        val context = FunctionContext(args.size)
+                         resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
+                         entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
+        if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
+        val context = FunctionContext(args.size, entryStrict.copyOf())
         val scope = Scope(context, source = outer.source)
         val free = freeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
         val captureSources = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
-        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof) }
+        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry) }
         context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
-            captureSources.map { it.proof.isLong && it.proof.evaluated }.toBooleanArray())
-        context.arguments = args.map { arg ->
+            captureSources.map { it.directLong }.toBooleanArray(),
+            captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray())
+        context.arguments = args.mapIndexed { index, arg ->
             val lifted = representation(arg)
             if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
-                CoreRepresentations.binder(arg).copy(evaluated = !lifted)) else null
+                CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])) else null
         }
         val compiled = compile(expression, scope, true)
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
@@ -201,16 +213,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             context.captures.forEachIndexed { index, local ->
                 b.beginStoreLocal(e.locals.getValue(local.id))
-                if (local.proof.isLong && local.proof.evaluated) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
+                if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
                 b.emitLoadArgument(1)
-                if (local.proof.isLong && local.proof.evaluated) b.endCaptureReadLong() else b.endCaptureRead()
+                if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
                 b.endStoreLocal()
             }
             val offset = if (context.captureLayout == null) 1 else 2
             context.arguments.forEachIndexed { index, local -> if (local != null) {
-                b.beginStoreLocal(e.locals.getValue(local.id))
-                b.emitLoadArgument(index + offset)
-                b.endStoreLocal()
+                restoreArgument(e, local) { b.emitLoadArgument(index + offset) }
             } }
             if (context.mayLoop) {
                 b.beginWhile()
@@ -234,8 +244,24 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             source?.let { BytecodeSources.end(b) }
         }.getNode(0)
         root.setLabel(label)
+        root.configureEntry(context.entryStrict, context.captureLayout != null)
         roots += root
         return root.callTarget
+    }
+
+    /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
+    private fun restoreArgument(e: Emission, local: Local, value: () -> Unit) {
+        val b = e.builder
+        val reference = if (local.cell) null else local.proof.referenceCarrier()
+        b.beginStoreLocal(e.locals.getValue(local.id))
+        when {
+            local.directLong -> { b.beginToLong(); value(); b.endToLong() }
+            reference == DataValue::class.java -> { b.beginRequireData(); value(); b.endRequireData() }
+            reference == Closure::class.java -> { b.beginRequireClosure(); value(); b.endRequireClosure() }
+            reference == LiteralAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
+            else -> value()
+        }
+        b.endStoreLocal()
     }
 
     private fun sourced(value: Expression, source: CoreSourceLocation?): Expression =
@@ -254,7 +280,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val localValue = undecorated(value)
             if (localValue is LocalExpression && localValue.resolve) {
                 val local = e.locals.getValue(localValue.local.id)
-                b.beginForceLocal(metrics, local)
+                b.beginForceLocal(metrics, local, localValue.local.cell)
                 b.emitLoadLocal(local)
                 b.endForceLocal()
             } else {
@@ -317,6 +343,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
 
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
+        val evaluatedArguments = arguments.map { it.proof.evaluated }.toBooleanArray()
         val loop = tail && arguments.size <= context.formalArity && context.formalArity > 0
         // Even a root without a direct self-call can receive A -> B -> ... -> A.
         if (tail) context.mayLoop = true
@@ -327,7 +354,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
             } else null
             if (!loop) {
-                b.beginApply(arguments.size, tail, metrics)
+                b.beginApply(arguments.size, tail, metrics, evaluatedArguments)
                 requireClosure(function).emit(e)
                 arguments.forEach { it.emit(e) }
                 b.endApply()
@@ -344,26 +371,42 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginConditional()
                 b.beginIsSelf(arguments.size, context.formalArity); b.emitLoadLocal(fn); b.endIsSelf()
                 b.beginBlock()
+                val prefix = context.formalArity - arguments.size
+                // Direct self-entry bypasses Dispatch. Enforce the full contract,
+                // including unused formals and a PAP's previously supplied prefix,
+                // before replacing any capture or argument in this activation.
+                val strictArguments = context.entryStrict.mapIndexed { index, strict ->
+                    if (!strict || index >= prefix && arguments[index - prefix].proof.evaluated) null
+                    else b.createLocal("strict tail operand $index", null).also { temporary ->
+                        b.beginStoreLocal(temporary)
+                        b.beginForceValue(metrics)
+                        if (index < prefix) {
+                            b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
+                        } else b.emitLoadLocal(args[index - prefix])
+                        b.endForceValue()
+                        b.endStoreLocal()
+                    }
+                }
                 context.captures.forEachIndexed { index, local ->
                     b.beginStoreLocal(e.locals.getValue(local.id))
-                    if (local.proof.isLong && local.proof.evaluated) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
+                    if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
                     b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment()
-                    if (local.proof.isLong && local.proof.evaluated) b.endCaptureReadLong() else b.endCaptureRead()
+                    if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
                     b.endStoreLocal()
                 }
-                val prefix = context.formalArity - arguments.size
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    b.beginStoreLocal(e.locals.getValue(local.id))
-                    if (index < prefix) {
-                        b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
-                    } else b.emitLoadLocal(args[index - prefix])
-                    b.endStoreLocal()
+                    restoreArgument(e, local) {
+                        if (strictArguments[index] != null) b.emitLoadLocal(strictArguments[index]!!)
+                        else if (index < prefix) {
+                            b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
+                        } else b.emitLoadLocal(args[index - prefix])
+                    }
                 } }
                 b.emitBranch(e.continueLabel!!)
                 // Unreachable value satisfies the expression shape of Conditional's then branch.
                 b.emitLoadConstant(Unit)
                 b.endBlock()
-                b.beginApply(arguments.size, true, metrics)
+                b.beginApply(arguments.size, true, metrics, evaluatedArguments)
                 b.emitLoadLocal(fn)
                 args.forEach { b.emitLoadLocal(it) }
                 b.endApply()
@@ -379,16 +422,16 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 // packet's environment and value arguments replace lexical locals.
                 context.captures.forEachIndexed { index, local ->
                     b.beginStoreLocal(e.locals.getValue(local.id))
-                    if (local.proof.isLong && local.proof.evaluated) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
+                    if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
                     b.beginTailArgument(1); b.emitLoadLocal(reentryResult); b.endTailArgument()
-                    if (local.proof.isLong && local.proof.evaluated) b.endCaptureReadLong() else b.endCaptureRead()
+                    if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
                     b.endStoreLocal()
                 }
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    b.beginStoreLocal(e.locals.getValue(local.id))
-                    b.beginTailArgument(index + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
-                    b.endStoreLocal()
+                    restoreArgument(e, local) {
+                        b.beginTailArgument(index + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
+                    }
                 } }
                 b.emitBranch(e.continueLabel!!)
                 b.emitLoadConstant(Unit)
@@ -417,11 +460,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
             target.locals.forEachIndexed { index, local ->
-                b.beginStoreLocal(e.locals.getValue(local.id))
-                if (local.proof.isLong && local.proof.evaluated) b.beginToLong()
-                b.emitLoadLocal(temporaries[index])
-                if (local.proof.isLong && local.proof.evaluated) b.endToLong()
-                b.endStoreLocal()
+                restoreArgument(e, local) { b.emitLoadLocal(temporaries[index]) }
             }
             if (target.index > region.emittedIndex) {
                 b.emitBranch(region.labels[target.index])
@@ -442,13 +481,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val region = JoinRegion()
         val local = scope.child()
         val targets = definitions.mapIndexed { index, definition ->
-            val parameters = definition.parameters.map { parameter ->
+            val entryStrict = CoreEntries.join(definition)
+            val parameters = definition.parameters.mapIndexed { parameterIndex, parameter ->
                 // Join formal names have lexical scope only in their own body.
-                val proof = CoreRepresentations.binder(parameter).copy(evaluated = !representation(parameter))
+                val proof = CoreRepresentations.binder(parameter).copy(evaluated = !representation(parameter) || entryStrict[parameterIndex])
                 Local(nextLocal++, parameter["id"] as String,
                     if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
             }
-            JoinTarget(region, index, definition.parameters, parameters).also { local.joins[definition.id] = it; local.locals.remove(definition.id) }
+            JoinTarget(region, index, definition.parameters, parameters, entryStrict).also { local.joins[definition.id] = it; local.locals.remove(definition.id) }
         }
         localJoinCount += targets.size
         val bodies = definitions.mapIndexed { index, definition ->
@@ -513,16 +553,23 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "void" -> constant(Unit)
         "lam" -> {
             val args = expr[1] as List<Map<String, Any?>>
-            closure(function("lambda ${args.joinToString { it["name"].toString() }}", args, expr[2] as List<Any?>, scope, CoreRepresentations.lambdaResult(expr)), args.size)
+            closure(function("lambda ${args.joinToString { it["name"].toString() }}", args, expr[2] as List<Any?>, scope, CoreRepresentations.lambdaResult(expr), CoreEntries.lambda(expr)), args.size)
         }
         "app" -> {
             val fn = expr[1] as List<Any?>; val args = expr[2] as List<List<Any?>>
             val flags = expr.getOrNull(3) as? List<*> ?: throw RuntimeFault("Application lacks representation flags")
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
             val strict = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size) strictConstructorFields(fn[1] as String, args.size) else null
+            val entryStrict = when (fn[0]) {
+                "lam" -> CoreEntries.lambda(fn)
+                "var" -> (fn[1] as String).let { id ->
+                    scope.joins[id]?.entryStrict ?: if (id in scope.locals) scope.locals.getValue(id).entry else globalEntries[id]
+                }
+                else -> null
+            }?.takeIf { args.size >= it.size }
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
-                argument(arg, scope, lifted && strict?.get(index) != true)
+                argument(arg, scope, lifted && strict?.get(index) != true && entryStrict?.getOrNull(index) != true)
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
@@ -537,7 +584,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 joinRegion(group, expr[3] as List<Any?>, recursive, scope, tail)
             } else {
                 val local = scope.child()
-                val slots = group.map { bind(local, it["id"] as String, !representation(it), CoreRepresentations.binder(it).copy(evaluated = false)) }
+                val slots = group.map { bind(local, it["id"] as String, !representation(it),
+                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it)) }
                 val rhs = group.map {
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
                     if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
@@ -546,7 +594,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     else argument(rhsExpr, rhsScope, lifted, it["name"].toString())
                 }
                 slots.forEachIndexed { index, slot ->
-                    local.locals[slot.name] = slot.copy(proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated))
+                    val proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated)
+                    // All RHS roots have already captured immutable Local records
+                    // with cell=true. Only body/new captures see published values.
+                    local.locals[slot.name] = slot.copy(proof = proof, cell = false,
+                        primitive = if (proof.present) proof.isLong else slot.primitive)
                 }
                 val body = compile(expr[3] as List<Any?>, local, tail)
                 ProvenExpression(Expression { e ->
@@ -717,23 +769,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
 
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")
-        if ((info["kind"] ?: "boxed") != "boxed") throw UnsupportedCore("Unsupported constructor representation ${info["kind"]}: $id")
-        val reps = info["fieldReps"] as? List<*> ?: throw RuntimeFault("Missing constructor primitive representations: $id")
-        if (reps.size != (info["arity"] as Number).toInt()) throw RuntimeFault("Constructor representation count mismatch: $id")
-        val fields = reps.map { field ->
-            val registers = field as? List<*> ?: throw UnsupportedCore("Unresolved constructor field representation: $id")
-            when (registers.size) {
-                0 -> "VoidRep"
-                1 -> when (val rep = registers[0] as? String ?: throw RuntimeFault("Invalid constructor field representation: $id")) {
-                    "BoxedRep (Just Lifted)" -> "LiftedRep"
-                    "BoxedRep (Just Unlifted)" -> "UnliftedRep"
-                    "BoxedRep Nothing" -> throw UnsupportedCore("Unresolved constructor field levity: $id")
-                    else -> rep
-                }
-                else -> throw UnsupportedCore("Multi-register constructor field unsupported: $id")
-            }
-        }.toTypedArray()
-        DataLayout(language, id, info["name"] as String, fields)
+        val fields = CoreFields(info)
+        DataLayout(language, id, info["name"] as String, fields.storage, fields.referenceTypes)
     }
     /** The constructor adapter enforces strict fields before storing them. */
     private fun fieldIsEvaluated(id: String, index: Int): Boolean {

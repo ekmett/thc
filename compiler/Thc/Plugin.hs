@@ -3,6 +3,7 @@ module Thc.Plugin (plugin) where
 
 import GHC.Plugins
 import qualified Thc.Sources as Sources
+import qualified Thc.Cbv as Cbv
 import Thc.Wired (wiredApplication, wiredRhs, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
@@ -57,6 +58,8 @@ data Ctx = Ctx
   -- are facts about already evaluated values, never demand predictions.
   , evaluatedIds :: VarSet
   , canCertify :: Bool
+  -- Current-module CBV requirements are selected only during native Tidy.
+  , deriveCbvContracts :: Bool
   , sourceTable :: Maybe Sources.SourceTable
   , activeSources :: [String]
   }
@@ -186,9 +189,22 @@ binding :: Ctx -> (Id,CoreExpr) -> J
 binding d (v,e) = O $
   [ ("id",S (varKey d v)), ("name",S (occNameString (nameOccName (varName v))))
   , ("type",S (pretty d (varType v))), ("lifted",lifted v)
-  , ("arity",num (idArity v)), ("expr",expr d e), ("rep",exprRep d e)
+  , ("arity",num (idArity v)), ("expr",annotated), ("rep",exprRep d e)
   , ("info",idMetadata d v)
+  , ("entryStrict",A (map B aligned)), ("entryStrictSource",S origin)
   ] ++ joinMetadata d v e ++ binderSource d v
+  where
+    (marks,origin) = if canCertify d then Cbv.entryContract (deriveCbvContracts d) v e else ([],"none")
+    exported = expr d e
+    -- Type binders have already erased; coercions retain their value slot.
+    -- Joins may return further lambdas: their suffix must remain unmarked.
+    aligned = case exported of
+      A [S "lam",A parameters,_,_] | length marks <= length parameters -> take (length parameters) (marks ++ repeat False)
+      _ -> marks
+    annotated = case exported of
+      A [S "lam",parameters,body,O metadata] ->
+        A [S "lam",parameters,body,O (metadata ++ [("entryStrict",A (map B aligned)),("entryStrictSource",S origin)])]
+      _ -> exported
 
 joinMetadata :: Ctx -> Id -> CoreExpr -> [(String,J)]
 joinMetadata d v e
@@ -207,6 +223,8 @@ idMetadata d v = O
   , ("occurrence",S (pretty d (idOccInfo v))), ("oneShot",S (pretty d (idOneShotInfo v)))
   , ("joinArity",if isJoinId v then num (idJoinArity v) else Z)
   , ("inline",S (pretty d (idInlinePragma v)))
+  , ("cbvEligible",B (Cbv.eligible v))
+  , ("cbvMarks",maybe Z (A . map B) (Cbv.existingMarks v))
   ]
 
 flattenBind :: CoreBind -> [(Id,CoreExpr)]
@@ -233,9 +251,17 @@ constructor d con = O
   , ("fieldLifted",A (map (liftedType . scaledThing) (dataConRepArgTys con)))
   -- Preserve GHC's actual per-slot register representation. Void is []; a
   -- runtime-polymorphic slot is null, never a guessed reference representation.
-  , ("fieldReps",A (map (fieldReps . scaledThing) (dataConRepArgTys con)))
+  , ("fieldReps",A (map fieldReps workerTypes))
+  -- A precise reference carrier is safe only after the worker's existing
+  -- strict/unlifted-field obligation has been enforced. A lazy known-data
+  -- field can still hold a THC thunk, so its evaluated flag remains false.
+  , ("fieldTypes",A (zipWith fieldType workerTypes workerStrict))
   ]
   where
+    workerTypes = map scaledThing (dataConRepArgTys con)
+    marks = dataConRepStrictness con
+    workerStrict = if length marks == length workerTypes then map isMarkedStrict marks else repeat False
+    fieldType ty strict = typeRep ty (strict || case typeLevity_maybe ty of Just Unlifted -> True; _ -> False)
     fieldReps ty = case typePrimRep_maybe ty of
       Nothing -> Z
       Just reps -> A (map (S . show) reps)
@@ -350,7 +376,7 @@ exportModule :: [CommandLineOption] -> ModGuts -> CoreM ModGuts
 exportModule opts guts = do
   flags <- getDynFlags
   sources <- liftIO $ loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
-  let d = Ctx flags (unitString (moduleUnit (mg_module guts)) ++ ":" ++ moduleNameString (moduleName (mg_module guts))) emptyVarSet emptyVarSet True sources []
+  let d = Ctx flags (unitString (moduleUnit (mg_module guts)) ++ ":" ++ moduleNameString (moduleName (mg_module guts))) emptyVarSet emptyVarSet True True sources []
       dir = case opts of [] -> "build/core"; x:_ -> x
       closureRoots = mapMaybe (stripPrefix "closure=") (drop 1 opts)
       modName = moduleNameString (moduleName (mg_module guts))
@@ -384,7 +410,7 @@ exportLate hsc opts pair@(guts,_)
   | otherwise = do
       sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (cg_binds guts))
       let m = cg_module guts
-          d = Ctx (hsc_dflags hsc) (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)) emptyVarSet emptyVarSet True sources []
+          d = Ctx (hsc_dflags hsc) (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)) emptyVarSet emptyVarSet True False sources []
           dir = case opts of [] -> "build/core"; x:_ -> x
           modName = moduleNameString (moduleName m)
           binds = concatMap flattenBind (cg_binds guts)
@@ -456,7 +482,7 @@ exportInterfaceClosure dir rootCtx roots = do
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]
   sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) [(v,e) | (_,v,e,_) <- imports]
-  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, sourceTable = sources, activeSources = [] }) (v,e) of
+  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCbvContracts = False, sourceTable = sources, activeSources = [] }) (v,e) of
         O fields -> O (fields ++ [("origin",S kind),("originModule",S (modulePrefix d))])
         _ -> error "binding was not an object"
       cons = nubBy (\a b -> dataConName a == dataConName b) (concat [exprCons e | (_,_,e,_) <- imports])

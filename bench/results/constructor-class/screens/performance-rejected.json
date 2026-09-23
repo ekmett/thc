@@ -1,0 +1,90 @@
+{
+  "recordedUtc": "2026-09-23T06:34:21.091706+00:00",
+  "performanceAccepted": false,
+  "correctnessPreflights": "All seven combinations pass all18nativeinputs both before/after compilation; zero diagnostic traps.",
+  "firstScreen": {
+    "exitCode": 0,
+    "timedOut": false,
+    "elapsedProcessSeconds": 76.22840220760554,
+    "compilerEventCount": 12,
+    "compilerFailureOrInvalidationEvents": [],
+    "name": "d2-b12000",
+    "depth": 2,
+    "expansionBudget": 12000,
+    "inliningBudget": 12000,
+    "valid": true,
+    "errors": [],
+    "warm": [
+      12032,
+      55234345542,
+      678375231696
+    ],
+    "windowNsPerCall": [
+      4104469.07421875,
+      4264436.1171875,
+      4270132.8125
+    ],
+    "medianNsPerCall": 4264436.1171875,
+    "latestCodeByRootId": {
+      "21": {
+        "name": "lambda sc, x, ds1",
+        "bytes": 100696,
+        "truffleIRNodes": 5753,
+        "loweredIRNodes": 19109
+      },
+      "22": {
+        "name": "lambda ww, ds2",
+        "bytes": 11500,
+        "truffleIRNodes": 1037,
+        "loweredIRNodes": 2565
+      },
+      "17": {
+        "name": "lambda def, ww, ds1",
+        "bytes": 2372,
+        "truffleIRNodes": 220,
+        "loweredIRNodes": 353
+      },
+      "18": {
+        "name": "lambda ww, ds",
+        "bytes": 3940,
+        "truffleIRNodes": 441,
+        "loweredIRNodes": 756
+      },
+      "23": {
+        "name": "lambda ww",
+        "bytes": 123792,
+        "truffleIRNodes": 7466,
+        "loweredIRNodes": 23868
+      },
+      "15": {
+        "name": "lambda k, x, l, r",
+        "bytes": 77112,
+        "truffleIRNodes": 4518,
+        "loweredIRNodes": 14971
+      },
+      "26": {
+        "name": "lambda n",
+        "bytes": 828,
+        "truffleIRNodes": 104,
+        "loweredIRNodes": 232
+      },
+      "10": {
+        "name": "lambda k, x, l, r",
+        "bytes": 1932,
+        "truffleIRNodes": 272,
+        "loweredIRNodes": 473
+      },
+      "91": {
+        "name": "org.graalvm.polyglot.Value<EntryValue>.execute",
+        "bytes": 4772,
+        "truffleIRNodes": 415,
+        "loweredIRNodes": 949
+      }
+    },
+    "latestGuestCodeBytes": 322172,
+    "badEvents": []
+  },
+  "reason": "Renewed roughly2x slowdown after passing native health probe; pmset4%discharging. Cause not proved.",
+  "incomplete": "Second AST process terminated; remaining five screens not launched. Matrix and its own descendants terminated under explicit cutoff instruction; unrelated processes untouched.",
+  "cpuReleased": true
+}

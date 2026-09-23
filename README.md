@@ -42,11 +42,11 @@ On macOS, `JAVA_HOME` is the `Contents/Home` directory inside the GraalVM bundle
 The `--compile` flag requests guest compilation and checks that code was
 installed. Compilation failures are errors.
 
-The AST backend remains the default. To run the same Core through the experimental
-[bytecode backend](docs/bytecode.md):
+The [bytecode backend](docs/bytecode.md) is the default. The AST interpreter is
+also available:
 
 ```sh
-THC_BACKEND=bytecode scripts/run.sh sumLoop 100000 --compile
+THC_BACKEND=ast scripts/run.sh sumLoop 100000 --compile
 ```
 
 For an ordinary `containers` example:
@@ -67,25 +67,25 @@ support for the paths exercised; they don't make the gaps disappear.
 ## Where things stand
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before
-and after requested compilation. The latest macOS ARM64 measurements take
-**2.51 ms with the AST interpreter** and **2.38 ms with bytecode**, against native
-GHC references of 1.28 ms and 1.29 ms: **1.96 times and 1.84 times GHC's cost**,
-respectively. No unsupported trap was entered. AST remains the default.
+and after requested compilation. A controlled macOS ARM64 comparison reduced
+bytecode's time from **2.34 ms to 1.54 ms**, against **1.25 ms for native GHC**:
+**34% less elapsed time**, or **1.23 times GHC's cost** on this workload.
+No unsupported trap was entered.
 
-Core exports now retain [representation evidence and local joins](docs/core-evidence.md),
-along with [source locations](docs/debug-locations.md) in both executable trees.
-Adding source notes left AST throughput unchanged; bytecode measured 2.7% lower.
-Graph inspection also caught a Kotlin enum-switch table preventing Graal from
-folding the result-type dispatch. Replacing it with direct comparisons removed
-the irrelevant typed branches and reduced AST time by 27.4% in a separate run.
+Core exports retain [representation evidence, worker entry contracts and local
+joins](docs/core-evidence.md), along with [source locations](docs/debug-locations.md)
+in both executable trees. The runtime keeps primitive and evaluated reference
+types through arguments, captures and constructor fields. PAPs stay lazy until
+saturation, and recursive captures retain their cells until publication.
 
 Each comparison uses three fresh processes per engine, five measured windows
-per process, and at least 12,000 warmup workloads. All 180 windows across the
-source-note checks and dispatch repair passed validation. The
-[source-location report](docs/debug-locations.md) records the measurements and
-[actual compiled graphs](docs/source-note-graphs/README.md).
+per process, and at least 12,000 warmup workloads. The [entry-contract and
+type-preservation report](docs/entry-contracts.md) records the changes,
+measurements and remaining costs. These are results for this Map workload,
+not a claim about arbitrary Haskell programs.
 
 The [typed execution and tail-cycle report](docs/typed-tail.md),
+[source-location report](docs/debug-locations.md),
 [initial bytecode report](docs/bytecode.md), [original Map report](docs/map-example.md),
 [call-packet follow-up](docs/call-packets.md), and [inlining report](docs/map-inlining.md)
 record the preceding experiments. There is plenty left to do.
@@ -105,7 +105,7 @@ currently integer-only.
 ```sh
 scripts/benchmark.sh
 THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh
-THC_BACKEND=bytecode THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-bytecode
+THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-ast
 ```
 
 Run the corresponding `try` script first. Benchmarks use changing inputs,

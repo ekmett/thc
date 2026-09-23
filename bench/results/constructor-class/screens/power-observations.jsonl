@@ -1,0 +1,2 @@
+{"recordedUtc": "2026-09-23T06:31:51.444948+00:00", "phase": "matrix preflights", "raw": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t4%; discharging; 0:33 remaining present: true\n\tBattery Warning: Early\n"}
+{"recordedUtc": "2026-09-23T06:33:00.661277+00:00", "phase": "first AST screen", "raw": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t4%; discharging; 0:30 remaining present: true\n\tBattery Warning: Early\n"}

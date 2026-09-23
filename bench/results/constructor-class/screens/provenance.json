@@ -1,0 +1,169 @@
+{
+  "publishedUtc": "2026-09-23T06:35:42.323411+00:00",
+  "sourceDirectory": "work/perf-sprint-constructor-class",
+  "sourceArtifactManifestSha256": "2da648efde20fd6c093927a16d9a3b4778d8713c0fb2c559207ea1a0acad65cf",
+  "frozenRuntime": "work/constructor-class-v6",
+  "frozenRuntimeManifestSha256": "26009de88c5de07c1974ecb2c843be4c224a6b0817b1e75f7b71b4c21e9d1b6c",
+  "runtimeJarSha256": "4829e1da3c877c3fd985c2f4d1c3a8eba15a4b7e4199f3dbc158b1e4138c5afd",
+  "scope": "Compact publication of immutable captured results with explicitly documented process-inventory omissions and a transformed health summary. Original local captures unchanged. No JVM/native execution/compression or new timing during publication. Parent runtime validation/manifest/javap remain untouched.",
+  "performanceAccepted": false,
+  "checks": [
+    {
+      "name": "check-ast-checked-classoff-argson",
+      "exitCode": 0,
+      "verifiedRows": 36,
+      "phases": {
+        "before-requested-compilation": 18,
+        "after-requested-compilation": 18
+      },
+      "backend": "ast",
+      "unsupportedTraps": 0
+    },
+    {
+      "name": "check-ast-checked-classon-argson",
+      "exitCode": 0,
+      "verifiedRows": 36,
+      "phases": {
+        "before-requested-compilation": 18,
+        "after-requested-compilation": 18
+      },
+      "backend": "ast",
+      "unsupportedTraps": 0
+    },
+    {
+      "name": "check-ast-unchecked-classon-argson",
+      "exitCode": 0,
+      "verifiedRows": 36,
+      "phases": {
+        "before-requested-compilation": 18,
+        "after-requested-compilation": 18
+      },
+      "backend": "ast",
+      "unsupportedTraps": 0
+    },
+    {
+      "name": "check-bytecode-checked-classoff-argson",
+      "exitCode": 0,
+      "verifiedRows": 36,
+      "phases": {
+        "before-requested-compilation": 18,
+        "after-requested-compilation": 18
+      },
+      "backend": "bytecode",
+      "unsupportedTraps": 0
+    },
+    {
+      "name": "check-bytecode-checked-classon-argson",
+      "exitCode": 0,
+      "verifiedRows": 36,
+      "phases": {
+        "before-requested-compilation": 18,
+        "after-requested-compilation": 18
+      },
+      "backend": "bytecode",
+      "unsupportedTraps": 0
+    },
+    {
+      "name": "check-bytecode-unchecked-classon-argson",
+      "exitCode": 0,
+      "verifiedRows": 36,
+      "phases": {
+        "before-requested-compilation": 18,
+        "after-requested-compilation": 18
+      },
+      "backend": "bytecode",
+      "unsupportedTraps": 0
+    },
+    {
+      "name": "check-bytecode-checked-classon-argsoff",
+      "exitCode": 0,
+      "verifiedRows": 36,
+      "phases": {
+        "before-requested-compilation": 18,
+        "after-requested-compilation": 18
+      },
+      "backend": "bytecode",
+      "unsupportedTraps": 0
+    }
+  ],
+  "configurations": [
+    {
+      "name": "ast-checked-classoff-argson",
+      "correctness": "passed18beforeAnd18after",
+      "timing": "completeButRejectedForHostSlowdown",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "ast-checked-classon-argson",
+      "correctness": "passed18beforeAnd18after",
+      "timing": "interruptedDuringStartupOrWarmupNoCompleteTiming",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "ast-unchecked-classon-argson",
+      "correctness": "passed18beforeAnd18after",
+      "timing": "notStarted",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-checked-classoff-argson",
+      "correctness": "passed18beforeAnd18after",
+      "timing": "notStarted",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-checked-classon-argson",
+      "correctness": "passed18beforeAnd18after",
+      "timing": "notStarted",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-unchecked-classon-argson",
+      "correctness": "passed18beforeAnd18after",
+      "timing": "notStarted",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-checked-classon-argsoff",
+      "correctness": "passed18beforeAnd18after",
+      "timing": "notStarted",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=false",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    }
+  ],
+  "publicationRedactions": "omitted-local-evidence.json"
+}

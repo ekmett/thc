@@ -1,0 +1,9 @@
+thc.runtime.BytecodeRootGen$ReadCellIfNeeded_Node.execute:23327	306	0
+thc.runtime.Calls.direct:10	103	0
+thc.runtime.BytecodeRoot$ForceLocal.force:186	67	0
+thc.runtime.BytecodeRoot$ForceLocal.force:200	47	0
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5082	35	0
+thc.runtime.Force.execute:198	34	0
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5065	31	0
+thc.runtime.Force.execute:162	31	0
+thc.runtime.Thunk.setState:46	13	0

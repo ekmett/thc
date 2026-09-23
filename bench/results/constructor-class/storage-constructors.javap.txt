@@ -1,0 +1,133 @@
+Compiled from "ConstructorClassIdentity.kt"
+final class thc.runtime.ConstructorClassOwners {
+  public static final thc.runtime.ConstructorClassOwners INSTANCE;
+
+  private static final thc.runtime.ConstructorClassOwners$registry$1 registry;
+
+  private thc.runtime.ConstructorClassOwners();
+    Code:
+         0: aload_0
+         1: invokespecial #8                  // Method java/lang/Object."<init>":()V
+         4: return
+
+  public final com.oracle.truffle.api.Assumption register(java.lang.Class<?>, java.lang.Object);
+    Code:
+         0: getstatic     #19                 // Field registry:Lthc/runtime/ConstructorClassOwners$registry$1;
+         3: aload_1
+         4: invokevirtual #25                 // Method thc/runtime/ConstructorClassOwners$registry$1.get:(Ljava/lang/Class;)Ljava/lang/Object;
+         7: checkcast     #27                 // class thc/runtime/ConstructorClassOwners$Owners
+        10: aload_2
+        11: invokevirtual #30                 // Method thc/runtime/ConstructorClassOwners$Owners.register:(Ljava/lang/Object;)Lcom/oracle/truffle/api/Assumption;
+        14: areturn
+
+  static {};
+    Code:
+         0: new           #2                  // class thc/runtime/ConstructorClassOwners
+         3: dup
+         4: invokespecial #36                 // Method "<init>":()V
+         7: putstatic     #39                 // Field INSTANCE:Lthc/runtime/ConstructorClassOwners;
+        10: new           #21                 // class thc/runtime/ConstructorClassOwners$registry$1
+        13: dup
+        14: invokespecial #40                 // Method thc/runtime/ConstructorClassOwners$registry$1."<init>":()V
+        17: putstatic     #19                 // Field registry:Lthc/runtime/ConstructorClassOwners$registry$1;
+        20: return
+}
+Compiled from "DataValues.kt"
+public class thc.runtime.DataValue extends thc.runtime.ValidatedStorage {
+  private final thc.runtime.DataLayout layout;
+
+  public thc.runtime.DataValue(thc.runtime.DataLayout, java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokevirtual #14                 // Method thc/runtime/DataLayout.checkAllocationKey$org_intelligence_thc:(Ljava/lang/Object;)V
+         6: getstatic     #20                 // Field kotlin/Unit.INSTANCE:Lkotlin/Unit;
+         9: invokespecial #23                 // Method thc/runtime/ValidatedStorage."<init>":(Lkotlin/Unit;)V
+        12: aload_0
+        13: aload_1
+        14: putfield      #27                 // Field layout:Lthc/runtime/DataLayout;
+        17: return
+
+  public final thc.runtime.DataLayout getLayout();
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/DataLayout;
+         4: areturn
+
+  public java.lang.String toString();
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/DataLayout;
+         4: aload_0
+         5: invokevirtual #40                 // Method thc/runtime/DataLayout.describe$org_intelligence_thc:(Lthc/runtime/DataValue;)Ljava/lang/String;
+         8: areturn
+}
+Compiled from "Frames.kt"
+public class thc.runtime.CapturedFrame extends thc.runtime.ValidatedStorage {
+  private final thc.runtime.CaptureLayout layout;
+
+  public thc.runtime.CapturedFrame(thc.runtime.CaptureLayout, java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokevirtual #14                 // Method thc/runtime/CaptureLayout.checkAllocationKey$org_intelligence_thc:(Ljava/lang/Object;)V
+         6: getstatic     #20                 // Field kotlin/Unit.INSTANCE:Lkotlin/Unit;
+         9: invokespecial #23                 // Method thc/runtime/ValidatedStorage."<init>":(Lkotlin/Unit;)V
+        12: aload_0
+        13: aload_1
+        14: putfield      #27                 // Field layout:Lthc/runtime/CaptureLayout;
+        17: return
+
+  public final thc.runtime.CaptureLayout getLayout();
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/CaptureLayout;
+         4: areturn
+
+  public final java.lang.Object getValue(int);
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/CaptureLayout;
+         4: aload_0
+         5: iload_1
+         6: invokevirtual #39                 // Method thc/runtime/CaptureLayout.read:(Lthc/runtime/CapturedFrame;I)Ljava/lang/Object;
+         9: areturn
+
+  public final long getLong(int);
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/CaptureLayout;
+         4: aload_0
+         5: iload_1
+         6: invokevirtual #47                 // Method thc/runtime/CaptureLayout.readLong:(Lthc/runtime/CapturedFrame;I)J
+         9: lreturn
+
+  public final boolean isLong(int);
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/CaptureLayout;
+         4: aload_0
+         5: iload_1
+         6: invokevirtual #52                 // Method thc/runtime/CaptureLayout.isLong:(Lthc/runtime/CapturedFrame;I)Z
+         9: ireturn
+
+  public final java.lang.Object getObject(int);
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/CaptureLayout;
+         4: aload_0
+         5: iload_1
+         6: invokevirtual #56                 // Method thc/runtime/CaptureLayout.readObject:(Lthc/runtime/CapturedFrame;I)Ljava/lang/Object;
+         9: areturn
+
+  public final boolean isObject(int);
+    Code:
+         0: aload_0
+         1: getfield      #27                 // Field layout:Lthc/runtime/CaptureLayout;
+         4: aload_0
+         5: iload_1
+         6: invokevirtual #59                 // Method thc/runtime/CaptureLayout.isObject:(Lthc/runtime/CapturedFrame;I)Z
+         9: ireturn
+}

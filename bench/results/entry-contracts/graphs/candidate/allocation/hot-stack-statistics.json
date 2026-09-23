@@ -1,0 +1,13 @@
+{
+  "threadId": 3,
+  "executionSamples": 408,
+  "allocationSamples": 5906,
+  "allocationWeightBytes": 34116394952,
+  "executionTruncatedStacks": 205,
+  "allocationTruncatedStacks": 3537,
+  "uniqueExecutionStacks": 38,
+  "uniqueAllocationStacks": 68,
+  "retainedFramesPerTextStack": 64,
+  "executionTopN": 100,
+  "allocationTopN": 250
+}

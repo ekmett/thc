@@ -4,6 +4,7 @@
 All nine timing processes run serially. Each engine occupies each run-order
 position once. Timings include each engine's host-call boundary, exclude startup
 and warmup, and describe this workload rather than general Haskell performance.
+Host and power observations are diagnostic; power warnings do not reject timings.
 """
 import argparse
 import csv
@@ -12,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import statistics
 import subprocess
@@ -25,6 +27,7 @@ FORKS, SAMPLES, SAMPLE_SECONDS = 3, 5, 2
 JVM_WARM_SECONDS, NATIVE_WARM_SECONDS, MINIMUM_WARM_CALLS = 15, 1, 12000
 ENGINES = ('baseline', 'candidate', 'native')
 FIELDS = ['entry', 'sample', 'repetitions', 'inputBase', 'checksum', 'elapsedNs']
+CRITICAL_BATTERY_PERCENT = 10  # Warning only; never changes timing validation.
 EVENT = re.compile(r'\bopt\s+(?:done|start|fail|inval\w*|deopt|queued|unqueued)\b|\bdeopt(?:imization)?\b', re.I)
 
 
@@ -52,6 +55,47 @@ def hashes(paths):
 
 def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + '\n')
+
+
+def parse_power_status(raw):
+    """Keep pmset's raw text authoritative; unknown formats remain unclassified."""
+    status = {}
+    source = re.search(r"Now drawing from '([^']+)'", raw)
+    if source:
+        status['source'] = source.group(1)
+    battery = re.search(r'\b(\d{1,3})%;\s*([^;\n]+)', raw)
+    if battery and 0 <= int(battery.group(1)) <= 100:
+        status['batteryPercent'] = int(battery.group(1))
+        status['batteryState'] = battery.group(2).strip()
+    return status
+
+
+def power_status():
+    status = {'recordedAtUtc': datetime.now(timezone.utc).isoformat()}
+    try:
+        result = subprocess.run(['/usr/bin/pmset', '-g', 'batt'], text=True,
+                                capture_output=True, timeout=3, check=False)
+        status.update(raw=result.stdout, stderr=result.stderr, returncode=result.returncode)
+        if result.returncode == 0:
+            status.update(parse_power_status(result.stdout))
+        else:
+            status['error'] = 'pmset failed; power state unavailable'
+    except (OSError, subprocess.SubprocessError) as error:
+        status['error'] = str(error)
+    return status
+
+
+def power_warnings(current, previous=None):
+    warnings = []
+    discharging = current.get('source') == 'Battery Power' or current.get('batteryState', '').lower() == 'discharging'
+    if discharging and current.get('batteryPercent', 101) <= CRITICAL_BATTERY_PERCENT:
+        warnings.append(f"Critical battery: {current['batteryPercent']}%; reported source={current.get('source', 'unknown')}, "
+                        f"state={current.get('batteryState', 'unknown')}")
+    if previous and previous.get('source') and current.get('source') and previous['source'] != current['source']:
+        warnings.append(f"Power source changed: {previous['source']} -> {current['source']}")
+    if current.get('error'):
+        warnings.append(f"Power status unavailable: {current['error']}")
+    return warnings
 
 
 def read_windows(path, base, cycle_sum):
@@ -149,6 +193,8 @@ def main():
     parser.add_argument('outdir', type=Path, help='new or empty output directory; existing results are never overwritten')
     parser.add_argument('--java-home', type=Path, default=os.environ.get('JAVA_HOME'), help='GraalVM JDK directory (default: JAVA_HOME)')
     parser.add_argument('--baseline-commit', required=True, help='baseline source revision label; runtime JAR hashes are authoritative')
+    parser.add_argument('--baseline-modules-manifest', type=Path,
+                        help='optional separate frozen baseline Core manifest, for controlled metadata ablations')
     parser.add_argument('--candidate-source-dir', type=Path, default=Path(__file__).resolve().parents[1] / 'src/main',
                         help='source tree to hash with the candidate (default: this checkout src/main)')
     parser.add_argument('--input-base', type=int, default=10000, help='first of sixteen varying inputs (default: 10000)')
@@ -156,6 +202,8 @@ def main():
     parser.add_argument('--candidate-backend', choices=('ast', 'bytecode'), default='ast')
     parser.add_argument('--baseline-source-notes', choices=('on', 'off'), help='explicit source attachment mode; also validates attached spans/roots')
     parser.add_argument('--candidate-source-notes', choices=('on', 'off'), help='explicit source attachment mode; also validates attached spans/roots')
+    parser.add_argument('--baseline-jvm-option', action='append', default=[], help='repeatable JVM option recorded in the baseline command')
+    parser.add_argument('--candidate-jvm-option', action='append', default=[], help='repeatable JVM option recorded in the candidate command')
     parser.add_argument('--process-timeout', type=int, default=300, help='maximum seconds for each timing process (default: 300)')
     args = parser.parse_args()
     require(args.java_home is not None, 'Set JAVA_HOME or pass --java-home')
@@ -175,9 +223,14 @@ def main():
         libraries[engine] = sorted(directory.glob('*.jar'))
         require(bool(libraries[engine]), f'No runtime JARs in {directory}')
     manifest = args.modules_manifest.resolve(strict=True)
-    modules = [(manifest.parent / line.strip()).resolve(strict=True) for line in manifest.read_text().splitlines() if line.strip()]
-    require(bool(modules) and len(modules) == len(set(modules)), 'Module manifest must be nonempty with unique paths')
-    require(all(',' not in str(p) for p in modules), 'Probe module paths cannot contain commas')
+    manifests = {'baseline': (args.baseline_modules_manifest or manifest).resolve(strict=True), 'candidate': manifest}
+    modules_by_engine = {}
+    for engine, engine_manifest in manifests.items():
+        modules = [(engine_manifest.parent / line.strip()).resolve(strict=True)
+                   for line in engine_manifest.read_text().splitlines() if line.strip()]
+        require(bool(modules) and len(modules) == len(set(modules)), 'Module manifest must be nonempty with unique paths')
+        require(all(',' not in str(p) for p in modules), 'Probe module paths cannot contain commas')
+        modules_by_engine[engine] = modules
     source_dir = args.candidate_source_dir.resolve(strict=True)
     sources = sorted(p for p in source_dir.rglob('*') if p.is_file())
     require(bool(sources), 'Candidate source directory is empty')
@@ -185,7 +238,8 @@ def main():
     require(not out.exists() or not any(out.iterdir()), 'Output directory must be new or empty')
     out.mkdir(parents=True, exist_ok=True)
     provenance = {'runtimeJars': {engine: hashes(paths) for engine, paths in libraries.items()},
-                  'nativeBinary': hashes([native]), 'moduleManifest': hashes([manifest]), 'modules': hashes(modules),
+                  'nativeBinary': hashes([native]), 'moduleManifest': hashes(set(manifests.values())),
+                  'modules': hashes(set(p for paths in modules_by_engine.values() for p in paths)),
                   'candidateSources': hashes(sources), 'java': hashes([java, release_path]), 'harness': hashes([Path(__file__).resolve()])}
     commands = []
     for fork in range(1, FORKS + 1):
@@ -197,22 +251,43 @@ def main():
                 command = [str(java), '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true',
                            '-Dthc.diagnosticUnsupported=true', f'-Dthc.minimumWarmCalls={MINIMUM_WARM_CALLS}',
                            f'-Dthc.backend={getattr(args, engine + "_backend")}',
-                           '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules)),
+                           '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules_by_engine[engine])),
                            ENTRY, '--steady', str(JVM_WARM_SECONDS), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
             if engine != 'native':
+                command[1:1] = getattr(args, engine + '_jvm_option')
                 notes = getattr(args, engine + '_source_notes')
                 if notes is not None:
                     command.insert(1, '-Dthc.sourceNotesEnabled=' + ('true' if notes == 'on' else 'false'))
             commands.append({'fork': fork, 'position': position, 'engine': engine, 'argv': command})
+    host = {'system': platform.system(), 'platform': platform.platform(), 'machine': platform.machine()}
     config = {'schema': 1, 'recordedAtUtc': datetime.now(timezone.utc).isoformat(), 'entry': ENTRY,
               'baselineCommit': args.baseline_commit, 'backends': {e: getattr(args, e + '_backend') for e in ENGINES[:2]}, 'inputBase': args.input_base, 'forks': FORKS, 'samples': SAMPLES,
               'sampleSeconds': SAMPLE_SECONDS, 'jvmWarmSeconds': JVM_WARM_SECONDS, 'nativeWarmSeconds': NATIVE_WARM_SECONDS,
               'minimumJvmWarmCalls': MINIMUM_WARM_CALLS, 'diagnosticUnsupported': True, 'instrumented': False,
+              'moduleManifests': {engine: str(path) for engine, path in manifests.items()},
               'sourceNotesModes': {e: getattr(args, e + '_source_notes') for e in ENGINES[:2]},
               'protocol': 'serialized rotated engine order; median of per-fork window medians; signed64 checksums',
               'candidateSourceNote': 'Recorded source hashes identify the supplied tree; the caller must build these runtime JARs from that tree.',
-              'commands': commands, 'provenance': provenance}
+              'host': host, 'commands': commands, 'provenance': provenance}
     write_json(out / 'run-config.json', config)
+    power = {'supported': host['system'] == 'Darwin', 'criticalBatteryPercent': CRITICAL_BATTERY_PERCENT,
+             'samples': [], 'warnings': []}
+
+    def record_power(spec, phase):
+        if not power['supported']:
+            return
+        sample = {key: spec[key] for key in ('engine', 'fork', 'position')}
+        sample.update(phase=phase, **power_status())
+        previous = next((sample for sample in reversed(power['samples']) if sample.get('source')), None)
+        for message in power_warnings(sample, previous):
+            warning = {'engine': spec['engine'], 'fork': spec['fork'], 'phase': phase,
+                       'recordedAtUtc': sample['recordedAtUtc'], 'message': message}
+            power['warnings'].append(warning)
+            print(f"WARNING: {spec['engine']}-{spec['fork']} {phase}: {message}; timings retained", file=sys.stderr, flush=True)
+        power['samples'].append(sample)
+        write_json(out / 'power-status.json', power)
+
+    write_json(out / 'power-status.json', power)
     rows, process_checks = [], []
     try:
         # Untimed scalar oracle queries establish a reference independently of
@@ -241,9 +316,14 @@ def main():
                 name = f'{engine}-{fork}'
                 raw, log = out / f'{name}.tsv', out / f'{name}.log'
                 print(f'Fork {fork}/{FORKS}, position {spec["position"]}/3: {engine} starting', flush=True)
+                record_power(spec, 'before')
                 start = time.monotonic()
-                with raw.open('w') as output, log.open('w') as errors:
-                    subprocess.run(spec['argv'], stdout=output, stderr=errors, check=True, timeout=args.process_timeout)
+                try:
+                    with raw.open('w') as output, log.open('w') as errors:
+                        subprocess.run(spec['argv'], stdout=output, stderr=errors, check=True, timeout=args.process_timeout)
+                finally:
+                    process_seconds = time.monotonic() - start
+                    record_power(spec, 'after')
                 windows = read_windows(raw, args.input_base, cycle_sum)
                 check = validate_jvm_log(log, cycle_sum, getattr(args, engine + '_backend'), getattr(args, engine + '_source_notes')) if engine != 'native' else {'nativeProcessSucceeded': True}
                 process_checks.append({'engine': engine, 'fork': fork, **check})
@@ -253,14 +333,14 @@ def main():
                     rows.append(row)
                 aggregate.flush()
                 median = statistics.median(r['elapsedNs'] / r['repetitions'] for r in windows)
-                print(f'Fork {fork}/{FORKS}: {engine} validated; {median:,.1f} ns/call; process {time.monotonic() - start:.1f}s', flush=True)
+                print(f'Fork {fork}/{FORKS}: {engine} validated; {median:,.1f} ns/call; process {process_seconds:.1f}s', flush=True)
         for records in [*provenance['runtimeJars'].values(), provenance['nativeBinary'], provenance['moduleManifest'],
                         provenance['modules'], provenance['candidateSources'], provenance['java'], provenance['harness']]:
             for record in records:
                 require(sha256(Path(record['path'])) == record['sha256'], f'Input changed during comparison: {record["path"]}')
         require(sorted(p for p in source_dir.rglob('*') if p.is_file()) == sources, 'Candidate source inventory changed during comparison')
         engines = {engine: engine_summary([r for r in rows if r['engine'] == engine]) for engine in ENGINES}
-        summary = {'entry': ENTRY, 'windowCount': len(rows), 'cycleChecksumSigned64': signed64(cycle_sum), 'engines': engines,
+        summary = {'entry': ENTRY, 'powerWarnings': power['warnings'], 'windowCount': len(rows), 'cycleChecksumSigned64': signed64(cycle_sum), 'engines': engines,
                    'ratios': {'candidate/baseline': engines['candidate']['medianNsPerCall'] / engines['baseline']['medianNsPerCall'],
                               'candidate/native': engines['candidate']['medianNsPerCall'] / engines['native']['medianNsPerCall']},
                    'limits': 'Exploratory workload comparison. No measured Truffle events does not establish absence of host JIT/GC or external machine contention.'}

@@ -1,0 +1,468 @@
+{
+  "scope": "Same current Core corpus, bytecode backend, default2/12000/12000, original source-notes-v2 versus typed-frames-v4 runtime. Exact allocation and sampled attribution are separate experiments from throughput. Graph capture perturbs compilation; static sites are from that captured compilation, not asserted to be identical machine code to timing runs.",
+  "profiles": {
+    "baseline-bytecode-default-allocation": {
+      "bytesPerCall": 9575492.5,
+      "sampleBytesPerCall": [
+        9575492.5,
+        9575492.5,
+        9575492.5
+      ],
+      "classWeights": [
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+          "samples": 5754,
+          "weightBytes": 24381802040,
+          "percentWeight": 62.29333763237534
+        },
+        {
+          "class": "[Ljava.lang.Object;",
+          "samples": 1512,
+          "weightBytes": 5163318568,
+          "percentWeight": 13.1918201260212
+        },
+        {
+          "class": "java.lang.Long",
+          "samples": 1089,
+          "weightBytes": 4528382264,
+          "percentWeight": 11.569614290076988
+        },
+        {
+          "class": "thc.runtime.Thunk",
+          "samples": 412,
+          "weightBytes": 1938994048,
+          "percentWeight": 4.953957492603373
+        },
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+          "samples": 425,
+          "weightBytes": 1824813488,
+          "percentWeight": 4.662236307948324
+        },
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$11",
+          "samples": 333,
+          "weightBytes": 869313288,
+          "percentWeight": 2.221018203201454
+        },
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$9",
+          "samples": 63,
+          "weightBytes": 386541432,
+          "percentWeight": 0.9875790104839132
+        },
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "samples": 29,
+          "weightBytes": 47139384,
+          "percentWeight": 0.12043693728940603
+        }
+      ],
+      "weightVsExactProjection": 0.997937015380671,
+      "hotStacks": {
+        "threadId": 3,
+        "executionSamples": 667,
+        "allocationSamples": 9617,
+        "allocationWeightBytes": 39140304512,
+        "executionTruncatedStacks": 371,
+        "allocationTruncatedStacks": 6620,
+        "uniqueExecutionStacks": 104,
+        "uniqueAllocationStacks": 122,
+        "retainedFramesPerTextStack": 64,
+        "executionTopN": 100,
+        "allocationTopN": 250
+      },
+      "firstThcExecutionFrames": [
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRootGen$ReadCellIfNeeded_Node.execute:23327",
+          "samples": 306,
+          "percentExecutionSamples": 45.877061469265364
+        },
+        {
+          "firstThcFrame": "thc.runtime.Calls.direct:10",
+          "samples": 103,
+          "percentExecutionSamples": 15.442278860569715
+        },
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRoot$ForceLocal.force:186",
+          "samples": 67,
+          "percentExecutionSamples": 10.044977511244378
+        },
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRoot$ForceLocal.force:200",
+          "samples": 47,
+          "percentExecutionSamples": 7.04647676161919
+        },
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5082",
+          "samples": 35,
+          "percentExecutionSamples": 5.247376311844078
+        },
+        {
+          "firstThcFrame": "thc.runtime.Force.execute:198",
+          "samples": 34,
+          "percentExecutionSamples": 5.097451274362818
+        },
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5065",
+          "samples": 31,
+          "percentExecutionSamples": 4.6476761619190405
+        },
+        {
+          "firstThcFrame": "thc.runtime.Force.execute:162",
+          "samples": 31,
+          "percentExecutionSamples": 4.6476761619190405
+        },
+        {
+          "firstThcFrame": "thc.runtime.Thunk.setState:46",
+          "samples": 13,
+          "percentExecutionSamples": 1.949025487256372
+        }
+      ],
+      "shapeMapping": {
+        "path": "work/perf-sprint-typed-frames/baseline-bytecode-default-allocation/shape-mapping.tsv",
+        "sha256": "3c4b051dea2af4185806313b405e7f2a8c5872d6cb00c775faab750cf6539062"
+      },
+      "validation": {
+        "path": "work/perf-sprint-typed-frames/baseline-bytecode-default-allocation/validation.json",
+        "sha256": "e4bb86a8bc8c019aacbfc380af59cf7c7d4360d802049480eb0e3a14a15e77ee"
+      }
+    },
+    "bytecode-default-allocation": {
+      "bytesPerCall": 8329466.5,
+      "sampleBytesPerCall": [
+        8329466.5,
+        8329466.5,
+        8329466.5
+      ],
+      "classWeights": [
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4",
+          "samples": 4059,
+          "weightBytes": 25004721144,
+          "percentWeight": 73.29238971227865
+        },
+        {
+          "class": "[Ljava.lang.Object;",
+          "samples": 916,
+          "weightBytes": 4007356552,
+          "percentWeight": 11.746131317913699
+        },
+        {
+          "class": "java.lang.Long",
+          "samples": 610,
+          "weightBytes": 3504724576,
+          "percentWeight": 10.272845595001952
+        },
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6",
+          "samples": 274,
+          "weightBytes": 1472840440,
+          "percentWeight": 4.3171045536089325
+        },
+        {
+          "class": "thc.runtime.Thunk",
+          "samples": 23,
+          "weightBytes": 62852392,
+          "percentWeight": 0.18422928943233907
+        },
+        {
+          "class": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$7",
+          "samples": 23,
+          "weightBytes": 58662136,
+          "percentWeight": 0.17194705385060347
+        },
+        {
+          "class": "org.graalvm.polyglot.Value",
+          "samples": 1,
+          "weightBytes": 5237712,
+          "percentWeight": 0.015352477913827618
+        }
+      ],
+      "weightVsExactProjection": 0.9999677634009483,
+      "hotStacks": {
+        "threadId": 3,
+        "executionSamples": 408,
+        "allocationSamples": 5906,
+        "allocationWeightBytes": 34116394952,
+        "executionTruncatedStacks": 205,
+        "allocationTruncatedStacks": 3537,
+        "uniqueExecutionStacks": 38,
+        "uniqueAllocationStacks": 68,
+        "retainedFramesPerTextStack": 64,
+        "executionTopN": 100,
+        "allocationTopN": 250
+      },
+      "firstThcExecutionFrames": [
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5155",
+          "samples": 119,
+          "percentExecutionSamples": 29.166666666666668
+        },
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt:5172",
+          "samples": 110,
+          "percentExecutionSamples": 26.96078431372549
+        },
+        {
+          "firstThcFrame": "thc.runtime.Calls.direct:10",
+          "samples": 82,
+          "percentExecutionSamples": 20.098039215686274
+        },
+        {
+          "firstThcFrame": "thc.runtime.BytecodeRoot$MatchData.matches:326",
+          "samples": 55,
+          "percentExecutionSamples": 13.480392156862745
+        },
+        {
+          "firstThcFrame": "thc.runtime.Force.execute:210",
+          "samples": 29,
+          "percentExecutionSamples": 7.107843137254902
+        },
+        {
+          "firstThcFrame": "thc.runtime.Force.execute:174",
+          "samples": 12,
+          "percentExecutionSamples": 2.9411764705882355
+        },
+        {
+          "firstThcFrame": "thc.runtime.TailCheck.check:286",
+          "samples": 1,
+          "percentExecutionSamples": 0.24509803921568626
+        }
+      ],
+      "shapeMapping": {
+        "path": "work/perf-sprint-typed-frames/bytecode-default-allocation/shape-mapping.tsv",
+        "sha256": "1a1f2cefce236c3b4ab00fc78e09de5c14163c084e50b510903136ab1d73a821"
+      },
+      "validation": {
+        "path": "work/perf-sprint-typed-frames/bytecode-default-allocation/validation.json",
+        "sha256": "80f909a765e5ea31484d0e642fc6e33e64fce53914e5be1bf8157eaa8a565f8d"
+      }
+    }
+  },
+  "allocationRatio": 0.8698734294867861,
+  "allocationChangePercent": -13.012657051321385,
+  "commonEightRootGraphTotals": {
+    "baseline": {
+      "peNodes": 6544,
+      "beforeHighNodes": 34747,
+      "afterMidNodes": 70586,
+      "guestCalls": 152,
+      "constantGuestTargets": 152,
+      "lateArrays": 134,
+      "lateLongArrayPackets": 18,
+      "lateLongBoxes": 148,
+      "RecCellGuards": 385,
+      "ThunkGuards": 90,
+      "allReferenceArrayPackets": 152
+    },
+    "candidate": {
+      "peNodes": 4242,
+      "beforeHighNodes": 18105,
+      "afterMidNodes": 37848,
+      "guestCalls": 172,
+      "constantGuestTargets": 172,
+      "lateArrays": 172,
+      "lateLongArrayPackets": 0,
+      "lateLongBoxes": 77,
+      "RecCellGuards": 0,
+      "ThunkGuards": 12,
+      "allReferenceArrayPackets": 172
+    }
+  },
+  "nativeAllocation": {
+    "recordedUtc": "2026-09-23T05:57:45.179850+00:00",
+    "native": {
+      "path": "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+      "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf"
+    },
+    "oracle": {
+      "path": "/Users/ekmett/thc/work/perf-sprint-typed-frames/oracle16.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+    },
+    "scope": "Whole-process GHC heap allocation slope, not JVM per-thread allocation. Native binary is unchanged.",
+    "runs": [
+      {
+        "repeat": 1,
+        "count": 0,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "0",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 67080,
+        "checksum": 0
+      },
+      {
+        "repeat": 1,
+        "count": 256,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "256",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 1811093184,
+        "checksum": 14433515568
+      },
+      {
+        "repeat": 1,
+        "count": 512,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "512",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 3622084544,
+        "checksum": 28867031136
+      },
+      {
+        "repeat": 2,
+        "count": 0,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "0",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 66960,
+        "checksum": 0
+      },
+      {
+        "repeat": 2,
+        "count": 256,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "256",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 1811093184,
+        "checksum": 14433515568
+      },
+      {
+        "repeat": 2,
+        "count": 512,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "512",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 3622084544,
+        "checksum": 28867031136
+      },
+      {
+        "repeat": 3,
+        "count": 0,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "0",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 66960,
+        "checksum": 0
+      },
+      {
+        "repeat": 3,
+        "count": 256,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "256",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 1811093184,
+        "checksum": 14433515568
+      },
+      {
+        "repeat": 3,
+        "count": 512,
+        "argv": [
+          "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+          "--bench",
+          "mapAggregate",
+          "512",
+          "10000",
+          "+RTS",
+          "-s",
+          "-RTS"
+        ],
+        "exitCode": 0,
+        "allocatedBytes": 3622084544,
+        "checksum": 28867031136
+      }
+    ],
+    "supported": true,
+    "slopes": [
+      {
+        "repeat": 1,
+        "bytesPerCall256Minus0": 7074320.71875,
+        "bytesPerCall512Minus256": 7074185.0,
+        "bytesPerCall512Minus0": 7074252.859375
+      },
+      {
+        "repeat": 2,
+        "bytesPerCall256Minus0": 7074321.1875,
+        "bytesPerCall512Minus256": 7074185.0,
+        "bytesPerCall512Minus0": 7074253.09375
+      },
+      {
+        "repeat": 3,
+        "bytesPerCall256Minus0": 7074321.1875,
+        "bytesPerCall512Minus256": 7074185.0,
+        "bytesPerCall512Minus0": 7074253.09375
+      }
+    ]
+  },
+  "limitations": [
+    "JFR allocation weights are statistical; per-class deltas are estimates, exact total counters are not.",
+    "JFR stack PCs of scalar-replaced/materialized allocations can point at inlined callers or compiler-directive positions rather than the original allocation operation.",
+    "Execution samples mapped to generated continueAt lines5155/5172 are not proof of bytecode dispatch: those lines are compiler directives and the actual compiled graph must determine surviving work.",
+    "205of408 current execution traces and3537of5906 allocation traces were truncated by JFR. Text summaries retain up to64frames; raw JFR retains recorded stacks.",
+    "GHC RTS allocation is process-wide; JVM allocation counter is on the calling thread, so allocation slopes have related but different scopes."
+  ]
+}

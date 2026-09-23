@@ -89,7 +89,8 @@ class RuntimeTest {
         executionContext().use { context ->
             val sum = loadEntry(context, modules, "sumLoop")
             assertEquals(5_000_050_000L, sum.execute(100_000L).asLong())
-            assertTrue(count(sum, "tailBounces") >= 100_000L)
+            assertTrue(count(sum, "selfTailReentries") >= 100_000L)
+            assertEquals(0L, count(sum, "tailBounces"))
             val cyclic = loadEntry(context, modules, "recursiveCaf")
             assertEquals(100_000L, cyclic.execute(100_000L).asLong())
             val list = loadEntry(context, modules, "caseList")
@@ -118,9 +119,11 @@ class RuntimeTest {
             val fn = loadEntry(context, modules, "capturedChangingEnv")
             assertEquals(10_017L, fn.execute(10_000L).asLong())
             assertTrue(fn.invokeMember("compile").asBoolean())
-            val before = count(fn, "tailBounces")
+            val before = count(fn, "selfTailReentries")
+            val bouncesBefore = count(fn, "tailBounces")
             assertEquals(100_017L, fn.execute(100_000L).asLong())
-            assertTrue(count(fn, "tailBounces") - before >= 100_000L)
+            assertTrue(count(fn, "selfTailReentries") - before >= 100_000L)
+            assertEquals(bouncesBefore, count(fn, "tailBounces"), "Direct self entry needs no tail packet")
             // The same lambda body entered 100k different offset environments.
             // A fresh host call must still begin at the original captured offset.
             val warmedUpdates = count(fn, "thunkEvaluations")

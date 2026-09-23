@@ -176,18 +176,21 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = LocalAccessor.class, name = "local")
+    @ConstantOperand(type = boolean.class, name = "cell")
     public static final class ForceLocal {
-        @Specialization public static long number(Metrics metrics, LocalAccessor local, long value) { return value; }
-        @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean value) { return value; }
+        @Specialization public static long number(Metrics metrics, LocalAccessor local, boolean cell, long value) { return value; }
+        @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean cell, boolean value) { return value; }
         @Specialization(replaces = {"number", "bool"})
-        public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, Object binding,
+        public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, boolean cell, Object binding,
                 @Bind("$node") Node node,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
-            Object original = ReadCellIfNeeded.read(binding);
+            // The compiler knows whether this lexical binding retains a recursive
+            // cell. Ordinary formals, fields and published values need no cell test.
+            Object original = cell ? ReadCellIfNeeded.read(binding) : binding;
             Object result = force.execute(frame, original);
             if (original instanceof Thunk thunk) {
-                if (binding instanceof RecCell cell) {
-                    ProgramKt.updateForcedCell(cell, thunk, result);
+                if (cell) {
+                    ProgramKt.updateForcedCell((RecCell) binding, thunk, result);
                 } else {
                     BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
                     if (local.getObject(bytecode, frame) == thunk) {
@@ -210,15 +213,33 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Checked reference identities give restored formals a concrete Graal stamp. */
+    @Operation
+    public static final class RequireData {
+        @Specialization public static DataValue require(Object value) {
+            if (value instanceof DataValue data) return data;
+            throw fail("Expected constructor value");
+        }
+    }
+
+    @Operation
+    public static final class RequireAddress {
+        @Specialization public static LiteralAddress require(Object value) {
+            if (value instanceof LiteralAddress address) return address;
+            throw fail("Expected a managed literal Addr#");
+        }
+    }
+
     @Operation(forceCached = true)
     @ConstantOperand(type = int.class, name = "arity")
     @ConstantOperand(type = boolean.class, name = "tail")
     @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean[].class, name = "evaluatedArguments")
     public static final class Apply {
         @Specialization public static Object apply(VirtualFrame frame, int arity, boolean tail,
-                Metrics metrics, Closure function, @Variadic Object[] arguments,
+                Metrics metrics, boolean[] evaluatedArguments, Closure function, @Variadic Object[] arguments,
                 @Bind("$node") Node node,
-                @Cached(value = "createDispatch(arity, tail, metrics)", neverDefault = true) Dispatch dispatch) {
+                @Cached(value = "createDispatch(arity, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
             try {
                 return dispatch.execute(frame, function, arguments);
             } catch (TailCall call) {
@@ -230,8 +251,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return call;
             }
         }
-        public static Dispatch createDispatch(int arity, boolean tail, Metrics metrics) {
-            return DispatchNodeGen.create(arity, tail, metrics);
+        public static Dispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
+            return Dispatch.Companion.create(arity, tail, metrics, evaluatedArguments);
         }
     }
 
@@ -302,7 +323,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = DataLayout.class, name = "layout")
     public static final class MatchData {
         @Specialization public static boolean matches(DataLayout layout, Object value) {
-            return value instanceof DataValue data && data.getLayout() == layout;
+            return layout.matches(value);
         }
     }
 

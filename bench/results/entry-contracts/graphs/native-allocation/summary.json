@@ -1,0 +1,188 @@
+{
+  "recordedUtc": "2026-09-23T05:57:45.179850+00:00",
+  "native": {
+    "path": "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+    "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf"
+  },
+  "oracle": {
+    "path": "/Users/ekmett/thc/work/perf-sprint-typed-frames/oracle16.tsv",
+    "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+  },
+  "scope": "Whole-process GHC heap allocation slope, not JVM per-thread allocation. Native binary is unchanged.",
+  "runs": [
+    {
+      "repeat": 1,
+      "count": 0,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "0",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 67080,
+      "checksum": 0
+    },
+    {
+      "repeat": 1,
+      "count": 256,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "256",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 1811093184,
+      "checksum": 14433515568
+    },
+    {
+      "repeat": 1,
+      "count": 512,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "512",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 3622084544,
+      "checksum": 28867031136
+    },
+    {
+      "repeat": 2,
+      "count": 0,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "0",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 66960,
+      "checksum": 0
+    },
+    {
+      "repeat": 2,
+      "count": 256,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "256",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 1811093184,
+      "checksum": 14433515568
+    },
+    {
+      "repeat": 2,
+      "count": 512,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "512",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 3622084544,
+      "checksum": 28867031136
+    },
+    {
+      "repeat": 3,
+      "count": 0,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "0",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 66960,
+      "checksum": 0
+    },
+    {
+      "repeat": 3,
+      "count": 256,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "256",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 1811093184,
+      "checksum": 14433515568
+    },
+    {
+      "repeat": 3,
+      "count": 512,
+      "argv": [
+        "/Users/ekmett/thc/work/typed-frames-v4/map/native-oracle",
+        "--bench",
+        "mapAggregate",
+        "512",
+        "10000",
+        "+RTS",
+        "-s",
+        "-RTS"
+      ],
+      "exitCode": 0,
+      "allocatedBytes": 3622084544,
+      "checksum": 28867031136
+    }
+  ],
+  "supported": true,
+  "slopes": [
+    {
+      "repeat": 1,
+      "bytesPerCall256Minus0": 7074320.71875,
+      "bytesPerCall512Minus256": 7074185.0,
+      "bytesPerCall512Minus0": 7074252.859375
+    },
+    {
+      "repeat": 2,
+      "bytesPerCall256Minus0": 7074321.1875,
+      "bytesPerCall512Minus256": 7074185.0,
+      "bytesPerCall512Minus0": 7074253.09375
+    },
+    {
+      "repeat": 3,
+      "bytesPerCall256Minus0": 7074321.1875,
+      "bytesPerCall512Minus256": 7074185.0,
+      "bytesPerCall512Minus0": 7074253.09375
+    }
+  ]
+}

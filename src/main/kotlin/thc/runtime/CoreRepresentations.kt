@@ -11,6 +11,15 @@ internal data class CoreRepresentation(
     val primReps: List<String>? = null
 ) {
     val isLong: Boolean get() = kind == CoreKind.LONG
+    val isEvaluatedReference: Boolean get() = evaluated &&
+        (kind == CoreKind.DATA || kind == CoreKind.CLOSURE || kind == CoreKind.ADDRESS)
+    /** A lifted type alone cannot exclude a thunk; a stored WHNF proof can. */
+    fun referenceCarrier(): Class<*>? = if (!evaluated) null else when (kind) {
+        CoreKind.DATA -> DataValue::class.java
+        CoreKind.CLOSURE -> Closure::class.java
+        CoreKind.ADDRESS -> LiteralAddress::class.java
+        else -> null
+    }
     fun refine(other: CoreRepresentation): CoreRepresentation {
         val merged = when {
             kind == CoreKind.UNKNOWN -> other.kind
@@ -101,6 +110,7 @@ internal object CoreJoins {
                 body = if (arity == all.size) rhs[2] as List<Any?> else {
                     val meta = CoreRepresentations.metadata(rhs)?.toMutableMap() ?: linkedMapOf()
                     binding["joinResultRep"]?.let { meta["rep"] = it }
+                    if (meta.containsKey("entryStrict")) meta["entryStrict"] = CoreEntries.lambda(rhs).drop(arity)
                     listOf("lam", all.drop(arity), rhs[2], meta)
                 }
             }

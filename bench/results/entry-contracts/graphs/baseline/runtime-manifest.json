@@ -1,0 +1,221 @@
+{
+  "revision": "90acd610bc254f8367e23eb16dbb969e8fc73cc3",
+  "status": "Diagnostic composite: original source-notes-v2 bytecode runtime and source, unchanged typed-frames-v4 Map Core/native corpus; created explicitly for same-corpus baseline/current comparisons. Original frozen directories remain unchanged.",
+  "recordedUtc": "2026-09-23T05:58:49.439117+00:00",
+  "origins": {
+    "runtime": "/Users/ekmett/thc/work/source-notes-v2",
+    "runtimeManifestSha256": "54ac187dca8efd68933bf738d773679a943ba43432e3cfb67b62ac74060a7beb",
+    "corpus": "/Users/ekmett/thc/work/typed-frames-v4",
+    "corpusManifestSha256": "e5f0558d4b88a02f8c2f8ceb58ba9beeff3fcc375a41a04c117ee32bee397bff"
+  },
+  "files": [
+    {
+      "path": "corpus-manifest.json",
+      "sha256": "e5f0558d4b88a02f8c2f8ceb58ba9beeff3fcc375a41a04c117ee32bee397bff"
+    },
+    {
+      "path": "lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "lib/thc-0.1-experiment.jar",
+      "sha256": "8f4d77ad37da5bd4d21295e625d43067bc114e085d7af1df25204e74b77fc23a"
+    },
+    {
+      "path": "lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    {
+      "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49"
+    },
+    {
+      "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1"
+    },
+    {
+      "path": "map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e"
+    },
+    {
+      "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452"
+    },
+    {
+      "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352"
+    },
+    {
+      "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef"
+    },
+    {
+      "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925"
+    },
+    {
+      "path": "map/07-Data.Set.Internal.json",
+      "sha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac"
+    },
+    {
+      "path": "map/08-Data.Map.Internal.json",
+      "sha256": "8fe30a776467f3cf86391aa03a470a6c554c9382b09f5d8a377cbf2c717225fc"
+    },
+    {
+      "path": "map/09-Data.Map.Internal.Debug.json",
+      "sha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d"
+    },
+    {
+      "path": "map/10-Data.Map.Strict.Internal.json",
+      "sha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b"
+    },
+    {
+      "path": "map/11-Data.Map.Strict.json",
+      "sha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0"
+    },
+    {
+      "path": "map/12-THC.MapWorkload.json",
+      "sha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7"
+    },
+    {
+      "path": "map/13-THC.InterfaceClosure.json",
+      "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+    },
+    {
+      "path": "map/14-GHC.Internal.CString.json",
+      "sha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e"
+    },
+    {
+      "path": "map/15-GHC.Internal.Err.json",
+      "sha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16"
+    },
+    {
+      "path": "map/16-GHC.InterfaceClosure.json",
+      "sha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438"
+    },
+    {
+      "path": "map/modules.txt",
+      "sha256": "583d944d993c31e1c3053db396d7c7612d95f6e38884c0f370d1949cf09e2133"
+    },
+    {
+      "path": "map/native-oracle",
+      "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf"
+    },
+    {
+      "path": "map/oracle.tsv",
+      "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea"
+    },
+    {
+      "path": "original-runtime-manifest.json",
+      "sha256": "54ac187dca8efd68933bf738d773679a943ba43432e3cfb67b62ac74060a7beb"
+    },
+    {
+      "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+      "sha256": "2a6847f8e65a49a70e9b13c689a586f14c55f212a6df59d84cafe3f43b3887d0"
+    },
+    {
+      "path": "src/main/java/thc/runtime/Calls.java",
+      "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+    },
+    {
+      "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+      "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+    },
+    {
+      "path": "src/main/kotlin/thc/Json.kt",
+      "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+    },
+    {
+      "path": "src/main/kotlin/thc/Language.kt",
+      "sha256": "6f04e547c64c40a0b6062aa5fcd2086d25bc59883f095c9fd587d635fe983fd8"
+    },
+    {
+      "path": "src/main/kotlin/thc/Main.kt",
+      "sha256": "ec9468fae080a4ec23866769c66fbd7660110cb26d1b4cc71769af225c92fd5d"
+    },
+    {
+      "path": "src/main/kotlin/thc/MapCheck.kt",
+      "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+    },
+    {
+      "path": "src/main/kotlin/thc/Probe.kt",
+      "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Application.kt",
+      "sha256": "b85a7188fa80226680cecd32a1324c727907aee15ec1d86c4537d3ff7db1dc5c"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+      "sha256": "6c023bcb91d7db54b895b877b9a7e14a5fef0f3516be22664dd304c3d2c846dd"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+      "sha256": "463ee9a842c630e9f27eeaddbcb4568c7051fbbd52de23de7c060579629380b7"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+      "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+      "sha256": "f041aa7be387d947af945a64919529aeaee54a9bda3b1b164150806fa003bdd3"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Frames.kt",
+      "sha256": "d6e27e494396da7182591ac863dfcd403918af6a4af7240756f09864f57c6a75"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+      "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+      "sha256": "30e246ea31ff26828b31e23da0b29bf774d17798320469fe1d228d3cfed44860"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+      "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+      "sha256": "5a0f27fd1e3bc1bf30da93347aaf20a704826afbaaa04e2f3e2c9a774343fd10"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Program.kt",
+      "sha256": "b1c8653d30eec6fa797b6ff6d461ad1e55dc3a72d0cacfb7a6feb20df9483e3f"
+    }
+  ]
+}

@@ -16,6 +16,9 @@ class GuestException(val payload: Any?, location: Node) :
  * ignores the payload can catch a raise# whose payload is itself bottom.
  */
 internal class RaiseException(@field:Child private var exception: Expr) : Expr() {
+    // This branch produces no value. It must not weaken the value proof of
+    // another case branch; this does not grant permission to speculate a raise.
+    init { representation = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing {
         val payload = exception.execute(frame)
         CompilerDirectives.transferToInterpreterAndInvalidate()

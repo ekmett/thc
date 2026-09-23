@@ -1,0 +1,254 @@
+{
+  "recordedUtc": "2026-09-23T06:30:39.135757+00:00",
+  "scope": "Seven one-process screens; same frozenJAR/Core. Depth2, both budgets12000. Full18inputs before and after requested compilation precede timings. Not a three-fork claim.",
+  "frozenManifestSha256": "26009de88c5de07c1974ecb2c843be4c224a6b0817b1e75f7b71b4c21e9d1b6c",
+  "health": "/Users/ekmett/thc/work/perf-sprint-constructor-class/health/summary.json",
+  "healthSha256": "3c9f55e0faad6d2a814d7211220205649e621de0ec24d9221963563ed684cc97",
+  "configs": [
+    {
+      "name": "ast-checked-classoff-argson",
+      "backend": "ast",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "ast-checked-classon-argson",
+      "backend": "ast",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "ast-unchecked-classon-argson",
+      "backend": "ast",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-checked-classoff-argson",
+      "backend": "bytecode",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-checked-classon-argson",
+      "backend": "bytecode",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-unchecked-classon-argson",
+      "backend": "bytecode",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    },
+    {
+      "name": "bytecode-checked-classon-argsoff",
+      "backend": "bytecode",
+      "jvmOptions": [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=false",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "check-ast-checked-classoff-argson",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true",
+        "-Dthc.backend=ast",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-cp",
+        "/Users/ekmett/thc/work/constructor-class-v6/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/modules.txt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/oracle.tsv"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "check-ast-checked-classon-argson",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true",
+        "-Dthc.backend=ast",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-cp",
+        "/Users/ekmett/thc/work/constructor-class-v6/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/modules.txt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/oracle.tsv"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "check-ast-unchecked-classon-argson",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true",
+        "-Dthc.backend=ast",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-cp",
+        "/Users/ekmett/thc/work/constructor-class-v6/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/modules.txt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/oracle.tsv"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "check-bytecode-checked-classoff-argson",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-cp",
+        "/Users/ekmett/thc/work/constructor-class-v6/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/modules.txt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/oracle.tsv"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "check-bytecode-checked-classon-argson",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-cp",
+        "/Users/ekmett/thc/work/constructor-class-v6/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/modules.txt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/oracle.tsv"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "check-bytecode-unchecked-classon-argson",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-cp",
+        "/Users/ekmett/thc/work/constructor-class-v6/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/modules.txt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/oracle.tsv"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "check-bytecode-checked-classon-argsoff",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dpolyglot.engine.ArgumentTypeSpeculation=false",
+        "-Dpolyglot.engine.ReturnTypeSpeculation=true",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-cp",
+        "/Users/ekmett/thc/work/constructor-class-v6/lib/*",
+        "thc.MapCheckKt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/modules.txt",
+        "/Users/ekmett/thc/work/constructor-class-v6/map/oracle.tsv"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "runs": [
+    {
+      "name": "ast-checked-classoff-argson",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/work/perf-sprint-constructor-class/tools/sweep.py",
+        "/Users/ekmett/thc/work/constructor-class-v6",
+        "/Users/ekmett/thc/work/perf-sprint-constructor-class/matrix/ast-checked-classoff-argson",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--backend",
+        "ast",
+        "--depths",
+        "2",
+        "--budgets",
+        "12000",
+        "--oracle",
+        "/Users/ekmett/thc/work/perf-sprint-owned-storage/oracle16.tsv",
+        "--jvm-option=-Dthc.staticShapeUnchecked=false",
+        "--jvm-option=-Dthc.constructorClassIdentity=false",
+        "--jvm-option=-Dpolyglot.engine.ArgumentTypeSpeculation=true",
+        "--jvm-option=-Dpolyglot.engine.ReturnTypeSpeculation=true"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

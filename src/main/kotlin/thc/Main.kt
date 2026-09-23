@@ -3,6 +3,9 @@ package thc
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Value
 
+/** One preference order for the command line, module requests and direct Core requests. */
+fun defaultBackend(): String = System.getProperty("thc.backend", System.getenv("THC_BACKEND") ?: "bytecode")
+
 fun executionContext(): Context = Context.newBuilder("thc")
     .allowExperimentalOptions(true)
     .option("engine.BackgroundCompilation", "false")
@@ -16,7 +19,7 @@ fun executionContext(): Context = Context.newBuilder("thc")
 
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
-              backend: String = System.getProperty("thc.backend", System.getenv("THC_BACKEND") ?: "ast")): Value =
+              backend: String = defaultBackend()): Value =
     context.eval("thc", CoreModules.request(modules, entry, instrument, java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
         System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict()))
 

@@ -1,0 +1,2 @@
+Premain-Class: ObjectSizesAgent
+

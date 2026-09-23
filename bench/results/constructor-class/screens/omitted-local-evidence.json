@@ -1,0 +1,27 @@
+{
+  "scope": "These full raw inventories remain local only; this publication does not claim to contain byte-identical copies.",
+  "files": [
+    {
+      "originalRepositoryPath": "work/perf-sprint-constructor-class/health/before-cpu.txt",
+      "sha256": "0663f14d7ebdfede86ea951ef8d3542dd7df2b36dfba09cac4cb6b0e9658846d",
+      "bytes": 73944,
+      "published": false,
+      "reason": "Full process COMM inventory omitted from public artifacts; original local capture retained unchanged."
+    },
+    {
+      "originalRepositoryPath": "work/perf-sprint-constructor-class/health/after-cpu.txt",
+      "sha256": "c505bc76619eac1ce0789a0d368c92aea1062fb77958bd6dc4cdeed5481303db",
+      "bytes": 74071,
+      "published": false,
+      "reason": "Full process COMM inventory omitted from public artifacts; original local capture retained unchanged."
+    }
+  ],
+  "transformedPublishedFiles": [
+    {
+      "path": "health/summary.json",
+      "originalRepositoryPath": "work/perf-sprint-constructor-class/health/summary.json",
+      "originalSha256": "3c9f55e0faad6d2a814d7211220205649e621de0ec24d9221963563ed684cc97",
+      "transformation": "Replaced raw process-inventory file links with explicit omission metadata and aggregate CPU-summary link."
+    }
+  ]
+}

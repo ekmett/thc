@@ -1,0 +1,23 @@
+{
+  "scope": "Aggregate ps snapshots before and after the short native probe, not samples during its timed windows. Percentages are summed as reported by ps and may exceed100 on multicore systems; no causality claim. No process names/PIDs or installed-application inventory published. The exact frozen native executable is matched internally; JVM ownership cannot be established from COMM alone.",
+  "snapshots": [
+    {
+      "phase": "before",
+      "recordedUtc": "2026-09-23T06:30:12.838745+00:00",
+      "processCount": 2082,
+      "totalReportedCpuPercent": 52.1,
+      "matchingFrozenNativeProcessCount": 0,
+      "matchingFrozenNativeCpuPercent": 0,
+      "allOtherReportedCpuPercent": 52.1
+    },
+    {
+      "phase": "after",
+      "recordedUtc": "2026-09-23T06:30:18.860278+00:00",
+      "processCount": 2083,
+      "totalReportedCpuPercent": 6.7,
+      "matchingFrozenNativeProcessCount": 0,
+      "matchingFrozenNativeCpuPercent": 0,
+      "allOtherReportedCpuPercent": 6.7
+    }
+  ]
+}

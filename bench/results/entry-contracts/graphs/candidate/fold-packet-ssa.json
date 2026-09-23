@@ -1,0 +1,353 @@
+{
+  "scope": "Selected nodes and edges, not a complete graph. nodeSourcePosition strips repeated Truffle note suffixes; full positions remain in BGV. All node IDs belong only to compilation3236.",
+  "source": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3236[lambda_ww,_ds]/graph-00005.json",
+  "sourceSha256": "d37fe974cd052daee25201f16bf045fe1cee9db982c7b4b617def546e40dc973",
+  "phase": "2: Before phase HighTierLowering",
+  "nodes": [
+    {
+      "id": 1,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "id": "1",
+        "idx": "1",
+        "stamp": "a!# com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget",
+        "value": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "stableDimension": 0,
+        "isDefaultStable": false,
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.hots...",
+        "stampKind": "a java.lang.Object",
+        "relativeFrequency": 1.0,
+        "nodeToBlock": "B0",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "toString": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "category": "floating",
+        "name": "C(Object[Instance<com.oracle.truffle.runtime.hots...) a java.lang.Object",
+        "class": "jdk.graal.compiler.nodes.ConstantNode",
+        "block": "0"
+      }
+    },
+    {
+      "id": 144,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "id": "144",
+        "idx": "144",
+        "stamp": "i64 [0]",
+        "value": "long[0|0x0]",
+        "stableDimension": 0,
+        "isDefaultStable": false,
+        "nodeSourcePosition": "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1665)\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]\ncom.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]",
+        "rawvalue": "0",
+        "stampKind": "i64",
+        "relativeFrequency": 1.0,
+        "nodeToBlock": "B0",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "C(0) i64",
+        "class": "jdk.graal.compiler.nodes.ConstantNode",
+        "block": "0"
+      }
+    },
+    {
+      "id": 5184,
+      "nodeClass": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+      "block": "12",
+      "properties": {
+        "id": "5184",
+        "idx": "5184",
+        "hasPredecessor": "true",
+        "stamp": "a thc.runtime.DataValue",
+        "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__3",
+        "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__3",
+        "memoryOrder": "MemoryOrderMode.PLAIN",
+        "uncheckedStamp": null,
+        "trustInjected": false,
+        "nodeSourcePosition": "jdk.internal.misc.Unsafe.getReference(Unsafe.java:-1)\nsun.misc.Unsafe.getObject(Unsafe.java:222)\ncom.oracle.truffle.api.staticobject.StaticProperty.getObject(StaticProperty.java:181)\nthc.runtime.DataLayout$Field.read(DataValues.kt:131)\nthc.runtime.DataLayout.read(DataValues.kt:64)\nthc.runtime.BytecodeRoot$ReadDataField.object(BytecodeRoot.java:349)\nthc.runtime.BytecodeRootGen$ReadDataField_Node.execute(BytecodeRootGen.java:25001)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleReadDataField_(BytecodeRootGen.java:7172)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5477)\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1673)\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1665)\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)\n[remaining source stack retained in BGV]",
+        "relativeFrequency": 1.0072230835425373,
+        "nodeToBlock": "B12",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_2",
+        "category": "fixed",
+        "killedLocationIdentity": "NO_LOCATION",
+        "locationIdentity": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$4.field__3",
+        "name": "LoadField#GeneratedStaticObject$$4.field__3",
+        "class": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+        "block": "12"
+      }
+    },
+    {
+      "id": 5289,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "11",
+      "properties": {
+        "id": "5289",
+        "idx": "5289",
+        "stamp": "i64",
+        "valueDescription": "i64",
+        "relativeFrequency": 2.0132387068450637,
+        "nodeToBlock": "B11",
+        "nodeCostSize": "NodeSize.SIZE_1",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "phi",
+        "name": "Phi(5115, 5260, i64)",
+        "class": "jdk.graal.compiler.nodes.ValuePhiNode",
+        "block": "11"
+      }
+    },
+    {
+      "id": 5297,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "id": "5297",
+        "idx": "5297",
+        "stamp": "a!# java.lang.Object[]",
+        "hasIdentity": true,
+        "objectId": 2,
+        "componentType": "java.lang.Object",
+        "length": 3,
+        "nodeSourcePosition": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)\nthc.runtime.ApplicationKt.access$appendWithHeader(Application.kt:1)\nthc.runtime.Dispatch.direct(Application.kt:151)\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90)\nthc.runtime.BytecodeRoot$Apply.apply(BytecodeRoot.java:244)\nthc.runtime.BytecodeRootGen$Apply_Node.execute(BytecodeRootGen.java:24466)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleApply_(BytecodeRootGen.java:6964)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5431)\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1673)\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1665)\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)\ncom.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)\n[remaining source stack retained in BGV]",
+        "relativeFrequency": 1.0,
+        "nodeToBlock": "B0",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "VirtualArray(2) Object[3]",
+        "class": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+        "block": "0"
+      }
+    },
+    {
+      "id": 5355,
+      "nodeClass": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+      "block": "12",
+      "properties": {
+        "id": "5355",
+        "idx": "5355",
+        "stamp": "void",
+        "targetMethod": "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)",
+        "referencedType": null,
+        "invokeKind": "CallTargetNode$InvokeKind.Special",
+        "returnStamp": "a java.lang.Object",
+        "typeProfile": null,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedCallTarget.doInvoke(OptimizedCallTarget.java:625)\ncom.oracle.truffle.runtime.OptimizedCallTarget.callDirect(OptimizedCallTarget.java:573)\ncom.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94)\nthc.runtime.Calls.direct(Calls.java:10)\nthc.runtime.DirectCallerNode.call(Application.kt:316)\nthc.runtime.Dispatch.direct(Application.kt:154)\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90)\nthc.runtime.BytecodeRoot$Apply.apply(BytecodeRoot.java:244)\nthc.runtime.BytecodeRootGen$Apply_Node.execute(BytecodeRootGen.java:24466)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleApply_(BytecodeRootGen.java:6964)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5431)\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1673)\n[remaining source stack retained in BGV]",
+        "relativeFrequency": 1.0072230835425373,
+        "nodeToBlock": "B12",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "MethodCallTarget",
+        "class": "jdk.graal.compiler.nodes.java.MethodCallTargetNode",
+        "block": "12"
+      }
+    },
+    {
+      "id": 5465,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "block": "12",
+      "properties": {
+        "id": "5465",
+        "idx": "5465",
+        "hasPredecessor": "true",
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "accessedLocation": "java.lang.Long.value",
+        "hasIdentity": false,
+        "nodeSourcePosition": "java.lang.Long.valueOf(Long.java:-1)\nthc.runtime.DirectCallerNode.call(Application.kt:315)\nthc.runtime.Dispatch.direct(Application.kt:154)\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90)\nthc.runtime.BytecodeRoot$Apply.apply(BytecodeRoot.java:244)\nthc.runtime.BytecodeRootGen$Apply_Node.execute(BytecodeRootGen.java:24466)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleApply_(BytecodeRootGen.java:6964)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5431)\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1673)\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1665)\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)\ncom.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)\n[remaining source stack retained in BGV]",
+        "relativeFrequency": 1.0072230835425373,
+        "nodeToBlock": "B12",
+        "nodeCostSize": "NodeSize.SIZE_8",
+        "nodeCostCycles": "NodeCycles.CYCLES_8",
+        "category": "fixed",
+        "killedLocationIdentity": "INIT_LOCATION",
+        "locationIdentity": "INIT_LOCATION",
+        "name": "BoxNode$AllocatingBox",
+        "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+        "block": "12"
+      }
+    },
+    {
+      "id": 5466,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "block": "12",
+      "properties": {
+        "id": "5466",
+        "idx": "5466",
+        "hasPredecessor": "true",
+        "stamp": "a!# java.lang.Long",
+        "boxingKind": "JavaKind.Long",
+        "accessedLocation": "java.lang.Long.value",
+        "hasIdentity": false,
+        "nodeSourcePosition": "java.lang.Long.valueOf(Long.java:-1)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleToLong$Apply_(BytecodeRootGen.java:9112)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5856)\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1673)\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1665)\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)\ncom.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)\ncom.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94)\nthc.runtime.Calls.direct(Calls.java:10)\nthc.runtime.DirectCallerNode.call(Application.kt:316)\nthc.runtime.Dispatch.direct(Application.kt:154)\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90)\n[remaining source stack retained in BGV]",
+        "relativeFrequency": 1.0072230835425373,
+        "nodeToBlock": "B12",
+        "nodeCostSize": "NodeSize.SIZE_8",
+        "nodeCostCycles": "NodeCycles.CYCLES_8",
+        "category": "fixed",
+        "killedLocationIdentity": "INIT_LOCATION",
+        "locationIdentity": "INIT_LOCATION",
+        "name": "BoxNode$AllocatingBox",
+        "class": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+        "block": "12"
+      }
+    },
+    {
+      "id": 5467,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+      "block": "12",
+      "properties": {
+        "id": "5467",
+        "idx": "5467",
+        "hasPredecessor": "true",
+        "stamp": "void",
+        "lockIndexes": "[0, 0]",
+        "ensureVirtual": "[false]",
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:-1) [bci:-6]",
+        "object(5297)": "Object[][5465,5466,5184]",
+        "relativeFrequency": 1.0072230835425373,
+        "nodeToBlock": "B12",
+        "nodeCostSize": "NodeSize.SIZE_16",
+        "nodeCostCycles": "NodeCycles.CYCLES_16",
+        "category": "fixed",
+        "killedLocationIdentity": "INIT_LOCATION",
+        "locationIdentity": "INIT_LOCATION",
+        "name": "Alloc 5297",
+        "class": "jdk.graal.compiler.nodes.virtual.CommitAllocationNode",
+        "block": "12"
+      }
+    },
+    {
+      "id": 5468,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+      "block": "12",
+      "properties": {
+        "id": "5468",
+        "idx": "5468",
+        "stamp": "a!# java.lang.Object[]",
+        "nodeSourcePosition": "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:263)\nthc.runtime.ApplicationKt.access$appendWithHeader(Application.kt:1)\nthc.runtime.Dispatch.direct(Application.kt:151)\nthc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90)\nthc.runtime.BytecodeRoot$Apply.apply(BytecodeRoot.java:244)\nthc.runtime.BytecodeRootGen$Apply_Node.execute(BytecodeRootGen.java:24466)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.handleApply_(BytecodeRootGen.java:6964)\nthc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5431)\nthc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1673)\nthc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1665)\ncom.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808)\ncom.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589)\n[remaining source stack retained in BGV]",
+        "relativeFrequency": 1.0072230835425373,
+        "nodeToBlock": "B12",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "AllocatedObject",
+        "class": "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode",
+        "block": "12"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": 5465,
+      "to": 5466,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 5466,
+      "to": 5467,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 5355,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": 0
+    },
+    {
+      "from": 5468,
+      "to": 5355,
+      "label": "arguments",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 1
+    },
+    {
+      "from": 144,
+      "to": 5465,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5289,
+      "to": 5466,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5297,
+      "to": 5467,
+      "label": "virtualObjects",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 5465,
+      "to": 5467,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": 0
+    },
+    {
+      "from": 5466,
+      "to": 5467,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 3,
+      "listIndex": 1
+    },
+    {
+      "from": 5184,
+      "to": 5467,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 4,
+      "listIndex": 2
+    },
+    {
+      "from": 5297,
+      "to": 5468,
+      "label": "virtualObject",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 5467,
+      "to": 5468,
+      "label": "commit",
+      "type": "Extension",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    }
+  ]
+}

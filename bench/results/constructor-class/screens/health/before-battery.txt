@@ -1,0 +1,3 @@
+Now drawing from 'Battery Power'
+ -InternalBattery-0 (id=20643939)	4%; discharging; 0:40 remaining present: true
+	Battery Warning: Early

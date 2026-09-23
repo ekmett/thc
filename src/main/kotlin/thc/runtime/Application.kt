@@ -138,6 +138,8 @@ internal abstract class Dispatch(
     @JvmField val tailCall: Boolean,
     @JvmField val metrics: Metrics
 ) : Node() {
+    @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1)
+    var evaluatedArguments: BooleanArray = booleanArrayOf()
     abstract fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any?
 
     @Specialization(guards = ["function.arity == argsSize", "function.target == cachedTarget"], limit = "3")
@@ -145,7 +147,7 @@ internal abstract class Dispatch(
                @Cached("function.target") cachedTarget: RootCallTarget,
                @Cached("function.supplied.length") prefixSize: Int,
                @Cached("function.environment != null") hasEnvironment: Boolean,
-               @Cached("createCaller(cachedTarget)") caller: DirectCallerNode): Any? {
+               @Cached("createCaller(cachedTarget, prefixSize)") caller: DirectCallerNode): Any? {
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
             function.supplied, prefixSize, arguments, argsSize)
         if (hasEnvironment) packet[1] = function.environment
@@ -158,7 +160,7 @@ internal abstract class Dispatch(
                           @Cached("function.target") cachedTarget: RootCallTarget,
                           @Cached("function.supplied.length") prefixSize: Int,
                           @Cached("function.environment != null") hasEnvironment: Boolean,
-                          @Cached("createCaller(cachedTarget)") caller: DirectCallerNode,
+                          @Cached("createCaller(cachedTarget, prefixSize)") caller: DirectCallerNode,
                           @Cached("createRemainder(arity)") rest: Dispatch,
                           @Cached("createForce()") force: Force): Any? {
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
@@ -192,14 +194,17 @@ internal abstract class Dispatch(
                             @Cached(inline = true) generic: GenericDispatch): Any? =
         generic.execute(frame, node, function, arguments, tailCall, metrics)
 
-    fun createCaller(target: RootCallTarget) = DirectCallerNode.create(target, metrics)
+    fun createCaller(target: RootCallTarget, prefixSize: Int) = DirectCallerNode(target, metrics, evaluatedArguments, prefixSize)
     fun createIndirectCaller() = IndirectCallerNode.create(metrics)
-    fun createRemainder(arity: Int): Dispatch = create(argsSize - arity, tailCall, metrics)
+    fun createRemainder(arity: Int): Dispatch = create(argsSize - arity, tailCall, metrics,
+        if (evaluatedArguments.isEmpty()) evaluatedArguments else evaluatedArguments.copyOfRange(arity, evaluatedArguments.size))
     fun createForce(): Force = Force(metrics)
 
     companion object {
-        fun create(argsSize: Int, tailCall: Boolean, metrics: Metrics): Dispatch =
-            DispatchNodeGen.create(argsSize, tailCall, metrics)
+        fun create(argsSize: Int, tailCall: Boolean, metrics: Metrics, evaluated: BooleanArray = booleanArrayOf()): Dispatch {
+            require(evaluated.isEmpty() || evaluated.size == argsSize)
+            return DispatchNodeGen.create(argsSize, tailCall, metrics).also { it.evaluatedArguments = evaluated.copyOf() }
+        }
     }
 }
 
@@ -264,6 +269,7 @@ private fun appendWithHeader(skip: Int, prefix: Array<Any?>, prefixSize: Int,
 internal class TailCall(val target: RootCallTarget, val args: Array<Any?>) : ControlFlowException()
 
 internal class TailCheck(private val metrics: Metrics) : Node() {
+    @Child private var bloomValue: BloomValue = BloomValueNodeGen.create()
     private val bounceProfile = BranchProfile.create()
     private val unrollProfile = BranchProfile.create()
 
@@ -277,7 +283,7 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
             bounce(target, arguments)
         } else {
             unrollProfile.enter()
-            arguments[0] = mask
+            arguments[0] = bloomValue.execute(mask)
         }
     }
 
@@ -288,7 +294,9 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
     }
 }
 
-internal class DirectCallerNode(val target: RootCallTarget, private val metrics: Metrics) : Node() {
+internal class DirectCallerNode(val target: RootCallTarget, private val metrics: Metrics,
+                               knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
+    @Child private var entryArguments = EntryArguments(target, metrics, knownEvaluated, prefixSize)
     @Child private var callNode = DirectCallNode.create(target)
     @Child private var loop = TailCallLoop(metrics)
     @Child private var tailCheck = TailCheck(metrics)
@@ -298,6 +306,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
     init { if (metrics.enabled) metrics.directCacheMisses++ }
 
     fun call(frame: VirtualFrame, arguments: Array<Any?>, tailCall: Boolean): Any? {
+        entryArguments.execute(frame, arguments)
         if (tailCall) {
             tailCheck.check(frame, target, arguments)
             return Calls.direct(callNode, arguments)
@@ -319,6 +328,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
 }
 
 internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
+    @Child private var entryArguments = IndirectEntryArguments(metrics)
     @Child private var callNode = IndirectCallNode.create()
     @Child private var loop = TailCallLoop(metrics)
     @Child private var tailCheck = TailCheck(metrics)
@@ -326,6 +336,7 @@ internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
     private val tailProfile = BranchProfile.create()
 
     fun call(frame: VirtualFrame, target: RootCallTarget, arguments: Array<Any?>, tailCall: Boolean): Any? {
+        entryArguments.execute(frame, target, arguments)
         if (metrics.enabled) metrics.indirectCalls++
         if (tailCall) {
             tailCheck.check(frame, target, arguments)

@@ -1,0 +1,286 @@
+{
+  "scope": "Same Map corpus and default BC policy. Roles matched by exact normalized source+name, not IDs/call counts. Static sites are not dynamic costs. Separately compiled roots can disappear through inlining and are reported explicitly.",
+  "rows": [
+    {
+      "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "baselineCompilation": 3224,
+      "candidateCompilation": 3219,
+      "baselineRootId": 17,
+      "candidateRootId": 17,
+      "baseline": {
+        "peNodes": 537,
+        "beforeHighNodes": 480,
+        "afterMidNodes": 860,
+        "guestCalls": 0,
+        "constantGuestTargets": 0,
+        "lateArrays": 0,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 1,
+        "RecCellGuards": 8,
+        "ThunkGuards": 3,
+        "allReferenceArrayPackets": 0
+      },
+      "candidate": {
+        "peNodes": 272,
+        "beforeHighNodes": 273,
+        "afterMidNodes": 375,
+        "guestCalls": 0,
+        "constantGuestTargets": 0,
+        "lateArrays": 0,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 0,
+        "RecCellGuards": 0,
+        "ThunkGuards": 1,
+        "allReferenceArrayPackets": 0
+      }
+    },
+    {
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+      "baselineCompilation": 3301,
+      "candidateCompilation": 3286,
+      "baselineRootId": 10,
+      "candidateRootId": 10,
+      "baseline": {
+        "peNodes": 850,
+        "beforeHighNodes": 419,
+        "afterMidNodes": 878,
+        "guestCalls": 0,
+        "constantGuestTargets": 0,
+        "lateArrays": 0,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 0,
+        "RecCellGuards": 9,
+        "ThunkGuards": 1,
+        "allReferenceArrayPackets": 0
+      },
+      "candidate": {
+        "peNodes": 629,
+        "beforeHighNodes": 156,
+        "afterMidNodes": 396,
+        "guestCalls": 0,
+        "constantGuestTargets": 0,
+        "lateArrays": 0,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 0,
+        "RecCellGuards": 0,
+        "ThunkGuards": 1,
+        "allReferenceArrayPackets": 0
+      }
+    },
+    {
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+      "baselineCompilation": 3311,
+      "candidateCompilation": 3297,
+      "baselineRootId": 15,
+      "candidateRootId": 15,
+      "baseline": {
+        "peNodes": 1585,
+        "beforeHighNodes": 6271,
+        "afterMidNodes": 13091,
+        "guestCalls": 29,
+        "constantGuestTargets": 29,
+        "lateArrays": 24,
+        "lateLongArrayPackets": 5,
+        "lateLongBoxes": 24,
+        "RecCellGuards": 54,
+        "ThunkGuards": 34,
+        "allReferenceArrayPackets": 29
+      },
+      "candidate": {
+        "peNodes": 1083,
+        "beforeHighNodes": 3961,
+        "afterMidNodes": 7653,
+        "guestCalls": 35,
+        "constantGuestTargets": 35,
+        "lateArrays": 35,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 10,
+        "RecCellGuards": 0,
+        "ThunkGuards": 4,
+        "allReferenceArrayPackets": 35
+      }
+    },
+    {
+      "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+      "baselineCompilation": 3353,
+      "candidateCompilation": 3331,
+      "baselineRootId": 30,
+      "candidateRootId": 26,
+      "baseline": {
+        "peNodes": 85,
+        "beforeHighNodes": 133,
+        "afterMidNodes": 227,
+        "guestCalls": 1,
+        "constantGuestTargets": 1,
+        "lateArrays": 1,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 2,
+        "RecCellGuards": 0,
+        "ThunkGuards": 0,
+        "allReferenceArrayPackets": 1
+      },
+      "candidate": {
+        "peNodes": 87,
+        "beforeHighNodes": 128,
+        "afterMidNodes": 191,
+        "guestCalls": 1,
+        "constantGuestTargets": 1,
+        "lateArrays": 1,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 1,
+        "RecCellGuards": 0,
+        "ThunkGuards": 0,
+        "allReferenceArrayPackets": 1
+      }
+    },
+    {
+      "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+      "baselineCompilation": 3077,
+      "candidateCompilation": 3111,
+      "baselineRootId": 21,
+      "candidateRootId": 21,
+      "baseline": {
+        "peNodes": 1633,
+        "beforeHighNodes": 5388,
+        "afterMidNodes": 10068,
+        "guestCalls": 35,
+        "constantGuestTargets": 35,
+        "lateArrays": 29,
+        "lateLongArrayPackets": 6,
+        "lateLongBoxes": 29,
+        "RecCellGuards": 36,
+        "ThunkGuards": 18,
+        "allReferenceArrayPackets": 35
+      },
+      "candidate": {
+        "peNodes": 923,
+        "beforeHighNodes": 3815,
+        "afterMidNodes": 7861,
+        "guestCalls": 42,
+        "constantGuestTargets": 42,
+        "lateArrays": 42,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 11,
+        "RecCellGuards": 0,
+        "ThunkGuards": 1,
+        "allReferenceArrayPackets": 42
+      }
+    },
+    {
+      "roleKey": "lambda ww @ n/a",
+      "baselineCompilation": 3281,
+      "candidateCompilation": 3270,
+      "baselineRootId": 27,
+      "candidateRootId": 23,
+      "baseline": {
+        "peNodes": 858,
+        "beforeHighNodes": 10893,
+        "afterMidNodes": 23452,
+        "guestCalls": 53,
+        "constantGuestTargets": 53,
+        "lateArrays": 46,
+        "lateLongArrayPackets": 7,
+        "lateLongBoxes": 53,
+        "RecCellGuards": 116,
+        "ThunkGuards": 28,
+        "allReferenceArrayPackets": 53
+      },
+      "candidate": {
+        "peNodes": 682,
+        "beforeHighNodes": 7340,
+        "afterMidNodes": 16859,
+        "guestCalls": 77,
+        "constantGuestTargets": 77,
+        "lateArrays": 77,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 37,
+        "RecCellGuards": 0,
+        "ThunkGuards": 5,
+        "allReferenceArrayPackets": 77
+      }
+    },
+    {
+      "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "baselineCompilation": 3269,
+      "candidateCompilation": 3236,
+      "baselineRootId": 18,
+      "candidateRootId": 18,
+      "baseline": {
+        "peNodes": 489,
+        "beforeHighNodes": 6118,
+        "afterMidNodes": 11955,
+        "guestCalls": 18,
+        "constantGuestTargets": 18,
+        "lateArrays": 18,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 23,
+        "RecCellGuards": 88,
+        "ThunkGuards": 6,
+        "allReferenceArrayPackets": 18
+      },
+      "candidate": {
+        "peNodes": 221,
+        "beforeHighNodes": 568,
+        "afterMidNodes": 996,
+        "guestCalls": 1,
+        "constantGuestTargets": 1,
+        "lateArrays": 1,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 2,
+        "RecCellGuards": 0,
+        "ThunkGuards": 0,
+        "allReferenceArrayPackets": 1
+      }
+    },
+    {
+      "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+      "baselineCompilation": 3161,
+      "candidateCompilation": 3169,
+      "baselineRootId": 22,
+      "candidateRootId": 22,
+      "baseline": {
+        "peNodes": 507,
+        "beforeHighNodes": 5045,
+        "afterMidNodes": 10055,
+        "guestCalls": 16,
+        "constantGuestTargets": 16,
+        "lateArrays": 16,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 16,
+        "RecCellGuards": 74,
+        "ThunkGuards": 0,
+        "allReferenceArrayPackets": 16
+      },
+      "candidate": {
+        "peNodes": 345,
+        "beforeHighNodes": 1864,
+        "afterMidNodes": 3517,
+        "guestCalls": 16,
+        "constantGuestTargets": 16,
+        "lateArrays": 16,
+        "lateLongArrayPackets": 0,
+        "lateLongBoxes": 16,
+        "RecCellGuards": 0,
+        "ThunkGuards": 0,
+        "allReferenceArrayPackets": 16
+      }
+    }
+  ],
+  "baselineOnly": [
+    {
+      "rootId": 26,
+      "name": "argument thunk",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:494",
+      "compilationId": 3238,
+      "codeBytes": 72356,
+      "roleKey": "argument thunk @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:494",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3238[argument_thunk].bgv",
+        "sha256": "d1278c319eca9d42ec6854bca0b158a0f459ad86a5088b426ceabbd2cfcfd1bd",
+        "bytes": 38928848
+      }
+    }
+  ],
+  "candidateOnly": []
+}

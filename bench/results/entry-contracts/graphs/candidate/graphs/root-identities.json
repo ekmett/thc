@@ -1,0 +1,117 @@
+{
+  "scope": "Latest successful compilation by within-run root ID; cross-run identities use name plus source; all original BGVs retained.",
+  "roots": [
+    {
+      "rootId": 10,
+      "name": "lambda k, x, l, r",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+      "compilationId": 3286,
+      "codeBytes": 2644,
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4272",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3286[lambda_k,_x,_l,_r].bgv",
+        "sha256": "b2aa354bdc550b3740a1fad16dea85f794f21aa1e9476cb46521f2321b051d5a",
+        "bytes": 1158407
+      }
+    },
+    {
+      "rootId": 15,
+      "name": "lambda k, x, l, r",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+      "compilationId": 3297,
+      "codeBytes": 56912,
+      "roleKey": "lambda k, x, l, r @ vendor/containers-0.8/src/Data/Map/Internal.hs:4302",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3297[lambda_k,_x,_l,_r].bgv",
+        "sha256": "23f4dc9dea9ba6b89cc542b924e5c74f12d1459409f9514941c7860643eb5a61",
+        "bytes": 40732129
+      }
+    },
+    {
+      "rootId": 17,
+      "name": "lambda def, ww, ds1",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "compilationId": 3219,
+      "codeBytes": 2068,
+      "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+        "sha256": "f81588d804397aea199e1a8fdcc53e97c8d54daecb96ca0333bb8db7902339db",
+        "bytes": 470452
+      }
+    },
+    {
+      "rootId": 18,
+      "name": "lambda ww, ds",
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "compilationId": 3236,
+      "codeBytes": 4616,
+      "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+        "sha256": "aa8c3518f730ca47741367d3c45a404b060ecd2acf1fcbaf7d7062de9a4033be",
+        "bytes": 2158764
+      }
+    },
+    {
+      "rootId": 21,
+      "name": "lambda sc, x, ds1",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+      "compilationId": 3111,
+      "codeBytes": 62668,
+      "roleKey": "lambda sc, x, ds1 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3111[lambda_sc,_x,_ds1].bgv",
+        "sha256": "710cf1526d6ef7c3bc020f30c847e0c02c573e707d987f7effe8a39a94380d47",
+        "bytes": 27480456
+      }
+    },
+    {
+      "rootId": 22,
+      "name": "lambda ww, ds2",
+      "source": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+      "compilationId": 3169,
+      "codeBytes": 24644,
+      "roleKey": "lambda ww, ds2 @ vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3169[lambda_ww,_ds2].bgv",
+        "sha256": "806e8291ea6e7a8a87faa594821d72f893f2e744fb03c544c379fe9d2d69ec52",
+        "bytes": 9107176
+      }
+    },
+    {
+      "rootId": 23,
+      "name": "lambda ww",
+      "source": "n/a",
+      "compilationId": 3270,
+      "codeBytes": 153856,
+      "roleKey": "lambda ww @ n/a",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+        "sha256": "4540410d56c42eefd7231157e1de3ded9e98445be1b2e076e87639c385c21a03",
+        "bytes": 64288928
+      }
+    },
+    {
+      "rootId": 26,
+      "name": "lambda n",
+      "source": "examples/THC/MapWorkload.hs:30",
+      "compilationId": 3331,
+      "codeBytes": 900,
+      "roleKey": "lambda n @ examples/THC/MapWorkload.hs:30",
+      "roleAmbiguous": false,
+      "bgv": {
+        "path": "TruffleHotSpotCompilation-3331[lambda_n].bgv",
+        "sha256": "9c928fd9471edb16438ca6519cab9381d1d5c3fb3b9e67e1cb63ff1a7a878668",
+        "bytes": 9656872
+      }
+    }
+  ]
+}
