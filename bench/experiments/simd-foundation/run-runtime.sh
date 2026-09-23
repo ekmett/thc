@@ -35,7 +35,7 @@ while IFS= read -r stage; do
     "-Djdk.graal.DumpPath=$destination/graphs" -cp "$CP" SimdRuntimeGraphProbe \
     "$CORE_DIR/$stage-core/$MODULE.json" "$OUT/oracle.tsv" "$entry" "$backend" inline native > "$destination/run.log" 2>&1
    for graph in "$destination/graphs/"*.bgv; do
-    "$JAVA_HOME/bin/java" -XX:-UseJVMCICompiler "${EXPORTS[@]}" -cp "$OUT/classes" GraphInspect "$graph" "$destination/parsed" '.*'
+    "$JAVA_HOME/bin/java" -XX:-UseJVMCICompiler "${EXPORTS[@]}" -cp "$OUT/classes" GraphInspect "$graph" "$destination/parsed" 'Before phase HighTierLowering'
    done
   done
  done

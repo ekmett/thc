@@ -90,3 +90,7 @@ The [JDK 25 Vector API documentation](https://docs.oracle.com/en/java/javase/25/
 explains its compiler-dependent SIMD lowering and scalar fallback. The pinned
 Graal implementation and its generated code determine which path THC actually
 uses; language type names do not establish that claim.
+
+The graph harness expands only the checked `Before phase HighTierLowering`
+snapshot to JSON. Its index still summarizes every compiler phase, and the raw
+BGV/CFG files retain the full graphs for further inspection.
