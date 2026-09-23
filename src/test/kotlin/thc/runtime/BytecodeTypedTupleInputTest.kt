@@ -112,6 +112,24 @@ class BytecodeTypedTupleInputTest {
         }
     }
 
+    @Test fun lexicalLongProofsTypeBareAndUnknownScalarOperandsBetweenTuplesAndPapSuffixes() {
+        fun bare(id: String): InputCore = listOf("var", id)
+        fun unknown(id: String): InputCore = listOf("var", id,
+            mapOf("rep" to mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)))
+        for (inlining in listOf(true, false)) withLanguage(inlining) { context, language ->
+            val worker = bind("worker", lam(listOf(arg("before"), arg("p", pair), arg("after")),
+                unpack(v("p", pair), pair, listOf("a", "b"), prim("+#", prim("+#", bare("before"), unknown("after")),
+                    prim("+#", bare("a"), unknown("b"))))))
+            val payload = pack(pair, unknown("x"), n(7))
+            val p = BytecodeProgram(language, module(worker,
+                bind("interleaved", lam(listOf(arg("x")), call("worker", listOf(bare("x"), payload, unknown("x"))))),
+                bind("scalarPrefix", lam(listOf(arg("x")), app(call("worker", listOf(bare("x")), closure), listOf(payload, unknown("x"))))),
+                bind("scalarSuffix", lam(listOf(arg("x")), app(call("worker", listOf(bare("x"), payload), closure), listOf(unknown("x")))))))
+            for (name in listOf("interleaved", "scalarPrefix", "scalarSuffix"))
+                checkCompiled(context, language, p, name) { it * 3L + 7L }
+        }
+    }
+
     @Test fun nestedFloatDoubleAndLazyReferenceLeavesStayTyped() {
         val inner = tuple(floating, double)
         val mixed = tuple(integer, inner, reference, state)
