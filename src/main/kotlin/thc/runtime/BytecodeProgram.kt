@@ -369,6 +369,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int64" -> int64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
@@ -951,7 +952,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "narrow16Int#", "intToInt16#", "int16ToInt#" -> "Narrow16"
             "narrow32Int#", "intToInt32#", "int32ToInt#" -> "Narrow32"
             "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> "NarrowWord"
-            "int2Word#", "word2Int#", "ord#", "chr#" -> "Identity"
+            "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"
             "indexCharOffAddr#" -> "AddressIndexChar"

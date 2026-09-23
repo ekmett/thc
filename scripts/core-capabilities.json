@@ -7,6 +7,7 @@
   "externalBindings": [],
   "literalKinds": [
     "int",
+    "int64",
     "word",
     "word8",
     "word16",
@@ -15,6 +16,10 @@
     "string-bytes"
   ],
   "integerLiteralRanges": {
+    "int64": [
+      -9223372036854775808,
+      9223372036854775807
+    ],
     "int": [
       -9223372036854775808,
       9223372036854775807
@@ -78,6 +83,8 @@
     "int16ToInt#": 1,
     "intToInt32#": 1,
     "int32ToInt#": 1,
+    "intToInt64#": 1,
+    "int64ToInt#": 1,
     "wordToWord8#": 1,
     "word8ToWord#": 1,
     "wordToWord16#": 1,
