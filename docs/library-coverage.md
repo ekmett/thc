@@ -116,6 +116,11 @@ same pinned, unmodified containers sources. Eleven entries share one post-Tidy
 export, with a separate strict audit and explicit support declaration for each
 entry. The full bundle's rejected audit cannot hide either supported slices or
 unsupported operations. All per-entry reports are fingerprinted artifacts.
+The optional `--check-existing build/libraries/cases.json` preparation check
+reaudits every entry from fingerprinted Core, enforcing the same declarations,
+argument-boundary and source-identity guards as fresh preparation. It does not
+regenerate or refresh a manifest. Focused negative tests run in CI and the
+library runner.
 
 Four entries have accepted strict audits with no missing globals or capability
 issues: `sequenceBuildViews` builds with `fromList` and drains through alternating

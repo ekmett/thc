@@ -18,6 +18,7 @@ BUILD = ROOT / 'build/libraries'
 CONTAINERS_URL = 'https://hackage.haskell.org/package/containers-0.8/containers-0.8.tar.gz'
 CONTAINERS_SHA = 'b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8'
 WORD_MASK = (1 << 64) - 1
+SEQUENCE_SUPPORTED = {'sequenceBuildViews', 'sequenceDequeViews', 'sequenceAppendViews', 'sequenceLazyLength'}
 
 # These are cold ghc-internal exception/state paths, not collection tuple
 # results. Exact owners, details and multiplicities make new gaps fail closed.
@@ -85,6 +86,15 @@ def check_existing(manifest):
         audit = auditor.Audit(modules, capabilities).run([entry['name'] for entry in group['entries']])
         violations.extend(audit_structure_violations(group, audit))
         print(json.dumps(dict(group=group['id'], execution=group['execution'], accepted=audit['accepted'], **audit['summary'])))
+        if group['id'] == 'sequence':
+            names = [entry['name'] for entry in group['entries']]
+            if len(names) != len(set(names)) or set(names) != set(SEQUENCE_ENTRIES):
+                violations.append('sequence: expected every Sequence entry exactly once')
+            for entry in group['entries']:
+                entry_audit = auditor.Audit(modules, capabilities).run([entry['name']])
+                violations.extend(sequence_entry_violations(entry, entry_audit))
+                print(json.dumps(dict(entry=entry['name'], execution=entry.get('execution'),
+                                      accepted=entry_audit['accepted'], **entry_audit['summary'])))
     if violations:
         raise RuntimeError('\n'.join(violations))
 
@@ -207,6 +217,27 @@ def require_sequence_tuple_frontier(audit):
         raise RuntimeError('expected aggregate frontier changed; review coverage')
 
 
+def sequence_entry_violations(entry, audit):
+    """Fresh preparation and reuse must enforce the same per-entry contract."""
+    name = entry['name']
+    if name not in SEQUENCE_ENTRIES:
+        return [name + ': unexpected Sequence entry']
+    execution = 'supported' if name in SEQUENCE_SUPPORTED else 'frontier'
+    violations = []
+    if entry.get('execution') != execution:
+        violations.append(name + ': expected ' + execution + ' declaration')
+    if audit['accepted'] != (execution == 'supported'):
+        violations.append(name + ': declared support disagrees with the strict entry audit')
+    if any(item['id'].startswith('main:') for item in audit['missingGlobals']):
+        violations.append(name + ': source-library definitions must resolve at the post-Tidy boundary')
+    if execution == 'frontier':
+        try:
+            require_sequence_tuple_frontier(audit)
+        except RuntimeError as error:
+            violations.append(name + ': ' + str(error))
+    return violations
+
+
 def verified_containers():
     archive = ROOT / 'vendor/archives/containers-0.8.tar.gz'
     archive.parent.mkdir(parents=True, exist_ok=True)
@@ -253,7 +284,6 @@ def main():
     intset_primitive_cold = sorted((set(primitive_cold) |
                                    {signed(WORD_MASK ^ (1 << bit)) for bit in range(64)} |
                                    {signed(0xaaaaaaaaaaaaaaaa), 0x5555555555555555}) - set(primitive_warm))
-    sequence_supported = {'sequenceBuildViews', 'sequenceDequeViews', 'sequenceAppendViews', 'sequenceLazyLength'}
     sequence_cold = sorted((set(range(18)) | {-3, -(1 << 63), (1 << 63) - 1,
         20, 21, 22, 24, 25, 26, 33, 34, 159, 160, 161, 255, 256, 257, 512, 1024}) - set(warm))
     groups = [
@@ -311,16 +341,8 @@ def main():
                 if result.returncode not in [0, 1]:
                     raise RuntimeError('Sequence capability auditor failed: ' + str(result.returncode))
                 entry_audit = json.loads(entry_path.read_text())
-                execution = 'supported' if name in sequence_supported else 'frontier'
-                if entry_audit['accepted'] != (execution == 'supported'):
-                    violations.append(name + ': declared support disagrees with ' + str(entry_path))
-                if any(item['id'].startswith('main:') for item in entry_audit['missingGlobals']):
-                    violations.append(name + ': source-library definitions must resolve at the post-Tidy boundary')
-                if execution == 'frontier':
-                    try:
-                        require_sequence_tuple_frontier(entry_audit)
-                    except RuntimeError as error:
-                        violations.append(name + ': ' + str(error))
+                execution = 'supported' if name in SEQUENCE_SUPPORTED else 'frontier'
+                violations.extend(sequence_entry_violations(dict(name=name, execution=execution), entry_audit))
                 group['entryAudits'][name] = dict(audit=str(entry_path), execution=execution)
         write_json(output / 'provenance.json', {
             'source': CONTAINERS_URL, 'sha256': CONTAINERS_SHA, 'sourcePatches': [],
