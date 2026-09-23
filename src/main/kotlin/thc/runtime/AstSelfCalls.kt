@@ -43,6 +43,14 @@ internal class AstSelfLayout(
             val reference = argumentReferences[i]
             if (reference != null) FrameAccess.write(frame, destination,
                 requireReferenceCarrier(FrameAccess.read(frame, source), reference))
+            else if (argumentProofs[i].isFloat) FrameAccess.writeFloat(frame, destination,
+                if (frame.isFloat(source)) frame.getFloat(source)
+                else if (frame.isObject(source)) frame.getObject(source) as? Float ?: fault("Expected primitive Float argument")
+                else fault("Expected primitive Float argument"))
+            else if (argumentProofs[i].isDouble) FrameAccess.writeDouble(frame, destination,
+                if (frame.isDouble(source)) frame.getDouble(source)
+                else if (frame.isObject(source)) frame.getObject(source) as? Double ?: fault("Expected primitive Double argument")
+                else fault("Expected primitive Double argument"))
             else if (frame.isLong(source)) FrameAccess.writeLong(frame, destination, frame.getLong(source))
             else if (argumentProofs[i].isLong) {
                 val value = FrameAccess.read(frame, source) as? Long ?: fault("Expected primitive Long argument")

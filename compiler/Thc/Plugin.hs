@@ -197,6 +197,8 @@ typeRep ty evaluated = O $
          | otherwise = case reps of
       Just [] -> "void"
       Just [r] | longRep r -> "long"
+      Just [FloatRep] -> "float"
+      Just [DoubleRep] -> "double"
       Just [AddrRep] -> "address"
       Just [BoxedRep _]
         | isFunTy rho -> "closure"

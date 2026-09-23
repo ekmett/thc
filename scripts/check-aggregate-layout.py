@@ -74,7 +74,7 @@ EXPECTED = {
     'lazyIdentity': tup([BOX, leaf('closure', [LIFTED], False),
                          *[leaf('object', [LIFTED], False) for _ in range(4)]], [LIFTED] * 6),
     'alternativesIdentity': summ([EMPTY, VOID, ONE,
-                                  tup([leaf('unknown', ['FloatRep']), leaf('unknown', ['DoubleRep']), INT],
+                                  tup([leaf('float', ['FloatRep']), leaf('double', ['DoubleRep']), INT],
                                       ['FloatRep', 'DoubleRep', 'IntRep']), INNER_SUM],
                                  ['WordRep', LIFTED, 'WordRep', 'WordRep', 'FloatRep', 'DoubleRep']),
     'polymorphicTuple': tup([UNKNOWN, INT], None, False),

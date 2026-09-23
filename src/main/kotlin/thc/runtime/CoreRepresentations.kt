@@ -2,7 +2,7 @@
 package thc.runtime
 
 /** Exact Core runtime kinds are independent of evidence that a lifted value is already evaluated. */
-internal enum class CoreKind { LONG, ADDRESS, VOID, DATA, CLOSURE, OBJECT, UNKNOWN }
+internal enum class CoreKind { LONG, FLOAT, DOUBLE, ADDRESS, VOID, DATA, CLOSURE, OBJECT, UNKNOWN }
 
 internal data class CoreRepresentation(
     val kind: CoreKind,
@@ -13,6 +13,8 @@ internal data class CoreRepresentation(
 ) {
     val isTuple: Boolean get() = components != null
     val isLong: Boolean get() = kind == CoreKind.LONG
+    val isFloat: Boolean get() = kind == CoreKind.FLOAT
+    val isDouble: Boolean get() = kind == CoreKind.DOUBLE
     val isEvaluatedReference: Boolean get() = evaluated &&
         (kind == CoreKind.DATA || kind == CoreKind.CLOSURE || kind == CoreKind.ADDRESS)
     /** A lifted type alone cannot exclude a thunk; a stored WHNF proof can. */
@@ -73,6 +75,7 @@ internal object CoreRepresentations {
         }
         val kind = when (map["kind"]) {
             "long" -> CoreKind.LONG; "address" -> CoreKind.ADDRESS; "void" -> CoreKind.VOID
+            "float" -> CoreKind.FLOAT; "double" -> CoreKind.DOUBLE
             "data" -> CoreKind.DATA; "closure" -> CoreKind.CLOSURE; "object" -> CoreKind.OBJECT
             "unknown" -> CoreKind.UNKNOWN
             else -> throw RuntimeFault("Unknown Core representation kind ${map["kind"]}")
@@ -85,6 +88,10 @@ internal object CoreRepresentations {
             throw RuntimeFault("Core Long proof lacks a supported primitive representation")
         if (kind == CoreKind.ADDRESS && reps != listOf("AddrRep"))
             throw RuntimeFault("Core address proof lacks AddrRep")
+        if (kind == CoreKind.FLOAT && reps != listOf("FloatRep"))
+            throw RuntimeFault("Core Float proof lacks FloatRep")
+        if (kind == CoreKind.DOUBLE && reps != listOf("DoubleRep"))
+            throw RuntimeFault("Core Double proof lacks DoubleRep")
         if (kind == CoreKind.VOID && reps != emptyList<String>())
             throw RuntimeFault("Core void proof has payload registers")
         if (kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&

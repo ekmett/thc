@@ -36,6 +36,7 @@ tasks.test {
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
         include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
+            "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
             "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
@@ -45,7 +46,7 @@ tasks.test {
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
-        include("prepare-corpus.py", "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
+        include("prepare-corpus.py", "prepare-floating-audit.py", "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)

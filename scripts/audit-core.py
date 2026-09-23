@@ -78,13 +78,13 @@ class Audit:
                         self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
                     else:
                         physical.extend(registers)
-                        if 'aggregate' not in component and (component.get('kind') in ('unknown', 'void') or
+                        if 'aggregate' not in component and (component.get('kind') in ('unknown', 'void', 'float', 'double') or
                                 any(r not in self.cap['fieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
                 if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:
                     self.issue('representation-proof', owner, path, 'Tuple components disagree with physical representations')
         kind, registers, evaluated = rep.get('kind'), rep.get('primReps'), rep.get('evaluated')
-        kinds = {'long', 'address', 'void', 'data', 'closure', 'object', 'unknown'}
+        kinds = {'long', 'float', 'double', 'address', 'void', 'data', 'closure', 'object', 'unknown'}
         if kind not in kinds or type(evaluated) is not bool or (registers is not None and
                 (not isinstance(registers, list) or any(not isinstance(r, str) for r in registers))):
             self.issue('representation-proof', owner, path, 'Invalid kind, register list, or WHNF evidence')
@@ -92,6 +92,8 @@ class Audit:
         longs = {'IntRep', 'Int8Rep', 'Int16Rep', 'Int32Rep', 'Int64Rep',
                  'WordRep', 'Word8Rep', 'Word16Rep', 'Word32Rep', 'Word64Rep'}
         valid = (kind == 'unknown' or
+                 kind == 'float' and registers == ['FloatRep'] or
+                 kind == 'double' and registers == ['DoubleRep'] or
                  kind == 'long' and isinstance(registers, list) and len(registers) == 1 and registers[0] in longs or
                  kind == 'address' and registers == ['AddrRep'] or
                  kind == 'void' and registers == [] or
@@ -387,6 +389,8 @@ class Audit:
                                                             owner, f'{altpath}/binders/{field}/rep', component=True)
                     elif kind == 'lit':
                         self.literal(value[0], value[1], owner, altpath + '/literal')
+                        if value[0] in ('float', 'double'):
+                            self.issue('alternative-kind', owner, altpath, 'Floating literal alternatives are invalid GHC Core')
                     elif kind != 'default':
                         self.issue('alternative-kind', owner, altpath, kind)
                     if self.is_tuple(binder_proof) and (kind not in ('data', 'default') or kind == 'default' and ids):
