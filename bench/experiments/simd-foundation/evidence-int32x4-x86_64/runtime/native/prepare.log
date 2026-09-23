@@ -1,0 +1,14 @@
+[1 of 6] Compiling Thc.Cbv          ( compiler/Thc/Cbv.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler/Thc/Cbv.dyn_o )
+[2 of 6] Compiling Thc.Demands      ( compiler/Thc/Demands.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler/Thc/Demands.dyn_o )
+[3 of 6] Compiling Thc.Sources      ( compiler/Thc/Sources.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler/Thc/Sources.dyn_o )
+[4 of 6] Compiling Thc.Wired        ( compiler/Thc/Wired.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler/Thc/Wired.dyn_o )
+[5 of 6] Compiling Thc.Plugin       ( compiler/Thc/Plugin.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler/Thc/Plugin.dyn_o )
+[6 of 6] Linking /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so
+Reading package info from "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/compiler
+[1 of 1] Compiling SimdInt32X4      ( /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/compiler/test-fixtures/SimdInt32X4.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/pre-ghc/SimdInt32X4.o )
+[1 of 1] Compiling SimdInt32X4      ( /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/compiler/test-fixtures/SimdInt32X4.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/post-ghc/SimdInt32X4.o )
+[1 of 3] Compiling SimdInt32X4      ( compiler/test-fixtures/SimdInt32X4.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/native/SimdInt32X4.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/compiler/test-fixtures/SimdInt32X4Native.hs, /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/native/simd
+SIMD export stages=['pre', 'post']; native oracle rows=243 (None means not run)

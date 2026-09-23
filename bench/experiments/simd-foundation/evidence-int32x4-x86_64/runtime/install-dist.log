@@ -1,0 +1,72 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources NO-SOURCE
+> Task :kaptGenerateStubsKotlin
+
+> Task :kaptKotlin
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:7: warning: This node is a candidate for node object inlining. The memory footprint is estimated to be reduced from 24 to 5 byte(s). Add @GenerateInline(true) to enable object inlining for this node or @GenerateInline(false) to disable this warning. Also consider disabling cached node generation with @GenerateCached(false) if all usages will be inlined. This warning may be suppressed using @SuppressWarnings("truffle-inlining").
+public abstract class BloomValue extends com.oracle.truffle.api.nodes.Node {
+                ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:20: warning: The @Cached(neverDefault=true|false) property is not needed to be set. Remove the property to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+    long cachedMask, @com.oracle.truffle.api.dsl.Cached(value = "box(cachedMask)", neverDefault = true)
+                                                                                                  ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/Dispatch.java:87: warning: For this specialization with inlined cache parameters it is recommended to use the static modifier. The method should be static to avoid accidently passing the wrong node parameter to inlined cached nodes. To resolve this add the static keyword to the specialization method.  This warning may be suppressed using @SuppressWarnings("truffle-static-method").
+    @com.oracle.truffle.api.dsl.Specialization(guards = {"function.arity < argsSize"}, replaces = {"directOverapplied"})
+    ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:215: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor first, LocalAccessor second, long left, long right, @Bind("$node") Node node) {
+                                                                                  ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:266: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:485: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Int64X2 value, @Bind("$node") Node node) {
+                               ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:442: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static Object raise(Object payload, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:246: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:518: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, Int32X4 value, @Bind("$node") Node node) {
+                                                                          ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:304: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:185: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:334: warning: This operation supports uncached execution, so forcing cached is not necessary. Remove the forceCached attribute to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-force-cached").
+    @Operation(forceCached = true)
+                             ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:344: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:354: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+
+> Task :compileKotlin
+
+> Task :compileJava
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:16889: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:19853: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+3 warnings
+
+> Task :classes
+> Task :jar
+> Task :startScripts
+> Task :installDist
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 25s
+7 actionable tasks: 7 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

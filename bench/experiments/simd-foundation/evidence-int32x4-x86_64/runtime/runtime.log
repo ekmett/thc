@@ -1,0 +1,9 @@
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-ast-vectorCase/parsed/index.json
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-ast-subtractCase/parsed/index.json
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-bytecode-vectorCase/parsed/index.json
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-bytecode-subtractCase/parsed/index.json
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-ast-vectorCase/parsed/index.json
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-ast-subtractCase/parsed/index.json
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-bytecode-vectorCase/parsed/index.json
+Read 118 graphs; selected 118. Index: /home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-bytecode-subtractCase/parsed/index.json
+Actual Core SIMD verified: x86_64, 8 compiled entry checks, native GHC input rows, no vector carrier/array allocation or field traffic.

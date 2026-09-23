@@ -1,0 +1,7 @@
+      int UseAVX                                   = 2                                    {ARCH product} {default}
+     bool UseCompactObjectHeaders                  = true                           {product lp64_product} {command line}
+      int UseSSE                                   = 4                                    {ARCH product} {default}
+     bool UseSSE42Intrinsics                       = true                                 {ARCH product} {default}
+java version "25.0.4.1" 2026-08-18 LTS
+Java(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)
+Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode)
