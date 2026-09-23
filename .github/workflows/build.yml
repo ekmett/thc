@@ -214,6 +214,7 @@ jobs:
             build/double-arrays/*/*/core/*.json
             build/int32-arrays/manifest.json
             build/int32-arrays/oracle.tsv
+            build/int32-arrays/literal-oracle.tsv
             build/int32-arrays/expected.tsv
             build/int32-arrays/NativeInt32Array.hs
             build/int32-arrays/native/int32-array-oracle
