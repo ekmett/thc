@@ -1,0 +1,416 @@
+{
+  "recordedUtc": "2026-09-23T08:16:02.709141+00:00",
+  "scope": "Two independent, serialized, same-JAR local flag ablations. These are not a combined-options comparison or a cross-host speed comparison.",
+  "runtimeJarSha256": "a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d",
+  "originalFiles": [
+    {
+      "publishedPath": "class/baseline-1.log",
+      "originalPath": "work/local-v7-options/class/baseline-1.log",
+      "sha256": "0e24218f424b869f9cc247aebddbe5ac45326e129542f48ff68ec87cdcb09176",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "class/baseline-1.tsv",
+      "originalPath": "work/local-v7-options/class/baseline-1.tsv",
+      "sha256": "5fed5fce4b98f6e288120ce8e95702c9cd3dc4d9bdceeb50375ae22ffec6508b",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "class/baseline-2.log",
+      "originalPath": "work/local-v7-options/class/baseline-2.log",
+      "sha256": "d6c92c6419ca8ea0196083f25a78516299d91a069dbc9b4d33306478c30e6dfc",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "class/baseline-2.tsv",
+      "originalPath": "work/local-v7-options/class/baseline-2.tsv",
+      "sha256": "55aa204377608ac3155523b6d67a6a815fde224808d864fa05f40546a6cf1ed3",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "class/baseline-3.log",
+      "originalPath": "work/local-v7-options/class/baseline-3.log",
+      "sha256": "481e733d5c3a1b8a40a40ae71a14c603d2654a4febb6761c8bf962af91ae5fb1",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "class/baseline-3.tsv",
+      "originalPath": "work/local-v7-options/class/baseline-3.tsv",
+      "sha256": "c674a410ed4e69240fdf7e3acceb3d9c884718ab43ba4d4cce8ef9628ae700ba",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "class/candidate-1.log",
+      "originalPath": "work/local-v7-options/class/candidate-1.log",
+      "sha256": "694cd995594dc819fa6ce0e7a765277ae7fcf779e9e37438521404c7ec4a7ce7",
+      "bytes": 9263
+    },
+    {
+      "publishedPath": "class/candidate-1.tsv",
+      "originalPath": "work/local-v7-options/class/candidate-1.tsv",
+      "sha256": "d1a6aa4173a0a8fb76a27e5f6899367d6aac38efca77a6f20105755f3119c986",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "class/candidate-2.log",
+      "originalPath": "work/local-v7-options/class/candidate-2.log",
+      "sha256": "e6a3fbf5869078ca0fe09f8c4936534007744273fa81fa27cf7369523b0f15a3",
+      "bytes": 9263
+    },
+    {
+      "publishedPath": "class/candidate-2.tsv",
+      "originalPath": "work/local-v7-options/class/candidate-2.tsv",
+      "sha256": "a0c220ba66c794a640c31e8f70456e82088f1e5162bc9f4ea812a443b7385ad2",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "class/candidate-3.log",
+      "originalPath": "work/local-v7-options/class/candidate-3.log",
+      "sha256": "4693bf3d8d57d38852e718ec2bd8b887b81b8dff08e3d71ceb7d74dbe4599efe",
+      "bytes": 9263
+    },
+    {
+      "publishedPath": "class/candidate-3.tsv",
+      "originalPath": "work/local-v7-options/class/candidate-3.tsv",
+      "sha256": "ae34fcd4a864073d9dd17e3e724bf59506c35da5c5fbb270752fffe7c9670174",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "class/native-1.log",
+      "originalPath": "work/local-v7-options/class/native-1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "class/native-1.tsv",
+      "originalPath": "work/local-v7-options/class/native-1.tsv",
+      "sha256": "c7f39753306b96df0b0a7286b379512cb9936984ef75ffbcc4d4600f467a62e9",
+      "bytes": 250
+    },
+    {
+      "publishedPath": "class/native-2.log",
+      "originalPath": "work/local-v7-options/class/native-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "class/native-2.tsv",
+      "originalPath": "work/local-v7-options/class/native-2.tsv",
+      "sha256": "18463c6ca7ddb374722f3a43f88df2f16bdc67a79a6780060e7832f2f498d49f",
+      "bytes": 250
+    },
+    {
+      "publishedPath": "class/native-3.log",
+      "originalPath": "work/local-v7-options/class/native-3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "class/native-3.tsv",
+      "originalPath": "work/local-v7-options/class/native-3.tsv",
+      "sha256": "8e3bc39bcda091c9806d3ee8561560febbaff2edcd8ecbb25d55c00a871dedef",
+      "bytes": 249
+    },
+    {
+      "publishedPath": "class/oracle.log",
+      "originalPath": "work/local-v7-options/class/oracle.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "class/oracle.tsv",
+      "originalPath": "work/local-v7-options/class/oracle.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277",
+      "bytes": 448
+    },
+    {
+      "publishedPath": "class/power-status.json",
+      "originalPath": "work/local-v7-options/class/power-status.json",
+      "sha256": "0c0226b8e4508d55f071033dbca3cf7f5c5e2e4b9e1e4d0b3ee4cfe41fb7ea1e",
+      "bytes": 7656
+    },
+    {
+      "publishedPath": "class/run-config.json",
+      "originalPath": "work/local-v7-options/class/run-config.json",
+      "sha256": "5fd28d41ae3a06fa14319e219393da218a6e86e8ca773cfee64eedff5fc0faca",
+      "bytes": 35618
+    },
+    {
+      "publishedPath": "class/summary.json",
+      "originalPath": "work/local-v7-options/class/summary.json",
+      "sha256": "4c1ca9df8c2f373a5ab77a7909b0455faf4e0dde6a0d77a878ee43845e7cf64b",
+      "bytes": 4006
+    },
+    {
+      "publishedPath": "class/timings.tsv",
+      "originalPath": "work/local-v7-options/class/timings.tsv",
+      "sha256": "877192431a8e1d9e1be1dcbdb1a3562bd29d1502966c3a25a201f4c8d1ccfcc5",
+      "bytes": 2811
+    },
+    {
+      "publishedPath": "class/validation.json",
+      "originalPath": "work/local-v7-options/class/validation.json",
+      "sha256": "111d3437ab160ba2688a8c8870bbf538102707fab2814b61fac25c212c7a9f35",
+      "bytes": 10130
+    },
+    {
+      "publishedPath": "commands/class-command.json",
+      "originalPath": "work/local-v7-options/class-command.json",
+      "sha256": "efd6dab93f5e76ff86e54bc1001427611fc97a9abc1ec4f3b45089457e98194f",
+      "bytes": 1712
+    },
+    {
+      "publishedPath": "compact/baseline-1.log",
+      "originalPath": "work/local-v7-options/compact/baseline-1.log",
+      "sha256": "3eb17b948827148ab582e740195ac323c381fa8226b7b871ee7e63ebf10b50e2",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "compact/baseline-1.tsv",
+      "originalPath": "work/local-v7-options/compact/baseline-1.tsv",
+      "sha256": "3450eb6c93c941da62bc52b3c866c45547c38c862f6b13998a30ba5d4181eb95",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "compact/baseline-2.log",
+      "originalPath": "work/local-v7-options/compact/baseline-2.log",
+      "sha256": "9ae97fe8c32538436b960cafa33585101de35e66ae3696cb9b7e4403127e9404",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "compact/baseline-2.tsv",
+      "originalPath": "work/local-v7-options/compact/baseline-2.tsv",
+      "sha256": "480d8e437f4ca5d60592743707a1be79d61da5219c626106246927a9f99be583",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "compact/baseline-3.log",
+      "originalPath": "work/local-v7-options/compact/baseline-3.log",
+      "sha256": "a83e91874f597e37431ba1323da52bf5e3f67878aba1c791a02aa961da80fbe2",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "compact/baseline-3.tsv",
+      "originalPath": "work/local-v7-options/compact/baseline-3.tsv",
+      "sha256": "6e2588b866be714088e8a67c3b138fada5f1af1351f32e0d1eb09c87691f22e6",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "compact/candidate-1.log",
+      "originalPath": "work/local-v7-options/compact/candidate-1.log",
+      "sha256": "8df64a175bc32566bc81623aee320fb43cd8efaa6c6b1973dfd52f8deac8b430",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "compact/candidate-1.tsv",
+      "originalPath": "work/local-v7-options/compact/candidate-1.tsv",
+      "sha256": "69de4e60898f09a4a06786c5607f9af79907e54f6516c39fd608135598f968c5",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "compact/candidate-2.log",
+      "originalPath": "work/local-v7-options/compact/candidate-2.log",
+      "sha256": "62bad254025e09004447a3f68c7a6cac98a638b642800d7e35a7129a34a142aa",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "compact/candidate-2.tsv",
+      "originalPath": "work/local-v7-options/compact/candidate-2.tsv",
+      "sha256": "523027d6a3ed769af8c1b4ec0c2b516ff5626a1395924844922fe3a318476ef9",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "compact/candidate-3.log",
+      "originalPath": "work/local-v7-options/compact/candidate-3.log",
+      "sha256": "322cd79b5725b3ab957771d56cbb666172fe959851670b21976d9dd5ea199992",
+      "bytes": 10137
+    },
+    {
+      "publishedPath": "compact/candidate-3.tsv",
+      "originalPath": "work/local-v7-options/compact/candidate-3.tsv",
+      "sha256": "28adf2cdc65563b314655dbd88fa581f13d32f80753633f4b183bdd44dc5bd7b",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "compact/native-1.log",
+      "originalPath": "work/local-v7-options/compact/native-1.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "compact/native-1.tsv",
+      "originalPath": "work/local-v7-options/compact/native-1.tsv",
+      "sha256": "bf809863fd90296a4aa3f7c0c8432bb2e4ed9eed2d1fe97e314b341a82434b00",
+      "bytes": 250
+    },
+    {
+      "publishedPath": "compact/native-2.log",
+      "originalPath": "work/local-v7-options/compact/native-2.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "compact/native-2.tsv",
+      "originalPath": "work/local-v7-options/compact/native-2.tsv",
+      "sha256": "c42cb889a72616b65feb1b1601b3cc595e4d1df208c90d7ce3a2b8add9bd3ae2",
+      "bytes": 248
+    },
+    {
+      "publishedPath": "compact/native-3.log",
+      "originalPath": "work/local-v7-options/compact/native-3.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "compact/native-3.tsv",
+      "originalPath": "work/local-v7-options/compact/native-3.tsv",
+      "sha256": "f15e06a264c708e2c04739674e36db0463711fb248b765768ad181f52807b413",
+      "bytes": 245
+    },
+    {
+      "publishedPath": "compact/oracle.log",
+      "originalPath": "work/local-v7-options/compact/oracle.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "publishedPath": "compact/oracle.tsv",
+      "originalPath": "work/local-v7-options/compact/oracle.tsv",
+      "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277",
+      "bytes": 448
+    },
+    {
+      "publishedPath": "compact/power-status.json",
+      "originalPath": "work/local-v7-options/compact/power-status.json",
+      "sha256": "d3feab3b8a68104a99cc46d36cbfe1dbef8e48914f8db2f9afe904033592c545",
+      "bytes": 7656
+    },
+    {
+      "publishedPath": "compact/run-config.json",
+      "originalPath": "work/local-v7-options/compact/run-config.json",
+      "sha256": "d0764368a566fd744bc820bf7e6848294450578e50b7232aa476f46be38d0b46",
+      "bytes": 35623
+    },
+    {
+      "publishedPath": "compact/summary.json",
+      "originalPath": "work/local-v7-options/compact/summary.json",
+      "sha256": "5f6c0500b78f61ab92af41798c8ad7f897ff34d95229e2fc8e99142b642e2da7",
+      "bytes": 3980
+    },
+    {
+      "publishedPath": "compact/timings.tsv",
+      "originalPath": "work/local-v7-options/compact/timings.tsv",
+      "sha256": "56bdeb2bfcf477fd34224e7392fbf00f1c3fce7e021997a24ce17ee018be7d65",
+      "bytes": 2805
+    },
+    {
+      "publishedPath": "compact/validation.json",
+      "originalPath": "work/local-v7-options/compact/validation.json",
+      "sha256": "5f57e0f751ddecc993ab4fcec9719fae86bfacecfc92cdd0190263953ad0692d",
+      "bytes": 10130
+    },
+    {
+      "publishedPath": "commands/compact-command.json",
+      "originalPath": "work/local-v7-options/compact-command.json",
+      "sha256": "c9e2cc6f019a9a384e73c4b4798d37dd24f520e95f5ad936b09add30bf8f8733",
+      "bytes": 1715
+    },
+    {
+      "publishedPath": "validation.json",
+      "originalPath": "work/local-v7-options/validation.json",
+      "sha256": "6e5db639aa07de053bb835374a4b504f84db81448ccba9b621e103108d07ad33",
+      "bytes": 156
+    },
+    {
+      "publishedPath": "map/checks.json",
+      "originalPath": "work/local-v7-options/checks.json",
+      "sha256": "dbac8a615802ddfa7ec7e5b7a9d3d478cbea406d0dc124ce4e7d607993dc1864",
+      "bytes": 9597
+    },
+    {
+      "publishedPath": "map/input-hashes.json",
+      "originalPath": "work/local-v7-options/input-hashes.json",
+      "sha256": "d266e1a214de92250e54a8725187904e2928ab4c60d96d87c4985cfbf6a12f62",
+      "bytes": 8594
+    },
+    {
+      "publishedPath": "map/default.log",
+      "originalPath": "work/local-v7-options/default.log",
+      "sha256": "630b4f0c88912b67a3b96021dcd0e655f4cb8f10b07d3586391f66657b287404",
+      "bytes": 9959
+    },
+    {
+      "publishedPath": "map/cache.log",
+      "originalPath": "work/local-v7-options/cache.log",
+      "sha256": "3bec7a8b5d5e7c239175f110fa35479059564fa167dccf77fc6b21b8ac21756c",
+      "bytes": 9959
+    },
+    {
+      "publishedPath": "map/class.log",
+      "originalPath": "work/local-v7-options/class.log",
+      "sha256": "1726e41bb3d6a64ba6dd8b064501a13fc236336eeb54069416c4394cfd3ee4b0",
+      "bytes": 9959
+    },
+    {
+      "publishedPath": "map/compact.log",
+      "originalPath": "work/local-v7-options/compact.log",
+      "sha256": "cd6892fecad9c296159138730665aff7bc8ac84904128e010423cdd42b826baf",
+      "bytes": 9959
+    },
+    {
+      "publishedPath": "map/oracle.tsv",
+      "originalPath": "work/boxed-value-cache-v7/map/oracle.tsv",
+      "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea",
+      "bytes": 420
+    },
+    {
+      "publishedPath": "tools/compare-map-runtimes.py",
+      "originalPath": "tools/compare-map-runtimes.py",
+      "sha256": "55da5cdbf243fc43cdd6e2d713eee2bb88ca7824f2b56e821e445f2be70358f1",
+      "bytes": 23145
+    }
+  ],
+  "powerObservations": [
+    {
+      "comparison": "class",
+      "observations": 18,
+      "firstUtc": "2026-09-23T08:06:34.664746+00:00",
+      "lastUtc": "2026-09-23T08:10:53.259026+00:00",
+      "sources": [
+        "AC Power"
+      ],
+      "batteryStates": [
+        "charging"
+      ],
+      "minimumBatteryPercent": 75,
+      "maximumBatteryPercent": 79,
+      "warnings": []
+    },
+    {
+      "comparison": "compact",
+      "observations": 18,
+      "firstUtc": "2026-09-23T08:10:53.720469+00:00",
+      "lastUtc": "2026-09-23T08:15:18.138044+00:00",
+      "sources": [
+        "AC Power"
+      ],
+      "batteryStates": [
+        "charging"
+      ],
+      "minimumBatteryPercent": 79,
+      "maximumBatteryPercent": 83,
+      "warnings": []
+    }
+  ],
+  "limitations": "Original absolute paths are provenance. Full runtime/Core/native binaries are identified by recorded hashes, not bundled or reverified by the portable verifier. Power/log checks do not exclude host JIT, GC, thermal or external contention.",
+  "authoredFiles": [
+    "README.md",
+    "verify.py",
+    "referenced-test-evidence.json"
+  ],
+  "interpretation": {
+    "class": "No demonstrated gain; aggregate on/off +2.3878% is descriptive for this run.",
+    "compact": "Lower aggregate median is not accepted as a stable 13.4463% speedup: off-fork dispersion and third-fork native slowdown leave attribution unresolved.",
+    "defaults": "unchanged; runtime option defaults remain false"
+  }
+}

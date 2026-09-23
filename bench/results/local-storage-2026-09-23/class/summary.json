@@ -1,0 +1,142 @@
+{
+  "entry": "mapAggregate",
+  "powerWarnings": [],
+  "windowCount": 45,
+  "cycleChecksumSigned64": 902094723,
+  "engines": {
+    "baseline": {
+      "medianNsPerCall": 1485298.9095052083,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 1534611.626953125,
+          "windowNsPerCall": [
+            1536475.2337239583,
+            1534611.626953125,
+            1533540.5546875,
+            1513761.6373697917,
+            1535169.1080729167
+          ],
+          "lastVsFirstPercent": -0.08500792088108611
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 1485298.9095052083,
+          "windowNsPerCall": [
+            1508191.5416666667,
+            1540406.3587239583,
+            1442860.080078125,
+            1450838.5690104167,
+            1485298.9095052083
+          ],
+          "lastVsFirstPercent": -1.517886258409884
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 1461012.20703125,
+          "windowNsPerCall": [
+            1471538.1940104167,
+            1454447.265625,
+            1476217.8821614583,
+            1457085.9641927083,
+            1461012.20703125
+          ],
+          "lastVsFirstPercent": -0.7153050476032874
+        }
+      ],
+      "minWindowNsPerCall": 1442860.080078125,
+      "maxWindowNsPerCall": 1540406.3587239583
+    },
+    "candidate": {
+      "medianNsPerCall": 1520764.9466145833,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 1510643.8802083333,
+          "windowNsPerCall": [
+            1519275.2825520833,
+            1507420.8444010417,
+            1510643.8802083333,
+            1522761.9895833333,
+            1484328.5045572917
+          ],
+          "lastVsFirstPercent": -2.3002268513239943
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 1534246.58203125,
+          "windowNsPerCall": [
+            1503661.2141927083,
+            1484987.9283854167,
+            1534292.8873697917,
+            1630059.86328125,
+            1534246.58203125
+          ],
+          "lastVsFirstPercent": 2.034059770236385
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 1520764.9466145833,
+          "windowNsPerCall": [
+            1554427.6529947917,
+            1632442.740625,
+            1514022.8138020833,
+            1515771.728515625,
+            1520764.9466145833
+          ],
+          "lastVsFirstPercent": -2.1656013591467738
+        }
+      ],
+      "minWindowNsPerCall": 1484328.5045572917,
+      "maxWindowNsPerCall": 1632442.740625
+    },
+    "native": {
+      "medianNsPerCall": 1285321.986607143,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 1269956.4732142857,
+          "windowNsPerCall": [
+            1278939.174107143,
+            1269956.4732142857,
+            1273191.40625,
+            1251327.5669642857,
+            1260833.1473214286
+          ],
+          "lastVsFirstPercent": -1.4157066381483396
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 1285321.986607143,
+          "windowNsPerCall": [
+            1272971.5401785714,
+            1285321.986607143,
+            1285492.7455357143,
+            1286452.5669642857,
+            1276859.375
+          ],
+          "lastVsFirstPercent": 0.305414119539793
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 1290758.9285714286,
+          "windowNsPerCall": [
+            1297148.9955357143,
+            1290758.9285714286,
+            1274683.59375,
+            1280059.7098214286,
+            1380228.515625
+          ],
+          "lastVsFirstPercent": 6.404778508499276
+        }
+      ],
+      "minWindowNsPerCall": 1251327.5669642857,
+      "maxWindowNsPerCall": 1380228.515625
+    }
+  },
+  "ratios": {
+    "candidate/baseline": 1.0238780469590392,
+    "candidate/native": 1.1831781938383688
+  },
+  "limits": "Exploratory workload comparison. No measured Truffle events does not establish absence of host JIT/GC or external machine contention."
+}

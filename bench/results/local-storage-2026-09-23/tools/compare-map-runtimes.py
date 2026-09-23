@@ -11,7 +11,6 @@ import csv
 from datetime import datetime, timezone
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import platform
@@ -119,8 +118,7 @@ def read_windows(path, base, cycle_sum):
     return rows
 
 
-def validate_jvm_log(path, cycle_sum, backend, source_notes=None,
-                     minimum_warm_calls=MINIMUM_WARM_CALLS, warm_seconds=JVM_WARM_SECONDS):
+def validate_jvm_log(path, cycle_sum, backend, source_notes=None):
     expected = ['PHASE WARM BEGIN', 'PHASE WARM END']
     expected += [f'PHASE MEASURE {i} {edge}' for i in range(1, SAMPLES + 1) for edge in ('BEGIN', 'END')]
     expected += ['PHASE VERIFY BEGIN', 'PHASE VERIFY END']
@@ -134,8 +132,8 @@ def validate_jvm_log(path, cycle_sum, backend, source_notes=None,
                 match = re.fullmatch(r'PHASE WARM END calls=(\d+) elapsedNs=(\d+) checksum=(-?\d+)', line)
                 require(match is not None, f'{path}: malformed warmup summary')
                 warm = dict(zip(('calls', 'elapsedNs', 'checksum'), map(int, match.groups())))
-                require(warm['calls'] >= minimum_warm_calls and warm['calls'] % 256 == 0, f'{path}: incomplete warmup')
-                require(warm['elapsedNs'] >= warm_seconds * 1_000_000_000, f'{path}: warmup shorter than {warm_seconds} seconds')
+                require(warm['calls'] >= MINIMUM_WARM_CALLS and warm['calls'] % 256 == 0, f'{path}: incomplete warmup')
+                require(warm['elapsedNs'] >= JVM_WARM_SECONDS * 1_000_000_000, f'{path}: warmup shorter than 15 seconds')
                 require(warm['checksum'] == signed64(cycle_sum * (warm['calls'] // 16)), f'{path}: warmup checksum mismatch')
             elif want == 'PHASE VERIFY END':
                 require(line == 'PHASE VERIFY END guestLastTierInstalled=true', f'{path}: last-tier verification failed')
@@ -206,20 +204,11 @@ def main():
     parser.add_argument('--candidate-source-notes', choices=('on', 'off'), help='explicit source attachment mode; also validates attached spans/roots')
     parser.add_argument('--baseline-jvm-option', action='append', default=[], help='repeatable JVM option recorded in the baseline command')
     parser.add_argument('--candidate-jvm-option', action='append', default=[], help='repeatable JVM option recorded in the candidate command')
-    parser.add_argument('--jvm-warm-seconds', type=float, default=JVM_WARM_SECONDS,
-                        help='minimum JVM warmup duration, at least 15 seconds (default: 15)')
-    parser.add_argument('--minimum-warm-calls', type=int, default=MINIMUM_WARM_CALLS,
-                        help='minimum JVM warmup calls, at least 12000 (default: 12000)')
-    parser.add_argument('--native-warm-seconds', type=float, default=NATIVE_WARM_SECONDS,
-                        help='native warmup duration, at least one second (default: 1)')
     parser.add_argument('--process-timeout', type=int, default=300, help='maximum seconds for each timing process (default: 300)')
     args = parser.parse_args()
     require(args.java_home is not None, 'Set JAVA_HOME or pass --java-home')
     require(-(1 << 63) <= args.input_base <= (1 << 63) - 16, 'Input cycle must fit signed 64-bit integers')
     require(args.process_timeout > 0, 'Process timeout must be positive')
-    require(math.isfinite(args.jvm_warm_seconds) and args.jvm_warm_seconds >= JVM_WARM_SECONDS, 'JVM warmup must be at least 15 seconds')
-    require(args.minimum_warm_calls >= MINIMUM_WARM_CALLS, 'JVM warmup must include at least 12000 calls')
-    require(math.isfinite(args.native_warm_seconds) and args.native_warm_seconds >= NATIVE_WARM_SECONDS, 'Native warmup must be at least one second')
     java_home = Path(args.java_home).resolve(strict=True)
     java = java_home / 'bin/java'
     native = args.native_binary.resolve(strict=True)
@@ -257,13 +246,13 @@ def main():
         order = ENGINES[fork - 1:] + ENGINES[:fork - 1]
         for position, engine in enumerate(order, 1):
             if engine == 'native':
-                command = [str(native), '--bench-steady', ENTRY, str(args.native_warm_seconds), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
+                command = [str(native), '--bench-steady', ENTRY, str(NATIVE_WARM_SECONDS), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
             else:
                 command = [str(java), '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true',
-                           '-Dthc.diagnosticUnsupported=true', f'-Dthc.minimumWarmCalls={args.minimum_warm_calls}',
+                           '-Dthc.diagnosticUnsupported=true', f'-Dthc.minimumWarmCalls={MINIMUM_WARM_CALLS}',
                            f'-Dthc.backend={getattr(args, engine + "_backend")}',
                            '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules_by_engine[engine])),
-                           ENTRY, '--steady', str(args.jvm_warm_seconds), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
+                           ENTRY, '--steady', str(JVM_WARM_SECONDS), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
             if engine != 'native':
                 command[1:1] = getattr(args, engine + '_jvm_option')
                 notes = getattr(args, engine + '_source_notes')
@@ -273,8 +262,8 @@ def main():
     host = {'system': platform.system(), 'platform': platform.platform(), 'machine': platform.machine()}
     config = {'schema': 1, 'recordedAtUtc': datetime.now(timezone.utc).isoformat(), 'entry': ENTRY,
               'baselineCommit': args.baseline_commit, 'backends': {e: getattr(args, e + '_backend') for e in ENGINES[:2]}, 'inputBase': args.input_base, 'forks': FORKS, 'samples': SAMPLES,
-              'sampleSeconds': SAMPLE_SECONDS, 'jvmWarmSeconds': args.jvm_warm_seconds, 'nativeWarmSeconds': args.native_warm_seconds,
-              'minimumJvmWarmCalls': args.minimum_warm_calls, 'diagnosticUnsupported': True, 'instrumented': False,
+              'sampleSeconds': SAMPLE_SECONDS, 'jvmWarmSeconds': JVM_WARM_SECONDS, 'nativeWarmSeconds': NATIVE_WARM_SECONDS,
+              'minimumJvmWarmCalls': MINIMUM_WARM_CALLS, 'diagnosticUnsupported': True, 'instrumented': False,
               'moduleManifests': {engine: str(path) for engine, path in manifests.items()},
               'sourceNotesModes': {e: getattr(args, e + '_source_notes') for e in ENGINES[:2]},
               'protocol': 'serialized rotated engine order; median of per-fork window medians; signed64 checksums',
@@ -336,8 +325,7 @@ def main():
                     process_seconds = time.monotonic() - start
                     record_power(spec, 'after')
                 windows = read_windows(raw, args.input_base, cycle_sum)
-                check = validate_jvm_log(log, cycle_sum, getattr(args, engine + '_backend'), getattr(args, engine + '_source_notes'),
-                                         args.minimum_warm_calls, args.jvm_warm_seconds) if engine != 'native' else {'nativeProcessSucceeded': True}
+                check = validate_jvm_log(log, cycle_sum, getattr(args, engine + '_backend'), getattr(args, engine + '_source_notes')) if engine != 'native' else {'nativeProcessSucceeded': True}
                 process_checks.append({'engine': engine, 'fork': fork, **check})
                 for window in windows:
                     row = {'engine': engine, 'fork': fork, **window}

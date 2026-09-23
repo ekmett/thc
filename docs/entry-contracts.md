@@ -182,3 +182,11 @@ and `I#` remain 40 and 24 bytes. Their per-instance layout field and alignment
 consume the header space saved by the VM. Moving the owner information to the
 carrier class needs permanent class ownership and a layout-carrying fallback;
 simply deleting the field would break shared-carrier storage.
+
+The [local class/compact comparison](../bench/results/local-storage-2026-09-23/README.md)
+likewise found no class-matching gain. Compact headers had a lower aggregate,
+but baseline fork variation and native drift prevent attributing that difference
+to headers. Subsequent representation experiments use compact headers on both
+sides, so the comparison isolates the language's object layout. The harness
+accepts longer explicit warmup through `--jvm-warm-seconds` and
+`--minimum-warm-calls`, enforcing both requested minima in its log validation.
