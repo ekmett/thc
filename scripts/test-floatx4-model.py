@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Small independent edge controls for the FloatX4 preparation model."""
 import importlib.util
+import copy
 from pathlib import Path
 import unittest
 
@@ -48,6 +49,51 @@ class FloatX4ModelTest(unittest.TestCase):
                 for lane in range(4):
                     self.assertEqual({(xs[lane], xs[4]) for xs in e['cases']},
                                      {(a, b) for a in range(21) for b in range(21)})
+
+    def test_structural_guards_reject_mutated_proofs(self):
+        # Synthetic metadata controls for inventory(), not a claim of valid Core.
+        lane = dict(kind='float', primReps=['FloatRep'])
+        scalar = dict(kind='long', primReps=['IntRep'])
+        vector = dict(kind='vector', primReps=['VecRep 4 FloatElemRep'],
+                      vector=dict(lanes=4, element='FloatElemRep'))
+        tuple_rep = dict(kind='unknown', aggregate='unboxed-tuple',
+                         primReps=['FloatRep']*4, components=[lane]*4)
+        calls = []
+        for primitive in sorted(model.PRIMITIVES):
+            argument = tuple_rep if primitive == 'packFloatX4#' else vector
+            result = tuple_rep if primitive == 'unpackFloatX4#' else vector
+            calls.append(['app', ['prim', primitive], [['synthetic', dict(rep=argument)]], dict(rep=result)])
+        bindings = [dict(name=e['name'], expr=['lam', [dict(rep=scalar)]*e['arity'],
+                    calls, dict(resultRep=scalar)]) for e in model.entries()]
+        bindings.append(dict(name='vectorArgument', expr=['lam', [dict(rep=vector)],
+                        [], dict(resultRep=vector)]))
+        fixture = dict(boundary=model.STAGES['pre'], bindings=bindings)
+        self.assertEqual(model.inventory(fixture, 'pre')['primitives'], sorted(model.PRIMITIVES))
+
+        bad = copy.deepcopy(fixture)
+        pack = next(c for c in bad['bindings'][0]['expr'][2] if c[1][1] == 'packFloatX4#')
+        pack[2] *= 4
+        with self.assertRaisesRegex(AssertionError, 'ONE logical tuple'):
+            model.inventory(bad, 'pre')
+        bad = copy.deepcopy(fixture)
+        pack = next(c for c in bad['bindings'][0]['expr'][2] if c[1][1] == 'packFloatX4#')
+        pack[2][0][-1]['rep']['components'][0]['kind'] = 'long'
+        with self.assertRaisesRegex(AssertionError, 'four Float# tuple leaves'):
+            model.inventory(bad, 'pre')
+        bad = copy.deepcopy(fixture)
+        unpack = next(c for c in bad['bindings'][0]['expr'][2] if c[1][1] == 'unpackFloatX4#')
+        unpack[-1]['rep'] = copy.deepcopy(tuple_rep)
+        unpack[-1]['rep']['components'][0]['kind'] = 'long'
+        with self.assertRaisesRegex(AssertionError, 'Unpack result'):
+            model.inventory(bad, 'pre')
+        bad = copy.deepcopy(fixture)
+        bad['bindings'][-1]['expr'][1][0]['rep']['vector']['lanes'] = 8
+        with self.assertRaisesRegex(AssertionError, 'inexact FloatX4'):
+            model.inventory(bad, 'pre')
+        bad = copy.deepcopy(fixture)
+        bad['bindings'][0]['expr'][1].append(dict(rep=scalar))
+        with self.assertRaisesRegex(AssertionError, 'Host entry ABI drift'):
+            model.inventory(bad, 'pre')
 
 
 if __name__ == '__main__':

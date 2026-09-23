@@ -129,6 +129,12 @@ def rep(expression):
     return expression[-1].get('rep') if isinstance(expression, list) and expression and isinstance(expression[-1], dict) else None
 
 
+def float_tuple(proof):
+    return bool(proof and proof.get('aggregate') == 'unboxed-tuple' and proof.get('primReps') == ['FloatRep']*4
+                and len(proof.get('components', [])) == 4 and all(
+                    c.get('kind') == 'float' and c.get('primReps') == ['FloatRep'] for c in proof['components']))
+
+
 def inventory(module, stage):
     check(module['boundary'] == STAGES[stage], 'Wrong Core boundary')
     vectors = [v for v in walk(module) if isinstance(v, dict) and v.get('kind') == 'vector']
@@ -141,13 +147,9 @@ def inventory(module, stage):
     packs = [v for v in applications if v[1][1] == 'packFloatX4#']
     for call in packs:
         check(len(call[2]) == 1, 'packFloatX4# must have ONE logical tuple argument')
-        proof = rep(call[2][0])
-        check(proof and proof.get('aggregate') == 'unboxed-tuple' and proof.get('primReps') == ['FloatRep']*4
-              and len(proof.get('components', [])) == 4 and all(c.get('kind') == 'float' and c.get('primReps') == ['FloatRep']
-              for c in proof['components']), 'Pack must retain four Float# tuple leaves')
+        check(float_tuple(rep(call[2][0])), 'Pack must retain four Float# tuple leaves')
     unpacked = [v for v in applications if v[1][1] == 'unpackFloatX4#']
-    check(all(rep(v) and rep(v).get('primReps') == ['FloatRep']*4
-              and rep(v).get('aggregate') == 'unboxed-tuple' for v in unpacked), 'Unpack result is not four Float# leaves')
+    check(all(float_tuple(rep(v)) for v in unpacked), 'Unpack result is not four Float# leaves')
     bindings = {b['name']: b for b in module['bindings']}
     for entry in entries():
         lam = bindings[entry['name']]['expr']
