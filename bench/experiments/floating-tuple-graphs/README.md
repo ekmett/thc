@@ -17,8 +17,8 @@ cannot enter the capture. The script leaves raw BGV/CFG and
 complete final LIR outside the captured evidence, parsing only the two audited
 compiler phases. `--collect-only` packages a run with a launch manifest and rejects
 changed runtime jars, exported Core, oracle, native provenance, JDK release or
-tooling inputs; recorded version information comes from launch time. The original
-raw graph hashes, exact case checks and final LIR are rechecked during collection.
+tooling inputs; recorded version information comes from launch time. Raw graph
+hashes, exact case checks and final LIR are rechecked during collection.
 
 The captured eight controls retain the exact installed entry after native replay:
 
