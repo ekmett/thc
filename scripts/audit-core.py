@@ -60,14 +60,29 @@ class Audit:
         if not isinstance(rep, dict):
             self.issue('representation-proof', owner, path, 'Expected representation record')
             return
-        # A logical empty/singleton tuple is not a scalar or a state token.
-        # Unknown metadata without this GHC-derived evidence remains valid.
+        # Aggregate capability is driven by exact logical metadata, never width.
         if 'aggregate' in rep:
             aggregate = rep['aggregate']
-            if aggregate in ('unboxed-tuple', 'unboxed-sum'):
-                self.issue('aggregate-representation', owner, path, aggregate)
-            else:
+            if aggregate not in ('unboxed-tuple', 'unboxed-sum'):
                 self.issue('representation-proof', owner, path, 'Invalid aggregate kind')
+            elif aggregate not in self.cap.get('aggregateResults', []):
+                self.issue('aggregate-representation', owner, path, aggregate)
+            elif not isinstance(rep.get('components'), list):
+                self.issue('aggregate-representation', owner, path, aggregate + ': missing exact components')
+            else:
+                physical = []
+                for index, component in enumerate(rep['components']):
+                    self.representation(component, owner, f'{path}/components/{index}')
+                    registers = component.get('primReps') if isinstance(component, dict) else None
+                    if not isinstance(registers, list):
+                        self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
+                    else:
+                        physical.extend(registers)
+                        if 'aggregate' not in component and (component.get('kind') in ('unknown', 'void') or
+                                any(r not in self.cap['fieldRepresentations'] for r in registers)):
+                            self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
+                if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:
+                    self.issue('representation-proof', owner, path, 'Tuple components disagree with physical representations')
         kind, registers, evaluated = rep.get('kind'), rep.get('primReps'), rep.get('evaluated')
         kinds = {'long', 'address', 'void', 'data', 'closure', 'object', 'unknown'}
         if kind not in kinds or type(evaluated) is not bool or (registers is not None and
@@ -97,6 +112,8 @@ class Audit:
             if type(arity) is not int or arity < 0 or arity > available or type(raw) is not int or arity > raw:
                 self.issue('join-metadata', owner, path, 'Join prefix disagrees with erased lambdas/raw join arity')
             self.representation(binding.get('joinResultRep'), owner, path + '/joinResultRep')
+            if self.is_tuple(binding.get('joinResultRep')):
+                self.issue('aggregate-boundary', owner, path, 'unboxed-tuple join result')
 
     def expression_metadata(self, expr, owner, path):
         index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4,
@@ -167,7 +184,65 @@ class Audit:
             except (TypeError, ValueError):
                 self.issue('invalid-literal-value', owner, path, f'{kind}: {value!r}')
 
-    def constructor(self, key, owner, path, constructing, arity):
+    @staticmethod
+    def is_tuple(rep):
+        return isinstance(rep, dict) and rep.get('aggregate') == 'unboxed-tuple'
+
+    @classmethod
+    def shape(cls, rep):
+        """Logical tuple boundaries are significant even at zero/one register.
+
+        Boxed leaf kinds and WHNF evidence may refine independently; primitive
+        representation names (including boxed liftedness) must still agree.
+        """
+        if not isinstance(rep, dict):
+            return None
+        if cls.is_tuple(rep):
+            components = rep.get('components')
+            if not isinstance(components, list):
+                return None
+            children = tuple(cls.shape(component) for component in components)
+            return None if None in children else ('tuple', children)
+        registers = rep.get('primReps')
+        return ('scalar', tuple(registers)) if isinstance(registers, list) else None
+
+    def compare_shapes(self, expected, actual, owner, path, component=False):
+        if not component and not (self.is_tuple(expected) or self.is_tuple(actual)):
+            return
+        left, right = self.shape(expected), self.shape(actual)
+        if left is None or right is None or left != right:
+            self.issue('aggregate-shape', owner, path, 'Conflicting or missing logical tuple representation proofs')
+
+    @staticmethod
+    def binder_scope(records):
+        return {record['id']: record.get('rep') for record in records
+                if isinstance(record, dict) and isinstance(record.get('id'), str)}
+
+    @staticmethod
+    def expression_rep(expr):
+        if not isinstance(expr, list) or not expr:
+            return None
+        index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4, 'case': 4, 'con': 3, 'prim': 2, 'void': 1}.get(expr[0])
+        return expr[index].get('rep') if index is not None and len(expr) > index and isinstance(expr[index], dict) else None
+
+    def free_variables(self, expr):
+        if not isinstance(expr, list) or not expr:
+            return set()
+        if expr[0] == 'var':
+            return {expr[1]}
+        if expr[0] == 'lam':
+            return self.free_variables(expr[2]) - {b['id'] for b in expr[1]}
+        if expr[0] == 'app':
+            return self.free_variables(expr[1]) | set().union(*(self.free_variables(a) for a in expr[2]))
+        if expr[0] == 'let':
+            ids = {b['id'] for b in expr[2]}
+            rhs = set().union(*(self.free_variables(b['expr']) for b in expr[2]))
+            return (rhs - ids if expr[1] else rhs) | (self.free_variables(expr[3]) - ids)
+        if expr[0] == 'case':
+            return self.free_variables(expr[1]) | set().union(*(self.free_variables(a[3]) - set(a[2]) - {expr[2]} for a in expr[3]))
+        return set()
+
+    def constructor(self, key, owner, path, constructing, arity, tuple_rep=None):
         use = dict(self.location(owner, path), operation='construct' if constructing else 'match', arity=arity)
         self.used_constructors.setdefault(key, []).append(use)
         info = self.constructors.get(key)
@@ -177,6 +252,13 @@ class Audit:
         expected = info.get('arity')
         if arity != expected:
             self.issue('constructor-arity', owner, path, f'{key}: got {arity}, expected {expected}')
+        if info.get('kind') == 'unboxed-tuple' and self.is_tuple(tuple_rep) and 'unboxed-tuple' in self.cap.get('aggregateResults', []):
+            components = tuple_rep.get('components')
+            if not isinstance(components, list) or len(components) != expected:
+                self.issue('aggregate-representation', owner, path, 'unboxed-tuple: constructor components mismatch')
+            # Global tuple workers are representation-polymorphic. The instantiated
+            # application/case proof supplies fields; generic worker nulls do not.
+            return
         if info.get('kind', 'boxed') not in self.cap['constructorKinds']:
             self.issue('constructor-kind', owner, path, f'{key}: {info.get("kind")}')
         reps = info.get('fieldReps')
@@ -200,7 +282,7 @@ class Audit:
                     elif is_strict and is_lifted and not self.cap['strictLiftedFields']:
                         self.issue('strict-lifted-field', owner, path, f'{key}[{index}]')
 
-    def walk(self, expr, bound, owner, path, primitive_arity=None):
+    def walk(self, expr, bound, owner, path, primitive_arity=None, tuple_result=None):
         if not isinstance(expr, list) or not expr or not isinstance(expr[0], str):
             self.issue('malformed-expression', owner, path, repr(expr)[:160])
             return
@@ -212,13 +294,24 @@ class Audit:
                     raise ValueError('Variable id must be a string')
                 if expr[1] not in bound:
                     self.reference(expr[1], owner, path)
+                else:
+                    self.compare_shapes(bound[expr[1]], self.expression_rep(expr), owner, path + '/rep')
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
             elif tag == 'void':
                 pass
             elif tag == 'lam':
                 ids = self.binder_ids(expr[1], owner, path + '/binders')
-                self.walk(expr[2], bound | ids, owner, path + '/body')
+                for binder in expr[1]:
+                    if self.is_tuple(binder.get('rep')):
+                        self.issue('aggregate-boundary', owner, path, 'unboxed-tuple formal argument')
+                captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
+                            if self.is_tuple(bound[key])}
+                if captured:
+                    self.issue('aggregate-boundary', owner, path, 'unboxed-tuple capture')
+                metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
+                self.compare_shapes(metadata.get('resultRep'), self.expression_rep(expr[2]), owner, path + '/resultRep')
+                self.walk(expr[2], bound | self.binder_scope(expr[1]), owner, path + '/body')
             elif tag == 'app':
                 arguments = expr[2]
                 flags = expr[3] if len(expr) > 3 else None
@@ -226,29 +319,51 @@ class Audit:
                     raise ValueError('Application arguments must be an array')
                 if not isinstance(flags, list) or len(flags) != len(arguments) or any(type(f) is not bool for f in flags):
                     self.issue('application-levity', owner, path, 'Missing/invalid argument representation flags')
-                self.walk(expr[1], bound, owner, path + '/function', len(arguments))
+                function = expr[1]
+                tuple_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-tuple'
+                proof = self.expression_rep(expr)
+                self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor else None)
                 for index, argument in enumerate(arguments):
+                    if tuple_constructor and self.is_tuple(proof) and isinstance(proof.get('components'), list):
+                        components = proof['components']
+                        if index < len(components):
+                            self.compare_shapes(components[index], self.expression_rep(argument), owner,
+                                                f'{path}/arguments/{index}/rep', component=True)
+                    if not tuple_constructor and (self.is_tuple(self.expression_rep(argument)) or
+                            argument[0] == 'var' and self.is_tuple(bound.get(argument[1]))):
+                        self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
                     self.walk(argument, bound, owner, f'{path}/arguments/{index}')
             elif tag == 'let':
                 recursive, group = expr[1], expr[2]
                 if type(recursive) is not bool:
                     raise ValueError('Let recursive flag must be boolean')
                 ids = self.binder_ids(group, owner, path + '/bindings')
+                local = bound | self.binder_scope(group)
                 for index, binding in enumerate(group):
                     if not isinstance(binding, dict):
                         continue
+                    if self.is_tuple(binding.get('rep')):
+                        self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
                     if recursive and binding.get('lifted') is False:
                         self.issue('recursive-unlifted', owner, f'{path}/bindings/{index}', binding.get('id'))
-                    self.walk(binding.get('expr'), bound | ids if recursive else bound,
+                    self.walk(binding.get('expr'), local if recursive else bound,
                               owner, f'{path}/bindings/{index}/rhs')
-                self.walk(expr[3], bound | ids, owner, path + '/body')
+                self.compare_shapes(self.expression_rep(expr), self.expression_rep(expr[3]), owner, path + '/body/rep')
+                self.walk(expr[3], local, owner, path + '/body')
             elif tag == 'case':
                 self.walk(expr[1], bound, owner, path + '/scrutinee')
                 if not isinstance(expr[2], str):
                     raise ValueError('Case binder must be a string')
+                metadata = expr[4] if len(expr) > 4 and isinstance(expr[4], dict) else {}
+                binder_proof = metadata.get('binder', {}).get('rep', self.expression_rep(expr[1]))
+                self.compare_shapes(binder_proof, self.expression_rep(expr[1]), owner, path + '/binder/rep')
+                if self.is_tuple(binder_proof):
+                    if len(expr[3]) != 1:
+                        self.issue('aggregate-boundary', owner, path, 'unboxed-tuple requires one alternative')
                 for index, alternative in enumerate(expr[3]):
                     altpath = f'{path}/alternatives/{index}'
                     kind, value, ids, rhs = alternative[:4]
+                    records = []
                     if len(alternative) > 4:
                         metadata = alternative[4]
                         records = metadata.get('binders') if isinstance(metadata, dict) else None
@@ -258,14 +373,31 @@ class Audit:
                     if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids):
                         raise ValueError('Alternative binders must be strings')
                     if kind == 'data':
-                        self.constructor(value, owner, altpath, False, len(ids))
+                        self.constructor(value, owner, altpath, False, len(ids), binder_proof)
+                        if self.is_tuple(binder_proof):
+                            if self.constructors.get(value, {}).get('kind') != 'unboxed-tuple':
+                                self.issue('aggregate-shape', owner, altpath, 'Tuple scrutinee requires a tuple alternative')
+                            components = binder_proof.get('components')
+                            if isinstance(components, list):
+                                if len(ids) != len(components) or not isinstance(records, list) or len(records) != len(components):
+                                    self.issue('aggregate-shape', owner, altpath, 'Tuple alternative components mismatch')
+                                else:
+                                    for field, (component, record) in enumerate(zip(components, records)):
+                                        self.compare_shapes(component, record.get('rep') if isinstance(record, dict) else None,
+                                                            owner, f'{altpath}/binders/{field}/rep', component=True)
                     elif kind == 'lit':
                         self.literal(value[0], value[1], owner, altpath + '/literal')
                     elif kind != 'default':
                         self.issue('alternative-kind', owner, altpath, kind)
-                    self.walk(rhs, bound | {expr[2]} | set(ids), owner, altpath + '/body')
+                    if self.is_tuple(binder_proof) and (kind not in ('data', 'default') or kind == 'default' and ids):
+                        self.issue('aggregate-shape', owner, altpath, 'Invalid tuple alternative')
+                    self.compare_shapes(self.expression_rep(expr), self.expression_rep(rhs), owner, altpath + '/body/rep')
+                    local = bound | {expr[2]: binder_proof} | dict.fromkeys(ids)
+                    if isinstance(records, list):
+                        local.update(self.binder_scope(records))
+                    self.walk(rhs, local, owner, altpath + '/body')
             elif tag == 'con':
-                self.constructor(expr[1], owner, path, True, expr[2])
+                self.constructor(expr[1], owner, path, True, expr[2], tuple_result or self.expression_rep(expr))
             elif tag == 'prim':
                 name = expr[1]
                 self.primitives.setdefault(name, []).append(dict(self.location(owner, path), arity=primitive_arity))
@@ -288,6 +420,9 @@ class Audit:
             else:
                 key = candidates[0]
                 roots.append(key)
+                expression = self.bindings[key].get('expr')
+                if isinstance(expression, list) and expression and expression[0] == 'lam' and len(expression) > 3 and self.is_tuple(expression[3].get('resultRep')):
+                    self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
                 if key not in self.chains:
                     self.chains[key] = [key]
                     self.queue.append(key)
@@ -298,7 +433,7 @@ class Audit:
             self.binding_metadata(binding, key, '/binding')
             if type(binding.get('lifted')) is not bool:
                 self.issue('unknown-binder-levity', key, '/binding', key)
-            self.walk(binding.get('expr'), set(), key, '/expr')
+            self.walk(binding.get('expr'), {}, key, '/expr')
         for issue in self.issues:
             if issue['owner'] in self.chains:
                 issue['reachableVia'] = self.chains[issue['owner']]
