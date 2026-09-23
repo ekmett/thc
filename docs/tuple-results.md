@@ -68,3 +68,13 @@ LIR computes the dynamic leaves in scalar registers. A host-result `Long` box
 remains. Residual controls retain a call boundary and typed slab traffic. This
 proves those compiled entries, not the inlining frequency of arbitrary programs
 or a multiple-register return convention across residual calls.
+
+The [real Set diagnostic experiment](../bench/experiments/set-diagnostic/README.md)
+also runs all 22 existing native oracle rows on both backends, including the
+exported `minViewSure`/`maxViewSure` tuple-result joins and `glue`, with no
+unsupported traps and valid compiled entries after replay. Its focused AST
+`minViewSure` graph keeps join results as separate SSA values until outer tuple
+completion; residual call traffic and three exception-control join guard groups
+(nine field reads) remain.
+This is diagnostic execution only: strict Set still rejects the remaining cold
+exception/backtrace and state-representation gaps.

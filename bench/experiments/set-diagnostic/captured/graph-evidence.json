@@ -1,0 +1,321 @@
+{
+  "backend": "ast",
+  "entry": "main:Data.Set.Internal.$wgo1",
+  "source": "minViewSure.go",
+  "diagnosticOnly": true,
+  "nativeRows": 22,
+  "compiledHelperValidAfterReplay": true,
+  "compiledEntryEvidence": {
+    "entries": 359,
+    "log": "/private/tmp/thc-set-diagnostic/min-view-ast/execution-check.log",
+    "sha256": "da6d057068534d4b2313bc215ef5c7c115a8278e9440a09e0257dc973c3b6674",
+    "inputs": {
+      "runtimeCheckoutHeadAtLaunch": "2d40d8bc72a1fdf481ab5d6b50c553a44491990a",
+      "inputsSha256": {
+        "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/SetDiagnosticProbe.java": "026efdcd052f905d12d0db358a9de4b8994a093de6877c904179e15f9139bbdc",
+        "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/inputs.py": "d1994b1b7c71eaa3ad6fe0fcf296ff56f347d78ef5141711e68423fab9db4d7f",
+        "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/inventory.py": "d71af02ac947084609d1f20507b16f33e96ebdf0f3fe7036b335f73b1032d948",
+        "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/summarize-graph.py": "16fdba15f88d34c00762a2bf29059c771b6672dd02c330747d6369b1c2004e3d",
+        "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/summarize.py": "358e2876853c6f8ee40e1bc09e119d1350ae22e8524c32efef2baab40a2da367",
+        "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/graph-min-view.sh": "fe1c64eb28095a804cba21c7986c471c9c04161dac736820d9ea5291e97c2e03",
+        "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/run.sh": "c9881114c1df78f8285655c234b6285ce0fd2984bd147b61eb767fc97878fac1",
+        "/private/tmp/thc-list-library/build/install/thc/lib/annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+        "/private/tmp/thc-list-library/build/install/thc/lib/collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+        "/private/tmp/thc-list-library/build/install/thc/lib/jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+        "/private/tmp/thc-list-library/build/install/thc/lib/kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+        "/private/tmp/thc-list-library/build/install/thc/lib/nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+        "/private/tmp/thc-list-library/build/install/thc/lib/polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+        "/private/tmp/thc-list-library/build/install/thc/lib/thc-0.1-experiment.jar": "e180659e0bd7f42fdd1d4ce0a7549d71d9a46599fabf3bc729807687f922dbb0",
+        "/private/tmp/thc-list-library/build/install/thc/lib/truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+        "/private/tmp/thc-list-library/build/install/thc/lib/truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+        "/private/tmp/thc-list-library/build/install/thc/lib/truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+        "/private/tmp/thc-list-library/build/install/thc/lib/word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+      }
+    }
+  },
+  "phases": [
+    {
+      "name": "39: Before phase HighTierLowering",
+      "nodes": 1586,
+      "nodeClassCounts": {
+        "jdk.graal.compiler.hotspot.nodes.HotSpotLoadReservedReferenceNode": 2,
+        "jdk.graal.compiler.nodes.BeginNode": 91,
+        "jdk.graal.compiler.nodes.ConstantNode": 54,
+        "jdk.graal.compiler.nodes.DeoptimizeNode": 12,
+        "jdk.graal.compiler.nodes.EndNode": 64,
+        "jdk.graal.compiler.nodes.FixedGuardNode": 128,
+        "jdk.graal.compiler.nodes.FrameState": 353,
+        "jdk.graal.compiler.nodes.IfNode": 35,
+        "jdk.graal.compiler.nodes.InvokeWithExceptionNode": 9,
+        "jdk.graal.compiler.nodes.MergeNode": 23,
+        "jdk.graal.compiler.nodes.ParameterNode": 1,
+        "jdk.graal.compiler.nodes.PiArrayNode": 5,
+        "jdk.graal.compiler.nodes.PiNode": 95,
+        "jdk.graal.compiler.nodes.ReturnNode": 1,
+        "jdk.graal.compiler.nodes.StartNode": 1,
+        "jdk.graal.compiler.nodes.ValuePhiNode": 73,
+        "jdk.graal.compiler.nodes.calc.AddNode": 34,
+        "jdk.graal.compiler.nodes.calc.ConditionalNode": 1,
+        "jdk.graal.compiler.nodes.calc.IntegerEqualsNode": 7,
+        "jdk.graal.compiler.nodes.calc.IntegerLessThanNode": 6,
+        "jdk.graal.compiler.nodes.calc.IsNullNode": 54,
+        "jdk.graal.compiler.nodes.calc.LeftShiftNode": 6,
+        "jdk.graal.compiler.nodes.calc.ObjectEqualsNode": 12,
+        "jdk.graal.compiler.nodes.calc.OrNode": 1,
+        "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+        "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 1,
+        "jdk.graal.compiler.nodes.extended.IntegerSwitchNode": 3,
+        "jdk.graal.compiler.nodes.extended.UnboxNode": 1,
+        "jdk.graal.compiler.nodes.java.ArrayLengthNode": 1,
+        "jdk.graal.compiler.nodes.java.ExceptionObjectNode": 9,
+        "jdk.graal.compiler.nodes.java.InstanceOfNode": 68,
+        "jdk.graal.compiler.nodes.java.LoadFieldNode": 120,
+        "jdk.graal.compiler.nodes.java.LoadIndexedNode": 9,
+        "jdk.graal.compiler.nodes.java.MethodCallTargetNode": 9,
+        "jdk.graal.compiler.nodes.java.StoreFieldNode": 75,
+        "jdk.graal.compiler.nodes.virtual.AllocatedObjectNode": 22,
+        "jdk.graal.compiler.nodes.virtual.CommitAllocationNode": 19,
+        "jdk.graal.compiler.nodes.virtual.MaterializedObjectState": 3,
+        "jdk.graal.compiler.nodes.virtual.VirtualArrayNode": 37,
+        "jdk.graal.compiler.nodes.virtual.VirtualBoxingNode": 8,
+        "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode": 35,
+        "jdk.graal.compiler.nodes.virtual.VirtualObjectState": 97
+      }
+    },
+    {
+      "name": "111: After low tier",
+      "nodes": 3487,
+      "nodeClassCounts": {
+        "jdk.graal.compiler.core.aarch64.AArch64AddressNode": 517,
+        "jdk.graal.compiler.hotspot.nodes.CurrentJavaThreadNode": 1,
+        "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode": 104,
+        "jdk.graal.compiler.hotspot.nodes.HotSpotDirectCallTargetNode": 10,
+        "jdk.graal.compiler.hotspot.word.PointerCastNode": 67,
+        "jdk.graal.compiler.nodes.BeginNode": 328,
+        "jdk.graal.compiler.nodes.ConstantNode": 151,
+        "jdk.graal.compiler.nodes.DeoptimizeNode": 18,
+        "jdk.graal.compiler.nodes.DynamicDeoptimizeNode": 21,
+        "jdk.graal.compiler.nodes.EndNode": 215,
+        "jdk.graal.compiler.nodes.FrameState": 218,
+        "jdk.graal.compiler.nodes.IfNode": 149,
+        "jdk.graal.compiler.nodes.InvokeNode": 1,
+        "jdk.graal.compiler.nodes.InvokeWithExceptionNode": 9,
+        "jdk.graal.compiler.nodes.MergeNode": 87,
+        "jdk.graal.compiler.nodes.ParameterNode": 1,
+        "jdk.graal.compiler.nodes.PrefetchAllocateNode": 33,
+        "jdk.graal.compiler.nodes.ReturnNode": 1,
+        "jdk.graal.compiler.nodes.StartNode": 1,
+        "jdk.graal.compiler.nodes.ValuePhiNode": 137,
+        "jdk.graal.compiler.nodes.calc.AddNode": 79,
+        "jdk.graal.compiler.nodes.calc.IntegerBelowNode": 31,
+        "jdk.graal.compiler.nodes.calc.IntegerEqualsNode": 15,
+        "jdk.graal.compiler.nodes.calc.IntegerLessThanNode": 6,
+        "jdk.graal.compiler.nodes.calc.IsNullNode": 11,
+        "jdk.graal.compiler.nodes.calc.LeftShiftNode": 14,
+        "jdk.graal.compiler.nodes.calc.NarrowNode": 59,
+        "jdk.graal.compiler.nodes.calc.ObjectEqualsNode": 1,
+        "jdk.graal.compiler.nodes.calc.OrNode": 1,
+        "jdk.graal.compiler.nodes.calc.PointerEqualsNode": 76,
+        "jdk.graal.compiler.nodes.calc.UnsignedRightShiftNode": 59,
+        "jdk.graal.compiler.nodes.calc.ZeroExtendNode": 8,
+        "jdk.graal.compiler.nodes.extended.ForeignCallNode": 25,
+        "jdk.graal.compiler.nodes.extended.IntegerSwitchNode": 3,
+        "jdk.graal.compiler.nodes.extended.MembarNode": 19,
+        "jdk.graal.compiler.nodes.extended.NullCheckNode": 64,
+        "jdk.graal.compiler.nodes.extended.PublishWritesNode": 25,
+        "jdk.graal.compiler.nodes.gc.G1PostWriteBarrierNode": 16,
+        "jdk.graal.compiler.nodes.gc.G1PreWriteBarrierNode": 35,
+        "jdk.graal.compiler.nodes.memory.MemoryAnchorNode": 56,
+        "jdk.graal.compiler.nodes.memory.ReadNode": 270,
+        "jdk.graal.compiler.nodes.memory.WriteNode": 319,
+        "jdk.graal.compiler.nodes.virtual.VirtualArrayNode": 36,
+        "jdk.graal.compiler.nodes.virtual.VirtualBoxingNode": 8,
+        "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode": 14,
+        "jdk.graal.compiler.nodes.virtual.VirtualObjectState": 91,
+        "jdk.graal.compiler.replacements.nodes.ReadRegisterNode": 40,
+        "jdk.graal.compiler.word.WordCastNode": 37
+      }
+    }
+  ],
+  "allocatedObjectsByStamp": {
+    "a!# java.lang.Object[]": 1,
+    "a!# com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2": 18,
+    "a!# thc.runtime.Thunk": 3
+  },
+  "callTargets": {
+    "com.oracle.truffle.api.nodes.RootNode.getName()": 3,
+    "thc.runtime.Metrics.recordThunk(Ljava/lang/String;)": 3,
+    "thc.runtime.HandoffPool.grow(I)": 1,
+    "thc.runtime.HandoffPool.allocate(Lthc/runtime/HandoffLayout;, [Lthc/runtime/HandoffStorage;)": 1,
+    "com.oracle.truffle.runtime.OptimizedCallTarget.callBoundary([Ljava/lang/Object;)": 1
+  },
+  "tupleFieldAccesses": [
+    {
+      "node": 7338,
+      "class": "jdk.graal.compiler.nodes.java.StoreFieldNode",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6.handoff__0",
+      "purpose": "outer-root-completion",
+      "valueInputs": [
+        {
+          "node": 19759,
+          "class": "jdk.graal.compiler.nodes.ValuePhiNode",
+          "stamp": "a! java.lang.Object"
+        }
+      ],
+      "methods": [
+        "jdk.internal.misc.Unsafe.putReference(Unsafe.java:-1)",
+        "sun.misc.Unsafe.putObject(Unsafe.java:240)",
+        "com.oracle.truffle.api.staticobject.StaticProperty.setObject(StaticProperty.java:214)",
+        "thc.runtime.HandoffLayout.setObject(Handoff.kt:41)",
+        "thc.runtime.TupleShape.write(TupleResults.kt:35)",
+        "thc.runtime.TupleShape.finish(TupleResults.kt:48)",
+        "thc.runtime.FunctionBody.execute(Program.kt:627)",
+        "thc.runtime.SelfRepeater.once(Program.kt:648)",
+        "thc.runtime.FunctionRoot.executeBody(Program.kt:756)",
+        "thc.runtime.FunctionRoot.execute(Program.kt:749)"
+      ]
+    },
+    {
+      "node": 7398,
+      "class": "jdk.graal.compiler.nodes.java.StoreFieldNode",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6.handoff__1",
+      "purpose": "outer-root-completion",
+      "valueInputs": [
+        {
+          "node": 7711,
+          "class": "jdk.graal.compiler.nodes.ValuePhiNode",
+          "stamp": "a! java.lang.Object"
+        }
+      ],
+      "methods": [
+        "jdk.internal.misc.Unsafe.putReference(Unsafe.java:-1)",
+        "sun.misc.Unsafe.putObject(Unsafe.java:240)",
+        "com.oracle.truffle.api.staticobject.StaticProperty.setObject(StaticProperty.java:214)",
+        "thc.runtime.HandoffLayout.setObject(Handoff.kt:41)",
+        "thc.runtime.TupleShape.write(TupleResults.kt:35)",
+        "thc.runtime.TupleShape.finish(TupleResults.kt:48)",
+        "thc.runtime.FunctionBody.execute(Program.kt:627)",
+        "thc.runtime.SelfRepeater.once(Program.kt:648)",
+        "thc.runtime.FunctionRoot.executeBody(Program.kt:756)",
+        "thc.runtime.FunctionRoot.execute(Program.kt:749)"
+      ]
+    },
+    {
+      "node": 9085,
+      "class": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6.handoff__0",
+      "purpose": "residual-callee-consumption",
+      "valueInputs": [],
+      "methods": [
+        "jdk.internal.misc.Unsafe.getReference(Unsafe.java:-1)",
+        "sun.misc.Unsafe.getObject(Unsafe.java:222)",
+        "com.oracle.truffle.api.staticobject.StaticProperty.getObject(StaticProperty.java:181)",
+        "thc.runtime.HandoffLayout.getObject(Handoff.kt:40)",
+        "thc.runtime.TupleShape.copyFrom(TupleResults.kt:29)",
+        "thc.runtime.TupleShape.consume(TupleResults.kt:56)",
+        "thc.runtime.AstTupleDestination.consume(TupleResults.kt:130)",
+        "thc.runtime.DirectTupleCaller.execute(TupleResults.kt:199)",
+        "thc.runtime.TupleDispatch.execute(TupleResults.kt:143)",
+        "thc.runtime.TupleApplication.executeTuple(TupleResults.kt:314)"
+      ]
+    },
+    {
+      "node": 9086,
+      "class": "jdk.graal.compiler.nodes.java.LoadFieldNode",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6.handoff__1",
+      "purpose": "residual-callee-consumption",
+      "valueInputs": [],
+      "methods": [
+        "jdk.internal.misc.Unsafe.getReference(Unsafe.java:-1)",
+        "sun.misc.Unsafe.getObject(Unsafe.java:222)",
+        "com.oracle.truffle.api.staticobject.StaticProperty.getObject(StaticProperty.java:181)",
+        "thc.runtime.HandoffLayout.getObject(Handoff.kt:40)",
+        "thc.runtime.TupleShape.copyFrom(TupleResults.kt:29)",
+        "thc.runtime.TupleShape.consume(TupleResults.kt:56)",
+        "thc.runtime.AstTupleDestination.consume(TupleResults.kt:130)",
+        "thc.runtime.DirectTupleCaller.execute(TupleResults.kt:199)",
+        "thc.runtime.TupleDispatch.execute(TupleResults.kt:143)",
+        "thc.runtime.TupleApplication.executeTuple(TupleResults.kt:314)"
+      ]
+    },
+    {
+      "node": 9113,
+      "class": "jdk.graal.compiler.nodes.java.StoreFieldNode",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6.handoff__0",
+      "purpose": "residual-callee-consumption",
+      "valueInputs": [
+        {
+          "node": 76,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "stamp": "a java.lang.Object NULL"
+        }
+      ],
+      "methods": [
+        "jdk.internal.misc.Unsafe.putReference(Unsafe.java:-1)",
+        "sun.misc.Unsafe.putObject(Unsafe.java:240)",
+        "com.oracle.truffle.api.staticobject.StaticProperty.setObject(StaticProperty.java:214)",
+        "thc.runtime.HandoffLayout.clearReferences(Handoff.kt:51)",
+        "thc.runtime.HandoffPool.release(Handoff.kt:99)",
+        "thc.runtime.TupleResultPool.release(TupleResults.kt:114)",
+        "thc.runtime.TupleResultPool.releaseChecked(TupleResults.kt:118)",
+        "thc.runtime.TupleShape.consume(TupleResults.kt:56)",
+        "thc.runtime.AstTupleDestination.consume(TupleResults.kt:130)",
+        "thc.runtime.DirectTupleCaller.execute(TupleResults.kt:199)"
+      ]
+    },
+    {
+      "node": 9117,
+      "class": "jdk.graal.compiler.nodes.java.StoreFieldNode",
+      "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$6.handoff__1",
+      "purpose": "residual-callee-consumption",
+      "valueInputs": [
+        {
+          "node": 76,
+          "class": "jdk.graal.compiler.nodes.ConstantNode",
+          "stamp": "a java.lang.Object NULL"
+        }
+      ],
+      "methods": [
+        "jdk.internal.misc.Unsafe.putReference(Unsafe.java:-1)",
+        "sun.misc.Unsafe.putObject(Unsafe.java:240)",
+        "com.oracle.truffle.api.staticobject.StaticProperty.setObject(StaticProperty.java:214)",
+        "thc.runtime.HandoffLayout.clearReferences(Handoff.kt:51)",
+        "thc.runtime.HandoffPool.release(Handoff.kt:99)",
+        "thc.runtime.TupleResultPool.release(TupleResults.kt:114)",
+        "thc.runtime.TupleResultPool.releaseChecked(TupleResults.kt:118)",
+        "thc.runtime.TupleShape.consume(TupleResults.kt:56)",
+        "thc.runtime.AstTupleDestination.consume(TupleResults.kt:130)",
+        "thc.runtime.DirectTupleCaller.execute(TupleResults.kt:199)"
+      ]
+    }
+  ],
+  "physicalVirtualFrameSlotAccesses": [],
+  "remainingLocalJoinGuardReads": {
+    "thc.runtime.LocalJoinJump.target": 3,
+    "thc.runtime.LocalJoinTarget.group": 3,
+    "thc.runtime.LocalJoinTarget.index": 3
+  },
+  "sha256": {
+    "/private/tmp/thc-set-diagnostic/min-view-ast/run.log": "eb641f010de82837b8538b8db372bdaa41a7d34819a690b422c2ea3f03edfd22",
+    "/private/tmp/thc-set-diagnostic/min-view-ast/graphs/TruffleHotSpotCompilation-2950[lambda_x,_ds,_r].bgv": "8c495692e5181e1a7e11fed7cb275f9d56322f0a07665d6ad334df0aafe2d88b",
+    "/private/tmp/thc-set-diagnostic/min-view-ast/graphs/TruffleHotSpotCompilation-2950[lambda_x,_ds,_r].cfg": "bc3e14bdddfd94b39b80c4e8130cc35824b15af3821ce48407bf030fb10b8645"
+  },
+  "inputs": {
+    "runtimeCheckoutHeadAtLaunch": "2d40d8bc72a1fdf481ab5d6b50c553a44491990a",
+    "inputsSha256": {
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/SetDiagnosticProbe.java": "bc6ea89e2181c589fd8be10d121997dae3c7c1670eaff46f7920c15688c0f1b3",
+      "/private/tmp/thc-list-library/build/install/thc/lib/annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "/private/tmp/thc-list-library/build/install/thc/lib/collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+      "/private/tmp/thc-list-library/build/install/thc/lib/kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+      "/private/tmp/thc-list-library/build/install/thc/lib/thc-0.1-experiment.jar": "e180659e0bd7f42fdd1d4ce0a7549d71d9a46599fabf3bc729807687f922dbb0",
+      "/private/tmp/thc-list-library/build/install/thc/lib/truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+      "/private/tmp/thc-list-library/build/install/thc/lib/truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+      "/private/tmp/thc-list-library/build/install/thc/lib/word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    "provenanceNote": "Same unchanged probe source and installed jars as the adjacent final correctness run; graph launched directly with the documented JVM flags."
+  }
+}
