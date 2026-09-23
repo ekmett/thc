@@ -14,6 +14,15 @@ internal object ManagedByteArray {
     }
     @JvmStatic fun read(bytes: ByteArray, offset: Long): Long = bytes[index(bytes, offset)].toLong() and 255L
     @JvmStatic fun write(bytes: ByteArray, offset: Long, value: Long) { bytes[index(bytes, offset)] = value.toByte() }
+    /** GHC requires distinct immutable/mutable arrays and fully contained ranges.
+     * Subtraction checks every full-width range before any narrowing or write. */
+    @JvmStatic fun copy(source: ByteArray, sourceOffset: Long, destination: ByteArray, destinationOffset: Long, count: Long) {
+        if (source === destination) fault("copyByteArray# requires distinct source and destination arrays")
+        fun contained(size: Long, offset: Long) = offset >= 0 && offset <= size && count >= 0 && count <= size - offset
+        if (!contained(source.size.toLong(), sourceOffset) || !contained(destination.size.toLong(), destinationOffset))
+            fault("ByteArray# copy range outside its backing storage")
+        System.arraycopy(source, sourceOffset.toInt(), destination, destinationOffset.toInt(), count.toInt())
+    }
     /** Unsafe freeze changes the static type, not the array or its identity. */
     @JvmStatic fun freeze(bytes: ByteArray): ByteArray = bytes
     @JvmStatic fun allocate(size: Long): ByteArray {
@@ -30,6 +39,8 @@ private const val BYTE_ARRAY_REP = "BoxedRep (Just Unlifted)"
 internal enum class ByteArrayOp(val primitive: String, private val arguments: List<List<String>>, val tuple: Boolean = false) {
     NEW("newByteArray#", listOf(listOf("IntRep"), emptyList()), true),
     WRITE("writeWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word8Rep"), emptyList())),
+    COPY("copyByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
+        listOf("IntRep"), listOf("IntRep"), emptyList())),
     FREEZE("unsafeFreezeByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
     SIZE("sizeofByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
     INDEX("indexWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
@@ -50,7 +61,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE, WRITE_INT -> emptyList(); SIZE, INDEX_INT -> listOf("IntRep"); else -> listOf("Word8Rep")
+            WRITE, WRITE_INT, COPY -> emptyList(); SIZE, INDEX_INT -> listOf("IntRep"); else -> listOf("Word8Rep")
         })
         if (!valid) throw RuntimeFault("ByteArray primitive result representation mismatch: $primitive")
     }
@@ -64,6 +75,7 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.NEW -> NewByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.WRITE -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.SIZE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
@@ -148,5 +160,21 @@ private class IndexIntArrayExpression(@field:Child private var array: Expr,
         val bytes = ManagedByteArray.require(array.execute(frame))
         val element = index.executeRequiredLong(frame)
         return ManagedIntArray.read(bytes, element)
+    }
+}
+
+private class CopyByteArrayExpression(@field:Child private var source: Expr,
+    @field:Child private var sourceOffset: Expr, @field:Child private var destination: Expr,
+    @field:Child private var destinationOffset: Expr, @field:Child private var count: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val from = ManagedByteArray.require(source.execute(frame))
+        val fromOffset = sourceOffset.executeRequiredLong(frame)
+        val to = ManagedByteArray.require(destination.execute(frame))
+        val toOffset = destinationOffset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedByteArray.copy(from, fromOffset, to, toOffset, length)
+        return Unit
     }
 }

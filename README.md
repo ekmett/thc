@@ -102,7 +102,7 @@ scalar/reference inputs, local join results and zero-width State# components;
 aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
-pack/length/unpack with ordered writes and native/model checks on both backends.
+pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
 [Int-array operations](docs/int-arrays.md) extend the same byte storage to
 public `UArray`/`STUArray` examples with native-endian, full-width values.
 
