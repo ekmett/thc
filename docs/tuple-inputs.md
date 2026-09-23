@@ -34,6 +34,10 @@ materialized transfer storage from fresh direct ingress. Generation checks preve
 an older caller's cleanup from releasing storage reused by a later call. Generic
 layout cleanup and copy helpers receive metadata and storage, never a VirtualFrame.
 Cached call shapes keep constant field accesses in the common path.
+An existing scalar operand without an exact primitive proof can generalize its
+bytecode local to Object when one higher-order site changes numeric targets.
+That scalar position uses a generic local read and a checked target-kind cast;
+exact tuple leaves continue to use primitive accessors.
 
 `TupleInputAudit.hs` supplies genuine pre/post-Tidy boundaries and 139 unary plus
 seven independent-pair native rows. Its preparer checks separate wraparound
@@ -49,3 +53,10 @@ These tests establish execution and lifetime correctness. Graph controls separat
 account for carrier/packet allocation and field traffic; typed fields alone are
 not a hardware register-passing claim. A scalar Object-return box can remain at
 the public Truffle boundary even when all tuple transport disappears.
+
+The [graph experiment](../bench/experiments/tuple-inputs/README.md) retains both
+native direct/mixed/lazy call controls and synthetic data-dependent tail loops.
+The latter preserve changing payload and depth recurrences for self, three-target
+and prefixed cycles; allocation removal is checked inside the surviving loop.
+Separate ownership tests force an actual deoptimization after partial input
+restore, including a throw, and require immediate reference cleanup before recovery.
