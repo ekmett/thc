@@ -2,11 +2,12 @@
 
 THC supports a bounded scalar `Float#`/`Double#` foundation in both the AST and
 bytecode backends. It includes floating literals, primitive locals, constructor
-fields and closure captures, scalar arguments/results, and 28 primops:
+fields and closure captures, scalar arguments/results, and 30 primops:
 
 | Family | Float# | Double# |
 | --- | --- | --- |
 | Arithmetic | `plusFloat#`, `minusFloat#`, `timesFloat#`, `divideFloat#`, `negateFloat#` | `+##`, `-##`, `*##`, `/##`, `negateDouble#` |
+| Square root | `sqrtFloat#` | `sqrtDouble#` |
 | Comparisons | `eqFloat#`, `neFloat#`, `ltFloat#`, `leFloat#`, `gtFloat#`, `geFloat#` | `==##`, `/=##`, `<##`, `<=##`, `>##`, `>=##` |
 | Int conversion | `int2Float#`, `float2Int#` | `int2Double#`, `double2Int#` |
 | Precision conversion | `double2Float#` | `float2Double#` |
@@ -68,6 +69,28 @@ valid GHC lowering path that widens an exact scalar binder is currently known.
 Malformed case results are checked against every known alternative independent
 of ordering; an unknown alternative does not inherit a floating proof from its
 peers.
+
+`scripts/prepare-sqrt-audit.py` separately exports public `Prelude.sqrt` for both
+precisions before and after Tidy. Its 418 native rows include signed zeros,
+subnormals, infinities, negative values, signaling/quiet NaNs, boundaries around
+perfect squares, and deterministic random finite inputs. An independent exact
+rational model finds adjacent output values and compares their squared midpoint,
+checking nearest-even rounding without calling a floating square-root function.
+The suite checks 288 exact bit results, 104 NaN classifications and 26 scalar
+consumer results. Arithmetic NaN payloads and signs are not specified.
+
+The AST uses separate typed unary nodes; BytecodeDSL uses typed unary operations.
+Both call JVM `Math.sqrt`, whose [specified behavior](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Math.html#sqrt(double))
+preserves signed zero and returns the correctly rounded binary64 root. Float
+operands are widened exactly, then the result is narrowed to binary32. The native
+and independent bit checks cover this path at both precision boundaries. Generic
+Object call/return boxing and optional scalar handoff eligibility remain unchanged.
+`SqrtPrimitiveTest` runs both exports and backends with guest inlining enabled and
+disabled. Every measured row requires the exact guest-entry count (one primitive
+producer or two roots for a scalar consumer) and the selected target still
+installed. Cold special values are checked without a compilation retry. The CI
+handoff run repeats the same tests; source, auditor, native and export hashes are
+validated before execution.
 
 For actual compiler evidence, `floatingLoop` has both f32 and f64 accumulators.
 Capture its graph with `scripts/dump-graph.sh`, selecting

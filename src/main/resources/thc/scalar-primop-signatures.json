@@ -1276,6 +1276,18 @@
       ],
       "result": "Word8Rep"
     },
+    "sqrtDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "sqrtFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "subInt16#": {
       "arguments": [
         "Int16Rep",

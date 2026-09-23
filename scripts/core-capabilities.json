@@ -337,7 +337,9 @@
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
-    "indexWord8Array#": 2
+    "indexWord8Array#": 2,
+    "sqrtFloat#": 1,
+    "sqrtDouble#": 1
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",

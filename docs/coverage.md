@@ -30,7 +30,7 @@ The [scalar bit suite](bit-primops.md) adds 21 population/zero-count, byte-swap,
 and bit-reversal operations with 11,923 native/model rows, pre/post-Tidy exports,
 and exact compiled-entry checks for every row on both backends.
 
-The [floating suite](floating-primitives.md) adds 28 scalar `Float#`/`Double#`
+The [floating suite](floating-primitives.md) adds 30 scalar `Float#`/`Double#`
 operations and 412 native/model rows, with primitive locals, fields and captures.
 Its compiled loop retains both precisions without boxing in the continuing loop;
 generic call boundaries and floating tuple leaves remain separate work.

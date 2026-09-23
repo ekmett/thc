@@ -1074,6 +1074,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "timesFloat#" -> "FloatMultiply"
             "divideFloat#" -> "FloatDivide"
             "negateFloat#" -> "FloatNegate"
+            "sqrtFloat#" -> "FloatSqrt"
             "eqFloat#" -> "FloatEqual"
             "neFloat#" -> "FloatNotEqual"
             "ltFloat#" -> "FloatLess"
@@ -1085,6 +1086,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "*##" -> "DoubleMultiply"
             "/##" -> "DoubleDivide"
             "negateDouble#" -> "DoubleNegate"
+            "sqrtDouble#" -> "DoubleSqrt"
             "==##" -> "DoubleEqual"
             "/=##" -> "DoubleNotEqual"
             "<##" -> "DoubleLess"
@@ -1099,11 +1101,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("FloatNegate", "DoubleNegate", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
+        val unary = operation in setOf("FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "IntToFloat", "DoubleToFloat" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "IntToDouble", "FloatToDouble" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -1114,6 +1116,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "FloatMultiply" -> b.beginFloatMultiply()
                 "FloatDivide" -> b.beginFloatDivide()
                 "FloatNegate" -> b.beginFloatNegate()
+                "FloatSqrt" -> b.beginFloatSqrt()
                 "FloatEqual" -> b.beginFloatEqual()
                 "FloatNotEqual" -> b.beginFloatNotEqual()
                 "FloatLess" -> b.beginFloatLess()
@@ -1125,6 +1128,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleMultiply" -> b.beginDoubleMultiply()
                 "DoubleDivide" -> b.beginDoubleDivide()
                 "DoubleNegate" -> b.beginDoubleNegate()
+                "DoubleSqrt" -> b.beginDoubleSqrt()
                 "DoubleEqual" -> b.beginDoubleEqual()
                 "DoubleNotEqual" -> b.beginDoubleNotEqual()
                 "DoubleLess" -> b.beginDoubleLess()
@@ -1145,6 +1149,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "FloatMultiply" -> b.endFloatMultiply()
                 "FloatDivide" -> b.endFloatDivide()
                 "FloatNegate" -> b.endFloatNegate()
+                "FloatSqrt" -> b.endFloatSqrt()
                 "FloatEqual" -> b.endFloatEqual()
                 "FloatNotEqual" -> b.endFloatNotEqual()
                 "FloatLess" -> b.endFloatLess()
@@ -1156,6 +1161,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleMultiply" -> b.endDoubleMultiply()
                 "DoubleDivide" -> b.endDoubleDivide()
                 "DoubleNegate" -> b.endDoubleNegate()
+                "DoubleSqrt" -> b.endDoubleSqrt()
                 "DoubleEqual" -> b.endDoubleEqual()
                 "DoubleNotEqual" -> b.endDoubleNotEqual()
                 "DoubleLess" -> b.endDoubleLess()

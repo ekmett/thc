@@ -105,7 +105,7 @@ aggregate arguments, join captures, ordinary captures and sums remain explicit b
 pack/length/unpack with ordered writes and native/model checks on both backends.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
-Double storage and 28 arithmetic/comparison/conversion primops, checked against
+Double storage and 30 arithmetic/comparison/conversion primops, including square roots, checked against
 native GHC. Floating tuple results and an unboxed floating call ABI remain out of scope.
 
 The `Data.Set` example remains a separate frontier until its full exported call

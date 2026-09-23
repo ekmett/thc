@@ -150,6 +150,7 @@ jobs:
             build/floating/core/
             build/floating/checks.json
             build/floating/oracle.tsv
+            build/sqrt/
             build/test-results/
             build/aggregate-frontier.json
             build/primop-coverage.json
