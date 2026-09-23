@@ -163,6 +163,8 @@ size limit remain unchanged.
 ## ShortByteString and managed bytes
 
 The [managed ByteArray workload](bytearrays.md) executes the installed
-ShortByteString pack/unpack workers and genuine GHC List length body. Strict
-pre/post-Tidy audits retain all five byte primitives, and native/model checks
-cover empty arrays, every byte value, and ordered writes on both backends.
+ShortByteString pack/unpack/uncons workers and genuine GHC List length body. Strict
+pre/post-Tidy audits retain all six supported byte primitives across the fixtures;
+the public uncons roundtrip has nine reachable bindings and no audit issues.
+Native/model checks cover empty arrays, every byte value, ordered writes, and
+contained copies between distinct arrays on both backends.

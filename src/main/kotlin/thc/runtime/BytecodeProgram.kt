@@ -693,6 +693,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     else e.builder.endFreezeByteArray()
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
+                        ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
                         ByteArrayOp.WRITE -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
@@ -700,6 +701,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     }
                     operands.forEach { it.emit(e) }
                     when (operation) {
+                        ByteArrayOp.COPY -> e.builder.endCopyByteArray()
                         ByteArrayOp.WRITE -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
