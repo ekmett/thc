@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Export a bounded real boot-library frontier; never synthesize missing bodies."""
+import argparse
 import hashlib
 import json
 import os
@@ -15,7 +16,10 @@ if subprocess.check_output([ghc, '--numeric-version'], text=True).strip() != '9.
 if subprocess.check_output([ghc_pkg, '--version'], text=True).strip() != 'GHC package manager version 9.14.1':
     raise SystemExit('THC requires ghc-pkg 9.14.1')
 root = Path(__file__).resolve().parent.parent
-build = root / 'build/map'
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--build-dir', type=Path, default=root / 'build/map',
+                    help='Private output directory (default: build/map)')
+build = parser.parse_args().build_dir.resolve()
 (build / 'core').mkdir(parents=True, exist_ok=True)
 source_root = root / 'vendor/ghc-9.14.1'
 package_url = 'https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/'

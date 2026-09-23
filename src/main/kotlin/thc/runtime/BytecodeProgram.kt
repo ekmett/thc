@@ -750,6 +750,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "==#", "eqWord#", "eqChar#" -> "Equal"
             "/=#", "neWord#", "neChar#" -> "NotEqual"
             "<#", "ltChar#" -> "LessThan"
+            "ltWord#" -> "LessThanUnsigned"
             "<=#", "leChar#" -> "LessEqual"
             ">#", "gtChar#" -> "GreaterThan"
             ">=#", "geChar#" -> "GreaterEqual"
@@ -757,6 +758,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "or#", "orI#" -> "BitOr"
             "xor#", "xorI#" -> "BitXor"
             "not#", "notI#" -> "BitNot"
+            "clz#" -> "CountLeadingZeros"
             "uncheckedIShiftL#", "uncheckedShiftL#" -> "ShiftLeft"
             "uncheckedIShiftRA#" -> "ShiftRight"
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> "ShiftRightUnsigned"
@@ -770,7 +772,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
-        val unary = operation in setOf("Negate", "BitNot", "Narrow8", "Narrow16", "Narrow32", "Identity", "Raise")
+        val unary = operation in setOf("Negate", "BitNot", "CountLeadingZeros", "Narrow8", "Narrow16", "Narrow32", "Identity", "Raise")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
@@ -779,8 +781,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
                 "Negate" -> b.beginNegate(); "Quotient" -> b.beginQuotient(); "Remainder" -> b.beginRemainder()
                 "Equal" -> b.beginEqual(); "NotEqual" -> b.beginNotEqual(); "LessThan" -> b.beginLessThan()
+                "LessThanUnsigned" -> b.beginLessThanUnsigned()
                 "LessEqual" -> b.beginLessEqual(); "GreaterThan" -> b.beginGreaterThan(); "GreaterEqual" -> b.beginGreaterEqual()
                 "BitAnd" -> b.beginBitAnd(); "BitOr" -> b.beginBitOr(); "BitXor" -> b.beginBitXor(); "BitNot" -> b.beginBitNot()
+                "CountLeadingZeros" -> b.beginCountLeadingZeros()
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
                 "Narrow8" -> b.beginNarrow8(); "Narrow16" -> b.beginNarrow16(); "Narrow32" -> b.beginNarrow32()
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus(); "AddressIndexChar" -> b.beginAddressIndexChar()
@@ -790,8 +794,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "Add" -> b.endAdd(); "Subtract" -> b.endSubtract(); "Multiply" -> b.endMultiply()
                 "Negate" -> b.endNegate(); "Quotient" -> b.endQuotient(); "Remainder" -> b.endRemainder()
                 "Equal" -> b.endEqual(); "NotEqual" -> b.endNotEqual(); "LessThan" -> b.endLessThan()
+                "LessThanUnsigned" -> b.endLessThanUnsigned()
                 "LessEqual" -> b.endLessEqual(); "GreaterThan" -> b.endGreaterThan(); "GreaterEqual" -> b.endGreaterEqual()
                 "BitAnd" -> b.endBitAnd(); "BitOr" -> b.endBitOr(); "BitXor" -> b.endBitXor(); "BitNot" -> b.endBitNot()
+                "CountLeadingZeros" -> b.endCountLeadingZeros()
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()

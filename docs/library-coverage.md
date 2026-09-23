@@ -33,3 +33,39 @@ The full source and its strict diagnostic are retained so aggregate lowering,
 pointer identity and source/interface identity work can be tested against an
 ordinary library program. No synthetic boxed tuples or ad hoc name substitutions
 are used to make this frontier appear supported.
+
+## IntMap and word primitives: validation checkpoint
+
+`THC.IntMapWorkload.intMapAggregate` uses `Data.IntMap.Strict` insertion with
+combining, adjustment, deletion, membership, lookup, size and an order-sensitive
+fold. Its signed keys include `minBound`, `maxBound`, negative keys and zero;
+the workload includes duplicate, absent and empty-map operations.
+
+The dedicated native driver and independent Python set/dictionary/integer models
+agree on 994 entry/input pairs: 22 Set inputs, 22 IntMap inputs and 190 inputs
+for each of five word-primitive entries. The primitive fixtures cover `clz#`
+and unsigned `ltWord#`, including zero, all 64 bit positions, adjacent values,
+the sign boundary and the all-ones word.
+
+The initial pre-Tidy IntMap audit found five missing worker identities:
+`Data.IntMap.Internal.$wdelete`, `Data.IntMap.Internal.$wgo`,
+`Data.IntMap.Strict.Internal.$winsert`,
+`Data.IntMap.Strict.Internal.adjustWithKey_$sadjustWithKey`, and
+`Data.IntMap.Strict.Internal.insertWithKey_$sinsertWithKey` (all in unit `main`).
+These definitions exist in the source export under pre-Tidy private identities,
+while consumers refer to their actual Tidy-generated interface identities.
+
+The library preparation helper now selects the existing, explicitly recorded
+post-Tidy/pre-CorePrep exporter for the complete Set and IntMap compilations.
+This uses GHC's actual definitions and names, not a name-matching heuristic.
+The primitive fixture still uses the ordinary pre-Tidy boundary. Regenerated
+strict audits and guest execution validation are pending at this checkpoint;
+the native agreement above alone is not a THC execution claim.
+
+Run `scripts/try-libraries.sh` with the pinned GHC and GraalVM environments.
+Reports are under `build/libraries/`: per-bundle source provenance and strict
+audits, `oracle.tsv`, `oracle-validation.json`, `cases.json`, and explicit AST
+and bytecode check logs. The checker keeps strict rejection separate from
+execution passes, disables compilation for its interpreted phase, and checks
+installed guest-code entry per input after requested compilation in a fresh
+context. Cold inputs are withheld from that context's warmup.
