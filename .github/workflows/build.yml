@@ -212,6 +212,13 @@ jobs:
             build/double-arrays/native/double-array-oracle
             build/double-arrays/*/*.audit.json
             build/double-arrays/*/*/core/*.json
+            build/int32-arrays/manifest.json
+            build/int32-arrays/oracle.tsv
+            build/int32-arrays/expected.tsv
+            build/int32-arrays/NativeInt32Array.hs
+            build/int32-arrays/native/int32-array-oracle
+            build/int32-arrays/*/*.audit.json
+            build/int32-arrays/*/*/core/*.json
             build/tuple-join/
             build/tuple-arithmetic/
             build/integer-primops/manifest.json
