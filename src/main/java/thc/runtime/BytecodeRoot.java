@@ -989,6 +989,38 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             fifteenth.setLong(bytecode, frame, value.fifteenth); sixteenth.setLong(bytecode, frame, value.sixteenth);
         }
     }
+    @Operation public static final class VectorWord32Pack {
+        @Specialization public static Word32X4 pack(long first, long second, long third, long fourth) {
+            return new Word32X4((int) first, (int) second, (int) third, (int) fourth);
+        }
+    }
+    @Operation public static final class VectorWord32Broadcast {
+        @Specialization public static Word32X4 broadcast(long value) { return Word32X4.broadcast((int) value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorWord32Binary {
+        @Specialization public static Word32X4 binary(int operation, Word32X4 first, Word32X4 second) {
+            return switch (operation) {
+                case 0 -> Word32X4.add(first, second);
+                case 1 -> Word32X4.subtract(first, second);
+                case 2 -> Word32X4.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid Word32X4 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    public static final class VectorWord32Unpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, Word32X4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first & 0xffff_ffffL); second.setLong(bytecode, frame, value.second & 0xffff_ffffL);
+            third.setLong(bytecode, frame, value.third & 0xffff_ffffL); fourth.setLong(bytecode, frame, value.fourth & 0xffff_ffffL);
+        }
+    }
     @Operation public static final class VectorWord16Pack {
         @Specialization public static Word16X8 pack(long first, long second, long third, long fourth,
                 long fifth, long sixth, long seventh, long eighth) {

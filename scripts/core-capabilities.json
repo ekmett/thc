@@ -397,6 +397,12 @@
     "plusWord16X8#": 2,
     "minusWord16X8#": 2,
     "timesWord16X8#": 2,
+    "packWord32X4#": 1,
+    "unpackWord32X4#": 1,
+    "broadcastWord32X4#": 1,
+    "plusWord32X4#": 2,
+    "minusWord32X4#": 2,
+    "timesWord32X4#": 2,
     "packFloatX4#": 1,
     "unpackFloatX4#": 1,
     "broadcastFloatX4#": 1,
@@ -471,6 +477,11 @@
     "unboxed-tuple"
   ],
   "vectorRepresentations": [
+    {
+      "lanes": 4,
+      "element": "Word32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
     {
       "lanes": 8,
       "element": "Word16ElemRep",

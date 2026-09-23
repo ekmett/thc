@@ -9,6 +9,7 @@ internal data class CoreVector(val lanes: Int, val element: String) {
         val INT8X16 = CoreVector(16, "Int8ElemRep")
         val WORD8X16 = CoreVector(16, "Word8ElemRep")
         val WORD16X8 = CoreVector(8, "Word16ElemRep")
+        val WORD32X4 = CoreVector(4, "Word32ElemRep")
         val FLOATX4 = CoreVector(4, "FloatElemRep")
         val DOUBLEX2 = CoreVector(2, "DoubleElemRep")
         fun parse(raw: Any?, kind: CoreKind, reps: List<String>?, aggregate: Boolean): CoreVector? {
@@ -24,7 +25,7 @@ internal data class CoreVector(val lanes: Int, val element: String) {
                 throw RuntimeFault("Invalid Core vector shape")
             val vector = CoreVector(lanes.toInt(), element)
             if (reps != listOf("VecRep ${vector.lanes} $element")) throw RuntimeFault("Vector shape disagrees with primitive representation")
-            if (vector != INT64X2 && vector != INT32X4 && vector != INT16X8 && vector != INT8X16 && vector != WORD8X16 && vector != WORD16X8 && vector != FLOATX4 && vector != DOUBLEX2) throw UnsupportedCore("Unsupported Core vector representation: $vector")
+            if (vector != INT64X2 && vector != INT32X4 && vector != INT16X8 && vector != INT8X16 && vector != WORD8X16 && vector != WORD16X8 && vector != WORD32X4 && vector != FLOATX4 && vector != DOUBLEX2) throw UnsupportedCore("Unsupported Core vector representation: $vector")
             return vector
         }
     }
@@ -53,6 +54,10 @@ internal object CoreVectors {
     private val laneWord16 = CoreRepresentation(CoreKind.LONG, true, true, listOf("Word16Rep"))
     val unpackedWord16 = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(8) { "Word16Rep" }, List(8) { laneWord16 })
     val operationsWord16 = setOf("packWord16X8#", "unpackWord16X8#", "broadcastWord16X8#", "plusWord16X8#", "minusWord16X8#", "timesWord16X8#")
+    val proofWord32 = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 4 Word32ElemRep"), vector = CoreVector.WORD32X4)
+    private val laneWord32 = CoreRepresentation(CoreKind.LONG, true, true, listOf("Word32Rep"))
+    val unpackedWord32 = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(4) { "Word32Rep" }, List(4) { laneWord32 })
+    val operationsWord32 = setOf("packWord32X4#", "unpackWord32X4#", "broadcastWord32X4#", "plusWord32X4#", "minusWord32X4#", "timesWord32X4#")
     val proofFloat = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep 4 FloatElemRep"), vector = CoreVector.FLOATX4)
     private val laneFloat = CoreRepresentation(CoreKind.FLOAT, true, true, listOf("FloatRep"))
     val unpackedFloat = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(4) { "FloatRep" }, List(4) { laneFloat })
@@ -62,7 +67,7 @@ internal object CoreVectors {
     val unpackedDouble = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(2) { "DoubleRep" }, List(2) { laneDouble })
     val operationsDouble = setOf("packDoubleX2#", "unpackDoubleX2#", "broadcastDoubleX2#", "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#")
     val operations32 = setOf("packInt32X4#", "unpackInt32X4#", "broadcastInt32X4#", "plusInt32X4#", "minusInt32X4#", "negateInt32X4#")
-    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsFloat + operationsDouble
+    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsWord32 + operationsFloat + operationsDouble
     fun requireVariableProof(binding: CoreRepresentation?, occurrence: CoreRepresentation) {
         if (occurrence.isVector && binding?.vector != occurrence.vector)
             throw RuntimeFault("Vector occurrence lacks a matching lexical binder proof")
@@ -104,6 +109,10 @@ internal object CoreVectors {
             "unpackWord16X8#" -> listOf(proofWord16)
             "broadcastWord16X8#" -> listOf(laneWord16)
             "plusWord16X8#", "minusWord16X8#", "timesWord16X8#" -> listOf(proofWord16, proofWord16)
+            "packWord32X4#" -> listOf(unpackedWord32)
+            "unpackWord32X4#" -> listOf(proofWord32)
+            "broadcastWord32X4#" -> listOf(laneWord32)
+            "plusWord32X4#", "minusWord32X4#", "timesWord32X4#" -> listOf(proofWord32, proofWord32)
             "packDoubleX2#" -> listOf(unpackedDouble)
             "unpackDoubleX2#" -> listOf(proofDouble)
             "broadcastDoubleX2#" -> listOf(laneDouble)
@@ -130,6 +139,8 @@ internal object CoreVectors {
             in operationsWord8 -> proofWord8
             "unpackWord16X8#" -> unpackedWord16
             in operationsWord16 -> proofWord16
+            "unpackWord32X4#" -> unpackedWord32
+            in operationsWord32 -> proofWord32
             "unpackDoubleX2#" -> unpackedDouble
             in operationsDouble -> proofDouble
             "unpackFloatX4#" -> unpackedFloat

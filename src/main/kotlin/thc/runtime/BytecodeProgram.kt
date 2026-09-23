@@ -1176,6 +1176,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operationsWord32 -> vectorWord32Primitive(name, operands)
         in CoreVectors.operationsWord16 -> vectorWord16Primitive(name, operands)
         in CoreVectors.operationsWord8 -> vectorWord8Primitive(name, operands)
         in CoreVectors.operations8 -> vector8Primitive(name, operands)
@@ -1265,6 +1266,32 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof8)
+    }
+
+    private fun vectorWord32Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackWord32X4#" -> tupleExpression(CoreVectors.unpackedWord32) { e, destination ->
+            e.builder.beginVectorWord32Unpack(destination[0], destination[1], destination[2], destination[3])
+            operands[0].emit(e)
+            e.builder.endVectorWord32Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packWord32X4#" -> {
+                    b.beginBlock()
+                    val lanes = List(4) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorWord32Pack(); lanes.forEach(b::emitLoadLocal); b.endVectorWord32Pack()
+                    b.endBlock()
+                }
+                "broadcastWord32X4#" -> { b.beginVectorWord32Broadcast(); operands[0].emit(e); b.endVectorWord32Broadcast() }
+                else -> {
+                    val operation = when (name) { "plusWord32X4#" -> 0; "minusWord32X4#" -> 1; "timesWord32X4#" -> 2; else -> error("Invalid Word32X4 operation") }
+                    b.beginVectorWord32Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVectorWord32Binary()
+                }
+            }
+        }, CoreVectors.proofWord32)
     }
 
     private fun vectorWord16Primitive(name: String, operands: List<Expression>): Expression = when (name) {

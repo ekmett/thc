@@ -9,6 +9,7 @@ from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_R
 from core_vectors import VECTOR16_REP, LANE16_REP, TUPLE16_REP, OPERATIONS, proof_error
 from core_vectors import VECTOR8_REP, LANE8_REP, TUPLE8_REP
 from core_vectors import VECTOR_WORD8_REP, LANE_WORD8_REP, TUPLE_WORD8_REP
+from core_vectors import VECTOR_WORD32_REP, LANE_WORD32_REP, TUPLE_WORD32_REP
 from core_vectors import VECTOR_WORD16_REP, LANE_WORD16_REP, TUPLE_WORD16_REP
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
@@ -25,6 +26,42 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def test_word32_shape_and_unsigned_identity_are_independent_of_storage(self):
+        m=fixture(); body=m['bindings'][0]['expr'][2]
+        body[1][1][1]='broadcastWord32X4#'
+        body[1][2][0]=['lit','word32','4294967295',dict(rep=copy.deepcopy(LANE_WORD32_REP))]
+        body[1][6]['rep']=copy.deepcopy(VECTOR_WORD32_REP)
+        body[4]['binder']['rep']=copy.deepcopy(VECTOR_WORD32_REP)
+        self.assertTrue(run(m)['accepted'])
+        self.assertIsNone(proof_error(VECTOR_WORD32_REP))
+        self.assertFalse(signature_matches(VECTOR_WORD32_REP,VECTOR32_REP))
+        for operand in (['lit','word32','2147483648'], ['lit','word32','4294967295',dict(rep=dict(kind='unknown',primReps=None,evaluated=False))]):
+            good=copy.deepcopy(m); good['bindings'][0]['expr'][2][1][2][0]=operand
+            self.assertTrue(run(good)['accepted'])
+        for operand in (['lit','int32','2147483647'], ['lit','int32','2147483647',dict(rep=LANE_WORD32_REP)],
+                        ['lit','word32','4294967295',dict(rep=LANE32_REP)]):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2][0]=operand
+            self.assertFalse(run(bad)['accepted'])
+        for flag in (True,None,0,'false'):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][3]=[flag]
+            self.assertFalse(run(bad)['accepted'])
+        for wrong in (LANE32_REP,LANE_WORD16_REP,LANE_WORD8_REP,LANE16_REP,LONG,dict(LANE_WORD32_REP,kind='unknown'),
+                      dict(LANE_WORD32_REP,primReps=['WordRep'])):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2][0][3]['rep']=wrong
+            self.assertFalse(run(bad)['accepted'],wrong)
+            for index in range(4):
+                lanes=copy.deepcopy(TUPLE_WORD32_REP); lanes['components'][index]=wrong
+                self.assertFalse(signature_matches(TUPLE_WORD32_REP,lanes))
+        for wrong in (VECTOR32_REP,VECTOR_WORD16_REP,VECTOR_WORD8_REP,VECTOR8_REP,VECTOR16_REP,TUPLE_WORD32_REP):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][6]['rep']=copy.deepcopy(wrong)
+            self.assertFalse(run(bad)['accepted'])
+        self.assertEqual(OPERATIONS['packWord32X4#'],([TUPLE_WORD32_REP],VECTOR_WORD32_REP))
+        self.assertEqual(OPERATIONS['unpackWord32X4#'],([VECTOR_WORD32_REP],TUPLE_WORD32_REP))
+        names={name for name in OPERATIONS if 'Word32X4' in name}
+        self.assertEqual(len(names),6)
+        self.assertNotIn('negateWord32X4#',CAP['primitives'])
+        for name in names: self.assertEqual(CAP['primitives'][name],len(OPERATIONS[name][0]))
+
     def test_word16_shape_and_unsigned_identity_are_independent_of_storage(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastWord16X8#'
@@ -210,6 +247,13 @@ class VectorAuditTest(unittest.TestCase):
         from word16x8_model import entries
         path=ROOT.parent/'build/simd-word16x8/pre-core/SimdWord16X8.json'
         if not path.exists(): self.skipTest('Word16 SIMD Core export not generated')
+        m=json.loads(path.read_text())
+        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        self.assertFalse(run(m,'vectorArgument')['accepted'])
+    def test_real_word32_core_local_entries_and_formal_frontier(self):
+        from word32x4_model import entries
+        path=ROOT.parent/'build/simd-word32x4/pre-core/SimdWord32X4.json'
+        if not path.exists(): self.skipTest('Word32 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])

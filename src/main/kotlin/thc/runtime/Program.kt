@@ -1293,6 +1293,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "packWord16X8#" -> VectorWord16Pack(operands[0], IntArray(8) { scope.layout.bind("<word16 vector lane $it>") })
                     "unpackWord16X8#" -> VectorWord16Unpack(operands[0])
                     in CoreVectors.operationsWord16 -> VectorWord16Operation(name, operands)
+                    "packWord32X4#" -> VectorWord32Pack(operands[0], IntArray(4) { scope.layout.bind("<word32 vector lane $it>") })
+                    "unpackWord32X4#" -> VectorWord32Unpack(operands[0])
+                    in CoreVectors.operationsWord32 -> VectorWord32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {

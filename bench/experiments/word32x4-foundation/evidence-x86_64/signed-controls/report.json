@@ -1,0 +1,586 @@
+{
+  "schema": 1,
+  "sourceVector": "int32x4",
+  "unsignedTarget": "word32x4",
+  "readerRevision": "ebc0c2241c2c635a8f88a4b4f442002e37bd9978",
+  "reader": {
+    "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/bench/experiments/word32x4-foundation/runtime-audit.py",
+    "sha256": "ffda2f4d81f5813422329ccb4d49842d36884cb577cec63c76855187aeef301e"
+  },
+  "reviewScript": {
+    "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/review-signed-controls.py",
+    "sha256": "cc4835a0a94d411407e8019c8321921d8346278ead6ea243e01ed1a34d82fb1a"
+  },
+  "originalEvidence": {
+    "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/evidence.json",
+    "sha256": "683bad62a500297b4fc255546e4a240c39a92b50c5a064eb701923928f0518b6"
+  },
+  "publishedEvidence": {
+    "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/bench/experiments/simd-foundation/evidence-int32x4-x86_64/runtime/evidence.json",
+    "sha256": "5a590e103cec8f53b533c5efe0d7feb4d3825281bcabf3d543d25e087ff41031"
+  },
+  "declaredOriginalRuntimeRevision": "1b75f278756e8352bd5854d75934e4005e6374d2",
+  "graphCount": 8,
+  "signedLaneChainCount": 32,
+  "compression": "Review-time gzip -n -c of the exact original local parsed graph; decoded bytes checked identical. Not an original capture artifact hash.",
+  "scope": "All eight real signed add/sub graphs fail the full Word32 reader FIRST at host arity 4 versus 2. Separately, all 32 live output chains use SignExtend32to64 and fail the exact unsigned widening predicate. No unsigned-specific full-gate rejection is claimed.",
+  "limitations": [
+    "No signed multiplication capture was available or inferred.",
+    "Original parsed graphs were newly hashed from the retained local capture; published historical evidence retained graph summaries, not parsed-file hashes.",
+    "No guest, native, JVM, compiler, or capture execution was repeated. No runtime or reader source was edited."
+  ],
+  "results": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "sourceEntry": "vectorCase",
+      "unsignedReaderEntry": "plusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-ast-vectorCase/parsed/graph-00045.json",
+        "sha256": "163a2467a9d34e35d4cc459f9cf8b39be51ba2363d3507c586481f49e96db99e"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/pre-ast-vectorCase.graph.json.gz",
+        "sha256": "6c5d4832fe28a005d0138967117f6cecf35c2e23f3b45576fb9d95021e4bbeea"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-ast-vectorCase/parsed/index.json",
+        "sha256": "e6fd282eec3ab22671e641b1f345e512397ff448a99ae7f432e1dd797751fc16"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 2821,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 2822,
+          "extension": 1977,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 2824,
+          "extension": 2149,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 2826,
+          "extension": 2350,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 2828,
+          "extension": 2548,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "sourceEntry": "subtractCase",
+      "unsignedReaderEntry": "minusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-ast-subtractCase/parsed/graph-00045.json",
+        "sha256": "d3e8c25df964746658513188b8b8371bc3b6df34ccba974247cc801dfcab2fca"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/pre-ast-subtractCase.graph.json.gz",
+        "sha256": "0140e61a78ee1a9ce2b8ced65bf761d7a997a4d0002fb917a15e61cb6a2a6dd2"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-ast-subtractCase/parsed/index.json",
+        "sha256": "fe355574bb7e23cc1108b5cc179f16f1466f836c371f08205b2ca795598540a1"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 3134,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.SubNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 3135,
+          "extension": 2259,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 3137,
+          "extension": 2430,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 3139,
+          "extension": 2632,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 3141,
+          "extension": 2828,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "sourceEntry": "vectorCase",
+      "unsignedReaderEntry": "plusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-bytecode-vectorCase/parsed/graph-00045.json",
+        "sha256": "0a24f560720987f2534e5e93fde7478087fc73092098bde76fb2359e778a5c52"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/pre-bytecode-vectorCase.graph.json.gz",
+        "sha256": "060a1c44dc1968bccd3a2a629b9bb17a2bc9863f7f7865cbbfeb9ed9c174fb7b"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-bytecode-vectorCase/parsed/index.json",
+        "sha256": "e1933a9a249f1d6a2d927282638f831bd6dce9bef0ca92d187ede85e742d160d"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 2833,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 2834,
+          "extension": 2065,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 2836,
+          "extension": 2192,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 2838,
+          "extension": 2347,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 2840,
+          "extension": 2500,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "sourceEntry": "subtractCase",
+      "unsignedReaderEntry": "minusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-bytecode-subtractCase/parsed/graph-00045.json",
+        "sha256": "a58dbe94a8585370f563f6058a1c12841b8ac1eb35d6880d48bdf953dd6af936"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/pre-bytecode-subtractCase.graph.json.gz",
+        "sha256": "57cdcb20313728170b920ea4327dcace7d9d071a336a4e9532bac39a398c88fb"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/pre-bytecode-subtractCase/parsed/index.json",
+        "sha256": "ec8c2cc79952600a01e6ef92a36ea0b4f1f7d4e198173673a0a643ddff04f3aa"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 3210,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.SubNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 3211,
+          "extension": 2397,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 3213,
+          "extension": 2524,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 3215,
+          "extension": 2679,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 3217,
+          "extension": 2829,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "sourceEntry": "vectorCase",
+      "unsignedReaderEntry": "plusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-ast-vectorCase/parsed/graph-00045.json",
+        "sha256": "2c5143006f42ca3685e495944d9184df8c2a8cbd2986d4ac55d8012f3118e7ca"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/post-ast-vectorCase.graph.json.gz",
+        "sha256": "fb21ad8429347383ab53d7f693137ecdb15c84e74df94707cd99742c1a4d6ae5"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-ast-vectorCase/parsed/index.json",
+        "sha256": "a09a69ae9630c207065a1c8aabb38503fe2ebcb7d97129d12850ccd7981fcccc"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 2821,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 2822,
+          "extension": 1977,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 2824,
+          "extension": 2149,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 2826,
+          "extension": 2350,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 2828,
+          "extension": 2548,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "sourceEntry": "subtractCase",
+      "unsignedReaderEntry": "minusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-ast-subtractCase/parsed/graph-00045.json",
+        "sha256": "93cd5e6f16897e2036028876ce4350f0485b86c0445d13fb661ab8db5eaf46ea"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/post-ast-subtractCase.graph.json.gz",
+        "sha256": "1c618cc2bdc95910687bd4d5e385e67068b03ead656c39dd7f326ca17366f0e2"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-ast-subtractCase/parsed/index.json",
+        "sha256": "f8452dac77b21eec3c75dfc1a28e8eb33de410c78282c79d7571250a0fe1f004"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 3134,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.SubNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 3135,
+          "extension": 2259,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 3137,
+          "extension": 2430,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 3139,
+          "extension": 2632,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 3141,
+          "extension": 2828,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "sourceEntry": "vectorCase",
+      "unsignedReaderEntry": "plusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-bytecode-vectorCase/parsed/graph-00045.json",
+        "sha256": "42cd07d56d34d7b4e6c583b4ea85d982d76a419818b07017f3f8bc696e2bf962"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/post-bytecode-vectorCase.graph.json.gz",
+        "sha256": "55a530df5d74db29f88f25357c5cf1f6dcd16f6355f13fcaf6538c10b33ef39f"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-bytecode-vectorCase/parsed/index.json",
+        "sha256": "0aad64b7589d7830f3e8f0e145862ad537ccf235ef5040a0a3076044fbb78e2e"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 2833,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 2834,
+          "extension": 2065,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 2836,
+          "extension": 2192,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 2838,
+          "extension": 2347,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 2840,
+          "extension": 2500,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "sourceEntry": "subtractCase",
+      "unsignedReaderEntry": "minusCase",
+      "parsedGraph": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-bytecode-subtractCase/parsed/graph-00045.json",
+        "sha256": "e1e4d12e184c750cc3dcab3224f1a9bdc96edcd19810b5cfdda18aa38689bccd"
+      },
+      "compressedGraph": {
+        "path": "/home/ekmett/ai/thc-word32x4-graph-harness-01a0cdeb/build/word32x4-signed-controls/post-bytecode-subtractCase.graph.json.gz",
+        "sha256": "dcb47924ee6104add8528b66f20dec5ef5ee471ac48d63da64a04b066d52d91e"
+      },
+      "parsedIndex": {
+        "path": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/post-bytecode-subtractCase/parsed/index.json",
+        "sha256": "0850174d9ea8f7dd709c2d5a23b1f7b5f0781a26ed019bc6eb857197c8405617"
+      },
+      "rootGroup": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+      "scalarHostUnboxes": 4,
+      "fullReaderAccepted": false,
+      "fullReaderRejection": "Exactly the two scalar host Long input unboxes are expected",
+      "packedArithmetic": {
+        "id": 3210,
+        "nodeClass": "jdk.graal.compiler.nodes.calc.SubNode",
+        "stamp": "<i32,i32,i32,i32>"
+      },
+      "signedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 3211,
+          "extension": 2397,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 1,
+          "cut": 3213,
+          "extension": 2524,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 2,
+          "cut": 3215,
+          "extension": 2679,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        },
+        {
+          "lane": 3,
+          "cut": 3217,
+          "extension": 2829,
+          "extensionKind": "SignExtendNode",
+          "inputBits": 32,
+          "resultBits": 64,
+          "resultConnected": true,
+          "satisfiesUnsignedExtensionPredicate": false
+        }
+      ]
+    }
+  ]
+}
