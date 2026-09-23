@@ -24,8 +24,7 @@ class ScalarBitCastTest {
         "doubleRoundtrip", "doubleField", "doubleCaptured", "doubleDecode", "doubleEncode")
     private fun context(inlining: Boolean = true) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
-        .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
-        .option("engine.SingleTierCompilationThreshold", "10000000").build()
+        .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
         if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
