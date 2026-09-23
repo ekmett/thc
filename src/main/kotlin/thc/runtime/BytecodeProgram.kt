@@ -333,6 +333,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
+        "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> LiteralAddress.fromHex(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -740,10 +741,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         e.builder.beginConstruct(layout); args.forEach { it.emit(e) }; e.builder.endConstruct()
     })
     private fun primitive(name: String, args: List<Expression>): Expression {
+        val wordMask = narrowWordPrimitiveMask(name)
         val operation = when (name) {
             "+#", "plusWord#" -> "Add"
             "-#", "minusWord#" -> "Subtract"
             "*#", "timesWord#" -> "Multiply"
+            "plusWord8#", "plusWord16#", "plusWord32#" -> "AddNarrowWord"
+            "subWord8#", "subWord16#", "subWord32#" -> "SubtractNarrowWord"
+            "timesWord8#", "timesWord16#", "timesWord32#" -> "MultiplyNarrowWord"
             "negateInt#" -> "Negate"
             "quotInt#" -> "Quotient"
             "remInt#" -> "Remainder"
@@ -753,6 +758,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "ltWord#" -> "LessThanUnsigned"
             "<=#", "leChar#" -> "LessEqual"
             "leWord#" -> "LessEqualUnsigned"
+            "ltWord8#", "ltWord16#", "ltWord32#" -> "LessThanNarrowWord"
+            "leWord8#", "leWord16#", "leWord32#" -> "LessEqualNarrowWord"
             ">#", "gtChar#" -> "GreaterThan"
             ">=#", "geChar#" -> "GreaterEqual"
             "and#", "andI#" -> "BitAnd"
@@ -769,6 +776,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "narrow8Int#", "intToInt8#", "int8ToInt#" -> "Narrow8"
             "narrow16Int#", "intToInt16#", "int16ToInt#" -> "Narrow16"
             "narrow32Int#", "intToInt32#", "int32ToInt#" -> "Narrow32"
+            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"
@@ -776,38 +784,46 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         val unary = operation in setOf("Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
-            "Narrow8", "Narrow16", "Narrow32", "Identity", "Raise")
+            "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
+                "AddNarrowWord" -> b.beginAddNarrowWord(wordMask); "SubtractNarrowWord" -> b.beginSubtractNarrowWord(wordMask)
+                "MultiplyNarrowWord" -> b.beginMultiplyNarrowWord(wordMask)
                 "Negate" -> b.beginNegate(); "Quotient" -> b.beginQuotient(); "Remainder" -> b.beginRemainder()
                 "Equal" -> b.beginEqual(); "NotEqual" -> b.beginNotEqual(); "LessThan" -> b.beginLessThan()
                 "LessThanUnsigned" -> b.beginLessThanUnsigned()
                 "LessEqual" -> b.beginLessEqual(); "GreaterThan" -> b.beginGreaterThan(); "GreaterEqual" -> b.beginGreaterEqual()
                 "LessEqualUnsigned" -> b.beginLessEqualUnsigned()
+                "LessThanNarrowWord" -> b.beginLessThanNarrowWord(wordMask); "LessEqualNarrowWord" -> b.beginLessEqualNarrowWord(wordMask)
                 "BitAnd" -> b.beginBitAnd(); "BitOr" -> b.beginBitOr(); "BitXor" -> b.beginBitXor(); "BitNot" -> b.beginBitNot()
                 "CountLeadingZeros" -> b.beginCountLeadingZeros()
                 "CountTrailingZeros" -> b.beginCountTrailingZeros(); "PopulationCount" -> b.beginPopulationCount()
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
                 "Narrow8" -> b.beginNarrow8(); "Narrow16" -> b.beginNarrow16(); "Narrow32" -> b.beginNarrow32()
+                "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus(); "AddressIndexChar" -> b.beginAddressIndexChar()
             }
             args.forEach { it.emit(e) }
             when (operation) {
                 "Add" -> b.endAdd(); "Subtract" -> b.endSubtract(); "Multiply" -> b.endMultiply()
+                "AddNarrowWord" -> b.endAddNarrowWord(); "SubtractNarrowWord" -> b.endSubtractNarrowWord()
+                "MultiplyNarrowWord" -> b.endMultiplyNarrowWord()
                 "Negate" -> b.endNegate(); "Quotient" -> b.endQuotient(); "Remainder" -> b.endRemainder()
                 "Equal" -> b.endEqual(); "NotEqual" -> b.endNotEqual(); "LessThan" -> b.endLessThan()
                 "LessThanUnsigned" -> b.endLessThanUnsigned()
                 "LessEqual" -> b.endLessEqual(); "GreaterThan" -> b.endGreaterThan(); "GreaterEqual" -> b.endGreaterEqual()
                 "LessEqualUnsigned" -> b.endLessEqualUnsigned()
+                "LessThanNarrowWord" -> b.endLessThanNarrowWord(); "LessEqualNarrowWord" -> b.endLessEqualNarrowWord()
                 "BitAnd" -> b.endBitAnd(); "BitOr" -> b.endBitOr(); "BitXor" -> b.endBitXor(); "BitNot" -> b.endBitNot()
                 "CountLeadingZeros" -> b.endCountLeadingZeros()
                 "CountTrailingZeros" -> b.endCountTrailingZeros(); "PopulationCount" -> b.endPopulationCount()
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
+                "NarrowWord" -> b.endNarrowWord()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()
             }
         })

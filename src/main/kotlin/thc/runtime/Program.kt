@@ -25,6 +25,23 @@ internal fun fault(message: String): Nothing {
     CompilerDirectives.transferToInterpreterAndInvalidate()
     throw RuntimeFault(message)
 }
+/** Narrow unsigned carriers are zero-extended Longs, unlike signed Int8/16/32 carriers. */
+internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {
+    "wordToWord8#", "word8ToWord#", "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#" -> 0xffL
+    "wordToWord16#", "word16ToWord#", "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#" -> 0xffffL
+    "wordToWord32#", "word32ToWord#", "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#" -> 0xffff_ffffL
+    else -> 0L
+}
+internal fun narrowWordLiteral(kind: String, value: String): Long {
+    val maximum = when (kind) {
+        "word8" -> 0xffL; "word16" -> 0xffffL; "word32" -> 0xffff_ffffL
+        else -> throw RuntimeFault("Invalid narrow word literal kind: $kind")
+    }
+    val number = value.toLongOrNull()
+    if (number == null || number !in 0L..maximum || number.toString() != value)
+        throw RuntimeFault("Invalid $kind literal: $value")
+    return number
+}
 /** Cadenza's recursive indirection: captured by identity, initialized once. */
 internal class RecCell {
     var initialized = false
@@ -507,16 +524,21 @@ private class Construct(private val layout: DataLayout,
     override fun executeDataValue(frame: VirtualFrame): DataValue = execute(frame)
 }
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
+    private val wordMask = narrowWordPrimitiveMask(name)
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
             "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
             "narrow8Int#", "narrow16Int#", "narrow32Int#",
-            "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#" -> 1
+            "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#",
+            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
             "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
             ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
-            "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2
+            "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#",
+            "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
+            "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
+            "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#" -> 2
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         if (arguments.size != arity) throw RuntimeFault("Primitive arity mismatch: $name")
@@ -530,6 +552,9 @@ private class Primitive(private val name: String, @field:Children private var ar
             "+#", "plusWord#" -> x + y
             "-#", "minusWord#" -> x - y
             "*#", "timesWord#" -> x * y
+            "plusWord8#", "plusWord16#", "plusWord32#" -> (x + y) and wordMask
+            "subWord8#", "subWord16#", "subWord32#" -> (x - y) and wordMask
+            "timesWord8#", "timesWord16#", "timesWord32#" -> (x * y) and wordMask
             "negateInt#" -> -x
             "quotInt#" -> x / y
             "remInt#" -> x % y
@@ -539,6 +564,9 @@ private class Primitive(private val name: String, @field:Children private var ar
             "ltWord#" -> b(java.lang.Long.compareUnsigned(x, y) < 0)
             "<=#", "leChar#" -> b(x <= y)
             "leWord#" -> b(java.lang.Long.compareUnsigned(x, y) <= 0)
+            // These masks fit below Long's sign bit, so signed order is unsigned order.
+            "ltWord8#", "ltWord16#", "ltWord32#" -> b((x and wordMask) < (y and wordMask))
+            "leWord8#", "leWord16#", "leWord32#" -> b((x and wordMask) <= (y and wordMask))
             ">#", "gtChar#" -> b(x > y)
             ">=#", "geChar#" -> b(x >= y)
             "and#", "andI#" -> x and y
@@ -556,6 +584,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "narrow8Int#", "intToInt8#", "int8ToInt#" -> x.toByte().toLong()
             "narrow16Int#", "intToInt16#", "int16ToInt#" -> x.toShort().toLong()
             "narrow32Int#", "intToInt32#", "int32ToInt#" -> x.toInt().toLong()
+            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> x and wordMask
             "int2Word#", "word2Int#", "ord#", "chr#" -> x
             else -> fault("Unsupported primitive")
         }
@@ -905,6 +934,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
+        "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> LiteralAddress.fromHex(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }

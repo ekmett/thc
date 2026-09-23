@@ -6,12 +6,12 @@ repeatable answer against native GHC, across both executable backends.
 
 Run `scripts/try.sh` from a fresh checkout. It builds the exporter, prepares the
 native oracles and runs the JVM tests. The additional corpus is described in
-[`examples/coverage.json`](../examples/coverage.json); it currently has 20 entries
-and 318 distinct entry/input pairs, alongside the original fixtures and Map.
+[`examples/coverage.json`](../examples/coverage.json); it currently has 24 entries
+and 458 distinct entry/input pairs, alongside the original fixtures and Map.
 
 The separate [library suite](library-coverage.md), run by
-`scripts/try-libraries.sh`, adds six executable entries and 972 native-oracle
-pairs covering real `Data.IntMap.Strict` and unsigned word primitives. Its Set
+`scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
+pairs covering real `Data.IntMap.Strict`, `Data.IntSet` and word primitives. Its Set
 workload records a rejected frontier separately. CI runs both suites on Linux
 and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
 
@@ -21,6 +21,7 @@ and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
 | Functions | Lists of captured closures, genuine overapplication, reused partial application with an unused bottom argument, a shared thunk captured by an escaping closure |
 | Trees | Three constructor layouts, recursive construction/folds, a captured higher-order map, selective traversal past bottom, shared subtrees |
 | Narrow integers | Ordinary `Data.Int` conversions, truncation/sign extension and unpacked `Int8Rep`/`Int16Rep`/`Int32Rep` fields |
+| Narrow words | Ordinary `Data.Word` conversions, modular arithmetic, unsigned comparisons and shared records with unpacked `Word8Rep`/`Word16Rep`/`Word32Rep` fields |
 | Numeric | Word wraparound and rotations, signed quotient/remainder, signed narrowing, mixed primitive/reference fields and captures, Unicode characters through U+10FFFF |
 
 The functional programs use ordinary Haskell `Int`, lists, functions and data
@@ -63,6 +64,39 @@ fields and recursive tree alternatives. Numeric entries require their intended
 primitives to remain reachable. In particular, the chooser had to remain an
 exported function to preserve its arity-one return boundary: `OPAQUE` alone
 allowed GHC to eta-expand it to three arguments.
+
+## Narrow unsigned words
+
+`THC.NarrowWordCoverage` uses ordinary `Word8`, `Word16` and `Word32` operations,
+with `Int#` only at the host entry. Its three arithmetic entries combine width
+conversion, wrapping addition/subtraction/multiplication and unsigned `<`, `<=`
+and equality. The record entry shares eight records between two order-sensitive
+folds. There are no `OPAQUE`/`NOINLINE` fences: structural checks require the
+actual producer and consumers to retain all three unpacked field widths and
+both references to the shared list. Runtime checks require `records` to be
+evaluated exactly once per call.
+
+Actual GHC 9.14.1 Core required only these additional operations for each width
+`N` in 8, 16 and 32: `wordToWordN#`, `wordNToWord#`, `plusWordN#`, `subWordN#`,
+`timesWordN#`, `ltWordN#` and `leWordN#`. Equality already lowered to `eqWord#`.
+The new `word8`, `word16` and `word32` literal forms accept canonical unsigned
+decimal values in their exact ranges, including in case alternatives. Invalid
+values remain load errors even in diagnostic mode.
+
+Both runtimes use zero-extended primitive `Long` carriers for narrow words;
+signed narrow integers retain their existing sign-extending behavior. Arithmetic
+is reduced modulo the declared width. In particular, `Word32` maximum times
+itself is 1, even though the full product exceeds signed 64-bit range, and
+widening `0xffffffff` yields 4294967295, not -1. Typed unpacked storage already
+supported these representations; no boxed numeric carrier was introduced.
+
+The four entries add 140 native-oracle rows over signed-machine extremes and
+values around every narrow sign and wrap boundary. A separate arbitrary-precision
+model checks all those native results. Focused JVM tests also compare primitive
+arithmetic with `BigInteger`, exercise both comparison operands and equality,
+compile each primitive family, and reject malformed arities and literal values.
+The general corpus checker supplies the held-out cold paths and requires
+installed-code entry for every input after broad warmup and recompilation.
 
 Preparation fingerprints its Haskell sources, compiler and preparation inputs,
 exported Core, structural report and native oracle. A local test against stale

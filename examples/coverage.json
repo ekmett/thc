@@ -561,6 +561,65 @@
           ]
         }
       ]
+    },
+    {
+      "id": "narrow-words",
+      "source": "examples/THC/NarrowWordCoverage.hs",
+      "module": "THC.NarrowWordCoverage",
+      "entries": [
+        {
+          "name": "word8Arithmetic",
+          "focus": "Ordinary Word8 conversion, wrapping arithmetic and unsigned ordering",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord8#", "word8ToWord#", "plusWord8#",
+            "subWord8#", "timesWord8#", "ltWord8#", "leWord8#", "eqWord#"],
+          "requiredLiteralKinds": ["word8"]
+        },
+        {
+          "name": "word16Arithmetic",
+          "focus": "Ordinary Word16 conversion, wrapping arithmetic and unsigned ordering",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord16#", "word16ToWord#", "plusWord16#",
+            "subWord16#", "timesWord16#", "ltWord16#", "leWord16#", "eqWord#"],
+          "requiredLiteralKinds": ["word16"]
+        },
+        {
+          "name": "word32Arithmetic",
+          "focus": "Ordinary Word32 conversion, wrapping arithmetic and unsigned ordering",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord32#", "word32ToWord#", "plusWord32#",
+            "subWord32#", "timesWord32#", "ltWord32#", "leWord32#", "eqWord#"],
+          "requiredLiteralKinds": ["word32"]
+        },
+        {
+          "name": "narrowWordRecordChecksum",
+          "focus": "Two consumers share records with unpacked Word8Rep/Word16Rep/Word32Rep fields and zero-extending conversions",
+          "warmInputs": [0, 11, 127, 256],
+          "coldInputs": [-1, 1, 128, 129, 254, 255, 257, -128, -129,
+            32767, 32768, 32769, 65534, 65535, 65536, 65537, -32768, -32769,
+            2147483647, 2147483648, 2147483649, 4294967294, 4294967295,
+            4294967296, 4294967297, -2147483648, -2147483649, -4294967295,
+            -4294967296, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["wordToWord8#", "word8ToWord#", "wordToWord16#",
+            "word16ToWord#", "wordToWord32#", "word32ToWord#"],
+          "sharedBindings": ["records"]
+        }
+      ]
     }
   ]
 }
