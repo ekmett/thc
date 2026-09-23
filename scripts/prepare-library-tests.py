@@ -126,6 +126,15 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + '\n')
 
 
+def require_sequence_tuple_frontier(audit):
+    # Result tuples are supported on this baseline. Preserve the actual
+    # unsupported positions, not the earlier blanket representation rejection.
+    expected = {'unboxed-tuple argument', 'unboxed-tuple formal argument'}
+    if not any(issue['code'] == 'aggregate-boundary' and issue['detail'] in expected
+               for issue in audit['issues']):
+        raise RuntimeError('expected aggregate frontier changed; review coverage')
+
+
 def verified_containers():
     archive = ROOT / 'vendor/archives/containers-0.8.tar.gz'
     archive.parent.mkdir(parents=True, exist_ok=True)
@@ -242,9 +251,11 @@ def main():
                     violations.append(name + ': declared support disagrees with ' + str(entry_path))
                 if any(item['id'].startswith('main:') for item in entry_audit['missingGlobals']):
                     violations.append(name + ': source-library definitions must resolve at the post-Tidy boundary')
-                if execution == 'frontier' and not any(issue['code'] == 'aggregate-representation' and
-                        issue['detail'] == 'unboxed-tuple' for issue in entry_audit['issues']):
-                    violations.append(name + ': expected aggregate frontier changed; review coverage')
+                if execution == 'frontier':
+                    try:
+                        require_sequence_tuple_frontier(entry_audit)
+                    except RuntimeError as error:
+                        violations.append(name + ': ' + str(error))
                 group['entryAudits'][name] = dict(audit=str(entry_path), execution=execution)
         write_json(output / 'provenance.json', {
             'source': CONTAINERS_URL, 'sha256': CONTAINERS_SHA, 'sourcePatches': [],
