@@ -25,6 +25,11 @@ internal data class CoreRepresentation(
         else -> null
     }
     fun refine(other: CoreRepresentation): CoreRepresentation {
+        // A Long is only the host carrier: distinct exact GHC scalar reps cannot
+        // replace one another on a lexical value. Unknown/legacy proofs add no constraint.
+        if (present && other.present && kind == CoreKind.LONG && other.kind == CoreKind.LONG &&
+            primReps?.size == 1 && other.primReps?.size == 1 && primReps != other.primReps)
+            throw RuntimeFault("Conflicting Core scalar representation proofs: $primReps and ${other.primReps}")
         if ((isVector || other.isVector) && present && other.present && vector != other.vector)
             throw RuntimeFault("Conflicting Core vector representation proofs")
         if (isTuple && other.isTuple && !TupleShape.compatible(this, other))

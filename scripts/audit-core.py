@@ -217,6 +217,12 @@ class Audit:
         return ('scalar', tuple(registers)) if isinstance(registers, list) else None
 
     def compare_shapes(self, expected, actual, owner, path, component=False):
+        # Exact scalar register names constrain the same lexical value too.
+        # Missing/unknown legacy proofs and boxed kind refinements remain compatible.
+        if all(isinstance(rep, dict) and rep.get('kind') == 'long' and
+               isinstance(rep.get('primReps'), list) and len(rep['primReps']) == 1 for rep in (expected, actual)):
+            if expected['primReps'] != actual['primReps']:
+                self.issue('scalar-representation', owner, path, 'Conflicting exact scalar primitive representations')
         if not component and not (self.is_tuple(expected) or self.is_tuple(actual) or is_vector(expected) or is_vector(actual)):
             return
         left, right = self.shape(expected), self.shape(actual)
