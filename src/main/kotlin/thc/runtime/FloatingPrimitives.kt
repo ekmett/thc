@@ -46,6 +46,10 @@ private val floatingOperations = mapOf(
 
 /** JVM float operations round each result to binary32; no implicit numeric widening. */
 internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
+    if (name == "sqrtFloat#" || name == "sqrtDouble#") {
+        if (arguments.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
+        return if (name == "sqrtFloat#") FloatSqrt(arguments[0]) else DoubleSqrt(arguments[0])
+    }
     val kind = when (name) {
         "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
         "int2Float#", "double2Float#" -> CoreKind.FLOAT
@@ -58,6 +62,20 @@ internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
         "float2Int#", "double2Int#", "float2Double#", "double2Float#")
     if (arguments.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
     return FloatingPrimitive(floatingOperations.getValue(name), arguments, kind)
+}
+
+// Keep each operand and result primitive throughout execution. Float inputs are
+// exactly widened for JVM sqrt and rounded back to their binary32 result.
+private class FloatSqrt(@field:Child private var value: Expr) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.FLOAT, evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = executeFloat(frame)
+    override fun executeFloat(frame: VirtualFrame): Float = Math.sqrt(value.executeRequiredFloat(frame).toDouble()).toFloat()
+}
+
+private class DoubleSqrt(@field:Child private var value: Expr) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.DOUBLE, evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = executeDouble(frame)
+    override fun executeDouble(frame: VirtualFrame): Double = Math.sqrt(value.executeRequiredDouble(frame))
 }
 
 private class FloatingPrimitive(private val operation: Int,

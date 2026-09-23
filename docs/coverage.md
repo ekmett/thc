@@ -32,6 +32,7 @@ and exact compiled-entry checks for every row on both backends.
 
 The [floating suite](floating-primitives.md) adds 28 scalar `Float#`/`Double#`
 operations and 441 native/model rows, with primitive locals, fields and captures.
+Two additional square-root primitives have a separate 418-row native/model suite.
 Its compiled loop retains both precisions without boxing in the continuing loop;
 generic scalar call boundaries still use the Object ABI. The floating tuple result
 slice adds genuine `Data.Complex` CPR workers, 44 native/model rows and eight IEEE

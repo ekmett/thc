@@ -105,9 +105,10 @@ aggregate arguments, join captures, ordinary captures and sums remain explicit b
 pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
-Double storage and 28 arithmetic/comparison/conversion primops, checked against
-native GHC. Floating tuple results also execute genuine `Data.Complex` workers;
-residual scalar floating inputs still use the existing Object call ABI.
+Double storage and 30 arithmetic/comparison/conversion primops, including square
+roots, checked against native GHC. Floating tuple results also execute genuine
+`Data.Complex` workers; residual scalar floating inputs still use the existing
+Object call ABI.
 
 The `Data.Set` example remains a separate frontier until its full exported call
 graph passes; native results alone are not counted as THC execution passes.

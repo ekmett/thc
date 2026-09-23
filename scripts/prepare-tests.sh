@@ -7,6 +7,7 @@ python3 scripts/generate-scalar-signatures.py
 compiler/build.sh
 python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
+python3 scripts/prepare-sqrt-audit.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/prepare-tuple-return-audit.py
 python3 scripts/prepare-state-tuple-audit.py

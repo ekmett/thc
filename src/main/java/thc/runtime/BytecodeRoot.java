@@ -705,6 +705,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class FloatMultiply { @Specialization public static float apply(float x, float y) { return x * y; } }
     @Operation public static final class FloatDivide { @Specialization public static float apply(float x, float y) { return x / y; } }
     @Operation public static final class FloatNegate { @Specialization public static float apply(float x) { return -x; } }
+    @Operation public static final class FloatSqrt { @Specialization public static float apply(float x) { return (float) Math.sqrt(x); } }
     @Operation public static final class FloatEqual { @Specialization public static long apply(float x, float y) { return x == y ? 1L : 0L; } }
     @Operation public static final class FloatNotEqual { @Specialization public static long apply(float x, float y) { return x != y ? 1L : 0L; } }
     @Operation public static final class FloatLess { @Specialization public static long apply(float x, float y) { return x < y ? 1L : 0L; } }
@@ -716,6 +717,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleMultiply { @Specialization public static double apply(double x, double y) { return x * y; } }
     @Operation public static final class DoubleDivide { @Specialization public static double apply(double x, double y) { return x / y; } }
     @Operation public static final class DoubleNegate { @Specialization public static double apply(double x) { return -x; } }
+    @Operation public static final class DoubleSqrt { @Specialization public static double apply(double x) { return Math.sqrt(x); } }
     @Operation public static final class DoubleEqual { @Specialization public static long apply(double x, double y) { return x == y ? 1L : 0L; } }
     @Operation public static final class DoubleNotEqual { @Specialization public static long apply(double x, double y) { return x != y ? 1L : 0L; } }
     @Operation public static final class DoubleLess { @Specialization public static long apply(double x, double y) { return x < y ? 1L : 0L; } }
