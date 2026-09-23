@@ -448,6 +448,14 @@ class Audit:
                 if self.is_tuple(binder_proof):
                     if len(expr[3]) != 1:
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple requires one alternative')
+                arm_proofs = [self.literal_rep(alt[3]) or self.expression_rep(alt[3]) for alt in expr[3]]
+                floating = next((proof for proof in [self.expression_rep(expr), *arm_proofs]
+                                 if isinstance(proof, dict) and proof.get('kind') in ('float', 'double')), None)
+                if floating is not None:
+                    # Validation is order independent; unknown arms do not gain
+                    # a floating result proof merely because another arm has one.
+                    for index, proof in enumerate(arm_proofs):
+                        self.compare_shapes(floating, proof, owner, f'{path}/alternatives/{index}/body/rep')
                 for index, alternative in enumerate(expr[3]):
                     altpath = f'{path}/alternatives/{index}'
                     kind, value, ids, rhs = alternative[:4]

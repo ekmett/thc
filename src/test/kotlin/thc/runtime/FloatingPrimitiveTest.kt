@@ -125,6 +125,37 @@ class FloatingPrimitiveTest {
                 FrameAccess.write(widened, slots[0], Any())
                 assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(slots[0]))
                 assertEquals((-0.0f).toRawBits(), (FrameAccess.read(old, slots[0]) as Float).toRawBits())
+
+                // API/legacy robustness: no ordinary valid GHC scalar binder
+                // that widens this way is known. New activations follow an
+                // already widened descriptor and store exact boxed carriers.
+                val scalarLayout = FrameLayout()
+                val scalarSlots = intArrayOf(scalarLayout.bind("long"), scalarLayout.bind("float"), scalarLayout.bind("double"))
+                val scalarDescriptor = scalarLayout.build()
+                val scalarCaptures = CaptureLayout(language, booleanArrayOf(true, false, false),
+                    exactLong = booleanArrayOf(true, false, false), exactFloat = booleanArrayOf(false, true, false),
+                    exactDouble = booleanArrayOf(false, false, true))
+                val scalarValues = arrayOf<Any>(Long.MIN_VALUE, -0.0f, Double.fromBits(0x7ff8000000001234L))
+                val primitiveFrame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scalarDescriptor)
+                scalarSlots.indices.forEach { FrameAccess.write(primitiveFrame, scalarSlots[it], scalarValues[it]) }
+                val wideningFrame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scalarDescriptor)
+                scalarSlots.forEach { FrameAccess.write(wideningFrame, it, Any()) }
+                val boxedFrame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scalarDescriptor)
+                FrameAccess.writeLong(boxedFrame, scalarSlots[0], scalarValues[0] as Long)
+                FrameAccess.writeFloat(boxedFrame, scalarSlots[1], scalarValues[1] as Float)
+                FrameAccess.writeDouble(boxedFrame, scalarSlots[2], scalarValues[2] as Double)
+                assertTrue(scalarSlots.all { boxedFrame.isObject(it) })
+                for (frame in listOf(primitiveFrame, boxedFrame)) {
+                    val capture = scalarCaptures.capture(frame, scalarSlots)
+                    assertEquals(scalarValues[0], scalarCaptures.readLong(capture, 0))
+                    assertEquals((scalarValues[1] as Float).toRawBits(), scalarCaptures.readFloat(capture, 1).toRawBits())
+                    assertEquals((scalarValues[2] as Double).toRawBits(), scalarCaptures.readDouble(capture, 2).toRawBits())
+                }
+                for ((index, wrong) in listOf(0 to 1.0, 1 to 1.0, 2 to 1.0f)) {
+                    FrameAccess.write(boxedFrame, scalarSlots[index], wrong)
+                    assertThrows(RuntimeFault::class.java) { scalarCaptures.capture(boxedFrame, scalarSlots) }
+                    FrameAccess.write(boxedFrame, scalarSlots[index], scalarValues[index])
+                }
             } finally { context.leave() }
         }
     }
@@ -174,6 +205,29 @@ class FloatingPrimitiveTest {
                         "bindings" to listOf(binding + ("expr" to expr)), "constructors" to emptyList<Any>()))))
                 val error = assertThrows(PolyglotException::class.java) { context.eval("thc", request) }
                 assertTrue(error.message.orEmpty().contains("Conflicting Core representation proofs"), error.message)
+            }
+        }
+    }
+
+    @Test fun floatingCaseValidationChecksEveryKnownAlternativeWithoutOrderDependence() {
+        for ((kind, register) in listOf("float" to "FloatRep", "double" to "DoubleRep")) {
+            val proof = mapOf("kind" to kind, "primReps" to listOf(register), "evaluated" to true)
+            val floating = listOf("lit", kind, "1.0")
+            val others = listOf(listOf("lit", if (kind == "float") "double" else "float", "1.0"),
+                listOf("lit", "int", "1"), listOf("lit", "string-bytes", "41"), listOf("void"))
+            for (other in others) for (arms in listOf(listOf(floating, other), listOf(other, floating))) {
+                for (declared in listOf(null, proof)) for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+                    val expr = listOf("case", listOf("lit", "int", "0"), "s", listOf(
+                        listOf("default", null, emptyList<String>(), arms[0]),
+                        listOf("lit", listOf("int", "0"), emptyList<String>(), arms[1]))) +
+                        if (declared == null) emptyList() else listOf(mapOf("rep" to declared))
+                    val binding = mapOf("id" to "entry", "name" to "entry", "arity" to 0, "lifted" to true, "expr" to expr)
+                    val request = Json.stringify(mapOf("entry" to "entry", "backend" to backend,
+                        "modules" to listOf(mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "Floating.MixedCase",
+                            "bindings" to listOf(binding), "constructors" to emptyList<Any>()))))
+                    val error = assertThrows(PolyglotException::class.java) { context.eval("thc", request) }
+                    assertTrue(error.message.orEmpty().contains("Conflicting Core representation proofs"), error.message)
+                }
             }
         }
     }

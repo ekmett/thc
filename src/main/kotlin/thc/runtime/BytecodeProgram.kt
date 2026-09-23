@@ -808,12 +808,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
-            var resultProof = CoreRepresentations.expression(expr)
-            for (alternative in alternatives) {
-                val actual = alternative.body.proof
-                if (actual.isFloat || actual.isDouble || resultProof.isFloat || resultProof.isDouble)
-                    resultProof = resultProof.refine(actual)
-            }
+            val resultProof = CoreRepresentations.expression(expr)
+            CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
             val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(resultProof)
                 ?: resultProof.copy(evaluated = alternatives.all { it.body.proof.evaluated })
             LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->

@@ -115,6 +115,26 @@ class AuditTest(unittest.TestCase):
                     report = run(expr)
                     self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, expr)
 
+    def test_floating_case_validation_is_order_independent_without_inventing_unknown_proofs(self):
+        for kind, register in [('float', 'FloatRep'), ('double', 'DoubleRep')]:
+            proof = dict(kind=kind, primReps=[register], evaluated=True)
+            floating = ['lit', kind, '1.0']
+            others = [['lit', 'double' if kind == 'float' else 'float', '1.0'], lit(1),
+                      ['lit', 'string-bytes', '41'], ['void']]
+            for other in others:
+                for first, second in [(floating, other), (other, floating)]:
+                    for declared in [None, proof]:
+                        case = ['case', lit(0), 's', [['default', None, [], first],
+                                ['lit', ['int', '0'], [], second]]]
+                        if declared is not None:
+                            case.append(dict(rep=declared, binder=dict(id='s', lifted=False, rep=LONG)))
+                        report = run(case)
+                        self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, case)
+            unknown_arm = ['var', 'legacy']
+            case = ['case', lit(0), 's', [['default', None, [], floating], ['lit', ['int', '0'], [], unknown_arm]]]
+            self.assertIsNone(audit_core.Audit.expression_rep(case))
+            self.assertTrue(run(['lam', [dict(id='legacy', lifted=False)], case])['accepted'])
+
     def test_scalar_lexical_occurrences_cannot_replace_exact_binder_registers(self):
         for primitive, expected, declared in [('quotRemInt#', 'IntRep', 'WordRep'), ('plusInt8#', 'Int8Rep', 'Word8Rep')]:
             scalar = dict(LONG, primReps=[expected])
