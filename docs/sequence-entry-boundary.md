@@ -169,8 +169,11 @@ barrier to aging: `BarrierSetNMethod::nmethod_entry_barrier` calls
 `CodeCache::gc_epoch()` to nmethod offset `0x48` at `0xe29c11`.
 `nmethod::is_cold` reads the same field and compares its age with
 `CodeCache::cold_gc_count()` at `0xe2a342` through `0xe2a35a`.
-This strengthens the explanation for an active fast trampoline aging as cold,
-but is not a direct sample of the retired boundary's age field.
+This provides a possible mechanism for an active fast trampoline aging as cold,
+but is not a direct sample of the retired boundary's age field or evidence that
+it was active at retirement. Loading/auditing rejected frontiers can also leave
+the boundary genuinely idle. An entry barrier cannot refresh code that is not
+being entered.
 
 An unchanged-checker bytecode replay with only ZGC and lifecycle logging added
 passes 8,028 comparisons and 2,760 required compiled calls. Its log shows one
@@ -197,3 +200,21 @@ Further work needs a discriminating caller-link or runtime-lifetime fix while
 retaining the ordinary public call and unchanged default-runtime gate. More
 primops, Sequence source substitutions, counter relaxation and diagnostic
 settling do not address this observed failure.
+
+## Java-Graal lifetime control: inconclusive
+
+A local module overlay moves G1's boundary tail dispatch onto the compiler's
+existing post-frame path, after its entry barrier. It leaves the installed JDK,
+THC runtime, manifest and checker unchanged. Both that experiment and the
+unmodified Java-Graal control pass all 8,028 comparisons and 2,760 required
+compiled-entry checks. The experimental run still cold-flushes its boundary at
+35.259s and reinstalls it at 91.349s; the control records no boundary retirement.
+Thus a passing patched replay is not evidence for a fix. Compiler host,
+observation, profiles and timing remain confounders, and genuine idle retirement
+would not be prevented by the change.
+
+The [compact lifetime experiment](../bench/experiments/sequence-boundary-lifetime/README.md)
+records configuration, compiler-selection evidence, results, artifact hashes and
+retained full-log locations. Neither a Java-Graal compiler-host switch nor a GC
+change is adopted in production. Default-runtime Sequence coverage remains
+blocked at the original strict entry gate.

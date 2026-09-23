@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "date": "2026-09-23",
+  "conclusion": "inconclusive: both Java-Graal controls pass; experimental boundary still cold-flushes",
+  "source_base": "77c7b20cec6b3807bbfa430aa76ad8d9a88225cc",
+  "frozen_runtime_commit": "3e5ee6d3506b6ebbb19322eb91df6eed5c250952",
+  "frozen_runtime_sha256": "ce0b5621f91f91461cabb371a386123ce54fb2f4bc939241398cbc7c4b2f46de",
+  "cases_sha256": "b9a7e8cda32b448cb9d5e54af08bec112eab4c112b1a8a63a23b32b6dad4179a",
+  "compiler": "Oracle GraalVM25.3.4.1+1.1 / Java25.0.4.1+1-LTS-jvmci-25.3-b22, Java-hosted Enterprise Graal with Truffle extensions",
+  "collector": "G1",
+  "unchanged_limits": {"heap": "6g", "stack": "2m", "compilation_timeout_seconds": 30, "maximum_graal_graph_size": 100000},
+  "results_each": {"exit_status": 0, "comparisons": 8028, "interpreted": 2676, "compiled_warm": 84, "cold": 2592, "post_cold_compiled": 2676, "required_compiled_checks": 2760, "clean_diagnostics": 17, "rejected_frontiers": 8},
+  "patched": {
+    "worktree": "/home/ekmett/ai/thc-sequence-boundary-lifetime-01a0cdeb",
+    "logs": "build/java-graal-patched",
+    "source": "build/compiler-overlay/src/jdk/graal/compiler/truffle/hotspot/amd64/AMD64TruffleCallBoundaryInstrumentationFactory.java",
+    "original_source_sha256": "ac24ccf855001eec08541b74be458c993e6fc0c050f287dea3783d0aa1657864",
+    "modified_source_sha256": "d893f1b1c2b905e25c7091f05940d789bfb57f333a6308951d19def68db67419",
+    "factory_class_sha256": "89c46c36e64d524bb3ccbf03cc03ffa469afbf486878f14639c0369f707b5e44",
+    "anonymous_class_sha256": "946b1c36e575ffd3f1f48ec9d66e8b05914f40f843eb8237af2f3cb3916a1ca9",
+    "check_bytecode_log_sha256": "5a449a60146e3df602ed0b1d7379892971e0ab104f9c74abccfbccded4c05a1e",
+    "hotspot_xml_sha256": "1071b7e032c658f91ca30b76ad24113651cc471dbc7f5541d0fc3361918a5342",
+    "lifecycle_log_sha256": "dabdeb1c07a6e7b7fabb06a0b181ee1a770e4e10a7bb7f0e28cf884252a2427f",
+    "classes_log_sha256": "10012a81b7d540f84c4135a69a8c5b1556e28e26fba11fff63a974f27c5c0bdd",
+    "boundary_install_seconds": [2.097, 91.349],
+    "boundary_compile_ids": [14092, 25341],
+    "boundary_cold_flush": {"seconds": 35.259, "epoch": 58, "cold_count": 11, "free_kb": 103408}
+  },
+  "control": {
+    "directory": "/home/ekmett/ai/thc-sequence-entry-attribution-01a0cdeb/build/java-graal-control-85dff0b",
+    "handoff": "HANDOFF-java-graal-control.md",
+    "check_bytecode_log_sha256": "4ffc1f48efcf1dcb07971bb02214333cc660ebe441c4830e9b8361b50029605a",
+    "hotspot_xml_sha256": "7bdb7988805af8998384d92786af9eaf5dfae6ea5aebbd47a219d67a8c8e5fc5",
+    "lifecycle_log_sha256": "2f8b7fe6b2beb9405dc6161df32fea3d9f7d1ce4820409c6e9acc5a9bfca942f",
+    "boundary_install_seconds": [1.836],
+    "boundary_compile_ids": [14117],
+    "recorded_boundary_retirements": 0,
+    "exit_seconds": 135.301
+  },
+  "caveats": [
+    "Not a native-compiler/default-runtime pass or production remedy.",
+    "Experimental run additionally logs class loading; timing and profiles are not controlled.",
+    "No entry timestamps establish activity versus genuine idleness at the cold flush.",
+    "Post-frame path cannot repair already stale compiled caller links.",
+    "Matched version-only probe reports compressed oops; actual replay did not dump ergonomic flags."
+  ]
+}
