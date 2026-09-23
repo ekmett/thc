@@ -23,6 +23,15 @@ internal object ManagedByteArray {
             fault("ByteArray# copy range outside its backing storage")
         System.arraycopy(source, sourceOffset.toInt(), destination, destinationOffset.toInt(), count.toInt())
     }
+    /** GHC promises only the sign of the unsigned lexicographic comparison.
+     * Validate both full-width ranges before narrowing; aliases are harmless. */
+    @JvmStatic fun compare(first: ByteArray, firstOffset: Long, second: ByteArray, secondOffset: Long, count: Long): Long {
+        fun contained(size: Long, offset: Long) = offset >= 0 && offset <= size && count >= 0 && count <= size - offset
+        if (!contained(first.size.toLong(), firstOffset) || !contained(second.size.toLong(), secondOffset))
+            fault("ByteArray# comparison range outside its backing storage")
+        return java.util.Arrays.compareUnsigned(first, firstOffset.toInt(), (firstOffset + count).toInt(),
+            second, secondOffset.toInt(), (secondOffset + count).toInt()).toLong()
+    }
     /** Unsafe freeze changes the static type, not the array or its identity. */
     @JvmStatic fun freeze(bytes: ByteArray): ByteArray = bytes
     @JvmStatic fun allocate(size: Long): ByteArray {
@@ -41,6 +50,8 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     WRITE("writeWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word8Rep"), emptyList())),
     COPY("copyByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
         listOf("IntRep"), listOf("IntRep"), emptyList())),
+    COMPARE("compareByteArrays#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
+        listOf("IntRep"), listOf("IntRep"))),
     FREEZE("unsafeFreezeByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
     SIZE("sizeofByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
     INDEX("indexWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
@@ -89,7 +100,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             result.primReps == payload
         else scalar(result, when (this) {
             WRITE_INT16, WRITE_WORD16, WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY -> emptyList()
-            SIZE, INDEX_INT -> listOf("IntRep")
+            SIZE, INDEX_INT, COMPARE -> listOf("IntRep")
             INDEX_INT16 -> listOf("Int16Rep"); INDEX_WORD16 -> listOf("Word16Rep")
             INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
             INDEX_FLOAT -> listOf("FloatRep"); INDEX_WORD -> listOf("WordRep")
@@ -108,6 +119,7 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.WRITE -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
+        ByteArrayOp.COMPARE -> CompareByteArraysExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
         ByteArrayOp.SIZE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
@@ -362,5 +374,19 @@ private class CopyByteArrayExpression(@field:Child private var source: Expr,
         ManagedByteArray.requireState(state.execute(frame))
         ManagedByteArray.copy(from, fromOffset, to, toOffset, length)
         return Unit
+    }
+}
+
+private class CompareByteArraysExpression(@field:Child private var first: Expr,
+    @field:Child private var firstOffset: Expr, @field:Child private var second: Expr,
+    @field:Child private var secondOffset: Expr, @field:Child private var count: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long {
+        val left = ManagedByteArray.require(first.execute(frame))
+        val from = firstOffset.executeRequiredLong(frame)
+        val right = ManagedByteArray.require(second.execute(frame))
+        val to = secondOffset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        return ManagedByteArray.compare(left, from, right, to, length)
     }
 }

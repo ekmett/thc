@@ -118,7 +118,8 @@ storage, joins, nested sums and unresolved layouts remain rejected.
 lazy reference storage and exact State sequencing on both backends.
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
-pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
+pack/length/unpack/uncons and public comparison/prefix/suffix operations, with ordered writes,
+contained ranges and native/model checks on both backends.
 [Int-array operations](docs/int-arrays.md) extend the same byte storage to
 public `UArray`/`STUArray` examples with native-endian, full-width values.
 [Double-array operations](docs/double-arrays.md) add typed floating storage,

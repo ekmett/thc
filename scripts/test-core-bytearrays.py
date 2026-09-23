@@ -212,5 +212,20 @@ class ByteArrayContracts(unittest.TestCase):
             self.assertIn('scalar-representation', {i['code'] for i in check(module)['issues']}, argument)
 
 
+    def test_compare_checks_every_reference_range_and_scalar_result(self):
+        for index in range(5):
+            for mutation in ('missing', 'wrong', 'lexical'):
+                module, app = fixture('compareByteArrays#')
+                proof = copy.deepcopy(app[2][index][2]['rep'])
+                proof['primReps'] = ['BoxedRep (Just Lifted)'] if index in (0, 2) else ['WordRep']
+                if mutation == 'missing': app[2][index][2].pop('rep')
+                elif mutation == 'wrong': app[2][index][2]['rep'] = proof
+                else: module['bindings'][0]['expr'][1][index]['rep'] = proof
+                self.assertFalse(check(module)['accepted'], (index, mutation))
+        module, app = fixture('compareByteArrays#')
+        app[6]['rep'] = dict(kind='unknown', aggregate='unboxed-tuple', components=[], primReps=[], evaluated=True)
+        self.assertFalse(check(module)['accepted'])
+
+
 if __name__ == '__main__':
     unittest.main()
