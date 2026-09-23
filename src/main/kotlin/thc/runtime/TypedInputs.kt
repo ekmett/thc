@@ -172,9 +172,9 @@ internal fun copyInputFields(source: HandoffStorage, destination: HandoffStorage
 
 /** Prefix fields are immutable after publication and cannot be confused with a pool loan. */
 internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputSource,
-    frame: VirtualFrame, node: Node, values: Array<Any?>?, offset: Int, count: Int): Closure {
-    check(count < function.arity)
-    val oldCount = function.suppliedCount
+    frame: VirtualFrame, node: Node, values: Array<Any?>?, offset: Int, count: Int,
+    oldCount: Int, remainingArity: Int): Closure {
+    check(count < remainingArity)
     val prefixWidth = input.logical.offset(oldCount)
     val sourceOffset = ArgumentLayout.offset(source.layout, offset)
     val sourceWidth = ArgumentLayout.offset(source.layout, offset + count) - sourceOffset
@@ -185,7 +185,7 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
         ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, storage, 0, prefixWidth, layout)
     }
     source.copy(frame, node, values, sourceOffset, storage, prefixWidth, sourceWidth, layout)
-    return Closure(function.environment, NO_PAP_ARGUMENTS, function.arity - count, function.target, oldCount + count, storage)
+    return Closure(function.environment, NO_PAP_ARGUMENTS, remainingArity - count, function.target, oldCount + count, storage)
 }
 
 /** The loan is consumed by entry before any guest continuation. Failed entry and
@@ -316,7 +316,7 @@ private class InputCallArm(private val source: InputSource, private val count: I
         if (arity > count) {
             if (destination != null) fault("Aggregate result application is under-saturated")
             if (metrics.enabled) metrics.papAllocations++
-            return if (input != null) typedPap(function, input, source, frame, this, values, start, count)
+            return if (input != null) typedPap(function, input, source, frame, this, values, start, count, prefixCount, arity)
             else legacyPap(frame, this, function, source, values, start, count)
         }
         val isTail = tail && arity == count
