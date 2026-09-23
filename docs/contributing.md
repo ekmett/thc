@@ -57,7 +57,7 @@ To reproduce the main checks locally:
 
 ```sh
 scripts/try.sh
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon test --rerun-tasks
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon test --rerun
 scripts/try-libraries.sh
 THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
 python3 -m unittest discover -s .github/scripts -p 'test_*.py'
