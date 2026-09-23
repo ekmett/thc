@@ -10,6 +10,7 @@ private typealias ProofExpr = List<Any?>
 /** Core proofs and lexical joins must remain sound at the public bytecode boundary. */
 class BytecodeCoreProofTest {
     private val longRep = rep("long", listOf("IntRep"), true)
+    private val wordRep = rep("long", listOf("WordRep"), true)
     private val dataRep = rep("data", listOf("BoxedRep (Just Lifted)"), true)
     private val closureRep = rep("closure", listOf("BoxedRep (Just Lifted)"), true)
     private val addressRep = rep("address", listOf("AddrRep"), true)
@@ -102,7 +103,8 @@ class BytecodeCoreProofTest {
     @Test fun capturedAddressesRemainObjectsAndCapturedLongsUsePrimitiveReads() {
         val address: ProofExpr = listOf("lit", "string-bytes", "61626300", meta(addressRep))
         val captured = lambda(listOf(binder("offset")), primitive("+#",
-            primitive("indexCharOffAddr#", variable("address", addressRep), variable("offset")), variable("saved")))
+            primitive("ord#", apply(listOf("prim", "indexCharOffAddr#"),
+                listOf(variable("address", addressRep), variable("offset")), result = wordRep)), variable("saved")))
         val body = local(listOf(binding("address", address, false, addressRep)),
             local(listOf(binding("saved", integer(17), false, longRep)), apply(captured, listOf(variable("input")))))
         executionContext().use { context ->
