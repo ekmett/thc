@@ -133,3 +133,32 @@ alone is not interpreted or compiled JVM execution evidence.
 General dynamic checked indices, error closures, FFI copying APIs, arbitrary
 bounds, atomic/concurrent accesses, and array allocation failure are outside this
 fixture claim. No throughput or allocation-elimination claim is made.
+
+## Verified checkpoint — 2026-09-23
+
+On eak-quartus, Linux x86_64, GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
+
+- Fresh complete fixture preparation passed: 2,418 array native/model rows,
+  14 genuine erased-literal rows and all sixteen strict pre/post audits.
+- All sixteen focused JVM tests passed: five storage tests, five native/gate
+  tests, three new literal tests and three retained Int32 literal regressions.
+- Full default and dense-handoff suites each passed **403 tests in 85 suites**,
+  with zero failures, errors or skips. `installDist` passed in both modes;
+  dense handoff used a forced rebuild/rerun.
+- Each mode passed all 19,456 measured compiled invocations / 38,912 exact guest
+  entries described above, preserving per-call identity and last-tier checks.
+- Python passed without skips: 9 new model, 9 ByteArray contract, 47 auditor,
+  4 primop inventory, 5 Int model, 9 Double model, 7 Int32 model and 13 Float/Word
+  model tests. All sixteen source and twenty-nine artifact hashes were rechecked
+  after both full suites.
+- Independent xhigh review checked native/storage tests and build/CI wiring.
+  Ultra review checked pinned contracts, literal/runtime behavior, actual Core
+  counts and all hashes; it separately reconstructed every array/literal native
+  result. Both reviews were clean without running JVM guest code themselves.
+
+Tested runtime revision: `8fa2a9982d4fcc19397e678ff7a752f6ccbec6f6`, based on
+`37ed64fa5bc27173d5143885e796dd2eb319954b`. No main/current-batch merge was added.
+Evidence remains under `build/int16-arrays/`, `build/prepare-all-int16.log`,
+`build/test-focused-int16.log`, `build/test-default-int16.log`,
+`build/test-handoff-int16.log`, and `build/test-results/int16-default/` /
+`int16-handoff/`. This checkpoint makes no performance or packed-code claim.
