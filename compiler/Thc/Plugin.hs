@@ -12,7 +12,7 @@ import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUb
 import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
 import GHC.Core.Utils (exprIsHNF, exprOkForSpecEval)
-import GHC.Builtin.PrimOps (primOpOcc)
+import GHC.Builtin.PrimOps (PrimOp(TagToEnumOp), primOpOcc)
 import qualified Data.ByteString as BS
 import Data.Char (ord)
 import Data.List (intercalate, nubBy, stripPrefix)
@@ -335,6 +335,7 @@ constructor d con = O $
   -- field can still hold a THC thunk, so its evaluated flag remains false.
   , ("fieldTypes",A (zipWith fieldType workerTypes workerStrict))
   ] ++ [("sumArity",num (length (tyConDataCons (dataConTyCon con)))) | isUnboxedSumDataCon con]
+    ++ [("enumFamily",enumFamily tc) | let tc = dataConTyCon con, supportedEnum tc]
   where
     workerTypes = map scaledThing (dataConRepArgTys con)
     marks = dataConRepStrictness con
@@ -375,7 +376,7 @@ exprRaw d original = case original of
              in if null vals then withRep (exprRep d a) (expr d f) else node
                [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals)
                ,B (canCertify d && exprIsHNF a)
-               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] demand
+               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]])
   l@Lam{} -> let (bs,body) = collectBinders l
                  vals = filter (not . isTyVar) bs
              in if null vals then withRep (exprRep d l) (expr d body)
@@ -442,10 +443,32 @@ literal d = \case
     numKind LitNumWord64 = "word64"
     numKind LitNumBigNat = "bignat"
 
+-- tagToEnum# carries a nominal result-type argument which ordinary application
+-- export erases. Retain only a complete, concrete nullary family; never infer
+-- an enum from a boxed runtime representation or a printed type name.
+supportedEnum :: TyCon -> Bool
+supportedEnum tc = isEnumerationTyCon tc && tyConArity tc == 0 && not (isFamInstTyCon tc)
+  && not (null cs) && all ((== 0) . dataConRepArity) cs
+  where cs = tyConDataCons tc
+
+enumFamily :: TyCon -> J
+enumFamily tc = O [("typeConstructor",S (nameKey (tyConName tc)))
+                 ,("constructors",A [S (nameKey (dataConName c)) | c <- tyConDataCons tc])]
+
+tagToEnumFamily :: CoreExpr -> Maybe TyCon
+tagToEnumFamily e = case collectArgs e of
+  (Var v,[Type ty,arg]) | Just TagToEnumOp <- isPrimOpId_maybe v
+                        , not (isTypeArg arg), not (isCoArg arg)
+                        , Just (tc,[]) <- splitTyConApp_maybe ty
+                        , supportedEnum tc -> Just tc
+  _ -> Nothing
+  where isCoArg Coercion{} = True
+        isCoArg _ = False
+
 exprCons :: CoreExpr -> [DataCon]
 exprCons = \case
   Var v -> maybe [] (:[]) (isDataConWorkId_maybe v)
-  App a b -> exprCons a ++ exprCons b
+  e@(App a b) -> maybe [] tyConDataCons (tagToEnumFamily e) ++ exprCons a ++ exprCons b
   Lam _ e -> exprCons e
   Let b e -> concatMap (exprCons . snd) (flattenBind b) ++ exprCons e
   Case s _ _ as -> exprCons s ++ concat [case ac of DataAlt c -> c : exprCons e; _ -> exprCons e | Alt ac _ e <- as]

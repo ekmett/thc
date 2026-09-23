@@ -747,7 +747,15 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
-            if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
+            if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
+                if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
+                val operand = compile(args[0], scope, false)
+                val ids = CoreEnums.validate(expr, operand.proof, constructors)
+                val family = EnumFamily(ids.map { dataLayout(it).allocate() }.toTypedArray())
+                ProvenExpression(Expression { e ->
+                    e.builder.beginTagToEnum(family); operand.emit(e); e.builder.endTagToEnum()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })

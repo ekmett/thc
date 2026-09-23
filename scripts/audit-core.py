@@ -385,6 +385,59 @@ class Audit:
                 return self.known_result(expr[1], seen)
         return self.expression_rep(expr)
 
+    def tag_to_enum(self, expr, bound, owner, path):
+        def reject(detail):
+            self.issue('enum-family', owner, path, 'tagToEnum#: ' + detail)
+        if self.cap.get('tagToEnum') != 'concrete-nullary-family':
+            reject('capability disabled')
+        args = expr[2]
+        if len(args) != 1 or expr[3] != [False]:
+            reject('exactly one unlifted Int# operand required')
+            return
+        actual = self.expression_rep(args[0])
+        if args[0][0] == 'var':
+            lexical = bound.get(args[0][1]) if args[0][1] in bound else self.bindings.get(args[0][1], {}).get('rep')
+            if actual is None:
+                actual = lexical
+            elif isinstance(actual, dict) and isinstance(lexical, dict):
+                # Match the lowered lexical value: unknown occurrence fields
+                # refine from the binder, while present contradictory registers
+                # and aggregate/vector identity remain visible to validation.
+                effective = dict(lexical, **actual)
+                if actual.get('kind') == 'unknown':
+                    effective['kind'] = lexical.get('kind')
+                if actual.get('primReps') is None:
+                    effective['primReps'] = lexical.get('primReps')
+                actual = effective
+        def scalar(rep, kind, register):
+            return isinstance(rep, dict) and rep.get('kind') == kind and rep.get('primReps') == [register] and 'aggregate' not in rep and not is_vector(rep)
+        if not scalar(actual, 'long', 'IntRep'):
+            reject('exact IntRep operand required')
+        if not scalar(self.expression_rep(expr), 'data', 'BoxedRep (Just Lifted)'):
+            reject('exact lifted data result required')
+        family = expr[6].get('enumFamily') if len(expr) > 6 and isinstance(expr[6], dict) else None
+        if not isinstance(family, dict) or set(family) != {'typeConstructor', 'constructors'} or not isinstance(family.get('typeConstructor'), str) or not family['typeConstructor']:
+            reject('missing/malformed concrete family')
+            return
+        ids = family['constructors']
+        if not isinstance(ids, list) or not ids or any(not isinstance(k, str) or not k for k in ids) or len(set(ids)) != len(ids):
+            reject('invalid ordered constructors')
+            return
+        for key, con in self.constructors.items():
+            declared = con.get('enumFamily')
+            if (isinstance(declared, dict) and declared.get('typeConstructor') == family['typeConstructor'] and
+                    (declared != family or key not in ids)):
+                reject('contradictory supplied family record ' + key)
+        for index, key in enumerate(ids):
+            con = self.constructors.get(key, {})
+            if (con.get('enumFamily') != family or con.get('kind') != 'boxed' or
+                    type(con.get('arity')) is not int or con['arity'] != 0 or
+                    type(con.get('tag')) is not int or con['tag'] != index + 1 or
+                    any(con.get(field) != [] for field in ('fieldReps', 'fieldTypes', 'fieldLifted', 'strictFields'))):
+                reject('contradictory/missing nullary constructor ' + key)
+            else:
+                self.constructor(key, owner, path + '/enumFamily', True, 0)
+
     def scalar_primitive(self, name, arguments, result, bound, owner, path):
         signature = SCALAR_SIGNATURES.get(name)
         if signature is None:
@@ -569,6 +622,10 @@ class Audit:
                         sum_constructor_tag(self.constructors.get(function[1]), len(arguments))
                     except ValueError as error:
                         self.issue('constructor-arity', owner, path, str(error))
+
+                enum_application = function[0] == 'prim' and function[1] == 'tagToEnum#'
+                if enum_application:
+                    self.tag_to_enum(expr, bound, owner, path)
                 if function[0] == 'prim':
                     self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
                 tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
@@ -673,7 +730,11 @@ class Audit:
                     self.compare_shapes(result, proof, owner, path + '/rep', component=True)
                 elif is_vector(proof):
                     self.issue('vector-boundary', owner, path, 'vector call result')
-                self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
+                if enum_application:
+                    self.expression_metadata(function, owner, path + '/function')
+                    self.primitives.setdefault('tagToEnum#', []).append(dict(self.location(owner, path), arity=len(arguments)))
+                else:
+                    self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
                 for index, argument in enumerate(arguments):
                     if sum_constructor and is_sum(proof) and sum_proof_error(proof) is None:
                         try:

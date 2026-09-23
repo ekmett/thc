@@ -127,6 +127,7 @@ jobs:
       - name: Check exact dependency auditor and library frontier
         run: |
           python3 scripts/test-audit-core.py
+          python3 scripts/test-core-enums.py
           python3 scripts/test-sum-layout.py
           python3 scripts/test-core-sums.py
           python3 scripts/test-library-frontier.py
@@ -177,6 +178,7 @@ jobs:
             build/floating-tuple/
             build/empty-tuple-input/
             build/sqrt/
+            build/tag-to-enum/
             build/test-results/
             build/aggregate-frontier.json
             build/primop-coverage.json
