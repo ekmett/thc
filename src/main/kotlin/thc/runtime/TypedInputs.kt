@@ -422,6 +422,7 @@ private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.t
 }
 
 /** A crossing back into the scalar ABI can contain only scalar logical arguments. */
+@ExplodeLoop
 private fun scalarValues(frame: VirtualFrame, node: Node, source: InputSource, values: Array<Any?>?, start: Int, count: Int): Array<Any?> {
     val result = arrayOfNulls<Any>(ArgumentLayout.offset(source.layout, start + count) - ArgumentLayout.offset(source.layout, start))
     var to = 0
