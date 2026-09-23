@@ -58,6 +58,20 @@ class FloatWordArrayNativeTest {
         visit(entry)
         return targets
     }
+    private data class TargetState(val target: RootCallTarget, val lastTierValid: Boolean)
+    private data class CallState(val entry: TargetState, val active: List<TargetState>)
+    private fun callState(entry: RootCallTarget): Result<CallState> = runCatching {
+        fun state(target: RootCallTarget) = TargetState(target,
+            target.javaClass.getMethod("isValidLastTier").invoke(target) as Boolean)
+        CallState(state(entry), activeTargets(entry).map(::state))
+    }
+    private fun describe(state: Result<CallState>): String = state.fold({ call ->
+        fun target(value: TargetState) = "${value.target.rootNode.name.take(80)}@${System.identityHashCode(value.target).toString(16)}" +
+            "(lastTierValid=${value.lastTierValid})"
+        "entry=${target(call.entry)} activeCount=${call.active.size} active=[" +
+            call.active.take(8).joinToString { target(it) } +
+            (if (call.active.size > 8) ", ..." else "") + "]"
+    }, { error -> "unavailable(${error.javaClass.simpleName}: ${error.message.orEmpty().take(160)})" })
     private fun released(language: Language) {
         val state = language.handoffState.get()
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
@@ -176,10 +190,20 @@ class FloatWordArrayNativeTest {
                         fun check(compiled: Boolean) {
                             for ((input, native) in cases) {
                                 val label = "$stage/$backend/$name/$input/inlining=$inlining"
+                                // Read-only snapshots add no guest calls. Snapshot failures must
+                                // not replace the result/counter assertions they help diagnose.
+                                val beforeTargets = if (compiled) callState(entry) else null
                                 val before = count()
                                 assertEquals(native, Calls.target(entry, arrayOf(0L, input)), label)
                                 if (compiled) {
-                                    assertEquals(expectedCalls.getValue(name), count()-before, "$label exact compiled entries")
+                                    val after = count()
+                                    val afterTargets = callState(entry)
+                                    assertEquals(expectedCalls.getValue(name), after-before) {
+                                        "$label exact compiled entries context@${System.identityHashCode(context).toString(16)}" +
+                                            " handoff=${System.getProperty("thc.handoffSlabs", "false")}" +
+                                            " countBefore=$before countAfter=$after" +
+                                            " before={${describe(beforeTargets!!)}} after={${describe(afterTargets)}}"
+                                    }
                                     val active = activeTargets(entry)
                                     assertEquals(targets.size, active.size, "$label active target count")
                                     assertTrue(active.all { target -> targets.any { it === target } }, "$label active target identities")
