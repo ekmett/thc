@@ -60,6 +60,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         val tuples: MutableMap<String, Pair<CoreRepresentation, List<Local>>> = linkedMapOf()) {
         fun child() = Scope(function, LinkedHashMap(locals), LinkedHashMap(joins), source, LinkedHashMap(tuples))
         fun withSource(location: CoreSourceLocation?) = Scope(function, locals, joins, location, tuples)
+        fun bindLocal(name: String, value: Local) { locals[name] = value; joins.remove(name); tuples.remove(name) }
+        fun bindTuple(name: String, proof: CoreRepresentation, fields: List<Local>) {
+            tuples[name] = proof to fields; locals.remove(name); joins.remove(name)
+        }
+        fun bindJoin(name: String, value: JoinTarget) { joins[name] = value; locals.remove(name); tuples.remove(name) }
     }
     private class JoinRegion
     private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
@@ -189,7 +194,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun bind(scope: Scope, name: String, primitive: Boolean,
                      proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
                      entry: BooleanArray? = null): Local =
-        Local(nextLocal++, name, !cell && (if (proof.present) proof.isLong else primitive), proof, cell, entry).also { scope.locals[name] = it; scope.joins.remove(name) }
+        Local(nextLocal++, name, !cell && (if (proof.present) proof.isLong else primitive), proof, cell, entry).also { scope.bindLocal(name, it) }
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
@@ -545,12 +550,12 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 Local(nextLocal++, parameter["id"] as String,
                     if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
             }
-            JoinTarget(region, index, definition.parameters, parameters, entryStrict).also { local.joins[definition.id] = it; local.locals.remove(definition.id) }
+            JoinTarget(region, index, definition.parameters, parameters, entryStrict).also { local.bindJoin(definition.id, it) }
         }
         localJoinCount += targets.size
         val bodies = definitions.mapIndexed { index, definition ->
             val bodyScope = (if (recursive) local else scope).child()
-            targets[index].locals.forEach { bodyScope.locals[it.name] = it; bodyScope.joins.remove(it.name) }
+            targets[index].locals.forEach { bodyScope.bindLocal(it.name, it) }
             compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
         }
         val entry = compile(expression, local, tail)
@@ -723,7 +728,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val binderProof = scrutinee.proof.refine(CoreRepresentations.caseBinder(expr)).copy(evaluated = true)
             if (binderProof.isTuple) tupleCase(expr, scrutinee, binderProof, local, tail) else {
             val binder = bind(local, expr[2] as String, true, binderProof)
-            if (scrutineeExpr[0] == "var") {
+            if (scrutineeExpr[0] == "var" && scrutineeExpr[1] != expr[2]) {
                 val id = scrutineeExpr[1] as String
                 scope.locals[id]?.let { local.locals[id] = it.copy(proof = it.proof.copy(evaluated = true)) }
             }
@@ -864,7 +869,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
         val shape = TupleShape(proof, language)
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "tuple field $index", field.isLong, field) }
-        scope.tuples[expr[2] as String] = proof to fields
+        scope.bindTuple(expr[2] as String, proof, fields)
         val alternatives = expr[3] as List<List<Any?>>
         if (alternatives.size != 1) throw RuntimeFault("Tuple case requires one alternative")
         val alt = alternatives.single()
@@ -879,9 +884,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 metadata.getOrNull(index)?.let { TupleShape.requireCompatible(component, CoreRepresentations.binder(it), component = true) }
                 val offset = shape.offsets[index]
                 val width = TupleShape.flatten(component).size
-                if (component.isTuple) scope.tuples[id] = component to fields.subList(offset, offset + width)
+                if (component.isTuple) scope.bindTuple(id, component, fields.subList(offset, offset + width))
                 else if (component.kind == CoreKind.VOID) throw UnsupportedCore("Unsupported Core aggregate void component binding")
-                else scope.locals[id] = fields[offset].copy(name = id)
+                else scope.bindLocal(id, fields[offset].copy(name = id))
             }
         } else if (alt[0] != "default" || ids.isNotEmpty()) throw RuntimeFault("Invalid tuple alternative")
         val body = compile(alt[3] as List<Any?>, scope, tail)

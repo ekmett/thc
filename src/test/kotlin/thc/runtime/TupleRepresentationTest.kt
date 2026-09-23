@@ -97,6 +97,29 @@ class TupleRepresentationTest {
                 Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("tupleZeroLazy"), arrayOf(4097L))))
         }
     }
+    @Test fun lexicalScalarAndJoinBindingsShadowTupleNames() = withLanguage { language ->
+        val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
+        fun literal(value: Long) = listOf("lit", "int", value.toString(), mapOf("rep" to longRep))
+        for (kind in listOf("let", "case", "join")) for (backend in listOf("ast", "bytecode")) {
+            val m = module()
+            val outer = list(expression(m, "tupleOutstanding")[2])
+            val id = outer[2] as String
+            val use = listOf("var", id, mapOf("rep" to longRep))
+            val body = if (kind == "case") listOf("case", literal(12345L), id,
+                listOf(listOf("default", null, emptyList<String>(), use)),
+                mapOf("rep" to longRep, "binder" to mapOf("id" to id, "rep" to longRep)))
+            else {
+                val binder = mutableMapOf<String, Any?>("id" to id, "name" to id, "lifted" to false,
+                    "coercion" to false, "rep" to longRep, "expr" to literal(12345L))
+                if (kind == "join") { binder["joinValueArity"] = 0L; binder["joinResultRep"] = longRep }
+                listOf("let", false, listOf(binder), use, mapOf("rep" to longRep))
+            }
+            list(list(outer[3])[0])[3] = body
+            val linked = CoreModules.reachable(m, "tupleOutstanding")
+            val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+            assertEquals(12345L, Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("tupleOutstanding"), arrayOf(8193L))), "$backend/$kind")
+        }
+    }
     @Test fun scalarHandoffCannotClaimSingletonReferenceTupleResults() {
         val previous = System.getProperty(HANDOFF_PROPERTY)
         System.setProperty(HANDOFF_PROPERTY, "true")

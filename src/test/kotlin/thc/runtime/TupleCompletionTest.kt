@@ -37,18 +37,20 @@ class TupleCompletionTest {
         @field:CompilationFinal(dimensions = 1) val fields = intArrayOf(layout.bind("integer"), layout.bind("lazy pointer"))
     }
     private class Producer(language: Language, val shape: TupleShape, private val slots: Slots = Slots(),
-        private val fallback: RootCallTarget? = null) : GuestRoot(language, slots.layout.build()) {
+        private val fallback: RootCallTarget? = null, private val environment: CaptureLayout? = null) : GuestRoot(language, slots.layout.build()) {
         @Child private var residual = IndirectCallNode.create()
-        init { configureTupleResult(shape); configureEntry(booleanArrayOf(false, false), false) }
+        init { configureTupleResult(shape); configureEntry(booleanArrayOf(false, false), environment != null) }
         override fun bloom(frame: VirtualFrame) = 0L
         override fun getName() = "tuple ownership producer"
         override fun execute(frame: VirtualFrame): Any {
-            val value = frame.arguments[1] as Long
+            val offset = if (environment == null) 1 else 2
+            val value = (frame.arguments[offset] as Long) +
+                (environment?.readLong(frame.arguments[1] as CapturedFrame, 0) ?: 0L)
             if (fallback != null && value < 0) {
                 shape.consume(frame, Calls.indirect(residual, fallback, arrayOf(0L, value, frame.arguments[2])), slots.fields, 0)
             } else {
                 FrameAccess.writeLong(frame, slots.fields[0], value + 17L)
-                FrameAccess.write(frame, slots.fields[1], frame.arguments[2])
+                FrameAccess.write(frame, slots.fields[1], frame.arguments[offset + 1])
             }
             return shape.finish(frame, slots.fields)
         }
@@ -64,6 +66,17 @@ class TupleCompletionTest {
             if (CompilerDirectives.inInterpreter() && result is HandoffStorage) Barrier.materialized++
             shape.consume(frame, result, slots.fields, 0)
             check(frame.getLong(slots.fields[0]) == value + 17L)
+            return frame.getObject(slots.fields[1])
+        }
+    }
+    private class DispatchConsumer(language: Language, shape: TupleShape, private val slots: Slots = Slots()) : RootNode(language, slots.layout.build()) {
+        @Child private var dispatch = TupleDispatch(object : TupleDestination(shape) {
+            override fun consume(frame: VirtualFrame, node: com.oracle.truffle.api.nodes.Node, result: Any?) =
+                shape.consume(frame, result, slots.fields, 0)
+        }, Metrics(false), 1, false)
+        override fun execute(frame: VirtualFrame): Any? {
+            dispatch.execute(frame, frame.arguments[0] as Closure, arrayOf(frame.arguments[1]))
+            check(frame.getLong(slots.fields[0]) == frame.arguments[2] as Long)
             return frame.getObject(slots.fields[1])
         }
     }
@@ -111,4 +124,26 @@ class TupleCompletionTest {
         }
         assertEquals(allocations, language.handoffState.get().results.allocations)
     }
+    @Test fun polymorphicTupleCallsKeepPapPrefixesAndCapturedHeadersThroughGenericDispatch() = withLanguage { language ->
+        val shape = shape(language)
+        val captured = CaptureLayout(language, booleanArrayOf(true), booleanArrayOf(true))
+        val producers = List(5) { index -> Producer(language, shape, environment = if (index % 2 == 0) null else captured).callTarget }
+        val closures = producers.mapIndexed { index, target ->
+            val environment = if (index % 2 == 0) null else captured.captureValues(arrayOf(31L * index))
+            Closure(environment, arity = 2, target = target).pap(arrayOf(100L * index))
+        }
+        val consumer = DispatchConsumer(language, shape).callTarget
+        val pointer = Any()
+        fun checkAll() = closures.forEachIndexed { index, closure ->
+            val expected = 100L * index + 17L + if (index % 2 == 0) 0L else 31L * index
+            assertSame(pointer, consumer.call(closure, pointer, expected)); released(language)
+        }
+        repeat(10) { checkAll() }
+        producers.forEach(::compile); compile(consumer)
+        val allocations = language.handoffState.get().results.allocations
+        repeat(10) { checkAll() }
+        assertTrue(valid(consumer))
+        assertEquals(allocations, language.handoffState.get().results.allocations)
+    }
+
 }
