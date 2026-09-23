@@ -9,6 +9,7 @@
     "float",
     "double",
     "int",
+    "int32",
     "int64",
     "word64",
     "word",
@@ -19,6 +20,10 @@
     "string-bytes"
   ],
   "integerLiteralRanges": {
+    "int32": [
+      -2147483648,
+      2147483647
+    ],
     "int64": [
       -9223372036854775808,
       9223372036854775807
