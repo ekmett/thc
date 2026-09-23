@@ -57,6 +57,10 @@ jobs:
               -cp 'build/install/thc/lib/*' thc.LibraryCheckKt build/libraries/cases.json "$backend" \
               2>&1 | tee "build/libraries/check-$backend.log"
           done
+          java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+            -Dthc.handoffSlabs=true -cp 'build/install/thc/lib/*' \
+            thc.LibraryCheckKt build/libraries/cases.json ast \
+            2>&1 | tee build/libraries/check-handoff-ast.log
       - name: Check exact dependency auditor
         run: python3 scripts/test-audit-core.py
       - name: Check benchmark power provenance
