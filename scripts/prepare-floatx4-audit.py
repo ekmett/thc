@@ -54,12 +54,13 @@ def classify(x):
         return 0
     codes = {0: 1, 0x80000000: 2, 0x7f800000: 3, 0xff800000: 4,
              1: 5, 0x80000001: 6, 0x007fffff: 7, 0x807fffff: 8,
-             0x00800000: 9, 0x80800000: 10, 0x7f7fffff: 11, 0xff7fffff: 12}
+             0x00800000: 9, 0x80800000: 10, 0x7f7fffff: 11, 0xff7fffff: 12,
+             2: 15, 0x80000002: 16, 0x4b800002: 17, 0xcb800002: 18}
     return codes.get(b, 13 if b >> 31 else 14)
 
 
 def classes(values):
-    return sum(classify(x) << (4*i) for i, x in enumerate(values))
+    return sum(classify(x) << (5*i) for i, x in enumerate(values))
 
 
 def expected(name, *args):

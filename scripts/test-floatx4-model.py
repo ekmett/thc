@@ -19,7 +19,7 @@ class FloatX4ModelTest(unittest.TestCase):
         self.assertEqual(model.bits(model.f32(model.from_bits(3)*0.5)), 2)
 
     def test_ieee_and_lane_order(self):
-        self.assertEqual(model.classes([0.0, -0.0, float('inf'), float('nan')]), 0x0321)
+        self.assertEqual(model.classes([0.0, -0.0, float('inf'), float('nan')]), 1+2*32+3*1024)
         self.assertNotEqual(model.classes([0.0, -0.0, float('inf'), float('nan')]),
                             model.classes([-0.0, 0.0, float('inf'), float('nan')]))
         self.assertEqual(model.classify(model.f32(float('inf') + float('-inf'))), 0)
@@ -27,9 +27,22 @@ class FloatX4ModelTest(unittest.TestCase):
         self.assertEqual(model.classify(model.f32(model.from_bits(0x7f7fffFF) * 2)), 3)
 
     def test_non_fma(self):
-        self.assertEqual(model.expected('nonFmaCase', 0), 0x1111)
-        self.assertEqual(model.classes([-2.0**-46]*4), 0xdddd)
+        self.assertEqual(model.expected('nonFmaCase', 0), 1+32+1024+32768)
+        self.assertEqual(model.classes([-2.0**-46]*4), 13*(1+32+1024+32768))
         self.assertNotEqual(model.expected('nonFmaCase', 0), model.classes([-2.0**-46]*4))
+
+    def test_exact_rounding_classifications_are_in_the_native_corpus(self):
+        rows = model.model_rows()
+        subnormal = rows[('edgeTimes', 19, 20, 5, 11, 13)]
+        self.assertEqual(subnormal & 31, 15)
+        self.assertEqual((subnormal >> 5) & 31, 16)
+        self.assertNotEqual(model.classify(model.from_bits(2)), model.classify(model.from_bits(3)))
+        self.assertNotEqual(model.classify(model.from_bits(0x80000002)), model.classify(model.from_bits(0x80000003)))
+        self.assertEqual(rows[('edgePlus', 18, 19, 4, 10, 15)] & 31, 17)
+        self.assertEqual(rows[('edgeMinus', 16, 17, 2, 8, 18)] & 31, 18)
+        for lane in range(4):
+            codes = {(value >> (5*lane)) & 31 for key, value in rows.items() if key[0].startswith('edge')}
+            self.assertTrue({15, 16, 17, 18} <= codes)
 
     def test_finite_signatures(self):
         self.assertEqual(model.expected('plusCase', 0, 0, 0, 0), 7*4 ^ 11*4 ^ 13*4 ^ 17*4)

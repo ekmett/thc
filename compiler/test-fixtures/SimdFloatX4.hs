@@ -50,8 +50,9 @@ edgeValue n = case n of
   19# -> 4.203895392974451e-45#
   _ -> -4.203895392974451e-45#
 
--- Four bits per lane, not a commutative reduction. NaN payload/sign is
--- intentionally unspecified. Finite arithmetic values have separate entries.
+-- Five bits per lane, not a commutative reduction. NaN payload/sign is
+-- intentionally unspecified. Dedicated codes distinguish subnormal rounding
+-- to two minimum subnormals and ties rounding to +/-16777220 exactly.
 classify :: Float# -> Int#
 classify x = case neFloat# x x of
   1# -> 0#
@@ -79,12 +80,20 @@ classify x = case neFloat# x x of
                       1# -> 11#
                       _ -> case eqFloat# x (-3.4028234663852886e38#) of
                         1# -> 12#
-                        _ -> case ltFloat# x 0.0# of
-                          1# -> 13#
-                          _ -> 14#
+                        _ -> case eqFloat# x 2.802596928649634e-45# of
+                          1# -> 15#
+                          _ -> case eqFloat# x (-2.802596928649634e-45#) of
+                            1# -> 16#
+                            _ -> case eqFloat# x 16777220.0# of
+                              1# -> 17#
+                              _ -> case eqFloat# x (-16777220.0#) of
+                                1# -> 18#
+                                _ -> case ltFloat# x 0.0# of
+                                  1# -> 13#
+                                  _ -> 14#
 
 classes :: Float# -> Float# -> Float# -> Float# -> Int#
-classes a b c d = classify a +# 16# *# classify b +# 256# *# classify c +# 4096# *# classify d
+classes a b c d = classify a +# 32# *# classify b +# 1024# *# classify c +# 32768# *# classify d
 
 edgePlus, edgeMinus, edgeTimes :: Int# -> Int# -> Int# -> Int# -> Int# -> Int#
 edgePlus a b c d e =
