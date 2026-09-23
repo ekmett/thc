@@ -3,6 +3,8 @@ package thc
 import com.oracle.truffle.api.dsl.Cached
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.nodes.Node
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
 import thc.runtime.TargetCache
 import thc.runtime.Metrics
 import com.oracle.truffle.api.CallTarget
@@ -195,11 +197,19 @@ class EntryValue(private val program: ExecutableProgram, private val entry: Stri
     fun invokeMember(member: String, arguments: Array<Any?>): Any {
         if (member != "compile") throw UnknownIdentifierException.create(member)
         require(arguments.isEmpty()) { "compile takes no arguments" }
-        val target = program.entryTarget(entry)
+        val original = program.entryTarget(entry)
+        // The host root is not cloned, but its guest direct call may be split.
+        // Compile the targets this stable dispatch tree actually invokes, not
+        // only the original target retained by the Haskell closure identity.
+        val targets = NodeUtil.findAllNodeInstances(guestTarget.rootNode, DirectCallNode::class.java)
+            .filter { it.callTarget === original }.map { it.currentCallTarget }.distinct()
+            .ifEmpty { listOf(original) }
         val cls = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
-        require(cls.isInstance(target)) { "Graal optimizing Truffle runtime required" }
-        cls.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-        check(cls.getMethod("isValidLastTier").invoke(target) == true) { "Guest code was not installed" }
+        for (target in targets) {
+            require(cls.isInstance(target)) { "Graal optimizing Truffle runtime required" }
+            cls.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+            check(cls.getMethod("isValidLastTier").invoke(target) == true) { "Guest code was not installed" }
+        }
         return true
     }
 }
