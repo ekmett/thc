@@ -340,7 +340,10 @@
     "indexWord8Array#": 2,
     "copyByteArray#": 6,
     "sqrtFloat#": 1,
-    "sqrtDouble#": 1
+    "sqrtDouble#": 1,
+    "newMutVar#": 2,
+    "readMutVar#": 2,
+    "writeMutVar#": 3
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -602,6 +605,36 @@
         "kind": "void",
         "primReps": []
       }
+    }
+  },
+  "managedMutVarPrimitives": {
+    "newMutVar#": {
+      "arguments": [
+        "boxed",
+        "state"
+      ],
+      "result": [
+        "state",
+        "mutvar"
+      ]
+    },
+    "readMutVar#": {
+      "arguments": [
+        "mutvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "writeMutVar#": {
+      "arguments": [
+        "mutvar",
+        "boxed",
+        "state"
+      ],
+      "result": "state"
     }
   }
 }

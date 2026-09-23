@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression coverage for the manifest's strict Set exception/state frontier."""
+"""Regression coverage for the manifest's strict Set missing-definition frontier."""
 import copy
 import importlib.util
 import json
@@ -20,9 +20,9 @@ class LibraryFrontierTest(unittest.TestCase):
     def violations(self):
         return prepare.audit_structure_violations(self.group, self.audit)
 
-    def test_actual_set_frontier_is_exception_state_not_collection_tuple_results(self):
+    def test_actual_set_frontier_is_missing_definitions_not_capability_gaps(self):
         self.assertEqual([], self.violations())
-        self.assertEqual(1, len(self.audit['issues']))
+        self.assertEqual(0, len(self.audit['issues']))
         self.assertEqual(3, len(self.audit['missingGlobals']))
         self.assertNotIn('aggregate-boundary', {i['code'] for i in self.audit['issues']})
 
@@ -33,8 +33,8 @@ class LibraryFrontierTest(unittest.TestCase):
         self.assertTrue(self.violations(), 'Even newly accepted Core requires explicit coverage review')
 
     def test_additional_gap_with_existing_diagnostic_kind_is_rejected(self):
-        extra = copy.deepcopy(next(i for i in self.audit['issues'] if i['code'] == 'unsupported-primitive'))
-        extra['owner'] = 'main:Data.Set.Internal.newUnsupportedPath'
+        extra = dict(code='unsupported-primitive', owner='main:Data.Set.Internal.newUnsupportedPath',
+                     detail='newUnsupported#')
         self.audit['issues'].append(extra)
         self.assertTrue(self.violations())
 
@@ -48,16 +48,13 @@ class LibraryFrontierTest(unittest.TestCase):
                                         detail='ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple'))
         self.assertTrue(self.violations(), 'Fresh runRW# exports must retain the exact exception tuple layout')
 
-    def test_duplicate_gap_and_changed_primitive_are_rejected(self):
-        original = copy.deepcopy(self.audit)
-        self.audit['issues'].append(copy.deepcopy(self.audit['issues'][0]))
-        self.assertTrue(self.violations())
-        self.audit = original
-        next(i for i in self.audit['issues'] if i['code'] == 'unsupported-primitive')['detail'] = 'newUnsupported#'
-        self.assertTrue(self.violations())
+    def test_reintroduced_mutvar_gap_is_rejected(self):
+        self.audit['issues'].append(dict(code='unsupported-primitive', owner=prepare.SET_BACKTRACE,
+                                        detail='readMutVar#'))
+        self.assertTrue(self.violations(), 'Native-validated MutVar support must not silently regress')
 
-    def test_removed_gap_requires_coverage_review(self):
-        self.audit['issues'].pop()
+    def test_duplicate_missing_definition_is_rejected(self):
+        self.audit['missingGlobals'].append(copy.deepcopy(self.audit['missingGlobals'][0]))
         self.assertTrue(self.violations())
 
     def test_unknown_or_missing_source_definition_is_rejected(self):

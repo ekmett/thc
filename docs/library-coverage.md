@@ -12,13 +12,13 @@ queries membership, and folds in ascending order with an order-sensitive checksu
 Empty and negative workloads are defined. Native GHC 9.14.1 agreed with an
 independent Python set model for all 1,041 inputs from -16 through 1024.
 
-Strict loading still rejects this workload. Cold backtrace collection reaches
-unsupported `readMutVar#`, and three exception-construction, backtrace and
-call-stack bindings remain missing.
+Strict loading still rejects this workload. Three exception-construction,
+backtrace and call-stack bindings remain missing. The formerly unsupported
+`readMutVar#` now has [native-validated managed reference support](mutvars.md).
 
-The current strict audit has 71 reachable bindings, one issue and three missing
-definitions. Collection tuple results and the two reachable min/max tuple-result
-joins now lower directly, and zero-width `State#` tuple components no longer add
+The current strict audit has 71 reachable bindings, zero capability issues and
+three missing definitions. Collection tuple results and the two reachable
+min/max tuple-result joins now lower directly, and zero-width `State#` tuple components no longer add
 capability gaps. Fresh `runRW#` exports also retain the exact
 `(# State# RealWorld, SomeException #)` layout in the cold exception case.
 Preparation pins the exact remaining diagnostics; neither new
@@ -166,3 +166,12 @@ pre/post-Tidy audits retain all six supported byte primitives across the fixture
 the public uncons roundtrip has nine reachable bindings and no audit issues.
 Native/model checks cover empty arrays, every byte value, ordered writes, and
 contained copies between distinct arrays on both backends.
+
+## STRef and managed references
+
+The [managed MutVar workload](mutvars.md) retains public `Control.Monad.ST` and
+`Data.STRef` operations, including lazy and strict modification, reference
+captures, saved read values and a recursive local join. Six pre/post-Tidy entry
+points strictly audit with no missing definitions or capability issues; 1,590
+native rows agree with an independent arithmetic model. Lifted values remain
+lazy through storage and reads, including bottom and closure payloads.

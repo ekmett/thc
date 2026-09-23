@@ -479,6 +479,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewMutVar {
+        @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, new ManagedMutVar(value));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadMutVar {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            ManagedMutVar cell = ManagedMutVar.require(value);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, cell.getValue());
+        }
+    }
+    @Operation public static final class WriteMutVar {
+        @Specialization public static Object write(Object reference, Object value, Object state) {
+            ManagedMutVar cell = ManagedMutVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            cell.setValue(value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
     /** State operands are evaluated before each effect; only the array has a tuple slot. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

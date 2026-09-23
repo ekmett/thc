@@ -7,15 +7,9 @@
     "suppliedBindings": 634,
     "reachableBindings": 71,
     "missingGlobals": 3,
-    "issues": 1
+    "issues": 0
   },
-  "issues": [
-    {
-      "code": "unsupported-primitive",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "readMutVar#"
-    }
-  ],
+  "issues": [],
   "primitives": [
     {
       "name": "*#"
@@ -75,6 +69,6 @@
     "compiler": "GHC9.14.1",
     "source": "unmodified containers-0.8 Set workload with ghc-internal exception interface/source exports",
     "entry": "THC.SetWorkload.setAggregate",
-    "extraction": "actual strict audit; roots, summary, diagnostic owners/details, primitive names and missing IDs only"
+    "extraction": "actual strict audit after managed MutVar support; roots, summary, diagnostic owners/details, primitive names and missing IDs only"
   }
 }
