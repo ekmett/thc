@@ -23,7 +23,8 @@ internal class AstSelfLayout(
     @field:CompilationFinal(dimensions = 1) private val environmentSlots: IntArray,
     @field:CompilationFinal(dimensions = 1) private val argumentSlots: IntArray,
     @field:CompilationFinal(dimensions = 1) private val argumentProofs: Array<CoreRepresentation>,
-    @field:CompilationFinal(dimensions = 1) val entryStrict: BooleanArray
+    @field:CompilationFinal(dimensions = 1) val entryStrict: BooleanArray,
+    val inputLayout: ArgumentLayout? = null
 ) {
     val arity: Int get() = argumentSlots.size
     @field:CompilationFinal(dimensions = 1)

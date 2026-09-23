@@ -49,6 +49,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val directDouble: Boolean get() = !cell && proof.isDouble && proof.evaluated
     }
     private class FunctionContext(val formalArity: Int, val entryStrict: BooleanArray = BooleanArray(formalArity)) {
+        var inputLayout: ArgumentLayout? = null
         var arguments: List<Local?> = emptyList()
         var captures: List<Local> = emptyList()
         var captureLayout: CaptureLayout? = null
@@ -147,7 +148,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
-        if (!diagnosticUnsupported) CoreRepresentations.validateAggregates(bindings)
+        if (!diagnosticUnsupported) {
+            CoreRepresentations.validateAggregates(bindings)
+            CoreInputCalls.validate(bindings)
+        }
         val scope = Scope(FunctionContext(0))
         val initializers = bindings.map { binding ->
             val expr = binding["expr"] as List<Any?>
@@ -231,7 +235,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val scope = Scope(context, source = outer.source)
         val free = freeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
-        args.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "formal argument") }
+        args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
+        context.inputLayout = ArgumentLayout.fromProofs(args.map(CoreRepresentations::binder))
         if ((free - argumentIds).any { it in outer.tuples }) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
         val freeLocals = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
         freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
@@ -246,11 +251,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         context.arguments = args.mapIndexed { index, arg ->
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
-            if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
+            if (proof.isEmptyTuple) {
+                if (lifted) throw RuntimeFault("Empty tuple formal cannot be lifted")
+                scope.bindTuple(arg["id"] as String, proof, emptyList()); null
+            } else if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
                 proof) else null
         }
         val compiled = compile(expression, scope, true)
-        if (compiled.loweredCase) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
+        if (compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
             ::dataLayout, sources, compiled.source)
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
@@ -279,7 +287,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             val offset = if (context.captureLayout == null) 1 else 2
             context.arguments.forEachIndexed { index, local -> if (local != null) {
-                restoreArgument(e, local) { b.emitLoadArgument(index + offset) }
+                restoreArgument(e, local) { b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset) }
             } }
             if (context.mayLoop) {
                 b.beginWhile()
@@ -311,6 +319,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }.getNode(0)
         root.setLabel(label)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
+        root.configureInput(context.inputLayout)
         root.configureLeadingCaseReturn(context.leadingCaseReturn)
         root.configureTupleResult(context.tuple)
         roots += root
@@ -383,10 +392,20 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             e.builder.endMakeClosure()
         })
     }
-    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expression {
-        CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
-        if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireNoVector(it.proof, "argument") }
-        if (expr[0] == "var" && expr[1] in scope.tuples) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (argument)")
+    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false): Expression {
+        val proof = CoreRepresentations.expression(expr)
+        fun check(value: CoreRepresentation) {
+            if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
+        }
+        check(proof)
+        val lexical = if (expr[0] == "var") scope.tuples[expr[1]]?.first ?: scope.locals[expr[1]]?.proof else null
+        lexical?.let(::check)
+        if (proof.isEmptyTuple || lexical?.isEmptyTuple == true) {
+            if (lifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
+            return compile(expr, scope, false).also {
+                if (!it.proof.isEmptyTuple) throw RuntimeFault("Missing exact empty tuple argument proof")
+            }
+        }
         if (!lifted) return force(compile(expr, scope, false).also {
             CoreRepresentations.requireNoVector(it.proof, "argument")
         })
@@ -444,10 +463,28 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return sourced(value, source)
     }
 
+    private fun compactArguments(e: Emission, function: Expression, arguments: List<Expression>,
+                                 layout: ArgumentLayout, emit: (BytecodeLocal, List<BytecodeLocal>) -> Unit) {
+        val b = e.builder
+        b.beginBlock()
+        val fn = b.createLocal("compact function", null)
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = arrayListOf<BytecodeLocal>()
+        arguments.forEachIndexed { index, argument ->
+            if (layout.isEmpty(index)) argument.emitTuple(e, emptyList())
+            else values += b.createLocal("compact operand $index", null).also { local ->
+                b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
+            }
+        }
+        emit(fn, values)
+        b.endBlock()
+    }
+
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
         val evaluatedArguments = arguments.map { it.proof.evaluated }.toBooleanArray()
-        val loop = tail && arguments.size <= context.formalArity && context.formalArity > 0
+        val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.proof })
+        val loop = tail && context.inputLayout == null && inputLayout == null && arguments.size <= context.formalArity && context.formalArity > 0
         // Even a root without a direct self-call can receive A -> B -> ... -> A.
         if (tail) context.mayLoop = true
         return evaluated(Expression { e ->
@@ -456,7 +493,13 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginBlock()
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
             } else null
-            if (!loop) {
+            if (inputLayout != null) {
+                compactArguments(e, function, arguments, inputLayout) { fn, values ->
+                    b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments)
+                    b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+                    b.endApplyCompact()
+                }
+            } else if (!loop) {
                 b.beginApply(arguments.size, tail, metrics, evaluatedArguments)
                 requireClosure(function).emit(e)
                 arguments.forEach { it.emit(e) }
@@ -533,7 +576,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
                     restoreArgument(e, local) {
-                        b.beginTailArgument(index + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
+                        b.beginTailArgument(ArgumentLayout.offset(context.inputLayout, index) + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
                     }
                 } }
                 b.emitBranch(e.continueLabel!!)
@@ -766,7 +809,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }?.takeIf { args.size >= it.size }
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
-                argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true)
+                argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
+                    allowEmpty = fn[0] != "prim" && fn[0] != "con")
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
@@ -937,22 +981,31 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun tupleApplication(shape: TupleShape, function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
+        val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.proof })
         val context = scope.function
         if (tail) context.mayLoop = true
         return tupleExpression(shape.proof) { e, destination ->
             val b = e.builder
             if (!tail) {
-                b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
-                requireClosure(function).emit(e)
-                arguments.forEach { it.emit(e) }
-                b.endApplyTuple()
+                if (inputLayout == null) {
+                    b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
+                    requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endApplyTuple()
+                } else compactArguments(e, function, arguments, inputLayout) { fn, values ->
+                    b.beginApplyCompactTuple(tupleSlots(shape, destination), inputLayout, metrics)
+                    b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal); b.endApplyCompactTuple()
+                }
             } else {
                 b.beginBlock()
                 val result = b.createLocal("tuple tail result", null)
                 b.beginStoreLocal(result)
-                b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
-                requireClosure(function).emit(e); arguments.forEach { it.emit(e) }
-                b.endTailApplyTuple(); b.endStoreLocal()
+                if (inputLayout == null) {
+                    b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
+                    requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endTailApplyTuple()
+                } else compactArguments(e, function, arguments, inputLayout) { fn, values ->
+                    b.beginTailApplyCompactTuple(tupleSlots(shape, destination), inputLayout, metrics)
+                    b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal); b.endTailApplyCompactTuple()
+                }
+                b.endStoreLocal()
                 b.beginIfThenElse()
                 b.beginIsTailReentry(); b.emitLoadLocal(result); b.endIsTailReentry()
                 b.beginBlock()
@@ -965,7 +1018,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    restoreArgument(e, local) { b.beginTailArgument(offset + index); b.emitLoadLocal(result); b.endTailArgument() }
+                    restoreArgument(e, local) { b.beginTailArgument(offset + ArgumentLayout.offset(context.inputLayout, index)); b.emitLoadLocal(result); b.endTailArgument() }
                 } }
                 b.emitBranch(e.continueLabel!!)
                 b.endBlock()

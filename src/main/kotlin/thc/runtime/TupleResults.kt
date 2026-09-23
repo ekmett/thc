@@ -142,10 +142,10 @@ private class AstTupleDestination(shape: TupleShape,
 
 /** Cache the complete call shape before making its packet. Each arm consumes its
  * result before joining control flow, keeping virtual carriers out of PIC phis. */
-internal class TupleDispatch(private val destination: TupleDestination, private val metrics: Metrics,
-    private val argsSize: Int, private val tail: Boolean) : Node() {
+internal class TupleDispatch @JvmOverloads constructor(private val destination: TupleDestination, private val metrics: Metrics,
+    private val argsSize: Int, private val tail: Boolean, private val inputLayout: ArgumentLayout? = null) : Node() {
     @Children private var direct = emptyArray<DirectTupleCaller>()
-    @Child private var generic = GenericTupleCaller(destination, metrics, tail)
+    @Child private var generic = GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout)
     @CompilationFinal private var megamorphic = false
 
     @ExplodeLoop fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
@@ -156,7 +156,7 @@ internal class TupleDispatch(private val destination: TupleDestination, private 
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
             if (direct.size < 3) {
-                val caller = insert(DirectTupleCaller(destination, metrics, argsSize, tail, function))
+                val caller = insert(DirectTupleCaller(destination, metrics, argsSize, tail, function, inputLayout))
                 direct = direct + caller
                 caller.execute(frame, function, arguments)
                 return
@@ -168,17 +168,18 @@ internal class TupleDispatch(private val destination: TupleDestination, private 
 }
 
 private class DirectTupleCaller(private val destination: TupleDestination, metrics: Metrics,
-    private val argsSize: Int, private val tail: Boolean, function: Closure) : Node() {
+    private val argsSize: Int, private val tail: Boolean, function: Closure, private val inputLayout: ArgumentLayout?) : Node() {
     private val target = function.target
     private val arity = function.arity
     private val prefixSize = function.supplied.size
+    private val prefixCount = function.suppliedCount
     private val hasEnvironment = function.environment != null
-    @Child private var entry = EntryArguments(target, metrics, prefixSize = prefixSize)
+    @Child private var entry = EntryArguments(target, metrics, prefixSize = prefixCount)
     @Child private var call = DirectCallNode.create(target)
     @Child private var tailCheck = TailCheck(metrics)
     @Child private var bounce = TupleBounce(destination, metrics)
-    @Child private var scalar: DirectCallerNode? = if (arity < argsSize) DirectCallerNode(target, metrics, prefixSize = prefixSize) else null
-    @Child private var rest: TupleDispatch? = if (arity < argsSize) TupleDispatch(destination, metrics, argsSize - arity, tail) else null
+    @Child private var scalar: DirectCallerNode? = if (arity < argsSize) DirectCallerNode(target, metrics, prefixSize = prefixCount) else null
+    @Child private var rest: TupleDispatch? = if (arity < argsSize) TupleDispatch(destination, metrics, argsSize - arity, tail, inputLayout?.suffix(arity)) else null
     @Child private var force = Force(metrics)
     init {
         if (metrics.enabled) metrics.directCacheMisses++
@@ -188,16 +189,18 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
         if (arity < argsSize && root.tupleResult != null) fault("Cannot overapply an unboxed tuple")
     }
     fun matches(function: Closure): Boolean = function.target === target && function.arity == arity &&
-        function.supplied.size == prefixSize && (function.environment != null) == hasEnvironment
+        function.supplied.size == prefixSize && function.suppliedCount == prefixCount && (function.environment != null) == hasEnvironment
     fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
+        ArgumentLayout.validate(function, inputLayout, 0, arity)
+        val physicalCount = ArgumentLayout.width(inputLayout, arity)
         val skip = if (hasEnvironment) 2 else 1
-        val packet = arrayOfNulls<Any>(skip + prefixSize + arity)
+        val packet = arrayOfNulls<Any>(skip + prefixSize + physicalCount)
         if (hasEnvironment) packet[1] = function.environment
         System.arraycopy(function.supplied, 0, packet, skip, prefixSize)
-        System.arraycopy(arguments, 0, packet, skip + prefixSize, arity)
+        System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount)
         if (arity < argsSize) {
             val closure = requireClosure(force.execute(frame, scalar!!.call(frame, packet, false)))
-            rest!!.execute(frame, closure, arguments.copyOfRange(arity, argsSize))
+            rest!!.execute(frame, closure, arguments.copyOfRange(physicalCount, arguments.size))
             return
         }
         entry.execute(frame, packet)
@@ -231,7 +234,7 @@ private class TupleBounce(private val destination: TupleDestination, private val
     }
 }
 private class GenericTupleCaller(private val destination: TupleDestination, private val metrics: Metrics,
-    private val tail: Boolean) : Node() {
+    private val tail: Boolean, private val argsSize: Int, private val inputLayout: ArgumentLayout?) : Node() {
     @Child private var call = IndirectCallNode.create()
     @Child private var entry = IndirectEntryArguments(metrics)
     @Child private var scalar = IndirectCallerNode(metrics)
@@ -242,18 +245,21 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
         var function = initial
         var offset = 0
         while (true) {
-            val remaining = arguments.size - offset
+            val remaining = argsSize - offset
             if (function.arity > remaining) fault("Tuple result application is under-saturated")
             val count = function.arity
+            ArgumentLayout.validate(function, inputLayout, offset, count)
+            val physicalOffset = ArgumentLayout.offset(inputLayout, offset)
+            val physicalCount = ArgumentLayout.offset(inputLayout, offset + count) - physicalOffset
             val exact = count == remaining
             val root = function.target.rootNode as? GuestRoot ?: fault("Invalid tuple call target")
             if (exact && root.tupleResult?.matches(destination.shape) != true) fault("Tuple call target result shape mismatch")
             if (!exact && root.tupleResult != null) fault("Cannot overapply an unboxed tuple")
             val skip = if (function.environment == null) 1 else 2
-            val packet = arrayOfNulls<Any>(skip + function.supplied.size + count)
+            val packet = arrayOfNulls<Any>(skip + function.supplied.size + physicalCount)
             if (function.environment != null) packet[1] = function.environment
             System.arraycopy(function.supplied, 0, packet, skip, function.supplied.size)
-            System.arraycopy(arguments, offset, packet, skip + function.supplied.size, count)
+            System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.size, physicalCount)
             if (!exact) {
                 function = requireClosure(force.execute(frame, scalar.call(frame, function.target, packet, false)))
                 offset += count
@@ -309,6 +315,7 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
 internal class TupleApplication(private val language: Language, private val shape: TupleShape,
     function: Expr, @field:Children private var arguments: Array<Expr>, private val tail: Boolean, private val metrics: Metrics) : Expr() {
     @Child private var function = Evaluate(function, metrics)
+    private val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.representation })
     @Child private var dispatch: TupleDispatch? = null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
@@ -316,13 +323,16 @@ internal class TupleApplication(private val language: Language, private val shap
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple value requires a destination")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val function = this.function.executeRequiredClosure(frame)
-        val values = arrayOfNulls<Any>(arguments.size)
-        for (index in arguments.indices) values[index] = arguments[index].execute(frame)
+        val values = arrayOfNulls<Any>(ArgumentLayout.width(inputLayout, arguments.size))
+        for (index in arguments.indices) {
+            if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
+            else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame)
+        }
         if (dispatch == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
             destinationSlots = slots
             destinationOffset = offset
-            dispatch = insert(TupleDispatch(AstTupleDestination(shape, slots, offset), metrics, arguments.size, tail))
+            dispatch = insert(TupleDispatch(AstTupleDestination(shape, slots, offset), metrics, arguments.size, tail, inputLayout))
         }
         check(destinationSlots === slots && destinationOffset == offset)
         dispatch!!.execute(frame, function, values)
