@@ -1,0 +1,112 @@
+{
+  "passed": true,
+  "calls": [
+    {
+      "argv": [
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/scripts/gradle.sh",
+        "--no-daemon",
+        "-Pthc.compactObjectHeaders=true",
+        "test",
+        "--rerun"
+      ],
+      "name": "0-full-tests",
+      "env": {
+        "JAVA_TOOL_OPTIONS": ""
+      }
+    },
+    {
+      "argv": [
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/scripts/gradle.sh",
+        "--no-daemon",
+        "-Pthc.compactObjectHeaders=false",
+        "test",
+        "--rerun"
+      ],
+      "name": "1-full-tests",
+      "env": {
+        "JAVA_TOOL_OPTIONS": "-XX:-UseCompactObjectHeaders"
+      }
+    },
+    {
+      "argv": [
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/scripts/gradle.sh",
+        "--no-daemon",
+        "-Pthc.compactObjectHeaders=true",
+        "test",
+        "--rerun"
+      ],
+      "name": "2-full-tests",
+      "env": {
+        "JAVA_TOOL_OPTIONS": "-XX:-UseCompactObjectHeaders -XX:+UseCompactObjectHeaders"
+      }
+    },
+    {
+      "argv": [
+        "/fake/java",
+        "-XX:+UseCompactObjectHeaders",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/map/modules.txt",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/map/oracle.tsv"
+      ],
+      "name": "check-plain",
+      "env": null
+    },
+    {
+      "argv": [
+        "/fake/java",
+        "-XX:+UseCompactObjectHeaders",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-XX:-UseCompactObjectHeaders",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/map/modules.txt",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/map/oracle.tsv"
+      ],
+      "name": "check-explicit",
+      "env": null
+    },
+    {
+      "argv": [
+        "/fake/java",
+        "-XX:+UseCompactObjectHeaders",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-XX:-UseCompactObjectHeaders",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/map/modules.txt",
+        "/var/folders/8w/hfls5ypd797cy77j3xgp0bnm0000gn/T/tmp8hluhqtf/output/frozen/map/oracle.tsv"
+      ],
+      "name": "check-plain-compact-off",
+      "env": null
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.ConstructorClassIdentityTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:47.351Z" hostname="eak-mba" time="0.033">
+  <properties/>
+  <testcase name="matchingDistinguishesConstructorsAndRejectsForeignValuesInBothStrategies()" classname="thc.runtime.ConstructorClassIdentityTest" time="0.004"/>
+  <testcase name="registryOwnershipSpansContextsAndUnexpectedFactoryClassesInvalidateBothOwners()" classname="thc.runtime.ConstructorClassIdentityTest" time="0.002"/>
+  <testcase name="astAndBytecodeCaseLoweringUseTheSameMatchingSemantics()" classname="thc.runtime.ConstructorClassIdentityTest" time="0.02"/>
+  <testcase name="compiledMatchTracksPermanentOrInvalidatableClassOwnership()" classname="thc.runtime.ConstructorClassIdentityTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

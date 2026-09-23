@@ -49,6 +49,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         var captures: List<Local> = emptyList()
         var captureLayout: CaptureLayout? = null
         var mayLoop = false
+        var leadingCaseReturn: LeadingCaseReturn? = null
     }
     private class Scope(val function: FunctionContext, val locals: MutableMap<String, Local> = linkedMapOf(),
                         val joins: MutableMap<String, JoinTarget> = linkedMapOf(),
@@ -71,14 +72,23 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         fun emit(emission: Emission)
         val proof: CoreRepresentation get() = CoreRepresentation.UNKNOWN
         val source: CoreSourceLocation? get() = null
+        val loweredCase: Boolean get() = false
+    }
+    private class LoweredCaseExpression(val expression: Expression) : Expression {
+        override fun emit(emission: Emission) = expression.emit(emission)
+        override val proof get() = expression.proof
+        override val source get() = expression.source
+        override val loweredCase get() = true
     }
     private class ProvenExpression(val expression: Expression, override val proof: CoreRepresentation) : Expression {
         override fun emit(emission: Emission) = expression.emit(emission)
         override val source get() = expression.source
+        override val loweredCase get() = expression.loweredCase
     }
     /** Source operations are builder metadata; they emit no guest instruction. */
     private class SourcedExpression(val expression: Expression, override val source: CoreSourceLocation) : Expression {
         override val proof get() = expression.proof
+        override val loweredCase get() = expression.loweredCase
         override fun emit(emission: Emission) {
             val sections = source.notes.map { it.section }.distinct().let {
                 if (it.lastOrNull() == source.section) it else it + source.section
@@ -142,7 +152,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
         "localJoinTransfers" to metrics.localJoinTransfers,
         "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
-        "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
+        "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces,
         "selfTailReentries" to metrics.selfTailReentries, "trampolineIterations" to metrics.trampolineIterations,
@@ -196,6 +206,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])) else null
         }
         val compiled = compile(expression, scope, true)
+        if (compiled.loweredCase) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
+            resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
+            ::dataLayout, sources, compiled.source)
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
         return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
     }
@@ -245,6 +258,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }.getNode(0)
         root.setLabel(label)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
+        root.configureLeadingCaseReturn(context.leadingCaseReturn)
         roots += root
         return root.callTarget
     }
@@ -650,11 +664,16 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             val explicit = alternatives.filter { it.kind != "default" }
             val fallback = alternatives.lastOrNull { it.kind == "default" }
-            ProvenExpression(Expression { e ->
+            val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
+                "default" -> 0; "data" -> 1; else -> 2
+            } }, alternatives.all { it.kind != "lit" || it.value is Long })
+            LoweredCaseExpression(ProvenExpression(Expression { e ->
                 val b = e.builder
                 b.beginBlock()
                 e.locals[binder.id] = b.createLocal(binder.name, null)
-                b.beginStoreLocal(e.locals.getValue(binder.id)); scrutinee.emit(e); b.endStoreLocal()
+                if (category == CaseCategory.GENERIC) {
+                    b.beginStoreLocal(e.locals.getValue(binder.id)); scrutinee.emit(e); b.endStoreLocal()
+                } else restoreArgument(e, binder) { scrutinee.emit(e) }
                 fun emitAlternative(alt: Alternative) {
                     b.beginBlock()
                     alt.fields.forEachIndexed { index, field ->
@@ -676,9 +695,17 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     }
                     val alt = explicit[index]
                     b.beginConditional()
-                    if (alt.kind == "data") b.beginMatchData(alt.value as DataLayout) else b.beginMatchLiteral(alt.value!!)
+                    when {
+                        category == CaseCategory.DATA -> b.beginMatchDataValue(alt.value as DataLayout)
+                        alt.kind == "data" -> b.beginMatchData(alt.value as DataLayout)
+                        else -> b.beginMatchLiteral(alt.value!!)
+                    }
                     read(binder, false).emit(e)
-                    if (alt.kind == "data") b.endMatchData() else b.endMatchLiteral()
+                    when {
+                        category == CaseCategory.DATA -> b.endMatchDataValue()
+                        alt.kind == "data" -> b.endMatchData()
+                        else -> b.endMatchLiteral()
+                    }
                     emitAlternative(alt)
                     emitChoice(index + 1)
                     b.endConditional()
@@ -686,7 +713,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 emitChoice(0)
                 b.endBlock()
                 e.locals.remove(binder.id)
-            }, CoreRepresentations.expression(expr).copy(evaluated = alternatives.all { it.body.proof.evaluated }))
+            }, CoreRepresentations.expression(expr).copy(evaluated = alternatives.all { it.body.proof.evaluated })))
         }
         "con" -> {
             val id = expr[1] as String; val arity = (expr[2] as Number).toInt()

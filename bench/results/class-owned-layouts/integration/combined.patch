@@ -1,0 +1,1635 @@
+diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml
+index 38aefae..91fbace 100644
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -52,7 +52,7 @@ jobs:
+       - name: Check Map through the AST backend
+         shell: bash
+         run: |
+-          java --enable-native-access=ALL-UNNAMED -Xss2m \
++          java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+             -Dthc.backend=ast -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
+             -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
+             2>&1 | tee build/map/check-ast.log
+diff --git a/README.md b/README.md
+index 65fc462..f0e2048 100644
+--- a/README.md
++++ b/README.md
+@@ -42,6 +42,14 @@ On macOS, `JAVA_HOME` is the `Contents/Home` directory inside the GraalVM bundle
+ The `--compile` flag requests guest compilation and checks that code was
+ installed. Compilation failures are errors.
+ 
++Ordinary app, test and probe launches use compact object headers. Constructor
++layouts belong to their generated storage classes where that class has a unique
++owner; shared storage classes keep a layout field. `-Dthc.classOwnedLayouts=false`
++selects the field-bearing representation for comparison. Gradle's
++`-Pthc.compactObjectHeaders=false` and the controlled benchmark's explicit
++`-XX:-UseCompactObjectHeaders` option provide header-off controls. The remaining
++storage and call-path experiments are opt-in.
++
+ The [bytecode backend](docs/bytecode.md) is the default. The AST interpreter is
+ also available:
+ 
+diff --git a/build.gradle.kts b/build.gradle.kts
+index 0aad1b3..4a3d4a3 100644
+--- a/build.gradle.kts
++++ b/build.gradle.kts
+@@ -22,9 +22,13 @@ kotlin {
+         freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")
+     }
+ }
++// Tests and benchmark controls can opt out explicitly; ordinary launches use compact headers.
++val compactObjectHeaders = providers.gradleProperty("thc.compactObjectHeaders").orElse("true").get()
++require(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "thc.compactObjectHeaders must be true or false" }
++val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-"}UseCompactObjectHeaders"
+ application {
+     mainClass.set("thc.MainKt")
+-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xss2m")
++    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
+ }
+ tasks.test {
+     useJUnitPlatform()
+diff --git a/scripts/benchmark-map.sh b/scripts/benchmark-map.sh
+index 8daf932..f81f891 100755
+--- a/scripts/benchmark-map.sh
++++ b/scripts/benchmark-map.sh
+@@ -22,7 +22,7 @@ printf '{"backend":"%s","diagnosticUnsupported":%s,"inputBase":%s,"warmSeconds":
+ cp build/map/audit.json "$OUT/capability-audit.json"
+ printf 'engine\tfork\tentry\tsample\trepetitions\tinputBase\tchecksum\telapsedNs\n' > "$OUT/timings.tsv"
+ run_jvm() {
+-  "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true \
++  "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+     "-Dthc.backend=$BACKEND" "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" -Dthc.minimumWarmCalls=12000 -cp 'build/install/thc/lib/*' thc.ProbeKt \
+     "$MODULES" mapAggregate --steady "$WARM_SECONDS" "$SAMPLE_SECONDS" "$SAMPLES" "$BASE" \
+     > "$OUT/mapAggregate-$fork-jvm.tsv" 2> "$OUT/mapAggregate-$fork.log"
+diff --git a/scripts/benchmark.sh b/scripts/benchmark.sh
+index 2677fba..0ddf45e 100755
+--- a/scripts/benchmark.sh
++++ b/scripts/benchmark.sh
+@@ -16,7 +16,7 @@ for spec in 'sumLoop 10000' 'fib 12' 'under 100' 'caseList 100'; do
+     read -r entry inputBase <<< "$spec"
+     for ((fork=1; fork<=FORKS; fork++)); do
+         printf 'Running %s fork %s: JVM warmup %ss, %s windows of %ss per engine\n' "$entry" "$fork" "$WARM_SECONDS" "$SAMPLES" "$SAMPLE_SECONDS"
+-        "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true \
++        "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+             -cp 'build/install/thc/lib/*' thc.ProbeKt \
+             build/core/THC.Prim.json,build/core/THC.Fixtures.json \
+             "$entry" --steady "$WARM_SECONDS" "$SAMPLE_SECONDS" "$SAMPLES" "$inputBase" \
+diff --git a/scripts/dump-graph.sh b/scripts/dump-graph.sh
+index 89fe386..8b2a8ff 100755
+--- a/scripts/dump-graph.sh
++++ b/scripts/dump-graph.sh
+@@ -9,7 +9,7 @@ OUT="${3:-$ROOT/work/graphs/$ENTRY-$(date +%Y%m%d-%H%M%S)}"
+ THC_JDK="$JAVA_HOME"
+ mkdir -p "$OUT" build/graph-tools
+ OUT="$(cd "$OUT" && pwd)"
+-"$THC_JDK/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true \
++"$THC_JDK/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+   "-Dthc.minimumWarmCalls=${THC_GRAPH_MIN_WARM_CALLS:-20000}" \
+   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \
+   -Djdk.graal.Dump=Truffle:1 -Djdk.graal.PrintGraph=File \
+diff --git a/scripts/dump-map-packets.sh b/scripts/dump-map-packets.sh
+index 5cc33fe..326475c 100755
+--- a/scripts/dump-map-packets.sh
++++ b/scripts/dump-map-packets.sh
+@@ -8,7 +8,7 @@ OUT="${1:-work/graphs/map-packets-$(date +%Y%m%d-%H%M%S)}"
+ BASELINE="${2:-}"
+ mkdir -p "$OUT" build/graph-tools
+ OUT="$(cd "$OUT" && pwd)"
+-"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m \
++"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+   -Dthc.traceCompilation=true -Dthc.minimumWarmCalls=256 \
+   "-Dthc.backend=${THC_BACKEND:-bytecode}" \
+   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \
+diff --git a/scripts/try-map.sh b/scripts/try-map.sh
+index a544071..1911651 100755
+--- a/scripts/try-map.sh
++++ b/scripts/try-map.sh
+@@ -17,6 +17,6 @@ scripts/native-map-oracle.sh mapAggregate 10000
+ python3 scripts/check-map-oracle.py
+ scripts/gradle.sh --no-daemon test installDist "$@"
+ THC_JAVA="$JAVA_HOME/bin/java"
+-"$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" \
++"$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" \
+   -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
+   2>&1 | tee build/map/check.log
+diff --git a/src/main/java/thc/runtime/BytecodeRoot.java b/src/main/java/thc/runtime/BytecodeRoot.java
+index e53e242..9bd34ae 100644
+--- a/src/main/java/thc/runtime/BytecodeRoot.java
++++ b/src/main/java/thc/runtime/BytecodeRoot.java
+@@ -327,6 +327,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
+         }
+     }
+ 
++    /** Only emitted after checked restoration of a proved-data case binder. */
++    @Operation
++    @ConstantOperand(type = DataLayout.class, name = "layout")
++    public static final class MatchDataValue {
++        @Specialization public static boolean matches(DataLayout layout, DataValue value) {
++            return layout.matches(value);
++        }
++    }
++
+     @Operation
+     @ConstantOperand(type = Object.class, name = "literal")
+     public static final class MatchLiteral {
+diff --git a/src/main/kotlin/thc/runtime/Application.kt b/src/main/kotlin/thc/runtime/Application.kt
+index 5c3b12e..d092ff9 100644
+--- a/src/main/kotlin/thc/runtime/Application.kt
++++ b/src/main/kotlin/thc/runtime/Application.kt
+@@ -297,6 +297,8 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
+ internal class DirectCallerNode(val target: RootCallTarget, private val metrics: Metrics,
+                                knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
+     @Child private var entryArguments = EntryArguments(target, metrics, knownEvaluated, prefixSize)
++    @Child private var leadingCaseReturn: LeadingCaseReturnNode? = (target.rootNode as? GuestRoot)
++        ?.leadingCaseReturn?.let { LeadingCaseReturnNode(it, metrics) }
+     @Child private var callNode = DirectCallNode.create(target)
+     @Child private var loop = TailCallLoop(metrics)
+     @Child private var tailCheck = TailCheck(metrics)
+@@ -307,6 +309,8 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
+ 
+     fun call(frame: VirtualFrame, arguments: Array<Any?>, tailCall: Boolean): Any? {
+         entryArguments.execute(frame, arguments)
++        // All CBV marks (including unused formals and PAP prefixes) run before the shortcut.
++        leadingCaseReturn?.execute(arguments)?.let { return it }
+         if (tailCall) {
+             tailCheck.check(frame, target, arguments)
+             return Calls.direct(callNode, arguments)
+diff --git a/src/main/kotlin/thc/runtime/BytecodeProgram.kt b/src/main/kotlin/thc/runtime/BytecodeProgram.kt
+index 5ebf64d..994abc9 100644
+--- a/src/main/kotlin/thc/runtime/BytecodeProgram.kt
++++ b/src/main/kotlin/thc/runtime/BytecodeProgram.kt
+@@ -49,6 +49,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+         var captures: List<Local> = emptyList()
+         var captureLayout: CaptureLayout? = null
+         var mayLoop = false
++        var leadingCaseReturn: LeadingCaseReturn? = null
+     }
+     private class Scope(val function: FunctionContext, val locals: MutableMap<String, Local> = linkedMapOf(),
+                         val joins: MutableMap<String, JoinTarget> = linkedMapOf(),
+@@ -71,14 +72,23 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+         fun emit(emission: Emission)
+         val proof: CoreRepresentation get() = CoreRepresentation.UNKNOWN
+         val source: CoreSourceLocation? get() = null
++        val loweredCase: Boolean get() = false
++    }
++    private class LoweredCaseExpression(val expression: Expression) : Expression {
++        override fun emit(emission: Emission) = expression.emit(emission)
++        override val proof get() = expression.proof
++        override val source get() = expression.source
++        override val loweredCase get() = true
+     }
+     private class ProvenExpression(val expression: Expression, override val proof: CoreRepresentation) : Expression {
+         override fun emit(emission: Emission) = expression.emit(emission)
+         override val source get() = expression.source
++        override val loweredCase get() = expression.loweredCase
+     }
+     /** Source operations are builder metadata; they emit no guest instruction. */
+     private class SourcedExpression(val expression: Expression, override val source: CoreSourceLocation) : Expression {
+         override val proof get() = expression.proof
++        override val loweredCase get() = expression.loweredCase
+         override fun emit(emission: Emission) {
+             val sections = source.notes.map { it.section }.distinct().let {
+                 if (it.lastOrNull() == source.section) it else it + source.section
+@@ -142,7 +152,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+         "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
+         "localJoinTransfers" to metrics.localJoinTransfers,
+         "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
+-        "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
++        "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
+         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
+         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces,
+         "selfTailReentries" to metrics.selfTailReentries, "trampolineIterations" to metrics.trampolineIterations,
+@@ -196,6 +206,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+                 CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])) else null
+         }
+         val compiled = compile(expression, scope, true)
++        if (compiled.loweredCase) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
++            resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
++            ::dataLayout, sources, compiled.source)
+         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
+         return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
+     }
+@@ -245,6 +258,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+         }.getNode(0)
+         root.setLabel(label)
+         root.configureEntry(context.entryStrict, context.captureLayout != null)
++        root.configureLeadingCaseReturn(context.leadingCaseReturn)
+         roots += root
+         return root.callTarget
+     }
+@@ -650,11 +664,16 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+             }
+             val explicit = alternatives.filter { it.kind != "default" }
+             val fallback = alternatives.lastOrNull { it.kind == "default" }
+-            ProvenExpression(Expression { e ->
++            val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
++                "default" -> 0; "data" -> 1; else -> 2
++            } }, alternatives.all { it.kind != "lit" || it.value is Long })
++            LoweredCaseExpression(ProvenExpression(Expression { e ->
+                 val b = e.builder
+                 b.beginBlock()
+                 e.locals[binder.id] = b.createLocal(binder.name, null)
+-                b.beginStoreLocal(e.locals.getValue(binder.id)); scrutinee.emit(e); b.endStoreLocal()
++                if (category == CaseCategory.GENERIC) {
++                    b.beginStoreLocal(e.locals.getValue(binder.id)); scrutinee.emit(e); b.endStoreLocal()
++                } else restoreArgument(e, binder) { scrutinee.emit(e) }
+                 fun emitAlternative(alt: Alternative) {
+                     b.beginBlock()
+                     alt.fields.forEachIndexed { index, field ->
+@@ -676,9 +695,17 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+                     }
+                     val alt = explicit[index]
+                     b.beginConditional()
+-                    if (alt.kind == "data") b.beginMatchData(alt.value as DataLayout) else b.beginMatchLiteral(alt.value!!)
++                    when {
++                        category == CaseCategory.DATA -> b.beginMatchDataValue(alt.value as DataLayout)
++                        alt.kind == "data" -> b.beginMatchData(alt.value as DataLayout)
++                        else -> b.beginMatchLiteral(alt.value!!)
++                    }
+                     read(binder, false).emit(e)
+-                    if (alt.kind == "data") b.endMatchData() else b.endMatchLiteral()
++                    when {
++                        category == CaseCategory.DATA -> b.endMatchDataValue()
++                        alt.kind == "data" -> b.endMatchData()
++                        else -> b.endMatchLiteral()
++                    }
+                     emitAlternative(alt)
+                     emitChoice(index + 1)
+                     b.endConditional()
+@@ -686,7 +713,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
+                 emitChoice(0)
+                 b.endBlock()
+                 e.locals.remove(binder.id)
+-            }, CoreRepresentations.expression(expr).copy(evaluated = alternatives.all { it.body.proof.evaluated }))
++            }, CoreRepresentations.expression(expr).copy(evaluated = alternatives.all { it.body.proof.evaluated })))
+         }
+         "con" -> {
+             val id = expr[1] as String; val arity = (expr[2] as Number).toInt()
+diff --git a/src/main/kotlin/thc/runtime/DataValues.kt b/src/main/kotlin/thc/runtime/DataValues.kt
+index d6526ea..dc93108 100644
+--- a/src/main/kotlin/thc/runtime/DataValues.kt
++++ b/src/main/kotlin/thc/runtime/DataValues.kt
+@@ -34,16 +34,22 @@ class DataLayout(
+ ) {
+     init { require(referenceTypes.size == fieldReps.size) }
+     @CompilationFinal(dimensions = 1)
+-    private val fields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
+-    val arity: Int = fields.size
++    private val fields: Array<Field>
++    val arity: Int = fieldReps.size
+     // Only this layout's private factory path can authorize a storage object.
+     // The key is checked by the superclass constructor and never retained there.
+     private val allocationKey = Any()
+ 
+-    private val shape = StaticShape.newBuilder(language).also { builder ->
+-        builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
+-        fields.forEach { it.register(builder) }
+-    }.build(DataValue::class.java, DataValueFactory::class.java)
++    private val shape: StaticShape<DataValueFactory>
++    // The permanent class token is distinct from the allocation authentication key.
++    private val classOwnerToken = Any()
++    private val ownedCarrier: Class<*>?
++
++    private fun buildShape(language: TruffleLanguage<*>, properties: Array<Field>, fieldless: Boolean): StaticShape<DataValueFactory> =
++        StaticShape.newBuilder(language).also { builder ->
++            builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
++            properties.forEach { it.register(builder) }
++        }.build(if (fieldless) DataValue::class.java else LayoutDataValue::class.java, DataValueFactory::class.java)
+ 
+     private val classIdentityEnabled = java.lang.Boolean.getBoolean(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
+     private val constructorClass: ConstructorClassIdentity
+@@ -54,9 +60,23 @@ class DataLayout(
+     internal val hasBoxedValueCache: Boolean get() = boxedValues != null
+ 
+     init {
+-        // Register checked/off-mode layouts too: a later enabled layout must
+-        // discover all prior owners of a shared array-storage carrier class.
+-        val sample = shape.factory.create(this, allocationKey)
++        val requested = java.lang.Boolean.parseBoolean(System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY, "true"))
++        var chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
++        var chosenShape = buildShape(language, chosenFields, requested)
++        var sample = chosenShape.factory.create(this, allocationKey)
++        val reserved = requested && ClassOwnedLayouts.reserve(sample.javaClass, classOwnerToken)
++        if (requested && !reserved) {
++            // A shared array carrier already belongs to another layout. Its old
++            // pointer-free values remain valid; this layout takes a separate
++            // superclass with an explicit owner field before publishing values.
++            // StaticProperty instances are shape-specific and cannot be reused.
++            chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
++            chosenShape = buildShape(language, chosenFields, false)
++            sample = chosenShape.factory.create(this, allocationKey)
++        }
++        fields = chosenFields
++        shape = chosenShape
++        ownedCarrier = if (reserved) sample.javaClass else null
+         constructorClass = ConstructorClassIdentity(sample.javaClass)
+         nullaryValue = if (arity == 0) sample else null
+         val range = if (!java.lang.Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) || fieldReps.size != 1) null
+@@ -71,17 +91,32 @@ class DataLayout(
+             // Every value owns its storage under both StaticShape strategies.
+             Array((it.last - it.first + 1).toInt()) { index ->
+                 val value = shape.factory.create(this, allocationKey)
+-                constructorClass.observe(value.javaClass)
++                checkAllocated(value)
+                 fields[0].initializeLong(value, boxedValueMinimum + index)
+                 value
+             }
+         }
++        if (ownedCarrier != null) ClassOwnedLayouts.publish(ownedCarrier, classOwnerToken, this)
++    }
++
++    /** Expected-layout operations use these guards, never a generic class lookup. */
++    private fun owns(value: Any?): Boolean = if (ownedCarrier != null)
++        value != null && value.javaClass === ownedCarrier
++    else value is LayoutDataValue && value.layout === this
++
++    private fun checkAllocated(value: DataValue) {
++        // An unexpected new carrier cannot escape and acquire an ambiguous cold
++        // identity. The old layout-carrying path retains its original fallback.
++        if (ownedCarrier != null && value.javaClass !== ownedCarrier)
++            fault("Unexpected carrier for class-owned constructor layout")
++        constructorClass.observe(value.javaClass)
+     }
+ 
+     fun matches(value: Any?): Boolean {
++        if (ownedCarrier != null) return owns(value)
+         if (classIdentityEnabled && constructorClass.isExclusive())
+             return value != null && value.javaClass === constructorClass.carrier
+-        return value is DataValue && value.layout === this
++        return owns(value)
+     }
+ 
+     internal fun checkAllocationKey(key: Any?) {
+@@ -113,25 +148,25 @@ class DataLayout(
+     /** Keep the value private until every final field has been initialized exactly once. */
+     internal fun allocate(): DataValue {
+         val value = nullaryValue ?: shape.factory.create(this, allocationKey)
+-        constructorClass.observe(value.javaClass)
++        checkAllocated(value)
+         return value
+     }
+ 
+     internal fun initialize(value: DataValue, index: Int, field: Any?) {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         fields[index].initialize(value, field)
+     }
+ 
+     /** A primitive producer can initialize its property without an Object-array bridge. */
+     internal fun initializeLong(value: DataValue, index: Int, field: Long) {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         fields[index].initializeLong(value, field)
+     }
+ 
+     fun read(value: DataValue, index: Int): Any? {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         return fields[index].read(value)
+     }
+@@ -142,21 +177,21 @@ class DataLayout(
+     }
+ 
+     fun readLong(value: DataValue, index: Int): Long {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         return fields[index].readLong(value)
+     }
+ 
+     /** Keep primitive property reads next to indexed frame writes, as Cadenza does. */
+     fun restore(value: DataValue, index: Int, frame: Frame, slot: Int) {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         fields[index].restore(value, frame, slot)
+     }
+ 
+     @TruffleBoundary
+     internal fun describe(value: DataValue): String {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (arity == 0) return name
+         return fields.indices.joinToString(prefix = "$name[", postfix = "]") { index ->
+             val field = read(value, index)
+@@ -229,12 +264,20 @@ class DataLayout(
+ }
+ 
+ /** Public superclass for Truffle's generated storage classes; no generic payload array. */
+-open class DataValue(val layout: DataLayout, allocationKey: Any?) :
++open class DataValue(layout: DataLayout, allocationKey: Any?) :
+     ValidatedStorage(layout.checkAllocationKey(allocationKey)) {
++    // Concrete getter: StaticShape deliberately rejects abstract superclass methods.
++    open val layout: DataLayout
++        @TruffleBoundary get() = ClassOwnedLayouts.resolve(javaClass)
++
+     @TruffleBoundary
+     override fun toString(): String = layout.describe(this)
+ }
+ 
++/** Default representation and shared-carrier fallback. The fieldless base has no fields. */
++open class LayoutDataValue(final override val layout: DataLayout, allocationKey: Any?) :
++    DataValue(layout, allocationKey)
++
+ /** Must match the public DataValue superclass constructor exactly. */
+ interface DataValueFactory {
+     fun create(layout: DataLayout, allocationKey: Any?): DataValue
+diff --git a/src/main/kotlin/thc/runtime/GuestRoot.kt b/src/main/kotlin/thc/runtime/GuestRoot.kt
+index acba48b..1b4ec04 100644
+--- a/src/main/kotlin/thc/runtime/GuestRoot.kt
++++ b/src/main/kotlin/thc/runtime/GuestRoot.kt
+@@ -19,6 +19,9 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
+         entryStrict = strict.copyOf()
+         entryArgumentOffset = if (hasEnvironment) 2 else 1
+     }
++    @field:CompilationFinal internal var leadingCaseReturn: LeadingCaseReturn? = null
++        private set
++    internal fun configureLeadingCaseReturn(recipe: LeadingCaseReturn?) { leadingCaseReturn = recipe }
+     // Clones retain identity, so self calls through a cloned target still loop.
+     private val bodyIdentity = Any()
+     @JvmField val mask = System.identityHashCode(bodyIdentity).let { h ->
+diff --git a/src/main/kotlin/thc/runtime/Program.kt b/src/main/kotlin/thc/runtime/Program.kt
+index f8218ef..751e2e2 100644
+--- a/src/main/kotlin/thc/runtime/Program.kt
++++ b/src/main/kotlin/thc/runtime/Program.kt
+@@ -52,6 +52,7 @@ internal class Metrics(val enabled: Boolean) {
+         thunkEvaluationsByLabel[label] = (thunkEvaluationsByLabel[label] ?: 0L) + 1L
+     }
+     var compiledEntries = 0L
++    var leadingCaseReturns = 0L
+     var thunkEvaluations = 0L
+     var thunkHits = 0L
+     var blackholes = 0L
+@@ -367,6 +368,8 @@ private class Alternative(val kind: Int, val value: Any?,
+                           @field:CompilationFinal(dimensions = 1) val fields: IntArray,
+                           @field:Child var body: Expr) : Node() {
+     private val matchProfile = CountingConditionProfile.create()
++    fun matchesData(value: DataValue): Boolean = matchProfile.profile((this.value as DataLayout).matches(value))
++    fun matchesLong(value: Long): Boolean = matchProfile.profile(value == this.value as Long)
+     fun matches(frame: VirtualFrame, slot: Int): Boolean = matchProfile.profile(when (kind) {
+         DATA_ALTERNATIVE -> if (frame.isObject(slot)) {
+             val scrutinee = frame.getObject(slot)
+@@ -377,8 +380,9 @@ private class Alternative(val kind: Int, val value: Any?,
+         else -> false
+     })
+ }
+-private class Case(scrutinee: Expr, private val binderSlot: Int,
+-                   @field:Children private var alternatives: Array<Alternative>, metrics: Metrics) : Expr() {
++private open class Case(scrutinee: Expr, protected val binderSlot: Int,
++                   @field:Children protected var alternatives: Array<Alternative>, metrics: Metrics,
++                   binderProof: CoreRepresentation? = null) : Expr() {
+     init {
+         val proofs = alternatives.map { it.body.representation }
+         val kinds = proofs.map { it.kind }.toSet()
+@@ -390,14 +394,18 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
+         representation = CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
+     }
+     // Preserve primitive scrutinees through their frame write and literal comparisons.
+-    @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics), true)
++    @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics).apply {
++        if (binderProof != null) representation = representation.refine(binderProof.copy(evaluated = false))
++    }, true)
++    protected fun prepare(frame: VirtualFrame) { scrutinee.write(frame) }
++    protected open fun matches(frame: VirtualFrame, alternative: Alternative): Boolean = alternative.matches(frame, binderSlot)
+ 
+     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
+-        scrutinee.write(frame)
++        prepare(frame)
+         var fallback: Alternative? = null
+         for (alt in alternatives) {
+             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+-            if (alt.matches(frame, binderSlot)) {
++            if (matches(frame, alt)) {
+                 restoreFields(frame, alt)
+                 return alt.body.execute(frame)
+             }
+@@ -406,11 +414,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
+     }
+ 
+     @ExplodeLoop override fun executeLong(frame: VirtualFrame): Long {
+-        scrutinee.write(frame)
++        prepare(frame)
+         var fallback: Alternative? = null
+         for (alt in alternatives) {
+             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+-            if (alt.matches(frame, binderSlot)) {
++            if (matches(frame, alt)) {
+                 restoreFields(frame, alt)
+                 return alt.body.executeLong(frame)
+             }
+@@ -419,11 +427,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
+     }
+ 
+     @ExplodeLoop override fun executeClosure(frame: VirtualFrame): Closure {
+-        scrutinee.write(frame)
++        prepare(frame)
+         var fallback: Alternative? = null
+         for (alt in alternatives) {
+             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+-            if (alt.matches(frame, binderSlot)) {
++            if (matches(frame, alt)) {
+                 restoreFields(frame, alt)
+                 return alt.body.executeClosure(frame)
+             }
+@@ -432,11 +440,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
+     }
+ 
+     @ExplodeLoop override fun executeDataValue(frame: VirtualFrame): DataValue {
+-        scrutinee.write(frame)
++        prepare(frame)
+         var fallback: Alternative? = null
+         for (alt in alternatives) {
+             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+-            if (alt.matches(frame, binderSlot)) {
++            if (matches(frame, alt)) {
+                 restoreFields(frame, alt)
+                 return alt.body.executeDataValue(frame)
+             }
+@@ -445,11 +453,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
+     }
+ 
+     @ExplodeLoop override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+-        scrutinee.write(frame)
++        prepare(frame)
+         var fallback: Alternative? = null
+         for (alt in alternatives) {
+             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+-            if (alt.matches(frame, binderSlot)) {
++            if (matches(frame, alt)) {
+                 restoreFields(frame, alt)
+                 return alt.body.executeAddress(frame)
+             }
+@@ -465,6 +473,25 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
+         }
+     }
+ }
++/** Category selection happens during lowering, never in the guest loop. */
++private class DataCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
++                       proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
++    override fun matches(frame: VirtualFrame, alternative: Alternative): Boolean =
++        alternative.matchesData(frame.getObject(binderSlot) as DataValue)
++}
++private class LongCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
++                       proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
++    override fun matches(frame: VirtualFrame, alternative: Alternative): Boolean =
++        alternative.matchesLong(frame.getLong(binderSlot))
++}
++private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
++                          proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
++    override fun execute(frame: VirtualFrame): Any? { prepare(frame); return alternatives.last().body.execute(frame) }
++    override fun executeLong(frame: VirtualFrame): Long { prepare(frame); return alternatives.last().body.executeLong(frame) }
++    override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return alternatives.last().body.executeClosure(frame) }
++    override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return alternatives.last().body.executeDataValue(frame) }
++    override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
++}
+ private class Construct(private val layout: DataLayout,
+                         @field:Children private var fields: Array<Expr>) : Expr() {
+     init { representation = CoreRepresentation(CoreKind.DATA, evaluated = true) }
+@@ -715,7 +742,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
+     override fun diagnostics(): Map<String, Any> = linkedMapOf(
+         "backend" to "ast", "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
+         "sourceRootCount" to attachedRootCount, "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
+-        "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
++        "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
+         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
+         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
+         "localJoinTransfers" to metrics.localJoinTransfers,
+@@ -776,10 +803,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
+         }
+         scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf())
+         val body = compile(expression, scope, true)
+-        val target = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
++        val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
+             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
+-            rootSource(body), entryStrict).callTarget
+-        return FunctionSpec(target, captures, captureSources)
++            rootSource(body), entryStrict)
++        if (body is Case) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
++            resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
++            ::dataLayout, sources, body.coreSourceLocation))
++        return FunctionSpec(root.callTarget, captures, captureSources)
+     }
+     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expr {
+         val fn = function(label, emptyList(), expr, scope)
+@@ -934,7 +964,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
+                 }
+                 Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail))
+             }.toTypedArray()
+-            Case(scrutinee, binder, alternatives, metrics)
++            when (caseCategory(binderProof, alternatives.map { it.kind },
++                alternatives.all { it.kind != LITERAL_ALTERNATIVE || it.value is Long })) {
++                CaseCategory.DATA -> DataCase(scrutinee, binder, alternatives, metrics, binderProof)
++                CaseCategory.LONG -> LongCase(scrutinee, binder, alternatives, metrics, binderProof)
++                CaseCategory.DEFAULT_ONLY -> DefaultCase(scrutinee, binder, alternatives, metrics, binderProof)
++                CaseCategory.GENERIC -> Case(scrutinee, binder, alternatives, metrics)
++            }
+         }
+         "con" -> {
+             val id = expr[1] as String; val arity = (expr[2] as Number).toInt()
+diff --git a/src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt b/src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt
+index a41894f..5e71ce7 100644
+--- a/src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt
++++ b/src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt
+@@ -133,7 +133,13 @@ class BoxedValueCacheTest {
+                     assertTrue(first.matches(value)); assertFalse(first.matches(other))
+                     assertTrue(second.matches(other)); assertFalse(second.matches(value))
+                     assertThrows(RuntimeFault::class.java) { second.readLong(value, 0) }
+-                    if (strategy == "array-based") assertSame(value.javaClass, other.javaClass)
++                    if (strategy == "array-based") {
++                        if (value is LayoutDataValue) assertSame(value.javaClass, other.javaClass)
++                        else {
++                            assertTrue(other is LayoutDataValue)
++                            assertNotSame(value.javaClass, other.javaClass)
++                        }
++                    }
+                 }
+                 context(strategy) { language ->
+                     val another = layout(language, builtins[0])
+diff --git a/src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt b/src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt
+index d38f224..b3dc0f7 100644
+--- a/src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt
++++ b/src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt
+@@ -58,8 +58,14 @@ class ConstructorClassIdentityTest {
+                 }
+                 assertThrows(RuntimeFault::class.java) { DataValue(first, Any()) }
+                 if (strategy == "array-based") {
+-                    assertSame(a.javaClass, b.javaClass)
+-                    assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
++                    if (a is LayoutDataValue) {
++                        assertSame(a.javaClass, b.javaClass)
++                        assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
++                    } else {
++                        assertTrue(b is LayoutDataValue)
++                        assertNotSame(a.javaClass, b.javaClass)
++                        assertTrue(proof(first).isExclusive()); assertTrue(proof(second).isExclusive())
++                    }
+                 }
+             }
+         }
+@@ -70,7 +76,7 @@ class ConstructorClassIdentityTest {
+         override fun getName(): String = "constructor class match"
+     }
+ 
+-    @Test fun compiledMatchDeoptimizesBeforeASecondSharedClassOwnerPublishesValues() = matching(true) {
++    @Test fun compiledMatchTracksPermanentOrInvalidatableClassOwnership() = matching(true) {
+         context("array-based") { language ->
+             val first = DataLayout(language, "First", "First", arrayOf("IntRep"))
+             val a = first.create(arrayOf(3_000_000_017L))
+@@ -85,10 +91,17 @@ class ConstructorClassIdentityTest {
+             // the earlier enabled proof, before even its first value is published.
+             lateinit var second: DataLayout
+             matching(false) { second = DataLayout(language, "Second", "Second", arrayOf("IntRep")) }
+-            assertFalse(valid(target), "Compiled class-only matching must depend on exclusive ownership")
+-            assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
+             val b = second.create(arrayOf(Long.MAX_VALUE))
+-            assertSame(a.javaClass, b.javaClass)
++            if (a is LayoutDataValue) {
++                assertFalse(valid(target), "Compiled shared-class matching must depend on exclusive ownership")
++                assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
++                assertSame(a.javaClass, b.javaClass)
++            } else {
++                assertTrue(valid(target), "A permanent owner keeps its class when a second layout falls back")
++                assertTrue(proof(first).isExclusive()); assertTrue(proof(second).isExclusive())
++                assertTrue(b is LayoutDataValue)
++                assertNotSame(a.javaClass, b.javaClass)
++            }
+             assertFalse(matches(b)); assertTrue(matches(a))
+             compile(target)
+             assertFalse(matches(b)); assertTrue(matches(a))
+diff --git a/src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt b/src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt
+index 602e834..31910e3 100644
+--- a/src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt
++++ b/src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt
+@@ -60,8 +60,12 @@ class StaticShapeSafetyTest {
+                 assertEquals(listOf(2), DataValue::class.java.constructors.map { it.parameterCount })
+                 assertEquals(listOf(2), CapturedFrame::class.java.constructors.map { it.parameterCount })
+                 if (strategy == "array-based") {
+-                    assertSame(value.javaClass, otherValue.javaClass,
++                    if (value is LayoutDataValue) assertSame(value.javaClass, otherValue.javaClass,
+                         "Layout validation must work even when constructors share their carrier class")
++                    else {
++                        assertTrue(otherValue is LayoutDataValue)
++                        assertNotSame(value.javaClass, otherValue.javaClass)
++                    }
+                     assertSame(environment.javaClass, otherEnvironment.javaClass)
+                 }
+ 
+diff --git a/tools/ci-performance.py b/tools/ci-performance.py
+index b3efa7c..15c9a6b 100644
+--- a/tools/ci-performance.py
++++ b/tools/ci-performance.py
+@@ -198,17 +198,22 @@ def run(out, command, name, timeout, environment=None):
+     return out / record['log']
+ 
+ 
+-def check_configuration(out, java, name):
++def check_configuration(out, java, name, compact_control=None):
+     frozen = out / 'frozen'
+     runtime, flags = suite_config(out)['configurations'][name]
++    flags = list(flags)
++    suffix = ""
++    if compact_control is not None:
++        flags.append('-XX:' + ('+' if compact_control else '-') + 'UseCompactObjectHeaders')
++        suffix = '-compact-on' if compact_control else '-compact-off'
+     expected = [line.split('\t') for line in (frozen / 'map/oracle.tsv').read_text().splitlines() if line]
+     assert len(expected) == 18, 'Expected the full 18-input Map oracle'
+     verify(out)
+-    command = [java, '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
++    command = [java, '-XX:+UseCompactObjectHeaders', '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
+                '-Dthc.backend=bytecode', '-Dthc.diagnosticUnsupported=true', '-Dthc.sourceNotesEnabled=true',
+                '-Dthc.traceCompilation=true', '-cp', str(frozen / runtime / 'lib/*'), 'thc.MapCheckKt',
+                frozen / 'map/modules.txt', frozen / 'map/oracle.tsv']
+-    log = run(out, command, 'check-' + name, 600)
++    log = run(out, command, 'check-' + name + suffix, 600)
+     lines = log.read_text().splitlines()
+     for phase in ('before-requested-compilation', 'after-requested-compilation'):
+         actual = [line.split('\t')[2:] for line in lines if line.startswith('VERIFIED_MAP\t' + phase + '\t')]
+@@ -216,7 +221,7 @@ def check_configuration(out, java, name):
+     diagnostics = json.loads(next(line.removeprefix('MAP_DIAGNOSTICS ') for line in lines if line.startswith('MAP_DIAGNOSTICS ')))
+     assert diagnostics['backend'] == 'bytecode' and diagnostics['unsupportedTraps'] == 0
+     assert diagnostics['sourceNotesEnabled'] is True and diagnostics['sourceRootCount'] > 0
+-    return {'configuration': name, 'beforeRows': 18, 'afterRows': 18, 'diagnostics': diagnostics}
++    return {'configuration': name, 'compactControl': compact_control, 'beforeRows': 18, 'afterRows': 18, 'diagnostics': diagnostics}
+ 
+ 
+ def check(out, java):
+@@ -269,7 +274,12 @@ def full_tests(out, name, flags):
+         shutil.rmtree(source)
+     totals = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+     try:
+-        run(out, [root / 'scripts/gradle.sh', '--no-daemon', 'test', '--rerun'],
++        compact = True
++        for flag in flags:
++            if flag == '-XX:+UseCompactObjectHeaders': compact = True
++            elif flag == '-XX:-UseCompactObjectHeaders': compact = False
++        run(out, [root / 'scripts/gradle.sh', '--no-daemon',
++                  '-Pthc.compactObjectHeaders=' + str(compact).lower(), 'test', '--rerun'],
+             name + '-full-tests', 1500, {'JAVA_TOOL_OPTIONS': ' '.join(flags)})
+     finally:
+         if source.exists():
+@@ -342,9 +352,12 @@ def compact(out, java_home):
+     config = json.loads((out / 'run.json').read_text())
+     root, frozen = Path(config['repository']), out / 'frozen'
+     try:
++        # Header-off is now an explicit control, so validate it separately too.
++        status['baselineTests'] = full_tests(out, 'compact-baseline', ['-XX:-UseCompactObjectHeaders'])
+         status['tests'] = full_tests(out, 'compact', ['-XX:+UseCompactObjectHeaders'])
+         status['stage'] = 'full-map-check'
+         write_json(status_path, status)
++        status['baselineMapCheck'] = check_configuration(out, java_home / 'bin/java', 'checked-class-off', compact_control=False)
+         status['mapCheck'] = check_configuration(out, java_home / 'bin/java', 'compact-checked-class-off')
+         status['stage'] = 'object-sizes'
+         write_json(status_path, status)
+diff --git a/tools/compare-map-runtimes.py b/tools/compare-map-runtimes.py
+index 36e9946..235c687 100755
+--- a/tools/compare-map-runtimes.py
++++ b/tools/compare-map-runtimes.py
+@@ -41,6 +41,14 @@ def require(condition, message):
+         raise InvalidRun(message)
+ 
+ 
++def compact_header_options(options):
++    """Ordinary comparisons use compact headers; an explicit per-engine control wins."""
++    options = list(options)
++    if not any(flag in ('-XX:+UseCompactObjectHeaders', '-XX:-UseCompactObjectHeaders') for flag in options):
++        options.insert(0, '-XX:+UseCompactObjectHeaders')
++    return options
++
++
+ def signed64(value):
+     return (value + (1 << 63)) % (1 << 64) - (1 << 63)
+ 
+@@ -300,7 +308,7 @@ def main():
+                            '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules_by_engine[engine])),
+                            ENTRY, '--steady', str(args.jvm_warm_seconds), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
+             if engine != 'native':
+-                command[1:1] = getattr(args, engine + '_jvm_option')
++                command[1:1] = compact_header_options(getattr(args, engine + '_jvm_option'))
+                 notes = getattr(args, engine + '_source_notes')
+                 if notes is not None:
+                     command.insert(1, '-Dthc.sourceNotesEnabled=' + ('true' if notes == 'on' else 'false'))
+diff --git a/tools/test-compare-map-runtimes.py b/tools/test-compare-map-runtimes.py
+index 08ed8c1..3b509b5 100644
+--- a/tools/test-compare-map-runtimes.py
++++ b/tools/test-compare-map-runtimes.py
+@@ -24,6 +24,17 @@ class HashCompatibilityTest(unittest.TestCase):
+                     self.assertEqual(harness['sha256'](path), expected)
+ 
+ 
++class CompactHeaderDefaultsTest(unittest.TestCase):
++    def test_default_and_explicit_controls_preserve_order_without_mutating_input(self):
++        select = harness['compact_header_options']
++        ordinary = ['-Dthc.backend=bytecode']
++        self.assertEqual(select(ordinary), ['-XX:+UseCompactObjectHeaders', *ordinary])
++        self.assertEqual(ordinary, ['-Dthc.backend=bytecode'])
++        for options in (['-XX:-UseCompactObjectHeaders'], ['-XX:+UseCompactObjectHeaders'],
++                        ['-XX:+UseCompactObjectHeaders', '-XX:-UseCompactObjectHeaders']):
++            self.assertEqual(select(options), options)
++
++
+ class PowerStatusTest(unittest.TestCase):
+     def test_low_battery_discharging_with_reported_ac_power(self):
+         raw = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=123)\t4%; discharging; (no estimate) present: true\n"
+diff --git a/src/main/kotlin/thc/runtime/CaseCategories.kt b/src/main/kotlin/thc/runtime/CaseCategories.kt
+new file mode 100644
+index 0000000..2a0c9bc
+--- /dev/null
++++ b/src/main/kotlin/thc/runtime/CaseCategories.kt
+@@ -0,0 +1,16 @@
++package thc.runtime
++
++internal const val TYPED_CASES_PROPERTY = "thc.typedCases"
++internal enum class CaseCategory { GENERIC, DATA, LONG, DEFAULT_ONLY }
++
++/** A case category is not a proof of constructor-family membership or exhaustiveness. */
++internal fun caseCategory(proof: CoreRepresentation, kinds: List<Int>, literalsAreLong: Boolean): CaseCategory {
++    if (!java.lang.Boolean.getBoolean(TYPED_CASES_PROPERTY)) return CaseCategory.GENERIC
++    val explicit = kinds.filter { it != 0 }
++    return when {
++        explicit.isEmpty() && kinds.isNotEmpty() -> CaseCategory.DEFAULT_ONLY
++        proof.kind == CoreKind.DATA && explicit.all { it == 1 } -> CaseCategory.DATA
++        proof.isLong && literalsAreLong && explicit.all { it == 2 } -> CaseCategory.LONG
++        else -> CaseCategory.GENERIC
++    }
++}
+diff --git a/src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt b/src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt
+new file mode 100644
+index 0000000..e917b84
+--- /dev/null
++++ b/src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt
+@@ -0,0 +1,41 @@
++package thc.runtime
++
++import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
++
++internal const val CLASS_OWNED_LAYOUTS_PROPERTY = "thc.classOwnedLayouts"
++
++/** Permanent class ownership for values that do not carry a layout pointer.
++ * The ClassValue instance never keeps a separate strong collection of its keys. */
++internal object ClassOwnedLayouts {
++    private class Owner {
++        private var token: Any? = null
++        @Volatile private var descriptor: DataLayout? = null
++
++        @Synchronized fun reserve(candidate: Any): Boolean {
++            if (token == null) token = candidate
++            return token === candidate
++        }
++
++        @Synchronized fun publish(candidate: Any, layout: DataLayout) {
++            if (token !== candidate || descriptor != null && descriptor !== layout)
++                fault("Invalid permanent constructor class ownership")
++            // Release only after all immutable descriptor fields and cached values
++            // have initialized. Reservation alone must not publish a partial `this`.
++            descriptor = layout
++        }
++
++        fun resolve(): DataLayout = descriptor ?: fault("Unpublished constructor class ownership")
++    }
++
++    // Composition is deliberate: callers must not gain ClassValue.remove().
++    private val owners = object : ClassValue<Owner>() {
++        override fun computeValue(type: Class<*>): Owner = Owner()
++    }
++
++    @TruffleBoundary fun reserve(carrier: Class<*>, token: Any): Boolean = owners.get(carrier).reserve(token)
++    @TruffleBoundary fun publish(carrier: Class<*>, token: Any, layout: DataLayout) =
++        owners.get(carrier).publish(token, layout)
++
++    /** Generic/debug access only. Compiled constructor operations already know their layout. */
++    @TruffleBoundary fun resolve(carrier: Class<*>): DataLayout = owners.get(carrier).resolve()
++}
+diff --git a/src/main/kotlin/thc/runtime/LeadingCaseReturn.kt b/src/main/kotlin/thc/runtime/LeadingCaseReturn.kt
+new file mode 100644
+index 0000000..c159025
+--- /dev/null
++++ b/src/main/kotlin/thc/runtime/LeadingCaseReturn.kt
+@@ -0,0 +1,74 @@
++@file:Suppress("UNCHECKED_CAST")
++package thc.runtime
++
++import com.oracle.truffle.api.CompilerDirectives
++import com.oracle.truffle.api.nodes.Node
++import com.oracle.truffle.api.source.SourceSection
++
++internal const val LEADING_CASE_RETURN_PROPERTY = "thc.leadingCaseReturn"
++
++/** Immutable partial-inlining recipe, installed before a successfully lowered root is published. */
++internal class LeadingCaseReturn private constructor(
++    val layout: DataLayout,
++    val scrutineeIndex: Int,
++    val resultIndex: Int,
++    val source: CoreSourceLocation?
++) {
++    companion object {
++        /** Called only for an actual lowered Case, never a diagnostic replacement for that Case. */
++        fun discover(args: List<Map<String, Any?>>, expression: List<Any?>,
++                     result: CoreRepresentation, argumentOffset: Int, usedFormals: Set<String>, hasCaptures: Boolean,
++                     dataLayout: (String) -> DataLayout, sources: CoreSources,
++                     inheritedSource: CoreSourceLocation?): LeadingCaseReturn? {
++            if (!java.lang.Boolean.getBoolean(LEADING_CASE_RETURN_PROPERTY) || !result.isLong || expression[0] != "case")
++                return null
++            // The shortcut must not skip entry validation for other live carriers/captures.
++            val ids = args.map { it["id"] as String }
++            if (hasCaptures || ids.toSet().size != ids.size) return null
++            val scrutinee = expression[1] as List<Any?>
++            if (scrutinee[0] != "var") return null
++            val scrutineeIndex = args.indexOfFirst { it["id"] == scrutinee[1] }
++            if (scrutineeIndex < 0 || CoreRepresentations.binder(args[scrutineeIndex]).kind !in
++                setOf(CoreKind.UNKNOWN, CoreKind.OBJECT, CoreKind.DATA)) return null
++            val alternatives = expression[3] as List<List<Any?>>
++            val seen = hashSetOf<String>()
++            for (alt in alternatives) {
++                if (alt[0] != "data") continue
++                val id = alt[1] as String
++                // Earlier duplicate alternatives have priority in both interpreters.
++                if (!seen.add(id) || (alt[2] as List<*>).isNotEmpty()) continue
++                val value = alt[3] as List<Any?>
++                if (value[0] != "var" || value[1] == expression[2]) continue
++                val resultIndex = args.indexOfFirst { it["id"] == value[1] }
++                if (resultIndex < 0 || resultIndex == scrutineeIndex || !CoreRepresentations.binder(args[resultIndex]).isLong ||
++                    usedFormals.any { it != scrutinee[1] && it != value[1] }) continue
++                val layout = dataLayout(id)
++                if (layout.arity != 0) continue
++                val location = sources.expression(value, sources.expression(expression, inheritedSource))
++                return LeadingCaseReturn(layout, scrutineeIndex + argumentOffset, resultIndex + argumentOffset, location)
++            }
++            return null
++        }
++    }
++}
++
++/**
++ * Compiled-only partial inlining: interpreted calls retain their ordinary frames.
++ * This child attributes the shortcut to the callee's case/arm, but deliberately
++ * does not synthesize a callee FrameInstance or report a root entry that did not occur.
++ */
++internal class LeadingCaseReturnNode(private val recipe: LeadingCaseReturn, private val metrics: Metrics) : Node() {
++    override fun getSourceSection(): SourceSection? = recipe.source?.section
++    fun getCoreSourceNotes(): List<CoreSourceNote> = recipe.source?.notes.orEmpty()
++
++    /** null is a miss; the only successful result carrier is a non-null boxed Long. */
++    fun execute(arguments: Array<Any?>): Any? {
++        if (!CompilerDirectives.inCompiledCode()) return null
++        val scrutinee = arguments[recipe.scrutineeIndex]
++        if (!recipe.layout.matches(scrutinee) || arguments[recipe.resultIndex] !is Long)
++            return null
++        if (metrics.enabled) metrics.leadingCaseReturns++
++        // Keep the original reference ABI value; do not unbox and rebox a cached result.
++        return arguments[recipe.resultIndex]
++    }
++}
+diff --git a/src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt b/src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt
+new file mode 100644
+index 0000000..9fccfb0
+--- /dev/null
++++ b/src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt
+@@ -0,0 +1,210 @@
++package thc.runtime
++
++import com.oracle.truffle.api.RootCallTarget
++import com.oracle.truffle.api.TruffleLanguage
++import com.oracle.truffle.api.frame.VirtualFrame
++import com.oracle.truffle.api.nodes.RootNode
++import com.oracle.truffle.api.staticobject.StaticShape
++import org.graalvm.polyglot.Context
++import org.junit.jupiter.api.Assertions.*
++import org.junit.jupiter.api.Test
++import thc.Language
++import java.lang.reflect.Modifier
++
++class ClassOwnedLayoutTest {
++    private fun options(owned: Boolean, unchecked: Boolean = false, action: () -> Unit) {
++        val settings = mapOf(CLASS_OWNED_LAYOUTS_PROPERTY to owned.toString(),
++            STATIC_SHAPE_UNCHECKED_PROPERTY to unchecked.toString())
++        val previous = settings.mapValues { System.getProperty(it.key) }
++        try {
++            settings.forEach { (key, value) -> System.setProperty(key, value) }
++            action()
++        } finally {
++            previous.forEach { (key, value) ->
++                if (value == null) System.clearProperty(key) else System.setProperty(key, value)
++            }
++        }
++    }
++
++    private fun context(strategy: String, action: (Language) -> Unit) {
++        Context.newBuilder("thc").allowExperimentalOptions(true)
++            .option("engine.StaticObjectStorageStrategy", strategy)
++            .option("engine.BackgroundCompilation", "false")
++            .option("engine.MultiTier", "false")
++            .option("engine.CompilationFailureAction", "Throw")
++            .build().use { context ->
++                context.initialize("thc"); context.enter()
++                try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
++                finally { context.leave() }
++            }
++    }
++
++    private fun compile(target: RootCallTarget) {
++        val optimized = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
++        optimized.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
++        assertEquals(true, optimized.getMethod("isValidLastTier").invoke(target))
++    }
++
++    private class ReadRoot(private val layout: DataLayout) : RootNode(null) {
++        override fun execute(frame: VirtualFrame): Any =
++            if (layout.matches(frame.arguments[0])) layout.readLong(frame.arguments[0] as DataValue, 0) else -17L
++    }
++
++    @Test fun defaultUsesClassOwnershipAndExplicitFalseKeepsLayoutCarriers() {
++        val previous = System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
++        try {
++            System.clearProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
++            context("field-based") { language ->
++                val owned = DataLayout(language, "DefaultOwner", "DefaultOwner", arrayOf("IntRep"))
++                val first = owned.create(arrayOf(Long.MIN_VALUE))
++                assertFalse(first is LayoutDataValue)
++                assertSame(owned, first.layout)
++                options(false) {
++                    val fallback = DataLayout(language, "ExplicitFallback", "ExplicitFallback", arrayOf("IntRep"))
++                    val second = fallback.create(arrayOf(Long.MAX_VALUE))
++                    assertTrue(second is LayoutDataValue)
++                    assertSame(fallback, second.layout)
++                    assertFalse(owned.matches(second)); assertFalse(fallback.matches(first))
++                    assertEquals(Long.MIN_VALUE, owned.readLong(first, 0))
++                    assertEquals(Long.MAX_VALUE, fallback.readLong(second, 0))
++                }
++            }
++        } finally {
++            if (previous == null) System.clearProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
++            else System.setProperty(CLASS_OWNED_LAYOUTS_PROPERTY, previous)
++        }
++    }
++
++    @Test fun fieldlessOwnersAndArrayFallbackKeepOldCompiledValuesValid() = options(true) {
++        assertTrue(DataValue::class.java.declaredFields.none { !Modifier.isStatic(it.modifiers) },
++            "The pointer-free base must not retain a per-instance layout or ownership token")
++        assertEquals(listOf(DataLayout::class.java), LayoutDataValue::class.java.declaredFields
++            .filter { !Modifier.isStatic(it.modifiers) }.map { it.type })
++        for (strategy in listOf("field-based", "array-based")) context(strategy) { language ->
++            val first = DataLayout(language, "First", "First", arrayOf("IntRep"))
++            val a = first.create(arrayOf(Long.MIN_VALUE))
++            assertFalse(a is LayoutDataValue)
++            assertSame(first, a.layout)
++            val target = ReadRoot(first).callTarget
++            repeat(30) { assertEquals(Long.MIN_VALUE, Calls.target(target, arrayOf(a))) }
++            compile(target)
++            val second = DataLayout(language, "Second", "Second", arrayOf("IntRep"))
++            val b = second.create(arrayOf(Long.MAX_VALUE))
++            val third = DataLayout(language, "Third", "Third", arrayOf("IntRep"))
++            val c = third.create(arrayOf(3_000_000_017L))
++            if (strategy == "array-based") {
++                assertTrue(b is LayoutDataValue); assertTrue(c is LayoutDataValue)
++                assertNotSame(a.javaClass, b.javaClass)
++                assertSame(b.javaClass, c.javaClass,
++                    "Shared fallback classes still discriminate by each value's layout")
++            } else {
++                assertFalse(b is LayoutDataValue); assertFalse(c is LayoutDataValue)
++            }
++            assertEquals(Long.MIN_VALUE, Calls.target(target, arrayOf(a)))
++            assertEquals(-17L, Calls.target(target, arrayOf(b)))
++            assertEquals(-17L, Calls.target(target, arrayOf(c)))
++            assertSame(first, a.layout); assertSame(second, b.layout); assertSame(third, c.layout)
++            assertEquals("First[${Long.MIN_VALUE}]", a.toString())
++            assertThrows(RuntimeFault::class.java) { second.readLong(a, 0) }
++            assertThrows(RuntimeFault::class.java) { first.initializeLong(b, 0, 0L) }
++            for (foreign in listOf(null, Any(), 1L, first)) assertFalse(first.matches(foreign))
++            assertEquals(Long.MAX_VALUE, second.readLong(b, 0))
++        }
++    }
++
++    @Test fun offModeAndClosedContextsCannotReassignAnExistingOwner() {
++        lateinit var first: DataLayout
++        lateinit var a: DataValue
++        options(true) {
++            context("array-based") { language ->
++                first = DataLayout(language, "Survivor", "Survivor", arrayOf("IntRep"))
++                a = first.create(arrayOf(Long.MIN_VALUE))
++                options(false) {
++                    val off = DataLayout(language, "Off", "Off", arrayOf("IntRep"))
++                    val b = off.create(arrayOf(12L))
++                    assertTrue(b is LayoutDataValue)
++                    assertFalse(first.matches(b)); assertFalse(off.matches(a))
++                    assertSame(first, a.layout)
++                }
++            }
++            // Language instances may get different generated classes across contexts;
++            // either policy must preserve the old class's permanent owner.
++            context("array-based") { language ->
++                val other = DataLayout(language, "Later", "Later", arrayOf("IntRep"))
++                val b = other.create(arrayOf(Long.MAX_VALUE))
++                assertSame(first, a.layout)
++                assertEquals(Long.MIN_VALUE, first.readLong(a, 0))
++                assertFalse(first.matches(b)); assertFalse(other.matches(a))
++                assertSame(other, b.layout)
++            }
++        }
++    }
++
++    private class ReservationCarrier
++    @Test fun classReservationIsPermanentAndDescriptorPublicationCannotChangeItsOwner() {
++        val token = Any()
++        val competitor = Any()
++        assertTrue(ClassOwnedLayouts.reserve(ReservationCarrier::class.java, token))
++        assertFalse(ClassOwnedLayouts.reserve(ReservationCarrier::class.java, competitor))
++        assertThrows(RuntimeFault::class.java) { ClassOwnedLayouts.resolve(ReservationCarrier::class.java) }
++        options(false) {
++            context("field-based") { language ->
++                val owner = DataLayout(language, "Owner", "Owner", emptyArray())
++                val other = DataLayout(language, "Other", "Other", emptyArray())
++                ClassOwnedLayouts.publish(ReservationCarrier::class.java, token, owner)
++                assertSame(owner, ClassOwnedLayouts.resolve(ReservationCarrier::class.java))
++                assertThrows(RuntimeFault::class.java) {
++                    ClassOwnedLayouts.publish(ReservationCarrier::class.java, competitor, other)
++                }
++                assertThrows(RuntimeFault::class.java) {
++                    ClassOwnedLayouts.publish(ReservationCarrier::class.java, token, other)
++                }
++                assertFalse(ClassOwnedLayouts.reserve(ReservationCarrier::class.java, competitor))
++                assertSame(owner, ClassOwnedLayouts.resolve(ReservationCarrier::class.java))
++            }
++        }
++    }
++
++    private class AnswerRoot : RootNode(null) {
++        var evaluations = 0
++        override fun execute(frame: VirtualFrame): Any { evaluations++; return Long.MIN_VALUE }
++    }
++    private class ForceRoot : RootNode(null) {
++        @Child private var force = Force(Metrics(false))
++        override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
++    }
++
++    @Test fun ownershipChecksPreservePreciseFieldsLazyFieldsAndAllocationAuthentication() {
++        for (strategy in listOf("field-based", "array-based")) for (unchecked in listOf(false, true)) options(true, unchecked) {
++            context(strategy) { language ->
++                val scalar = DataLayout(language, "Scalar", "Scalar", arrayOf("IntRep"))
++                val a = scalar.create(arrayOf(Long.MAX_VALUE))
++                val typed = DataLayout(language, "Typed", "Typed", arrayOf("LiftedRep"), arrayOf(DataValue::class.java))
++                assertSame(a, typed.read(typed.create(arrayOf(a)), 0))
++                assertNull(typed.read(typed.create(arrayOf(null)), 0))
++                assertThrows(IllegalArgumentException::class.java) { typed.create(arrayOf(Any())) }
++                val lazy = DataLayout(language, "Lazy", "Lazy", arrayOf("LiftedRep"))
++                val answer = AnswerRoot()
++                val thunk = Thunk(answer.callTarget, null)
++                val cell = lazy.create(arrayOf(thunk))
++                assertEquals(0, answer.evaluations)
++                assertSame(thunk, lazy.read(cell, 0))
++                cell.toString()
++                assertEquals(0, answer.evaluations)
++                val force = ForceRoot().callTarget
++                repeat(2) { assertEquals(Long.MIN_VALUE, Calls.target(force, arrayOf(lazy.read(cell, 0)))) }
++                assertEquals(1, answer.evaluations)
++                assertNull(thunk.target)
++                for (fake in listOf(null, Any(), scalar, a)) {
++                    assertThrows(RuntimeFault::class.java) { DataValue(scalar, fake) }
++                    assertThrows(RuntimeFault::class.java) { LayoutDataValue(scalar, fake) }
++                    assertThrows(RuntimeFault::class.java) { object : DataValue(scalar, fake) {} }
++                }
++                val foreign = StaticShape.newBuilder(language).build(DataValue::class.java, DataValueFactory::class.java)
++                assertThrows(RuntimeFault::class.java) { foreign.factory.create(scalar, Any()) }
++                for (index in listOf(-1, 1)) assertThrows(RuntimeFault::class.java) { scalar.read(a, index) }
++                assertEquals(Long.MAX_VALUE, scalar.readLong(a, 0))
++            }
++        }
++    }
++}
+diff --git a/src/test/kotlin/thc/runtime/LeadingCaseReturnTest.kt b/src/test/kotlin/thc/runtime/LeadingCaseReturnTest.kt
+new file mode 100644
+index 0000000..fccdb28
+--- /dev/null
++++ b/src/test/kotlin/thc/runtime/LeadingCaseReturnTest.kt
+@@ -0,0 +1,272 @@
++package thc.runtime
++
++import com.oracle.truffle.api.RootCallTarget
++import com.oracle.truffle.api.TruffleLanguage
++import com.oracle.truffle.api.bytecode.Instruction
++import com.oracle.truffle.api.frame.VirtualFrame
++import com.oracle.truffle.api.nodes.DirectCallNode
++import com.oracle.truffle.api.nodes.NodeUtil
++import com.oracle.truffle.api.nodes.RootNode
++import org.junit.jupiter.api.Assertions.*
++import org.junit.jupiter.api.Test
++import thc.Language
++import thc.executionContext
++
++private typealias LeadingCore = List<Any?>
++
++class LeadingCaseReturnTest {
++    private val long = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
++    private val data = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to false)
++    private val closure = data + ("kind" to "closure")
++    private fun variable(id: String, source: String? = null): LeadingCore =
++        if (source == null) listOf("var", id) else listOf("var", id, mapOf("source" to source))
++    private fun integer(n: Long): LeadingCore = listOf("lit", "int", n.toString())
++    private fun parameter(id: String, rep: Map<String, Any> = long) = mapOf(
++        "id" to id, "name" to id, "lifted" to (rep !== long), "coercion" to false, "rep" to rep)
++    private fun lambda(args: List<Map<String, Any>>, body: LeadingCore, strict: List<Boolean> = List(args.size) { false },
++                       result: Map<String, Any> = long): LeadingCore = listOf("lam", args, body,
++        mapOf("rep" to closure, "resultRep" to result, "entryStrict" to strict))
++    private fun binding(id: String, rhs: LeadingCore): Map<String, Any?> =
++        mapOf("id" to id, "name" to id, "lifted" to true, "expr" to rhs)
++    private fun apply(fn: LeadingCore, args: List<LeadingCore>, lifted: List<Boolean> = List(args.size) { false }): LeadingCore =
++        listOf("app", fn, args, lifted, false, false)
++    private fun plus(a: LeadingCore, b: LeadingCore) = apply(listOf("prim", "+#"), listOf(a, b))
++    private fun constructor(id: String, reps: List<List<String>> = emptyList()) = mapOf(
++        "id" to id, "name" to id, "arity" to reps.size, "kind" to "boxed", "fieldReps" to reps,
++        "strictFields" to List(reps.size) { false }, "fieldLifted" to List(reps.size) { false })
++    private fun worker(extra: Boolean = false, strictTree: Boolean = false, captured: Boolean = false,
++                       coldBody: LeadingCore? = null): LeadingCore {
++        val payload = if (captured) plus(variable("payload"), variable("captured")) else variable("payload")
++        val body = listOf("case", variable("tree"), "treeCase", listOf(
++            listOf("data", "Stop", emptyList<String>(), variable("acc", "arm")),
++            listOf("data", "Next", listOf("payload"), coldBody ?: plus(variable("acc"), payload),
++                mapOf("binders" to listOf(parameter("payload")))),
++            listOf("default", null, emptyList<String>(), integer(-1))),
++            mapOf("rep" to long, "binder" to parameter("treeCase", data), "source" to "case", "sourceNotes" to listOf("case")))
++        return lambda(listOf(parameter("acc"), parameter("tree", data)) +
++            if (extra) listOf(parameter("unused", data)) else emptyList(), body,
++            listOf(false, strictTree) + if (extra) listOf(true) else emptyList())
++    }
++    private fun driver(extra: Boolean = false, tail: Boolean = false): LeadingCore {
++        val call = apply(variable("fn"), listOf(variable("acc"), variable("tree")) +
++            if (extra) listOf(variable("unused")) else emptyList(),
++            listOf(false, true) + if (extra) listOf(true) else emptyList())
++        return lambda(listOf(parameter("fn", closure), parameter("acc"), parameter("tree", data)) +
++            if (extra) listOf(parameter("unused", data)) else emptyList(), if (tail) call else plus(call, integer(1)))
++    }
++    private fun module(bindings: List<Map<String, Any?>>, notes: Boolean, diagnostic: Boolean = false): Map<String, Any?> = mapOf(
++        "bindings" to (listOf(binding("stop", listOf("con", "Stop", 0)), binding("other", listOf("con", "Other", 0)),
++            binding("next", apply(listOf("con", "Next", 1), listOf(integer(7))))) + bindings),
++        "constructors" to listOf(constructor("Stop"), constructor("Other"), constructor("Next", listOf(listOf("IntRep"))),
++            mapOf("id" to "Unsupported", "name" to "Unsupported", "arity" to 0, "kind" to "unboxed-tuple", "fieldReps" to emptyList<Any>())),
++        "instrument" to true, "diagnosticUnsupported" to diagnostic,
++        "sourceNotesEnabled" to notes,
++        "sourceFiles" to listOf(mapOf("id" to "Case.hs", "path" to "Case.hs", "content" to "case tree of Stop -> acc \n")),
++        "sourceSpans" to listOf(
++            mapOf("id" to "case", "file" to "Case.hs", "startLine" to 1, "startColumn" to 1, "endLine" to 1, "endColumn" to 25,
++                "charIndex" to 0, "charLength" to 24),
++            mapOf("id" to "arm", "file" to "Case.hs", "startLine" to 1, "startColumn" to 22, "endLine" to 1, "endColumn" to 25,
++                "charIndex" to 21, "charLength" to 3)))
++    private fun each(enabled: Boolean = true, notes: Boolean = true, diagnostic: Boolean = false,
++                     bindings: List<Map<String, Any?>>, action: (String, ExecutableProgram) -> Unit) {
++        val previous = System.getProperty(LEADING_CASE_RETURN_PROPERTY)
++        System.setProperty(LEADING_CASE_RETURN_PROPERTY, enabled.toString())
++        try {
++            executionContext().use { context ->
++                context.initialize("thc"); context.enter()
++                try {
++                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
++                    for (backend in listOf("ast", "bytecode")) {
++                        val m = module(bindings, notes, diagnostic)
++                        action(backend, if (backend == "ast") Program(language, m) else BytecodeProgram(language, m))
++                    }
++                } finally { context.leave() }
++            }
++        } finally { if (previous == null) System.clearProperty(LEADING_CASE_RETURN_PROPERTY) else System.setProperty(LEADING_CASE_RETURN_PROPERTY, previous) }
++    }
++    private fun run(p: ExecutableProgram, name: String, vararg args: Any?): Any? =
++        Calls.target(p.hostEntryTarget(args.size), arrayOf(p.entryValue(name), arrayOf(*args)))
++    private fun count(p: ExecutableProgram, name: String = "leadingCaseReturns") = (p.diagnostics().getValue(name) as Number).toLong()
++    private fun compile(target: RootCallTarget) {
++        val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
++        type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
++        assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
++    }
++    private class CloneCaller(target: RootCallTarget) : RootNode(null) {
++        @Child private var call = DirectCallNode.create(target)
++        override fun execute(frame: VirtualFrame): Any? = Calls.direct(call, frame.arguments)
++        fun cloneTarget(): RootCallTarget {
++            callTarget
++            assertTrue(call.cloneCallTarget())
++            return call.clonedCallTarget as RootCallTarget
++        }
++    }
++    private fun leadingNodes(root: RootNode): List<LeadingCaseReturnNode> {
++        if (root !is BytecodeRoot) return NodeUtil.findAllNodeInstances(root, LeadingCaseReturnNode::class.java)
++        // Bytecode DSL cached operation nodes are not ordinary @Children entries.
++        return root.bytecodeNode.instructions.flatMap { it.arguments }
++            .filter { it.descriptor.kind == Instruction.Argument.Kind.NODE_PROFILE }
++            .mapNotNull { it.asCachedNode() }.distinct()
++            .flatMap { NodeUtil.findAllNodeInstances(it, LeadingCaseReturnNode::class.java) }
++    }
++    private fun thunk(value: Any? = null, failure: Boolean = false) = Thunk(object : RootNode(null) {
++        override fun execute(frame: VirtualFrame): Any? = if (failure) throw RuntimeFault("forced unused argument") else value
++    }.callTarget, null)
++
++    @Test fun onlyCompiledDirectCallsShortcutAndPreservePendingWorkAndFullWidthResults() {
++        for (enabled in listOf(false, true)) each(enabled, bindings = listOf(binding("worker", worker()), binding("driver", driver()),
++            binding("tailDriver", driver(tail = true)))) { backend, p ->
++            val fn = p.entryValue("worker"); val stop = p.entryValue("stop"); val next = p.entryValue("next")
++            assertEquals(enabled, (p.entryTarget("worker").rootNode as GuestRoot).leadingCaseReturn != null)
++            repeat(25) { assertEquals(12L, run(p, "driver", fn, 11L, stop)); assertEquals(19L, run(p, "driver", fn, 11L, next)) }
++            repeat(10) { assertEquals(11L, run(p, "tailDriver", fn, 11L, stop)) }
++            assertEquals(0L, count(p), "$backend interpreter must retain ordinary calls")
++            compile(p.entryTarget("driver")); compile(p.entryTarget("tailDriver"))
++            val before = count(p)
++            for (value in listOf(Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_017L)) {
++                assertEquals(value + 1, run(p, "driver", fn, value, stop), backend)
++                assertEquals(value, run(p, "tailDriver", fn, value, stop), backend)
++            }
++            assertEquals(if (enabled) before + 6 else before, count(p), backend)
++            val hits = count(p)
++            assertEquals(19L, run(p, "driver", fn, 11L, next), backend)
++            assertEquals(0L, run(p, "driver", fn, 11L, p.entryValue("other")), backend)
++            assertEquals(hits, count(p), "$backend nonmatching layouts must execute the original case")
++        }
++    }
++
++    @Test fun unusedStrictFormalsAreForcedBeforeShortcutAndPapPrefixesOnlyAtSaturation() = each(bindings = listOf(
++        binding("worker", worker(extra = true, strictTree = true)), binding("driver", driver(extra = true)),
++        binding("saturate", lambda(listOf(parameter("fn", closure), parameter("unused", data)),
++            plus(apply(variable("fn"), listOf(variable("unused")), listOf(true)), integer(1)))))) { backend, p ->
++        val fn = p.entryValue("worker") as Closure; val stop = p.entryValue("stop")
++        repeat(25) {
++            assertEquals(12L, run(p, "driver", fn, 11L, stop, stop))
++            assertEquals(12L, run(p, "driver", fn, 11L, stop, thunk(stop)))
++        }
++        compile(p.entryTarget("driver"))
++        val delayed = thunk(stop); val before = count(p, "thunkEvaluations")
++        assertEquals(12L, run(p, "driver", fn, 11L, stop, delayed), backend)
++        assertEquals(before + 1, count(p, "thunkEvaluations")); assertEquals(2, delayed.state)
++        val hits = count(p)
++        assertThrows(RuntimeFault::class.java) { run(p, "driver", fn, 11L, stop, thunk(failure = true)) }
++        assertEquals(hits, count(p), "A throwing strict argument prevents the shortcut")
++        val prefix = thunk(stop)
++        val pap = fn.pap(arrayOf(31L, prefix))
++        assertEquals(0, prefix.state, "PAP allocation must remain lazy")
++        repeat(25) {
++            assertEquals(32L, run(p, "saturate", pap, stop))
++            assertEquals(32L, run(p, "saturate", fn.pap(arrayOf(31L, thunk(stop))), thunk(stop)))
++        }
++        compile(p.entryTarget("saturate"))
++        val fresh = thunk(stop); val freshPap = fn.pap(arrayOf(47L, fresh)); val freshUnused = thunk(stop)
++        val papHits = count(p)
++        assertEquals(48L, run(p, "saturate", freshPap, freshUnused), backend)
++        assertEquals(papHits + 1, count(p), "Both prefix and suffix are forced before a saturated PAP hit")
++        assertEquals(2, fresh.state); assertEquals(2, freshUnused.state)
++    }
++
++    @Test fun unmarkedThunkScrutineeFallsBackWhileMarkedScrutineeCanReturnAfterForcing() {
++        for (strict in listOf(false, true)) each(bindings = listOf(binding("worker", worker(strictTree = strict)), binding("driver", driver()))) { backend, p ->
++            val fn = p.entryValue("worker"); val stop = p.entryValue("stop")
++            repeat(25) {
++                assertEquals(12L, run(p, "driver", fn, 11L, stop))
++                assertEquals(12L, run(p, "driver", fn, 11L, thunk(stop)))
++            }
++            compile(p.entryTarget("driver"))
++            val delayed = thunk(stop); val before = count(p); val evaluations = count(p, "thunkEvaluations")
++            assertEquals(12L, run(p, "driver", fn, 11L, delayed), backend)
++            assertEquals(2, delayed.state); assertEquals(evaluations + 1, count(p, "thunkEvaluations"))
++            assertEquals(before + if (strict) 1 else 0, count(p), backend)
++        }
++    }
++
++    @Test fun capturedEnvironmentOffsetAndOverapplicationRemainCorrect() = each(bindings = listOf(
++        binding("factory", lambda(listOf(parameter("captured")), worker(captured = true), result = closure)),
++        binding("worker", worker()), binding("driver", driver()), binding("over", lambda(listOf(parameter("fn", closure), parameter("acc"), parameter("tree", data)),
++            apply(variable("fn"), listOf(variable("acc"), variable("tree"), integer(1)), listOf(false, true, false)))))) { backend, p ->
++        val fn = run(p, "factory", 100L) as Closure; val stop = p.entryValue("stop"); val next = p.entryValue("next")
++        assertNotNull(fn.environment)
++        assertEquals(2, (fn.target.rootNode as GuestRoot).entryArgumentOffset)
++        assertNull((fn.target.rootNode as GuestRoot).leadingCaseReturn, "Captured entry validation stays on the normal path")
++        repeat(25) { assertEquals(12L, run(p, "driver", fn, 11L, stop)); assertEquals(119L, run(p, "driver", fn, 11L, next)) }
++        compile(p.entryTarget("driver"))
++        val before = count(p)
++        assertEquals(Long.MAX_VALUE, run(p, "driver", fn, Long.MAX_VALUE - 1, stop), backend)
++        assertEquals(before, count(p))
++        // Returning an Int# does not make overapplication valid, even on the trivial arm.
++        val eligible = p.entryValue("worker")
++        repeat(20) { assertThrows(RuntimeFault::class.java) { run(p, "over", eligible, 11L, stop) } }
++        compile(p.entryTarget("over"))
++        // Throwing code may transfer to the interpreter before this compiled-only optimization.
++        // The continuation must still reject overapplication in either execution tier.
++        assertThrows(RuntimeFault::class.java) { run(p, "over", eligible, 11L, stop) }
++    }
++
++    @Test fun diagnosticReplacementCannotAcquireARecipeButAnUnsupportedColdBodyCan() {
++        val unsupportedCase = listOf("case", variable("tree"), "treeCase", listOf(
++            listOf("data", "Stop", emptyList<String>(), variable("acc")),
++            listOf("data", "Unsupported", emptyList<String>(), integer(0))), mapOf("rep" to long))
++        each(diagnostic = true, bindings = listOf(binding("broken", lambda(listOf(parameter("acc"), parameter("tree", data)), unsupportedCase)),
++            binding("cold", worker(coldBody = listOf("unsupported", "cold"))), binding("driver", driver()))) { backend, p ->
++            assertNull((p.entryTarget("broken").rootNode as GuestRoot).leadingCaseReturn, backend)
++            assertThrows(RuntimeFault::class.java) { run(p, "driver", p.entryValue("broken"), 11L, p.entryValue("stop")) }
++            val fn = p.entryValue("cold"); val stop = p.entryValue("stop")
++            assertNotNull((p.entryTarget("cold").rootNode as GuestRoot).leadingCaseReturn)
++            repeat(25) { assertEquals(12L, run(p, "driver", fn, 11L, stop)) }
++            compile(p.entryTarget("driver")); val before = count(p)
++            assertEquals(12L, run(p, "driver", fn, 11L, stop)); assertEquals(before + 1, count(p))
++            assertThrows(RuntimeFault::class.java) { run(p, "driver", fn, 11L, p.entryValue("next")) }
++        }
++    }
++
++    @Test fun otherUsedFormalValidationAndUnprovenResultsCannotBeSkipped() {
++        val base = worker(extra = true)
++        @Suppress("UNCHECKED_CAST")
++        val arms = ((base[2] as List<Any?>)[3] as List<List<Any?>>).toMutableList()
++        arms[1] = arms[1].toMutableList().also { it[3] = plus(variable("acc"), variable("unused")) }
++        val body = (base[2] as List<Any?>).toMutableList().also { it[3] = arms }
++        val used = lambda(listOf(parameter("acc"), parameter("tree", data), parameter("unused")), body)
++        val legacy = lambda(listOf(parameter("acc") - "rep", parameter("tree", data)), worker()[2] as List<Any?>)
++        each(bindings = listOf(binding("used", used), binding("legacy", legacy), binding("driver", driver(extra = true)))) { backend, p ->
++            assertNull((p.entryTarget("used").rootNode as GuestRoot).leadingCaseReturn, backend)
++            assertNull((p.entryTarget("legacy").rootNode as GuestRoot).leadingCaseReturn, backend)
++            val fn = p.entryValue("used"); val stop = p.entryValue("stop")
++            repeat(25) { assertEquals(12L, run(p, "driver", fn, 11L, stop, 3L)) }
++            compile(p.entryTarget("driver"))
++            val expected = if (backend == "ast") RuntimeFault::class.java else ClassCastException::class.java
++            assertThrows(expected) { run(p, "driver", fn, 11L, stop, "invalid primitive carrier") }
++            assertEquals(0L, count(p))
++        }
++    }
++
++    @Test fun sourceNotesAndClonedRecipesPreserveAttributionWithoutAddingRootEntries() {
++        for (notes in listOf(false, true)) each(notes = notes, bindings = listOf(binding("worker", worker()), binding("driver", driver()))) { backend, p ->
++            val fn = p.entryValue("worker") as Closure; val stop = p.entryValue("stop")
++            val root = fn.target.rootNode as GuestRoot
++            val recipe = requireNotNull(root.leadingCaseReturn)
++            assertEquals(if (notes) "acc" else null, recipe.source?.section?.characters?.toString(), backend)
++            if (notes) assertEquals(listOf("case", "arm"), recipe.source!!.notes.map { it.id })
++            val workerCaller = CloneCaller(fn.target)
++            val clonedWorker = workerCaller.cloneTarget()
++            assertSame(recipe, (clonedWorker.rootNode as GuestRoot).leadingCaseReturn)
++            assertEquals(11L, Calls.target(workerCaller.callTarget, arrayOf(0L, 11L, stop)))
++            repeat(25) { assertEquals(12L, run(p, "driver", fn, 11L, stop)) }
++            // Truffle clones belong to their originating DirectCallNode; do not create
++            // a new DirectCallNode targeting an already-cloned target.
++            val driverCaller = CloneCaller(p.entryTarget("driver"))
++            val clonedDriver = driverCaller.cloneTarget()
++            repeat(25) { assertEquals(12L, Calls.target(driverCaller.callTarget, arrayOf(0L, fn, 11L, stop))) }
++            val originalChildren = leadingNodes(p.entryTarget("driver").rootNode)
++            val children = leadingNodes(clonedDriver.rootNode)
++            assertTrue(children.isNotEmpty(), backend)
++            assertNotSame(originalChildren.single(), children.single())
++            assertEquals(if (notes) "acc" else null, children.single().sourceSection?.characters?.toString())
++            assertEquals(originalChildren.single().getCoreSourceNotes(), children.single().getCoreSourceNotes())
++            compile(clonedDriver); val hits = count(p); val entries = count(p, "compiledEntries")
++            assertEquals(12L, Calls.target(driverCaller.callTarget, arrayOf(0L, fn, 11L, stop)))
++            assertEquals(hits + 1, count(p))
++            assertEquals(entries + 1, count(p, "compiledEntries"), "Only the caller actually enters a guest root")
++        }
++    }
++}
+diff --git a/src/test/kotlin/thc/runtime/TypedCaseTest.kt b/src/test/kotlin/thc/runtime/TypedCaseTest.kt
+new file mode 100644
+index 0000000..fc1f758
+--- /dev/null
++++ b/src/test/kotlin/thc/runtime/TypedCaseTest.kt
+@@ -0,0 +1,150 @@
++package thc.runtime
++
++import com.oracle.truffle.api.RootCallTarget
++import com.oracle.truffle.api.TruffleLanguage
++import com.oracle.truffle.api.frame.VirtualFrame
++import com.oracle.truffle.api.nodes.RootNode
++import org.junit.jupiter.api.Assertions.*
++import org.junit.jupiter.api.Test
++import thc.Language
++import thc.executionContext
++
++private typealias CaseCore = List<Any?>
++
++class TypedCaseTest {
++    private val long = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
++    private fun reference(kind: String) = mapOf("kind" to kind,
++        "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to false)
++    private val data = reference("data")
++    private val closure = reference("closure")
++    private val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
++    private fun param(id: String, rep: Map<String, Any>? = null): Map<String, Any> = mapOf(
++        "id" to id, "name" to id, "lifted" to (rep !== long && rep !== address), "coercion" to false) +
++        (rep?.let { mapOf("rep" to it) } ?: emptyMap())
++    private fun variable(id: String): CaseCore = listOf("var", id)
++    private fun number(n: Long): CaseCore = listOf("lit", "int", n.toString())
++    private fun binding(id: String, body: CaseCore) = mapOf("id" to id, "name" to id, "lifted" to true, "expr" to body)
++    private fun lambda(args: List<Map<String, Any>>, body: CaseCore, result: Map<String, Any>? = long): CaseCore =
++        listOf("lam", args, body, mapOf("rep" to closure) + (result?.let { mapOf("resultRep" to it) } ?: emptyMap()))
++    private fun primitive(name: String, vararg args: CaseCore): CaseCore =
++        listOf("app", listOf("prim", name), args.toList(), List(args.size) { false })
++    private fun box(value: CaseCore): CaseCore = listOf("app", listOf("con", "Box", 1), listOf(value), listOf(false), true, true)
++    private fun arm(value: Long, body: CaseCore): CaseCore = listOf("lit", listOf("int", value.toString()), emptyList<String>(), body)
++    private fun otherwise(body: CaseCore): CaseCore = listOf("default", null, emptyList<String>(), body)
++    private fun dataArm(id: String, fields: List<String>, body: CaseCore): CaseCore = listOf("data", id, fields, body)
++    private fun case(scrutinee: CaseCore, binder: String, proof: Map<String, Any>?, alternatives: List<CaseCore>,
++                     result: Map<String, Any>? = long): CaseCore = listOf("case", scrutinee, binder, alternatives,
++        (proof?.let { mapOf("binder" to param(binder, it)) } ?: emptyMap()) +
++            (result?.let { mapOf("rep" to it) } ?: emptyMap()))
++    private fun compile(target: RootCallTarget) {
++        val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
++        type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
++        assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
++    }
++    private fun call(p: ExecutableProgram, id: String, vararg args: Any?): Any? =
++        Calls.target(p.hostEntryTarget(args.size), arrayOf(p.entryValue(id), arrayOf(*args)))
++
++    private fun each(action: (Boolean, String, ExecutableProgram) -> Unit) {
++        val previous = System.getProperty(TYPED_CASES_PROPERTY)
++        try {
++            for (enabled in listOf(false, true)) {
++                System.setProperty(TYPED_CASES_PROPERTY, enabled.toString())
++                executionContext().use { context ->
++                    context.initialize("thc"); context.enter()
++                    try {
++                        val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
++                        for (backend in listOf("ast", "bytecode")) {
++                            val module = mapOf("instrument" to true, "bindings" to fixtures(), "constructors" to listOf(
++                                mapOf("id" to "Box", "name" to "Box", "arity" to 1, "kind" to "boxed", "fieldReps" to listOf(listOf("IntRep")),
++                                    "fieldLifted" to listOf(false), "strictFields" to listOf(false)),
++                                mapOf("id" to "End", "name" to "End", "arity" to 0, "kind" to "boxed", "fieldReps" to emptyList<Any>(),
++                                    "fieldLifted" to emptyList<Boolean>(), "strictFields" to emptyList<Boolean>()),
++                                mapOf("id" to "Other", "name" to "Other", "arity" to 0, "kind" to "boxed", "fieldReps" to emptyList<Any>(),
++                                    "fieldLifted" to emptyList<Boolean>(), "strictFields" to emptyList<Boolean>())))
++                            action(enabled, backend, if (backend == "ast") Program(language, module) else BytecodeProgram(language, module))
++                        }
++                    } finally { context.leave() }
++                }
++            }
++        } finally {
++            if (previous == null) System.clearProperty(TYPED_CASES_PROPERTY) else System.setProperty(TYPED_CASES_PROPERTY, previous)
++        }
++    }
++
++    private fun fixtures(): List<Map<String, Any>> {
++        val select = primitive("+#", case(variable("input"), "whole", data, listOf(
++            dataArm("Box", listOf("payload"), case(variable("payload"), "n", long, listOf(
++                arm(-1, case(number(9), "unmatched", long, emptyList())), arm(Long.MIN_VALUE, primitive("+#", variable("n"), number(3))),
++                otherwise(primitive("+#", variable("n"), number(7)))))),
++            dataArm("End", emptyList(), number(99)), otherwise(number(-17)))), number(1))
++        fun identity(id: String, rep: Map<String, Any>) = binding(id, lambda(listOf(param("input")),
++            case(variable("input"), "whole", rep, listOf(otherwise(variable("whole"))), rep), rep))
++        return listOf(binding("make", lambda(listOf(param("n", long)), box(variable("n")), data)),
++            binding("end", listOf("con", "End", 0)), binding("other", listOf("con", "Other", 0)),
++            binding("select", lambda(listOf(param("input")), select)),
++            binding("partial", lambda(listOf(param("input")), case(variable("input"), "whole", data,
++                listOf(dataArm("Box", listOf("n"), variable("n")))))),
++            binding("generic", lambda(listOf(param("input")), case(variable("input"), "whole", null,
++                listOf(arm(0, number(11)), dataArm("End", emptyList(), number(12)), otherwise(number(13)))))),
++            binding("plus", lambda(listOf(param("n", long)), primitive("+#", variable("n"), number(5)))),
++            identity("dataIdentity", data), identity("functionIdentity", closure), identity("addressIdentity", address))
++    }
++
++    @Test fun typedCasesKeepWidePrimitiveResultsColdArmsAndGeneralCaseFallback() = each { enabled, backend, p ->
++        fun selected(value: Long): Any? = call(p, "select", call(p, "make", value))
++        repeat(30) { assertEquals(10L, selected(2)) }
++        compile(p.entryTarget("select"))
++        for (n in listOf(Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_017L, -3_000_000_017L))
++            assertEquals(if (n == Long.MIN_VALUE) n + 4 else n + 8, selected(n), "$enabled/$backend/$n")
++        assertEquals(100L, call(p, "select", call(p, "end")))
++        assertEquals(-16L, call(p, "select", call(p, "other")), "DATA is not proof of a particular constructor family")
++        assertEquals(11L, call(p, "generic", 0L)); assertEquals(12L, call(p, "generic", call(p, "end")))
++        assertEquals(13L, call(p, "generic", 5L)); assertEquals(13L, call(p, "generic", call(p, "other")))
++        val failure = assertThrows(RuntimeFault::class.java) { call(p, "partial", call(p, "end")) }
++        assertTrue(failure.message.orEmpty().contains("Non-exhaustive Core case"))
++        assertEquals(0L, p.diagnostics()["blackholes"])
++        repeat(2) {
++            val failureArm = assertThrows(RuntimeFault::class.java) { selected(-1) }
++            assertTrue(failureArm.message.orEmpty().contains("Non-exhaustive Core case"))
++        }
++        assertEquals(0L, p.diagnostics()["blackholes"])
++        if (backend == "ast") {
++            val names = mutableSetOf<String>()
++            p.entryTarget("select").rootNode.accept { names += it.javaClass.simpleName; true }
++            assertEquals(enabled, "DataCase" in names)
++            assertEquals(enabled, "LongCase" in names)
++        } else assertEquals(enabled, "MatchDataValue" in (p as BytecodeProgram).bytecodeDump())
++    }
++
++    @Test fun defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() = each { _, _, p ->
++        val value = call(p, "make", Long.MIN_VALUE)
++        val function = p.entryValue("plus")
++        val literal = LiteralAddress.fromHex("41ff")
++        repeat(30) {
++            assertSame(value, call(p, "dataIdentity", value))
++            assertSame(function, call(p, "functionIdentity", function))
++            assertSame(literal, call(p, "addressIdentity", literal))
++        }
++        for (id in listOf("dataIdentity", "functionIdentity", "addressIdentity")) compile(p.entryTarget(id))
++        assertSame(value, call(p, "dataIdentity", value)); assertSame(function, call(p, "functionIdentity", function))
++        assertSame(literal, call(p, "addressIdentity", literal))
++        var evaluations = 0
++        val target = object : RootNode(null) {
++            override fun execute(frame: VirtualFrame): Any? { evaluations++; return value }
++        }.callTarget
++        val thunk = Thunk(target, null)
++        repeat(2) { assertSame(value, call(p, "dataIdentity", thunk)) }
++        assertEquals(1, evaluations)
++        assertEquals(2, thunk.state)
++        assertNull(thunk.target)
++        val failed = Thunk(object : RootNode(null) {
++            override fun execute(frame: VirtualFrame): Nothing { evaluations++; throw RuntimeFault("case scrutinee failed") }
++        }.callTarget, null)
++        repeat(2) {
++            assertEquals("case scrutinee failed", assertThrows(RuntimeFault::class.java) {
++                call(p, "dataIdentity", failed)
++            }.message)
++        }
++        assertEquals(2, evaluations, "Default-only case still evaluates and memoizes a failing scrutinee")
++    }
++}

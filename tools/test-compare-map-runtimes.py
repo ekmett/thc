@@ -24,6 +24,17 @@ class HashCompatibilityTest(unittest.TestCase):
                     self.assertEqual(harness['sha256'](path), expected)
 
 
+class CompactHeaderDefaultsTest(unittest.TestCase):
+    def test_default_and_explicit_controls_preserve_order_without_mutating_input(self):
+        select = harness['compact_header_options']
+        ordinary = ['-Dthc.backend=bytecode']
+        self.assertEqual(select(ordinary), ['-XX:+UseCompactObjectHeaders', *ordinary])
+        self.assertEqual(ordinary, ['-Dthc.backend=bytecode'])
+        for options in (['-XX:-UseCompactObjectHeaders'], ['-XX:+UseCompactObjectHeaders'],
+                        ['-XX:+UseCompactObjectHeaders', '-XX:-UseCompactObjectHeaders']):
+            self.assertEqual(select(options), options)
+
+
 class PowerStatusTest(unittest.TestCase):
     def test_low_battery_discharging_with_reported_ac_power(self):
         raw = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=123)\t4%; discharging; (no estimate) present: true\n"

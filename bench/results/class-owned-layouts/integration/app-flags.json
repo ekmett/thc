@@ -1,0 +1,20 @@
+[
+  {
+    "name": "app-default",
+    "argv": [
+      "/private/tmp/thc-combined-defaults/build/install/thc/bin/thc"
+    ],
+    "JAVA_OPTS": "-XX:+PrintFlagsFinal -version",
+    "returncode": 0,
+    "flag": "     bool UseCompactObjectHeaders                  = true                           {product lp64_product} {command line}"
+  },
+  {
+    "name": "app-explicit-header-off",
+    "argv": [
+      "/private/tmp/thc-combined-defaults/build/install/thc/bin/thc"
+    ],
+    "JAVA_OPTS": "-XX:-UseCompactObjectHeaders -XX:+PrintFlagsFinal -version",
+    "returncode": 0,
+    "flag": "     bool UseCompactObjectHeaders                  = false                          {product lp64_product} {command line}"
+  }
+]

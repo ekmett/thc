@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: Standard matrix or one selected combination against all toggles off
+        description: Standard matrix, selected legacy toggles, or all experimental flags on
         type: choice
-        options: [standard, combined]
+        options: [standard, combined, all-on]
         default: standard
       constructor_class:
         description: Combined suite only — constructor class matching
@@ -99,6 +99,7 @@ jobs:
           set -euo pipefail
           scripts/try-map.sh 2>&1 | tee work/ci-performance/logs/current-build.log
           python3 tools/test-compare-map-runtimes.py
+          python3 tools/test-ci-performance.py
       - name: Build original runtime in isolated checkout
         if: inputs.suite == 'standard'
         shell: bash
@@ -122,20 +123,20 @@ jobs:
       - name: Full Map checks before timings
         if: inputs.suite == 'standard'
         run: python3 work/ci-performance/frozen/helpers/ci-performance.py check work/ci-performance
-      - name: Original bytecode versus current default bytecode
+      - name: Original bytecode versus class-owned compact baseline
         if: inputs.suite == 'standard'
         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison original-vs-current
-      - name: Checked storage with constructor class matching off versus on
+      - name: Layout-bearing checked storage with class matching off versus on
         if: inputs.suite == 'standard'
         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison constructor-class
-      - name: Constructor class matching with checked versus unchecked storage
+      - name: Layout-bearing class matching with checked versus unchecked storage
         if: inputs.suite == 'standard'
         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison owned-storage
       - name: Optional compact headers — full tests, Map check, sizes, then timing
         if: inputs.suite == 'standard'
         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compact work/ci-performance
-      - name: Combined options — full tests, both Map checks, then one comparison
-        if: inputs.suite == 'combined'
+      - name: Selected suite — full tests, both Map checks, then one comparison
+        if: inputs.suite == 'combined' || inputs.suite == 'all-on'
         run: python3 work/ci-performance/frozen/helpers/ci-performance.py combined work/ci-performance
       - name: Verify immutable inputs and summarize completed comparisons
         run: python3 work/ci-performance/frozen/helpers/ci-performance.py finish work/ci-performance

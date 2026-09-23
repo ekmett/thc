@@ -60,8 +60,12 @@ class StaticShapeSafetyTest {
                 assertEquals(listOf(2), DataValue::class.java.constructors.map { it.parameterCount })
                 assertEquals(listOf(2), CapturedFrame::class.java.constructors.map { it.parameterCount })
                 if (strategy == "array-based") {
-                    assertSame(value.javaClass, otherValue.javaClass,
+                    if (value is LayoutDataValue) assertSame(value.javaClass, otherValue.javaClass,
                         "Layout validation must work even when constructors share their carrier class")
+                    else {
+                        assertTrue(otherValue is LayoutDataValue)
+                        assertNotSame(value.javaClass, otherValue.javaClass)
+                    }
                     assertSame(environment.javaClass, otherEnvironment.javaClass)
                 }
 

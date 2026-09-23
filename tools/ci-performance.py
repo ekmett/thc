@@ -22,22 +22,35 @@ ORIGINAL = '4c116a8493eafad4077a1c5eb9c046bff56fe3c4'
 POLICY = ['-Dpolyglot.compiler.InliningRecursionDepth=2',
           '-Dpolyglot.compiler.InliningExpansionBudget=12000',
           '-Dpolyglot.compiler.InliningInliningBudget=12000']
+def runtime_flags(*, class_owned=True, constructor_class=False, unchecked=False,
+                  leading_case=False, typed_cases=False, boxed_cache=False, compact=True):
+    """Freeze every current experimental toggle; defaults must not change controls."""
+    values = {'classOwnedLayouts': class_owned, 'constructorClassIdentity': constructor_class,
+              'staticShapeUnchecked': unchecked, 'leadingCaseReturn': leading_case,
+              'typedCases': typed_cases, 'boxedValueCache': boxed_cache}
+    return ['-Dthc.' + name + '=' + str(value).lower() for name, value in values.items()] + [
+        '-XX:' + ('+' if compact else '-') + 'UseCompactObjectHeaders']
+
+
 CONFIGURATIONS = {
-    'original': ('original', []),
-    'current-default': ('current', []),
-    'checked-class-off': ('current', ['-Dthc.staticShapeUnchecked=false', '-Dthc.constructorClassIdentity=false']),
-    'checked-class-on': ('current', ['-Dthc.staticShapeUnchecked=false', '-Dthc.constructorClassIdentity=true']),
-    'unchecked-class-on': ('current', ['-Dthc.staticShapeUnchecked=true', '-Dthc.constructorClassIdentity=true']),
-    'compact-checked-class-off': ('current', ['-Dthc.staticShapeUnchecked=false', '-Dthc.constructorClassIdentity=false', '-XX:+UseCompactObjectHeaders']),
+    'original': ('original', ['-XX:+UseCompactObjectHeaders']),
+    'class-owned-baseline': ('current', runtime_flags()),
+    # Class-owned matching bypasses constructorClassIdentity. Its isolated ablation
+    # deliberately retains per-object layout storage in both configurations.
+    'layout-bearing-class-off': ('current', runtime_flags(class_owned=False)),
+    'layout-bearing-class-on': ('current', runtime_flags(class_owned=False, constructor_class=True)),
+    'layout-bearing-unchecked-class-on': ('current', runtime_flags(class_owned=False, constructor_class=True, unchecked=True)),
+    'class-owned-noncompact': ('current', runtime_flags(compact=False)),
 }
 COMPARISONS = {
-    'original-vs-current': ('original', 'current-default'),
-    'constructor-class': ('checked-class-off', 'checked-class-on'),
-    'owned-storage': ('checked-class-on', 'unchecked-class-on'),
-    'compact-headers': ('checked-class-off', 'compact-checked-class-off'),
+    'original-vs-current': ('original', 'class-owned-baseline'),
+    'constructor-class': ('layout-bearing-class-off', 'layout-bearing-class-on'),
+    'owned-storage': ('layout-bearing-class-on', 'layout-bearing-unchecked-class-on'),
+    'compact-headers': ('class-owned-noncompact', 'class-owned-baseline'),
 }
 REQUIRED_COMPARISONS = tuple(name for name in COMPARISONS if name != 'compact-headers')
-REQUIRED_CONFIGURATIONS = tuple(name for name in CONFIGURATIONS if not name.startswith('compact-'))
+REQUIRED_CONFIGURATIONS = tuple(dict.fromkeys(
+    config for name in REQUIRED_COMPARISONS for config in COMPARISONS[name]))
 
 
 def sha(path):
@@ -62,22 +75,32 @@ def selected_suite(args):
     suite = args.suite or 'standard'
     options = {name: getattr(args, name) == 'true'
                for name in ('constructor_class', 'unchecked', 'compact_headers')}
+    if suite in ('standard', 'all-on') and any(options.values()):
+        raise ValueError('Combination flags require --suite combined')
     if suite == 'standard':
-        if any(options.values()):
-            raise ValueError('Combination flags require --suite combined')
         configurations, comparisons = CONFIGURATIONS, COMPARISONS
         required_configs, required_comparisons = REQUIRED_CONFIGURATIONS, REQUIRED_COMPARISONS
-    else:
+    elif suite == 'combined':
         if not any(options.values()):
             raise ValueError('Combined suite requires at least one selected flag')
-        def flags(values):
-            return ['-Dthc.constructorClassIdentity=' + str(values['constructor_class']).lower(),
-                    '-Dthc.staticShapeUnchecked=' + str(values['unchecked']).lower(),
-                    '-XX:' + ('+' if values['compact_headers'] else '-') + 'UseCompactObjectHeaders']
-        configurations = {'current-default': ('current', flags(dict.fromkeys(options, False))),
-                          'selected-combination': ('current', flags(options))}
-        comparisons = {'combined': ('current-default', 'selected-combination')}
+        configurations = {
+            'combination-control': ('current', runtime_flags(compact=False)),
+            'selected-combination': ('current', runtime_flags(
+                constructor_class=options['constructor_class'], unchecked=options['unchecked'],
+                compact=options['compact_headers']))}
+        comparisons = {'combined': ('combination-control', 'selected-combination')}
         required_configs, required_comparisons = tuple(configurations), tuple(comparisons)
+    elif suite == 'all-on':
+        options = dict.fromkeys(('class_owned', 'constructor_class', 'unchecked',
+                                'leading_case', 'typed_cases', 'boxed_cache', 'compact_headers'), True)
+        configurations = {
+            'class-owned-baseline': CONFIGURATIONS['class-owned-baseline'],
+            'all-on': ('current', runtime_flags(constructor_class=True, unchecked=True,
+                                              leading_case=True, typed_cases=True, boxed_cache=True))}
+        comparisons = {'all-on': ('class-owned-baseline', 'all-on')}
+        required_configs, required_comparisons = tuple(configurations), tuple(comparisons)
+    else:
+        raise ValueError('Unknown suite: ' + str(suite))
     return {'suite': suite, 'selectedOptions': options, 'configurations': configurations,
             'comparisons': comparisons, 'requiredConfigurations': required_configs,
             'requiredComparisons': required_comparisons}
@@ -104,7 +127,7 @@ def freeze(out, baseline, selection):
         for path in libraries:
             copy_file(path, frozen / name / 'lib' / path.name)
         shutil.copytree(checkout / 'src/main', frozen / name / 'src/main')
-    if selection['suite'] == 'combined':
+    if selection['suite'] != 'standard':
         shutil.copytree(root / 'src/test', frozen / 'current/src/test')
     write_json(frozen / 'suite.json', dict(selection, currentCommit=revision(root)))
     source_manifest = root / 'build/map/modules.txt'
@@ -198,17 +221,22 @@ def run(out, command, name, timeout, environment=None):
     return out / record['log']
 
 
-def check_configuration(out, java, name):
+def check_configuration(out, java, name, compact_control=None):
     frozen = out / 'frozen'
     runtime, flags = suite_config(out)['configurations'][name]
+    flags = list(flags)
+    suffix = ""
+    if compact_control is not None:
+        flags.append('-XX:' + ('+' if compact_control else '-') + 'UseCompactObjectHeaders')
+        suffix = '-compact-on' if compact_control else '-compact-off'
     expected = [line.split('\t') for line in (frozen / 'map/oracle.tsv').read_text().splitlines() if line]
     assert len(expected) == 18, 'Expected the full 18-input Map oracle'
     verify(out)
-    command = [java, '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
+    command = [java, '-XX:+UseCompactObjectHeaders', '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
                '-Dthc.backend=bytecode', '-Dthc.diagnosticUnsupported=true', '-Dthc.sourceNotesEnabled=true',
                '-Dthc.traceCompilation=true', '-cp', str(frozen / runtime / 'lib/*'), 'thc.MapCheckKt',
                frozen / 'map/modules.txt', frozen / 'map/oracle.tsv']
-    log = run(out, command, 'check-' + name, 600)
+    log = run(out, command, 'check-' + name + suffix, 600)
     lines = log.read_text().splitlines()
     for phase in ('before-requested-compilation', 'after-requested-compilation'):
         actual = [line.split('\t')[2:] for line in lines if line.startswith('VERIFIED_MAP\t' + phase + '\t')]
@@ -216,7 +244,7 @@ def check_configuration(out, java, name):
     diagnostics = json.loads(next(line.removeprefix('MAP_DIAGNOSTICS ') for line in lines if line.startswith('MAP_DIAGNOSTICS ')))
     assert diagnostics['backend'] == 'bytecode' and diagnostics['unsupportedTraps'] == 0
     assert diagnostics['sourceNotesEnabled'] is True and diagnostics['sourceRootCount'] > 0
-    return {'configuration': name, 'beforeRows': 18, 'afterRows': 18, 'diagnostics': diagnostics}
+    return {'configuration': name, 'compactControl': compact_control, 'beforeRows': 18, 'afterRows': 18, 'diagnostics': diagnostics}
 
 
 def check(out, java):
@@ -233,15 +261,13 @@ def compare(out, name, java_home):
     assert checks['passed'] is True, 'All Map configurations must pass before timing'
     if name == 'compact-headers':
         assert json.loads((out / 'compact-status.json').read_text())['readyToTime'] is True
-    elif name == 'combined':
+    elif name in ('combined', 'all-on'):
         assert json.loads((out / 'combined-status.json').read_text())['compatibilityPassed'] is True
     verify(out)
     frozen = out / 'frozen'
     selection = suite_config(out)
     left, right = selection['comparisons'][name]
     baseline, baseline_flags = selection['configurations'][left]
-    if name == 'compact-headers':
-        baseline_flags = baseline_flags + ['-XX:-UseCompactObjectHeaders']
     candidate, candidate_flags = selection['configurations'][right]
     config = json.loads((out / 'run.json').read_text())
     command = [sys.executable, frozen / 'helpers/compare-map-runtimes.py',
@@ -269,7 +295,12 @@ def full_tests(out, name, flags):
         shutil.rmtree(source)
     totals = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
     try:
-        run(out, [root / 'scripts/gradle.sh', '--no-daemon', 'test', '--rerun'],
+        compact = True
+        for flag in flags:
+            if flag == '-XX:+UseCompactObjectHeaders': compact = True
+            elif flag == '-XX:-UseCompactObjectHeaders': compact = False
+        run(out, [root / 'scripts/gradle.sh', '--no-daemon',
+                  '-Pthc.compactObjectHeaders=' + str(compact).lower(), 'test', '--rerun'],
             name + '-full-tests', 1500, {'JAVA_TOOL_OPTIONS': ' '.join(flags)})
     finally:
         if source.exists():
@@ -296,8 +327,10 @@ def verify_test_sources(out):
 
 def combined(out, java_home):
     selection = suite_config(out)
-    assert selection['suite'] == 'combined', 'Combined action requires the combined suite'
-    status = {'selectedOptions': selection['selectedOptions'], 'configurations': selection['configurations'],
+    assert selection['suite'] in ('combined', 'all-on'), 'Selected action requires combined or all-on suite'
+    comparison, = selection['requiredComparisons']
+    _, candidate = selection['comparisons'][comparison]
+    status = {'suite': selection['suite'], 'comparison': comparison, 'selectedOptions': selection['selectedOptions'], 'configurations': selection['configurations'],
               'compatibilityPassed': False, 'timingAccepted': False, 'stage': 'full-tests'}
     status_path = out / 'combined-status.json'
     write_json(status_path, status)
@@ -305,7 +338,7 @@ def combined(out, java_home):
         verify(out)
         verify_test_sources(out)
         try:
-            status['tests'] = full_tests(out, 'combined', selection['configurations']['selected-combination'][1])
+            status['tests'] = full_tests(out, 'combined', selection['configurations'][candidate][1])
         finally:
             verify_test_sources(out)
         status['stage'] = 'full-map-check'
@@ -314,7 +347,7 @@ def combined(out, java_home):
         status['mapChecks'] = json.loads((out / 'checks.json').read_text())['configurations']
         status.update(compatibilityPassed=True, stage='timing')
         write_json(status_path, status)
-        compare(out, 'combined', java_home)
+        compare(out, comparison, java_home)
         status.update(timingAccepted=True, stage='complete')
     except Exception as error:
         status['error'] = str(error)
@@ -342,10 +375,13 @@ def compact(out, java_home):
     config = json.loads((out / 'run.json').read_text())
     root, frozen = Path(config['repository']), out / 'frozen'
     try:
-        status['tests'] = full_tests(out, 'compact', ['-XX:+UseCompactObjectHeaders'])
+        # Header-off is now an explicit control, so validate it separately too.
+        status['baselineTests'] = full_tests(out, 'compact-baseline', CONFIGURATIONS['class-owned-noncompact'][1])
+        status['tests'] = full_tests(out, 'compact', CONFIGURATIONS['class-owned-baseline'][1])
         status['stage'] = 'full-map-check'
         write_json(status_path, status)
-        status['mapCheck'] = check_configuration(out, java_home / 'bin/java', 'compact-checked-class-off')
+        status['baselineMapCheck'] = check_configuration(out, java_home / 'bin/java', 'class-owned-noncompact')
+        status['mapCheck'] = check_configuration(out, java_home / 'bin/java', 'class-owned-baseline')
         status['stage'] = 'object-sizes'
         write_json(status_path, status)
         # The published cold probe expects lib/, src/, map/, and a manifest under one root.
@@ -361,7 +397,7 @@ def compact(out, java_home):
         write_json(probe / 'manifest.json', {'files': records})
         command = [sys.executable, frozen / 'helpers/object-sizes.py', probe,
                    out / 'compact-object-sizes', '--java-home', java_home, '--backend', 'bytecode']
-        command += ['--jvm-option=' + flag for flag in CONFIGURATIONS['compact-checked-class-off'][1]]
+        command += ['--jvm-option=' + flag for flag in CONFIGURATIONS['class-owned-baseline'][1]]
         run(out, command, 'compact-object-sizes', 180)
         sizes = (out / 'compact-object-sizes/sizes.out').read_text()
         assert 'VM_OPTION\tUseCompactObjectHeaders\ttrue' in sizes, 'Compact object headers were not active'
@@ -416,8 +452,8 @@ def main():
     parser.add_argument('action', choices=('validate', 'freeze', 'check', 'compare', 'compact', 'combined', 'finish'))
     parser.add_argument('out', type=Path)
     parser.add_argument('--baseline-checkout', type=Path)
-    parser.add_argument('--comparison', choices=(*COMPARISONS, 'combined'))
-    parser.add_argument('--suite', choices=('standard', 'combined'))
+    parser.add_argument('--comparison', choices=(*COMPARISONS, 'combined', 'all-on'))
+    parser.add_argument('--suite', choices=('standard', 'combined', 'all-on'))
     for flag in ('constructor-class', 'unchecked', 'compact-headers'):
         parser.add_argument('--' + flag, choices=('false', 'true'))
     args = parser.parse_args()

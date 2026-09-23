@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.OperandRetentionTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:53:00.844Z" hostname="eak-mba" time="0.002">
+  <properties/>
+  <testcase name="joinTransferReleasesCompletedOperandsButDoesNotMoveOrClearOnOperandFailure()" classname="thc.runtime.OperandRetentionTest" time="0.001"/>
+  <testcase name="selfTransferReleasesEveryOperandIncludingUnusedFormalsWithoutWideningSlots()" classname="thc.runtime.OperandRetentionTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

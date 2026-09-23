@@ -58,8 +58,14 @@ class ConstructorClassIdentityTest {
                 }
                 assertThrows(RuntimeFault::class.java) { DataValue(first, Any()) }
                 if (strategy == "array-based") {
-                    assertSame(a.javaClass, b.javaClass)
-                    assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
+                    if (a is LayoutDataValue) {
+                        assertSame(a.javaClass, b.javaClass)
+                        assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
+                    } else {
+                        assertTrue(b is LayoutDataValue)
+                        assertNotSame(a.javaClass, b.javaClass)
+                        assertTrue(proof(first).isExclusive()); assertTrue(proof(second).isExclusive())
+                    }
                 }
             }
         }
@@ -70,7 +76,7 @@ class ConstructorClassIdentityTest {
         override fun getName(): String = "constructor class match"
     }
 
-    @Test fun compiledMatchDeoptimizesBeforeASecondSharedClassOwnerPublishesValues() = matching(true) {
+    @Test fun compiledMatchTracksPermanentOrInvalidatableClassOwnership() = matching(true) {
         context("array-based") { language ->
             val first = DataLayout(language, "First", "First", arrayOf("IntRep"))
             val a = first.create(arrayOf(3_000_000_017L))
@@ -85,10 +91,17 @@ class ConstructorClassIdentityTest {
             // the earlier enabled proof, before even its first value is published.
             lateinit var second: DataLayout
             matching(false) { second = DataLayout(language, "Second", "Second", arrayOf("IntRep")) }
-            assertFalse(valid(target), "Compiled class-only matching must depend on exclusive ownership")
-            assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
             val b = second.create(arrayOf(Long.MAX_VALUE))
-            assertSame(a.javaClass, b.javaClass)
+            if (a is LayoutDataValue) {
+                assertFalse(valid(target), "Compiled shared-class matching must depend on exclusive ownership")
+                assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
+                assertSame(a.javaClass, b.javaClass)
+            } else {
+                assertTrue(valid(target), "A permanent owner keeps its class when a second layout falls back")
+                assertTrue(proof(first).isExclusive()); assertTrue(proof(second).isExclusive())
+                assertTrue(b is LayoutDataValue)
+                assertNotSame(a.javaClass, b.javaClass)
+            }
             assertFalse(matches(b)); assertTrue(matches(a))
             compile(target)
             assertFalse(matches(b)); assertTrue(matches(a))

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.StaticShapeSafetyTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:22.935Z" hostname="eak-mba" time="0.009">
+  <properties/>
+  <testcase name="ownedStorageRejectsForgedKeysAndCrossLayoutAccessInBothStrategies()" classname="thc.runtime.StaticShapeSafetyTest" time="0.008"/>
+  <testcase name="engineCanForceChecksDespiteThePerShapeExperiment()" classname="thc.runtime.StaticShapeSafetyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -133,7 +133,13 @@ class BoxedValueCacheTest {
                     assertTrue(first.matches(value)); assertFalse(first.matches(other))
                     assertTrue(second.matches(other)); assertFalse(second.matches(value))
                     assertThrows(RuntimeFault::class.java) { second.readLong(value, 0) }
-                    if (strategy == "array-based") assertSame(value.javaClass, other.javaClass)
+                    if (strategy == "array-based") {
+                        if (value is LayoutDataValue) assertSame(value.javaClass, other.javaClass)
+                        else {
+                            assertTrue(other is LayoutDataValue)
+                            assertNotSame(value.javaClass, other.javaClass)
+                        }
+                    }
                 }
                 context(strategy) { language ->
                     val another = layout(language, builtins[0])

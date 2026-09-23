@@ -34,16 +34,22 @@ class DataLayout(
 ) {
     init { require(referenceTypes.size == fieldReps.size) }
     @CompilationFinal(dimensions = 1)
-    private val fields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
-    val arity: Int = fields.size
+    private val fields: Array<Field>
+    val arity: Int = fieldReps.size
     // Only this layout's private factory path can authorize a storage object.
     // The key is checked by the superclass constructor and never retained there.
     private val allocationKey = Any()
 
-    private val shape = StaticShape.newBuilder(language).also { builder ->
-        builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
-        fields.forEach { it.register(builder) }
-    }.build(DataValue::class.java, DataValueFactory::class.java)
+    private val shape: StaticShape<DataValueFactory>
+    // The permanent class token is distinct from the allocation authentication key.
+    private val classOwnerToken = Any()
+    private val ownedCarrier: Class<*>?
+
+    private fun buildShape(language: TruffleLanguage<*>, properties: Array<Field>, fieldless: Boolean): StaticShape<DataValueFactory> =
+        StaticShape.newBuilder(language).also { builder ->
+            builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
+            properties.forEach { it.register(builder) }
+        }.build(if (fieldless) DataValue::class.java else LayoutDataValue::class.java, DataValueFactory::class.java)
 
     private val classIdentityEnabled = java.lang.Boolean.getBoolean(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
     private val constructorClass: ConstructorClassIdentity
@@ -54,9 +60,23 @@ class DataLayout(
     internal val hasBoxedValueCache: Boolean get() = boxedValues != null
 
     init {
-        // Register checked/off-mode layouts too: a later enabled layout must
-        // discover all prior owners of a shared array-storage carrier class.
-        val sample = shape.factory.create(this, allocationKey)
+        val requested = java.lang.Boolean.parseBoolean(System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY, "true"))
+        var chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
+        var chosenShape = buildShape(language, chosenFields, requested)
+        var sample = chosenShape.factory.create(this, allocationKey)
+        val reserved = requested && ClassOwnedLayouts.reserve(sample.javaClass, classOwnerToken)
+        if (requested && !reserved) {
+            // A shared array carrier already belongs to another layout. Its old
+            // pointer-free values remain valid; this layout takes a separate
+            // superclass with an explicit owner field before publishing values.
+            // StaticProperty instances are shape-specific and cannot be reused.
+            chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
+            chosenShape = buildShape(language, chosenFields, false)
+            sample = chosenShape.factory.create(this, allocationKey)
+        }
+        fields = chosenFields
+        shape = chosenShape
+        ownedCarrier = if (reserved) sample.javaClass else null
         constructorClass = ConstructorClassIdentity(sample.javaClass)
         nullaryValue = if (arity == 0) sample else null
         val range = if (!java.lang.Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) || fieldReps.size != 1) null
@@ -71,17 +91,32 @@ class DataLayout(
             // Every value owns its storage under both StaticShape strategies.
             Array((it.last - it.first + 1).toInt()) { index ->
                 val value = shape.factory.create(this, allocationKey)
-                constructorClass.observe(value.javaClass)
+                checkAllocated(value)
                 fields[0].initializeLong(value, boxedValueMinimum + index)
                 value
             }
         }
+        if (ownedCarrier != null) ClassOwnedLayouts.publish(ownedCarrier, classOwnerToken, this)
+    }
+
+    /** Expected-layout operations use these guards, never a generic class lookup. */
+    private fun owns(value: Any?): Boolean = if (ownedCarrier != null)
+        value != null && value.javaClass === ownedCarrier
+    else value is LayoutDataValue && value.layout === this
+
+    private fun checkAllocated(value: DataValue) {
+        // An unexpected new carrier cannot escape and acquire an ambiguous cold
+        // identity. The old layout-carrying path retains its original fallback.
+        if (ownedCarrier != null && value.javaClass !== ownedCarrier)
+            fault("Unexpected carrier for class-owned constructor layout")
+        constructorClass.observe(value.javaClass)
     }
 
     fun matches(value: Any?): Boolean {
+        if (ownedCarrier != null) return owns(value)
         if (classIdentityEnabled && constructorClass.isExclusive())
             return value != null && value.javaClass === constructorClass.carrier
-        return value is DataValue && value.layout === this
+        return owns(value)
     }
 
     internal fun checkAllocationKey(key: Any?) {
@@ -113,25 +148,25 @@ class DataLayout(
     /** Keep the value private until every final field has been initialized exactly once. */
     internal fun allocate(): DataValue {
         val value = nullaryValue ?: shape.factory.create(this, allocationKey)
-        constructorClass.observe(value.javaClass)
+        checkAllocated(value)
         return value
     }
 
     internal fun initialize(value: DataValue, index: Int, field: Any?) {
-        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].initialize(value, field)
     }
 
     /** A primitive producer can initialize its property without an Object-array bridge. */
     internal fun initializeLong(value: DataValue, index: Int, field: Long) {
-        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].initializeLong(value, field)
     }
 
     fun read(value: DataValue, index: Int): Any? {
-        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         return fields[index].read(value)
     }
@@ -142,21 +177,21 @@ class DataLayout(
     }
 
     fun readLong(value: DataValue, index: Int): Long {
-        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         return fields[index].readLong(value)
     }
 
     /** Keep primitive property reads next to indexed frame writes, as Cadenza does. */
     fun restore(value: DataValue, index: Int, frame: Frame, slot: Int) {
-        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         fields[index].restore(value, frame, slot)
     }
 
     @TruffleBoundary
     internal fun describe(value: DataValue): String {
-        if (value.layout !== this) fault("Constructor value does not match layout")
+        if (!owns(value)) fault("Constructor value does not match layout")
         if (arity == 0) return name
         return fields.indices.joinToString(prefix = "$name[", postfix = "]") { index ->
             val field = read(value, index)
@@ -229,11 +264,19 @@ class DataLayout(
 }
 
 /** Public superclass for Truffle's generated storage classes; no generic payload array. */
-open class DataValue(val layout: DataLayout, allocationKey: Any?) :
+open class DataValue(layout: DataLayout, allocationKey: Any?) :
     ValidatedStorage(layout.checkAllocationKey(allocationKey)) {
+    // Concrete getter: StaticShape deliberately rejects abstract superclass methods.
+    open val layout: DataLayout
+        @TruffleBoundary get() = ClassOwnedLayouts.resolve(javaClass)
+
     @TruffleBoundary
     override fun toString(): String = layout.describe(this)
 }
+
+/** Default representation and shared-carrier fallback. The fieldless base has no fields. */
+open class LayoutDataValue(final override val layout: DataLayout, allocationKey: Any?) :
+    DataValue(layout, allocationKey)
 
 /** Must match the public DataValue superclass constructor exactly. */
 interface DataValueFactory {

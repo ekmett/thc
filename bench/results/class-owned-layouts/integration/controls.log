@@ -1,0 +1,3 @@
+{'name': 'owned-off', 'argv': ['scripts/gradle.sh', '--no-daemon', 'test', '--rerun'], 'JAVA_TOOL_OPTIONS': ['-Dthc.classOwnedLayouts=false'], 'returncode': 0, 'totals': {'tests': 167, 'failures': 0, 'errors': 0, 'skipped': 0}}
+{'name': 'headers-off-focused', 'argv': ['scripts/gradle.sh', '--no-daemon', 'test', '--rerun', '-Pthc.compactObjectHeaders=false', '--tests', 'thc.runtime.ClassOwnedLayoutTest'], 'JAVA_TOOL_OPTIONS': [], 'returncode': 0, 'totals': {'tests': 5, 'failures': 0, 'errors': 0, 'skipped': 0}}
+ALL CONTROLS PASSED

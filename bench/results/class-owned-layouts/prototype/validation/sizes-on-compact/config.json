@@ -1,0 +1,595 @@
+{
+  "recordedAtUtc": "2026-09-23T08:17:44.948745+00:00",
+  "scope": "Load-only shallow object sizes; no workload timing or guest compilation",
+  "backend": "bytecode",
+  "jvmOptions": [
+    "-Dthc.classOwnedLayouts=true",
+    "-XX:+UseCompactObjectHeaders"
+  ],
+  "frozenManifest": {
+    "base": "e9c3db9f2c8710f65281ee10e1521a25de7a7566",
+    "createdAtUtc": "2026-09-23T08:17:40.853101+00:00",
+    "status": "Isolated class-owned-layout prototype; default false; validated source and libraries; no throughput claim",
+    "testResults": {
+      "startedAtUtc": "2026-09-23T08:15:48.388556+00:00",
+      "base": "e9c3db9f2c8710f65281ee10e1521a25de7a7566",
+      "runs": [
+        {
+          "name": "default",
+          "argv": [
+            "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+            "test",
+            "installDist",
+            "--no-daemon"
+          ],
+          "javaToolOptions": "-Dthc.classOwnedLayouts=false",
+          "startedAtUtc": "2026-09-23T08:15:48.388982+00:00",
+          "returncode": 0,
+          "endedAtUtc": "2026-09-23T08:16:23.433937+00:00",
+          "tests": {
+            "tests": 157,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        {
+          "name": "owned",
+          "argv": [
+            "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+            "test",
+            "--rerun",
+            "--no-daemon"
+          ],
+          "javaToolOptions": "-Dthc.classOwnedLayouts=true",
+          "startedAtUtc": "2026-09-23T08:16:23.448834+00:00",
+          "returncode": 0,
+          "endedAtUtc": "2026-09-23T08:16:35.739205+00:00",
+          "tests": {
+            "tests": 157,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        {
+          "name": "owned-compact-checked",
+          "argv": [
+            "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+            "test",
+            "--rerun",
+            "--no-daemon"
+          ],
+          "javaToolOptions": "-Dthc.classOwnedLayouts=true -Dthc.constructorClassIdentity=true -Dthc.boxedValueCache=true -XX:+UseCompactObjectHeaders",
+          "startedAtUtc": "2026-09-23T08:16:35.748636+00:00",
+          "returncode": 0,
+          "endedAtUtc": "2026-09-23T08:16:48.804554+00:00",
+          "tests": {
+            "tests": 157,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        {
+          "name": "owned-compact-unchecked",
+          "argv": [
+            "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+            "test",
+            "--rerun",
+            "--no-daemon"
+          ],
+          "javaToolOptions": "-Dthc.classOwnedLayouts=true -Dthc.constructorClassIdentity=true -Dthc.boxedValueCache=true -Dthc.staticShapeUnchecked=true -XX:+UseCompactObjectHeaders",
+          "startedAtUtc": "2026-09-23T08:16:48.815730+00:00",
+          "returncode": 0,
+          "endedAtUtc": "2026-09-23T08:17:02.837001+00:00",
+          "tests": {
+            "tests": 157,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          }
+        },
+        {
+          "name": "DataValue-bytecode",
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javap",
+            "-p",
+            "-c",
+            "-classpath",
+            "/Users/ekmett/thc/work/class-owned-layout-prototype/build/classes/kotlin/main",
+            "thc.runtime.DataValue"
+          ],
+          "javaToolOptions": "",
+          "startedAtUtc": "2026-09-23T08:17:02.847447+00:00",
+          "returncode": 0,
+          "endedAtUtc": "2026-09-23T08:17:03.004689+00:00"
+        },
+        {
+          "name": "LayoutDataValue-bytecode",
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javap",
+            "-p",
+            "-c",
+            "-classpath",
+            "/Users/ekmett/thc/work/class-owned-layout-prototype/build/classes/kotlin/main",
+            "thc.runtime.LayoutDataValue"
+          ],
+          "javaToolOptions": "",
+          "startedAtUtc": "2026-09-23T08:17:03.005095+00:00",
+          "returncode": 0,
+          "endedAtUtc": "2026-09-23T08:17:03.142373+00:00"
+        },
+        {
+          "name": "ClassOwnedLayouts-bytecode",
+          "argv": [
+            "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javap",
+            "-p",
+            "-c",
+            "-classpath",
+            "/Users/ekmett/thc/work/class-owned-layout-prototype/build/classes/kotlin/main",
+            "thc.runtime.ClassOwnedLayouts"
+          ],
+          "javaToolOptions": "",
+          "startedAtUtc": "2026-09-23T08:17:03.142786+00:00",
+          "returncode": 0,
+          "endedAtUtc": "2026-09-23T08:17:03.284061+00:00"
+        }
+      ]
+    },
+    "files": [
+      {
+        "path": "lib/annotations-13.0.jar",
+        "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+      },
+      {
+        "path": "lib/collections-25.3.4.1.jar",
+        "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+      },
+      {
+        "path": "lib/jniutils-25.3.4.1.jar",
+        "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+      },
+      {
+        "path": "lib/kotlin-stdlib-2.4.20.jar",
+        "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+      },
+      {
+        "path": "lib/nativeimage-25.3.4.1.jar",
+        "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+      },
+      {
+        "path": "lib/polyglot-25.3.4.1.jar",
+        "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+      },
+      {
+        "path": "lib/thc-0.1-experiment.jar",
+        "sha256": "1d51bca562a5f7848cd2f9b88cde6102e00509760bf2a70713f0afedc4fcb192"
+      },
+      {
+        "path": "lib/truffle-api-25.3.4.1.jar",
+        "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+      },
+      {
+        "path": "lib/truffle-compiler-25.3.4.1.jar",
+        "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+      },
+      {
+        "path": "lib/truffle-runtime-25.3.4.1.jar",
+        "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+      },
+      {
+        "path": "lib/word-25.3.4.1.jar",
+        "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+      },
+      {
+        "path": "map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49"
+      },
+      {
+        "path": "map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1"
+      },
+      {
+        "path": "map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e"
+      },
+      {
+        "path": "map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452"
+      },
+      {
+        "path": "map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352"
+      },
+      {
+        "path": "map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef"
+      },
+      {
+        "path": "map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925"
+      },
+      {
+        "path": "map/07-Data.Set.Internal.json",
+        "sha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac"
+      },
+      {
+        "path": "map/08-Data.Map.Internal.json",
+        "sha256": "8fe30a776467f3cf86391aa03a470a6c554c9382b09f5d8a377cbf2c717225fc"
+      },
+      {
+        "path": "map/09-Data.Map.Internal.Debug.json",
+        "sha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d"
+      },
+      {
+        "path": "map/10-Data.Map.Strict.Internal.json",
+        "sha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b"
+      },
+      {
+        "path": "map/11-Data.Map.Strict.json",
+        "sha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0"
+      },
+      {
+        "path": "map/12-THC.MapWorkload.json",
+        "sha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7"
+      },
+      {
+        "path": "map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+      },
+      {
+        "path": "map/14-GHC.Internal.CString.json",
+        "sha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e"
+      },
+      {
+        "path": "map/15-GHC.Internal.Err.json",
+        "sha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16"
+      },
+      {
+        "path": "map/16-GHC.InterfaceClosure.json",
+        "sha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438"
+      },
+      {
+        "path": "map/modules.txt",
+        "sha256": "74d601879c6e5ff49794fe6015cc7d8a2ef31c2fd216d4c3f77ca6842ee86bcb"
+      },
+      {
+        "path": "map/native-oracle",
+        "sha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf"
+      },
+      {
+        "path": "map/oracle.tsv",
+        "sha256": "81ca6d7b62895882e0ab18710a8365aef097943b226347a9105de2ef03b9a9ea"
+      },
+      {
+        "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "cb56b04a9e0593ea84e16e301a8de0b7744b85d14779ce001be4dcdfc3908656"
+      },
+      {
+        "path": "src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+      },
+      {
+        "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+        "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+      },
+      {
+        "path": "src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+      },
+      {
+        "path": "src/main/kotlin/thc/Language.kt",
+        "sha256": "0bcf93c9d7b3757b982d459823658094a2d6d0f8f95fd656f1bb9b6876991bf5"
+      },
+      {
+        "path": "src/main/kotlin/thc/Main.kt",
+        "sha256": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6"
+      },
+      {
+        "path": "src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+      },
+      {
+        "path": "src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "983555586726fb402891770d8e348d9348fb2657d7260773a1ee1387fd7b6078"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+        "sha256": "7c6102b8852f5db93e07abd5ac05583a85f241c42eddf8736d070c4db0c5c1da"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/BloomValue.kt",
+        "sha256": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "8c71c0ea57d4276b9067b03edf9b2889fa7f8809435ce797c47736119e663bbc"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt",
+        "sha256": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt",
+        "sha256": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreEntries.kt",
+        "sha256": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreFields.kt",
+        "sha256": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+        "sha256": "578b57e67f93c61f498ad503c078299c5c269e3f966efabbb4ff6b4ee78b8d30"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+        "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "6ead068652a07fb6fcf3f8a7322dcef5a7fba00f48b4ec0891c50ccb8c07501f"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/EntryArguments.kt",
+        "sha256": "9c7af82a990fe84121de81070323258cd1654b86c3d00ebc494b5923d468e1ce"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "6846ac154751c3d8485d82a1adc0939ae8ca596774189f1d44c0446b3fae7185"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "91cb6c35d5ef04c3006dc3ff732fa2fa4786e121ec588f3e8362c96af4d82e37"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "95d26f02c73e26857461e42350b1b14a535153647d588582002c26d3dab312c3"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+        "sha256": "404f83c6e543764458bb426ceb7188226372485a2f91b4f0a0f342c3c75ea9b7"
+      },
+      {
+        "path": "src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "06e94e5c4ee7610c532cee5a802f3bd9d57f3c9dbbf61ed90ad79ef6e0ff08e0"
+      },
+      {
+        "path": "src/test/kotlin/thc/BloomHeaderTest.kt",
+        "sha256": "82d5d8b175d771cb3214872ebd213321c88d58513b5055fea2ccfdcc9ece131a"
+      },
+      {
+        "path": "src/test/kotlin/thc/BytecodeBackendTest.kt",
+        "sha256": "edbd0ed1d09404b750195dfe5a90e5e19c2a04d38cd4a902fa9b3d1abfdfaac1"
+      },
+      {
+        "path": "src/test/kotlin/thc/BytecodeCoreProofTest.kt",
+        "sha256": "420b266a6401a9f92f7b2e79c20d6edf6ddbef3f72d2891559d0ad63d0fe0217"
+      },
+      {
+        "path": "src/test/kotlin/thc/BytecodeSourceNotesTest.kt",
+        "sha256": "95eec19d5ed5aa39e37b96c450d4ddc829a5eccb7ac01a985210d2b9aa6ba111"
+      },
+      {
+        "path": "src/test/kotlin/thc/CStringTest.kt",
+        "sha256": "fd874bcefdaa87172d6c84deb31ad1c6b7bdd462337fdcb2cf8aed5854ed3123"
+      },
+      {
+        "path": "src/test/kotlin/thc/CasePrimitiveTest.kt",
+        "sha256": "cfd14c599d8c1ded194b783224bf0d6330d1fcc217e05b668a02f2aecbe65260"
+      },
+      {
+        "path": "src/test/kotlin/thc/CoreLinkerTest.kt",
+        "sha256": "4aa1cf6a302291bbc7c1f6be41c505ee2663cff7888a51a510354fcce0671c79"
+      },
+      {
+        "path": "src/test/kotlin/thc/DiagnosticModeTest.kt",
+        "sha256": "b349bf43273f5e6a34735db7e36798b92820bb53bc193cfadf7c14dcb4f8d40b"
+      },
+      {
+        "path": "src/test/kotlin/thc/FramesTest.kt",
+        "sha256": "a173084bee55203a8dde330d9c3c1384670f0b58682fa0d7226029d9adee4639"
+      },
+      {
+        "path": "src/test/kotlin/thc/GuestExceptionsTest.kt",
+        "sha256": "47c191ab4dbf1d248b0e2101887f07e1aa99ccb19b23f0f9355fe1fb07135dad"
+      },
+      {
+        "path": "src/test/kotlin/thc/RealCoreEntryContractTest.kt",
+        "sha256": "2d23c107616964162bdfb3fc50581a45b13b3cbc4709392ba52432089d122901"
+      },
+      {
+        "path": "src/test/kotlin/thc/RealCoreJoinTest.kt",
+        "sha256": "72caff621575a10f0da951146a61fbdc5c4a685aabcc759e90cccf5a7a82aa52"
+      },
+      {
+        "path": "src/test/kotlin/thc/RuntimeTest.kt",
+        "sha256": "7f4ec8fc75964c7c5ddf19614873ef9dcd0fe045ccae1a836eee1e00e0e2d318"
+      },
+      {
+        "path": "src/test/kotlin/thc/SelfTailProfileTest.kt",
+        "sha256": "c2f46463cd8b6531b7962851a11d7e05f462d311105de4f5f08eb42df2096da4"
+      },
+      {
+        "path": "src/test/kotlin/thc/StrictFieldsTest.kt",
+        "sha256": "db2cce99bf7d9d34a85882740b8b14c8c87a130de4c2b0e680a49a181d6f86a9"
+      },
+      {
+        "path": "src/test/kotlin/thc/TailCycleTest.kt",
+        "sha256": "90b614adae33dde28f9d37ce2436946834b68f03d455ab9fb879dcc35a903f13"
+      },
+      {
+        "path": "src/test/kotlin/thc/ThunkDispatchTest.kt",
+        "sha256": "78909f1649e895e68c0bf2b448f5fd1768b3571a3565223e348a1c4a536f81ad"
+      },
+      {
+        "path": "src/test/kotlin/thc/ThunkRetentionTest.kt",
+        "sha256": "68af72fe738066f53b343c1eb71a83cef643af6e34622b1aabf6a7771f9dbe07"
+      },
+      {
+        "path": "src/test/kotlin/thc/TypedApplicationTest.kt",
+        "sha256": "56f660de53527a483e7e9bd533414ceb9117b64bff1e8dcc90574c552fc2b314"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/AstSelfCallTest.kt",
+        "sha256": "c072c02fde8c38067b629c9e4766f1922a5030c0a3635b051644b5f606be5f0b"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/BindingCellMetadataTest.kt",
+        "sha256": "bf2831d4fa2846a3d9c270bb25b16328aa3c3e4642a09d6e2086b1d446465d8e"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/BloomValueTest.kt",
+        "sha256": "283b47b0114920e2df1b897d5d30f79bce81bc3749963ec4dfa6539d793b3c46"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt",
+        "sha256": "6e2f880c4aea9ad334d59b328d1370965d11f544b93c353be59e09d761dc6698"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt",
+        "sha256": "547d4d363be12f6a346bcebf5a79c6944c6d75f03205a2417596f8f8af3e18d7"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt",
+        "sha256": "ae3ee0d764e247073a0740f7f8aada667ff6aa30642ea2c94579d4a23dd0a37f"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/CoreProofJoinTest.kt",
+        "sha256": "0067e57d1431c9021eea6a64a1d7c29eb14bb8afdc0139e5b37a99035d068ecd"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/CoreSourceTest.kt",
+        "sha256": "1fabeba2ebd8cbb6a15bf53f93eb29f95148e44df0885ab9728a06cc369c05e7"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/EntryContractTest.kt",
+        "sha256": "7de8b6aaa24ad4e61de6a6cb7f3bbdc278dbeb529f53ab2dddf87edaf6f7b390"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/EntrySelfCallTest.kt",
+        "sha256": "5d981ff6f9f05c9a5aacf559eb2c7c4433f4a27f7ee173b0dfa9a3b54ad8ba19"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ForcedBindingTest.kt",
+        "sha256": "4d9fb0b506e3b5d8983618894866f2ea8df917b2ead0c061eb59e411937a022c"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/JoinWhnfProofTest.kt",
+        "sha256": "711c4590e4bc2a24c516d04d0b75c6e8bdb0f0fadd7b48d468bc7f301c2c85c6"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/OperandRetentionTest.kt",
+        "sha256": "0619241ed32733e61db2a66dbb90741f7a35cf6bbd0a9aaaabc0894dd354aeb0"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ReferenceCaptureTest.kt",
+        "sha256": "2276897ba0dd9eab20707ae2cc295120b1ae65f6d69edea932c45470f8d09d94"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ReferenceFieldTest.kt",
+        "sha256": "ecd8087ee1620c321f18e67196d3cd71253bdb5f4bd54ed9a5df82a5d29fa0fa"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/ReferenceFormalTest.kt",
+        "sha256": "9b45b33d1464aeb0f3f396ea8525ad4f2c082f3301fcabb3974316796f0e4f41"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/SourceCloneTest.kt",
+        "sha256": "b16a10e3ca92e0938b4d0190e61433fc22f633337d7782b5fc1ae53c13f627f8"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt",
+        "sha256": "77cc1b5205387999708abf10e7c5e6786b0f12c0edb1703a45c67d968672adc8"
+      },
+      {
+        "path": "src/test/kotlin/thc/runtime/TypedExecutionTest.kt",
+        "sha256": "a76f3858f51a2d4f17049b8efae798f11c2120dfb2d146c2cd9626813280a823"
+      }
+    ]
+  },
+  "inputs": [
+    {
+      "path": "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/ObjectSizesAgent.java",
+      "sha256": "51993546f5f8245b3e33b8a3cd3de07da8be4b35b6b6fa413cefa1e968498ceb"
+    },
+    {
+      "path": "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/ObjectSizes.java",
+      "sha256": "63ef098707659b2e2e18b8c7ffec12f1639196cd484409af41de758c983afa0b"
+    },
+    {
+      "path": "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/object-sizes.py",
+      "sha256": "6944087dd494e90ef41fb80fcf0d7a183ad2183be9d1625aa51b863e613e10fa"
+    },
+    {
+      "path": "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/manifest.json",
+      "sha256": "372bb7159d4d84522a072bafaa7bdb8454e2a277ef06d842c32e80e4ace63fd2"
+    },
+    {
+      "path": "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/release",
+      "sha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05"
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javac",
+        "-cp",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/annotations-13.0.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/word-25.3.4.1.jar",
+        "-d",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-compact/classes",
+        "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/ObjectSizesAgent.java",
+        "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/ObjectSizes.java"
+      ],
+      "stdout": "javac.out",
+      "stderr": "javac.err",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/jar",
+        "--create",
+        "--file",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-compact/object-sizes-agent.jar",
+        "--manifest",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-compact/agent.mf",
+        "-C",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-compact/classes",
+        "ObjectSizesAgent.class"
+      ],
+      "stdout": "jar.out",
+      "stderr": "jar.err",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "-Dthc.classOwnedLayouts=true",
+        "-XX:+UseCompactObjectHeaders",
+        "--enable-native-access=ALL-UNNAMED",
+        "-javaagent:/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-compact/object-sizes-agent.jar",
+        "-cp",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-compact/classes:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/annotations-13.0.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/collections-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/jniutils-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/kotlin-stdlib-2.4.20.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/nativeimage-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/polyglot-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/thc-0.1-experiment.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/truffle-api-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/truffle-compiler-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/truffle-runtime-25.3.4.1.jar:/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/lib/word-25.3.4.1.jar",
+        "ObjectSizes",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/map/modules.txt",
+        "bytecode"
+      ],
+      "stdout": "sizes.out",
+      "stderr": "sizes.err",
+      "returncode": 0
+    }
+  ],
+  "validatedInputsUnchanged": true
+}

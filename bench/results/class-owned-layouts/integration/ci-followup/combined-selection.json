@@ -1,0 +1,47 @@
+{
+  "suite": "combined",
+  "selectedOptions": {
+    "constructor_class": false,
+    "unchecked": false,
+    "compact_headers": true
+  },
+  "configurations": {
+    "combination-control": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:-UseCompactObjectHeaders"
+      ]
+    ],
+    "selected-combination": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ]
+  },
+  "comparisons": {
+    "combined": [
+      "combination-control",
+      "selected-combination"
+    ]
+  },
+  "requiredConfigurations": [
+    "combination-control",
+    "selected-combination"
+  ],
+  "requiredComparisons": [
+    "combined"
+  ]
+}

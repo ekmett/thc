@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.BytecodeCoreProofTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:54:16.580Z" hostname="eak-mba" time="0.212">
+  <properties/>
+  <testcase name="malformedJoinsAreRejectedEvenInDiagnosticMode()" classname="thc.BytecodeCoreProofTest" time="0.019"/>
+  <testcase name="adjustedJoinArityCanReturnTheRestOfAFlattenedLambda()" classname="thc.BytecodeCoreProofTest" time="0.024"/>
+  <testcase name="primitiveIdentityCompilesAfterOneOrdinaryInvocation()" classname="thc.BytecodeCoreProofTest" time="0.007"/>
+  <testcase name="capturedAddressesRemainObjectsAndCapturedLongsUsePrimitiveReads()" classname="thc.BytecodeCoreProofTest" time="0.013"/>
+  <testcase name="mutuallyRecursiveJoinsStayInsideTheirOwningRoot()" classname="thc.BytecodeCoreProofTest" time="0.049"/>
+  <testcase name="provenLongCaseAndLetOmitAdaptiveForcingInstructions()" classname="thc.BytecodeCoreProofTest" time="0.008"/>
+  <testcase name="diagnosticGlobalCannotRetainTheUnsupportedConstructorWhnfProof()" classname="thc.BytecodeCoreProofTest" time="0.008"/>
+  <testcase name="evaluatedCoreVarsStillForceOurCafAndRecursiveAliasThunks()" classname="thc.BytecodeCoreProofTest" time="0.034"/>
+  <testcase name="diagnosticSubstitutionCannotAcquireItsOriginalLongWhnfProof()" classname="thc.BytecodeCoreProofTest" time="0.01"/>
+  <testcase name="recursiveJoinUsesParallelMovesAndPreservesNonTailContinuation()" classname="thc.BytecodeCoreProofTest" time="0.036"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

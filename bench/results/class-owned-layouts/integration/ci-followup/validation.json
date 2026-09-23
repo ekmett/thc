@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "scope": "Python configuration/launch mocks, static syntax only; no JVM or timing run",
+  "baseSnapshot": "/Users/ekmett/thc/work/combined-defaults-v1",
+  "baseManifestSha256": "02216490fa0c40a652e7cd499e3dc7d9b9b908c5422419cdbf23e3c114b0af03",
+  "files": [
+    {
+      "path": "tools/ci-performance.py",
+      "beforeSha256": "aa39502d9c58aac4c0a208150a63e19f0af84a1701f6c403cb906a7f3b98c774",
+      "afterSha256": "5088d792945075fa61a4f6f7f03e26fc67099b640349a752f1b99d90c6e46ba4"
+    },
+    {
+      "path": ".github/workflows/performance.yml",
+      "beforeSha256": "cc10d05aa549d57f933712a96572b5ef61fdc346fcbde0ecb63f693471a2d4e3",
+      "afterSha256": "04e88392e4fb6139e0f67eff7c060982be3f245022644ef9102b7e8eacbf0315"
+    },
+    {
+      "path": "tools/test-ci-performance.py",
+      "beforeSha256": null,
+      "afterSha256": "463389ea1ce09a106471ec1bb31d4fe1f4fb92b276cfab5d7c6288c56fdb1df6"
+    }
+  ],
+  "checks": [
+    {
+      "name": "ci-launch-mocks",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "tools/test-ci-performance.py"
+      ],
+      "returncode": 0
+    },
+    {
+      "name": "harness-tests",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "tools/test-compare-map-runtimes.py"
+      ],
+      "returncode": 0
+    },
+    {
+      "name": "python-syntax",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "py_compile",
+        "tools/ci-performance.py",
+        "tools/test-ci-performance.py"
+      ],
+      "returncode": 0
+    },
+    {
+      "name": "workflow-yaml",
+      "argv": [
+        "ruby",
+        "-e",
+        "require 'yaml'; p YAML.load_file('.github/workflows/performance.yml').fetch('jobs').fetch('performance').fetch('steps').size"
+      ],
+      "returncode": 0
+    }
+  ]
+}

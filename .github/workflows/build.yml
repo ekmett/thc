@@ -52,7 +52,7 @@ jobs:
       - name: Check Map through the AST backend
         shell: bash
         run: |
-          java --enable-native-access=ALL-UNNAMED -Xss2m \
+          java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
             -Dthc.backend=ast -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
             -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
             2>&1 | tee build/map/check-ast.log

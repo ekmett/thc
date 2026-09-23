@@ -1,0 +1,402 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :kaptGenerateStubsKotlin
+
+> Task :kaptKotlin
+/private/tmp/thc-combined-defaults/build/tmp/kapt3/stubs/main/thc/runtime/Dispatch.java:87: warning: For this specialization with inlined cache parameters it is recommended to use the static modifier. The method should be static to avoid accidently passing the wrong node parameter to inlined cached nodes. To resolve this add the static keyword to the specialization method.  This warning may be suppressed using @SuppressWarnings("truffle-static-method").
+    @com.oracle.truffle.api.dsl.Specialization(guards = {"function.arity < argsSize"}, replaces = {"directOverapplied"})
+    ^
+/private/tmp/thc-combined-defaults/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:7: warning: This node is a candidate for node object inlining. The memory footprint is estimated to be reduced from 24 to 5 byte(s). Add @GenerateInline(true) to enable object inlining for this node or @GenerateInline(false) to disable this warning. Also consider disabling cached node generation with @GenerateCached(false) if all usages will be inlined. This warning may be suppressed using @SuppressWarnings("truffle-inlining").
+public abstract class BloomValue extends com.oracle.truffle.api.nodes.Node {
+                ^
+/private/tmp/thc-combined-defaults/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:20: warning: The @Cached(neverDefault=true|false) property is not needed to be set. Remove the property to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+    long cachedMask, @com.oracle.truffle.api.dsl.Cached(value = "box(cachedMask)", neverDefault = true)
+                                                                                                  ^
+/private/tmp/thc-combined-defaults/src/main/java/thc/runtime/BytecodeRoot.java:271: warning: This operation supports uncached execution, so forcing cached is not necessary. Remove the forceCached attribute to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-force-cached").
+    @Operation(forceCached = true)
+                             ^
+/private/tmp/thc-combined-defaults/src/main/java/thc/runtime/BytecodeRoot.java:281: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/private/tmp/thc-combined-defaults/src/main/java/thc/runtime/BytecodeRoot.java:291: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/private/tmp/thc-combined-defaults/src/main/java/thc/runtime/BytecodeRoot.java:379: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static Object raise(Object payload, @Bind("$node") Node node) {
+                                                                   ^
+/private/tmp/thc-combined-defaults/src/main/java/thc/runtime/BytecodeRoot.java:185: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/private/tmp/thc-combined-defaults/src/main/java/thc/runtime/BytecodeRoot.java:241: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+
+> Task :compileKotlin
+
+> Task :compileJava
+/private/tmp/thc-combined-defaults/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:9530: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+/private/tmp/thc-combined-defaults/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:11522: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+2 warnings
+
+> Task :classes
+> Task :jar
+> Task :startScripts
+> Task :installDist
+> Task :kaptGenerateStubsTestKotlin
+> Task :kaptTestKotlin
+> Task :compileTestKotlin
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.nodes.NodeClassImpl$NodeFieldData (file:/Users/ekmett/thc/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-api/25.3.4.1/d0ad4561c54b72dae2918cf8ba0d899844912df8/truffle-api-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.nodes.NodeClassImpl$NodeFieldData
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+
+BloomHeaderTest > selfAndConservativeBloomHitsStillBounceBeforeWritingAnyHeader() PASSED
+
+BloomHeaderTest > compiledDynamicAncestryPreservesEveryBitAndStillDetectsBloomHits() PASSED
+
+BytecodeBackendTest > unsupportedCodeRejectsAtLoadOrTrapsOnlyWhenTheDiagnosticBranchIsEntered() PASSED
+
+BytecodeBackendTest > backendSelectionAndMutableProgramStateAreIsolatedWithinASharedEngine() PASSED
+
+BytecodeBackendTest > allExportedFixturesMatchNativeGhcBeforeAndAfterCompilation() PASSED
+
+BytecodeBackendTest > managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() PASSED
+
+BytecodeBackendTest > coldRaiseKeepsItsBottomPayloadLazyAndMemoizesTheGuestFailure() PASSED
+
+BytecodeBackendTest > unusedBottomStaysLazyAndFailedThunksAreNotReentered() PASSED
+
+BytecodeBackendTest > strictConstructorWorkersForceOnlyAtFullSaturationIncludingColdCompiledPaths() PASSED
+
+BytecodeBackendTest > sharingPartialAndOverapplicationPreserveTheirSemantics() PASSED
+
+BytecodeBackendTest > aSelfTailCallThroughAPapRestoresBothItsPrefixAndNewArguments() PASSED
+
+BytecodeBackendTest > compiledBaseCasesCanGrowIntoLongSelfMutualAndCapturedLoops() PASSED
+
+BytecodeBackendTest > wideArgumentsCapturesAndConstructorFieldsPreserveEveryOperand() PASSED
+
+BytecodeCoreProofTest > malformedJoinsAreRejectedEvenInDiagnosticMode() PASSED
+
+BytecodeCoreProofTest > adjustedJoinArityCanReturnTheRestOfAFlattenedLambda() PASSED
+
+BytecodeCoreProofTest > primitiveIdentityCompilesAfterOneOrdinaryInvocation() PASSED
+
+BytecodeCoreProofTest > capturedAddressesRemainObjectsAndCapturedLongsUsePrimitiveReads() PASSED
+
+BytecodeCoreProofTest > mutuallyRecursiveJoinsStayInsideTheirOwningRoot() PASSED
+
+BytecodeCoreProofTest > provenLongCaseAndLetOmitAdaptiveForcingInstructions() PASSED
+
+BytecodeCoreProofTest > diagnosticGlobalCannotRetainTheUnsupportedConstructorWhnfProof() PASSED
+
+BytecodeCoreProofTest > evaluatedCoreVarsStillForceOurCafAndRecursiveAliasThunks() PASSED
+
+BytecodeCoreProofTest > diagnosticSubstitutionCannotAcquireItsOriginalLongWhnfProof() PASSED
+
+BytecodeCoreProofTest > recursiveJoinUsesParallelMovesAndPreservesNonTailContinuation() PASSED
+
+BytecodeSourceNotesTest > sourceSectionsPreserveLocalJoinBackedgesAndTheirOuterContinuation() PASSED
+
+BytecodeSourceNotesTest > notesAttachToNativeBytecodeWithoutChangingInstructionsOrLocalWriteback() PASSED
+
+BytecodeSourceNotesTest > bytecodeKeepsSourceLocationsWhenOriginalFileContentIsUnavailable() PASSED
+
+CStringTest > literalPrimitivesExecuteInGuestCodeAndRejectNumericFakePointers() PASSED
+
+CStringTest > genuineGhcCStringDecoderConsumesLiteralBytesBeforeAndAfterCompilation() PASSED
+
+CStringTest > literalAddressBoundsRejectOverflowAndForeignMemoryAccess() PASSED
+
+CStringTest > literalStoragePreservesUnsignedBytesEmbeddedNulsAndImplicitTerminator() PASSED
+
+CasePrimitiveTest > nestedLiteralAndDefaultCasesFeedPrimitiveOperandsThroughLetAndEvaluation() PASSED
+
+CasePrimitiveTest > dataAndDefaultArmsPreserveFieldsAndWholeScrutineeBindingsInPrimitiveContext() PASSED
+
+CasePrimitiveTest > primitiveCaseForcesSharedScrutineesOnceAndKeepsUnselectedFailureLazy() PASSED
+
+CoreLinkerTest > shadowedGlobalsDoNotBringTheirUnsupportedDependenciesIntoTheProgram() PASSED
+
+CoreLinkerTest > nonrecursiveRhsAndCaseScrutineeRetainTheirOuterDependencies() PASSED
+
+CoreLinkerTest > linkedModulesPreserveSourceIdentityAndRejectConflictingText() PASSED
+
+CoreLinkerTest > recursiveGlobalClosureTerminatesAndKeepsAllTransitiveDependencies() PASSED
+
+DiagnosticModeTest > diagnosticPrimitiveGapsRemainExplicitAndMalformedCoreStillRejects() PASSED
+
+DiagnosticModeTest > normalExecutionStillRejectsUnavailableCodeAtLoad() PASSED
+
+DiagnosticModeTest > diagnosticBranchesCompileAndUnavailablePathsTrapExplicitly() PASSED
+
+FramesTest > supportedTagsAndUnwrittenNullRetainTheirValues() PASSED
+
+FramesTest > typedLongWritesWidenBooleanSlotsWithoutChangingSuspendedFrames() PASSED
+
+FramesTest > livePrimitiveFramesSurviveDescriptorWideningInAnotherActivation() PASSED
+
+FramesTest > typedLongWritesRespectDescriptorWideningAcrossActivations() PASSED
+
+FramesTest > unrelatedTruffleNumericTagsAreRejectedInsteadOfSilentlyBoxed() PASSED
+
+GuestExceptionsTest > coldRaiseBranchStaysLazyCompilesAndReportsAGuestException() PASSED
+
+GuestExceptionsTest > raisingAnEvaluatedConstructorPreservesItsPayloadIdentity() PASSED
+
+GuestExceptionsTest > raiseKeepsBottomPayloadUnevaluatedAndMemoizesTheSameGuestException() PASSED
+
+RealCoreEntryContractTest > genuineWorkerContractPreservesFullWidthResultsAndColdBranches() PASSED
+
+RealCoreEntryContractTest > genuineFunctionReturningJoinKeepsTheReturnedArgumentOutsideItsContract() PASSED
+
+RealCoreEntryContractTest > genuinePolymorphicJoinUsesItsErasedValuePrefix() PASSED
+
+RealCoreEntryContractTest > genuineWorkerRetainsTheCoercionSlotBeforeItsMarkedBoxedArgument() PASSED
+
+RealCoreJoinTest > exportedRecursiveJoinIsALocalLoopBeforeAndAfterCompilation() PASSED
+
+RealCoreJoinTest > erasedTypeJoinAndFunctionReturningJoinPreserveTheirValueArity() PASSED
+
+RuntimeTest > cadenzaTailLoopsAndProductiveCafUseBoundedHostStack() PASSED
+
+RuntimeTest > hostKernelAbiRejectsNonIntegralArgumentsAndWrongArity() PASSED
+
+RuntimeTest > constructorCasesDistinguishEqualArityAlternativesBeforeAndAfterCompilation() PASSED
+
+RuntimeTest > selfTailCallsRefreshChangingPrimitiveCapturesAndReplayOriginalCaf() PASSED
+
+RuntimeTest > transportRejectsAmbiguityAndRoundTripsControlCharacters() PASSED
+
+RuntimeTest > recursiveAliasStaysLazyUntilDemanded() PASSED
+
+RuntimeTest > sharingPapAndOverapplicationHaveObservableRuntimeCoverage() PASSED
+
+RuntimeTest > repeatedHostEntryKeepsGuestAndInteropCompilable() PASSED
+
+RuntimeTest > boundedDispatchCacheSurvivesMoreThanThreeTargets() PASSED
+
+RuntimeTest > constructorLayoutsRejectCrossConstructorReadsAndShareNullaryValues() PASSED
+
+RuntimeTest > papPrefixesSurviveRepeatedUnderapplicationAndMegamorphicOverapplication() PASSED
+
+RuntimeTest > recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() PASSED
+
+RuntimeTest > unusedBottomRemainsLazyAndDemandedBottomBlackholes() PASSED
+
+RuntimeTest > constructorLayoutsPreservePrimitiveWidthObjectIdentityAndVoidSlots() PASSED
+
+RuntimeTest > exportedHaskellMatchesNativeGhcBeforeAndAfterGuestCompilation() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRemainsStackSafeAndRecompiles() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRestoresChangingCaptures() PASSED
+
+StrictFieldsTest > unknownStrictFieldLevityStillFailsClosed() PASSED
+
+StrictFieldsTest > strictFieldsShareTheirWhnfWhileAnOrdinaryFieldKeepsItsUnevaluatedThunk() PASSED
+
+StrictFieldsTest > directSaturatedStrictOperandsDoNotAllocateAnImmediatelyForcedThunk() PASSED
+
+StrictFieldsTest > partialConstructorRetainsStrictArgumentLazilyUntilItIsSaturated() PASSED
+
+StrictFieldsTest > strictWorkerForcesIgnoredFieldsInDirectAndFirstClassApplications() PASSED
+
+StrictFieldsTest > realGhcStrictConstructorPreservesPrimitiveValuesBeforeAndAfterCompilation() PASSED
+
+TailCycleTest > twoRootCyclesReenterLocallyBeforeAndAfterCompilation() PASSED
+
+TailCycleTest > aNonTailEdgeRetainsEveryPendingAddition() PASSED
+
+TailCycleTest > aClonedRootConsumesTransfersTargetingItsOriginalBody() PASSED
+
+TailCycleTest > anInteriorRootHandlesABCDECReturnsAndCanRetargetOutwardToB() PASSED
+
+TailCycleTest > falsePositiveAncestryStillUsesTheTrampolineWhenNoActiveRootMatches() PASSED
+
+TailCycleTest > overapplicationAndNonTailWorkSurviveAnInnerTailCycle() PASSED
+
+TailCycleTest > reentryRestoresChangedCapturesAndPapPrefixesAcrossDifferentArities() PASSED
+
+ThunkDispatchTest > closedAndCapturedThunksKeepTheirArgumentsAfterTargetCacheSaturates() PASSED
+
+ThunkDispatchTest > capturedThunkTailBounceStillUpdatesTheOriginalThunk() PASSED
+
+ThunkRetentionTest > cafEntryTargetsRemainCompilableAfterValuesFunctionsAndFailuresAreMemoized() PASSED
+
+ThunkRetentionTest > unexpectedFailuresKeepTheSuspensionForAnActualRetry() PASSED
+
+ThunkRetentionTest > successfulUpdatesReleaseSuspensionsAndRemainShared() PASSED
+
+ThunkRetentionTest > memoizedGuestAndRuntimeFailuresReleaseSuspensionsWithoutRepeatingEffects() PASSED
+
+TypedApplicationTest > partialAndOverapplicationReachTheNumericResultAfterAnIntermediateCapturedFunction() PASSED
+
+TypedApplicationTest > aPolymorphicLiftedResultCanChangeFromDataToClosureAfterCompilation() PASSED
+
+TypedApplicationTest > closedAndCapturedLambdasForwardNumericCaseAndLetResultsToPrimitiveConsumers() PASSED
+
+AstSelfCallTest > polymorphicTailSiteRetainsSelfTransferAfterThreeNegativeTargetCacheEntries() PASSED
+
+AstSelfCallTest > selfTransferSwapsWidePrimitiveArgumentsAndSurvivesColdCompiledRecursion() PASSED
+
+AstSelfCallTest > clonedRootsShareBodyIdentityWhileKeepingIndependentSelfTargetCaches() PASSED
+
+AstSelfCallTest > selfTransferRestoresDistinctEnvironmentsAndTheirRecursiveCells() PASSED
+
+BindingCellMetadataTest > recursiveCapturesKeepCellsWhileClosuresCreatedAfterPublicationCaptureValues() PASSED
+
+BindingCellMetadataTest > ordinaryObjectParametersFieldsAndCapturesNeedNoRecursiveCellReads() PASSED
+
+BindingCellMetadataTest > escapingRecursiveClosuresRetainCellsAfterCaseRefinementAndAcrossInvocations() PASSED
+
+BloomValueTest > specializingAnActualCloneDoesNotWidenTheOriginalCache() PASSED
+
+BloomValueTest > actualTailChainsReuseTheirHeaderAndNonTailCallsResetAncestry() PASSED
+
+BloomValueTest > saturatedBloomCollisionStillBouncesAndPreservesPendingWork() PASSED
+
+BloomValueTest > threeWideMasksReuseBoxesAndMegamorphicFallbackPreservesEveryBit() PASSED
+
+BoxedValueCacheTest > bothBackendsSwitchBetweenCachedAndFullWidthConstructorsAfterCompilation() PASSED
+
+BoxedValueCacheTest > wiredConstructorIdentitiesAndPrimitiveRepresentationsMatchActualPinnedExports() PASSED
+
+BoxedValueCacheTest > exactGhcRangesReuseImmutableValuesWhileEveryOtherPayloadStaysFullWidth() PASSED
+
+BoxedValueCacheTest > cachesRemainOwnedByTheirLayoutAcrossSharedArrayCarriersAndContexts() PASSED
+
+BoxedValueCacheTest > defaultOffAndNonBuiltinConstructorsKeepOrdinaryAllocation() PASSED
+
+ClassOwnedLayoutTest > fieldlessOwnersAndArrayFallbackKeepOldCompiledValuesValid() PASSED
+
+ClassOwnedLayoutTest > offModeAndClosedContextsCannotReassignAnExistingOwner() PASSED
+
+ClassOwnedLayoutTest > defaultUsesClassOwnershipAndExplicitFalseKeepsLayoutCarriers() PASSED
+
+ClassOwnedLayoutTest > classReservationIsPermanentAndDescriptorPublicationCannotChangeItsOwner() PASSED
+
+ClassOwnedLayoutTest > ownershipChecksPreservePreciseFieldsLazyFieldsAndAllocationAuthentication() PASSED
+
+ConstructorClassIdentityTest > matchingDistinguishesConstructorsAndRejectsForeignValuesInBothStrategies() PASSED
+
+ConstructorClassIdentityTest > registryOwnershipSpansContextsAndUnexpectedFactoryClassesInvalidateBothOwners() PASSED
+
+ConstructorClassIdentityTest > astAndBytecodeCaseLoweringUseTheSameMatchingSemantics() PASSED
+
+ConstructorClassIdentityTest > compiledMatchTracksPermanentOrInvalidatableClassOwnership() PASSED
+
+CoreProofJoinTest > recursivePrimitiveJoinUsesParallelMovesAndReturnsToNonTailContinuation() PASSED
+
+CoreProofJoinTest > mutualJoinsAndNestedOuterTransfersStayInTheirLexicalRegion() PASSED
+
+CoreProofJoinTest > exportedEvaluatedCafAndRecursiveAliasesStillForceIntroducedThunks() PASSED
+
+CoreProofJoinTest > provenLongCapturesPreserveFullWidthValuesWithoutAnObjectArm() PASSED
+
+CoreProofJoinTest > invalidJoinUsesRejectAtLoadRatherThanEscapingIntoClosures() PASSED
+
+CoreProofJoinTest > representationMetadataRequiresExactCarriersAndPreservesLegacyUnknown() PASSED
+
+CoreSourceTest > unverifiedCoordinatesNeverIndexAvailableSourceText() PASSED
+
+CoreSourceTest > sourceNotesAttachToTypedAstAndRootsWithoutAddingExecutionNodes() PASSED
+
+CoreSourceTest > realGhcSourceNotesReachTypedRootsAndLocalJoinNodes() PASSED
+
+CoreSourceTest > characterOffsetsUseUtf16WithoutReencodingUnicodeSource() PASSED
+
+CoreSourceTest > missingSourceContentRetainsLocationsAndOriginalExclusiveProvenance() PASSED
+
+EntryContractTest > malformedEntryContractsFailAtLoad() PASSED
+
+EntryContractTest > megamorphicCallsEnforceAndShareStrictPapPrefixes() PASSED
+
+EntryContractTest > strictJoinPrefixDoesNotStrictifyTheReturnedFunctionSuffix() PASSED
+
+EntryContractTest > papPrefixStaysLazyUntilSaturationAndItsThunkIsSharedAfterward() PASSED
+
+EntryContractTest > overapplicationEnforcesOnlyTheSaturatedFirstFunctionBeforeApplyingItsResult() PASSED
+
+EntryContractTest > knownWorkerCompilesStrictOperandsDirectlyWhileUnknownCallsEnforceTheSameContract() PASSED
+
+EntrySelfCallTest > directSelfPapPrefixForcesEvenUnusedStrictFormalsBeforeReentry() PASSED
+
+EntrySelfCallTest > ancestorReentryReceivesForcedArgumentsThroughUnknownCalls() PASSED
+
+ForcedBindingTest > repeatedLocalDemandsBypassThunkHeadersButSeparateAliasesKeepSharing() PASSED
+
+ForcedBindingTest > recursiveCellIdentitySurvivesStrictRhsForcingBeforeGroupPublication() PASSED
+
+ForcedBindingTest > astForcingReplacesOnlyTheDemandedLocalAndRetainsSharedThunkAliases() PASSED
+
+ForcedBindingTest > preexistingCapturesKeepTheirFinalThunkReferenceWhileTheirRestoredLocalUpdates() PASSED
+
+ForcedBindingTest > failedForcingLeavesLocalLinksPointingAtTheMemoizedFailure() PASSED
+
+JoinWhnfProofTest > recursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() PASSED
+
+LeadingCaseReturnTest > otherUsedFormalValidationAndUnprovenResultsCannotBeSkipped() PASSED
+
+LeadingCaseReturnTest > unusedStrictFormalsAreForcedBeforeShortcutAndPapPrefixesOnlyAtSaturation() PASSED
+
+LeadingCaseReturnTest > capturedEnvironmentOffsetAndOverapplicationRemainCorrect() PASSED
+
+LeadingCaseReturnTest > diagnosticReplacementCannotAcquireARecipeButAnUnsupportedColdBodyCan() PASSED
+
+LeadingCaseReturnTest > unmarkedThunkScrutineeFallsBackWhileMarkedScrutineeCanReturnAfterForcing() PASSED
+
+LeadingCaseReturnTest > sourceNotesAndClonedRecipesPreserveAttributionWithoutAddingRootEntries() PASSED
+
+LeadingCaseReturnTest > onlyCompiledDirectCallsShortcutAndPreservePendingWorkAndFullWidthResults() PASSED
+
+OperandRetentionTest > joinTransferReleasesCompletedOperandsButDoesNotMoveOrClearOnOperandFailure() PASSED
+
+OperandRetentionTest > selfTransferReleasesEveryOperandIncludingUnusedFormalsWithoutWideningSlots() PASSED
+
+ReferenceCaptureTest > lazyAndCaseRefinedRecursiveCapturesRetainTheirPhysicalStorage() PASSED
+
+ReferenceCaptureTest > preciseReferenceAndPrimitiveCapturesRoundTripThroughBothStorageEntrypoints() PASSED
+
+ReferenceCaptureTest > compiledEscapedClosuresKeepDataFunctionsAndLiteralAddressesPrecise() PASSED
+
+ReferenceFieldTest > strictDataAndClosureFieldsArePreciseWhileLazyAndPolymorphicFieldsRemainGeneric() PASSED
+
+ReferenceFieldTest > constructorProofsMustAlignWithBothStorageAndWorkerEvaluation() PASSED
+
+ReferenceFieldTest > typedConstructorPapKeepsItsStrictPrefixLazyUntilSaturation() PASSED
+
+ReferenceFormalTest > concreteReferenceFormalsSurviveDirectAndAncestorParallelMoves() PASSED
+
+ReferenceFormalTest > checkedReferenceEntryRejectsNullButDoesNotStrictifyLazyData() PASSED
+
+SourceCloneTest > actualClonedTargetsRetainRootAndChildLocationsBeforeAndAfterCompilation() PASSED
+
+StaticShapeSafetyTest > ownedStorageRejectsForgedKeysAndCrossLayoutAccessInBothStrategies() PASSED
+
+StaticShapeSafetyTest > engineCanForceChecksDespiteThePerShapeExperiment() PASSED
+
+TypedCaseTest > typedCasesKeepWidePrimitiveResultsColdArmsAndGeneralCaseFallback() PASSED
+
+TypedCaseTest > defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() PASSED
+
+TypedExecutionTest > typedEvaluationRunsItsChildOnceWhenACompiledLongPathReceivesAThunk() PASSED
+
+TypedExecutionTest > runtimeTypesPreserveUnexpectedValuesAndDoNotCoerceDistinctPrimitiveKinds() PASSED
+
+[Incubating] Problems report is available at: file:///private/tmp/thc-combined-defaults/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 34s
+11 actionable tasks: 11 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

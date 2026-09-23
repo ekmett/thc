@@ -327,6 +327,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Only emitted after checked restoration of a proved-data case binder. */
+    @Operation
+    @ConstantOperand(type = DataLayout.class, name = "layout")
+    public static final class MatchDataValue {
+        @Specialization public static boolean matches(DataLayout layout, DataValue value) {
+            return layout.matches(value);
+        }
+    }
+
     @Operation
     @ConstantOperand(type = Object.class, name = "literal")
     public static final class MatchLiteral {

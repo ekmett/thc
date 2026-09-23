@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.DiagnosticModeTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:17.926Z" hostname="eak-mba" time="0.019">
+  <properties/>
+  <testcase name="diagnosticPrimitiveGapsRemainExplicitAndMalformedCoreStillRejects()" classname="thc.DiagnosticModeTest" time="0.007"/>
+  <testcase name="normalExecutionStillRejectsUnavailableCodeAtLoad()" classname="thc.DiagnosticModeTest" time="0.005"/>
+  <testcase name="diagnosticBranchesCompileAndUnavailablePathsTrapExplicitly()" classname="thc.DiagnosticModeTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

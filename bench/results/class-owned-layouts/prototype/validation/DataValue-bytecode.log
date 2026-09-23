@@ -1,0 +1,28 @@
+Compiled from "DataValues.kt"
+public class thc.runtime.DataValue extends thc.runtime.ValidatedStorage {
+  public thc.runtime.DataValue(thc.runtime.DataLayout, java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokevirtual #14                 // Method thc/runtime/DataLayout.checkAllocationKey$org_intelligence_thc:(Ljava/lang/Object;)V
+         6: getstatic     #20                 // Field kotlin/Unit.INSTANCE:Lkotlin/Unit;
+         9: invokespecial #23                 // Method thc/runtime/ValidatedStorage."<init>":(Lkotlin/Unit;)V
+        12: return
+
+  public thc.runtime.DataLayout getLayout();
+    Code:
+         0: getstatic     #37                 // Field thc/runtime/ClassOwnedLayouts.INSTANCE:Lthc/runtime/ClassOwnedLayouts;
+         3: aload_0
+         4: invokevirtual #43                 // Method java/lang/Object.getClass:()Ljava/lang/Class;
+         7: invokevirtual #47                 // Method thc/runtime/ClassOwnedLayouts.resolve:(Ljava/lang/Class;)Lthc/runtime/DataLayout;
+        10: areturn
+
+  public java.lang.String toString();
+    Code:
+         0: aload_0
+         1: invokevirtual #51                 // Method getLayout:()Lthc/runtime/DataLayout;
+         4: aload_0
+         5: invokevirtual #55                 // Method thc/runtime/DataLayout.describe$org_intelligence_thc:(Lthc/runtime/DataValue;)Ljava/lang/String;
+         8: areturn
+}

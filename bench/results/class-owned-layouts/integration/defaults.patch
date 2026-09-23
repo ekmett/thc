@@ -1,0 +1,254 @@
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -52,7 +52,7 @@
+       - name: Check Map through the AST backend
+         shell: bash
+         run: |
+-          java --enable-native-access=ALL-UNNAMED -Xss2m \
++          java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+             -Dthc.backend=ast -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
+             -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
+             2>&1 | tee build/map/check-ast.log
+--- a/README.md
++++ b/README.md
+@@ -41,6 +41,14 @@
+ On macOS, `JAVA_HOME` is the `Contents/Home` directory inside the GraalVM bundle.
+ The `--compile` flag requests guest compilation and checks that code was
+ installed. Compilation failures are errors.
++
++Ordinary app, test and probe launches use compact object headers. Constructor
++layouts belong to their generated storage classes where that class has a unique
++owner; shared storage classes keep a layout field. `-Dthc.classOwnedLayouts=false`
++selects the field-bearing representation for comparison. Gradle's
++`-Pthc.compactObjectHeaders=false` and the controlled benchmark's explicit
++`-XX:-UseCompactObjectHeaders` option provide header-off controls. The remaining
++storage and call-path experiments are opt-in.
+ 
+ The [bytecode backend](docs/bytecode.md) is the default. The AST interpreter is
+ also available:
+--- a/build.gradle.kts
++++ b/build.gradle.kts
+@@ -22,9 +22,13 @@
+         freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")
+     }
+ }
++// Tests and benchmark controls can opt out explicitly; ordinary launches use compact headers.
++val compactObjectHeaders = providers.gradleProperty("thc.compactObjectHeaders").orElse("true").get()
++require(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "thc.compactObjectHeaders must be true or false" }
++val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-"}UseCompactObjectHeaders"
+ application {
+     mainClass.set("thc.MainKt")
+-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xss2m")
++    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
+ }
+ tasks.test {
+     useJUnitPlatform()
+--- a/scripts/benchmark-map.sh
++++ b/scripts/benchmark-map.sh
+@@ -22,7 +22,7 @@
+ cp build/map/audit.json "$OUT/capability-audit.json"
+ printf 'engine\tfork\tentry\tsample\trepetitions\tinputBase\tchecksum\telapsedNs\n' > "$OUT/timings.tsv"
+ run_jvm() {
+-  "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true \
++  "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+     "-Dthc.backend=$BACKEND" "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" -Dthc.minimumWarmCalls=12000 -cp 'build/install/thc/lib/*' thc.ProbeKt \
+     "$MODULES" mapAggregate --steady "$WARM_SECONDS" "$SAMPLE_SECONDS" "$SAMPLES" "$BASE" \
+     > "$OUT/mapAggregate-$fork-jvm.tsv" 2> "$OUT/mapAggregate-$fork.log"
+--- a/scripts/benchmark.sh
++++ b/scripts/benchmark.sh
+@@ -16,7 +16,7 @@
+     read -r entry inputBase <<< "$spec"
+     for ((fork=1; fork<=FORKS; fork++)); do
+         printf 'Running %s fork %s: JVM warmup %ss, %s windows of %ss per engine\n' "$entry" "$fork" "$WARM_SECONDS" "$SAMPLES" "$SAMPLE_SECONDS"
+-        "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true \
++        "$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+             -cp 'build/install/thc/lib/*' thc.ProbeKt \
+             build/core/THC.Prim.json,build/core/THC.Fixtures.json \
+             "$entry" --steady "$WARM_SECONDS" "$SAMPLE_SECONDS" "$SAMPLES" "$inputBase" \
+--- a/scripts/dump-graph.sh
++++ b/scripts/dump-graph.sh
+@@ -9,7 +9,7 @@
+ THC_JDK="$JAVA_HOME"
+ mkdir -p "$OUT" build/graph-tools
+ OUT="$(cd "$OUT" && pwd)"
+-"$THC_JDK/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true \
++"$THC_JDK/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
+   "-Dthc.minimumWarmCalls=${THC_GRAPH_MIN_WARM_CALLS:-20000}" \
+   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \
+   -Djdk.graal.Dump=Truffle:1 -Djdk.graal.PrintGraph=File \
+--- a/scripts/dump-map-packets.sh
++++ b/scripts/dump-map-packets.sh
+@@ -8,7 +8,7 @@
+ BASELINE="${2:-}"
+ mkdir -p "$OUT" build/graph-tools
+ OUT="$(cd "$OUT" && pwd)"
+-"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m \
++"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+   -Dthc.traceCompilation=true -Dthc.minimumWarmCalls=256 \
+   "-Dthc.backend=${THC_BACKEND:-bytecode}" \
+   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \
+--- a/scripts/try-map.sh
++++ b/scripts/try-map.sh
+@@ -17,6 +17,6 @@
+ python3 scripts/check-map-oracle.py
+ scripts/gradle.sh --no-daemon test installDist "$@"
+ THC_JAVA="$JAVA_HOME/bin/java"
+-"$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" \
++"$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" \
+   -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
+   2>&1 | tee build/map/check.log
+--- a/src/main/kotlin/thc/runtime/DataValues.kt
++++ b/src/main/kotlin/thc/runtime/DataValues.kt
+@@ -60,7 +60,7 @@
+     internal val hasBoxedValueCache: Boolean get() = boxedValues != null
+ 
+     init {
+-        val requested = java.lang.Boolean.getBoolean(CLASS_OWNED_LAYOUTS_PROPERTY)
++        val requested = java.lang.Boolean.parseBoolean(System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY, "true"))
+         var chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
+         var chosenShape = buildShape(language, chosenFields, requested)
+         var sample = chosenShape.factory.create(this, allocationKey)
+--- a/tools/ci-performance.py
++++ b/tools/ci-performance.py
+@@ -198,17 +198,22 @@
+     return out / record['log']
+ 
+ 
+-def check_configuration(out, java, name):
++def check_configuration(out, java, name, compact_control=None):
+     frozen = out / 'frozen'
+     runtime, flags = suite_config(out)['configurations'][name]
++    flags = list(flags)
++    suffix = ""
++    if compact_control is not None:
++        flags.append('-XX:' + ('+' if compact_control else '-') + 'UseCompactObjectHeaders')
++        suffix = '-compact-on' if compact_control else '-compact-off'
+     expected = [line.split('\t') for line in (frozen / 'map/oracle.tsv').read_text().splitlines() if line]
+     assert len(expected) == 18, 'Expected the full 18-input Map oracle'
+     verify(out)
+-    command = [java, '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
++    command = [java, '-XX:+UseCompactObjectHeaders', '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
+                '-Dthc.backend=bytecode', '-Dthc.diagnosticUnsupported=true', '-Dthc.sourceNotesEnabled=true',
+                '-Dthc.traceCompilation=true', '-cp', str(frozen / runtime / 'lib/*'), 'thc.MapCheckKt',
+                frozen / 'map/modules.txt', frozen / 'map/oracle.tsv']
+-    log = run(out, command, 'check-' + name, 600)
++    log = run(out, command, 'check-' + name + suffix, 600)
+     lines = log.read_text().splitlines()
+     for phase in ('before-requested-compilation', 'after-requested-compilation'):
+         actual = [line.split('\t')[2:] for line in lines if line.startswith('VERIFIED_MAP\t' + phase + '\t')]
+@@ -216,7 +221,7 @@
+     diagnostics = json.loads(next(line.removeprefix('MAP_DIAGNOSTICS ') for line in lines if line.startswith('MAP_DIAGNOSTICS ')))
+     assert diagnostics['backend'] == 'bytecode' and diagnostics['unsupportedTraps'] == 0
+     assert diagnostics['sourceNotesEnabled'] is True and diagnostics['sourceRootCount'] > 0
+-    return {'configuration': name, 'beforeRows': 18, 'afterRows': 18, 'diagnostics': diagnostics}
++    return {'configuration': name, 'compactControl': compact_control, 'beforeRows': 18, 'afterRows': 18, 'diagnostics': diagnostics}
+ 
+ 
+ def check(out, java):
+@@ -269,7 +274,12 @@
+         shutil.rmtree(source)
+     totals = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+     try:
+-        run(out, [root / 'scripts/gradle.sh', '--no-daemon', 'test', '--rerun'],
++        compact = True
++        for flag in flags:
++            if flag == '-XX:+UseCompactObjectHeaders': compact = True
++            elif flag == '-XX:-UseCompactObjectHeaders': compact = False
++        run(out, [root / 'scripts/gradle.sh', '--no-daemon',
++                  '-Pthc.compactObjectHeaders=' + str(compact).lower(), 'test', '--rerun'],
+             name + '-full-tests', 1500, {'JAVA_TOOL_OPTIONS': ' '.join(flags)})
+     finally:
+         if source.exists():
+@@ -342,9 +352,12 @@
+     config = json.loads((out / 'run.json').read_text())
+     root, frozen = Path(config['repository']), out / 'frozen'
+     try:
++        # Header-off is now an explicit control, so validate it separately too.
++        status['baselineTests'] = full_tests(out, 'compact-baseline', ['-XX:-UseCompactObjectHeaders'])
+         status['tests'] = full_tests(out, 'compact', ['-XX:+UseCompactObjectHeaders'])
+         status['stage'] = 'full-map-check'
+         write_json(status_path, status)
++        status['baselineMapCheck'] = check_configuration(out, java_home / 'bin/java', 'checked-class-off', compact_control=False)
+         status['mapCheck'] = check_configuration(out, java_home / 'bin/java', 'compact-checked-class-off')
+         status['stage'] = 'object-sizes'
+         write_json(status_path, status)
+--- a/tools/compare-map-runtimes.py
++++ b/tools/compare-map-runtimes.py
+@@ -39,6 +39,14 @@
+ def require(condition, message):
+     if not condition:
+         raise InvalidRun(message)
++
++
++def compact_header_options(options):
++    """Ordinary comparisons use compact headers; an explicit per-engine control wins."""
++    options = list(options)
++    if not any(flag in ('-XX:+UseCompactObjectHeaders', '-XX:-UseCompactObjectHeaders') for flag in options):
++        options.insert(0, '-XX:+UseCompactObjectHeaders')
++    return options
+ 
+ 
+ def signed64(value):
+@@ -300,7 +308,7 @@
+                            '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules_by_engine[engine])),
+                            ENTRY, '--steady', str(args.jvm_warm_seconds), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
+             if engine != 'native':
+-                command[1:1] = getattr(args, engine + '_jvm_option')
++                command[1:1] = compact_header_options(getattr(args, engine + '_jvm_option'))
+                 notes = getattr(args, engine + '_source_notes')
+                 if notes is not None:
+                     command.insert(1, '-Dthc.sourceNotesEnabled=' + ('true' if notes == 'on' else 'false'))
+--- a/tools/test-compare-map-runtimes.py
++++ b/tools/test-compare-map-runtimes.py
+@@ -22,6 +22,17 @@
+                 self.assertEqual(harness['sha256'](path), expected)
+                 with patch.object(harness['hashlib'], 'file_digest', None, create=True):
+                     self.assertEqual(harness['sha256'](path), expected)
++
++
++class CompactHeaderDefaultsTest(unittest.TestCase):
++    def test_default_and_explicit_controls_preserve_order_without_mutating_input(self):
++        select = harness['compact_header_options']
++        ordinary = ['-Dthc.backend=bytecode']
++        self.assertEqual(select(ordinary), ['-XX:+UseCompactObjectHeaders', *ordinary])
++        self.assertEqual(ordinary, ['-Dthc.backend=bytecode'])
++        for options in (['-XX:-UseCompactObjectHeaders'], ['-XX:+UseCompactObjectHeaders'],
++                        ['-XX:+UseCompactObjectHeaders', '-XX:-UseCompactObjectHeaders']):
++            self.assertEqual(select(options), options)
+ 
+ 
+ class PowerStatusTest(unittest.TestCase):
+--- a/src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt
++++ b/src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt
+@@ -48,6 +48,31 @@
+     private class ReadRoot(private val layout: DataLayout) : RootNode(null) {
+         override fun execute(frame: VirtualFrame): Any =
+             if (layout.matches(frame.arguments[0])) layout.readLong(frame.arguments[0] as DataValue, 0) else -17L
++    }
++
++    @Test fun defaultUsesClassOwnershipAndExplicitFalseKeepsLayoutCarriers() {
++        val previous = System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
++        try {
++            System.clearProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
++            context("field-based") { language ->
++                val owned = DataLayout(language, "DefaultOwner", "DefaultOwner", arrayOf("IntRep"))
++                val first = owned.create(arrayOf(Long.MIN_VALUE))
++                assertFalse(first is LayoutDataValue)
++                assertSame(owned, first.layout)
++                options(false) {
++                    val fallback = DataLayout(language, "ExplicitFallback", "ExplicitFallback", arrayOf("IntRep"))
++                    val second = fallback.create(arrayOf(Long.MAX_VALUE))
++                    assertTrue(second is LayoutDataValue)
++                    assertSame(fallback, second.layout)
++                    assertFalse(owned.matches(second)); assertFalse(fallback.matches(first))
++                    assertEquals(Long.MIN_VALUE, owned.readLong(first, 0))
++                    assertEquals(Long.MAX_VALUE, fallback.readLong(second, 0))
++                }
++            }
++        } finally {
++            if (previous == null) System.clearProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
++            else System.setProperty(CLASS_OWNED_LAYOUTS_PROPERTY, previous)
++        }
+     }
+ 
+     @Test fun fieldlessOwnersAndArrayFallbackKeepOldCompiledValuesValid() = options(true) {

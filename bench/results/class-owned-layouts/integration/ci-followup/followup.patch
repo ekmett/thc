@@ -1,0 +1,382 @@
+--- a/tools/ci-performance.py
++++ b/tools/ci-performance.py
+@@ -22,22 +22,35 @@
+ POLICY = ['-Dpolyglot.compiler.InliningRecursionDepth=2',
+           '-Dpolyglot.compiler.InliningExpansionBudget=12000',
+           '-Dpolyglot.compiler.InliningInliningBudget=12000']
++def runtime_flags(*, class_owned=True, constructor_class=False, unchecked=False,
++                  leading_case=False, typed_cases=False, boxed_cache=False, compact=True):
++    """Freeze every current experimental toggle; defaults must not change controls."""
++    values = {'classOwnedLayouts': class_owned, 'constructorClassIdentity': constructor_class,
++              'staticShapeUnchecked': unchecked, 'leadingCaseReturn': leading_case,
++              'typedCases': typed_cases, 'boxedValueCache': boxed_cache}
++    return ['-Dthc.' + name + '=' + str(value).lower() for name, value in values.items()] + [
++        '-XX:' + ('+' if compact else '-') + 'UseCompactObjectHeaders']
++
++
+ CONFIGURATIONS = {
+-    'original': ('original', []),
+-    'current-default': ('current', []),
+-    'checked-class-off': ('current', ['-Dthc.staticShapeUnchecked=false', '-Dthc.constructorClassIdentity=false']),
+-    'checked-class-on': ('current', ['-Dthc.staticShapeUnchecked=false', '-Dthc.constructorClassIdentity=true']),
+-    'unchecked-class-on': ('current', ['-Dthc.staticShapeUnchecked=true', '-Dthc.constructorClassIdentity=true']),
+-    'compact-checked-class-off': ('current', ['-Dthc.staticShapeUnchecked=false', '-Dthc.constructorClassIdentity=false', '-XX:+UseCompactObjectHeaders']),
++    'original': ('original', ['-XX:+UseCompactObjectHeaders']),
++    'class-owned-baseline': ('current', runtime_flags()),
++    # Class-owned matching bypasses constructorClassIdentity. Its isolated ablation
++    # deliberately retains per-object layout storage in both configurations.
++    'layout-bearing-class-off': ('current', runtime_flags(class_owned=False)),
++    'layout-bearing-class-on': ('current', runtime_flags(class_owned=False, constructor_class=True)),
++    'layout-bearing-unchecked-class-on': ('current', runtime_flags(class_owned=False, constructor_class=True, unchecked=True)),
++    'class-owned-noncompact': ('current', runtime_flags(compact=False)),
+ }
+ COMPARISONS = {
+-    'original-vs-current': ('original', 'current-default'),
+-    'constructor-class': ('checked-class-off', 'checked-class-on'),
+-    'owned-storage': ('checked-class-on', 'unchecked-class-on'),
+-    'compact-headers': ('checked-class-off', 'compact-checked-class-off'),
++    'original-vs-current': ('original', 'class-owned-baseline'),
++    'constructor-class': ('layout-bearing-class-off', 'layout-bearing-class-on'),
++    'owned-storage': ('layout-bearing-class-on', 'layout-bearing-unchecked-class-on'),
++    'compact-headers': ('class-owned-noncompact', 'class-owned-baseline'),
+ }
+ REQUIRED_COMPARISONS = tuple(name for name in COMPARISONS if name != 'compact-headers')
+-REQUIRED_CONFIGURATIONS = tuple(name for name in CONFIGURATIONS if not name.startswith('compact-'))
++REQUIRED_CONFIGURATIONS = tuple(dict.fromkeys(
++    config for name in REQUIRED_COMPARISONS for config in COMPARISONS[name]))
+ 
+ 
+ def sha(path):
+@@ -62,22 +75,32 @@
+     suite = args.suite or 'standard'
+     options = {name: getattr(args, name) == 'true'
+                for name in ('constructor_class', 'unchecked', 'compact_headers')}
++    if suite in ('standard', 'all-on') and any(options.values()):
++        raise ValueError('Combination flags require --suite combined')
+     if suite == 'standard':
+-        if any(options.values()):
+-            raise ValueError('Combination flags require --suite combined')
+         configurations, comparisons = CONFIGURATIONS, COMPARISONS
+         required_configs, required_comparisons = REQUIRED_CONFIGURATIONS, REQUIRED_COMPARISONS
+-    else:
++    elif suite == 'combined':
+         if not any(options.values()):
+             raise ValueError('Combined suite requires at least one selected flag')
+-        def flags(values):
+-            return ['-Dthc.constructorClassIdentity=' + str(values['constructor_class']).lower(),
+-                    '-Dthc.staticShapeUnchecked=' + str(values['unchecked']).lower(),
+-                    '-XX:' + ('+' if values['compact_headers'] else '-') + 'UseCompactObjectHeaders']
+-        configurations = {'current-default': ('current', flags(dict.fromkeys(options, False))),
+-                          'selected-combination': ('current', flags(options))}
+-        comparisons = {'combined': ('current-default', 'selected-combination')}
++        configurations = {
++            'combination-control': ('current', runtime_flags(compact=False)),
++            'selected-combination': ('current', runtime_flags(
++                constructor_class=options['constructor_class'], unchecked=options['unchecked'],
++                compact=options['compact_headers']))}
++        comparisons = {'combined': ('combination-control', 'selected-combination')}
+         required_configs, required_comparisons = tuple(configurations), tuple(comparisons)
++    elif suite == 'all-on':
++        options = dict.fromkeys(('class_owned', 'constructor_class', 'unchecked',
++                                'leading_case', 'typed_cases', 'boxed_cache', 'compact_headers'), True)
++        configurations = {
++            'class-owned-baseline': CONFIGURATIONS['class-owned-baseline'],
++            'all-on': ('current', runtime_flags(constructor_class=True, unchecked=True,
++                                              leading_case=True, typed_cases=True, boxed_cache=True))}
++        comparisons = {'all-on': ('class-owned-baseline', 'all-on')}
++        required_configs, required_comparisons = tuple(configurations), tuple(comparisons)
++    else:
++        raise ValueError('Unknown suite: ' + str(suite))
+     return {'suite': suite, 'selectedOptions': options, 'configurations': configurations,
+             'comparisons': comparisons, 'requiredConfigurations': required_configs,
+             'requiredComparisons': required_comparisons}
+@@ -104,7 +127,7 @@
+         for path in libraries:
+             copy_file(path, frozen / name / 'lib' / path.name)
+         shutil.copytree(checkout / 'src/main', frozen / name / 'src/main')
+-    if selection['suite'] == 'combined':
++    if selection['suite'] != 'standard':
+         shutil.copytree(root / 'src/test', frozen / 'current/src/test')
+     write_json(frozen / 'suite.json', dict(selection, currentCommit=revision(root)))
+     source_manifest = root / 'build/map/modules.txt'
+@@ -238,15 +261,13 @@
+     assert checks['passed'] is True, 'All Map configurations must pass before timing'
+     if name == 'compact-headers':
+         assert json.loads((out / 'compact-status.json').read_text())['readyToTime'] is True
+-    elif name == 'combined':
++    elif name in ('combined', 'all-on'):
+         assert json.loads((out / 'combined-status.json').read_text())['compatibilityPassed'] is True
+     verify(out)
+     frozen = out / 'frozen'
+     selection = suite_config(out)
+     left, right = selection['comparisons'][name]
+     baseline, baseline_flags = selection['configurations'][left]
+-    if name == 'compact-headers':
+-        baseline_flags = baseline_flags + ['-XX:-UseCompactObjectHeaders']
+     candidate, candidate_flags = selection['configurations'][right]
+     config = json.loads((out / 'run.json').read_text())
+     command = [sys.executable, frozen / 'helpers/compare-map-runtimes.py',
+@@ -306,8 +327,10 @@
+ 
+ def combined(out, java_home):
+     selection = suite_config(out)
+-    assert selection['suite'] == 'combined', 'Combined action requires the combined suite'
+-    status = {'selectedOptions': selection['selectedOptions'], 'configurations': selection['configurations'],
++    assert selection['suite'] in ('combined', 'all-on'), 'Selected action requires combined or all-on suite'
++    comparison, = selection['requiredComparisons']
++    _, candidate = selection['comparisons'][comparison]
++    status = {'suite': selection['suite'], 'comparison': comparison, 'selectedOptions': selection['selectedOptions'], 'configurations': selection['configurations'],
+               'compatibilityPassed': False, 'timingAccepted': False, 'stage': 'full-tests'}
+     status_path = out / 'combined-status.json'
+     write_json(status_path, status)
+@@ -315,7 +338,7 @@
+         verify(out)
+         verify_test_sources(out)
+         try:
+-            status['tests'] = full_tests(out, 'combined', selection['configurations']['selected-combination'][1])
++            status['tests'] = full_tests(out, 'combined', selection['configurations'][candidate][1])
+         finally:
+             verify_test_sources(out)
+         status['stage'] = 'full-map-check'
+@@ -324,7 +347,7 @@
+         status['mapChecks'] = json.loads((out / 'checks.json').read_text())['configurations']
+         status.update(compatibilityPassed=True, stage='timing')
+         write_json(status_path, status)
+-        compare(out, 'combined', java_home)
++        compare(out, comparison, java_home)
+         status.update(timingAccepted=True, stage='complete')
+     except Exception as error:
+         status['error'] = str(error)
+@@ -353,12 +376,12 @@
+     root, frozen = Path(config['repository']), out / 'frozen'
+     try:
+         # Header-off is now an explicit control, so validate it separately too.
+-        status['baselineTests'] = full_tests(out, 'compact-baseline', ['-XX:-UseCompactObjectHeaders'])
+-        status['tests'] = full_tests(out, 'compact', ['-XX:+UseCompactObjectHeaders'])
++        status['baselineTests'] = full_tests(out, 'compact-baseline', CONFIGURATIONS['class-owned-noncompact'][1])
++        status['tests'] = full_tests(out, 'compact', CONFIGURATIONS['class-owned-baseline'][1])
+         status['stage'] = 'full-map-check'
+         write_json(status_path, status)
+-        status['baselineMapCheck'] = check_configuration(out, java_home / 'bin/java', 'checked-class-off', compact_control=False)
+-        status['mapCheck'] = check_configuration(out, java_home / 'bin/java', 'compact-checked-class-off')
++        status['baselineMapCheck'] = check_configuration(out, java_home / 'bin/java', 'class-owned-noncompact')
++        status['mapCheck'] = check_configuration(out, java_home / 'bin/java', 'class-owned-baseline')
+         status['stage'] = 'object-sizes'
+         write_json(status_path, status)
+         # The published cold probe expects lib/, src/, map/, and a manifest under one root.
+@@ -374,7 +397,7 @@
+         write_json(probe / 'manifest.json', {'files': records})
+         command = [sys.executable, frozen / 'helpers/object-sizes.py', probe,
+                    out / 'compact-object-sizes', '--java-home', java_home, '--backend', 'bytecode']
+-        command += ['--jvm-option=' + flag for flag in CONFIGURATIONS['compact-checked-class-off'][1]]
++        command += ['--jvm-option=' + flag for flag in CONFIGURATIONS['class-owned-baseline'][1]]
+         run(out, command, 'compact-object-sizes', 180)
+         sizes = (out / 'compact-object-sizes/sizes.out').read_text()
+         assert 'VM_OPTION\tUseCompactObjectHeaders\ttrue' in sizes, 'Compact object headers were not active'
+@@ -429,8 +452,8 @@
+     parser.add_argument('action', choices=('validate', 'freeze', 'check', 'compare', 'compact', 'combined', 'finish'))
+     parser.add_argument('out', type=Path)
+     parser.add_argument('--baseline-checkout', type=Path)
+-    parser.add_argument('--comparison', choices=(*COMPARISONS, 'combined'))
+-    parser.add_argument('--suite', choices=('standard', 'combined'))
++    parser.add_argument('--comparison', choices=(*COMPARISONS, 'combined', 'all-on'))
++    parser.add_argument('--suite', choices=('standard', 'combined', 'all-on'))
+     for flag in ('constructor-class', 'unchecked', 'compact-headers'):
+         parser.add_argument('--' + flag, choices=('false', 'true'))
+     args = parser.parse_args()
+--- a/.github/workflows/performance.yml
++++ b/.github/workflows/performance.yml
+@@ -4,9 +4,9 @@
+   workflow_dispatch:
+     inputs:
+       suite:
+-        description: Standard matrix or one selected combination against all toggles off
++        description: Standard matrix, selected legacy toggles, or all experimental flags on
+         type: choice
+-        options: [standard, combined]
++        options: [standard, combined, all-on]
+         default: standard
+       constructor_class:
+         description: Combined suite only — constructor class matching
+@@ -99,6 +99,7 @@
+           set -euo pipefail
+           scripts/try-map.sh 2>&1 | tee work/ci-performance/logs/current-build.log
+           python3 tools/test-compare-map-runtimes.py
++          python3 tools/test-ci-performance.py
+       - name: Build original runtime in isolated checkout
+         if: inputs.suite == 'standard'
+         shell: bash
+@@ -122,20 +123,20 @@
+       - name: Full Map checks before timings
+         if: inputs.suite == 'standard'
+         run: python3 work/ci-performance/frozen/helpers/ci-performance.py check work/ci-performance
+-      - name: Original bytecode versus current default bytecode
++      - name: Original bytecode versus class-owned compact baseline
+         if: inputs.suite == 'standard'
+         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison original-vs-current
+-      - name: Checked storage with constructor class matching off versus on
++      - name: Layout-bearing checked storage with class matching off versus on
+         if: inputs.suite == 'standard'
+         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison constructor-class
+-      - name: Constructor class matching with checked versus unchecked storage
++      - name: Layout-bearing class matching with checked versus unchecked storage
+         if: inputs.suite == 'standard'
+         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison owned-storage
+       - name: Optional compact headers — full tests, Map check, sizes, then timing
+         if: inputs.suite == 'standard'
+         run: python3 work/ci-performance/frozen/helpers/ci-performance.py compact work/ci-performance
+-      - name: Combined options — full tests, both Map checks, then one comparison
+-        if: inputs.suite == 'combined'
++      - name: Selected suite — full tests, both Map checks, then one comparison
++        if: inputs.suite == 'combined' || inputs.suite == 'all-on'
+         run: python3 work/ci-performance/frozen/helpers/ci-performance.py combined work/ci-performance
+       - name: Verify immutable inputs and summarize completed comparisons
+         run: python3 work/ci-performance/frozen/helpers/ci-performance.py finish work/ci-performance
+--- /dev/null
++++ b/tools/test-ci-performance.py
+@@ -0,0 +1,145 @@
++#!/usr/bin/env python3
++"""Configuration and launch-contract checks; never starts a JVM or benchmark."""
++import argparse
++import importlib.util
++import itertools
++import json
++from pathlib import Path
++import tempfile
++import unittest
++from unittest.mock import patch
++
++spec = importlib.util.spec_from_file_location('ci_performance', Path(__file__).with_name('ci-performance.py'))
++ci = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(ci)
++
++
++def selection(suite, **kwargs):
++    return ci.selected_suite(argparse.Namespace(suite=suite, **{
++        name: str(kwargs.get(name, False)).lower()
++        for name in ('constructor_class', 'unchecked', 'compact_headers')}))
++
++
++def options(flags):
++    return {flag[2:].split('=', 1)[0]: flag.split('=', 1)[1]
++            for flag in flags if flag.startswith('-D')}
++
++
++class ConfigurationTest(unittest.TestCase):
++    def test_standard_controls_are_explicit_and_distinct(self):
++        chosen = selection('standard')
++        self.assertEqual(len(chosen['requiredComparisons']), 3)
++        for name, (_, flags) in chosen['configurations'].items():
++            if name != 'original':
++                self.assertEqual(len(options(flags)), 6)
++            self.assertEqual(sum('UseCompactObjectHeaders' in flag for flag in flags), 1)
++        left, right = chosen['comparisons']['constructor-class']
++        lflags, rflags = [options(chosen['configurations'][name][1]) for name in (left, right)]
++        self.assertEqual(lflags['thc.classOwnedLayouts'], 'false')
++        self.assertEqual(rflags['thc.classOwnedLayouts'], 'false')
++        self.assertEqual({key for key in lflags if lflags[key] != rflags[key]}, {'thc.constructorClassIdentity'})
++        left, right = chosen['comparisons']['compact-headers']
++        self.assertEqual(options(chosen['configurations'][left][1]), options(chosen['configurations'][right][1]))
++        self.assertIn('-XX:-UseCompactObjectHeaders', chosen['configurations'][left][1])
++        self.assertIn('-XX:+UseCompactObjectHeaders', chosen['configurations'][right][1])
++        self.assertNotIn(left, chosen['requiredConfigurations'])
++
++    def test_selected_combinations_and_all_on_preset(self):
++        for bits in itertools.product((False, True), repeat=3):
++            selected = dict(zip(('constructor_class', 'unchecked', 'compact_headers'), bits))
++            if not any(bits):
++                with self.assertRaises(ValueError): selection('combined', **selected)
++                continue
++            chosen = selection('combined', **selected)
++            self.assertEqual(chosen['comparisons']['combined'], ('combination-control', 'selected-combination'))
++            control, candidate = [chosen['configurations'][key][1] for key in chosen['requiredConfigurations']]
++            self.assertIn('-XX:-UseCompactObjectHeaders', control)
++            self.assertEqual(options(candidate)['thc.constructorClassIdentity'], str(bits[0]).lower())
++            self.assertEqual(options(candidate)['thc.staticShapeUnchecked'], str(bits[1]).lower())
++            self.assertIn('-XX:' + ('+' if bits[2] else '-') + 'UseCompactObjectHeaders', candidate)
++        chosen = selection('all-on')
++        self.assertEqual(chosen['comparisons']['all-on'], ('class-owned-baseline', 'all-on'))
++        self.assertEqual(set(options(chosen['configurations']['all-on'][1]).values()), {'true'})
++        self.assertEqual(sum(value == 'true' for value in options(chosen['configurations']['class-owned-baseline'][1]).values()), 1)
++        for suite in ('standard', 'all-on'):
++            with self.assertRaises(ValueError): selection(suite, unchecked=True)
++        with self.assertRaises(ValueError): selection('typo')
++
++    def test_selected_runner_gates_timing_after_tests_and_map(self):
++        for suite in ('combined', 'all-on'):
++            chosen = selection(suite, **({'unchecked': True} if suite == 'combined' else {}))
++            with tempfile.TemporaryDirectory() as directory:
++                out = Path(directory)
++                events = []
++                def tests(_, name, flags):
++                    events.append('tests')
++                    self.assertEqual(flags, chosen['configurations'][chosen['comparisons'][chosen['requiredComparisons'][0]][1]][1])
++                    return dict(tests=167, failures=0, errors=0, skipped=0)
++                def check(*_):
++                    events.append('map')
++                    ci.write_json(out / 'checks.json', {'passed': True, 'configurations': []})
++                def compare(_, name, __):
++                    events.append('timing')
++                    self.assertEqual(name, chosen['requiredComparisons'][0])
++                    self.assertTrue(json.loads((out / 'combined-status.json').read_text())['compatibilityPassed'])
++                with patch.object(ci, 'suite_config', return_value=chosen), patch.object(ci, 'verify'), \
++                     patch.object(ci, 'verify_test_sources'), patch.object(ci, 'full_tests', side_effect=tests), \
++                     patch.object(ci, 'check', side_effect=check), patch.object(ci, 'compare', side_effect=compare):
++                    ci.combined(out, Path('/fake-java'))
++                self.assertEqual(events, ['tests', 'map', 'timing'])
++                status = json.loads((out / 'combined-status.json').read_text())
++                self.assertEqual(status['suite'], suite)
++                self.assertTrue(status['timingAccepted'])
++
++    def test_selected_compatibility_failure_never_times(self):
++        with tempfile.TemporaryDirectory() as directory:
++            out = Path(directory)
++            with patch.object(ci, 'suite_config', return_value=selection('all-on')), patch.object(ci, 'verify'), \
++                 patch.object(ci, 'verify_test_sources'), patch.object(ci, 'full_tests', side_effect=RuntimeError('failed tests')), \
++                 patch.object(ci, 'check') as check, patch.object(ci, 'compare') as compare:
++                with self.assertRaisesRegex(RuntimeError, 'failed tests'): ci.combined(out, Path('/fake-java'))
++                check.assert_not_called()
++                compare.assert_not_called()
++            status = json.loads((out / 'combined-status.json').read_text())
++            self.assertFalse(status['compatibilityPassed'])
++            self.assertFalse(status['timingAccepted'])
++
++    def test_full_suite_respects_explicit_header_control(self):
++        for enabled in (False, True):
++            with tempfile.TemporaryDirectory() as directory:
++                out = Path(directory)
++                root = out / 'repo'
++                source = root / 'build/test-results/test'
++                source.mkdir(parents=True)
++                (source / 'TEST-stale.xml').write_text('<testsuite tests="999"/>')
++                ci.write_json(out / 'run.json', {'repository': str(root)})
++                def run(_, command, name, timeout, environment):
++                    self.assertIn('-Pthc.compactObjectHeaders=' + str(enabled).lower(), command)
++                    self.assertFalse(source.exists())
++                    self.assertIn('-XX:' + ('+' if enabled else '-') + 'UseCompactObjectHeaders', environment['JAVA_TOOL_OPTIONS'])
++                    source.mkdir(parents=True)
++                    (source / 'TEST-current.xml').write_text('<testsuite tests="167" failures="0" errors="0" skipped="0"/>')
++                with patch.object(ci, 'run', side_effect=run):
++                    result = ci.full_tests(out, 'selected', ci.runtime_flags(compact=enabled))
++                self.assertEqual(result['tests'], 167)
++
++    def test_all_on_compare_emits_exact_frozen_flags(self):
++        chosen = selection('all-on')
++        with tempfile.TemporaryDirectory() as directory:
++            out = Path(directory)
++            ci.write_json(out / 'checks.json', {'passed': True})
++            ci.write_json(out / 'combined-status.json', {'compatibilityPassed': True})
++            ci.write_json(out / 'run.json', {'currentCommit': 'fixed-commit'})
++            result = out / 'comparisons/all-on'
++            result.mkdir(parents=True)
++            ci.write_json(result / 'validation.json', {'passed': True, 'validatedWindows': 45})
++            with patch.object(ci, 'suite_config', return_value=chosen), patch.object(ci, 'verify'), patch.object(ci, 'run') as run:
++                ci.compare(out, 'all-on', Path('/fake-java'))
++            command = run.call_args.args[1]
++            for side, name in (('baseline', 'class-owned-baseline'), ('candidate', 'all-on')):
++                actual = [flag.split('=', 1)[1] for flag in command if isinstance(flag, str) and flag.startswith('--' + side + '-jvm-option=')]
++                self.assertEqual(actual, ci.POLICY + chosen['configurations'][name][1])
++
++
++if __name__ == '__main__':
++    unittest.main()

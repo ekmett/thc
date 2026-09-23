@@ -52,6 +52,7 @@ internal class Metrics(val enabled: Boolean) {
         thunkEvaluationsByLabel[label] = (thunkEvaluationsByLabel[label] ?: 0L) + 1L
     }
     var compiledEntries = 0L
+    var leadingCaseReturns = 0L
     var thunkEvaluations = 0L
     var thunkHits = 0L
     var blackholes = 0L
@@ -367,6 +368,8 @@ private class Alternative(val kind: Int, val value: Any?,
                           @field:CompilationFinal(dimensions = 1) val fields: IntArray,
                           @field:Child var body: Expr) : Node() {
     private val matchProfile = CountingConditionProfile.create()
+    fun matchesData(value: DataValue): Boolean = matchProfile.profile((this.value as DataLayout).matches(value))
+    fun matchesLong(value: Long): Boolean = matchProfile.profile(value == this.value as Long)
     fun matches(frame: VirtualFrame, slot: Int): Boolean = matchProfile.profile(when (kind) {
         DATA_ALTERNATIVE -> if (frame.isObject(slot)) {
             val scrutinee = frame.getObject(slot)
@@ -377,8 +380,9 @@ private class Alternative(val kind: Int, val value: Any?,
         else -> false
     })
 }
-private class Case(scrutinee: Expr, private val binderSlot: Int,
-                   @field:Children private var alternatives: Array<Alternative>, metrics: Metrics) : Expr() {
+private open class Case(scrutinee: Expr, protected val binderSlot: Int,
+                   @field:Children protected var alternatives: Array<Alternative>, metrics: Metrics,
+                   binderProof: CoreRepresentation? = null) : Expr() {
     init {
         val proofs = alternatives.map { it.body.representation }
         val kinds = proofs.map { it.kind }.toSet()
@@ -390,14 +394,18 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
         representation = CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
     }
     // Preserve primitive scrutinees through their frame write and literal comparisons.
-    @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics), true)
+    @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics).apply {
+        if (binderProof != null) representation = representation.refine(binderProof.copy(evaluated = false))
+    }, true)
+    protected fun prepare(frame: VirtualFrame) { scrutinee.write(frame) }
+    protected open fun matches(frame: VirtualFrame, alternative: Alternative): Boolean = alternative.matches(frame, binderSlot)
 
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
-        scrutinee.write(frame)
+        prepare(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
-            if (alt.matches(frame, binderSlot)) {
+            if (matches(frame, alt)) {
                 restoreFields(frame, alt)
                 return alt.body.execute(frame)
             }
@@ -406,11 +414,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
     }
 
     @ExplodeLoop override fun executeLong(frame: VirtualFrame): Long {
-        scrutinee.write(frame)
+        prepare(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
-            if (alt.matches(frame, binderSlot)) {
+            if (matches(frame, alt)) {
                 restoreFields(frame, alt)
                 return alt.body.executeLong(frame)
             }
@@ -419,11 +427,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
     }
 
     @ExplodeLoop override fun executeClosure(frame: VirtualFrame): Closure {
-        scrutinee.write(frame)
+        prepare(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
-            if (alt.matches(frame, binderSlot)) {
+            if (matches(frame, alt)) {
                 restoreFields(frame, alt)
                 return alt.body.executeClosure(frame)
             }
@@ -432,11 +440,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
     }
 
     @ExplodeLoop override fun executeDataValue(frame: VirtualFrame): DataValue {
-        scrutinee.write(frame)
+        prepare(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
-            if (alt.matches(frame, binderSlot)) {
+            if (matches(frame, alt)) {
                 restoreFields(frame, alt)
                 return alt.body.executeDataValue(frame)
             }
@@ -445,11 +453,11 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
     }
 
     @ExplodeLoop override fun executeAddress(frame: VirtualFrame): LiteralAddress {
-        scrutinee.write(frame)
+        prepare(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
             if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
-            if (alt.matches(frame, binderSlot)) {
+            if (matches(frame, alt)) {
                 restoreFields(frame, alt)
                 return alt.body.executeAddress(frame)
             }
@@ -464,6 +472,25 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
             for (i in alt.fields.indices) layout.restore(data, i, frame, alt.fields[i])
         }
     }
+}
+/** Category selection happens during lowering, never in the guest loop. */
+private class DataCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
+                       proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
+    override fun matches(frame: VirtualFrame, alternative: Alternative): Boolean =
+        alternative.matchesData(frame.getObject(binderSlot) as DataValue)
+}
+private class LongCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
+                       proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
+    override fun matches(frame: VirtualFrame, alternative: Alternative): Boolean =
+        alternative.matchesLong(frame.getLong(binderSlot))
+}
+private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
+                          proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
+    override fun execute(frame: VirtualFrame): Any? { prepare(frame); return alternatives.last().body.execute(frame) }
+    override fun executeLong(frame: VirtualFrame): Long { prepare(frame); return alternatives.last().body.executeLong(frame) }
+    override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return alternatives.last().body.executeClosure(frame) }
+    override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return alternatives.last().body.executeDataValue(frame) }
+    override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
 }
 private class Construct(private val layout: DataLayout,
                         @field:Children private var fields: Array<Expr>) : Expr() {
@@ -715,7 +742,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
         "backend" to "ast", "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
         "sourceRootCount" to attachedRootCount, "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
-        "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
+        "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
         "localJoinTransfers" to metrics.localJoinTransfers,
@@ -776,10 +803,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf())
         val body = compile(expression, scope, true)
-        val target = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
+        val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
-            rootSource(body), entryStrict).callTarget
-        return FunctionSpec(target, captures, captureSources)
+            rootSource(body), entryStrict)
+        if (body is Case) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
+            resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
+            ::dataLayout, sources, body.coreSourceLocation))
+        return FunctionSpec(root.callTarget, captures, captureSources)
     }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expr {
         val fn = function(label, emptyList(), expr, scope)
@@ -934,7 +964,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail))
             }.toTypedArray()
-            Case(scrutinee, binder, alternatives, metrics)
+            when (caseCategory(binderProof, alternatives.map { it.kind },
+                alternatives.all { it.kind != LITERAL_ALTERNATIVE || it.value is Long })) {
+                CaseCategory.DATA -> DataCase(scrutinee, binder, alternatives, metrics, binderProof)
+                CaseCategory.LONG -> LongCase(scrutinee, binder, alternatives, metrics, binderProof)
+                CaseCategory.DEFAULT_ONLY -> DefaultCase(scrutinee, binder, alternatives, metrics, binderProof)
+                CaseCategory.GENERIC -> Case(scrutinee, binder, alternatives, metrics)
+            }
         }
         "con" -> {
             val id = expr[1] as String; val arity = (expr[2] as Number).toInt()

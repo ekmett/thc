@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.AstSelfCallTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:46.707Z" hostname="eak-mba" time="0.158">
+  <properties/>
+  <testcase name="polymorphicTailSiteRetainsSelfTransferAfterThreeNegativeTargetCacheEntries()" classname="thc.runtime.AstSelfCallTest" time="0.057"/>
+  <testcase name="selfTransferSwapsWidePrimitiveArgumentsAndSurvivesColdCompiledRecursion()" classname="thc.runtime.AstSelfCallTest" time="0.062"/>
+  <testcase name="clonedRootsShareBodyIdentityWhileKeepingIndependentSelfTargetCaches()" classname="thc.runtime.AstSelfCallTest" time="0.015"/>
+  <testcase name="selfTransferRestoresDistinctEnvironmentsAndTheirRecursiveCells()" classname="thc.runtime.AstSelfCallTest" time="0.023"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

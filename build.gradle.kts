@@ -22,9 +22,13 @@ kotlin {
         freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")
     }
 }
+// Tests and benchmark controls can opt out explicitly; ordinary launches use compact headers.
+val compactObjectHeaders = providers.gradleProperty("thc.compactObjectHeaders").orElse("true").get()
+require(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "thc.compactObjectHeaders must be true or false" }
+val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-"}UseCompactObjectHeaders"
 application {
     mainClass.set("thc.MainKt")
-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xss2m")
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
 }
 tasks.test {
     useJUnitPlatform()

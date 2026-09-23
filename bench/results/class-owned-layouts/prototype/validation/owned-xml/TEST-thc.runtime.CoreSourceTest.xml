@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.CoreSourceTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:34.699Z" hostname="eak-mba" time="0.025">
+  <properties/>
+  <testcase name="unverifiedCoordinatesNeverIndexAvailableSourceText()" classname="thc.runtime.CoreSourceTest" time="0.001"/>
+  <testcase name="sourceNotesAttachToTypedAstAndRootsWithoutAddingExecutionNodes()" classname="thc.runtime.CoreSourceTest" time="0.009"/>
+  <testcase name="realGhcSourceNotesReachTypedRootsAndLocalJoinNodes()" classname="thc.runtime.CoreSourceTest" time="0.014"/>
+  <testcase name="characterOffsetsUseUtf16WithoutReencodingUnicodeSource()" classname="thc.runtime.CoreSourceTest" time="0.0"/>
+  <testcase name="missingSourceContentRetainsLocationsAndOriginalExclusiveProvenance()" classname="thc.runtime.CoreSourceTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.ForcedBindingTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:47.988Z" hostname="eak-mba" time="0.139">
+  <properties/>
+  <testcase name="repeatedLocalDemandsBypassThunkHeadersButSeparateAliasesKeepSharing()" classname="thc.runtime.ForcedBindingTest" time="0.034"/>
+  <testcase name="recursiveCellIdentitySurvivesStrictRhsForcingBeforeGroupPublication()" classname="thc.runtime.ForcedBindingTest" time="0.007"/>
+  <testcase name="astForcingReplacesOnlyTheDemandedLocalAndRetainsSharedThunkAliases()" classname="thc.runtime.ForcedBindingTest" time="0.015"/>
+  <testcase name="preexistingCapturesKeepTheirFinalThunkReferenceWhileTheirRestoredLocalUpdates()" classname="thc.runtime.ForcedBindingTest" time="0.076"/>
+  <testcase name="failedForcingLeavesLocalLinksPointingAtTheMemoizedFailure()" classname="thc.runtime.ForcedBindingTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

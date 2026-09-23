@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.EntryContractTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:54:20.855Z" hostname="eak-mba" time="0.147">
+  <properties/>
+  <testcase name="malformedEntryContractsFailAtLoad()" classname="thc.runtime.EntryContractTest" time="0.0"/>
+  <testcase name="megamorphicCallsEnforceAndShareStrictPapPrefixes()" classname="thc.runtime.EntryContractTest" time="0.023"/>
+  <testcase name="strictJoinPrefixDoesNotStrictifyTheReturnedFunctionSuffix()" classname="thc.runtime.EntryContractTest" time="0.017"/>
+  <testcase name="papPrefixStaysLazyUntilSaturationAndItsThunkIsSharedAfterward()" classname="thc.runtime.EntryContractTest" time="0.011"/>
+  <testcase name="overapplicationEnforcesOnlyTheSaturatedFirstFunctionBeforeApplyingItsResult()" classname="thc.runtime.EntryContractTest" time="0.047"/>
+  <testcase name="knownWorkerCompilesStrictOperandsDirectlyWhileUnknownCallsEnforceTheSameContract()" classname="thc.runtime.EntryContractTest" time="0.047"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

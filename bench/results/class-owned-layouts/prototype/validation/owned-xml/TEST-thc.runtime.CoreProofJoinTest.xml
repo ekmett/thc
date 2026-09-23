@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.CoreProofJoinTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:34.343Z" hostname="eak-mba" time="0.356">
+  <properties/>
+  <testcase name="recursivePrimitiveJoinUsesParallelMovesAndReturnsToNonTailContinuation()" classname="thc.runtime.CoreProofJoinTest" time="0.104"/>
+  <testcase name="mutualJoinsAndNestedOuterTransfersStayInTheirLexicalRegion()" classname="thc.runtime.CoreProofJoinTest" time="0.199"/>
+  <testcase name="exportedEvaluatedCafAndRecursiveAliasesStillForceIntroducedThunks()" classname="thc.runtime.CoreProofJoinTest" time="0.027"/>
+  <testcase name="provenLongCapturesPreserveFullWidthValuesWithoutAnObjectArm()" classname="thc.runtime.CoreProofJoinTest" time="0.005"/>
+  <testcase name="invalidJoinUsesRejectAtLoadRatherThanEscapingIntoClosures()" classname="thc.runtime.CoreProofJoinTest" time="0.02"/>
+  <testcase name="representationMetadataRequiresExactCarriersAndPreservesLegacyUnknown()" classname="thc.runtime.CoreProofJoinTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

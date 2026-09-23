@@ -297,6 +297,8 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
 internal class DirectCallerNode(val target: RootCallTarget, private val metrics: Metrics,
                                knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
     @Child private var entryArguments = EntryArguments(target, metrics, knownEvaluated, prefixSize)
+    @Child private var leadingCaseReturn: LeadingCaseReturnNode? = (target.rootNode as? GuestRoot)
+        ?.leadingCaseReturn?.let { LeadingCaseReturnNode(it, metrics) }
     @Child private var callNode = DirectCallNode.create(target)
     @Child private var loop = TailCallLoop(metrics)
     @Child private var tailCheck = TailCheck(metrics)
@@ -307,6 +309,8 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
 
     fun call(frame: VirtualFrame, arguments: Array<Any?>, tailCall: Boolean): Any? {
         entryArguments.execute(frame, arguments)
+        // All CBV marks (including unused formals and PAP prefixes) run before the shortcut.
+        leadingCaseReturn?.execute(arguments)?.let { return it }
         if (tailCall) {
             tailCheck.check(frame, target, arguments)
             return Calls.direct(callNode, arguments)

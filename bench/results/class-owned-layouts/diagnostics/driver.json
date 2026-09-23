@@ -1,0 +1,148 @@
+{
+  "scope": "Same frozen prototype JAR/Core, class-owned layout off/on with compact headers on. Selected lookup/fold/worker graphs and separate exact allocation/JFR diagnostics. No throughput conclusions from these captures.",
+  "startedUtc": "2026-09-23T08:43:15.667741+00:00",
+  "runtimeJarSha256": "1d51bca562a5f7848cd2f9b88cde6102e00509760bf2a70713f0afedc4fcb192",
+  "frozenManifest": {
+    "path": "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen/manifest.json",
+    "sha256": "372bb7159d4d84522a072bafaa7bdb8454e2a277ef06d842c32e80e4ace63fd2"
+  },
+  "helper": {
+    "path": "/Users/ekmett/thc/work/boxed-value-diagnostics-tools/diagnose.py",
+    "sha256": "df8e19c241d3adb5a492309514871fd5c8ecb4d9a6334baa56d2c12ea44d9141"
+  },
+  "driver": {
+    "path": "/Users/ekmett/thc/work/class-owned-diagnostic-tools/capture.py",
+    "sha256": "e89e4f29d76726211a284519f4730e952ed96857460398f02f5e91b85ab627cc"
+  },
+  "oracleProvenance": {
+    "copiedFrom": "/Users/ekmett/thc/work/boxed-value-cache-comparison/oracle.tsv",
+    "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277",
+    "nativeBinarySha256": "56db4f037fffadad198c4e6bf367e287266fd9c13f9450f4ec5787b186de9fbf",
+    "sameNativeAndModuleContentsAsV7": true,
+    "moduleManifestDifference": "Frozen manifests list absolute paths in their respective directories; all module JSON contents are identical."
+  },
+  "commands": [
+    {
+      "label": "graph-off",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/work/boxed-value-diagnostics-tools/diagnose.py",
+        "graph",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/graph-off",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--backend",
+        "bytecode",
+        "--depth",
+        "2",
+        "--budget",
+        "12000",
+        "--oracle",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/oracle16.tsv",
+        "--selected-map-roots",
+        "--jvm-option=-Dthc.classOwnedLayouts=false",
+        "--jvm-option=-XX:+UseCompactObjectHeaders",
+        "--jvm-option=-Dthc.boxedValueCache=false",
+        "--jvm-option=-Dthc.constructorClassIdentity=false",
+        "--jvm-option=-Dthc.staticShapeUnchecked=false"
+      ],
+      "log": "graph-off.log",
+      "startedUtc": "2026-09-23T08:43:15.668066+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 63.75639320816845
+    },
+    {
+      "label": "graph-on",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/work/boxed-value-diagnostics-tools/diagnose.py",
+        "graph",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/graph-on",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--backend",
+        "bytecode",
+        "--depth",
+        "2",
+        "--budget",
+        "12000",
+        "--oracle",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/oracle16.tsv",
+        "--selected-map-roots",
+        "--jvm-option=-Dthc.classOwnedLayouts=true",
+        "--jvm-option=-XX:+UseCompactObjectHeaders",
+        "--jvm-option=-Dthc.boxedValueCache=false",
+        "--jvm-option=-Dthc.constructorClassIdentity=false",
+        "--jvm-option=-Dthc.staticShapeUnchecked=false"
+      ],
+      "log": "graph-on.log",
+      "startedUtc": "2026-09-23T08:44:19.411774+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 54.06414633244276
+    },
+    {
+      "label": "profile-off",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/work/boxed-value-diagnostics-tools/diagnose.py",
+        "profile",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/profile-off",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--backend",
+        "bytecode",
+        "--depth",
+        "2",
+        "--budget",
+        "12000",
+        "--oracle",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/oracle16.tsv",
+        "--selected-map-roots",
+        "--jvm-option=-Dthc.classOwnedLayouts=false",
+        "--jvm-option=-XX:+UseCompactObjectHeaders",
+        "--jvm-option=-Dthc.boxedValueCache=false",
+        "--jvm-option=-Dthc.constructorClassIdentity=false",
+        "--jvm-option=-Dthc.staticShapeUnchecked=false"
+      ],
+      "log": "profile-off.log",
+      "startedUtc": "2026-09-23T08:45:13.468029+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 38.13750166725367
+    },
+    {
+      "label": "profile-on",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/work/boxed-value-diagnostics-tools/diagnose.py",
+        "profile",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/profile-on",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--backend",
+        "bytecode",
+        "--depth",
+        "2",
+        "--budget",
+        "12000",
+        "--oracle",
+        "/Users/ekmett/thc/work/class-owned-diagnostics/oracle16.tsv",
+        "--selected-map-roots",
+        "--jvm-option=-Dthc.classOwnedLayouts=true",
+        "--jvm-option=-XX:+UseCompactObjectHeaders",
+        "--jvm-option=-Dthc.boxedValueCache=false",
+        "--jvm-option=-Dthc.constructorClassIdentity=false",
+        "--jvm-option=-Dthc.staticShapeUnchecked=false"
+      ],
+      "log": "profile-on.log",
+      "startedUtc": "2026-09-23T08:45:51.606898+00:00",
+      "exitCode": 0,
+      "elapsedSeconds": 34.32305962499231
+    }
+  ],
+  "passed": true,
+  "finishedUtc": "2026-09-23T08:46:25.931534+00:00"
+}

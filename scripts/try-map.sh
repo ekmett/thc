@@ -17,6 +17,6 @@ scripts/native-map-oracle.sh mapAggregate 10000
 python3 scripts/check-map-oracle.py
 scripts/gradle.sh --no-daemon test installDist "$@"
 THC_JAVA="$JAVA_HOME/bin/java"
-"$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" \
+"$THC_JAVA" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" \
   -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
   2>&1 | tee build/map/check.log

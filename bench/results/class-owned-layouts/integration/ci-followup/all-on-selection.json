@@ -1,0 +1,51 @@
+{
+  "suite": "all-on",
+  "selectedOptions": {
+    "class_owned": true,
+    "constructor_class": true,
+    "unchecked": true,
+    "leading_case": true,
+    "typed_cases": true,
+    "boxed_cache": true,
+    "compact_headers": true
+  },
+  "configurations": {
+    "class-owned-baseline": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ],
+    "all-on": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.leadingCaseReturn=true",
+        "-Dthc.typedCases=true",
+        "-Dthc.boxedValueCache=true",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ]
+  },
+  "comparisons": {
+    "all-on": [
+      "class-owned-baseline",
+      "all-on"
+    ]
+  },
+  "requiredConfigurations": [
+    "class-owned-baseline",
+    "all-on"
+  ],
+  "requiredComparisons": [
+    "all-on"
+  ]
+}

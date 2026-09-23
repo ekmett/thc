@@ -1,0 +1,106 @@
+{
+  "suite": "standard",
+  "selectedOptions": {
+    "constructor_class": false,
+    "unchecked": false,
+    "compact_headers": false
+  },
+  "configurations": {
+    "original": [
+      "original",
+      [
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ],
+    "class-owned-baseline": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ],
+    "layout-bearing-class-off": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ],
+    "layout-bearing-class-on": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ],
+    "layout-bearing-unchecked-class-on": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ],
+    "class-owned-noncompact": [
+      "current",
+      [
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.boxedValueCache=false",
+        "-XX:-UseCompactObjectHeaders"
+      ]
+    ]
+  },
+  "comparisons": {
+    "original-vs-current": [
+      "original",
+      "class-owned-baseline"
+    ],
+    "constructor-class": [
+      "layout-bearing-class-off",
+      "layout-bearing-class-on"
+    ],
+    "owned-storage": [
+      "layout-bearing-class-on",
+      "layout-bearing-unchecked-class-on"
+    ],
+    "compact-headers": [
+      "class-owned-noncompact",
+      "class-owned-baseline"
+    ]
+  },
+  "requiredConfigurations": [
+    "original",
+    "class-owned-baseline",
+    "layout-bearing-class-off",
+    "layout-bearing-class-on",
+    "layout-bearing-unchecked-class-on"
+  ],
+  "requiredComparisons": [
+    "original-vs-current",
+    "constructor-class",
+    "owned-storage"
+  ]
+}

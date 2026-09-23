@@ -1,0 +1,197 @@
+{
+  "startedAtUtc": "2026-09-23T08:15:48.388556+00:00",
+  "base": "e9c3db9f2c8710f65281ee10e1521a25de7a7566",
+  "runs": [
+    {
+      "name": "default",
+      "argv": [
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+        "test",
+        "installDist",
+        "--no-daemon"
+      ],
+      "javaToolOptions": "-Dthc.classOwnedLayouts=false",
+      "startedAtUtc": "2026-09-23T08:15:48.388982+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:16:23.433937+00:00",
+      "tests": {
+        "tests": 157,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "owned",
+      "argv": [
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+        "test",
+        "--rerun",
+        "--no-daemon"
+      ],
+      "javaToolOptions": "-Dthc.classOwnedLayouts=true",
+      "startedAtUtc": "2026-09-23T08:16:23.448834+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:16:35.739205+00:00",
+      "tests": {
+        "tests": 157,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "owned-compact-checked",
+      "argv": [
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+        "test",
+        "--rerun",
+        "--no-daemon"
+      ],
+      "javaToolOptions": "-Dthc.classOwnedLayouts=true -Dthc.constructorClassIdentity=true -Dthc.boxedValueCache=true -XX:+UseCompactObjectHeaders",
+      "startedAtUtc": "2026-09-23T08:16:35.748636+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:16:48.804554+00:00",
+      "tests": {
+        "tests": 157,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "owned-compact-unchecked",
+      "argv": [
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/scripts/gradle.sh",
+        "test",
+        "--rerun",
+        "--no-daemon"
+      ],
+      "javaToolOptions": "-Dthc.classOwnedLayouts=true -Dthc.constructorClassIdentity=true -Dthc.boxedValueCache=true -Dthc.staticShapeUnchecked=true -XX:+UseCompactObjectHeaders",
+      "startedAtUtc": "2026-09-23T08:16:48.815730+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:02.837001+00:00",
+      "tests": {
+        "tests": 157,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "name": "DataValue-bytecode",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javap",
+        "-p",
+        "-c",
+        "-classpath",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/build/classes/kotlin/main",
+        "thc.runtime.DataValue"
+      ],
+      "javaToolOptions": "",
+      "startedAtUtc": "2026-09-23T08:17:02.847447+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:03.004689+00:00"
+    },
+    {
+      "name": "LayoutDataValue-bytecode",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javap",
+        "-p",
+        "-c",
+        "-classpath",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/build/classes/kotlin/main",
+        "thc.runtime.LayoutDataValue"
+      ],
+      "javaToolOptions": "",
+      "startedAtUtc": "2026-09-23T08:17:03.005095+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:03.142373+00:00"
+    },
+    {
+      "name": "ClassOwnedLayouts-bytecode",
+      "argv": [
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javap",
+        "-p",
+        "-c",
+        "-classpath",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/build/classes/kotlin/main",
+        "thc.runtime.ClassOwnedLayouts"
+      ],
+      "javaToolOptions": "",
+      "startedAtUtc": "2026-09-23T08:17:03.142786+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:03.284061+00:00"
+    },
+    {
+      "name": "sizes-off-normal",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/object-sizes.py",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-off-normal",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--jvm-option=-Dthc.classOwnedLayouts=false",
+        "--jvm-option=-XX:-UseCompactObjectHeaders"
+      ],
+      "javaToolOptions": "",
+      "startedAtUtc": "2026-09-23T08:17:40.902321+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:42.184517+00:00"
+    },
+    {
+      "name": "sizes-on-normal",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/object-sizes.py",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-normal",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--jvm-option=-Dthc.classOwnedLayouts=true",
+        "--jvm-option=-XX:-UseCompactObjectHeaders"
+      ],
+      "javaToolOptions": "",
+      "startedAtUtc": "2026-09-23T08:17:42.184782+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:43.473817+00:00"
+    },
+    {
+      "name": "sizes-off-compact",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/object-sizes.py",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-off-compact",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--jvm-option=-Dthc.classOwnedLayouts=false",
+        "--jvm-option=-XX:+UseCompactObjectHeaders"
+      ],
+      "javaToolOptions": "",
+      "startedAtUtc": "2026-09-23T08:17:43.474084+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:44.868382+00:00"
+    },
+    {
+      "name": "sizes-on-compact",
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/ekmett/thc/bench/results/constructor-class/object-sizes/object-sizes.py",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+        "/Users/ekmett/thc/work/class-owned-layout-prototype/validation/sizes-on-compact",
+        "--java-home",
+        "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--jvm-option=-Dthc.classOwnedLayouts=true",
+        "--jvm-option=-XX:+UseCompactObjectHeaders"
+      ],
+      "javaToolOptions": "",
+      "startedAtUtc": "2026-09-23T08:17:44.868683+00:00",
+      "returncode": 0,
+      "endedAtUtc": "2026-09-23T08:17:46.209875+00:00"
+    }
+  ],
+  "frozen": "/Users/ekmett/thc/work/class-owned-layout-prototype/frozen",
+  "completedAtUtc": "2026-09-23T08:17:46.210128+00:00"
+}

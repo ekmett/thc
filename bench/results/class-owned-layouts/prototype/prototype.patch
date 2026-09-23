@@ -1,0 +1,483 @@
+--- a/src/main/kotlin/thc/runtime/DataValues.kt
++++ b/src/main/kotlin/thc/runtime/DataValues.kt
+@@ -34,16 +34,22 @@
+ ) {
+     init { require(referenceTypes.size == fieldReps.size) }
+     @CompilationFinal(dimensions = 1)
+-    private val fields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
+-    val arity: Int = fields.size
++    private val fields: Array<Field>
++    val arity: Int = fieldReps.size
+     // Only this layout's private factory path can authorize a storage object.
+     // The key is checked by the superclass constructor and never retained there.
+     private val allocationKey = Any()
+ 
+-    private val shape = StaticShape.newBuilder(language).also { builder ->
+-        builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
+-        fields.forEach { it.register(builder) }
+-    }.build(DataValue::class.java, DataValueFactory::class.java)
++    private val shape: StaticShape<DataValueFactory>
++    // The permanent class token is distinct from the allocation authentication key.
++    private val classOwnerToken = Any()
++    private val ownedCarrier: Class<*>?
++
++    private fun buildShape(language: TruffleLanguage<*>, properties: Array<Field>, fieldless: Boolean): StaticShape<DataValueFactory> =
++        StaticShape.newBuilder(language).also { builder ->
++            builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
++            properties.forEach { it.register(builder) }
++        }.build(if (fieldless) DataValue::class.java else LayoutDataValue::class.java, DataValueFactory::class.java)
+ 
+     private val classIdentityEnabled = java.lang.Boolean.getBoolean(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
+     private val constructorClass: ConstructorClassIdentity
+@@ -54,9 +60,23 @@
+     internal val hasBoxedValueCache: Boolean get() = boxedValues != null
+ 
+     init {
+-        // Register checked/off-mode layouts too: a later enabled layout must
+-        // discover all prior owners of a shared array-storage carrier class.
+-        val sample = shape.factory.create(this, allocationKey)
++        val requested = java.lang.Boolean.getBoolean(CLASS_OWNED_LAYOUTS_PROPERTY)
++        var chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
++        var chosenShape = buildShape(language, chosenFields, requested)
++        var sample = chosenShape.factory.create(this, allocationKey)
++        val reserved = requested && ClassOwnedLayouts.reserve(sample.javaClass, classOwnerToken)
++        if (requested && !reserved) {
++            // A shared array carrier already belongs to another layout. Its old
++            // pointer-free values remain valid; this layout takes a separate
++            // superclass with an explicit owner field before publishing values.
++            // StaticProperty instances are shape-specific and cannot be reused.
++            chosenFields = Array(fieldReps.size) { Field(it, fieldReps[it], referenceTypes[it]) }
++            chosenShape = buildShape(language, chosenFields, false)
++            sample = chosenShape.factory.create(this, allocationKey)
++        }
++        fields = chosenFields
++        shape = chosenShape
++        ownedCarrier = if (reserved) sample.javaClass else null
+         constructorClass = ConstructorClassIdentity(sample.javaClass)
+         nullaryValue = if (arity == 0) sample else null
+         val range = if (!java.lang.Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) || fieldReps.size != 1) null
+@@ -71,17 +91,32 @@
+             // Every value owns its storage under both StaticShape strategies.
+             Array((it.last - it.first + 1).toInt()) { index ->
+                 val value = shape.factory.create(this, allocationKey)
+-                constructorClass.observe(value.javaClass)
++                checkAllocated(value)
+                 fields[0].initializeLong(value, boxedValueMinimum + index)
+                 value
+             }
+         }
++        if (ownedCarrier != null) ClassOwnedLayouts.publish(ownedCarrier, classOwnerToken, this)
++    }
++
++    /** Expected-layout operations use these guards, never a generic class lookup. */
++    private fun owns(value: Any?): Boolean = if (ownedCarrier != null)
++        value != null && value.javaClass === ownedCarrier
++    else value is LayoutDataValue && value.layout === this
++
++    private fun checkAllocated(value: DataValue) {
++        // An unexpected new carrier cannot escape and acquire an ambiguous cold
++        // identity. The old layout-carrying path retains its original fallback.
++        if (ownedCarrier != null && value.javaClass !== ownedCarrier)
++            fault("Unexpected carrier for class-owned constructor layout")
++        constructorClass.observe(value.javaClass)
+     }
+ 
+     fun matches(value: Any?): Boolean {
++        if (ownedCarrier != null) return owns(value)
+         if (classIdentityEnabled && constructorClass.isExclusive())
+             return value != null && value.javaClass === constructorClass.carrier
+-        return value is DataValue && value.layout === this
++        return owns(value)
+     }
+ 
+     internal fun checkAllocationKey(key: Any?) {
+@@ -113,25 +148,25 @@
+     /** Keep the value private until every final field has been initialized exactly once. */
+     internal fun allocate(): DataValue {
+         val value = nullaryValue ?: shape.factory.create(this, allocationKey)
+-        constructorClass.observe(value.javaClass)
++        checkAllocated(value)
+         return value
+     }
+ 
+     internal fun initialize(value: DataValue, index: Int, field: Any?) {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         fields[index].initialize(value, field)
+     }
+ 
+     /** A primitive producer can initialize its property without an Object-array bridge. */
+     internal fun initializeLong(value: DataValue, index: Int, field: Long) {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         fields[index].initializeLong(value, field)
+     }
+ 
+     fun read(value: DataValue, index: Int): Any? {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         return fields[index].read(value)
+     }
+@@ -142,21 +177,21 @@
+     }
+ 
+     fun readLong(value: DataValue, index: Int): Long {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         return fields[index].readLong(value)
+     }
+ 
+     /** Keep primitive property reads next to indexed frame writes, as Cadenza does. */
+     fun restore(value: DataValue, index: Int, frame: Frame, slot: Int) {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (index < 0 || index >= arity) fault("Invalid constructor field index")
+         fields[index].restore(value, frame, slot)
+     }
+ 
+     @TruffleBoundary
+     internal fun describe(value: DataValue): String {
+-        if (value.layout !== this) fault("Constructor value does not match layout")
++        if (!owns(value)) fault("Constructor value does not match layout")
+         if (arity == 0) return name
+         return fields.indices.joinToString(prefix = "$name[", postfix = "]") { index ->
+             val field = read(value, index)
+@@ -229,11 +264,19 @@
+ }
+ 
+ /** Public superclass for Truffle's generated storage classes; no generic payload array. */
+-open class DataValue(val layout: DataLayout, allocationKey: Any?) :
++open class DataValue(layout: DataLayout, allocationKey: Any?) :
+     ValidatedStorage(layout.checkAllocationKey(allocationKey)) {
++    // Concrete getter: StaticShape deliberately rejects abstract superclass methods.
++    open val layout: DataLayout
++        @TruffleBoundary get() = ClassOwnedLayouts.resolve(javaClass)
++
+     @TruffleBoundary
+     override fun toString(): String = layout.describe(this)
+ }
++
++/** Default representation and shared-carrier fallback. The fieldless base has no fields. */
++open class LayoutDataValue(final override val layout: DataLayout, allocationKey: Any?) :
++    DataValue(layout, allocationKey)
+ 
+ /** Must match the public DataValue superclass constructor exactly. */
+ interface DataValueFactory {
+--- /dev/null
++++ b/src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt
+@@ -0,0 +1,41 @@
++package thc.runtime
++
++import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
++
++internal const val CLASS_OWNED_LAYOUTS_PROPERTY = "thc.classOwnedLayouts"
++
++/** Permanent class ownership for values that do not carry a layout pointer.
++ * The ClassValue instance never keeps a separate strong collection of its keys. */
++internal object ClassOwnedLayouts {
++    private class Owner {
++        private var token: Any? = null
++        @Volatile private var descriptor: DataLayout? = null
++
++        @Synchronized fun reserve(candidate: Any): Boolean {
++            if (token == null) token = candidate
++            return token === candidate
++        }
++
++        @Synchronized fun publish(candidate: Any, layout: DataLayout) {
++            if (token !== candidate || descriptor != null && descriptor !== layout)
++                fault("Invalid permanent constructor class ownership")
++            // Release only after all immutable descriptor fields and cached values
++            // have initialized. Reservation alone must not publish a partial `this`.
++            descriptor = layout
++        }
++
++        fun resolve(): DataLayout = descriptor ?: fault("Unpublished constructor class ownership")
++    }
++
++    // Composition is deliberate: callers must not gain ClassValue.remove().
++    private val owners = object : ClassValue<Owner>() {
++        override fun computeValue(type: Class<*>): Owner = Owner()
++    }
++
++    @TruffleBoundary fun reserve(carrier: Class<*>, token: Any): Boolean = owners.get(carrier).reserve(token)
++    @TruffleBoundary fun publish(carrier: Class<*>, token: Any, layout: DataLayout) =
++        owners.get(carrier).publish(token, layout)
++
++    /** Generic/debug access only. Compiled constructor operations already know their layout. */
++    @TruffleBoundary fun resolve(carrier: Class<*>): DataLayout = owners.get(carrier).resolve()
++}
+--- /dev/null
++++ b/src/test/kotlin/thc/runtime/ClassOwnedLayoutTest.kt
+@@ -0,0 +1,185 @@
++package thc.runtime
++
++import com.oracle.truffle.api.RootCallTarget
++import com.oracle.truffle.api.TruffleLanguage
++import com.oracle.truffle.api.frame.VirtualFrame
++import com.oracle.truffle.api.nodes.RootNode
++import com.oracle.truffle.api.staticobject.StaticShape
++import org.graalvm.polyglot.Context
++import org.junit.jupiter.api.Assertions.*
++import org.junit.jupiter.api.Test
++import thc.Language
++import java.lang.reflect.Modifier
++
++class ClassOwnedLayoutTest {
++    private fun options(owned: Boolean, unchecked: Boolean = false, action: () -> Unit) {
++        val settings = mapOf(CLASS_OWNED_LAYOUTS_PROPERTY to owned.toString(),
++            STATIC_SHAPE_UNCHECKED_PROPERTY to unchecked.toString())
++        val previous = settings.mapValues { System.getProperty(it.key) }
++        try {
++            settings.forEach { (key, value) -> System.setProperty(key, value) }
++            action()
++        } finally {
++            previous.forEach { (key, value) ->
++                if (value == null) System.clearProperty(key) else System.setProperty(key, value)
++            }
++        }
++    }
++
++    private fun context(strategy: String, action: (Language) -> Unit) {
++        Context.newBuilder("thc").allowExperimentalOptions(true)
++            .option("engine.StaticObjectStorageStrategy", strategy)
++            .option("engine.BackgroundCompilation", "false")
++            .option("engine.MultiTier", "false")
++            .option("engine.CompilationFailureAction", "Throw")
++            .build().use { context ->
++                context.initialize("thc"); context.enter()
++                try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
++                finally { context.leave() }
++            }
++    }
++
++    private fun compile(target: RootCallTarget) {
++        val optimized = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
++        optimized.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
++        assertEquals(true, optimized.getMethod("isValidLastTier").invoke(target))
++    }
++
++    private class ReadRoot(private val layout: DataLayout) : RootNode(null) {
++        override fun execute(frame: VirtualFrame): Any =
++            if (layout.matches(frame.arguments[0])) layout.readLong(frame.arguments[0] as DataValue, 0) else -17L
++    }
++
++    @Test fun fieldlessOwnersAndArrayFallbackKeepOldCompiledValuesValid() = options(true) {
++        assertTrue(DataValue::class.java.declaredFields.none { !Modifier.isStatic(it.modifiers) },
++            "The pointer-free base must not retain a per-instance layout or ownership token")
++        assertEquals(listOf(DataLayout::class.java), LayoutDataValue::class.java.declaredFields
++            .filter { !Modifier.isStatic(it.modifiers) }.map { it.type })
++        for (strategy in listOf("field-based", "array-based")) context(strategy) { language ->
++            val first = DataLayout(language, "First", "First", arrayOf("IntRep"))
++            val a = first.create(arrayOf(Long.MIN_VALUE))
++            assertFalse(a is LayoutDataValue)
++            assertSame(first, a.layout)
++            val target = ReadRoot(first).callTarget
++            repeat(30) { assertEquals(Long.MIN_VALUE, Calls.target(target, arrayOf(a))) }
++            compile(target)
++            val second = DataLayout(language, "Second", "Second", arrayOf("IntRep"))
++            val b = second.create(arrayOf(Long.MAX_VALUE))
++            val third = DataLayout(language, "Third", "Third", arrayOf("IntRep"))
++            val c = third.create(arrayOf(3_000_000_017L))
++            if (strategy == "array-based") {
++                assertTrue(b is LayoutDataValue); assertTrue(c is LayoutDataValue)
++                assertNotSame(a.javaClass, b.javaClass)
++                assertSame(b.javaClass, c.javaClass,
++                    "Shared fallback classes still discriminate by each value's layout")
++            } else {
++                assertFalse(b is LayoutDataValue); assertFalse(c is LayoutDataValue)
++            }
++            assertEquals(Long.MIN_VALUE, Calls.target(target, arrayOf(a)))
++            assertEquals(-17L, Calls.target(target, arrayOf(b)))
++            assertEquals(-17L, Calls.target(target, arrayOf(c)))
++            assertSame(first, a.layout); assertSame(second, b.layout); assertSame(third, c.layout)
++            assertEquals("First[${Long.MIN_VALUE}]", a.toString())
++            assertThrows(RuntimeFault::class.java) { second.readLong(a, 0) }
++            assertThrows(RuntimeFault::class.java) { first.initializeLong(b, 0, 0L) }
++            for (foreign in listOf(null, Any(), 1L, first)) assertFalse(first.matches(foreign))
++            assertEquals(Long.MAX_VALUE, second.readLong(b, 0))
++        }
++    }
++
++    @Test fun offModeAndClosedContextsCannotReassignAnExistingOwner() {
++        lateinit var first: DataLayout
++        lateinit var a: DataValue
++        options(true) {
++            context("array-based") { language ->
++                first = DataLayout(language, "Survivor", "Survivor", arrayOf("IntRep"))
++                a = first.create(arrayOf(Long.MIN_VALUE))
++                options(false) {
++                    val off = DataLayout(language, "Off", "Off", arrayOf("IntRep"))
++                    val b = off.create(arrayOf(12L))
++                    assertTrue(b is LayoutDataValue)
++                    assertFalse(first.matches(b)); assertFalse(off.matches(a))
++                    assertSame(first, a.layout)
++                }
++            }
++            // Language instances may get different generated classes across contexts;
++            // either policy must preserve the old class's permanent owner.
++            context("array-based") { language ->
++                val other = DataLayout(language, "Later", "Later", arrayOf("IntRep"))
++                val b = other.create(arrayOf(Long.MAX_VALUE))
++                assertSame(first, a.layout)
++                assertEquals(Long.MIN_VALUE, first.readLong(a, 0))
++                assertFalse(first.matches(b)); assertFalse(other.matches(a))
++                assertSame(other, b.layout)
++            }
++        }
++    }
++
++    private class ReservationCarrier
++    @Test fun classReservationIsPermanentAndDescriptorPublicationCannotChangeItsOwner() {
++        val token = Any()
++        val competitor = Any()
++        assertTrue(ClassOwnedLayouts.reserve(ReservationCarrier::class.java, token))
++        assertFalse(ClassOwnedLayouts.reserve(ReservationCarrier::class.java, competitor))
++        assertThrows(RuntimeFault::class.java) { ClassOwnedLayouts.resolve(ReservationCarrier::class.java) }
++        options(false) {
++            context("field-based") { language ->
++                val owner = DataLayout(language, "Owner", "Owner", emptyArray())
++                val other = DataLayout(language, "Other", "Other", emptyArray())
++                ClassOwnedLayouts.publish(ReservationCarrier::class.java, token, owner)
++                assertSame(owner, ClassOwnedLayouts.resolve(ReservationCarrier::class.java))
++                assertThrows(RuntimeFault::class.java) {
++                    ClassOwnedLayouts.publish(ReservationCarrier::class.java, competitor, other)
++                }
++                assertThrows(RuntimeFault::class.java) {
++                    ClassOwnedLayouts.publish(ReservationCarrier::class.java, token, other)
++                }
++                assertFalse(ClassOwnedLayouts.reserve(ReservationCarrier::class.java, competitor))
++                assertSame(owner, ClassOwnedLayouts.resolve(ReservationCarrier::class.java))
++            }
++        }
++    }
++
++    private class AnswerRoot : RootNode(null) {
++        var evaluations = 0
++        override fun execute(frame: VirtualFrame): Any { evaluations++; return Long.MIN_VALUE }
++    }
++    private class ForceRoot : RootNode(null) {
++        @Child private var force = Force(Metrics(false))
++        override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
++    }
++
++    @Test fun ownershipChecksPreservePreciseFieldsLazyFieldsAndAllocationAuthentication() {
++        for (strategy in listOf("field-based", "array-based")) for (unchecked in listOf(false, true)) options(true, unchecked) {
++            context(strategy) { language ->
++                val scalar = DataLayout(language, "Scalar", "Scalar", arrayOf("IntRep"))
++                val a = scalar.create(arrayOf(Long.MAX_VALUE))
++                val typed = DataLayout(language, "Typed", "Typed", arrayOf("LiftedRep"), arrayOf(DataValue::class.java))
++                assertSame(a, typed.read(typed.create(arrayOf(a)), 0))
++                assertNull(typed.read(typed.create(arrayOf(null)), 0))
++                assertThrows(IllegalArgumentException::class.java) { typed.create(arrayOf(Any())) }
++                val lazy = DataLayout(language, "Lazy", "Lazy", arrayOf("LiftedRep"))
++                val answer = AnswerRoot()
++                val thunk = Thunk(answer.callTarget, null)
++                val cell = lazy.create(arrayOf(thunk))
++                assertEquals(0, answer.evaluations)
++                assertSame(thunk, lazy.read(cell, 0))
++                cell.toString()
++                assertEquals(0, answer.evaluations)
++                val force = ForceRoot().callTarget
++                repeat(2) { assertEquals(Long.MIN_VALUE, Calls.target(force, arrayOf(lazy.read(cell, 0)))) }
++                assertEquals(1, answer.evaluations)
++                assertNull(thunk.target)
++                for (fake in listOf(null, Any(), scalar, a)) {
++                    assertThrows(RuntimeFault::class.java) { DataValue(scalar, fake) }
++                    assertThrows(RuntimeFault::class.java) { LayoutDataValue(scalar, fake) }
++                    assertThrows(RuntimeFault::class.java) { object : DataValue(scalar, fake) {} }
++                }
++                val foreign = StaticShape.newBuilder(language).build(DataValue::class.java, DataValueFactory::class.java)
++                assertThrows(RuntimeFault::class.java) { foreign.factory.create(scalar, Any()) }
++                for (index in listOf(-1, 1)) assertThrows(RuntimeFault::class.java) { scalar.read(a, index) }
++                assertEquals(Long.MAX_VALUE, scalar.readLong(a, 0))
++            }
++        }
++    }
++}
+--- a/src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt
++++ b/src/test/kotlin/thc/runtime/ConstructorClassIdentityTest.kt
+@@ -58,8 +58,14 @@
+                 }
+                 assertThrows(RuntimeFault::class.java) { DataValue(first, Any()) }
+                 if (strategy == "array-based") {
+-                    assertSame(a.javaClass, b.javaClass)
+-                    assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
++                    if (a is LayoutDataValue) {
++                        assertSame(a.javaClass, b.javaClass)
++                        assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
++                    } else {
++                        assertTrue(b is LayoutDataValue)
++                        assertNotSame(a.javaClass, b.javaClass)
++                        assertTrue(proof(first).isExclusive()); assertTrue(proof(second).isExclusive())
++                    }
+                 }
+             }
+         }
+@@ -70,7 +76,7 @@
+         override fun getName(): String = "constructor class match"
+     }
+ 
+-    @Test fun compiledMatchDeoptimizesBeforeASecondSharedClassOwnerPublishesValues() = matching(true) {
++    @Test fun compiledMatchTracksPermanentOrInvalidatableClassOwnership() = matching(true) {
+         context("array-based") { language ->
+             val first = DataLayout(language, "First", "First", arrayOf("IntRep"))
+             val a = first.create(arrayOf(3_000_000_017L))
+@@ -85,10 +91,17 @@
+             // the earlier enabled proof, before even its first value is published.
+             lateinit var second: DataLayout
+             matching(false) { second = DataLayout(language, "Second", "Second", arrayOf("IntRep")) }
+-            assertFalse(valid(target), "Compiled class-only matching must depend on exclusive ownership")
+-            assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
+             val b = second.create(arrayOf(Long.MAX_VALUE))
+-            assertSame(a.javaClass, b.javaClass)
++            if (a is LayoutDataValue) {
++                assertFalse(valid(target), "Compiled shared-class matching must depend on exclusive ownership")
++                assertFalse(proof(first).isExclusive()); assertFalse(proof(second).isExclusive())
++                assertSame(a.javaClass, b.javaClass)
++            } else {
++                assertTrue(valid(target), "A permanent owner keeps its class when a second layout falls back")
++                assertTrue(proof(first).isExclusive()); assertTrue(proof(second).isExclusive())
++                assertTrue(b is LayoutDataValue)
++                assertNotSame(a.javaClass, b.javaClass)
++            }
+             assertFalse(matches(b)); assertTrue(matches(a))
+             compile(target)
+             assertFalse(matches(b)); assertTrue(matches(a))
+--- a/src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt
++++ b/src/test/kotlin/thc/runtime/StaticShapeSafetyTest.kt
+@@ -60,8 +60,12 @@
+                 assertEquals(listOf(2), DataValue::class.java.constructors.map { it.parameterCount })
+                 assertEquals(listOf(2), CapturedFrame::class.java.constructors.map { it.parameterCount })
+                 if (strategy == "array-based") {
+-                    assertSame(value.javaClass, otherValue.javaClass,
++                    if (value is LayoutDataValue) assertSame(value.javaClass, otherValue.javaClass,
+                         "Layout validation must work even when constructors share their carrier class")
++                    else {
++                        assertTrue(otherValue is LayoutDataValue)
++                        assertNotSame(value.javaClass, otherValue.javaClass)
++                    }
+                     assertSame(environment.javaClass, otherEnvironment.javaClass)
+                 }
+ 
+--- a/src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt
++++ b/src/test/kotlin/thc/runtime/BoxedValueCacheTest.kt
+@@ -133,7 +133,13 @@
+                     assertTrue(first.matches(value)); assertFalse(first.matches(other))
+                     assertTrue(second.matches(other)); assertFalse(second.matches(value))
+                     assertThrows(RuntimeFault::class.java) { second.readLong(value, 0) }
+-                    if (strategy == "array-based") assertSame(value.javaClass, other.javaClass)
++                    if (strategy == "array-based") {
++                        if (value is LayoutDataValue) assertSame(value.javaClass, other.javaClass)
++                        else {
++                            assertTrue(other is LayoutDataValue)
++                            assertNotSame(value.javaClass, other.javaClass)
++                        }
++                    }
+                 }
+                 context(strategy) { language ->
+                     val another = layout(language, builtins[0])

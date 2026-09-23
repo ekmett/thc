@@ -19,6 +19,9 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
         entryStrict = strict.copyOf()
         entryArgumentOffset = if (hasEnvironment) 2 else 1
     }
+    @field:CompilationFinal internal var leadingCaseReturn: LeadingCaseReturn? = null
+        private set
+    internal fun configureLeadingCaseReturn(recipe: LeadingCaseReturn?) { leadingCaseReturn = recipe }
     // Clones retain identity, so self calls through a cloned target still loop.
     private val bodyIdentity = Any()
     @JvmField val mask = System.identityHashCode(bodyIdentity).let { h ->

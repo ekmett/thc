@@ -1,0 +1,12 @@
+[
+  {
+    "path": "/Users/ekmett/thc/work/class-owned-diagnostics/profile-off/map.jfr",
+    "sha256": "5292d639865c85421cecd3e9f50ef304d910c5de8bdc986ffb5d5823052ad2a2",
+    "bytes": 384047
+  },
+  {
+    "path": "/Users/ekmett/thc/work/class-owned-diagnostics/profile-on/map.jfr",
+    "sha256": "93b002b8222bab58e220ce03760da3857550f8e0ef2baffa7e03d0511b51def7",
+    "bytes": 344388
+  }
+]

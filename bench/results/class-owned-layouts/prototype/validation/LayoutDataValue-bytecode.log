@@ -1,0 +1,21 @@
+Compiled from "DataValues.kt"
+public class thc.runtime.LayoutDataValue extends thc.runtime.DataValue {
+  private final thc.runtime.DataLayout layout;
+
+  public thc.runtime.LayoutDataValue(thc.runtime.DataLayout, java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokespecial #10                 // Method thc/runtime/DataValue."<init>":(Lthc/runtime/DataLayout;Ljava/lang/Object;)V
+         6: aload_0
+         7: aload_1
+         8: putfield      #14                 // Field layout:Lthc/runtime/DataLayout;
+        11: return
+
+  public final thc.runtime.DataLayout getLayout();
+    Code:
+         0: aload_0
+         1: getfield      #14                 // Field layout:Lthc/runtime/DataLayout;
+         4: areturn
+}

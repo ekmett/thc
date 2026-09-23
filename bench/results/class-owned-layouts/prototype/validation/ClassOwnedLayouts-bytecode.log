@@ -1,0 +1,54 @@
+Compiled from "ClassOwnedLayouts.kt"
+public final class thc.runtime.ClassOwnedLayouts {
+  public static final thc.runtime.ClassOwnedLayouts INSTANCE;
+
+  private static final thc.runtime.ClassOwnedLayouts$owners$1 owners;
+
+  private thc.runtime.ClassOwnedLayouts();
+    Code:
+         0: aload_0
+         1: invokespecial #8                  // Method java/lang/Object."<init>":()V
+         4: return
+
+  public final boolean reserve(java.lang.Class<?>, java.lang.Object);
+    Code:
+         0: getstatic     #19                 // Field owners:Lthc/runtime/ClassOwnedLayouts$owners$1;
+         3: aload_1
+         4: invokevirtual #25                 // Method thc/runtime/ClassOwnedLayouts$owners$1.get:(Ljava/lang/Class;)Ljava/lang/Object;
+         7: checkcast     #27                 // class thc/runtime/ClassOwnedLayouts$Owner
+        10: aload_2
+        11: invokevirtual #30                 // Method thc/runtime/ClassOwnedLayouts$Owner.reserve:(Ljava/lang/Object;)Z
+        14: ireturn
+
+  public final void publish(java.lang.Class<?>, java.lang.Object, thc.runtime.DataLayout);
+    Code:
+         0: getstatic     #19                 // Field owners:Lthc/runtime/ClassOwnedLayouts$owners$1;
+         3: aload_1
+         4: invokevirtual #25                 // Method thc/runtime/ClassOwnedLayouts$owners$1.get:(Ljava/lang/Class;)Ljava/lang/Object;
+         7: checkcast     #27                 // class thc/runtime/ClassOwnedLayouts$Owner
+        10: aload_2
+        11: aload_3
+        12: invokevirtual #40                 // Method thc/runtime/ClassOwnedLayouts$Owner.publish:(Ljava/lang/Object;Lthc/runtime/DataLayout;)V
+        15: return
+
+  public final thc.runtime.DataLayout resolve(java.lang.Class<?>);
+    Code:
+         0: getstatic     #19                 // Field owners:Lthc/runtime/ClassOwnedLayouts$owners$1;
+         3: aload_1
+         4: invokevirtual #25                 // Method thc/runtime/ClassOwnedLayouts$owners$1.get:(Ljava/lang/Class;)Ljava/lang/Object;
+         7: checkcast     #27                 // class thc/runtime/ClassOwnedLayouts$Owner
+        10: invokevirtual #48                 // Method thc/runtime/ClassOwnedLayouts$Owner.resolve:()Lthc/runtime/DataLayout;
+        13: areturn
+
+  static {};
+    Code:
+         0: new           #2                  // class thc/runtime/ClassOwnedLayouts
+         3: dup
+         4: invokespecial #50                 // Method "<init>":()V
+         7: putstatic     #53                 // Field INSTANCE:Lthc/runtime/ClassOwnedLayouts;
+        10: new           #21                 // class thc/runtime/ClassOwnedLayouts$owners$1
+        13: dup
+        14: invokespecial #54                 // Method thc/runtime/ClassOwnedLayouts$owners$1."<init>":()V
+        17: putstatic     #19                 // Field owners:Lthc/runtime/ClassOwnedLayouts$owners$1;
+        20: return
+}

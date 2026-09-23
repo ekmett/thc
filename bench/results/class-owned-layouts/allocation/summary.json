@@ -1,0 +1,41 @@
+{
+  "scope": "Executing-thread bytes including host entry per complete mapAggregate invocation; separate diagnostic processes, not throughput. Both modes use compact object headers.",
+  "samples": {
+    "off": [
+      {
+        "bytes": 2037504384,
+        "calls": 256,
+        "bytesPerCall": 7959001.5
+      },
+      {
+        "bytes": 2037504384,
+        "calls": 256,
+        "bytesPerCall": 7959001.5
+      },
+      {
+        "bytes": 2037504384,
+        "calls": 256,
+        "bytesPerCall": 7959001.5
+      }
+    ],
+    "on": [
+      {
+        "bytes": 1703297536,
+        "calls": 256,
+        "bytesPerCall": 6653506.0
+      },
+      {
+        "bytes": 1703297536,
+        "calls": 256,
+        "bytesPerCall": 6653506.0
+      },
+      {
+        "bytes": 1703297536,
+        "calls": 256,
+        "bytesPerCall": 6653506.0
+      }
+    ]
+  },
+  "bytesPerCallSaved": 1305495.5,
+  "reductionPercent": 16.402754792796557
+}

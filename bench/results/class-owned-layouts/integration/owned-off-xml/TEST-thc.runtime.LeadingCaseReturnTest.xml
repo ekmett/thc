@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.LeadingCaseReturnTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:54:21.222Z" hostname="eak-mba" time="0.315">
+  <properties/>
+  <testcase name="otherUsedFormalValidationAndUnprovenResultsCannotBeSkipped()" classname="thc.runtime.LeadingCaseReturnTest" time="0.018"/>
+  <testcase name="unusedStrictFormalsAreForcedBeforeShortcutAndPapPrefixesOnlyAtSaturation()" classname="thc.runtime.LeadingCaseReturnTest" time="0.061"/>
+  <testcase name="capturedEnvironmentOffsetAndOverapplicationRemainCorrect()" classname="thc.runtime.LeadingCaseReturnTest" time="0.037"/>
+  <testcase name="diagnosticReplacementCannotAcquireARecipeButAnUnsupportedColdBodyCan()" classname="thc.runtime.LeadingCaseReturnTest" time="0.027"/>
+  <testcase name="unmarkedThunkScrutineeFallsBackWhileMarkedScrutineeCanReturnAfterForcing()" classname="thc.runtime.LeadingCaseReturnTest" time="0.047"/>
+  <testcase name="sourceNotesAndClonedRecipesPreserveAttributionWithoutAddingRootEntries()" classname="thc.runtime.LeadingCaseReturnTest" time="0.036"/>
+  <testcase name="onlyCompiledDirectCallsShortcutAndPreservePendingWorkAndFullWidthResults()" classname="thc.runtime.LeadingCaseReturnTest" time="0.087"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

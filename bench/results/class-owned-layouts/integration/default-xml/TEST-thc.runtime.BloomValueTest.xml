@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.BloomValueTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:52:59.731Z" hostname="eak-mba" time="0.113">
+  <properties/>
+  <testcase name="specializingAnActualCloneDoesNotWidenTheOriginalCache()" classname="thc.runtime.BloomValueTest" time="0.007"/>
+  <testcase name="actualTailChainsReuseTheirHeaderAndNonTailCallsResetAncestry()" classname="thc.runtime.BloomValueTest" time="0.015"/>
+  <testcase name="saturatedBloomCollisionStillBouncesAndPreservesPendingWork()" classname="thc.runtime.BloomValueTest" time="0.082"/>
+  <testcase name="threeWideMasksReuseBoxesAndMegamorphicFallbackPreservesEveryBit()" classname="thc.runtime.BloomValueTest" time="0.007"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

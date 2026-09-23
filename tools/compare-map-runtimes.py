@@ -41,6 +41,14 @@ def require(condition, message):
         raise InvalidRun(message)
 
 
+def compact_header_options(options):
+    """Ordinary comparisons use compact headers; an explicit per-engine control wins."""
+    options = list(options)
+    if not any(flag in ('-XX:+UseCompactObjectHeaders', '-XX:-UseCompactObjectHeaders') for flag in options):
+        options.insert(0, '-XX:+UseCompactObjectHeaders')
+    return options
+
+
 def signed64(value):
     return (value + (1 << 63)) % (1 << 64) - (1 << 63)
 
@@ -300,7 +308,7 @@ def main():
                            '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules_by_engine[engine])),
                            ENTRY, '--steady', str(args.jvm_warm_seconds), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
             if engine != 'native':
-                command[1:1] = getattr(args, engine + '_jvm_option')
+                command[1:1] = compact_header_options(getattr(args, engine + '_jvm_option'))
                 notes = getattr(args, engine + '_source_notes')
                 if notes is not None:
                     command.insert(1, '-Dthc.sourceNotesEnabled=' + ('true' if notes == 'on' else 'false'))

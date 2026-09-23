@@ -8,7 +8,7 @@ OUT="${1:-work/graphs/map-packets-$(date +%Y%m%d-%H%M%S)}"
 BASELINE="${2:-}"
 mkdir -p "$OUT" build/graph-tools
 OUT="$(cd "$OUT" && pwd)"
-"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m \
+"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
   -Dthc.traceCompilation=true -Dthc.minimumWarmCalls=256 \
   "-Dthc.backend=${THC_BACKEND:-bytecode}" \
   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \

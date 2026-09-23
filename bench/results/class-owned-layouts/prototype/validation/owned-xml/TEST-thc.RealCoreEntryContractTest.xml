@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.RealCoreEntryContractTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-09-23T08:16:30.659Z" hostname="eak-mba" time="0.194">
+  <properties/>
+  <testcase name="genuineWorkerContractPreservesFullWidthResultsAndColdBranches()" classname="thc.RealCoreEntryContractTest" time="0.054"/>
+  <testcase name="genuineFunctionReturningJoinKeepsTheReturnedArgumentOutsideItsContract()" classname="thc.RealCoreEntryContractTest" time="0.043"/>
+  <testcase name="genuinePolymorphicJoinUsesItsErasedValuePrefix()" classname="thc.RealCoreEntryContractTest" time="0.065"/>
+  <testcase name="genuineWorkerRetainsTheCoercionSlotBeforeItsMarkedBoxedArgument()" classname="thc.RealCoreEntryContractTest" time="0.031"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

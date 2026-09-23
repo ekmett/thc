@@ -9,7 +9,7 @@ OUT="${3:-$ROOT/work/graphs/$ENTRY-$(date +%Y%m%d-%H%M%S)}"
 THC_JDK="$JAVA_HOME"
 mkdir -p "$OUT" build/graph-tools
 OUT="$(cd "$OUT" && pwd)"
-"$THC_JDK/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -Dthc.traceCompilation=true \
+"$THC_JDK/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true \
   "-Dthc.minimumWarmCalls=${THC_GRAPH_MIN_WARM_CALLS:-20000}" \
   "-Dthc.diagnosticUnsupported=${THC_DIAGNOSTIC_UNSUPPORTED:-false}" \
   -Djdk.graal.Dump=Truffle:1 -Djdk.graal.PrintGraph=File \
