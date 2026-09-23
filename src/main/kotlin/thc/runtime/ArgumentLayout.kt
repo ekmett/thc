@@ -30,10 +30,12 @@ internal class ArgumentLayout private constructor(
 
         /** Empty proofs cannot be supplied to scalar formals (including State#), or vice versa. */
         fun validate(function: Closure, supplied: ArgumentLayout?, offset: Int, count: Int) {
-            val formal = (function.target.rootNode as? GuestRoot)?.inputLayout
+            validate((function.target.rootNode as? GuestRoot)?.inputLayout, function.suppliedCount, supplied, offset, count)
+        }
+        fun validate(formal: ArgumentLayout?, prefixCount: Int, supplied: ArgumentLayout?, offset: Int, count: Int) {
             if (formal == null && supplied == null) return
             for (i in 0 until count) {
-                val expected = formal?.isEmpty(function.suppliedCount + i) == true
+                val expected = formal?.isEmpty(prefixCount + i) == true
                 val actual = supplied?.isEmpty(offset + i) == true
                 if (expected != actual) fault("Conflicting empty tuple argument representation")
             }

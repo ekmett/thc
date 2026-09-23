@@ -151,11 +151,12 @@ internal abstract class Dispatch(
     @Specialization(guards = ["function.arity == argsSize", "function.target == cachedTarget"], limit = "3")
     fun direct(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                @Cached("function.target") cachedTarget: RootCallTarget,
+               @Cached("targetInputLayout(cachedTarget)") formalLayout: ArgumentLayout?,
                @Cached("function.supplied.length") prefixSize: Int,
                @Cached("function.suppliedCount") prefixCount: Int,
                @Cached("function.environment != null") hasEnvironment: Boolean,
                @Cached("createCaller(cachedTarget, prefixCount)") caller: DirectCallerNode): Any? {
-        ArgumentLayout.validate(function, argumentLayout, 0, minOf(argsSize, function.arity))
+        ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, argsSize)
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
             function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, argsSize))
         if (hasEnvironment) packet[1] = function.environment
@@ -166,13 +167,14 @@ internal abstract class Dispatch(
     fun directOverapplied(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                           @Cached("function.arity") arity: Int,
                           @Cached("function.target") cachedTarget: RootCallTarget,
+                          @Cached("targetInputLayout(cachedTarget)") formalLayout: ArgumentLayout?,
                           @Cached("function.supplied.length") prefixSize: Int,
                           @Cached("function.suppliedCount") prefixCount: Int,
                           @Cached("function.environment != null") hasEnvironment: Boolean,
                           @Cached("createCaller(cachedTarget, prefixCount)") caller: DirectCallerNode,
                           @Cached("createRemainder(arity)") rest: Dispatch,
                           @Cached("createForce()") force: Force): Any? {
-        ArgumentLayout.validate(function, argumentLayout, 0, minOf(argsSize, function.arity))
+        ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, arity)
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
             function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, arity))
         if (hasEnvironment) packet[1] = function.environment
@@ -206,6 +208,7 @@ internal abstract class Dispatch(
                             @Cached(inline = true) generic: GenericDispatch): Any? =
         generic.execute(frame, node, function, arguments, argsSize, argumentLayout, tailCall, metrics)
 
+    fun targetInputLayout(target: RootCallTarget) = (target.rootNode as? GuestRoot)?.inputLayout
     fun createCaller(target: RootCallTarget, prefixSize: Int) = DirectCallerNode(target, metrics, evaluatedArguments, prefixSize)
     fun createIndirectCaller() = IndirectCallerNode.create(metrics)
     fun createRemainder(arity: Int): Dispatch = create(argsSize - arity, tailCall, metrics,
