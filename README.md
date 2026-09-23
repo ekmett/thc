@@ -104,6 +104,9 @@ aggregate arguments, join captures, ordinary captures and sums remain explicit b
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
 pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
 
+Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
+while preserving lazy lifted elements and closures.
+
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 28 arithmetic/comparison/conversion primops, checked against
 native GHC. Floating tuple results also execute genuine `Data.Complex` workers;
