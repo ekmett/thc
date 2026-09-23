@@ -12,6 +12,18 @@ parse_power_status = harness['parse_power_status']
 power_warnings = harness['power_warnings']
 
 
+class HashCompatibilityTest(unittest.TestCase):
+    def test_streaming_fallback_matches_native_hashing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'input.bin'
+            for contents in (b'', b'abc', bytes(range(256)) * 8193):
+                path.write_bytes(contents)
+                expected = harness['hashlib'].sha256(contents).hexdigest()
+                self.assertEqual(harness['sha256'](path), expected)
+                with patch.object(harness['hashlib'], 'file_digest', None, create=True):
+                    self.assertEqual(harness['sha256'](path), expected)
+
+
 class PowerStatusTest(unittest.TestCase):
     def test_low_battery_discharging_with_reported_ac_power(self):
         raw = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=123)\t4%; discharging; (no estimate) present: true\n"

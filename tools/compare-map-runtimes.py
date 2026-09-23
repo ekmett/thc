@@ -47,7 +47,14 @@ def signed64(value):
 
 def sha256(path):
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        file_digest = getattr(hashlib, 'file_digest', None)
+        if file_digest is not None:
+            return file_digest(stream, 'sha256').hexdigest()
+        # Ubuntu 22.04's Python 3.10 predates hashlib.file_digest.
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+        return digest.hexdigest()
 
 
 def hashes(paths):
