@@ -1,0 +1,323 @@
+@file:Suppress("UNCHECKED_CAST")
+package thc.runtime
+
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.Instruction
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
+import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.PolyglotException
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+import thc.*
+import java.io.File
+import java.nio.ByteOrder
+import java.security.MessageDigest
+import java.util.Collections
+import java.util.IdentityHashMap
+
+class FloatWordArrayNativeTest {
+    private val root = File(System.getProperty("thc.projectRoot"))
+    private val names = listOf("unboxedFloatAccum", "unboxedFloatST", "unboxedWordAccum", "unboxedWordST",
+        "moveFloatBits", "indexFloatBits", "aliasWordBytes")
+    private val operations = listOf(ByteArrayOp.READ_FLOAT, ByteArrayOp.WRITE_FLOAT, ByteArrayOp.INDEX_FLOAT,
+        ByteArrayOp.READ_WORD, ByteArrayOp.WRITE_WORD, ByteArrayOp.INDEX_WORD)
+    private fun manifest() = Json.parse(File(root, "build/float-word-arrays/manifest.json").readText()) as Map<String, Any?>
+    private fun merged(paths: List<String>) = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
+    private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
+        if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
+    private fun context(inlining: Boolean) = Context.newBuilder("thc").allowExperimentalOptions(true)
+        .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
+        .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
+        .option("engine.SingleTierCompilationThreshold", "10000000").build()
+    private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
+        target.javaClass.getMethod("isValidLastTier").invoke(target), label)
+    private fun compile(target: RootCallTarget) {
+        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        valid(target, "initial installation")
+    }
+    private fun activeTargets(entry: RootCallTarget): List<RootCallTarget> {
+        val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
+        val targets = mutableListOf<RootCallTarget>()
+        fun visit(target: RootCallTarget) {
+            if (!seen.add(target)) return
+            val root = target.rootNode
+            // Bytecode DSL operation caches are not ordinary @Children fields.
+            // Its public instruction API exposes the actual adopted cached nodes.
+            val nodes = if (root is BytecodeRoot) listOf(root) + root.bytecodeNode.instructions
+                .flatMap { it.arguments }.filter { it.kind == Instruction.Argument.Kind.NODE_PROFILE }
+                .mapNotNull { it.asCachedNode() }
+            else listOf(root)
+            for (call in nodes.flatMap { NodeUtil.findAllNodeInstances(it, DirectCallNode::class.java) }) {
+                val active = call.currentCallTarget as? RootCallTarget ?: continue
+                if (active.rootNode is GuestRoot) visit(active)
+            }
+            targets.add(target) // Install callees before their callers.
+        }
+        visit(entry)
+        return targets
+    }
+    private fun released(language: Language) {
+        val state = language.handoffState.get()
+        assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
+        assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
+    }
+    private fun model(name: String, seed: Long): Long {
+        if (name == "moveFloatBits" || name == "indexFloatBits") return seed and 0xffff_ffffL
+        if (name.startsWith("unboxedFloat")) {
+            // Integer fixed-point quarters: no host floating arithmetic in the model.
+            val x = (seed and 65535L) - 32768L
+            val cells = LongArray(8) { x*4 }
+            if (name == "unboxedFloatAccum") {
+                for ((index, quarters) in listOf(0 to 13L, 3 to 22L, 0 to -8L, 7 to (2*x)))
+                    cells[index] += quarters
+            } else {
+                check(name == "unboxedFloatST")
+                val before = cells[0]
+                cells[3] = before+1
+                cells[7] = 3*cells[3]-4*x+2
+            }
+            return cells[0]*7 + cells[3]*11 + cells[7]*13
+        }
+        // BigInteger modulo arithmetic independently models full-width Word cells.
+        val modulus = java.math.BigInteger.ONE.shiftLeft(64)
+        fun word(value: Long) = java.math.BigInteger.valueOf(value).mod(modulus)
+        if (name == "unboxedWordAccum" || name == "unboxedWordST") {
+            val cells = Array(8) { word(seed) }
+            if (name == "unboxedWordAccum") {
+                for ((index, delta) in listOf(0 to word(3), 3 to word(5), 0 to word(-2), 7 to word(seed)))
+                    cells[index] = (cells[index]+delta).mod(modulus)
+            } else {
+                cells[3] = (cells[0]+word(7)).mod(modulus)
+                cells[7] = (cells[3]*word(3)-word(seed)).mod(modulus)
+            }
+            return (cells[0]*word(7)+cells[3]*word(11)+cells[7]*word(13)).mod(modulus).toLong()
+        }
+        check(name == "aliasWordBytes")
+        val bytes = LongArray(16) { offset ->
+            val value = if (offset < 8) seed else seed xor 0x55aa55aa55aa55aaL
+            val position = offset % 8
+            val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) position else 7-position)*8
+            (value ushr shift) and 255
+        }
+        bytes[7] = (seed+101) and 255
+        bytes[8] = (seed+37) and 255
+        fun element(offset: Int): java.math.BigInteger {
+            var value = java.math.BigInteger.ZERO
+            for (byte in 0..7) {
+                val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 7-byte)*8
+                value = value.or(java.math.BigInteger.valueOf(bytes[offset+byte]).shiftLeft(shift))
+            }
+            return value
+        }
+        return (3.toBigInteger()*word(seed) + 16.toBigInteger()*element(0) + 20.toBigInteger()*element(8) +
+            17.toBigInteger()*word(bytes[0]) + 19.toBigInteger()*word(bytes[7]) +
+            23.toBigInteger()*word(bytes[8]) + 29.toBigInteger()*word(bytes[15])).mod(modulus).toLong()
+    }
+    @Test fun nativePublicArraysAndFloatMovementWithInlining() = native(true)
+    @Test fun nativePublicArraysAndFloatMovementAcrossResidualCalls() = native(false)
+    private fun native(inlining: Boolean) {
+        val manifest = manifest()
+        assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())
+        assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
+        assertEquals(64, (manifest["wordBits"] as Number).toInt())
+        assertEquals(true, manifest["signalingNaNsExcluded"])
+        assertEquals(setOf("moveFloatBits", "indexFloatBits"), (manifest["signalingNaNExclusionScope"] as List<String>).toSet())
+        assertEquals(names.toSet(), (manifest["inputsByEntry"] as Map<String, *>).keys)
+        for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
+            val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
+                .joinToString("") { "%02x".format(it.toInt() and 255) }
+            assertEquals(expected, actual, "Stale Float/Word-array fixture: $path; rerun prepare-float-word-arrays.py")
+        }
+        val rows = File(root, "build/float-word-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        assertEquals(names.toSet(), rows.keys)
+        assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
+        val expectedCalls = names.associateWith { if (it in listOf("moveFloatBits", "indexFloatBits")) 3L else 2L }
+        assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
+        val stages = manifest["stages"] as Map<String, List<String>>
+        assertEquals(setOf("pre", "post"), stages.keys)
+        for ((stage, paths) in stages) {
+            val module = merged(paths)
+            for (name in names) {
+                val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+                val movement = name in listOf("moveFloatBits", "indexFloatBits")
+                assertEquals(if (movement) 590 else 397, cases.size, "$name pinned input domain")
+                assertEquals(cases.size, cases.map { it.first }.toSet().size)
+                assertEquals(((manifest["inputsByEntry"] as Map<String, List<Number>>).getValue(name)).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
+                for ((input, native) in cases) {
+                    assertEquals(model(name, input), native, "Native $name($input)")
+                    if (movement) {
+                        val bits = input and 0xffff_ffffL
+                        val exponent = bits and 0x7f80_0000L
+                        val fraction = bits and 0x007f_ffffL
+                        assertFalse(exponent == 0x7f80_0000L && fraction != 0L && (bits and 0x0040_0000L) == 0L)
+                    }
+                }
+                for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
+                    context.initialize("thc"); context.enter()
+                    try {
+                        val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                        val linked = CoreModules.reachable(module, name)
+                        val bindings = linked["bindings"] as List<Map<String, Any?>>
+                        val program = program(language, linked + ("instrument" to true), backend)
+                        val entry = program.entryTarget(bindings.single { it["name"] == name }["id"] as String)
+                        fun lambdaLabel(expression: List<*>): String {
+                            assertEquals("lam", expression[0])
+                            val formals = expression[1] as List<Map<String, Any?>>
+                            return "lambda ${formals.joinToString { it["name"].toString() }}"
+                        }
+                        val rootExpression = bindings.single { it["name"] == name }["expr"] as List<*>
+                        val stateCall = rootExpression[2] as List<*>
+                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet() +
+                            lambdaLabel(stateCall[1] as List<*>)
+                        var targets = emptyList<RootCallTarget>()
+                        fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        fun check(compiled: Boolean) {
+                            for ((input, native) in cases) {
+                                val label = "$stage/$backend/$name/$input/inlining=$inlining"
+                                val before = count()
+                                assertEquals(native, Calls.target(entry, arrayOf(0L, input)), label)
+                                if (compiled) {
+                                    assertEquals(expectedCalls.getValue(name), count()-before, "$label exact compiled entries")
+                                    val active = activeTargets(entry)
+                                    assertEquals(targets.size, active.size, "$label active target count")
+                                    assertTrue(active.all { target -> targets.any { it === target } }, "$label active target identities")
+                                    targets.forEach { valid(it, label) }
+                                }
+                                released(language)
+                            }
+                        }
+                        check(false)
+                        targets = activeTargets(entry)
+                        assertEquals(expectedCalls.getValue(name).toInt(), targets.size, "$stage/$backend/$name active guest roots")
+                        assertEquals(expectedLabels, targets.map { it.rootNode.name }.toSet(), "$stage/$backend/$name guest root labels")
+                        targets.forEach(::compile)
+                        val allocations = language.handoffState.get().results.allocations
+                        check(true)
+                        assertEquals(allocations, language.handoffState.get().results.allocations, "Pooled results reused")
+                        for (counter in listOf("unsupportedTraps", "blackholes"))
+                            assertEquals(0L, (program.diagnostics().getValue(counter) as Number).toLong(), counter)
+                    } finally { context.leave() }
+                }
+            }
+        }
+    }
+
+    private fun applications(value: Any?): List<MutableList<Any?>> = when (value) {
+        is List<*> -> (if (value.firstOrNull() == "app") listOf(value as MutableList<Any?>) else emptyList()) + value.flatMap(::applications)
+        is Map<*, *> -> value.values.flatMap(::applications)
+        else -> emptyList()
+    }
+    private fun paths() = (manifest()["stages"] as Map<String, List<String>>).getValue("pre")
+    private fun owner(operation: ByteArrayOp) = when (operation) {
+        ByteArrayOp.INDEX_FLOAT -> "indexFloatBits"
+        ByteArrayOp.READ_FLOAT, ByteArrayOp.WRITE_FLOAT -> "moveFloatBits"
+        else -> "aliasWordBytes"
+    }
+
+    @Test fun exactFloatAndWordStateShapesAndSaturationAreRequiredInBothLoadModes() {
+        val paths = paths()
+        for (backend in listOf("ast", "bytecode")) context(true).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (operation in operations) for (mutation in 0..15) for (diagnostic in listOf(false, true)) {
+                    val module = CoreModules.reachable(merged(paths), owner(operation))
+                    val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
+                    val args = app[2] as MutableList<Any?>
+                    val flags = app[3] as MutableList<Any?>
+                    val metadata = CoreRepresentations.metadata(app) as MutableMap<String, Any?>
+                    fun wrong(kind: String, rep: String) = mapOf("kind" to kind, "primReps" to listOf(rep), "evaluated" to true)
+                    when (mutation) {
+                        0 -> { args.removeAt(args.lastIndex); flags.removeAt(flags.lastIndex); metadata.remove("callDemand") }
+                        1 -> { args.add(args[0]); flags.add(false); metadata.remove("callDemand") }
+                        2 -> metadata.remove("rep")
+                        3 -> metadata["rep"] = wrong("double", "DoubleRep")
+                        4 -> flags[0] = true
+                        5 -> (CoreRepresentations.metadata(args[0] as List<Any?>)!!["rep"] as MutableMap<String, Any?>)["kind"] = "unknown"
+                        6 -> (CoreRepresentations.metadata(args[1] as List<Any?>)!!["rep"] as MutableMap<String, Any?>)["primReps"] = listOf("Int64Rep")
+                        7 -> if (operation in listOf(ByteArrayOp.WRITE_FLOAT, ByteArrayOp.WRITE_WORD)) {
+                            (CoreRepresentations.metadata(args[2] as List<Any?>)!! as MutableMap<String, Any?>)["rep"] = wrong("long", "IntRep")
+                        } else metadata["rep"] = wrong("long", "IntRep")
+                        8 -> if (operation in listOf(ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD)) {
+                            val proof = metadata["rep"] as MutableMap<String, Any?>
+                            (proof["components"] as MutableList<Any?>)[0] = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple",
+                                "components" to emptyList<Any?>(), "primReps" to emptyList<String>(), "evaluated" to true)
+                        } else metadata["rep"] = mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to true)
+                        9 -> if (operation in listOf(ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD)) {
+                            val proof = metadata["rep"] as MutableMap<String, Any?>
+                            (proof["components"] as MutableList<Any?>)[1] = wrong("double", "DoubleRep")
+                            proof["primReps"] = listOf("DoubleRep")
+                        } else flags[1] = true
+                        in 10..15 -> {
+                            val rep = when (mutation) {
+                                10 -> if (operation.primitive.contains("Float")) "Word32Rep" else "Word64Rep"
+                                11 -> "Int32Rep"; 12 -> "Int64Rep"; 13 -> "IntRep"
+                                14 -> if (operation.primitive.contains("Float")) "DoubleRep" else "Word32Rep"
+                                else -> if (operation.primitive.contains("Float")) "FloatRep" else "WordRep"
+                            }
+                            val kind = if (mutation == 15) "unknown" else if (rep == "DoubleRep") "double" else "long"
+                            val payload = wrong(kind, rep)
+                            if (operation.primitive.startsWith("write")) {
+                                (CoreRepresentations.metadata(args[2] as List<Any?>)!! as MutableMap<String, Any?>)["rep"] = payload
+                            } else if (operation.tuple) {
+                                val proof = metadata["rep"] as MutableMap<String, Any?>
+                                (proof["components"] as MutableList<Any?>)[1] = payload
+                                proof["primReps"] = listOf(rep)
+                            } else metadata["rep"] = payload
+                        }
+                    }
+                    if (diagnostic && mutation == 15 && operation.tuple) {
+                        // An unknown tuple component is the existing unsupported
+                        // aggregate frontier, not a supported scalar contract.
+                        // Diagnostic mode may defer it, but must trap on demand.
+                        val p = program(language, module + mapOf("diagnosticUnsupported" to true, "instrument" to true), backend)
+                        val reason = "Unsupported Core aggregate representation: unboxed-tuple has unsupported fields"
+                        assertTrue((p.diagnostics().getValue("deferredUnsupported") as List<*>).contains(reason))
+                        assertEquals(0L, (p.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                        val failure = assertThrows(RuntimeFault::class.java) {
+                            Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue(owner(operation)), arrayOf(5L)))
+                        }
+                        assertEquals("Diagnostic unsupported path reached: $reason", failure.message)
+                        assertEquals(1L, (p.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                        released(language)
+                    } else assertThrows(RuntimeFault::class.java, {
+                        program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                    }, "$backend/$operation/mutation$mutation/$diagnostic")
+                }
+                for (operation in operations) {
+                    val module = CoreModules.reachable(merged(paths), owner(operation))
+                    val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
+                    val primitive = (app[1] as List<*>).toList(); app.clear(); app.addAll(primitive)
+                    assertThrows(UnsupportedCore::class.java) { program(language, module, backend) }
+                }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() {
+        val paths = paths()
+        for (backend in listOf("ast", "bytecode")) context(true).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (operation in operations) for (index in listOf(Long.MIN_VALUE, -1L,
+                    if (operation.primitive.contains("Float")) 1L else 2L, 1L shl 32, 1L shl 61, 1L shl 62, Long.MAX_VALUE)) {
+                    val name = owner(operation)
+                    val module = CoreModules.reachable(merged(paths), name)
+                    val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
+                    val args = app[2] as MutableList<Any?>
+                    args[1] = listOf("lit", "int", index.toString(), CoreRepresentations.metadata(args[1] as List<Any?>))
+                    val program = program(language, module, backend)
+                    val function = context.asValue(EntryValue(program, name, 1))
+                    val failure = assertThrows(PolyglotException::class.java) { function.execute(5L) }
+                    val storage = if (operation.primitive.contains("Float")) "Float" else "Int"
+                    assertTrue(failure.message.orEmpty().contains("ByteArray# $storage index"), "$backend/$operation/$index: $failure")
+                    released(language)
+                    assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                }
+            } finally { context.leave() }
+        }
+    }
+}

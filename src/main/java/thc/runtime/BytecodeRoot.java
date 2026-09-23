@@ -712,6 +712,31 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadFloatArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            float result = ManagedFloatArray.read(array, index);
+            destination.setFloat(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteFloatArray {
+        @Specialization public static Object write(Object value, long index, float number, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedFloatArray.write(array, index, number);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class IndexFloatArray {
+        @Specialization public static float index(Object value, long index) {
+            return ManagedFloatArray.read(ManagedByteArray.require(value), index);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = boolean.class, name = "unsigned")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadInt32Array {

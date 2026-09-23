@@ -5,8 +5,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
 
-/** Native-endian 64-bit Int# views of the existing ByteArray# backing storage.
+/** Native-endian 64-bit Int#/Word# views of the existing ByteArray# backing storage.
  * Plain accesses preserve byte aliasing without a wrapper, long[] copy or boxing.
+ * Word# uses the same raw Long bits; no numerical unsigned conversion is needed.
  * This is not an atomic/concurrent array interface.
  */
 public final class ManagedIntArray {

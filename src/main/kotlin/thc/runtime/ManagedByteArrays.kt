@@ -55,28 +55,36 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     INDEX_INT32("indexInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_WORD32("readWord32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_WORD32("writeWord32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word32Rep"), emptyList())),
-    INDEX_WORD32("indexWord32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep")));
+    INDEX_WORD32("indexWord32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_FLOAT("readFloatArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_FLOAT("writeFloatArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("FloatRep"), emptyList())),
+    INDEX_FLOAT("indexFloatArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_WORD("readWordArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_WORD("writeWordArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("WordRep"), emptyList())),
+    INDEX_WORD("indexWordArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep")));
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         if (actual.size != arguments.size) throw RuntimeFault("Primitive arity mismatch: $primitive")
         fun scalar(proof: CoreRepresentation, registers: List<String>): Boolean = !proof.isTuple &&
             proof.primReps == registers && proof.kind == when (registers.singleOrNull()) {
                 null -> CoreKind.VOID; BYTE_ARRAY_REP -> CoreKind.OBJECT
-                "DoubleRep" -> CoreKind.DOUBLE; else -> CoreKind.LONG
+                "DoubleRep" -> CoreKind.DOUBLE; "FloatRep" -> CoreKind.FLOAT; else -> CoreKind.LONG
             }
         if (flags != List(arguments.size) { false } || actual.indices.any { !scalar(actual[it], arguments[it]) })
             throw RuntimeFault("ByteArray primitive argument representation mismatch: $primitive")
         val payload = listOf(when (this) {
             READ_INT -> "IntRep"; READ_DOUBLE -> "DoubleRep"
-            READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"; else -> BYTE_ARRAY_REP
+            READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"
+            READ_FLOAT -> "FloatRep"; READ_WORD -> "WordRep"; else -> BYTE_ARRAY_REP
         })
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, COPY -> emptyList()
+            WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY -> emptyList()
             SIZE, INDEX_INT -> listOf("IntRep")
             INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
+            INDEX_FLOAT -> listOf("FloatRep"); INDEX_WORD -> listOf("WordRep")
             INDEX_DOUBLE -> listOf("DoubleRep"); else -> listOf("Word8Rep")
         })
         if (!valid) throw RuntimeFault("ByteArray primitive result representation mismatch: $primitive")
@@ -94,12 +102,15 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.SIZE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
-        ByteArrayOp.READ_INT -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
-        ByteArrayOp.WRITE_INT -> WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
-        ByteArrayOp.INDEX_INT -> IndexIntArrayExpression(operands[0], operands[1])
+        ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> IndexIntArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_DOUBLE -> ReadDoubleArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_DOUBLE -> WriteDoubleArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_DOUBLE -> IndexDoubleArrayExpression(operands[0], operands[1])
+        ByteArrayOp.READ_FLOAT -> ReadFloatArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_FLOAT -> WriteFloatArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_FLOAT -> IndexFloatArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> ReadInt32ArrayExpression(
             operation == ByteArrayOp.READ_WORD32, operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> WriteInt32ArrayExpression(
@@ -218,6 +229,39 @@ private class IndexDoubleArrayExpression(@field:Child private var array: Expr,
         val bytes = ManagedByteArray.require(array.execute(frame))
         val element = index.executeRequiredLong(frame)
         return ManagedDoubleArray.read(bytes, element)
+    }
+}
+
+private class ReadFloatArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        FrameAccess.writeFloat(frame, slots[offset], ManagedFloatArray.read(bytes, element))
+        return null
+    }
+}
+private class WriteFloatArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var value: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        val number = value.executeRequiredFloat(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedFloatArray.write(bytes, element, number)
+        return Unit
+    }
+}
+private class IndexFloatArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeFloat(frame)
+    override fun executeFloat(frame: VirtualFrame): Float {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        return ManagedFloatArray.read(bytes, element)
     }
 }
 
