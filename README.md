@@ -98,7 +98,7 @@ vector metadata and primitive lane storage. Vector calls, returns, captures,
 fields and joins remain explicit boundaries.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
-scalar/reference inputs, local join results and zero-width State# components;
+scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
 aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
@@ -108,7 +108,8 @@ public `UArray`/`STUArray` examples with native-endian, full-width values.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 28 arithmetic/comparison/conversion primops, checked against
-native GHC. Floating tuple results and an unboxed floating call ABI remain out of scope.
+native GHC. Floating tuple results also execute genuine `Data.Complex` workers;
+residual scalar floating inputs still use the existing Object call ABI.
 
 The `Data.Set` example remains a separate frontier until its full exported call
 graph passes; native results alone are not counted as THC execution passes.

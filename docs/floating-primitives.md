@@ -23,21 +23,22 @@ Generic function call packets and root returns still use the existing Object
 ABI. Non-inlined floating calls can therefore allocate wrapper objects. The
 optional integer/reference handoff ABI does not cover floating values. The
 public embedding interface still accepts integer inputs; the fixtures enter
-through `Int# -> Int#` wrappers. This is scalar runtime support, not a claim of
-ordinary floating library coverage or an unboxed floating calling convention.
+through `Int# -> Int#` wrappers. This does not establish an unboxed scalar floating
+calling convention across residual calls.
 
-Floating unboxed tuple leaves remain unsupported. In particular, ordinary GHC
-CPR can turn a boxed producer into a floating tuple-return worker. The real
-`floatingTupleFrontier` fixture retains that transformation and is rejected by
-both the strict capability auditor and runtime loaders. The separate boxed-field
-fixture marks its producer `OPAQUE` to preserve the boxed boundary under test;
-native GHC and THC use the same source. Floating literal case alternatives are
-invalid GHC Core and fail closed. Vectors and unboxed sums are outside this work.
+Exact floating [unboxed tuple results](tuple-results.md) use primitive float/double
+fields and typed destination slots on both backends. Ordinary GHC CPR can turn a
+boxed producer into such a worker; the original `floatingTupleFrontier` now runs
+as a positive native control. A separate suite executes public `Data.Complex`
+multiplication and `conjugate` through real floating CPR workers. The boxed-field
+control keeps its `OPAQUE` producer to preserve the boxed boundary under test.
+Aggregate arguments/captures, vector ABI expansion and unboxed sums remain
+unsupported. Floating literal case alternatives are invalid GHC Core and fail closed.
 
 `scripts/prepare-floating-audit.py` builds the native oracle, exports current
 GHC 9.14.1 Core, checks all 28 primops, verifies concrete worker results/arguments,
-boxed field representations and retained floating captures, and audits all 14
-positive roots strictly. It independently checks 412 native rows, including
+boxed field representations and retained floating captures, and audits all 15
+positive roots strictly. It independently checks 441 native rows, including
 binary32's 2^24 boundary, binary64's 2^53 boundary, negative values, signed zero,
 infinities, NaNs and the smallest subnormals. Floating-to-Int conversion tests
 exclude non-finite and out-of-range operands, whose GHC behavior is undefined.
