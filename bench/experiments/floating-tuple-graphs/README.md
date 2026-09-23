@@ -6,15 +6,19 @@ It reuses the tuple graph harness and strict allocation/call auditor.
 
 ```sh
 python3 scripts/prepare-floating-tuples.py
-scripts/gradle.sh --no-daemon installDist
 python3 bench/experiments/floating-tuple-graphs/run.py /tmp/thc-floating-graphs \
   --capture bench/experiments/floating-tuple-graphs/captured
 ```
 
-`JAVA_HOME` must identify the pinned GraalVM. The script leaves raw BGV/CFG and
+`JAVA_HOME` must identify the pinned GraalVM. Commit runtime changes first: the
+runner verifies their source hashes against HEAD and rebuilds `installDist` before
+recording its launch manifest. Use a new or empty output directory so stale graphs
+cannot enter the capture. The script leaves raw BGV/CFG and
 complete final LIR outside the captured evidence, parsing only the two audited
-compiler phases. `--collect-only` packages an existing run and rejects changed
-runtime jars, exported Core, oracle or harness inputs.
+compiler phases. `--collect-only` packages a run with a launch manifest and rejects
+changed runtime jars, exported Core, oracle, native provenance, JDK release or
+tooling inputs; recorded version information comes from launch time. The original
+raw graph hashes, exact case checks and final LIR are rechecked during collection.
 
 The captured eight controls retain the exact installed entry after native replay:
 
