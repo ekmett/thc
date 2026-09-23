@@ -333,6 +333,12 @@
     "plusInt32X4#": 2,
     "minusInt32X4#": 2,
     "negateInt32X4#": 1,
+    "packFloatX4#": 1,
+    "unpackFloatX4#": 1,
+    "broadcastFloatX4#": 1,
+    "plusFloatX4#": 2,
+    "minusFloatX4#": 2,
+    "timesFloatX4#": 2,
     "newByteArray#": 2,
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
@@ -358,6 +364,11 @@
     {
       "lanes": 4,
       "element": "Int32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 4,
+      "element": "FloatElemRep",
       "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
     }
   ],

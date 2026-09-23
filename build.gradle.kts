@@ -52,6 +52,7 @@ tasks.test {
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
+            "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
@@ -60,7 +61,7 @@ tasks.test {
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-tuple-arithmetic.py",
-            "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "core_vectors.py",
+            "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "core_*.py", "generate-scalar-signatures.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
@@ -78,5 +79,5 @@ tasks.register<JavaExec>("probe") {
     workingDir(projectDir)
 }
 
-// Vector intrinsics are isolated in Java; guest values retain primitive lane fields.
+// Vector intrinsics are isolated in Java; FloatX4 retains a fixed-species FloatVector.
 tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }

@@ -1,5 +1,9 @@
 # Bounded Int64X2 and Int32X4 execution
 
+The separate [FloatX4 foundation](floatx4.md) adds local floating pack/unpack,
+broadcast and addition/subtraction/multiplication using a fixed-width
+FloatVector carrier. The integer-carrier storage description below is unchanged.
+
 Both backends execute local `Int64X2#` and `Int32X4#` pack, unpack, broadcast, addition,
 subtraction and negation. Each operation requires exact GHC representation
 metadata; `VecRep 2 Int64ElemRep` and `VecRep 4 Int32ElemRep` have vector identities
@@ -23,7 +27,7 @@ that execute vectors must add `--add-modules=jdk.incubator.vector` too.
 This first slice rejects vector function arguments/results, PAP prefixes,
 closure captures, ordinary let bindings, join arguments/results, constructor
 fields, vector leaves inside unboxed tuples, and other lane types/widths. Arrays,
-loads/stores, shuffle, insertion, multiplication, quotient and remainder primops
+loads/stores, shuffle, insertion, integer multiplication, quotient and remainder primops
 remain unsupported. A vector-valued case/local expression is supported when GHC
 retains it within one scalar root. GHC can turn a source-local expression into a
 join with vector formals; the native `branchCase` fixture records that explicit

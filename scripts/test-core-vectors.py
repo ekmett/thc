@@ -5,7 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
-from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_REP
+from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_REP, VECTOR_FLOAT_REP, LANE_FLOAT_REP, TUPLE_FLOAT_REP, signature_matches
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
 audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
@@ -21,6 +21,30 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def test_float_local_shape_requires_concrete_float_lanes(self):
+        m=fixture(); body=m['bindings'][0]['expr'][2]
+        body[1][1][1]='broadcastFloatX4#'
+        body[1][2][0]=['lit','float','1.0',dict(rep=copy.deepcopy(LANE_FLOAT_REP))]
+        body[1][6]['rep']=copy.deepcopy(VECTOR_FLOAT_REP)
+        body[4]['binder']['rep']=copy.deepcopy(VECTOR_FLOAT_REP)
+        self.assertTrue(run(m)['accepted'])
+        for kind in ('unknown', 'double', 'long'):
+            bad=copy.deepcopy(m)
+            bad['bindings'][0]['expr'][2][1][2][0]=['lit','double','1.0',dict(rep=dict(LANE_FLOAT_REP,kind=kind))]
+            self.assertFalse(run(bad)['accepted'],kind)
+        for wrong in (VECTOR32_REP, VECTOR_REP, TUPLE_FLOAT_REP):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][6]['rep']=copy.deepcopy(wrong)
+            self.assertFalse(run(bad)['accepted'])
+        self.assertTrue(signature_matches(TUPLE_FLOAT_REP, TUPLE_FLOAT_REP))
+        bad=copy.deepcopy(TUPLE_FLOAT_REP); bad['components'][0]=dict(LANE_FLOAT_REP,kind='unknown')
+        self.assertFalse(signature_matches(TUPLE_FLOAT_REP,bad))
+    def test_real_float_core_local_entries_and_formal_frontier(self):
+        path=ROOT.parent/'build/simd-floatx4/pre-core/SimdFloatX4.json'
+        if not path.exists(): self.skipTest('Float SIMD Core export not generated')
+        m=json.loads(path.read_text())
+        for name in ('plusCase','minusCase','timesCase','edgePlus','edgeMinus','edgeTimes','nonFmaCase'):
+            self.assertTrue(run(m,name)['accepted'], name)
+        self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_exact_local_vector_is_accepted(self): self.assertTrue(run(fixture())['accepted'])
     def test_missing_or_wrong_shape_is_rejected(self):
         for mutation in ('missing', 'lane-count', 'physical', 'boxed', 'tuple'):
