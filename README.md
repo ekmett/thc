@@ -111,6 +111,8 @@ public Double arrays and native-checked bit movement through tuple-returning rea
 unsigned elements, public accumulation/ST examples and cross-element byte aliases.
 [Float/Word-array operations](docs/float-word-arrays.md) add typed four-byte Float
 and eight-byte machine Word storage, public examples and native bit-movement checks.
+[Int16/Word16-array operations](docs/int16-arrays.md) add two-byte signed/unsigned
+storage and exact narrow literal proofs.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 28 arithmetic/comparison/conversion primops, checked against

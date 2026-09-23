@@ -9,6 +9,40 @@ narrow width. Reads return genuine `(# State#, Int16# #)` or
 Writes return State; immutable indexing returns the narrow scalar. Values widen
 with sign extension for Int16 and zero extension for Word16.
 
+## Runtime and exact literal boundary
+
+Both backends use a native-order primitive `short` VarHandle view of the same
+managed `byte[]`, with no boxed or copied element array. Signed reads widen the
+short to Long; unsigned reads zero-extend it; writes keep the low sixteen bits.
+Full-width indices are checked against `byteLength/2` before narrowing/scaling,
+so an odd trailing byte cannot be accessed as an element. State validation
+precedes memory effects and result publication; unsafe freeze preserves identity.
+Storage tests include every one of the 65,536 bit patterns, byte1/2 aliases,
+wide views, odd tails, enormous indices and failed State effects.
+
+Canonical signed `int16` syntax is accepted only in `[-32768,32767]`, including
+literal alternatives. Both `int16` and the already parsed `word16` forms now
+provide intrinsic exact representation proofs. The shared 16/32-bit proof
+helper preserves the reviewed rule: absent or genuinely unconstrained
+unknown/null metadata can refine from literal syntax; contradictory known
+representations and malformed records fail. No int8 literal support is added.
+
+The native JVM matrix runs interpreted and compiled before/after Tidy, on AST
+and bytecode, with inlining enabled and disabled. It discovers active split
+targets (including bytecode instruction caches), compiles callees first and
+requires exactly two guest entries, unchanged target identities and valid
+last-tier code after every measured invocation. There are no settling calls,
+retries or raised runtime limits. This covers 19,344 array invocations and 112
+literal invocations per handoff configuration: 19,456 calls / 38,912 guest
+entries. Result/argument loans and references must be released, warmed result
+pools reused, and supported execution must have no traps or blackholes.
+
+Malformed width, signedness, arity, State and representation-flag controls run
+on both backends and load policies. Unknown tuple leaves retain the existing
+diagnostic frontier: strict mode rejects them at load; diagnostic mode records
+the reason and must trap exactly once on demand without handoff leaks. Other
+contradictory positive contracts still fail during loading.
+
 ## Genuine public examples
 
 `examples/THC/Unboxed16Arrays.hs` uses installed, unmodified `array-0.5.8.0`

@@ -57,6 +57,8 @@ tasks.test {
             "int32-arrays/NativeInt32Array.hs", "int32-arrays/native/int32-array-oracle",
             "float-word-arrays/**/*.json", "float-word-arrays/oracle.tsv", "float-word-arrays/expected.tsv",
             "float-word-arrays/NativeFloatWordArray.hs", "float-word-arrays/native/float-word-array-oracle",
+            "int16-arrays/**/*.json", "int16-arrays/oracle.tsv", "int16-arrays/expected.tsv", "int16-arrays/literal-oracle.tsv",
+            "int16-arrays/NativeInt16Array.hs", "int16-arrays/native/int16-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
@@ -74,6 +76,7 @@ tasks.test {
             "prepare-double-arrays.py", "test-double-array-model.py",
             "prepare-int32-arrays.py", "test-int32-array-model.py",
             "prepare-float-word-arrays.py", "test-float-word-array-model.py",
+            "prepare-int16-arrays.py", "test-int16-array-model.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
