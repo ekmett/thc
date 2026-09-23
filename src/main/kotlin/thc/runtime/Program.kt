@@ -53,6 +53,13 @@ internal fun narrowWordLiteral(kind: String, value: String): Long {
         throw RuntimeFault("Invalid $kind literal: $value")
     return number
 }
+/** Int16 literals are canonical decimal signed 16-bit values, widened to Long. */
+internal fun int16Literal(value: String): Long {
+    val number = value.toLongOrNull()
+    if (number == null || number !in Short.MIN_VALUE.toLong()..Short.MAX_VALUE.toLong() || number.toString() != value)
+        throw RuntimeFault("Invalid int16 literal: $value")
+    return number
+}
 /** Int32 literals are canonical decimal signed 32-bit values, widened to Long. */
 internal fun int32Literal(value: String): Long {
     val number = value.toLongOrNull()
@@ -981,6 +988,7 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
         Local(-1, false, proof, false, tupleSlots = slots).also { locals[id] = it; joins.remove(id) }
     fun bindVoid(id: String, proof: CoreRepresentation): Local =
         Local(-1, false, proof.copy(evaluated = true), false).also { locals[id] = it; joins.remove(id) }
+    fun bindSlot(id: String, local: Local) { locals[id] = local; joins.remove(id) }
     fun refine(id: String, proof: CoreRepresentation) { locals[id]?.let { locals[id] = it.copy(proof = proof, primitive = if (proof.present) proof.isLong else it.primitive) } }
     fun publish(id: String, proof: CoreRepresentation) {
         refine(id, proof)
@@ -1028,8 +1036,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         val scope = Scope(FrameLayout())
         val initializers = bindings.map { binding ->
+            CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding")
             withSource(sources.binding(binding)) {
                 val expr = binding["expr"] as List<Any?>
+                CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
                 if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
                 else argument(expr, scope, representation(binding), binding["name"] as String)
             }
@@ -1126,9 +1136,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf(), inputLayout)
         val body = compile(expression, scope, true)
         val handoff = HandoffEntry.create(language, scope.layout, args.map(CoreRepresentations::binder), resultProof, captures != null)
+        if ((body.representation.isSum || resultProof.isSum) && (!body.representation.isSum || !resultProof.isSum))
+            throw RuntimeFault("Sum function requires exact body and declared result proofs")
         val effectiveResult = body.representation.refine(resultProof)
         CoreRepresentations.requireNoVector(effectiveResult, "function result")
-        val tuple = if (effectiveResult.isTuple) TupleShape(effectiveResult, language as thc.Language) else null
+        val tuple = if (effectiveResult.isAggregate) TupleShape(effectiveResult, language as thc.Language) else null
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<tuple return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
@@ -1159,6 +1171,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         if (!lifted) return Evaluate(compile(expr, scope, false).also {
             CoreRepresentations.requireNoVector(it.representation, "argument")
+            CoreRepresentations.requireNoSum(it.representation, "argument")
         }, metrics)
         // GHC's context-aware exprOkForSpecEval certificate also covers total
         // primitive operands in constructors, without strictifying recursive
@@ -1166,10 +1179,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         // an update thunk and captures. A false certificate overrides HNF.
         // Older exports fall back to exprIsHNF; missing proofs stay lazy.
         if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true)))
-            return compile(expr, scope, false)
-        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
+            return compile(expr, scope, false).also { CoreRepresentations.requireNoSum(it.representation, "argument") }
+        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { CoreRepresentations.requireNoSum(it.representation, "argument") }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
         "int64" -> int64Literal(value)
         "word64" -> word64Literal(value)
@@ -1216,7 +1230,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int32", "word32")) it.proven(CoreRepresentations.narrow32LiteralProof(expr)) else it
+            if (expr[1] in listOf("int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> Literal(Unit)
         "lam" -> {
@@ -1232,9 +1246,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
-            if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
+            if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
+                if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
+                val operand = compile(args[0], scope, false)
+                val ids = CoreEnums.validate(expr, operand.representation, constructors)
+                TagToEnum(EnumFamily(ids.map { dataLayout(it).allocate() }.toTypedArray()), operand)
+            } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
-                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
+                CoreVectors.validateFlags(flags)
                 val operands = args.map { compile(it, scope, false) }.toTypedArray()
                 when (name) {
                     "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })
@@ -1248,6 +1268,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "unpackFloatX4#" -> VectorFloatUnpack(operands[0])
                     in CoreVectors.operationsFloat -> VectorFloatOperation(name, operands)
                     in CoreVectors.operations32 -> Vector32Operation(name, operands)
+                    "packInt16X8#" -> Vector16Pack(operands[0], IntArray(8) { scope.layout.bind("<int16 vector lane $it>") })
+                    "unpackInt16X8#" -> Vector16Unpack(operands[0])
+                    in CoreVectors.operations16 -> Vector16Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
@@ -1268,6 +1291,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 TupleArithmeticExpression(tupleOperation, tupleProof,
                     argument(args[0], scope, false), argument(args[1], scope, false))
+            } else if (tupleProof.isSum && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-sum") {
+                val tag = SumShape.constructor(tupleProof, constructors[fn[1]], fn[2])
+                if (args.size != 1) throw RuntimeFault("Sum constructor must be saturated")
+                val selected = tupleProof.alternatives!![tag - 1]
+                val lifted = flags.single() as? Boolean ?: throw UnsupportedCore("Unknown sum payload levity")
+                val payload = if (selected.isTuple) compile(args.single(), scope, false)
+                    else argument(args.single(), scope, lifted)
+                SumShape.payload(selected, payload.representation, lifted)
+                SumConstruct(TupleShape(tupleProof, language as thc.Language), tag, payload)
             } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language as thc.Language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
@@ -1305,7 +1337,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 constructorStrictFields != null -> Construct(dataLayout(fn[1] as String), nodes)
                 else -> {
                     val function = compile(fn, scope, false)
-                    if (tupleProof.isTuple) TupleApplication(language as thc.Language, TupleShape(tupleProof, language), function, nodes, tail, metrics)
+                    if (tupleProof.isAggregate) TupleApplication(language as thc.Language, TupleShape(tupleProof, language), function, nodes, tail, metrics)
                     else {
                     val self = scope.self
                     if (tail && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
@@ -1328,6 +1360,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val rhs = group.map { binding -> withSource(sources.binding(binding, currentSource)) {
                     val it = binding
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
+                    CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding")
                     if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
                     val node = if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, local, it["name"].toString())
                     else argument(rhsExpr, if (recursive) local else scope, lifted, it["name"].toString())
@@ -1349,7 +1382,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 local.locals[id]?.let { local.refine(id, it.proof.copy(evaluated = true)) }
             }
             val binderProof = scrutinee.representation.refine(CoreRepresentations.caseBinder(expr).copy(evaluated = false)).copy(evaluated = true)
-            if (binderProof.isTuple) compileTupleCase(expr, scrutinee, binderProof, local, tail) else {
+            if (binderProof.isSum) compileSumCase(expr, scrutinee, binderProof, local, tail)
+            else if (binderProof.isTuple) compileTupleCase(expr, scrutinee, binderProof, local, tail) else {
             val binder = local.bind(expr[2] as String, !binderProof.present || binderProof.isLong, binderProof).slot
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
@@ -1381,6 +1415,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail))
             }.toTypedArray()
+            CoreRepresentations.validateAggregateCaseResult(CoreRepresentations.expression(expr), alternatives.map { it.body.representation })
             CoreRepresentations.validateFloatingCaseResult(CoreRepresentations.expression(expr),
                 alternatives.map { it.body.representation })
             when (caseCategory(binderProof, alternatives.map { it.kind },
@@ -1409,6 +1444,48 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "prim" -> throw UnsupportedCore("Unsaturated primitive ${expr[1]}")
         else -> throw UnsupportedCore("Unsupported Core node ${expr[0]}")
     }
+    private fun compileSumCase(expr: List<Any?>, scrutinee: Expr, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expr {
+        val shape = TupleShape(proof, language as thc.Language)
+        val slots = IntArray(shape.width) { scope.layout.bind("<sum case $it>") }
+        scope.bindTuple(expr[2] as String, proof, slots)
+        val tags = mutableSetOf<Int>()
+        var fallback = -1
+        val arms = (expr[3] as List<List<Any?>>).mapIndexed { index, alt ->
+            val child = scope.child()
+            val ids = alt[2] as List<String>
+            if (alt[0] == "default") {
+                if (fallback >= 0 || ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
+                    throw RuntimeFault("Invalid sum DEFAULT alternative")
+                fallback = index
+            } else {
+                if (alt[0] != "data" || ids.size != 1) throw RuntimeFault("Invalid sum alternative")
+                val tag = SumShape.constructor(proof, constructors[alt[1]], ids.size)
+                if (!tags.add(tag)) throw RuntimeFault("Duplicate sum alternative tag")
+                val component = proof.alternatives!![tag - 1]
+                val metadata = CoreRepresentations.alternativeBinders(alt)
+                if (metadata.size != 1 || metadata[0]["id"] != ids[0]) throw RuntimeFault("Missing sum payload binder proof")
+                val actual = CoreRepresentations.binder(metadata.single())
+                val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
+                SumShape.payload(component, actual, lifted)
+                val field = component.refine(actual).copy(evaluated = component.evaluated)
+                val projection = proof.alternativeSlots!![tag - 1].map { slots[it] }.toIntArray()
+                if (component.isTuple) child.bindTuple(ids[0], field, projection)
+                else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], field)
+                else child.bindSlot(ids[0], Local(projection[0], component.isLong, field, false))
+            }
+            compile(alt[3] as List<Any?>, child, tail)
+        }.toTypedArray()
+        if (arms.isEmpty()) throw RuntimeFault("Empty sum case")
+        val alternatives = expr[3] as List<List<Any?>>
+        fun selected(tag: Int) = alternatives.indexOfFirst { it[0] == "data" && (constructors[it[1]]?.get("tag") as? Number)?.toInt() == tag }
+            .let { if (it >= 0) it else fallback }
+        val result = arms.first().representation.refine(CoreRepresentations.expression(expr))
+        arms.forEach { result.refine(it.representation) }
+        CoreRepresentations.validateFloatingCaseResult(result, arms.map { it.representation })
+        CoreRepresentations.requireNoVector(result, "sum case result")
+        return SumCase(scrutinee, slots, arms, selected(1), selected(2),
+            result.copy(evaluated = arms.all { it.representation.evaluated }))
+    }
     private fun compileTupleCase(expr: List<Any?>, scrutinee: Expr, proof: CoreRepresentation, local: Scope, tail: Boolean): Expr {
         val shape = TupleShape(proof, language as thc.Language)
         val slots = IntArray(shape.width) { local.layout.bind("<tuple case $it>") }
@@ -1431,7 +1508,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val offset = shape.offsets[index]
                 if (component.isTuple) local.bindTuple(id, component.copy(evaluated = true), slots.copyOfRange(offset, offset + width))
                 else if (component.kind == CoreKind.VOID) local.bindVoid(id, field)
-                else local.locals[id] = Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false)
+                else local.bindSlot(id, Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false))
             }
         } else if (alt[0] != "default" || ids.isNotEmpty()) throw RuntimeFault("Invalid tuple alternative")
         return TupleCase(scrutinee, slots, compile(alt[3] as List<Any?>, local, tail))
@@ -1487,10 +1564,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         val entry = compile(expr[3] as List<Any?>, local, tail)
         CoreRepresentations.requireNoVector(entry.representation, "join result")
+        CoreRepresentations.requireNoSum(entry.representation, "join result")
         val bodies = definitions.mapIndexed { index, definition ->
             withSource(sources.binding(definition.binding, currentSource)) {
                 compile(definition.body, bodyScopes[index], tail).also { node ->
                     CoreRepresentations.requireNoVector(node.representation, "join result")
+                    CoreRepresentations.requireNoSum(node.representation, "join result")
                     node.representation = node.representation.refine(definition.result.copy(evaluated = false))
                 }
             }

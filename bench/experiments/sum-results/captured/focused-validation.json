@@ -1,0 +1,98 @@
+{
+  "runtimeCommit": "5c7f620ed77129a4717f99cd60fa130926248a42",
+  "scope": "Focused sum/native/ownership/metadata and original aggregate frontier gates; full suite recorded separately",
+  "runs": [
+    {
+      "mode": "default",
+      "tests": 23,
+      "log": {
+        "path": "/private/tmp/thc-sum-final-focused.log",
+        "sha256": "7c891d85e938704ce558cfcb5710a0c47e74ed00e163f152a2b8c7e285eaa6b7"
+      },
+      "xml": [
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-default/TEST-thc.AggregateFrontierTest.xml",
+          "sha256": "deb4bb8abb15b3088d10773b5a78b2c12c6e0da115118aa8f7e8692e020ae9b6",
+          "suite": "thc.AggregateFrontierTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-default/TEST-thc.SumLayoutMetadataTest.xml",
+          "sha256": "77f8f94c439e3594f289fb023f66813e5cd14c6993335b899597ef01fc2040a9",
+          "suite": "thc.SumLayoutMetadataTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-default/TEST-thc.runtime.SumProtocolTest.xml",
+          "sha256": "8c67141d54b1c46cb870c19ebf2b586931ca56f4e027fd7ccb77b4c8a86e1add",
+          "suite": "thc.runtime.SumProtocolTest",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-default/TEST-thc.runtime.SumResultTest.xml",
+          "sha256": "eb5f4e574d1584bbcf27c5bdd60dbc936c0c8476ccb953b4c32676bad652d35a",
+          "suite": "thc.runtime.SumResultTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    {
+      "mode": "handoff",
+      "tests": 23,
+      "log": {
+        "path": "/private/tmp/thc-sum-final-handoff.log",
+        "sha256": "3822447692e0e1069c39e2a7d87fde9bcb3a94e9705f936c555fab04aecc5fcd"
+      },
+      "xml": [
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-handoff/TEST-thc.AggregateFrontierTest.xml",
+          "sha256": "2e7e0349246e154db3bb4a82733f251987e3c9ac0efdfa7295ef01b11bfa2bf8",
+          "suite": "thc.AggregateFrontierTest",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-handoff/TEST-thc.SumLayoutMetadataTest.xml",
+          "sha256": "83c2c4534e1667432ce31b0737a0de324f578248f31a26b8535749cd0613ca5b",
+          "suite": "thc.SumLayoutMetadataTest",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-handoff/TEST-thc.runtime.SumProtocolTest.xml",
+          "sha256": "b38f7200bfb7501edc47dd335b33488505b70a6f2987de41c7086200c4e79b3d",
+          "suite": "thc.runtime.SumProtocolTest",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "path": "/private/tmp/thc-unboxed-sum-results/build/reports/sum-reviewed-handoff/TEST-thc.runtime.SumResultTest.xml",
+          "sha256": "f571b0c7b79939a8c14c45a93d40ed48c570d5cc83e441314ab32a89f8d0ceb6",
+          "suite": "thc.runtime.SumResultTest",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    }
+  ]
+}

@@ -105,7 +105,9 @@ operations with exact typed lanes and bit-sensitive correctness gates.
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
 [Exact empty tuple inputs](docs/empty-tuple-inputs.md) retain logical arity with no payload fields.
-Other aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
+Other aggregate arguments, join captures and ordinary captures remain explicit boundaries.
+[Binary unboxed sum results](docs/sum-results.md) use exact typed destinations; sum inputs,
+storage, joins, nested sums and unresolved layouts remain rejected.
 
 [Managed MutVar operations](docs/mutvars.md) execute ordinary ST/STRef code with
 lazy reference storage and exact State sequencing on both backends.
@@ -120,9 +122,16 @@ public Double arrays and native-checked bit movement through tuple-returning rea
 unsigned elements, public accumulation/ST examples and cross-element byte aliases.
 [Float/Word-array operations](docs/float-word-arrays.md) add typed four-byte Float
 and eight-byte machine Word storage, public examples and native bit-movement checks.
+[Int16/Word16-array operations](docs/int16-arrays.md) add two-byte signed/unsigned
+storage and exact narrow literal proofs.
 
 Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
 while preserving lazy lifted elements and closures.
+
+[Concrete `tagToEnum#` families](docs/tag-to-enum.md) preserve the instantiated
+nullary constructor family before type erasure. Saturated calls use a primitive
+Long tag and return the existing typed constructor value; missing family proofs
+and invalid full-width tags are rejected.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 30 arithmetic/comparison/conversion primops, including square
@@ -146,6 +155,7 @@ joins](docs/core-evidence.md), along with [source locations](docs/debug-location
 in both executable trees. The runtime keeps primitive and evaluated reference
 types through arguments, captures and constructor fields. PAPs stay lazy until
 saturation, and recursive captures retain their cells until publication.
+Managed string-literal addresses also use [precise final constructor fields](docs/core-evidence.md#precise-reference-storage), preserving lazy neighboring payloads.
 
 Each comparison uses three fresh processes per engine, five measured windows
 per process, and at least 12,000 warmup workloads. The [entry-contract and

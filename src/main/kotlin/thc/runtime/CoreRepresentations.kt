@@ -10,10 +10,15 @@ internal data class CoreRepresentation(
     val present: Boolean = false,
     val primReps: List<String>? = null,
     val components: List<CoreRepresentation>? = null,
-    val vector: CoreVector? = null
+    val vector: CoreVector? = null,
+    val alternatives: List<CoreRepresentation>? = null,
+    val tagSlot: Int? = null,
+    val alternativeSlots: List<List<Int>>? = null
 ) {
     val isVector: Boolean get() = vector != null
     val isTuple: Boolean get() = components != null
+    val isSum: Boolean get() = alternatives != null
+    val isAggregate: Boolean get() = isTuple || isSum
     val isEmptyTuple: Boolean get() = present && kind == CoreKind.UNKNOWN && components?.isEmpty() == true && primReps?.isEmpty() == true
     val isLong: Boolean get() = kind == CoreKind.LONG
     val isFloat: Boolean get() = kind == CoreKind.FLOAT
@@ -39,11 +44,11 @@ internal data class CoreRepresentation(
             throw RuntimeFault("Conflicting Core boxed levity proofs: $boxed and $otherBoxed")
         if ((isVector || other.isVector) && present && other.present && vector != other.vector)
             throw RuntimeFault("Conflicting Core vector representation proofs")
-        if (isTuple && other.isTuple && !TupleShape.compatible(this, other))
-            throw RuntimeFault("Conflicting logical tuple representation proofs")
-        if (isTuple && other.present && !other.isTuple && other.kind != CoreKind.UNKNOWN ||
-            other.isTuple && present && !isTuple && kind != CoreKind.UNKNOWN)
-            throw RuntimeFault("Conflicting scalar and tuple representation proofs")
+        if (isAggregate && other.isAggregate && !TupleShape.compatible(this, other))
+            throw RuntimeFault("Conflicting logical aggregate representation proofs")
+        if (isAggregate && !other.isAggregate && (other.kind != CoreKind.UNKNOWN || other.primReps != null) ||
+            other.isAggregate && !isAggregate && (kind != CoreKind.UNKNOWN || primReps != null))
+            throw RuntimeFault("Conflicting scalar and aggregate representation proofs")
         val merged = when {
             kind == CoreKind.UNKNOWN -> other.kind
             other.kind == CoreKind.UNKNOWN || kind == other.kind -> kind
@@ -58,7 +63,8 @@ internal data class CoreRepresentation(
         val mergedReps = if (boxed != null && other.primReps == listOf("BoxedRep Nothing")) primReps
             else other.primReps ?: primReps
         return CoreRepresentation(merged, evaluated || other.evaluated,
-            present || other.present, mergedReps, other.components ?: components, other.vector ?: vector)
+            present || other.present, mergedReps, other.components ?: components, other.vector ?: vector,
+            other.alternatives ?: alternatives, other.tagSlot ?: tagSlot, other.alternativeSlots ?: alternativeSlots)
     }
     private fun exactBoxedRep(): String? = if (present &&
         kind in setOf(CoreKind.OBJECT, CoreKind.DATA, CoreKind.CLOSURE))
@@ -76,6 +82,10 @@ internal object CoreRepresentations {
         val floating = proofs.firstOrNull { it.isFloat || it.isDouble } ?: return
         proofs.forEach { floating.refine(it) }
     }
+    fun validateAggregateCaseResult(declared: CoreRepresentation, alternatives: List<CoreRepresentation>) {
+        val aggregate = (listOf(declared) + alternatives).firstOrNull { it.isAggregate } ?: return
+        (listOf(declared) + alternatives).forEach { aggregate.refine(it) }
+    }
     /** Validate every retained proof, including cold branches and unused binders. */
     fun validateAggregates(bindings: List<Map<String, Any?>>) {
         fun visit(value: Any?) {
@@ -89,12 +99,32 @@ internal object CoreRepresentations {
         }
         visit(bindings)
     }
+    /** Sum host results remain unsupported through known aliases and PAP prefixes. */
+    fun knownFunctionResult(expression: List<Any?>, bindings: List<Map<String, Any?>>): CoreRepresentation? {
+        val globals = bindings.associateBy { it["id"] as String }
+        fun resolve(expr: List<Any?>, seen: Set<String>): Pair<Int, CoreRepresentation>? = when (expr.firstOrNull()) {
+            "lam" -> (expr[1] as List<*>).size to lambdaResult(expr)
+            "var" -> (expr[1] as String).let { id ->
+                if (id in seen) null else (globals[id]?.get("expr") as? List<Any?>)?.let { resolve(it, seen + id) }
+            }
+            "app" -> resolve(expr[1] as List<Any?>, seen)?.let { (arity, result) ->
+                val supplied = (expr[2] as List<*>).size
+                if (supplied < arity) arity - supplied to result else null
+            }
+            else -> null
+        }
+        return resolve(expression, emptySet())?.second
+    }
     fun requireInput(proof: CoreRepresentation) {
         if (!proof.isEmptyTuple) requireScalar(proof, "argument")
     }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {
         requireNoVector(proof, boundary)
+        if (proof.isSum) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum ($boundary)")
         if (proof.isTuple) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple ($boundary)")
+    }
+    fun requireNoSum(proof: CoreRepresentation, boundary: String) {
+        if (proof.isSum) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum ($boundary)")
     }
     fun requireNoVector(proof: CoreRepresentation, boundary: String) {
         if (proof.isVector) throw UnsupportedCore("Unsupported Core vector boundary: $boundary")
@@ -104,11 +134,28 @@ internal object CoreRepresentations {
         val map = value as? Map<String, Any?> ?: throw RuntimeFault("Invalid Core representation metadata")
         val components = when (val aggregate = map["aggregate"]) {
             null -> null
-            "unboxed-sum" -> throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum")
+            "unboxed-sum" -> null
             "unboxed-tuple" -> (map["components"] as? List<*>)?.map(::parse)
                 ?: throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple lacks exact components")
             else -> throw RuntimeFault("Invalid Core aggregate representation: $aggregate")
         }
+        if (map["aggregate"] == "unboxed-sum" && "components" in map)
+            throw RuntimeFault("Sum proof contains tuple components")
+        val alternatives = if (map["aggregate"] == "unboxed-sum")
+            (map["alternatives"] as? List<*>)?.map(::parse)
+                ?: throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum lacks exact alternatives")
+            else null
+        fun exactInt(value: Any?): Int {
+            if (value !is Long && value !is Int) throw RuntimeFault("Invalid sum slot index")
+            val number = value as Number
+            val index = number.toInt()
+            if (number.toDouble() != index.toDouble()) throw RuntimeFault("Invalid sum slot index")
+            return index
+        }
+        val tagSlot = if (alternatives != null) exactInt(map["tagSlot"]) else null
+        val projections = if (alternatives != null) (map["alternativeSlots"] as? List<*>)?.map { row ->
+            (row as? List<*>)?.map(::exactInt) ?: throw RuntimeFault("Invalid sum alternative projection")
+        } ?: throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum lacks exact projection") else null
         val kind = when (map["kind"]) {
             "long" -> CoreKind.LONG; "address" -> CoreKind.ADDRESS; "void" -> CoreKind.VOID
             "float" -> CoreKind.FLOAT; "double" -> CoreKind.DOUBLE
@@ -134,10 +181,11 @@ internal object CoreRepresentations {
         if (kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
             (reps?.size != 1 || reps[0] !in setOf("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)", "BoxedRep Nothing")))
             throw RuntimeFault("Core reference proof lacks a single boxed representation")
-        val vector = CoreVector.parse(map["vector"], kind, reps, components)
+        val vector = CoreVector.parse(map["vector"], kind, reps, components != null || alternatives != null)
         val evaluated = map["evaluated"] as? Boolean ?: throw RuntimeFault("Missing Core evaluatedness proof")
-        val proof = CoreRepresentation(kind, evaluated, true, reps, components, vector)
+        val proof = CoreRepresentation(kind, evaluated, true, reps, components, vector, alternatives, tagSlot, projections)
         if (components != null) TupleShape.validate(proof)
+        if (alternatives != null) SumShape.validate(proof)
         return proof
     }
     fun binder(binding: Map<String, Any?>): CoreRepresentation = parse(binding["rep"])
@@ -151,15 +199,19 @@ internal object CoreRepresentations {
     fun expression(expr: List<Any?>): CoreRepresentation = parse(metadata(expr)?.get("rep"))
     /** Narrow literals have intrinsic signed/unsigned identity, not merely a
      * Long carrier. Missing legacy metadata is fine; a contradictory proof is not. */
-    fun narrow32LiteralProof(expr: List<Any?>): CoreRepresentation {
-        val expected = if (expr[1] == "int32") "Int32Rep" else "Word32Rep"
+    fun narrowLiteralProof(expr: List<Any?>): CoreRepresentation {
+        val expected = when (expr[1]) {
+            "int16" -> "Int16Rep"; "word16" -> "Word16Rep"
+            "int32" -> "Int32Rep"; "word32" -> "Word32Rep"
+            else -> throw RuntimeFault("Not a supported narrow literal: ${expr[1]}")
+        }
         val proof = expression(expr)
         // Export-only identity rewrites retain an explicit unconstrained proof.
         // The literal still supplies its own exact representation; malformed
         // records have already failed parse(), and retained constraints must match.
-        val unconstrained = proof.kind == CoreKind.UNKNOWN && proof.primReps == null && !proof.isTuple && !proof.isVector
+        val unconstrained = proof.kind == CoreKind.UNKNOWN && proof.primReps == null && !proof.isAggregate && !proof.isVector
         if (proof.present && !unconstrained &&
-            (proof.kind != CoreKind.LONG || proof.primReps != listOf(expected) || proof.isTuple || proof.isVector))
+            (proof.kind != CoreKind.LONG || proof.primReps != listOf(expected) || proof.isAggregate || proof.isVector))
             throw RuntimeFault("${expr[1]} literal requires exact $expected metadata")
         return CoreRepresentation(CoreKind.LONG, evaluated = true, present = true, primReps = listOf(expected))
     }
@@ -209,6 +261,7 @@ internal object CoreJoins {
                     listOf("lam", all.drop(arity), rhs[2], meta)
                 }
             }
+            CoreRepresentations.requireNoSum(CoreRepresentations.joinResult(binding), "join result")
             CoreJoinDefinition(binding, binding["id"] as String, parameters, body, CoreRepresentations.joinResult(binding))
         }
     }

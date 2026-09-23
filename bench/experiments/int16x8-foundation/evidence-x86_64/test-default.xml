@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdInt16VectorTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-23T20:39:22.296Z" hostname="eak-quartus" time="4.989">
+  <properties/>
+  <testcase name="literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution()" classname="thc.runtime.SimdInt16VectorTest" time="0.008"/>
+  <testcase name="allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct()" classname="thc.runtime.SimdInt16VectorTest" time="0.128"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithoutInlining()" classname="thc.runtime.SimdInt16VectorTest" time="2.517"/>
+  <testcase name="exactShapeRequiresEightShortFieldsAndEightInt16TupleLanes()" classname="thc.runtime.SimdInt16VectorTest" time="0.002"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithInlining()" classname="thc.runtime.SimdInt16VectorTest" time="2.25"/>
+  <testcase name="bothLoadersRetainVectorBoundaryAndRejectForgedShapes()" classname="thc.runtime.SimdInt16VectorTest" time="0.084"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

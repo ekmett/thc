@@ -24,7 +24,7 @@ Binder, binding and expression metadata can carry:
 
 Newtypes, type families and unary class representations do not establish a data-object layout. Unboxed tuples and sums remain `unknown`, including the empty unboxed tuple: an empty register list alone does not make an unsupported aggregate a void token. The shared parser checks exact carriers for positive primitive/reference proofs. Older schema-1 trees without metadata remain accepted with unknown evidence; unsupported operations and unresolved required representations still fail explicitly.
 
-Aggregate records additionally retain [recursive logical components and alternatives](aggregate-layout.md), independently of their physical register vector. GHC's representation view exposes aggregate newtype aliases without promoting scalar newtypes to data/closure proofs. Unresolved aggregate runtime representations stay `null`; lazy lifted children stay unevaluated. These records drive [bounded tuple-result lowering](tuple-results.md); [Exact empty tuple inputs](empty-tuple-inputs.md) preserve logical arity with no payload fields; other aggregate arguments, join arguments, captures, sums and unresolved layouts still reject.
+Aggregate records additionally retain [recursive logical components and alternatives](aggregate-layout.md), independently of their physical register vector. GHC's representation view exposes aggregate newtype aliases without promoting scalar newtypes to data/closure proofs. Unresolved aggregate runtime representations stay `null`; lazy lifted children stay unevaluated. These records drive [bounded tuple-result lowering](tuple-results.md); [Exact empty tuple inputs](empty-tuple-inputs.md) preserve logical arity with no payload fields; [binary sum results](sum-results.md) use exact storage projections. Other aggregate arguments, join arguments, captures and unresolved layouts still reject.
 
 A successful case establishes WHNF for its binder and original scrutinee variable within the alternatives. Pattern fields gain the same fact only when they are unlifted or the saturated constructor worker requires them to be strict. Worker strictness marks must align exactly with worker fields, including coercions. Lazy lifted fields remain lazy. Lexical facts propagate by GHC variable identity, so shadowing does not leak them into another binding.
 
@@ -79,6 +79,27 @@ Both backends preserve this distinction in their local/capture metadata. Bytecod
 Constructor metadata also carries `fieldTypes`, aligned with `fieldReps`, `strictFields` and `fieldLifted`. Each record uses the same structured kind and evaluatedness proof as an expression. Its type comes from the constructor worker's actual field type; its evaluated flag requires a strict worker field or an unlifted representation. The runtime checks that these records agree with the existing storage and evaluation obligations before using them.
 
 An evaluated data field can be a final Java `DataValue` field, and an evaluated function field can be a final `Closure` field. A lazy field of either Haskell type still uses `Object`, because it can contain a thunk. A strict polymorphic field also stays `Object`: WHNF alone does not identify its carrier. Thus `Map`'s strict left and right children can have concrete reference fields while its polymorphic key and value retain their general representation. The existing primitive size field stays `long`.
+
+A constructor `AddrRep` field uses a final `LiteralAddress` property, including
+older records that retain `fieldReps` but omit `fieldTypes`. Retained exact field
+types must identify an evaluated, unlifted address. Allocation rejects numeric,
+null and foreign carriers; the supported value is an immutable managed GHC string
+literal plus a checked offset, never a native pointer. Lazy neighboring fields
+remain untouched. Heap-field capabilities are separate from aggregate-leaf
+capabilities, so this does not enable address-containing tuple or sum results.
+
+[AddressFieldAudit.hs](../compiler/test-fixtures/AddressFieldAudit.hs) and
+[its preparation](../scripts/prepare-address-fields.py) retain opaque constructor
+calls, cases, returned records and captured addresses before and after Tidy.
+Two hundred native rows agree with an independent bounded byte-index model,
+including high bytes, embedded/final NUL and negative offsets within the literal.
+Natural optimized examples are separate; GHC eta-expands the source constructor
+partial application, while a synthetic runtime control checks the actual PAP.
+Both backends check each compiled row's guest entry and host/original/active
+target validity with inlining enabled and disabled. Address aggregate frontiers
+remain rejected. This removes the `TrNameS` field obstacle in the genuine
+`arrEleBottom` source chain; its Typeable/unsafe-equality globals and `tagToEnum#`
+frontier still prevent strict acceptance.
 
 Closure environments apply the same rule to proven evaluated data, function and managed-address captures. Precise reference captures need neither an adaptive primitive arm nor a tag. Captures that can hold a recursive cell remain generic even if forcing has established WHNF for the cell's contents. Older exports without these proofs retain the previous storage layout.
 

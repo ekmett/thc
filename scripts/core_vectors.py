@@ -25,6 +25,20 @@ OPERATIONS.update({
     'minusInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
     'negateInt32X4#': ([VECTOR32_REP], VECTOR32_REP),
 })
+VECTOR16_REP = {'kind': 'vector', 'primReps': ['VecRep 8 Int16ElemRep'], 'evaluated': True,
+                'vector': {'lanes': 8, 'element': 'Int16ElemRep'}}
+LANE16_REP = {'kind': 'long', 'primReps': ['Int16Rep'], 'evaluated': True}
+TUPLE16_REP = {'kind': 'unknown', 'primReps': ['Int16Rep'] * 8, 'evaluated': True,
+               'aggregate': 'unboxed-tuple', 'components': [LANE16_REP] * 8}
+OPERATIONS.update({
+    'packInt16X8#': ([TUPLE16_REP], VECTOR16_REP),
+    'unpackInt16X8#': ([VECTOR16_REP], TUPLE16_REP),
+    'broadcastInt16X8#': ([LANE16_REP], VECTOR16_REP),
+    'plusInt16X8#': ([VECTOR16_REP, VECTOR16_REP], VECTOR16_REP),
+    'minusInt16X8#': ([VECTOR16_REP, VECTOR16_REP], VECTOR16_REP),
+    'negateInt16X8#': ([VECTOR16_REP], VECTOR16_REP),
+    'timesInt16X8#': ([VECTOR16_REP, VECTOR16_REP], VECTOR16_REP),
+})
 VECTOR_FLOAT_REP = {'kind': 'vector', 'primReps': ['VecRep 4 FloatElemRep'], 'evaluated': True,
                     'vector': {'lanes': 4, 'element': 'FloatElemRep'}}
 LANE_FLOAT_REP = {'kind': 'float', 'primReps': ['FloatRep'], 'evaluated': True}
@@ -69,6 +83,6 @@ def proof_error(rep):
         return 'Invalid Core vector shape'
     if registers != [f"VecRep {shape['lanes']} {shape['element']}"]:
         return 'Vector shape disagrees with primitive representation'
-    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
+    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
         return 'Unsupported Core vector representation'
     return None

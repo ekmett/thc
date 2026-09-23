@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pinned GHC sum layout metadata and native fixtures; no sum execution capability."""
+"""Pinned GHC sum layouts, native fixtures and exact runtime capability boundaries."""
 import argparse
 import hashlib
 import importlib.util
@@ -64,6 +64,7 @@ EXPECTED = {
 }
 ENTRIES = ['sumCase', 'directCase', 'nestedCase', 'lazyCase', 'zeroCase', 'unitCase',
            'boxedKindsCase', 'floatDoubleCase', 'narrowWideCase', 'threeWayCase']
+SUPPORTED = {'sumCase', 'directCase', 'lazyCase', 'zeroCase', 'unitCase', 'boxedKindsCase', 'floatDoubleCase'}
 INPUTS = [-(1 << 63), -2147483649, -2147483648, -5, -1, 0, 1, 7,
           2147483647, 2147483648, 4294967295, 4294967296, (1 << 63)-1]
 
@@ -119,14 +120,14 @@ def inventory(stage):
     spec = importlib.util.spec_from_file_location('sum_audit', ROOT/'scripts/audit-core.py')
     audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
     cap = json.loads((ROOT/'scripts/core-capabilities.json').read_text())
-    check('unboxed-sum' not in cap.get('aggregateResults', []), 'This fixture must not enable sum execution')
+    supported = SUPPORTED if 'unboxed-sum' in cap.get('aggregateResults', []) else {'directCase'}
     roots = [*EXPECTED, *ENTRIES]
     reports = []
     for name in roots:
         report = audit.Audit([(str(path), module)], cap).run([name])
-        check(report['accepted'] == (name == 'directCase'), stage+'/'+name+': sum rejection changed')
-        if name != 'directCase':
-            check(any(i['code'] == 'aggregate-representation' and i['detail'] == 'unboxed-sum' for i in report['issues']), name+': missing explicit sum rejection')
+        check(report['accepted'] == (name in supported), stage+'/'+name+': sum rejection changed')
+        if name not in supported:
+            check(any(i['code'] in ('aggregate-representation', 'aggregate-boundary') and i['detail'].startswith('unboxed-sum') for i in report['issues']), name+': missing explicit sum rejection')
         reports.append(dict(entry=name, accepted=report['accepted'], firstIssue=report['issues'][0] if report['issues'] else None))
     return dict(stage=stage, records=records, exactResultShapes=len(EXPECTED), audits=reports)
 
@@ -172,7 +173,7 @@ def prepare():
                      packages={name:output([pkg,'describe',name]) for name in ('ghc','base','ghc-internal','ghc-prim')})
     return dict(schema=1, nativeRows=len(ENTRIES)*len(INPUTS), entries=ENTRIES, inputs=INPUTS, toolchain=toolchain,
                 sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts], commands=commands,
-                claim='Metadata and native evidence only; retained sums must reject in THC.')
+                claim='Exact sum layout evidence with capability-gated result/case execution and explicit unsupported boundaries.')
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__); parser.add_argument('--prepare', action='store_true'); args=parser.parse_args()
@@ -182,7 +183,7 @@ def main():
     coverage = [inventory(stage) for stage in STAGES]
     if args.prepare: (OUT/'provenance.json').write_text(json.dumps(provenance, indent=2)+'\n')
     (OUT/'checks.json').write_text(json.dumps(dict(coverage=coverage, nativeRows=provenance['nativeRows'],
-        provenance=record(OUT/'provenance.json'), supportedSumEntries=0), indent=2)+'\n')
-    print(f"Sum metadata: {len(EXPECTED)} shapes × 2 stages, {provenance['nativeRows']} native/model rows; sum execution remains rejected")
+        provenance=record(OUT/'provenance.json'), supportedSumEntries=sum(r['accepted'] and r['entry'] != 'directCase' for r in coverage[0]['audits'])), indent=2)+'\n')
+    print(f"Sum metadata: {len(EXPECTED)} shapes × 2 stages, {provenance['nativeRows']} native/model rows; capability boundaries checked")
 
 if __name__ == '__main__': main()

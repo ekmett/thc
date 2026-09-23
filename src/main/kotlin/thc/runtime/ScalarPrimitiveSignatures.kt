@@ -26,8 +26,8 @@ internal object ScalarPrimitiveSignatures {
     private fun requireProof(name: String, position: String, expected: String, proof: CoreRepresentation) {
         // Missing/unknown legacy metadata is not a contradictory exact type proof.
         // Casts through genuine scalar newtypes preserve the same primitive rep.
-        if (!proof.present || proof.primReps == null || proof.kind == CoreKind.UNKNOWN && !proof.isTuple && !proof.isVector) return
-        if (proof.isTuple || proof.isVector || proof.primReps != listOf(expected))
+        if (!proof.present || proof.primReps == null || proof.kind == CoreKind.UNKNOWN && !proof.isAggregate && !proof.isVector) return
+        if (proof.isAggregate || proof.isVector || proof.primReps != listOf(expected))
             throw RuntimeFault("Primitive representation mismatch: $name $position expects $expected, found ${proof.primReps}")
     }
 }

@@ -219,6 +219,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    @Operation
+    public static final class CheckSumTag {
+        @Specialization public static long execute(long value) { return SumShape.INSTANCE.checkedTag(value); }
+    }
+
+    @Operation
+    @ConstantOperand(type = EnumFamily.class, name = "family")
+    public static final class TagToEnum {
+        @Specialization public static DataValue select(EnumFamily family, long tag) { return family.select(tag); }
+    }
+
     /** Saturated tuple arithmetic never constructs a result carrier or payload array. */
     @Operation
     @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")
@@ -739,6 +750,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = boolean.class, name = "unsigned")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadInt16Array {
+        @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = unsigned ? ManagedInt16Array.readUnsigned(array, index) : ManagedInt16Array.readSigned(array, index);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteInt16Array {
+        @Specialization public static Object write(Object value, long index, long integer, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedInt16Array.write(array, index, integer);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "unsigned")
+    public static final class IndexInt16Array {
+        @Specialization public static long index(boolean unsigned, Object value, long index) {
+            byte[] array = ManagedByteArray.require(value);
+            return unsigned ? ManagedInt16Array.readUnsigned(array, index) : ManagedInt16Array.readSigned(array, index);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "unsigned")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadInt32Array {
         @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
@@ -788,6 +827,51 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Int64X2 value, @Bind("$node") Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
+        }
+    }
+
+    @Operation public static final class Vector16Pack {
+        @Specialization public static Int16X8 pack(long first, long second, long third, long fourth,
+                long fifth, long sixth, long seventh, long eighth) {
+            return new Int16X8((short) first, (short) second, (short) third, (short) fourth,
+                (short) fifth, (short) sixth, (short) seventh, (short) eighth);
+        }
+    }
+    @Operation public static final class Vector16Broadcast {
+        @Specialization public static Int16X8 broadcast(long value) { return Int16X8.broadcast((short) value); }
+    }
+    @Operation public static final class Vector16Negate {
+        @Specialization public static Int16X8 negate(Int16X8 value) { return Int16X8.negate(value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class Vector16Binary {
+        @Specialization public static Int16X8 binary(int operation, Int16X8 first, Int16X8 second) {
+            return switch (operation) {
+                case 0 -> Int16X8.add(first, second);
+                case 1 -> Int16X8.subtract(first, second);
+                case 2 -> Int16X8.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid Int16X8 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    @ConstantOperand(type = LocalAccessor.class, name = "fifth")
+    @ConstantOperand(type = LocalAccessor.class, name = "sixth")
+    @ConstantOperand(type = LocalAccessor.class, name = "seventh")
+    @ConstantOperand(type = LocalAccessor.class, name = "eighth")
+    public static final class Vector16Unpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, LocalAccessor fifth, LocalAccessor sixth,
+                LocalAccessor seventh, LocalAccessor eighth, Int16X8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
+            third.setLong(bytecode, frame, value.third); fourth.setLong(bytecode, frame, value.fourth);
+            fifth.setLong(bytecode, frame, value.fifth); sixth.setLong(bytecode, frame, value.sixth);
+            seventh.setLong(bytecode, frame, value.seventh); eighth.setLong(bytecode, frame, value.eighth);
         }
     }
 

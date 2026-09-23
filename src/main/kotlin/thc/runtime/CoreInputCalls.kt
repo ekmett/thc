@@ -37,7 +37,7 @@ internal object CoreInputCalls {
                             if (expected.isEmptyTuple || actual.isEmptyTuple) {
                                 if (!expected.isEmptyTuple || !actual.isEmptyTuple)
                                     throw UnsupportedCore("Missing or conflicting exact empty tuple argument proof")
-                            } else if (expected.isTuple || actual.isTuple) TupleShape.requireCompatible(expected, actual, component = true)
+                            } else if (expected.isAggregate || actual.isAggregate) TupleShape.requireCompatible(expected, actual, component = true)
                         }
                     }
                     visit(fn, scope); args.forEach { visit(it, scope) }

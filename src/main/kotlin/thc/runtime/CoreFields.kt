@@ -27,7 +27,17 @@ internal class CoreFields(info: Map<String, Any?>) {
                 else -> throw UnsupportedCore("Multi-register constructor field unsupported: $id")
             }
         }.toTypedArray()
-        referenceTypes = arrayOfNulls(arity)
+        // AddrRep has one managed carrier even in older exports lacking fieldTypes.
+        // It must never become a generic reference property or a native pointer.
+        referenceTypes = Array(arity) { if (storage[it] == "AddrRep") LiteralAddress::class.java else null }
+        for (index in storage.indices) if (storage[index] == "AddrRep") {
+            if (info.containsKey("fieldLifted")) {
+                val lifted = info["fieldLifted"] as? List<*>
+                    ?: throw RuntimeFault("Invalid address constructor levity: $id field $index")
+                if (lifted.size != arity || lifted[index] != false)
+                    throw RuntimeFault("Address constructor field must be unlifted: $id field $index")
+            }
+        }
         if (info.containsKey("fieldTypes")) {
             val types = info["fieldTypes"] as? List<*> ?: throw RuntimeFault("Invalid constructor field types: $id")
             val strict = info["strictFields"] as? List<*> ?: throw RuntimeFault("Missing constructor strictness metadata: $id")
@@ -36,8 +46,11 @@ internal class CoreFields(info: Map<String, Any?>) {
                 throw RuntimeFault("Constructor field type count mismatch: $id")
             for (index in types.indices) {
                 val proof = CoreRepresentations.parse(types[index])
+                CoreRepresentations.requireNoSum(proof, "constructor field")
                 if (!proof.present || proof.primReps != reps[index])
                     throw RuntimeFault("Constructor field type disagrees with its primitive representation: $id field $index")
+                if (storage[index] == "AddrRep" && proof.kind != CoreKind.ADDRESS)
+                    throw RuntimeFault("Address constructor field lacks its exact managed carrier: $id field $index")
                 val strictField = strict[index] as? Boolean ?: throw RuntimeFault("Unknown constructor field strictness: $id")
                 val expectedLifted = storage[index] == "LiftedRep"
                 if (lifted[index] != expectedLifted)

@@ -104,6 +104,8 @@ jobs:
           assert proof['nativeRows'] == 2196 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           proof = json.loads(Path('build/simd-doublex2/provenance.json').read_text())
           assert proof['nativeRows'] == 3390 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-int16x8/provenance.json').read_text())
+          assert proof['nativeRows'] == 6032 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           PY
       - name: Test opt-in dense handoff
         env:
@@ -127,19 +129,24 @@ jobs:
       - name: Check exact dependency auditor and library frontier
         run: |
           python3 scripts/test-audit-core.py
+          python3 scripts/test-core-enums.py
           python3 scripts/test-sum-layout.py
+          python3 scripts/test-core-sums.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
           python3 scripts/test-floatx4-model.py
           python3 scripts/test-doublex2-model.py
+          python3 scripts/test-int16x8-model.py
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-arrays.py
+          python3 scripts/test-address-fields.py
           python3 scripts/test-core-mutvars.py
           python3 scripts/test-int-array-model.py
           python3 scripts/test-double-array-model.py
           python3 scripts/test-int32-array-model.py
           python3 scripts/test-float-word-array-model.py
+          python3 scripts/test-int16-array-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -174,6 +181,7 @@ jobs:
             build/floating-tuple/
             build/empty-tuple-input/
             build/sqrt/
+            build/tag-to-enum/
             build/test-results/
             build/aggregate-frontier.json
             build/primop-coverage.json
@@ -181,6 +189,7 @@ jobs:
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
             build/sum-layout/
+            build/sum-result/
             build/tuple-return/
             build/state-tuple/checks.json
             build/state-tuple/provenance.json
@@ -193,6 +202,7 @@ jobs:
             build/mutvar/*/*.audit.json
             build/mutvar/*/core/*.json
             build/boxed-arrays/
+            build/address-fields/
             build/bytearray/manifest.json
             build/bytearray/oracle.tsv
             build/bytearray/NativeByteArray.hs
@@ -228,6 +238,14 @@ jobs:
             build/float-word-arrays/native/float-word-array-oracle
             build/float-word-arrays/*/*.audit.json
             build/float-word-arrays/*/*/core/*.json
+            build/int16-arrays/manifest.json
+            build/int16-arrays/oracle.tsv
+            build/int16-arrays/expected.tsv
+            build/int16-arrays/literal-oracle.tsv
+            build/int16-arrays/NativeInt16Array.hs
+            build/int16-arrays/native/int16-array-oracle
+            build/int16-arrays/*/*.audit.json
+            build/int16-arrays/*/*/core/*.json
             build/tuple-join/
             build/tuple-arithmetic/
             build/integer-primops/manifest.json
@@ -245,6 +263,7 @@ jobs:
             build/simd-int32x4/
             build/simd-floatx4/
             build/simd-doublex2/
+            build/simd-int16x8/
             build/signed-narrow-primops/manifest.json
             build/signed-narrow-primops/oracle.tsv
             build/signed-narrow-primops/*.audit.json

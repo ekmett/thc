@@ -237,12 +237,16 @@ class DataLayout(
             "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" -> LONG
             "FloatRep" -> FLOAT
             "DoubleRep" -> DOUBLE
-            "LiftedRep", "UnliftedRep" -> OBJECT
+            "LiftedRep", "UnliftedRep", "AddrRep" -> OBJECT
             "VoidRep" -> VOID
             else -> throw UnsupportedCore("Unsupported constructor field representation: $representation")
         }
-        private val referenceType = referenceType ?: Any::class.java
-        init { require(referenceType == null || kind == OBJECT) }
+        private val address = representation == "AddrRep"
+        private val referenceType = if (address) LiteralAddress::class.java else referenceType ?: Any::class.java
+        init {
+            require(referenceType == null || kind == OBJECT)
+            require(!address || referenceType == null || referenceType == LiteralAddress::class.java)
+        }
         private val property = DefaultStaticProperty("field_$index")
 
         fun register(builder: StaticShape.Builder) {
@@ -261,7 +265,8 @@ class DataLayout(
                 LONG -> property.setLong(value, field as? Long ?: fault("Expected primitive Long constructor field"))
                 FLOAT -> property.setFloat(value, field as? Float ?: fault("Expected primitive Float constructor field"))
                 DOUBLE -> property.setDouble(value, field as? Double ?: fault("Expected primitive Double constructor field"))
-                OBJECT -> property.setObject(value, field)
+                OBJECT -> property.setObject(value, if (address)
+                    field as? LiteralAddress ?: fault("Expected a managed literal Addr# constructor field") else field)
                 VOID -> if (field !== Unit) fault("Expected zero-width constructor field")
             }
         }

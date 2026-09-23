@@ -10,7 +10,8 @@ import java.io.File
 class AggregateLayoutTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val boundaries = mapOf(
-        "nestedIdentity" to "unboxed-sum", "lazyIdentity" to "unboxed-tuple",
+        // The inner binary sum has a known layout; its enclosing tuple-of-sum remains unsupported.
+        "nestedIdentity" to "unboxed-tuple", "lazyIdentity" to "unboxed-tuple",
         "alternativesIdentity" to "unboxed-sum", "polymorphicTuple" to "unboxed-tuple",
         "polymorphicSum" to "unboxed-sum", "polymorphicNested" to "unboxed-tuple",
         "levityPolymorphic" to "unboxed-tuple", "tupleAliasIdentity" to "unboxed-tuple",

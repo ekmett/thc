@@ -1,0 +1,381 @@
+Resource run log: /home/ekmett/.codex/worktrees/98d0/cult/build-agent-logs/20260923-163305-9vknpeds/output.log
+GHC primop inventory: 319 advertised / 1491 total; names and arities agree
+Verified 242 exact monomorphic scalar signatures against GHC 9.14.1
+[1 of 6] Compiling Thc.Cbv          ( compiler/Thc/Cbv.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/Thc/Cbv.dyn_o )
+[2 of 6] Compiling Thc.Demands      ( compiler/Thc/Demands.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/Thc/Demands.dyn_o )
+[3 of 6] Compiling Thc.Sources      ( compiler/Thc/Sources.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/Thc/Sources.dyn_o )
+[4 of 6] Compiling Thc.Wired        ( compiler/Thc/Wired.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/Thc/Wired.dyn_o )
+[5 of 6] Compiling Thc.Plugin       ( compiler/Thc/Plugin.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/Thc/Plugin.dyn_o )
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 3] Compiling FloatingAudit    ( compiler/test-fixtures/FloatingAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating/native/FloatingAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/FloatingAuditNative.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating/native/floating-oracle
+[1 of 1] Compiling FloatingAudit    ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/FloatingAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating/ghc/FloatingAudit.o )
+Floating audit: 441 native rows, 28 primops, 15 strict entries
+[1 of 3] Compiling FloatingTupleAudit ( compiler/test-fixtures/FloatingTupleAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating-tuple/native/FloatingTupleAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/FloatingTupleAuditNative.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating-tuple/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating-tuple/native/oracle
+[1 of 1] Compiling FloatingTupleAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/FloatingTupleAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating-tuple/pre-ghc/FloatingTupleAudit.o )
+{"accepted": true, "suppliedBindings": 42, "reachableBindings": 18, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling FloatingTupleAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/FloatingTupleAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/floating-tuple/post-ghc/FloatingTupleAudit.o )
+{"accepted": true, "suppliedBindings": 44, "reachableBindings": 18, "missingGlobals": 0, "issues": 0}
+Floating tuples: 44 native/model rows, 8 IEEE bit rows, exact pre/post layouts and strict audits
+[1 of 3] Compiling SqrtAudit        ( compiler/test-fixtures/SqrtAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/sqrt/native/SqrtAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SqrtAuditNative.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/sqrt/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/sqrt/native/oracle
+[1 of 1] Compiling SqrtAudit        ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SqrtAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/sqrt/pre-ghc/SqrtAudit.o )
+{"accepted": true, "suppliedBindings": 9, "reachableBindings": 4, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling SqrtAudit        ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SqrtAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/sqrt/post-ghc/SqrtAudit.o )
+{"accepted": true, "suppliedBindings": 9, "reachableBindings": 4, "missingGlobals": 0, "issues": 0}
+Sqrt native/model: {"coverage": [{"audit": {"issues": 0, "missingGlobals": 0, "reachableBindings": 4, "suppliedBindings": 9}, "primitives": ["sqrtFloat#", "sqrtDouble#"], "stage": "pre"}, {"audit": {"issues": 0, "missingGlobals": 0, "reachableBindings": 4, "suppliedBindings": 9}, "primitives": ["sqrtFloat#", "sqrtDouble#"], "stage": "post"}], "exactBitRows": 288, "integerRows": 26, "nanClassificationRows": 104, "nativeRows": 418, "provenance": {"path": "build/sqrt/provenance.json", "sha256": "9b41b494a359bfea46a5de76f68bde0b1ea947927deaf679dafd6296e388c032"}}
+[1 of 1] Compiling AggregateFrontier ( compiler/test-fixtures/AggregateFrontier.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/aggregate-ghc/AggregateFrontier.o )
+[1 of 1] Compiling AggregateFrontier ( compiler/test-fixtures/AggregateFrontier.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/aggregate-post-ghc/AggregateFrontier.o )
+Aggregate frontier: 3 supported result-only entries, 8 rejected boundaries; 48 native oracle rows
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 1] Compiling AggregateLayoutAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/AggregateLayoutAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/aggregate-layout/native/AggregateLayoutAudit.o )
+[1 of 1] Compiling AggregateLayoutAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/AggregateLayoutAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/aggregate-layout/pre-ghc/AggregateLayoutAudit.o )
+[1 of 1] Compiling AggregateLayoutAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/AggregateLayoutAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/aggregate-layout/post-ghc/AggregateLayoutAudit.o )
+Aggregate layout: 18 recursive/unknown layout proofs in both native stages; polymorphic/alias regressions checked; 0 supported entries
+Sum metadata: 17 shapes × 2 stages, 130 native/model rows; sum execution remains rejected
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 3] Compiling TupleReturnAudit ( compiler/test-fixtures/TupleReturnAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-return/native/TupleReturnAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/TupleReturnAuditNative.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-return/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-return/native/tuple-return
+[1 of 1] Compiling TupleReturnAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/TupleReturnAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-return/pre-ghc/TupleReturnAudit.o )
+[1 of 1] Compiling TupleReturnAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/TupleReturnAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-return/post-ghc/TupleReturnAudit.o )
+Tuple return fixture: 94 verified native rows, 15 producers in both stages; PAP retained; overapplication retained: [True, True]
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 3] Compiling StateTupleAudit  ( compiler/test-fixtures/StateTupleAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/state-tuple/native/StateTupleAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/StateTupleAuditNative.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/state-tuple/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/state-tuple/native/state-tuple
+[1 of 1] Compiling StateTupleAudit  ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/StateTupleAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/state-tuple/pre-ghc/StateTupleAudit.o )
+{"accepted": true, "suppliedBindings": 35, "reachableBindings": 12, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling StateTupleAudit  ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/StateTupleAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/state-tuple/post-ghc/StateTupleAudit.o )
+{"accepted": true, "suppliedBindings": 37, "reachableBindings": 12, "missingGlobals": 0, "issues": 0}
+State# tuples: 21 verified native rows; zero-width logical fields and runRW# proofs preserved at both stages
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 3] Compiling EmptyTupleInputAudit ( compiler/test-fixtures/EmptyTupleInputAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/empty-tuple-input/native/EmptyTupleInputAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/EmptyTupleInputAuditNative.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/empty-tuple-input/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/empty-tuple-input/native/empty-tuple-input
+[1 of 1] Compiling EmptyTupleInputAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/EmptyTupleInputAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/empty-tuple-input/pre-ghc/EmptyTupleInputAudit.o )
+{"accepted": true, "suppliedBindings": 60, "reachableBindings": 38, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling EmptyTupleInputAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/EmptyTupleInputAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/empty-tuple-input/post-ghc/EmptyTupleInputAudit.o )
+{"accepted": true, "suppliedBindings": 62, "reachableBindings": 38, "missingGlobals": 0, "issues": 0}
+Exact-empty input fixture: 118 native rows + 7 independent-input rows; both stages strict accepted
+[1 of 1] Compiling TupleJoinAudit   ( compiler/test-fixtures/TupleJoinAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-join/pre-ghc/TupleJoinAudit.o )
+[1 of 1] Compiling TupleJoinAudit   ( compiler/test-fixtures/TupleJoinAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-join/post-ghc/TupleJoinAudit.o )
+{"rows": 54, "joins": {"pre": 9, "post": 9}}
+[1 of 1] Compiling IntegerPrimopsAudit ( compiler/test-fixtures/IntegerPrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/integer-primops/ghc/IntegerPrimopsAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling IntegerPrimopsAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/IntegerPrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/integer-primops/native/IntegerPrimopsAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/integer-primops/NativeIntegerPrimops.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/integer-primops/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/integer-primops/native/integer-primops-oracle
+Prepared 40 scalar integer primops / 56791 native oracle rows
+[1 of 1] Compiling BitPrimopsAudit  ( compiler/test-fixtures/BitPrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bit-primops/pre-ghc/BitPrimopsAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling BitPrimopsAudit  ( compiler/test-fixtures/BitPrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bit-primops/post-ghc/BitPrimopsAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling BitPrimopsAudit  ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/BitPrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bit-primops/native/BitPrimopsAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bit-primops/NativeBitPrimops.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bit-primops/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bit-primops/native/bit-primops-oracle
+Prepared 21 scalar bit primops / 11923 native oracle rows / pre+post Core
+[1 of 1] Compiling ByteArrayAudit   ( compiler/test-fixtures/ByteArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bytearray/pre/ghc/ByteArrayAudit.o )
+THC interface closure: 4 actual unfoldings, 1 missing source definitions
+[1 of 1] Compiling ByteArrayAudit   ( compiler/test-fixtures/ByteArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bytearray/post/ghc/ByteArrayAudit.o )
+THC interface closure: 4 actual unfoldings, 1 missing source definitions
+[1 of 3] Compiling ByteArrayAudit   ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/ByteArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bytearray/native/ByteArrayAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bytearray/NativeByteArray.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bytearray/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/bytearray/native/bytearray-oracle
+Prepared 4 real ByteArray workloads / 4116 native rows / pre+post Core
+[1 of 1] Compiling BoxedArrayAudit  ( compiler/test-fixtures/BoxedArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/boxed-arrays/pre/ghc/BoxedArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 4 missing source definitions
+[1 of 1] Compiling BoxedArrayAudit  ( compiler/test-fixtures/BoxedArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/boxed-arrays/post/ghc/BoxedArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 4 missing source definitions
+[1 of 3] Compiling BoxedArrayAudit  ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/BoxedArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/boxed-arrays/native/BoxedArrayAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/boxed-arrays/NativeBoxedArray.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/boxed-arrays/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/boxed-arrays/native/boxed-array-oracle
+Prepared boxed arrays: 164 supported native/model rows; 451 total value rows; 5 expected exceptions; strict pre/post checks
+[1 of 1] Compiling MutVarAudit      ( compiler/test-fixtures/MutVarAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/mutvar/pre/ghc/MutVarAudit.o )
+THC interface closure: 1 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling MutVarAudit      ( compiler/test-fixtures/MutVarAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/mutvar/post/ghc/MutVarAudit.o )
+THC interface closure: 1 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling MutVarAudit      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/MutVarAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/mutvar/native/MutVarAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/mutvar/NativeMutVar.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/mutvar/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/mutvar/native/mutvar-oracle
+Prepared 8 genuine STRef/MutVar workloads / 2120 native-model rows / pre+post Core
+[1 of 1] Compiling THC.UnboxedArrays ( examples/THC/UnboxedArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/pre/0/ghc/THC/UnboxedArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling IntArrayAudit    ( compiler/test-fixtures/IntArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/pre/1/ghc/IntArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.UnboxedArrays ( examples/THC/UnboxedArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/post/0/ghc/THC/UnboxedArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling IntArrayAudit    ( compiler/test-fixtures/IntArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/post/1/ghc/IntArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 4] Compiling IntArrayAudit    ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/IntArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/native/IntArrayAudit.o )
+[2 of 4] Compiling THC.UnboxedArrays ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/UnboxedArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/native/THC/UnboxedArrays.o )
+[3 of 4] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/NativeIntArray.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/native/Main.o )
+[4 of 4] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int-arrays/native/int-array-oracle
+Prepared 5 Int array entries / 1965 native-model rows / strict pre+post Core
+[1 of 1] Compiling THC.UnboxedDoubleArrays ( examples/THC/UnboxedDoubleArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/pre/0/ghc/THC/UnboxedDoubleArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling DoubleArrayAudit ( compiler/test-fixtures/DoubleArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/pre/1/ghc/DoubleArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.UnboxedDoubleArrays ( examples/THC/UnboxedDoubleArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/post/0/ghc/THC/UnboxedDoubleArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling DoubleArrayAudit ( compiler/test-fixtures/DoubleArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/post/1/ghc/DoubleArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 4] Compiling DoubleArrayAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/DoubleArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/native/DoubleArrayAudit.o )
+[2 of 4] Compiling THC.UnboxedDoubleArrays ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/UnboxedDoubleArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/native/THC/UnboxedDoubleArrays.o )
+[3 of 4] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/NativeDoubleArray.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/native/Main.o )
+[4 of 4] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/double-arrays/native/double-array-oracle
+Prepared 4 Double array entries / 2024 native-model rows / strict pre+post Core
+[1 of 1] Compiling THC.Unboxed32Arrays ( examples/THC/Unboxed32Arrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/pre/0/ghc/THC/Unboxed32Arrays.o )
+examples/THC/Unboxed32Arrays.hs:36:54: warning: [GHC-97441] [-Woverflowed-literals]
+    Literal -2 is out of the Word32 range 0..4294967295
+   |
+36 |       a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word32
+   |                                                      ^
+
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling Int32ArrayAudit  ( compiler/test-fixtures/Int32ArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/pre/1/ghc/Int32ArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.Unboxed32Arrays ( examples/THC/Unboxed32Arrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/post/0/ghc/THC/Unboxed32Arrays.o )
+examples/THC/Unboxed32Arrays.hs:36:54: warning: [GHC-97441] [-Woverflowed-literals]
+    Literal -2 is out of the Word32 range 0..4294967295
+   |
+36 |       a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word32
+   |                                                      ^
+
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling Int32ArrayAudit  ( compiler/test-fixtures/Int32ArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/post/1/ghc/Int32ArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 4] Compiling Int32ArrayAudit  ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/Int32ArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/native/Int32ArrayAudit.o )
+[2 of 4] Compiling THC.Unboxed32Arrays ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/Unboxed32Arrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/native/THC/Unboxed32Arrays.o )
+/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/Unboxed32Arrays.hs:36:54: warning: [GHC-97441] [-Woverflowed-literals]
+    Literal -2 is out of the Word32 range 0..4294967295
+   |
+36 |       a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word32
+   |                                                      ^
+
+[3 of 4] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/NativeInt32Array.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/native/Main.o )
+[4 of 4] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int32-arrays/native/int32-array-oracle
+Prepared 6 Int32/Word32 array entries / 2382 native-model rows / 14 noinline literal rows / strict pre+post Core
+[1 of 1] Compiling THC.UnboxedFloatArrays ( examples/THC/UnboxedFloatArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/pre/0/ghc/THC/UnboxedFloatArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.UnboxedWordArrays ( examples/THC/UnboxedWordArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/pre/1/ghc/THC/UnboxedWordArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling FloatArrayAudit  ( compiler/test-fixtures/FloatArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/pre/2/ghc/FloatArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling WordArrayAudit   ( compiler/test-fixtures/WordArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/pre/3/ghc/WordArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.UnboxedFloatArrays ( examples/THC/UnboxedFloatArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/post/0/ghc/THC/UnboxedFloatArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.UnboxedWordArrays ( examples/THC/UnboxedWordArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/post/1/ghc/THC/UnboxedWordArrays.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling FloatArrayAudit  ( compiler/test-fixtures/FloatArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/post/2/ghc/FloatArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling WordArrayAudit   ( compiler/test-fixtures/WordArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/post/3/ghc/WordArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 6] Compiling FloatArrayAudit  ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/FloatArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/native/FloatArrayAudit.o )
+[2 of 6] Compiling THC.UnboxedFloatArrays ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/UnboxedFloatArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/native/THC/UnboxedFloatArrays.o )
+[3 of 6] Compiling THC.UnboxedWordArrays ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/UnboxedWordArrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/native/THC/UnboxedWordArrays.o )
+[4 of 6] Compiling WordArrayAudit   ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/WordArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/native/WordArrayAudit.o )
+[5 of 6] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/NativeFloatWordArray.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/native/Main.o )
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/float-word-arrays/native/float-word-array-oracle
+Prepared 7 Float/Word array entries / 3165 native-model rows / strict pre+post Core
+[1 of 1] Compiling THC.Unboxed16Arrays ( examples/THC/Unboxed16Arrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/pre/0/ghc/THC/Unboxed16Arrays.o )
+examples/THC/Unboxed16Arrays.hs:36:54: warning: [GHC-97441] [-Woverflowed-literals]
+    Literal -2 is out of the Word16 range 0..65535
+   |
+36 |       a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word16
+   |                                                      ^
+
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling Int16ArrayAudit  ( compiler/test-fixtures/Int16ArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/pre/1/ghc/Int16ArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.Unboxed16Arrays ( examples/THC/Unboxed16Arrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/post/0/ghc/THC/Unboxed16Arrays.o )
+examples/THC/Unboxed16Arrays.hs:36:54: warning: [GHC-97441] [-Woverflowed-literals]
+    Literal -2 is out of the Word16 range 0..65535
+   |
+36 |       a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word16
+   |                                                      ^
+
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling Int16ArrayAudit  ( compiler/test-fixtures/Int16ArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/post/1/ghc/Int16ArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 4] Compiling Int16ArrayAudit  ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/Int16ArrayAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/native/Int16ArrayAudit.o )
+[2 of 4] Compiling THC.Unboxed16Arrays ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/Unboxed16Arrays.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/native/THC/Unboxed16Arrays.o )
+/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/Unboxed16Arrays.hs:36:54: warning: [GHC-97441] [-Woverflowed-literals]
+    Literal -2 is out of the Word16 range 0..65535
+   |
+36 |       a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word16
+   |                                                      ^
+
+[3 of 4] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/NativeInt16Array.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/native/Main.o )
+[4 of 4] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/int16-arrays/native/int16-array-oracle
+Prepared 6 Int16/Word16 array entries / 2418 native-model rows / 14 noinline literal rows / strict pre+post Core
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 1] Compiling SimdInt64X2      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt64X2.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd/pre-ghc/SimdInt64X2.o )
+[1 of 1] Compiling SimdInt64X2      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt64X2.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd/post-ghc/SimdInt64X2.o )
+[1 of 3] Compiling SimdInt64X2      ( compiler/test-fixtures/SimdInt64X2.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd/native/SimdInt64X2.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt64X2Native.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd/native/simd
+SIMD export stages=['pre', 'post']; native oracle rows=147 (None means not run)
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 1] Compiling SimdInt32X4      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt32X4.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int32x4/pre-ghc/SimdInt32X4.o )
+[1 of 1] Compiling SimdInt32X4      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt32X4.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int32x4/post-ghc/SimdInt32X4.o )
+[1 of 3] Compiling SimdInt32X4      ( compiler/test-fixtures/SimdInt32X4.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int32x4/native/SimdInt32X4.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt32X4Native.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int32x4/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int32x4/native/simd
+SIMD export stages=['pre', 'post']; native oracle rows=243 (None means not run)
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 1] Compiling SimdFloatX4      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdFloatX4.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-floatx4/pre-ghc/SimdFloatX4.o )
+[1 of 1] Compiling SimdFloatX4      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdFloatX4.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-floatx4/post-ghc/SimdFloatX4.o )
+[1 of 3] Compiling SimdFloatX4      ( compiler/test-fixtures/SimdFloatX4.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-floatx4/native/SimdFloatX4.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdFloatX4Native.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-floatx4/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-floatx4/native/floatx4-oracle
+FloatX4 stages=['pre', 'post'], native rows=2196, model rows=2196, positive strict audits=True
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 1] Compiling SimdDoubleX2     ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdDoubleX2.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-doublex2/pre-ghc/SimdDoubleX2.o )
+[1 of 1] Compiling SimdDoubleX2     ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdDoubleX2.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-doublex2/post-ghc/SimdDoubleX2.o )
+[1 of 3] Compiling SimdDoubleX2     ( compiler/test-fixtures/SimdDoubleX2.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-doublex2/native/SimdDoubleX2.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdDoubleX2Native.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-doublex2/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-doublex2/native/doublex2-oracle
+DoubleX2 stages=['pre', 'post'], native rows=3390, model rows=3390, positive strict audits=True
+[1 of 1] Compiling TupleArithmeticAudit ( compiler/test-fixtures/TupleArithmeticAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-arithmetic/pre-ghc/TupleArithmeticAudit.o )
+[1 of 1] Compiling TupleArithmeticAudit ( compiler/test-fixtures/TupleArithmeticAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-arithmetic/post-ghc/TupleArithmeticAudit.o )
+[1 of 3] Compiling TupleArithmeticAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/TupleArithmeticAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-arithmetic/native/TupleArithmeticAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-arithmetic/NativeTupleArithmetic.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-arithmetic/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/tuple-arithmetic/native/tuple-arithmetic-oracle
+Verified 6 tuple primops, pre/post Tidy, 8279 native two-field rows
+[6 of 6] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/compiler
+[1 of 1] Compiling SimdInt16X8      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt16X8.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int16x8/pre-ghc/SimdInt16X8.o )
+[1 of 1] Compiling SimdInt16X8      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt16X8.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int16x8/post-ghc/SimdInt16X8.o )
+[1 of 3] Compiling SimdInt16X8      ( compiler/test-fixtures/SimdInt16X8.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int16x8/native/SimdInt16X8.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SimdInt16X8Native.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int16x8/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/simd-int16x8/native/int16x8-oracle
+Int16X8 stages=['pre', 'post'], native rows=6032, model rows=6032, positive strict audits=True
+[1 of 1] Compiling SignedNarrowPrimopsAudit ( compiler/test-fixtures/SignedNarrowPrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/signed-narrow-primops/ghc/SignedNarrowPrimopsAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling SignedNarrowPrimopsAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/SignedNarrowPrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/signed-narrow-primops/native/SignedNarrowPrimopsAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/signed-narrow-primops/NativeSignedNarrowPrimops.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/signed-narrow-primops/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/signed-narrow-primops/native/signed-narrow-primops-oracle
+Prepared 36 signed narrow primops / 73453 native oracle rows
+[1 of 1] Compiling Explicit64PrimopsAudit ( compiler/test-fixtures/Explicit64PrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/explicit64-primops/ghc/Explicit64PrimopsAudit.o )
+[1 of 3] Compiling Explicit64PrimopsAudit ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/Explicit64PrimopsAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/explicit64-primops/native/Explicit64PrimopsAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/explicit64-primops/NativeExplicit64.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/explicit64-primops/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/explicit64-primops/native/explicit64-oracle
+Verified 36 explicit64 primops + 2 literal controls / 66117 native/model rows
+[ 1 of 11] Compiling CbvAudit         ( compiler/test-fixtures/CbvAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/CbvAudit.o )
+[ 2 of 11] Compiling CbvCoercionAudit ( compiler/test-fixtures/CbvCoercionAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/CbvCoercionAudit.o )
+compiler/test-fixtures/CbvCoercionAudit.hs:10:17: warning: [GHC-12003] [-Wtype-equality-out-of-scope]
+    • The ‘~’ operator is out of scope.
+      Assuming it to stand for an equality constraint.
+    • Note: ‘~’ used to be built-in syntax but now is a regular type operator
+            exported from Data.Type.Equality and Prelude.
+            If you are using a custom Prelude, consider re-exporting it.
+    • This will become an error in a future GHC release.
+   |
+10 |   Witness :: (a ~ Int) => Int# -> Witness a
+   |                 ^
+
+[ 3 of 11] Compiling CbvJoinAudit     ( compiler/test-fixtures/CbvJoinAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/CbvJoinAudit.o )
+[ 4 of 11] Compiling ConstructorFieldAudit ( compiler/test-fixtures/ConstructorFieldAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/ConstructorFieldAudit.o )
+[ 5 of 11] Compiling DemandAudit      ( compiler/test-fixtures/DemandAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/DemandAudit.o )
+[ 6 of 11] Compiling RepresentationAudit ( compiler/test-fixtures/RepresentationAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/RepresentationAudit.o )
+[ 7 of 11] Compiling SourceNotes      ( compiler/test-fixtures/SourceNotes.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/SourceNotes.o )
+[ 8 of 11] Compiling SpeculationAudit ( compiler/test-fixtures/SpeculationAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/SpeculationAudit.o )
+[ 9 of 11] Compiling StrictFields     ( compiler/test-fixtures/StrictFields.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/StrictFields.o )
+[10 of 11] Compiling THC.Prim         ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/Prim.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/THC/Prim.o )
+[11 of 11] Compiling THC.Fixtures     ( examples/THC/Fixtures.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/ghc/THC/Fixtures.o )
+PASS: safe subtraction, safe constant division, unsafe divide-zero case, lazy bottom/PAP, enclosing recursive DFun guard
+PASS: primitive/boxed/newtype/family proofs, case and strict-field WHNF, erased type join prefix, function-returning join
+PASS: GHC API signature/id arity mismatch, type/coercion slots, overapplication, absence/bottom/dead ends, lazy wrappers, cast/tick/unknown heads
+[1 of 1] Compiling DemandAudit      ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/compiler/test-fixtures/DemandAudit.hs, /tmp/thc-precise-demand-t8ok6n3t/ghc/DemandAudit.o )
+PASS DemandAudit: 33 call certificates, 6 strict argument positions
+PASS CbvCoercionAudit: 73 call certificates, 11 strict argument positions
+PASS: ordinary strict calls, unchanged entry/WHNF facts, polymorphic values, PAP saturation, absent/bottom exclusion, lazy barrier, retained coercion alignment
+PASS DemandAudit: 55 call certificates, 10 strict argument positions
+PASS: genuine GHC precise-exception branch/scrutinee demands stay lazy; pure control stays strict (metadata only)
+[1 of 3] Compiling CbvAudit         ( compiler/test-fixtures/CbvAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/cbv-post-ghc/CbvAudit.o )
+[2 of 3] Compiling CbvCoercionAudit ( compiler/test-fixtures/CbvCoercionAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/cbv-post-ghc/CbvCoercionAudit.o )
+compiler/test-fixtures/CbvCoercionAudit.hs:10:17: warning: [GHC-12003] [-Wtype-equality-out-of-scope]
+    • The ‘~’ operator is out of scope.
+      Assuming it to stand for an equality constraint.
+    • Note: ‘~’ used to be built-in syntax but now is a regular type operator
+            exported from Data.Type.Equality and Prelude.
+            If you are using a custom Prelude, consider re-exporting it.
+    • This will become an error in a future GHC release.
+   |
+10 |   Witness :: (a ~ Int) => Int# -> Witness a
+   |                 ^
+
+[3 of 3] Compiling CbvJoinAudit     ( compiler/test-fixtures/CbvJoinAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/cbv-post-ghc/CbvJoinAudit.o )
+PASS CbvAudit: {'definitions': 24, 'markedDefinitions': 1, 'markedArguments': 1, 'ghc-tidy-proposal': 1}
+PASS CbvJoinAudit: {'definitions': 25, 'markedDefinitions': 1, 'markedArguments': 1, 'ghc-tidy-proposal': 1}
+PASS CbvCoercionAudit: {'definitions': 90, 'markedDefinitions': 1, 'markedArguments': 1, 'ghc-tidy-proposal': 1}
+PASS: real worker marks, strict ordinary function exclusion, unchanged WHNF facts, erased type join prefix, returned lambda suffix, retained coercion alignment, actual post-Tidy agreement
+PASS ConstructorFieldAudit: 15 aligned constructor field proofs
+PASS: strict/lazy data and function fields, polymorphic Object fields, primitive storage, newtype conservatism, coercion slots
+[1 of 2] Compiling RepresentationAudit ( compiler/test-fixtures/RepresentationAudit.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/source-ghc/RepresentationAudit.o )
+[2 of 2] Compiling SourceNotes      ( compiler/test-fixtures/SourceNotes.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/source-ghc/SourceNotes.o )
+PASS source metadata: {"files": 3, "missingContent": 1, "nestedNotes": 76, "references": 167, "spans": 94, "tabs": 1, "unicode": 1}
+[1 of 1] Compiling InterfaceRoots   ( compiler/package-roots/InterfaceRoots.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/map/interface-ghc/InterfaceRoots.o )
+THC interface closure: 20 actual unfoldings, 4 missing source definitions
+[1 of 5] Compiling THC.MapWorkload  ( THC/MapWorkload.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/native/THC/MapWorkload.o )
+[2 of 5] Compiling THC.Prim         ( THC/Prim.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/native/THC/Prim.o )
+[3 of 5] Compiling THC.Fixtures     ( THC/Fixtures.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/native/THC/Fixtures.o )
+[4 of 5] Compiling Main             ( NativeOracle.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/native/Main.o )
+[5 of 5] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/native/native-oracle
+[1 of 1] Compiling THC.Int64Conversions ( examples/THC/Int64Conversions.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/int64-conversions/ghc/THC/Int64Conversions.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 2] Compiling THC.CoverageSupport ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/CoverageSupport.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/lists/ghc/THC/CoverageSupport.o )
+[2 of 2] Compiling THC.ListCoverage ( examples/THC/ListCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/lists/ghc/THC/ListCoverage.o )
+THC interface closure: 0 actual unfoldings, 2 missing source definitions
+[1 of 2] Compiling THC.CoverageSupport ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/CoverageSupport.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/functions/ghc/THC/CoverageSupport.o )
+[2 of 2] Compiling THC.FunctionCoverage ( examples/THC/FunctionCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/functions/ghc/THC/FunctionCoverage.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.TreeCoverage ( examples/THC/TreeCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/trees/ghc/THC/TreeCoverage.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.NumericCoverage ( examples/THC/NumericCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/numeric/ghc/THC/NumericCoverage.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.NarrowIntCoverage ( examples/THC/NarrowIntCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/narrow-ints/ghc/THC/NarrowIntCoverage.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling THC.NarrowWordCoverage ( examples/THC/NarrowWordCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/narrow-words/ghc/THC/NarrowWordCoverage.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 2] Compiling THC.CoverageSupport ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/CoverageSupport.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/pointers/ghc/THC/CoverageSupport.o )
+[2 of 2] Compiling THC.PointerCoverage ( examples/THC/PointerCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/groups/pointers/ghc/THC/PointerCoverage.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+Verified 23 functional corpus structure facts: /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/structure.json
+[ 1 of 11] Compiling THC.CoverageSupport ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/CoverageSupport.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/CoverageSupport.o )
+[ 2 of 11] Compiling THC.FunctionCoverage ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/FunctionCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/FunctionCoverage.o )
+[ 3 of 11] Compiling THC.Int64Conversions ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/Int64Conversions.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/Int64Conversions.o )
+[ 4 of 11] Compiling THC.ListCoverage ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/ListCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/ListCoverage.o )
+[ 5 of 11] Compiling THC.NarrowIntCoverage ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/NarrowIntCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/NarrowIntCoverage.o )
+[ 6 of 11] Compiling THC.NarrowWordCoverage ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/NarrowWordCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/NarrowWordCoverage.o )
+[ 7 of 11] Compiling THC.NumericCoverage ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/NumericCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/NumericCoverage.o )
+[ 8 of 11] Compiling THC.PointerCoverage ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/PointerCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/PointerCoverage.o )
+[ 9 of 11] Compiling THC.TreeCoverage ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/examples/THC/TreeCoverage.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/THC/TreeCoverage.o )
+[10 of 11] Compiling Main             ( /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/NativeCorpus.hs, /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/Main.o )
+[11 of 11] Linking /home/ekmett/ai/thc-int16x8-foundation-01a0cdeb/build/corpus/native/corpus-oracle
+Prepared 28 strict Core entries / 507 native oracle rows

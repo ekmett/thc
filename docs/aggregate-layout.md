@@ -3,7 +3,7 @@
 The exporter preserves logical unboxed tuple components and sum alternatives in
 addition to GHC 9.14.1's physical `primReps` vector. Both runtime backends support
 [exact tuple results](tuple-results.md) with scalar/reference inputs. Aggregate
-arguments, join arguments/captures, ordinary captures, sums and unresolved layouts remain explicit boundaries. Exact tuple join results use local destination slots within the same root.
+arguments other than exact empty tuples, join arguments/captures, ordinary captures and unresolved layouts remain explicit boundaries. [Binary sum results](sum-results.md) use the placement evidence below. Exact tuple join results use local destination slots within the same root.
 The metadata fixtures below test these boundaries independently of execution.
 
 Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one
@@ -144,12 +144,10 @@ package, command and artifact hashes in `build/sum-layout/provenance.json`;
 running it without `--prepare` verifies those hashes before checking the exports.
 Normal test preparation and CI include these checks.
 
-No sum capability is enabled. The auditor still rejects all retained-sum roots,
-and `SumLayoutMetadataTest` checks strict load rejection on both backends and both
-export stages. The direct-case control is optimized by GHC to ordinary scalar
-Core and alone executes in THC. Future sum lowering must validate the complete
-logical alternatives, family arity, physical storage classes and projection,
-then construct and project the selected alternative using typed destinations.
-It must preserve lazy reference leaves, validate tags, and keep unknown layouts
-and unsupported input/capture boundaries explicit. This metadata does not define
-a hardware call-register ABI or permit generic object-array sum payloads.
+[Bounded binary sum lowering](sum-results.md) validates the complete logical
+alternatives, family arity, physical storage classes and projection before using
+typed destinations. The metadata suite accepts six retained-sum consumers and
+the optimized scalar direct-case control; all unsupported families and boundaries
+still reject before execution on both backends and both export stages. This
+metadata does not define a hardware call-register ABI or permit generic
+object-array sum payloads.

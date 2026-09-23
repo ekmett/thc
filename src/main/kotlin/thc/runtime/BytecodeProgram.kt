@@ -154,7 +154,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }
         val scope = Scope(FunctionContext(0))
         val initializers = bindings.map { binding ->
+            CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding")
             val expr = binding["expr"] as List<Any?>
+            CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
             val bindingScope = scope.withSource(sources.binding(binding))
             if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, bindingScope, binding["name"] as String)
             else argument(expr, bindingScope, representation(binding), binding["name"] as String)
@@ -261,9 +263,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         if (compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
             ::dataLayout, sources, compiled.source)
+        if ((compiled.proof.isSum || resultProof.isSum) && (!compiled.proof.isSum || !resultProof.isSum))
+            throw RuntimeFault("Sum function requires exact body and declared result proofs")
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
         CoreRepresentations.requireNoVector(body.proof, "function result")
-        context.tuple = if (body.proof.isTuple) TupleShape(body.proof, language) else null
+        context.tuple = if (body.proof.isAggregate) TupleShape(body.proof, language) else null
         return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
     }
 
@@ -355,7 +359,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         else LocalExpression(local, resolve)
     private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.copy(evaluated = true))
     private fun force(value: Expression): Expression {
-        if (value.proof.isTuple) return value
+        if (value.proof.isAggregate) return value
         if (value.proof.evaluated) return value
         return evaluated(ResultExpression { e, destination ->
             if (destination != null) value.emitTuple(e, destination) else {
@@ -408,11 +412,13 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }
         if (!lifted) return force(compile(expr, scope, false).also {
             CoreRepresentations.requireNoVector(it.proof, "argument")
+            CoreRepresentations.requireNoSum(it.proof, "argument")
         })
-        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false)
-        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
+        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false).also { CoreRepresentations.requireNoSum(it.proof, "argument") }
+        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { CoreRepresentations.requireNoSum(it.proof, "argument") }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
         "int64" -> int64Literal(value)
         "word64" -> word64Literal(value)
@@ -652,10 +658,12 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             targets[index].locals.forEach { bodyScope.bindLocal(it.name, it) }
             val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
             CoreRepresentations.requireNoVector(body.proof, "join result")
+            CoreRepresentations.requireNoSum(body.proof, "join result")
             ProvenExpression(body, body.proof.refine(definition.result.copy(evaluated = false)))
         }
         val entry = compile(expression, local, tail)
         CoreRepresentations.requireNoVector(entry.proof, "join result")
+        CoreRepresentations.requireNoSum(entry.proof, "join result")
         val proof = entry.proof.refine(CoreRepresentations.expression(expression).copy(evaluated = false))
         bodies.forEach { TupleShape.requireCompatible(proof, it.proof) }
         return ProvenExpression(ResultExpression { e, destination ->
@@ -725,7 +733,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int32", "word32")) ProvenExpression(it, CoreRepresentations.narrow32LiteralProof(expr)) else it
+            if (expr[1] in listOf("int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
@@ -739,9 +747,18 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
-            if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
+            if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
+                if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
+                val operand = compile(args[0], scope, false)
+                val ids = CoreEnums.validate(expr, operand.proof, constructors)
+                val family = EnumFamily(ids.map { dataLayout(it).allocate() }.toTypedArray())
+                ProvenExpression(Expression { e ->
+                    e.builder.beginTagToEnum(family); operand.emit(e); e.builder.endTagToEnum()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
-                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
+                CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
@@ -789,6 +806,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
                         ByteArrayOp.READ_FLOAT -> e.builder.beginReadFloatArray(destination[0])
+                        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 ->
+                            e.builder.beginReadInt16Array(operation == ByteArrayOp.READ_WORD16, destination[0])
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 ->
                             e.builder.beginReadInt32Array(operation == ByteArrayOp.READ_WORD32, destination[0])
                         else -> error("Scalar ByteArray operation")
@@ -800,6 +819,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT -> e.builder.endReadFloatArray()
+                        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> e.builder.endReadInt16Array()
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> e.builder.endReadInt32Array()
                         else -> error("Scalar ByteArray operation")
                     }
@@ -815,7 +835,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.INDEX_DOUBLE -> e.builder.beginIndexDoubleArray()
                         ByteArrayOp.WRITE_FLOAT -> e.builder.beginWriteFloatArray()
                         ByteArrayOp.INDEX_FLOAT -> e.builder.beginIndexFloatArray()
+                        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16 -> e.builder.beginWriteInt16Array()
                         ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> e.builder.beginWriteInt32Array()
+                        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16 ->
+                            e.builder.beginIndexInt16Array(operation == ByteArrayOp.INDEX_WORD16)
                         ByteArrayOp.INDEX_INT32, ByteArrayOp.INDEX_WORD32 ->
                             e.builder.beginIndexInt32Array(operation == ByteArrayOp.INDEX_WORD32)
                         else -> error("Tuple ByteArray operation")
@@ -832,7 +855,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.INDEX_DOUBLE -> e.builder.endIndexDoubleArray()
                         ByteArrayOp.WRITE_FLOAT -> e.builder.endWriteFloatArray()
                         ByteArrayOp.INDEX_FLOAT -> e.builder.endIndexFloatArray()
+                        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16 -> e.builder.endWriteInt16Array()
                         ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> e.builder.endWriteInt32Array()
+                        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16 -> e.builder.endIndexInt16Array()
                         ByteArrayOp.INDEX_INT32, ByteArrayOp.INDEX_WORD32 -> e.builder.endIndexInt32Array()
                         else -> error("Tuple ByteArray operation")
                     }
@@ -844,6 +869,30 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1])
                     operands.forEach { it.emit(e) }
                     e.builder.endTupleArithmetic()
+                }
+            } else if (tupleProof.isSum && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-sum") {
+                val tag = SumShape.constructor(tupleProof, constructors[fn[1]], fn[2])
+                if (args.size != 1) throw RuntimeFault("Sum constructor must be saturated")
+                val selected = tupleProof.alternatives!![tag - 1]
+                val lifted = flags.single() as? Boolean ?: throw UnsupportedCore("Unknown sum payload levity")
+                val payload = if (selected.isTuple) compile(args.single(), scope, false) else argument(args.single(), scope, lifted)
+                SumShape.payload(selected, payload.proof, lifted)
+                val shape = TupleShape(tupleProof, language)
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    b.beginBlock()
+                    shape.leaves.forEachIndexed { index, field ->
+                        b.beginStoreLocal(destination[index])
+                        if (field.isLong) b.emitLoadConstant(0L) else if (field.isFloat) b.emitLoadConstant(0.0f)
+                        else if (field.isDouble) b.emitLoadConstant(0.0) else b.emitLoadNull()
+                        b.endStoreLocal()
+                    }
+                    val mapped = tupleProof.alternativeSlots!![tag - 1].map { destination[it] }
+                    if (selected.isTuple) payload.emitTuple(e, mapped)
+                    else if (selected.kind == CoreKind.VOID) { b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid() }
+                    else { b.beginStoreLocal(mapped.single()); payload.emit(e); b.endStoreLocal() }
+                    b.beginStoreLocal(destination[0]); b.emitLoadConstant(tag.toLong()); b.endStoreLocal()
+                    b.endBlock()
                 }
             } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language)
@@ -888,10 +937,16 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
                 fn[0] == "prim" -> {
                     ScalarPrimitiveSignatures.validate(fn[1] as String, operands.map { it.proof }, tupleProof)
-                    primitive(fn[1] as String, operands)
+                    val value = primitive(fn[1] as String, operands)
+                    if (fn[1] == "raise#" && tupleProof.isAggregate) tupleExpression(tupleProof) { e, _ ->
+                        val b = e.builder
+                        b.beginBlock()
+                        b.beginStoreLocal(b.createLocal("non-returning aggregate", null)); value.emit(e); b.endStoreLocal()
+                        b.endBlock()
+                    } else value
                 }
                 strict != null -> construct(dataLayout(fn[1] as String), operands)
-                else -> if (tupleProof.isTuple) tupleApplication(TupleShape(tupleProof, language), compile(fn, scope, false), operands, scope, tail)
+                else -> if (tupleProof.isAggregate) tupleApplication(TupleShape(tupleProof, language), compile(fn, scope, false), operands, scope, tail)
                     else application(compile(fn, scope, false), operands, scope, tail)
             }
             }
@@ -907,6 +962,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it)) }
                 val rhs = group.map {
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
+                    CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding")
                     if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
                     val rhsScope = (if (recursive) local else scope).withSource(sources.binding(it, scope.source))
                     if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, rhsScope, it["name"].toString())
@@ -945,7 +1001,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val scrutineeExpr = expr[1] as List<Any?>
             val scrutinee = force(compile(scrutineeExpr, scope, false))
             val binderProof = scrutinee.proof.refine(CoreRepresentations.caseBinder(expr)).copy(evaluated = true)
-            if (binderProof.isTuple) tupleCase(expr, scrutinee, binderProof, local, tail) else {
+            if (binderProof.isSum) sumCase(expr, scrutinee, binderProof, local, tail)
+            else if (binderProof.isTuple) tupleCase(expr, scrutinee, binderProof, local, tail) else {
             val binder = bind(local, expr[2] as String, true, binderProof)
             if (scrutineeExpr[0] == "var" && scrutineeExpr[1] != expr[2]) {
                 val id = scrutineeExpr[1] as String
@@ -977,6 +1034,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             val resultProof = CoreRepresentations.expression(expr)
+            CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
             val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(resultProof)
                 ?: resultProof.copy(evaluated = alternatives.all { it.body.proof.evaluated })
@@ -1102,6 +1160,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operations16 -> vector16Primitive(name, operands)
         in CoreVectors.operationsDouble -> vectorDoublePrimitive(name, operands)
         in CoreVectors.operationsFloat -> vectorFloatPrimitive(name, operands)
         in CoreVectors.operations32 -> vector32Primitive(name, operands)
@@ -1128,6 +1187,34 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof)
+    }
+
+    private fun vector16Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackInt16X8#" -> tupleExpression(CoreVectors.unpacked16) { e, destination ->
+            e.builder.beginVector16Unpack(destination[0], destination[1], destination[2], destination[3],
+                destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endVector16Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packInt16X8#" -> {
+                    b.beginBlock()
+                    val lanes = List(8) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVector16Pack(); lanes.forEach(b::emitLoadLocal); b.endVector16Pack()
+                    b.endBlock()
+                }
+                "broadcastInt16X8#" -> { b.beginVector16Broadcast(); operands[0].emit(e); b.endVector16Broadcast() }
+                "negateInt16X8#" -> { b.beginVector16Negate(); operands[0].emit(e); b.endVector16Negate() }
+                else -> {
+                    val operation = when (name) { "plusInt16X8#" -> 0; "minusInt16X8#" -> 1; "timesInt16X8#" -> 2; else -> error("Invalid Int16X8 operation") }
+                    b.beginVector16Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVector16Binary()
+                }
+            }
+        }, CoreVectors.proof16)
     }
 
     private fun vector32Primitive(name: String, operands: List<Expression>): Expression = when (name) {
@@ -1208,6 +1295,70 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }, CoreVectors.proofDouble)
     }
 
+    private fun sumCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
+        val shape = TupleShape(proof, language)
+        val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "sum field $index", field.isLong, field) }
+        scope.bindTuple(expr[2] as String, proof, fields)
+        data class Arm(val tag: Int?, val body: Expression)
+        val seen = mutableSetOf<Int?>()
+        val arms = (expr[3] as List<List<Any?>>).map { alt ->
+            val child = scope.child()
+            val ids = alt[2] as List<String>
+            val tag = if (alt[0] == "default") {
+                if (ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
+                    throw RuntimeFault("Invalid sum DEFAULT alternative")
+                null
+            } else {
+                if (alt[0] != "data" || ids.size != 1) throw RuntimeFault("Invalid sum alternative")
+                val selected = SumShape.constructor(proof, constructors[alt[1]], ids.size)
+                val component = proof.alternatives!![selected - 1]
+                val metadata = CoreRepresentations.alternativeBinders(alt)
+                if (metadata.size != 1 || metadata[0]["id"] != ids[0]) throw RuntimeFault("Missing sum payload binder proof")
+                val actual = CoreRepresentations.binder(metadata.single())
+                val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
+                SumShape.payload(component, actual, lifted)
+                val logical = component.refine(actual).copy(evaluated = component.evaluated)
+                val projected = proof.alternativeSlots!![selected - 1].map { fields[it] }
+                if (component.isTuple) {
+                    val leaves = TupleShape.flatten(logical)
+                    child.bindTuple(ids[0], logical, projected.mapIndexed { i, field -> field.copy(proof = leaves[i]) })
+                } else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], logical)
+                else child.bindLocal(ids[0], projected.single().copy(name = ids[0], proof = logical))
+                selected
+            }
+            if (!seen.add(tag)) throw RuntimeFault("Duplicate sum alternative")
+            Arm(tag, compile(alt[3] as List<Any?>, child, tail))
+        }
+        if (arms.isEmpty()) throw RuntimeFault("Empty sum case")
+        val result = arms.first().body.proof.refine(CoreRepresentations.expression(expr))
+        arms.forEach { result.refine(it.body.proof) }
+        CoreRepresentations.validateFloatingCaseResult(result, arms.map { it.body.proof })
+        CoreRepresentations.requireNoVector(result, "sum case result")
+        return ProvenExpression(ResultExpression { e, destination ->
+            val b = e.builder
+            b.beginBlock()
+            fields.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+            scrutinee.emitTuple(e, fields.map { e.locals.getValue(it.id) })
+            b.beginStoreLocal(e.locals.getValue(fields[0].id)); b.beginCheckSumTag()
+            read(fields[0]).emit(e); b.endCheckSumTag(); b.endStoreLocal()
+            val explicit = arms.filter { it.tag != null }
+            val fallback = arms.singleOrNull { it.tag == null }
+            fun choice(index: Int) {
+                if (index == explicit.size) {
+                    if (fallback == null) b.emitFailCase() else emitResult(fallback.body, e, destination)
+                    return
+                }
+                val arm = explicit[index]
+                if (destination == null) b.beginConditional() else b.beginIfThenElse()
+                b.beginMatchLiteral(arm.tag!!.toLong()); read(fields[0]).emit(e); b.endMatchLiteral()
+                emitResult(arm.body, e, destination); choice(index + 1)
+                if (destination == null) b.endConditional() else b.endIfThenElse()
+            }
+            choice(0)
+            b.endBlock()
+            fields.forEach { e.locals.remove(it.id) }
+        }, result.copy(evaluated = arms.all { it.body.proof.evaluated }))
+    }
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
         val shape = TupleShape(proof, language)
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "tuple field $index", field.isLong, field) }
