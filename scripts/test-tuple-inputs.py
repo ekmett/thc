@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Disabled typed-ingress infrastructure: exact logical proofs, never width guesses."""
+"""Typed-ingress contracts: exact logical proofs, never width guesses."""
 import copy
 import importlib.util
 import json
@@ -14,6 +14,7 @@ from core_tuple_inputs import LONG_REPS, proof_error
 
 CAP = json.loads((ROOT / 'core-capabilities.json').read_text())
 ENABLED = dict(CAP, aggregateInputs=['empty-unboxed-tuple', 'unboxed-tuple'])
+DISABLED = dict(CAP, aggregateInputs=['empty-unboxed-tuple'])
 LONG = dict(kind='long', primReps=['IntRep'], evaluated=True)
 STATE = dict(kind='void', primReps=[], evaluated=True)
 REF = dict(kind='object', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
@@ -69,10 +70,9 @@ class TupleInputs(unittest.TestCase):
         if detail:self.assertIn(detail,[i['detail'] for i in r['issues']],r['issues'])
         return r
 
-    def test_capability_is_disabled_and_existing_exact_empty_is_preserved(self):
-        self.assertNotIn('unboxed-tuple',CAP['aggregateInputs'])
-        self.rejected(fixture([tup(LONG)]),cap=CAP,detail='unboxed-tuple formal argument')
-        self.accepted(fixture([tup(),LONG]),cap=CAP)
+    def test_disabled_capability_rejects_nonempty_and_preserves_exact_empty(self):
+        self.rejected(fixture([tup(LONG)]),cap=DISABLED,detail='unboxed-tuple formal argument')
+        self.accepted(fixture([tup(),LONG]),cap=DISABLED)
 
     def test_recursive_mixed_and_zero_width_inputs_preserve_leaf_kinds(self):
         for shape in [tup(),tup(STATE),tup(tup()),tup(LONG),tup(STATE,tup(),LONG),
@@ -268,7 +268,7 @@ class TupleInputs(unittest.TestCase):
         for path in paths:
             module=json.loads(path.read_text())
             r=audit.Audit([(str(path),module)],ENABLED).run(entries);self.assertTrue(r['accepted'],r['issues'])
-            r=audit.Audit([(str(path),module)],CAP).run(entries);self.assertFalse(r['accepted'])
+            r=audit.Audit([(str(path),module)],DISABLED).run(entries);self.assertFalse(r['accepted'])
             self.assertIn('unboxed-tuple formal argument',[i['detail'] for i in r['issues']])
 
 if __name__=='__main__':unittest.main()

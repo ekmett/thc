@@ -103,9 +103,10 @@ The [DoubleX2 foundation](docs/doublex2.md) adds the corresponding six binary64
 operations with exact typed lanes and bit-sensitive correctness gates.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
-scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
-[Exact empty tuple inputs](docs/empty-tuple-inputs.md) retain logical arity with no payload fields.
-Other aggregate arguments, join captures and ordinary captures remain explicit boundaries.
+concrete Float/Double leaves, local join results and zero-width State# components.
+[Typed tuple inputs](docs/tuple-inputs.md) preserve logical arity across direct calls, PAPs and tail transfers,
+including [exact empty inputs](docs/empty-tuple-inputs.md) with no payload fields.
+Sum inputs, aggregate join arguments and captures remain explicit boundaries.
 [Binary unboxed sum results](docs/sum-results.md) use exact typed destinations; sum inputs,
 storage, joins, nested sums and unresolved layouts remain rejected.
 
