@@ -138,6 +138,10 @@ internal object CoreJoins {
                 if (rhs.firstOrNull() != "lam") throw RuntimeFault("Join value arity exceeds its lambda prefix")
                 val all = rhs[1] as List<Map<String, Any?>>
                 if (arity > all.size) throw RuntimeFault("Join value arity exceeds its lambda prefix")
+                if (arity == all.size) {
+                    val result = CoreRepresentations.joinResult(binding)
+                    TupleShape.requireCompatible(result, CoreRepresentations.lambdaResult(rhs))
+                }
                 parameters = all.take(arity)
                 body = if (arity == all.size) rhs[2] as List<Any?> else {
                     val meta = CoreRepresentations.metadata(rhs)?.toMutableMap() ?: linkedMapOf()

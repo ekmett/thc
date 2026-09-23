@@ -112,8 +112,11 @@ class Audit:
             if type(arity) is not int or arity < 0 or arity > available or type(raw) is not int or arity > raw:
                 self.issue('join-metadata', owner, path, 'Join prefix disagrees with erased lambdas/raw join arity')
             self.representation(binding.get('joinResultRep'), owner, path + '/joinResultRep')
-            if self.is_tuple(binding.get('joinResultRep')):
+            if (self.is_tuple(binding.get('joinResultRep')) and
+                    'unboxed-tuple' not in self.cap.get('aggregateJoinResults', [])):
                 self.issue('aggregate-boundary', owner, path, 'unboxed-tuple join result')
+            body = expr[2] if available and arity == available else expr
+            self.compare_shapes(binding.get('joinResultRep'), self.expression_rep(body), owner, path + '/joinResultRep')
 
     def expression_metadata(self, expr, owner, path):
         index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4,
@@ -215,8 +218,14 @@ class Audit:
 
     @staticmethod
     def binder_scope(records):
-        return {record['id']: record.get('rep') for record in records
-                if isinstance(record, dict) and isinstance(record.get('id'), str)}
+        scope = {}
+        for record in records:
+            if isinstance(record, dict) and isinstance(record.get('id'), str):
+                proof = record.get('rep')
+                if 'joinValueArity' in record:
+                    proof = dict(proof or {}, _join_result=record.get('joinResultRep'), _join_arity=record['joinValueArity'])
+                scope[record['id']] = proof
+        return scope
 
     @staticmethod
     def expression_rep(expr):
@@ -295,7 +304,10 @@ class Audit:
                 if expr[1] not in bound:
                     self.reference(expr[1], owner, path)
                 else:
-                    self.compare_shapes(bound[expr[1]], self.expression_rep(expr), owner, path + '/rep')
+                    proof = bound[expr[1]]
+                    if isinstance(proof, dict) and proof.get('_join_arity') == 0 and primitive_arity is None:
+                        proof = proof['_join_result']
+                    self.compare_shapes(proof, self.expression_rep(expr), owner, path + '/rep')
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
             elif tag == 'void':
@@ -322,6 +334,9 @@ class Audit:
                 function = expr[1]
                 tuple_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-tuple'
                 proof = self.expression_rep(expr)
+                target = bound.get(function[1]) if function[0] == 'var' else None
+                if isinstance(target, dict) and '_join_result' in target:
+                    self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')
                 self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor else None)
                 for index, argument in enumerate(arguments):
                     if tuple_constructor and self.is_tuple(proof) and isinstance(proof.get('components'), list):
@@ -342,8 +357,14 @@ class Audit:
                 for index, binding in enumerate(group):
                     if not isinstance(binding, dict):
                         continue
-                    if self.is_tuple(binding.get('rep')):
+                    if self.is_tuple(binding.get('rep')) and 'joinValueArity' not in binding:
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
+                    if 'joinValueArity' in binding:
+                        captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
+                        if any(self.is_tuple(bound[key]) for key in captured):
+                            self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple join capture')
+                        self.compare_shapes(self.expression_rep(expr), binding.get('joinResultRep'), owner,
+                                            f'{path}/bindings/{index}/joinResultRep')
                     if recursive and binding.get('lifted') is False:
                         self.issue('recursive-unlifted', owner, f'{path}/bindings/{index}', binding.get('id'))
                     self.walk(binding.get('expr'), local if recursive else bound,

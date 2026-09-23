@@ -80,7 +80,66 @@ def run_tuple(module):
     return audit_core.Audit([('tuple.json', module)], TUPLE_CAP).run(['root'])
 
 
+def tuple_join_fixture(zero=False):
+    module = tuple_fixture()
+    producer = module['bindings'][1]['expr']
+    proof = copy.deepcopy(producer[3]['resultRep'])
+    rhs = producer[2] if zero else ['lam', [dict(id='arg', lifted=False, rep=LONG)], producer[2],
+                                  dict(rep=CLOSURE, resultRep=copy.deepcopy(proof))]
+    join = dict(id='finish', name='finish', lifted=not zero, rep=proof if zero else CLOSURE,
+                joinValueArity=0 if zero else 1, joinResultRep=copy.deepcopy(proof),
+                info=dict(joinArity=0 if zero else 1), expr=rhs)
+    call = [*var('finish'), dict(rep=copy.deepcopy(proof))] if zero else [
+        'app', [*var('finish'), dict(rep=CLOSURE)], [[*var('x'), dict(rep=LONG)]],
+        [False], False, False, dict(rep=copy.deepcopy(proof))]
+    producer[2] = ['let', False, [join], call, dict(rep=copy.deepcopy(proof))]
+    return module, join
+
+
 class AuditTest(unittest.TestCase):
+    def test_exact_tuple_join_results_include_zero_arity_binders(self):
+        for zero in (False, True):
+            module, _ = tuple_join_fixture(zero)
+            self.assertTrue(run_tuple(module)['accepted'])
+            oldcap = dict(TUPLE_CAP, aggregateJoinResults=[])
+            report = audit_core.Audit([('join', module)], oldcap).run(['root'])
+            self.assertIn('aggregate-boundary', {i['code'] for i in report['issues']})
+
+    def test_tuple_join_result_lambda_and_call_proofs_must_agree(self):
+        for location in ('join', 'lambda', 'call'):
+            module, join = tuple_join_fixture()
+            proof = (join['joinResultRep'] if location == 'join' else join['expr'][3]['resultRep']
+                     if location == 'lambda' else module['bindings'][1]['expr'][2][3][6]['rep'])
+            proof['components'][0] = tuple_rep(LONG)
+            self.assert_shape_rejected(module)
+
+    def test_zero_arity_tuple_join_cannot_capture_an_aggregate(self):
+        module, join = tuple_join_fixture(True)
+        producer = module['bindings'][1]['expr']
+        region = producer[2]
+        original = join['expr']
+        proof = join['joinResultRep']
+        join['expr'] = [*var('held'), dict(rep=proof)]
+        producer[2] = ['case', original, 'held', [['default', None, [], region, dict(binders=[])]],
+                       dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
+        report = run_tuple(module)
+        self.assertIn('unboxed-tuple join capture', [i['detail'] for i in report['issues']])
+
+    def test_recursive_join_identity_shadows_outer_tuple_for_capture_checks(self):
+        module, join = tuple_join_fixture()
+        producer = module['bindings'][1]['expr']
+        region = producer[2]; region[1] = True
+        original = join['expr'][2]
+        proof = join['joinResultRep']
+        call = copy.deepcopy(region[3])
+        join['expr'][2] = ['case', [*var('arg'), dict(rep=LONG)], 'condition', [
+            ['lit', ['int', '0'], [], original, dict(binders=[])],
+            ['default', None, [], call, dict(binders=[])]],
+            dict(rep=proof, binder=dict(id='condition', lifted=False, rep=LONG))]
+        producer[2] = ['case', copy.deepcopy(original), 'finish', [['default', None, [], region, dict(binders=[])]],
+                       dict(rep=proof, binder=dict(id='finish', lifted=False, rep=proof))]
+        self.assertTrue(run_tuple(module)['accepted'])
+
     def assert_shape_rejected(self, module):
         report = run_tuple(module)
         self.assertFalse(report['accepted'])

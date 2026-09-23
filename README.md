@@ -89,8 +89,10 @@ the suite; missing dependencies and unsupported constructs remain explicit.
 and `Data.IntSet` operations, bitmap primitives and unsigned word boundaries,
 checked against native GHC and independent models. `scripts/try-libraries.sh`
 runs those checks on both backends.
+The [unsigned scalar primop slice](docs/integer-primops.md) adds native-checked
+machine-word division and narrow-word comparisons, bitwise operations and shifts.
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
-scalar/reference inputs; aggregate arguments, joins, captures, sums and scalar
+scalar/reference inputs and local join results; aggregate arguments, join captures, ordinary captures, sums and scalar
 void tuple components remain explicit boundaries.
 
 The `Data.Set` example remains a separate frontier until its full exported call

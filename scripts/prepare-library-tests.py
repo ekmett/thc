@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Export real containers workloads, preserve strict gaps, and verify native oracles."""
+import argparse
+from collections import Counter
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,6 +18,75 @@ BUILD = ROOT / 'build/libraries'
 CONTAINERS_URL = 'https://hackage.haskell.org/package/containers-0.8/containers-0.8.tar.gz'
 CONTAINERS_SHA = 'b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8'
 WORD_MASK = (1 << 64) - 1
+
+# These are cold ghc-internal exception/state paths, not collection tuple
+# results. Exact owners, details and multiplicities make new gaps fail closed.
+SET_EXCEPTION = 'ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException'
+SET_BACKTRACE = 'ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1'
+SET_FRONTIER_ISSUES = Counter({
+    ('constructor-kind', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple'): 1,
+    ('constructor-field-representation', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#)[0]: None'): 1,
+    ('constructor-field-representation', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#)[1]: None'): 1,
+    ('aggregate-representation', SET_EXCEPTION + '_$stoExceptionWithBacktrace', 'unboxed-tuple: unsupported component'): 6,
+    ('aggregate-representation', SET_BACKTRACE, 'unboxed-tuple: unsupported component'): 7,
+    ('unsupported-primitive', SET_BACKTRACE, 'readMutVar#'): 1,
+})
+SET_FRONTIER_MISSING = {
+    'ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException',
+    'ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef',
+    'ghc-internal:GHC.Internal.Stack.withFrozenCallStack1',
+}
+
+
+def audit_structure_violations(group, audit):
+    """Keep preparation and reuse checks on the same explicit coverage contract."""
+    violations = []
+    name = group['id']
+    if audit['accepted'] != (group['execution'] == 'supported'):
+        violations.append(name + ': declared support disagrees with the strict audit')
+    primitives = {primitive['name'] for primitive in audit['primitives']}
+    if name in ['intmap', 'intmap-primops'] and not {'clz#', 'ltWord#'} <= primitives:
+        violations.append(name + ': required word primitives disappeared from reachable Core')
+    if name in ['intset', 'intset-primops'] and not {'popCnt#', 'ctz#', 'leWord#'} <= primitives:
+        violations.append(name + ': required IntSet word primitives disappeared from reachable Core')
+    if name == 'set':
+        if group['execution'] != 'frontier' or audit['accepted']:
+            violations.append('set: remains an explicit strict frontier; native rows are not supported execution')
+        actual = Counter((issue['code'], issue['owner'], issue['detail'] if isinstance(issue['detail'], str)
+                          else json.dumps(issue['detail'], sort_keys=True)) for issue in audit['issues'])
+        if actual != SET_FRONTIER_ISSUES:
+            added, removed = actual - SET_FRONTIER_ISSUES, SET_FRONTIER_ISSUES - actual
+            violations.append(f'set: exception/state frontier changed; review coverage (added={dict(added)}, removed={dict(removed)})')
+        missing = [item['id'] for item in audit['missingGlobals']]
+        if set(missing) != SET_FRONTIER_MISSING or len(missing) != len(SET_FRONTIER_MISSING):
+            violations.append('set: exception/backtrace missing-definition frontier changed; review coverage')
+        if audit['roots'] != ['main:THC.SetWorkload.setAggregate']:
+            violations.append('set: expected workload root changed; review coverage')
+        if 'reallyUnsafePtrEquality#' not in primitives:
+            violations.append('set: required pointer-identity primitive disappeared from reachable Core')
+    return violations
+
+
+def check_existing(manifest):
+    """Reaudit recorded, fingerprinted exports without rebuilding or running guest code."""
+    cases = json.loads(manifest.read_text())
+    spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'scripts/audit-core.py')
+    auditor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(auditor)
+    capabilities = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
+    violations = []
+    for group in cases['groups']:
+        modules = []
+        for filename in group['modules']:
+            path = Path(filename)
+            if cases['artifactHashes'].get(filename) != digest(path):
+                raise RuntimeError('Stale library export: ' + filename)
+            modules.append((filename, json.loads(path.read_text())))
+        audit = auditor.Audit(modules, capabilities).run([entry['name'] for entry in group['entries']])
+        violations.extend(audit_structure_violations(group, audit))
+        print(json.dumps(dict(group=group['id'], execution=group['execution'], accepted=audit['accepted'], **audit['summary'])))
+    if violations:
+        raise RuntimeError('\n'.join(violations))
 
 
 def signed(value):
@@ -154,6 +226,13 @@ def verified_containers():
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check-existing', type=Path, metavar='CASES_JSON',
+                        help='Reaudit fingerprinted exported modules only; no regeneration or execution')
+    args = parser.parse_args()
+    if args.check_existing:
+        check_existing(args.check_existing)
+        return
     ghc, ghc_pkg = os.environ.get('GHC', 'ghc'), os.environ.get('GHC_PKG', 'ghc-pkg')
     if subprocess.check_output([ghc, '--numeric-version'], text=True).strip() != '9.14.1':
         raise RuntimeError('THC requires GHC 9.14.1')
@@ -219,21 +298,7 @@ def main():
         if result.returncode not in [0, 1]:
             raise RuntimeError('Capability auditor failed: ' + str(result.returncode))
         audit = json.loads(audit_path.read_text())
-        if audit['accepted'] != (group['execution'] == 'supported'):
-            violations.append(group['id'] + ': declared support disagrees with ' + str(audit_path))
-        primitives = {primitive['name'] for primitive in audit['primitives']}
-        if group['id'] in ['intmap', 'intmap-primops'] and not {'clz#', 'ltWord#'} <= primitives:
-            violations.append(group['id'] + ': required word primitives disappeared from reachable Core')
-        if group['id'] in ['intset', 'intset-primops'] and not {'popCnt#', 'ctz#', 'leWord#'} <= primitives:
-            violations.append(group['id'] + ': required IntSet word primitives disappeared from reachable Core')
-        if group['id'] == 'set':
-            frontier = {(issue['code'], issue['detail']) for issue in audit['issues']}
-            if ('aggregate-representation', 'unboxed-tuple') not in frontier:
-                violations.append('set: expected aggregate frontier changed; review coverage')
-            if 'reallyUnsafePtrEquality#' not in primitives:
-                violations.append('set: required pointer-identity primitive disappeared from reachable Core')
-            if any(item['id'].startswith('main:') for item in audit['missingGlobals']):
-                violations.append('set: source-library definitions must resolve at the post-Tidy boundary')
+        violations.extend(audit_structure_violations(group, audit))
         group['audit'] = str(audit_path)
         if group['id'] == 'sequence':
             # One real source export, but distinct public-API slices have distinct
