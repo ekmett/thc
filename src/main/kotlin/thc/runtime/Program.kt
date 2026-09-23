@@ -430,7 +430,8 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
             kinds.isNotEmpty() && kinds.all { it in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) } -> CoreKind.OBJECT
             else -> CoreKind.UNKNOWN
         }
-        representation = CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
+        representation = CoreVectors.caseResult(proofs)
+            ?: CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
     }
     // Preserve primitive scrutinees through their frame write and literal comparisons.
     @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics).apply {
@@ -1038,7 +1039,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expr {
         CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
         if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireScalar(it.proof, "argument") }
-        if (!lifted) return Evaluate(compile(expr, scope, false), metrics)
+        if (!lifted) return Evaluate(compile(expr, scope, false).also {
+            CoreRepresentations.requireNoVector(it.representation, "argument")
+        }, metrics)
         // GHC's context-aware exprOkForSpecEval certificate also covers total
         // primitive operands in constructors, without strictifying recursive
         // dictionary knots. Allocate these values directly instead of creating
@@ -1326,9 +1329,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         val entry = compile(expr[3] as List<Any?>, local, tail)
+        CoreRepresentations.requireNoVector(entry.representation, "join result")
         val bodies = definitions.mapIndexed { index, definition ->
             withSource(sources.binding(definition.binding, currentSource)) {
                 compile(definition.body, bodyScopes[index], tail).also { node ->
+                    CoreRepresentations.requireNoVector(node.representation, "join result")
                     node.representation = node.representation.refine(definition.result.copy(evaluated = false))
                 }
             }

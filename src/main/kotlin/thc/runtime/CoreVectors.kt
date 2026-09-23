@@ -32,6 +32,13 @@ internal object CoreVectors {
         if (occurrence.isVector && binding?.vector != occurrence.vector)
             throw RuntimeFault("Vector occurrence lacks a matching lexical binder proof")
     }
+    /** A local case must retain vector identity even when its result annotation is absent. */
+    fun caseResult(alternatives: List<CoreRepresentation>): CoreRepresentation? {
+        val vector = alternatives.firstOrNull { it.isVector } ?: return null
+        if (alternatives.any { it.vector != vector.vector })
+            throw RuntimeFault("Conflicting vector case result representations")
+        return vector.copy(evaluated = alternatives.all { it.evaluated })
+    }
     fun validate(name: String, arguments: List<CoreRepresentation>, result: CoreRepresentation) {
         val expected = when (name) {
             "packInt64X2#" -> listOf(unpacked)
