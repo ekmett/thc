@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdInt32VectorTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-23T14:33:33.875Z" hostname="eak-quartus" time="0.646">
+  <properties/>
+  <testcase name="exactInt32VectorIdentityAndDenseDurableStorage()" classname="thc.runtime.SimdInt32VectorTest" time="0.035"/>
+  <testcase name="vectorFormalJoinRemainsUnsupported()" classname="thc.runtime.SimdInt32VectorTest" time="0.182"/>
+  <testcase name="realInt32CorePreservesSignedLanesAndEntersCompiledCodeForEveryRow()" classname="thc.runtime.SimdInt32VectorTest" time="0.419"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "vector": "int32x4",
+  "commands": [
+    {
+      "argv": [
+        "compiler/build.sh"
+      ],
+      "env": {}
+    },
+    {
+      "argv": [
+        "compiler/export.sh",
+        "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/compiler/test-fixtures/SimdInt32X4.hs"
+      ],
+      "env": {
+        "THC_CORE_OUT": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/pre-core",
+        "THC_GHC_OUT": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/pre-ghc"
+      }
+    },
+    {
+      "argv": [
+        "compiler/export.sh",
+        "-fplugin-opt=Thc.Plugin:post-tidy",
+        "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/compiler/test-fixtures/SimdInt32X4.hs"
+      ],
+      "env": {
+        "THC_CORE_OUT": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/post-core",
+        "THC_GHC_OUT": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/post-ghc"
+      }
+    },
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc",
+        "--make",
+        "-O2",
+        "-fforce-recomp",
+        "-dcore-lint",
+        "-icompiler/test-fixtures",
+        "-odir",
+        "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/native",
+        "-hidir",
+        "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/native",
+        "-o",
+        "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/native/simd",
+        "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/compiler/test-fixtures/SimdInt32X4Native.hs"
+      ],
+      "env": {}
+    },
+    {
+      "argv": [
+        "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/native/simd"
+      ],
+      "stdout": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/simd-int32x4/oracle.tsv"
+    }
+  ],
+  "nativeRows": 243,
+  "stages": [
+    "pre",
+    "post"
+  ],
+  "toolchain": {
+    "ghcVersion": "9.14.1",
+    "host": "eak-quartus",
+    "machine": "x86_64",
+    "system": "Linux-6.8.0-100-generic-x86_64-with-glibc2.35",
+    "ghcInfo": " [(\"Project name\",\"The Glorious Glasgow Haskell Compilation System\")\n ,(\"C compiler command\",\"gcc\")\n ,(\"C compiler flags\",\"\")\n ,(\"C++ compiler command\",\"g++\")\n ,(\"C++ compiler flags\",\"\")\n ,(\"C compiler link flags\",\"-fuse-ld=gold -Wl,--no-as-needed\")\n ,(\"C compiler supports -no-pie\",\"YES\")\n ,(\"CPP command\",\"gcc\")\n ,(\"CPP flags\",\"-E\")\n ,(\"Haskell CPP command\",\"gcc\")\n ,(\"Haskell CPP flags\",\"-E -undef -traditional\")\n ,(\"JavaScript CPP command\",\"gcc\")\n ,(\"JavaScript CPP flags\",\"-E -CC -Wno-unicode -nostdinc\")\n ,(\"C-- CPP command\",\"gcc\")\n ,(\"C-- CPP flags\",\"-E\")\n ,(\"C-- CPP supports -g0\",\"YES\")\n ,(\"ld supports compact unwind\",\"NO\")\n ,(\"ld supports filelist\",\"NO\")\n ,(\"ld supports single module\",\"NO\")\n ,(\"ld is GNU ld\",\"YES\")\n ,(\"Merge objects command\",\"ld.gold\")\n ,(\"Merge objects flags\",\"-r\")\n ,(\"Merge objects supports response files\",\"YES\")\n ,(\"ar command\",\"ar\")\n ,(\"ar flags\",\"q\")\n ,(\"ar supports at file\",\"YES\")\n ,(\"ar supports -L\",\"NO\")\n ,(\"ranlib command\",\"ranlib\")\n ,(\"otool command\",\"\")\n ,(\"install_name_tool command\",\"\")\n ,(\"windres command\",\"/bin/false\")\n ,(\"unlit command\",\"/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/lib/ghc-9.14.1/lib/../bin/unlit\")\n ,(\"cross compiling\",\"NO\")\n ,(\"target platform string\",\"x86_64-unknown-linux\")\n ,(\"target os\",\"OSLinux\")\n ,(\"target arch\",\"ArchX86_64\")\n ,(\"target word size\",\"8\")\n ,(\"target word big endian\",\"NO\")\n ,(\"target has GNU nonexec stack\",\"YES\")\n ,(\"target has .ident directive\",\"YES\")\n ,(\"target has subsections via symbols\",\"NO\")\n ,(\"target has libm\",\"YES\")\n ,(\"Unregisterised\",\"NO\")\n ,(\"LLVM target\",\"x86_64-unknown-linux\")\n ,(\"LLVM llc command\",\"llc-20\")\n ,(\"LLVM opt command\",\"opt-20\")\n ,(\"LLVM llvm-as command\",\"clang-20\")\n ,(\"LLVM llvm-as flags\",\"\")\n ,(\"Use inplace MinGW toolchain\",\"NO\")\n ,(\"target RTS linker only supports shared libraries\",\"NO\")\n ,(\"Use interpreter\",\"YES\")\n ,(\"Support SMP\",\"YES\")\n ,(\"RTS ways\",\"v thr thr_debug thr_debug_p thr_debug_p_dyn thr_debug_dyn thr_p thr_p_dyn thr_dyn debug debug_p debug_p_dyn debug_dyn p p_dyn dyn\")\n ,(\"Tables next to code\",\"YES\")\n ,(\"Leading underscore\",\"NO\")\n ,(\"Use LibFFI\",\"NO\")\n ,(\"RTS expects libdw\",\"NO\")\n ,(\"Relative Global Package DB\",\"package.conf.d\")\n ,(\"base unit-id\",\"base-4.22.0.0-8900\")\n ,(\"Project version\",\"9.14.1\")\n ,(\"Project Git commit id\",\"902339d332fb4ce2b3c87dcac1ee6495d41ad886\")\n ,(\"Project Version Int\",\"914\")\n ,(\"Project Patch Level\",\"1\")\n ,(\"Project Patch Level1\",\"1\")\n ,(\"Project Patch Level2\",\"0\")\n ,(\"Project Unit Id\",\"ghc-9.14.1-7e95\")\n ,(\"ghc-internal Unit Id\",\"ghc-internal-9.1401.0-56a8\")\n ,(\"Booter version\",\"9.10.1\")\n ,(\"Stage\",\"2\")\n ,(\"Build platform\",\"x86_64-unknown-linux\")\n ,(\"Host platform\",\"x86_64-unknown-linux\")\n ,(\"Target platform\",\"x86_64-unknown-linux\")\n ,(\"target os string\",\"linux\")\n ,(\"target arch string\",\"x86_64\")\n ,(\"target word size in bits\",\"64\")\n ,(\"Have interpreter\",\"YES\")\n ,(\"Object splitting supported\",\"NO\")\n ,(\"Have native code generator\",\"YES\")\n ,(\"target has RTS linker\",\"YES\")\n ,(\"Target default backend\",\"native code generator\")\n ,(\"Support dynamic-too\",\"YES\")\n ,(\"Support parallel --make\",\"YES\")\n ,(\"Support reexported-modules\",\"YES\")\n ,(\"Support thinning and renaming package flags\",\"YES\")\n ,(\"Support Backpack\",\"YES\")\n ,(\"Requires unified installed package IDs\",\"YES\")\n ,(\"Uses package keys\",\"YES\")\n ,(\"Uses unit IDs\",\"YES\")\n ,(\"GHC Dynamic\",\"YES\")\n ,(\"GHC Profiled\",\"NO\")\n ,(\"Debug on\",\"NO\")\n ,(\"LibDir\",\"/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/lib/ghc-9.14.1/lib\")\n ,(\"Global Package DB\",\"/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/lib/ghc-9.14.1/lib/package.conf.d\")\n ]\n",
+    "ghcBinarySha256": "9fb9365cc68780907349303deb23ce360de33527a272b06385e27dc7bfe5d6ed"
+  },
+  "sources": [
+    {
+      "path": "compiler/test-fixtures/SimdInt32X4.hs",
+      "sha256": "4f5d7ac8707aef5473d2ae2ec792c6100ca47462b647daa82039f9b900b349b2"
+    },
+    {
+      "path": "compiler/test-fixtures/SimdInt32X4Native.hs",
+      "sha256": "1a1dd168ce7d30e5593b2bb63cf87a6962508f8ddfeeb0f72c156669e3039238"
+    },
+    {
+      "path": "scripts/prepare-simd-audit.py",
+      "sha256": "094878953499a6c3eed35af80cd3bee7bc7eaf8fefe6a08e596f8b0938385977"
+    },
+    {
+      "path": "compiler/Thc/Cbv.hs",
+      "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c"
+    },
+    {
+      "path": "compiler/Thc/Demands.hs",
+      "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a"
+    },
+    {
+      "path": "compiler/Thc/Plugin.hs",
+      "sha256": "5126b716ff67abcc33e9d15d64709d1c9971bdb39832e36f31cf7285bb1d776b"
+    },
+    {
+      "path": "compiler/Thc/Sources.hs",
+      "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+    },
+    {
+      "path": "compiler/Thc/Wired.hs",
+      "sha256": "0fa673b5e3cd94e1398b69843644f8170d153819f45135a4d3913a10bdbfc48b"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "build/simd-int32x4/pre-core/SimdInt32X4.json",
+      "sha256": "342139072f0c85f5372f6cc67d1c8973f03d07ab1e25590ed50b6a9411ec3ddd"
+    },
+    {
+      "path": "build/simd-int32x4/post-core/SimdInt32X4.json",
+      "sha256": "3efa9c4b9e482b5649c00cb1515a489291fccff674acc84cf57ecc46a3e5a333"
+    },
+    {
+      "path": "build/simd-int32x4/oracle.tsv",
+      "sha256": "ffe963d4d2930806595e0ab2298b9dd248bb2e22cf4ab68f81572d1561561c63"
+    }
+  ]
+}

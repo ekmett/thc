@@ -1,0 +1,786 @@
+{
+  "schema": 1,
+  "vector": "int32x4",
+  "architecture": "x86_64",
+  "results": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "vectorCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 66,
+        "edges": 90,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 10,
+          "jdk.graal.compiler.nodes.FrameState": 1,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 5,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 3,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 2,
+          "jdk.graal.compiler.nodes.calc.MulNode": 2,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 4,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 2,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 4,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 6
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "pre-ast-vectorCase/run.log",
+        "sha256": "e692e32789d27d88be78e12924dbd0f0a0032bc944a197a957e4a435273cf067"
+      },
+      "lir": {
+        "path": "pre-ast-vectorCase/final-lir.txt",
+        "sha256": "5529a3017896dfcfe681b30bf71e2e78ecf1e68aa6953e8f7c6d143a83c2f733"
+      },
+      "physicalInstruction": "VPADDD",
+      "graphPerCallCompiledCounterChecked": false
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "subtractCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 75,
+        "edges": 100,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 11,
+          "jdk.graal.compiler.nodes.FrameState": 1,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 5,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 2,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 1,
+          "jdk.graal.compiler.nodes.calc.MulNode": 3,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.NegateNode": 1,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 4,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 3,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 8,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 9
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "pre-ast-subtractCase/run.log",
+        "sha256": "68cb0aec1f4a70a318ee0fa5ec79e38341ae23ead4fc4abdff394ee06ac959b8"
+      },
+      "lir": {
+        "path": "pre-ast-subtractCase/final-lir.txt",
+        "sha256": "7e258106f06b8268878953ea058270f619c910872057bd659d93ea89aca9e2ed"
+      },
+      "physicalInstruction": "VPSUBD",
+      "graphPerCallCompiledCounterChecked": false
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "vectorCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 91,
+        "edges": 148,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 17,
+          "jdk.graal.compiler.nodes.FrameState": 6,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 6,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 3,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 2,
+          "jdk.graal.compiler.nodes.calc.MulNode": 2,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 5,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.nodes.virtual.VirtualArrayNode": 4,
+          "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode": 1,
+          "jdk.graal.compiler.nodes.virtual.VirtualObjectState": 5,
+          "jdk.graal.compiler.truffle.nodes.TrufflePreserveFrameStateNode": 1,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 2,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 4,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 6
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "pre-bytecode-vectorCase/run.log",
+        "sha256": "901363a63a55e379bc31a31ab574c4d1767266aed78999a08505f2d294009229"
+      },
+      "lir": {
+        "path": "pre-bytecode-vectorCase/final-lir.txt",
+        "sha256": "0de2604088dc0e62d826d89db6e7a88ed479a1f183c39876a7af3889fc20b406"
+      },
+      "physicalInstruction": "VPADDD",
+      "graphPerCallCompiledCounterChecked": false
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "subtractCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 100,
+        "edges": 158,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 18,
+          "jdk.graal.compiler.nodes.FrameState": 6,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 6,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 2,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 1,
+          "jdk.graal.compiler.nodes.calc.MulNode": 3,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.NegateNode": 1,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 5,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.nodes.virtual.VirtualArrayNode": 4,
+          "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode": 1,
+          "jdk.graal.compiler.nodes.virtual.VirtualObjectState": 5,
+          "jdk.graal.compiler.truffle.nodes.TrufflePreserveFrameStateNode": 1,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 3,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 8,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 9
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "pre-bytecode-subtractCase/run.log",
+        "sha256": "2d9f47028b3cc899ca2ba3d814c868e359fa51a5d635a4cc6a20cb8743b097fd"
+      },
+      "lir": {
+        "path": "pre-bytecode-subtractCase/final-lir.txt",
+        "sha256": "81d6daccc77fccb142fb7ca9bad4369d35d1b8967ae0d9e1140b987e702b3072"
+      },
+      "physicalInstruction": "VPSUBD",
+      "graphPerCallCompiledCounterChecked": false
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "vectorCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 66,
+        "edges": 90,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 10,
+          "jdk.graal.compiler.nodes.FrameState": 1,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 5,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 3,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 2,
+          "jdk.graal.compiler.nodes.calc.MulNode": 2,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 4,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 2,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 4,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 6
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "post-ast-vectorCase/run.log",
+        "sha256": "774a26cabcfb7485386e1f43aed4280472521be20af2910bbfb45baee155487d"
+      },
+      "lir": {
+        "path": "post-ast-vectorCase/final-lir.txt",
+        "sha256": "7c53a6dba4f30b12b2a8d97b7edb513701b445693eee58711ec8b54945ff2e78"
+      },
+      "physicalInstruction": "VPADDD",
+      "graphPerCallCompiledCounterChecked": false
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "subtractCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 75,
+        "edges": 100,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 11,
+          "jdk.graal.compiler.nodes.FrameState": 1,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 5,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 2,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 1,
+          "jdk.graal.compiler.nodes.calc.MulNode": 3,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.NegateNode": 1,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 4,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 3,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 8,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 9
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "post-ast-subtractCase/run.log",
+        "sha256": "ecbc173abf36e1b23c7dca70b6642435210cc35ad2e496d050cc78ebfc41e093"
+      },
+      "lir": {
+        "path": "post-ast-subtractCase/final-lir.txt",
+        "sha256": "e8df226b862f1ee458909abfb72f094dbfce92f6bbf622cb759111be5242987a"
+      },
+      "physicalInstruction": "VPSUBD",
+      "graphPerCallCompiledCounterChecked": false
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "vectorCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 91,
+        "edges": 148,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 17,
+          "jdk.graal.compiler.nodes.FrameState": 6,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 6,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 3,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 2,
+          "jdk.graal.compiler.nodes.calc.MulNode": 2,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 5,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.nodes.virtual.VirtualArrayNode": 4,
+          "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode": 1,
+          "jdk.graal.compiler.nodes.virtual.VirtualObjectState": 5,
+          "jdk.graal.compiler.truffle.nodes.TrufflePreserveFrameStateNode": 1,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 2,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 4,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 6
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "post-bytecode-vectorCase/run.log",
+        "sha256": "7f695f0caaa01b77f53d7dae78b85bc6d3b1e56f0d6d1eda2536313105c9e22c"
+      },
+      "lir": {
+        "path": "post-bytecode-vectorCase/final-lir.txt",
+        "sha256": "eb98096513ed5622056b338def06d07a99253aaad7928fc9c6ae41320eec1418"
+      },
+      "physicalInstruction": "VPADDD",
+      "graphPerCallCompiledCounterChecked": false
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "subtractCase",
+      "rows": 81,
+      "installedEntryValidAfterExecution": true,
+      "vectorAllocations": false,
+      "vectorFieldTraffic": false,
+      "physicalPackedInstructions": true,
+      "hostLongResultBox": true,
+      "highTierGraph": {
+        "ordinal": 45,
+        "dumpId": 39,
+        "group": "TruffleIR.Tier2.lambda_a,_b,_c,_d()",
+        "name": "39: Before phase HighTierLowering",
+        "graphType": "StructuredGraph",
+        "nodes": 100,
+        "edges": 158,
+        "blocks": 1,
+        "nodeClassCounts": {
+          "jdk.graal.compiler.nodes.ConstantNode": 18,
+          "jdk.graal.compiler.nodes.FrameState": 6,
+          "jdk.graal.compiler.nodes.ParameterNode": 1,
+          "jdk.graal.compiler.nodes.PiArrayNode": 1,
+          "jdk.graal.compiler.nodes.PiNode": 6,
+          "jdk.graal.compiler.nodes.ReturnNode": 1,
+          "jdk.graal.compiler.nodes.StartNode": 1,
+          "jdk.graal.compiler.nodes.calc.AddNode": 2,
+          "jdk.graal.compiler.nodes.calc.LeftShiftNode": 1,
+          "jdk.graal.compiler.nodes.calc.MulNode": 3,
+          "jdk.graal.compiler.nodes.calc.NarrowNode": 5,
+          "jdk.graal.compiler.nodes.calc.NegateNode": 1,
+          "jdk.graal.compiler.nodes.calc.SignExtendNode": 4,
+          "jdk.graal.compiler.nodes.calc.SubNode": 1,
+          "jdk.graal.compiler.nodes.calc.XorNode": 3,
+          "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode": 1,
+          "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue": 5,
+          "jdk.graal.compiler.nodes.extended.UnboxNode": 4,
+          "jdk.graal.compiler.nodes.java.LoadIndexedNode": 5,
+          "jdk.graal.compiler.nodes.virtual.VirtualArrayNode": 4,
+          "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode": 1,
+          "jdk.graal.compiler.nodes.virtual.VirtualObjectState": 5,
+          "jdk.graal.compiler.truffle.nodes.TrufflePreserveFrameStateNode": 1,
+          "jdk.graal.compiler.vector.nodes.simd.SimdBroadcastNode": 3,
+          "jdk.graal.compiler.vector.nodes.simd.SimdCutNode": 8,
+          "jdk.graal.compiler.vector.nodes.simd.SimdInsertNode": 9
+        }
+      },
+      "lirNormalization": "trailing whitespace removed",
+      "log": {
+        "path": "post-bytecode-subtractCase/run.log",
+        "sha256": "30e1b8be96c0a2bf6d268070dce6db8dc093e6fb216a48d7d40b5839d9d9c77c"
+      },
+      "lir": {
+        "path": "post-bytecode-subtractCase/final-lir.txt",
+        "sha256": "2398c21f6bf530ad5de0bf5844c7f25ef500e49a332cc6b0b1aff10f010dd736"
+      },
+      "physicalInstruction": "VPSUBD",
+      "graphPerCallCompiledCounterChecked": false
+    }
+  ],
+  "sources": [
+    {
+      "path": "build.gradle.kts",
+      "sha256": "93c54acecaaf781a1e5d0d5f7cfff50a782c715bb5976fe48db494814a6545d9"
+    },
+    {
+      "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+      "sha256": "88a81aa3649952be7f480e411eb84d2ba8b12b8ea8283dd786900861e04d77ca"
+    },
+    {
+      "path": "src/main/java/thc/runtime/Calls.java",
+      "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+    },
+    {
+      "path": "src/main/java/thc/runtime/Int32X4.java",
+      "sha256": "5cac5b334384165f47965d3d1b55d571e5310db2572335d10242cc046764ee3a"
+    },
+    {
+      "path": "src/main/java/thc/runtime/Int64X2.java",
+      "sha256": "ba9a429eb8a9eb03c66d1c8c19cbed2694b90385c7638aa33ee121c3c7d2c469"
+    },
+    {
+      "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+      "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+    },
+    {
+      "path": "src/main/kotlin/thc/Json.kt",
+      "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+    },
+    {
+      "path": "src/main/kotlin/thc/Language.kt",
+      "sha256": "aad9f6b957819ed9411da7460c3e981eebdf1d470da02db408eb6275f36fae33"
+    },
+    {
+      "path": "src/main/kotlin/thc/LibraryCheck.kt",
+      "sha256": "6972150be4500d6f439d127848f9da0a4cdebdbcefd5c372f94e30d5348e16f5"
+    },
+    {
+      "path": "src/main/kotlin/thc/Main.kt",
+      "sha256": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6"
+    },
+    {
+      "path": "src/main/kotlin/thc/MapCheck.kt",
+      "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+    },
+    {
+      "path": "src/main/kotlin/thc/Probe.kt",
+      "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Application.kt",
+      "sha256": "f289576829af2fc0f9f6e203d15561879c4af02931ab307c6990aea308e212a0"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+      "sha256": "7c6102b8852f5db93e07abd5ac05583a85f241c42eddf8736d070c4db0c5c1da"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/BloomValue.kt",
+      "sha256": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+      "sha256": "9c14c9f5cdc8ca1cf2576138700b94b0902dc4abdeaad1e63854c73f627d19d5"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CaseCategories.kt",
+      "sha256": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt",
+      "sha256": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt",
+      "sha256": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreCallDemands.kt",
+      "sha256": "e109bdefd49f9db539d418227794eb8763d40c0ad635c78a5a2328e64d0d9196"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreEntries.kt",
+      "sha256": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreFields.kt",
+      "sha256": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+      "sha256": "43e278d285db9fa3876e3f99917d31c74c2c7f9de6bb1bda60ad138d29364147"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+      "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreVectors.kt",
+      "sha256": "f4d97c7f660b7b8f7e30c736b6ee62aa2cf2c220af32e29e666813c4abd83f57"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+      "sha256": "5af2f5b0b9f716cd979d0f840760e71c30e3e571930be3515415b0d435222db0"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/EntryArguments.kt",
+      "sha256": "9c7af82a990fe84121de81070323258cd1654b86c3d00ebc494b5923d468e1ce"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Frames.kt",
+      "sha256": "6846ac154751c3d8485d82a1adc0939ae8ca596774189f1d44c0446b3fae7185"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+      "sha256": "91cb6c35d5ef04c3006dc3ff732fa2fa4786e121ec588f3e8362c96af4d82e37"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+      "sha256": "6ac733dffb2fc9da28133eece7d9e856bb39f9d7fd5998af0091f9daf664a0be"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Handoff.kt",
+      "sha256": "8e8c44ae8831b358b332dc4bfb456a4a9867844093e3ba3b91b8a9e6303aa747"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LeadingCaseReturn.kt",
+      "sha256": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+      "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+      "sha256": "7129d4e4dc156f9bb82eb62144db31e4cd39a1f44382feb56c72dbcc46ea19e0"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Program.kt",
+      "sha256": "9f28e08a664952dcf9d14392d5677423d7467df4e0309eb321717cc0535149db"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/TupleArithmetic.kt",
+      "sha256": "af4fcfad9658e8908ecedae60f8ed34448f4f6c37b7bd03001d91098658459e6"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/TupleResults.kt",
+      "sha256": "72a75cbd2446da5159658c5d4ebfb438e3e9b560a2c739b8e3a3a886063c3cc2"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Vector32Expressions.kt",
+      "sha256": "859a021a585e60f9ca31e44519d0c911f1c83ce4acf30fbe9155305cc747316e"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/VectorExpressions.kt",
+      "sha256": "302658f2bd688ae05ff68f6de830884e9e58ae169c10f837930a31ae33fdb161"
+    },
+    {
+      "path": "bench/experiments/simd-foundation/SimdRuntimeGraphProbe.java",
+      "sha256": "ee108a842faac67dc6471588eafde7c82992dd8c06cfbebd1814097638394ead"
+    },
+    {
+      "path": "bench/experiments/simd-foundation/VectorApiProbe.java",
+      "sha256": "07b85bb70ea988dc7a6321014fb7f11416468759cd167cfb9221a6ad4c73f1a5"
+    },
+    {
+      "path": "bench/experiments/simd-foundation/audit.py",
+      "sha256": "67aede5a858127f5e6859a86f03920f357ef604b78b712342a753e26186a6f17"
+    },
+    {
+      "path": "bench/experiments/simd-foundation/run-runtime.sh",
+      "sha256": "db65613f3861c509a6cc54019e017b39f29ab5bd0f11ae769191b9aa2eecbe2e"
+    },
+    {
+      "path": "bench/experiments/simd-foundation/run.sh",
+      "sha256": "4561d1fc2a5b00150c61374b7b34b67808d1eaa634359bc7e67bd6d1fa570e30"
+    },
+    {
+      "path": "bench/experiments/simd-foundation/runtime-audit.py",
+      "sha256": "7e7d10000e1d80f886c9fc3e620a772f07f29999d4db0abf0bd7429dd0ad4b0d"
+    }
+  ],
+  "runtimeJars": [
+    {
+      "path": "build/install/thc/lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "build/install/thc/lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "build/install/thc/lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "build/install/thc/lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "build/install/thc/lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "build/install/thc/lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "build/install/thc/lib/thc-0.1-experiment.jar",
+      "sha256": "c3a0c61db39787771d5e7c680f2a71ce67b886a286b144cf12c44c6c2506c605"
+    },
+    {
+      "path": "build/install/thc/lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "build/install/thc/lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "build/install/thc/lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "build/install/thc/lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    }
+  ],
+  "inputProvenance": {
+    "path": "input-provenance.json",
+    "sha256": "d0a952278af04a4b23b0f033ec0fe0931e50d9d9da40f5dc193a040b5136fb77"
+  },
+  "jdk": {
+    "path": "jdk-release.txt",
+    "sha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96"
+  },
+  "claim": "Actual exported Core on both THC backends with native GHC rows and physical packed instructions; not a vector function calling convention.",
+  "sourceRevision": "1b75f278756e8352bd5854d75934e4005e6374d2",
+  "host": {
+    "name": "eak-quartus",
+    "cpu": "12th Gen Intel(R) Core(TM) i9-12900K",
+    "cpuRecord": {
+      "path": "cpu.txt",
+      "sha256": "f5c67b549d9af60fdb16ec02b2cdb57aefb1b35516890dee03abfd6d5631e064"
+    },
+    "kernelRecord": {
+      "path": "kernel.txt",
+      "sha256": "629606327089596430e9e8489f6f14b7a9a76f91062bd6d7c104686354d115fe"
+    },
+    "effectiveJvmFlags": {
+      "path": "jvm-flags.txt",
+      "sha256": "95b33f44434123e333c77ffb7828dc57fcd816bd6813ecd1875f8733d852302c"
+    }
+  },
+  "packaging": {
+    "originalEvidenceSha256": "683bad62a500297b4fc255546e4a240c39a92b50c5a064eb701923928f0518b6",
+    "originalPath": "/home/ekmett/ai/thc-int32x4-x86-validation-01a0cdeb/build/int32-native-graphs/evidence.json",
+    "normalization": "Removed graph properties and unavailable parsed graph paths; made source and retained artifact paths relative; graph outcomes and node counts unchanged."
+  },
+  "commands": [
+    "python3 scripts/prepare-simd-audit.py --vector int32x4",
+    "scripts/gradle.sh --offline --no-daemon --max-workers=4 installDist",
+    "bench/experiments/simd-foundation/run-runtime.sh build/int32-native-graphs int32x4",
+    "scripts/gradle.sh --offline --no-daemon --max-workers=4 test --tests thc.runtime.SimdInt32VectorTest"
+  ],
+  "environment": "/home/ekmett/thc-benchmarks/2026-09-23-083914/environment.sh",
+  "graphJvmArguments": [
+    "--add-modules=jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+    "-XX:+UseCompactObjectHeaders",
+    "-Djdk.graal.Dump=Truffle:2",
+    "-Djdk.graal.PrintGraph=File",
+    "-Djdk.graal.PrintGraphWithSchedule=true",
+    "-Djdk.graal.PrintBackendCFG=true",
+    "-Djdk.graal.DumpPath=<control>/graphs"
+  ],
+  "graphContextOptions": {
+    "engine.BackgroundCompilation": "false",
+    "engine.MultiTier": "false",
+    "engine.CompilationFailureAction": "Throw",
+    "engine.SingleTierCompilationThreshold": "10000000"
+  },
+  "graphCounterLimit": "Graph controls set instrument=false: they verify native results and installed-target last-tier validity after execution, not a compiled-entry counter on each invocation.",
+  "instrumentedFocusedTest": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "postCompileCalls": 648,
+    "expectedCompiledEntriesPerCall": 1,
+    "scope": "pre/post-Tidy x AST/bytecode x vectorCase/subtractCase x 81 native rows; separate instrumented JVM run",
+    "source": {
+      "path": "src/test/kotlin/thc/runtime/SimdInt32VectorTest.kt",
+      "sha256": "f44fc66f927f938c5d811049536dd8d22265e55ad0d094398e1b9e414333a7ad"
+    },
+    "report": {
+      "path": "TEST-thc.runtime.SimdInt32VectorTest.xml",
+      "sha256": "41a4c613746bd5c8fb4b53a7c6e39466bcaf74aaf98a1d779b04d6d92de35280"
+    },
+    "log": {
+      "path": "focused-tests.log",
+      "sha256": "03b3a708d07e132b9fe5fde59cbd0e316f95d32a547cebe7f39aa8a449aa1c22"
+    }
+  },
+  "freshNativePreparation": {
+    "rows": 243,
+    "provenance": {
+      "path": "native/provenance.json",
+      "sha256": "1fe3266a56b57df3dbe48e65ff600dea18ee52993468dbd0d7df6f3ff3b80c40"
+    },
+    "oracle": {
+      "path": "native/oracle.tsv",
+      "sha256": "ffe963d4d2930806595e0ab2298b9dd248bb2e22cf4ab68f81572d1561561c63"
+    },
+    "log": {
+      "path": "native/prepare.log",
+      "sha256": "6c6131216ca9d6d9c8502f0dd469d0ec9780274f84a281c5d6117b2b60da23be"
+    }
+  }
+}
