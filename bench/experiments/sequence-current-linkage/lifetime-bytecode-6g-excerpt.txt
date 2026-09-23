@@ -1,0 +1,11 @@
+SEQUENCE_LOAD_ONLY_ACCEPTED	bytecode	sequenceBuild
+SEQUENCE_LOAD_ONLY_ACCEPTED	bytecode	sequenceEnds
+SEQUENCE_LOAD_ONLY_ACCEPTED	bytecode	sequenceAppend
+SEQUENCE_LOAD_ONLY_REJECTED	bytecode	sequenceSplit	thc.runtime.UnsupportedCore: Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)
+SEQUENCE_LOAD_ONLY_REJECTED	bytecode	sequenceIndexUpdate	thc.runtime.UnsupportedCore: Unresolved external binding ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'
+SEQUENCE_LOAD_ONLY_REJECTED	bytecode	sequenceAggregate	thc.runtime.UnsupportedCore: Unresolved external binding ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'
+SEQUENCE_LOAD_ONLY_ACCEPTED	bytecode	sequenceLazyPayloads
+VERIFIED_LIBRARY	bytecode	compiled-warm	sequenceBuildViews	1	258103
+VERIFIED_LIBRARY	bytecode	compiled-warm	sequenceBuildViews	8	5435681624
+VERIFIED_LIBRARY	bytecode	compiled-warm	sequenceBuildViews	64	5420159424
+SEQUENCE_FIRST_WARM_GATE_PASSED	bytecode	rows=3	{"backend":"bytecode","bytecodeRootCount":108,"sourceNotesEnabled":true,"sourceSpanCount":10115,"sourceRootCount":100,"localJoinCount":22,"localJoinTransfers":772,"instrumented":true,"thunkEvaluationsByLabel":{"xs":43,"argument thunk":3796},"compiledEntries":311,"leadingCaseReturns":0,"thunkEvaluations":3839,"thunkHits":57,"blackholes":0,"directCacheMisses":75,"indirectCalls":1335,"tailBounces":0,"selfTailReentries":0,"trampolineIterations":0,"papAllocations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

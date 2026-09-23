@@ -1,0 +1,11 @@
+SEQUENCE_LOAD_ONLY_ACCEPTED	ast	sequenceBuild
+SEQUENCE_LOAD_ONLY_ACCEPTED	ast	sequenceEnds
+SEQUENCE_LOAD_ONLY_ACCEPTED	ast	sequenceAppend
+SEQUENCE_LOAD_ONLY_REJECTED	ast	sequenceSplit	thc.runtime.UnsupportedCore: Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)
+SEQUENCE_LOAD_ONLY_REJECTED	ast	sequenceIndexUpdate	thc.runtime.UnsupportedCore: Unresolved external binding ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'
+SEQUENCE_LOAD_ONLY_REJECTED	ast	sequenceAggregate	thc.runtime.UnsupportedCore: Unresolved external binding ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'
+SEQUENCE_LOAD_ONLY_ACCEPTED	ast	sequenceLazyPayloads
+VERIFIED_LIBRARY	ast	compiled-warm	sequenceBuildViews	1	258103
+VERIFIED_LIBRARY	ast	compiled-warm	sequenceBuildViews	8	5435681624
+VERIFIED_LIBRARY	ast	compiled-warm	sequenceBuildViews	64	5420159424
+SEQUENCE_FIRST_WARM_GATE_PASSED	ast	rows=3	{"backend":"ast","sourceNotesEnabled":true,"sourceSpanCount":10115,"sourceRootCount":100,"instrumented":true,"thunkEvaluationsByLabel":{"xs":43,"argument thunk":3796},"compiledEntries":444,"leadingCaseReturns":0,"thunkEvaluations":3839,"thunkHits":57,"blackholes":0,"directCacheMisses":86,"indirectCalls":247,"tailBounces":0,"papAllocations":0,"localJoinTransfers":772,"selfTailReentries":980,"trampolineIterations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"indexed primitive slots; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

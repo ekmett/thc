@@ -1,0 +1,183 @@
+{
+  "schema": 1,
+  "conclusion": "non-reproduction; no linkage fix or Sequence coverage promotion",
+  "runtimeRevision": "81f5c296dd3e819444ab601ca1b4e84cf176c02b",
+  "historicalRevision": "ffdbca6f091b6ee48cd9baed2a8f61e3a6eb5a3d",
+  "sequenceArchiveSha256": "2cc2757b7d912520950a5de4f9bfeb05f3230dadddd343d79e30a35ecd10484a",
+  "originalNativeOracleSha256": "01fabd9fdc09bcf68a7fac03ecf0c93504ac3ef458a8c0ca521a460348ac2cd7",
+  "jdk": "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home",
+  "localMachineArchitecture": "arm64",
+  "javaVersion": "java version \"25.0.4.1\" 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)\n",
+  "engineOptions": {
+    "BackgroundCompilation": false,
+    "MultiTier": false,
+    "SingleTierCompilationThreshold": 10000,
+    "CompilationFailureAction": "Throw",
+    "CompilationTimeoutSeconds": 30,
+    "MaximumGraalGraphSize": 100000
+  },
+  "runs": [
+    {
+      "backend": "ast",
+      "heap": "ergonomic",
+      "command": [
+        "$JAVA_HOME/bin/java",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dthc.handoffSlabs=false",
+        "-cp",
+        "build/sequence-host-linkage/lifetime-classes:build/install/thc/lib/*",
+        "thc.LibraryCheckKt",
+        "build/sequence-host-linkage/lifetime-cases.json",
+        "ast"
+      ],
+      "exitStatus": 0,
+      "rawLog": "/private/tmp/thc-sequence-host-linkage/build/sequence-host-linkage/lifetime-ast-default.log",
+      "rawLogSha256": "b096c1d9cfcb28ad01a23f24026454ffa5cde9f2e10a31605399f03de44cf02e",
+      "comparisons": 7613,
+      "requiredCompiledChecks": 2599,
+      "precedingComparisons": 7610,
+      "precedingRequiredCompiledChecks": 2596,
+      "phases": {
+        "interpreted": 2562,
+        "compiled-warm": 75,
+        "after-compilation-cold": 2452,
+        "post-cold-compiled": 2524
+      },
+      "sequenceInterpretedRows": 38,
+      "sequenceCompiledWarmRows": 3,
+      "finalSequenceCompiledEntries": 444,
+      "emptyInputLoadPositives": 4,
+      "loadRejections": 3,
+      "unsupportedTraps": 0,
+      "blackholes": 0
+    },
+    {
+      "backend": "ast",
+      "heap": "6g",
+      "command": [
+        "$JAVA_HOME/bin/java",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Xmx6g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dthc.handoffSlabs=false",
+        "-cp",
+        "build/sequence-host-linkage/lifetime-classes:build/install/thc/lib/*",
+        "thc.LibraryCheckKt",
+        "build/sequence-host-linkage/lifetime-cases.json",
+        "ast"
+      ],
+      "exitStatus": 0,
+      "rawLog": "/private/tmp/thc-sequence-host-linkage/build/sequence-host-linkage/lifetime-ast-6g.log",
+      "rawLogSha256": "b096c1d9cfcb28ad01a23f24026454ffa5cde9f2e10a31605399f03de44cf02e",
+      "comparisons": 7613,
+      "requiredCompiledChecks": 2599,
+      "precedingComparisons": 7610,
+      "precedingRequiredCompiledChecks": 2596,
+      "phases": {
+        "interpreted": 2562,
+        "compiled-warm": 75,
+        "after-compilation-cold": 2452,
+        "post-cold-compiled": 2524
+      },
+      "sequenceInterpretedRows": 38,
+      "sequenceCompiledWarmRows": 3,
+      "finalSequenceCompiledEntries": 444,
+      "emptyInputLoadPositives": 4,
+      "loadRejections": 3,
+      "unsupportedTraps": 0,
+      "blackholes": 0
+    },
+    {
+      "backend": "bytecode",
+      "heap": "6g",
+      "command": [
+        "$JAVA_HOME/bin/java",
+        "--add-modules=jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Xmx6g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dthc.handoffSlabs=false",
+        "-cp",
+        "build/sequence-host-linkage/lifetime-classes:build/install/thc/lib/*",
+        "thc.LibraryCheckKt",
+        "build/sequence-host-linkage/lifetime-cases.json",
+        "bytecode"
+      ],
+      "exitStatus": 0,
+      "rawLog": "/private/tmp/thc-sequence-host-linkage/build/sequence-host-linkage/lifetime-bytecode-6g.log",
+      "rawLogSha256": "71f4b5c48f22d4fa20c20dd76731386999ac2f8a2b7931d1507857a925a68ca9",
+      "comparisons": 7613,
+      "requiredCompiledChecks": 2599,
+      "precedingComparisons": 7610,
+      "precedingRequiredCompiledChecks": 2596,
+      "phases": {
+        "interpreted": 2562,
+        "compiled-warm": 75,
+        "after-compilation-cold": 2452,
+        "post-cold-compiled": 2524
+      },
+      "sequenceInterpretedRows": 38,
+      "sequenceCompiledWarmRows": 3,
+      "finalSequenceCompiledEntries": 311,
+      "emptyInputLoadPositives": 4,
+      "loadRejections": 3,
+      "unsupportedTraps": 0,
+      "blackholes": 0
+    }
+  ],
+  "classes": {
+    "lifetime-classes/thc/LibraryCheckKt.class": "1070ade01ef119ec70a2146bf73d9a4037e32496966a4ee2b1b114535c47bd3b"
+  },
+  "runtimeJars": {
+    "annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+    "collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+    "jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+    "kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+    "nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+    "polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+    "thc-0.1-experiment.jar": "22800c36b34f2ab4d629cfe1c3566ed97f92e8eaf9215a466ded3d0ccc47ce18",
+    "truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+    "truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+    "truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+    "word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+  },
+  "retainedInputs": {
+    "lifetime-cases.json": "889b2afd1dfa92dedf9fa0753d5d5311a7d236cd9774488942800d88008e2056",
+    "oracle.tsv": "4206ae862b10b254b0e79ab3d8193766d41fb6aa14b656adcd067cf5dfbf4b21",
+    "lifetime-provenance.json": "74f22e142287603ee7caa7f3b8a8b5c6e9a4a5bbfa7a69b80d36bb15f00a47af",
+    "lifetime-src/LibraryCheck.kt": "90c5b6cdcbb16a55b44fe7c722b86b9633b77ffb648b8c46a5e743ef67611b90"
+  },
+  "sourceInspections": {
+    "aarch64-backend.javap": "dd1a6cb2ab147f4909b616f19012549d6dde9c7fbff6d53713935dd8d3f293c8",
+    "HotSpotTruffleRuntime.javap": "f527ebbf0e777b22adb205e9fd3d21d0b711a30357e33fc5eb1afff4bff85d9a",
+    "aarch64-boundary.javap": "34146e016c09e217615ddde55e3e7519161a25a5503849d97f8a54322d1a5b1e",
+    "OptimizedCallTarget.javap": "2eaf78307f862be2694be57ef319ff1a688e4c3548d0d99e9a5edd65d9374821",
+    "aarch64-boundary-inner.javap": "9fcf1ffd3b558d496dd91bcca67d1f2ac72ece3bee11cbb78162276bf4e10faa"
+  },
+  "limitations": [
+    "The original unrelated five-group Core exports/audits were not in the archive; current genuine exports are used with identical native prefix rows.",
+    "Sequence bytes are genuine equivalent exports, not exact CI artifact.",
+    "Four historical frontier positions now load successfully due to exact-empty input support; no guest execution is added there.",
+    "The first three warm calls preserve the old positive compiledEntries gate; the lifetime checker does not instrument host entry or establish exact native caller linkage.",
+    "No graph or event failure attribution exists for these passing controls.",
+    "The existing five-group checker retains its ordinary cold-training/recompile phases; Sequence is compiled once, with no settling or retry.",
+    "Only default handoff=false lifetime controls; prior isolated views covered both modes but are not lifetime proof.",
+    "Pinned compile/repair hook is unchanged from the historical failing runtime."
+  ],
+  "reproductionSources": {
+    "checker.patch": "66eff53e389e78150f302af696dfc09a90cfd30b4fa992eee76551bef8b8a554",
+    "compile.py": "e6b2343836028aa286ae69d744c5ff3bff36eba84f1136bba6e53585c98d8903",
+    "prepare.py": "3bf79421e0c27abda2c08e4aad5222bcbfe346c1b8e9ebcd43e9913368c79a13"
+  },
+  "checkerReproductionVerification": {
+    "guestReplays": 0,
+    "classCount": 1,
+    "byteIdenticalToCaptured": true
+  }
+}
