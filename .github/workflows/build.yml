@@ -61,8 +61,10 @@ jobs:
             -Dthc.handoffSlabs=true -cp 'build/install/thc/lib/*' \
             thc.LibraryCheckKt build/libraries/cases.json ast \
             2>&1 | tee build/libraries/check-handoff-ast.log
-      - name: Check exact dependency auditor
-        run: python3 scripts/test-audit-core.py
+      - name: Check exact dependency auditor and library frontier
+        run: |
+          python3 scripts/test-audit-core.py
+          python3 scripts/test-library-frontier.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
       - name: Run ordinary Map workload with explicit unsupported-path traps
