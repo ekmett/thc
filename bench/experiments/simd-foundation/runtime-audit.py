@@ -15,9 +15,11 @@ if mode == 'prepare':
     native_dir = root / 'build/simd' if core['nativeRows'] is not None else root / 'bench/experiments/simd-foundation/evidence-x86_64/native'
     native = json.loads((native_dir / 'provenance.json').read_text())
     assert native['nativeRows'] == 147
+    # Native GHC does not load THC's exporter plugin; validate its compiled Haskell
+    # inputs. The current exporter has independent hashed Core provenance below.
     for source in native['sources']:
-        if source['path'].startswith('compiler/'):
-            assert digest(root / source['path']) == source['sha256'], 'Native fixture/exporter source mismatch: ' + source['path']
+        if source['path'].startswith('compiler/test-fixtures/'):
+            assert digest(root / source['path']) == source['sha256'], 'Native fixture source mismatch: ' + source['path']
     oracle = native_dir / 'oracle.tsv'
     proof = next(a for a in native['artifacts'] if a['path'].endswith('/oracle.tsv'))
     assert digest(oracle) == proof['sha256'], 'Native oracle hash mismatch'
