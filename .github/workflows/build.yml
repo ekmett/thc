@@ -41,6 +41,15 @@ jobs:
           java --version
       - name: Build and test from source
         run: scripts/try.sh
+      - name: Require fresh native SIMD oracle and post-Tidy export on x86
+        if: runner.os == 'Linux'
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          proof = json.loads(Path('build/simd/provenance.json').read_text())
+          assert proof['nativeRows'] == 147 and proof['stages'] == ['pre', 'post'], proof
+          PY
       - name: Test opt-in dense handoff
         env:
           JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
@@ -65,6 +74,7 @@ jobs:
         run: |
           python3 scripts/test-audit-core.py
           python3 scripts/test-library-frontier.py
+          python3 scripts/test-core-vectors.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
       - name: Run ordinary Map workload with explicit unsupported-path traps
@@ -93,6 +103,7 @@ jobs:
             build/integer-primops/manifest.json
             build/integer-primops/oracle.tsv
             build/integer-primops/*.audit.json
+            build/simd/
             build/corpus/corpus.json
             build/corpus/oracle.tsv
             build/corpus/structure.json

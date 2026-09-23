@@ -947,6 +947,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
                          entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
+        CoreRepresentations.requireNoVector(resultProof, "function result")
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val scope = Scope(FrameLayout())
         val free = freeVariables(expression)
@@ -983,6 +984,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val body = compile(expression, scope, true)
         val handoff = HandoffEntry.create(language, scope.layout, args.map(CoreRepresentations::binder), resultProof, captures != null)
         val effectiveResult = body.representation.refine(resultProof)
+        CoreRepresentations.requireNoVector(effectiveResult, "function result")
         val tuple = if (effectiveResult.isTuple) TupleShape(effectiveResult, language as thc.Language) else null
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<tuple return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
@@ -1043,6 +1045,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
+            CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
             scope.joins[id]?.let { joinJump(it, emptyList(), emptyList<Boolean>(), scope) }
                 ?: scope.locals[id]?.let {
                     if (it.tupleSlots != null) TupleLocalRead(TupleShape(it.proof, language as thc.Language), it.tupleSlots)
@@ -1065,7 +1068,16 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
-            if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
+            if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
+                val name = fn[1] as String
+                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                val operands = args.map { compile(it, scope, false) }.toTypedArray()
+                when (name) {
+                    "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })
+                    "unpackInt64X2#" -> VectorUnpack(operands[0])
+                    else -> VectorOperation(name, operands)
+                }
+            } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language as thc.Language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size)
@@ -1078,6 +1090,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "var" && fn[1] in scope.joins) {
                 joinJump(scope.joins.getValue(fn[1] as String), args, flags, scope, callStrict)
             } else {
+            CoreRepresentations.requireNoVector(tupleProof, "call result")
             val constructorStrictFields = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size)
                 strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {

@@ -28,7 +28,7 @@ require(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "th
 val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-"}UseCompactObjectHeaders"
 application {
     mainClass.set("thc.MainKt")
-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
+    applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
 }
 tasks.test {
     useJUnitPlatform()
@@ -41,6 +41,7 @@ tasks.test {
             "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
+            "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
@@ -62,3 +63,6 @@ tasks.register<JavaExec>("probe") {
     jvmArgs(application.applicationDefaultJvmArgs)
     workingDir(projectDir)
 }
+
+// Vector intrinsics are isolated in Java; guest values retain primitive lane fields.
+tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }

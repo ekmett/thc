@@ -184,7 +184,13 @@
     "uncheckedShiftRL#": 2,
     "plusAddr#": 2,
     "indexCharOffAddr#": 2,
-    "raise#": 1
+    "raise#": 1,
+    "packInt64X2#": 1,
+    "unpackInt64X2#": 1,
+    "broadcastInt64X2#": 1,
+    "plusInt64X2#": 2,
+    "minusInt64X2#": 2,
+    "negateInt64X2#": 1
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -195,5 +201,12 @@
   ],
   "aggregateJoinResults": [
     "unboxed-tuple"
+  ],
+  "vectorRepresentations": [
+    {
+      "lanes": 2,
+      "element": "Int64ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    }
   ]
 }

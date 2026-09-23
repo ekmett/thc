@@ -216,6 +216,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
                          entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
+        CoreRepresentations.requireNoVector(resultProof, "function result")
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val context = FunctionContext(args.size, entryStrict.copyOf())
         val scope = Scope(context, source = outer.source)
@@ -224,6 +225,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         args.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "formal argument") }
         if ((free - argumentIds).any { it in outer.tuples }) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
         val captureSources = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
+        captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
         context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry) }
         context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
             captureSources.map { it.directLong }.toBooleanArray(),
@@ -239,6 +241,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
             ::dataLayout, sources, compiled.source)
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
+        CoreRepresentations.requireNoVector(body.proof, "function result")
         context.tuple = if (body.proof.isTuple) TupleShape(body.proof, language) else null
         return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
     }
@@ -363,6 +366,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expression {
         CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
+        if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireNoVector(it.proof, "argument") }
         if (expr[0] == "var" && expr[1] in scope.tuples) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (argument)")
         if (!lifted) return force(compile(expr, scope, false))
         if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false)
@@ -618,6 +622,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expression = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
+            CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
             scope.tuples[id]?.let { (proof, fields) ->
                 TupleShape.requireCompatible(proof, CoreRepresentations.expression(expr))
                 tupleExpression(proof) { e, destination ->
@@ -643,7 +648,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
-            if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
+            if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
+                val name = fn[1] as String
+                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size) throw RuntimeFault("Tuple constructor arity mismatch")
@@ -666,6 +675,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     e.builder.endBlock()
                 }
             } else {
+            CoreRepresentations.requireNoVector(tupleProof, "call result")
             val strict = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size) strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
                 "lam" -> CoreEntries.lambda(fn)
@@ -874,6 +884,32 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endBlock()
             }
         }
+    }
+
+    private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackInt64X2#" -> tupleExpression(CoreVectors.unpacked) { e, destination ->
+            e.builder.beginVectorUnpack(destination[0], destination[1])
+            operands[0].emit(e)
+            e.builder.endVectorUnpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packInt64X2#" -> {
+                    b.beginBlock()
+                    val lanes = List(2) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorPack(); lanes.forEach(b::emitLoadLocal); b.endVectorPack()
+                    b.endBlock()
+                }
+                "broadcastInt64X2#" -> { b.beginVectorBroadcast(); operands[0].emit(e); b.endVectorBroadcast() }
+                "negateInt64X2#" -> { b.beginVectorNegate(); operands[0].emit(e); b.endVectorNegate() }
+                else -> {
+                    b.beginVectorBinary(name == "minusInt64X2#")
+                    operands.forEach { it.emit(e) }; b.endVectorBinary()
+                }
+            }
+        }, CoreVectors.proof)
     }
 
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
