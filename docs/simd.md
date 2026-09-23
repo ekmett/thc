@@ -80,6 +80,12 @@ Per-row compiled-entry assertions belong to the separate instrumented JVM tests.
 An accepted type or the earlier Int64 mechanism probe alone does not establish
 these Int32 production properties.
 
+The [four AArch64 Int32X4 production controls](../bench/experiments/simd-foundation/runtime-int32x4-aarch64/README.md)
+match the source-verified x86 native rows and show packed `V128_DWORD` ADD/SUB
+without surviving carrier allocation, field traffic, or residual calls. Lane
+extraction/reinsertion still appears between some operations. Their runtime
+revision and the separate local pre-Core/native-x86 origins are recorded.
+
 The [JDK 25 Vector API documentation](https://docs.oracle.com/en/java/javase/25/docs/api/jdk.incubator.vector/jdk/incubator/vector/package-summary.html)
 explains its compiler-dependent SIMD lowering and scalar fallback. The pinned
 Graal implementation and its generated code determine which path THC actually
