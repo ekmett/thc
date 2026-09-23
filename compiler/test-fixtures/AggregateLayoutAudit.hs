@@ -1,9 +1,11 @@
 {-# LANGUAGE DataKinds, ExplicitForAll, KindSignatures, MagicHash #-}
 {-# LANGUAGE NoImplicitPrelude, PolyKinds, TypeFamilies, UnboxedSums, UnboxedTuples, UnliftedNewtypes #-}
+{-# LANGUAGE StandaloneKindSignatures, UnliftedDatatypes #-}
 -- Metadata-only coverage: these declarations are checked by native GHC, but
 -- their unboxed boundaries are deliberately rejected by the THC runtime.
 module AggregateLayoutAudit where
-import GHC.Exts (Int#, Word#, Float#, Double#, State#, Proxy#, RealWorld, RuntimeRep(..), Levity(..), TYPE, raise#)
+import GHC.Exts (Int, Int#, Word#, Float#, Double#, State#, Proxy#, RealWorld, RuntimeRep(..), Levity(..), TYPE, raise#)
+import GHC.Tuple (Solo)
 
 data Box = Box Int#
 newtype Wrapped = Wrapped Box
@@ -109,3 +111,44 @@ stateAliasIdentity x = x
 {-# OPAQUE proxyIdentity #-}
 proxyIdentity :: Proxy# a -> Proxy# a
 proxyIdentity x = x
+
+-- Boxedness and liftedness are independent. These are single boxed objects,
+-- including the unlifted product; none has an unboxed aggregate return layout.
+{-# OPAQUE boxedPairIdentity #-}
+boxedPairIdentity :: (Int, Int) -> (Int, Int)
+boxedPairIdentity x = x
+
+{-# OPAQUE boxedUnitIdentity #-}
+boxedUnitIdentity :: () -> ()
+boxedUnitIdentity x = x
+
+{-# OPAQUE boxedSoloIdentity #-}
+boxedSoloIdentity :: Solo Box -> Solo Box
+boxedSoloIdentity x = x
+
+type UnliftedProduct :: TYPE ('BoxedRep 'Unlifted)
+data UnliftedProduct = UnliftedProduct Box Box
+
+{-# OPAQUE unliftedProductIdentity #-}
+unliftedProductIdentity :: UnliftedProduct -> UnliftedProduct
+unliftedProductIdentity x = x
+
+{-# OPAQUE bottomBox #-}
+bottomBox :: Box
+bottomBox = bottomBox
+
+{-# OPAQUE boxedLazy #-}
+boxedLazy :: Int# -> (Box, Box)
+boxedLazy x = (Box x, bottomBox)
+
+{-# OPAQUE boxedLazyUse #-}
+boxedLazyUse :: Int# -> Int#
+boxedLazyUse x = case boxedLazy x of (Box n, _) -> n
+
+{-# OPAQUE unliftedLazy #-}
+unliftedLazy :: Int# -> UnliftedProduct
+unliftedLazy x = UnliftedProduct (Box x) bottomBox
+
+{-# OPAQUE unliftedLazyUse #-}
+unliftedLazyUse :: Int# -> Int#
+unliftedLazyUse x = case unliftedLazy x of UnliftedProduct (Box n) _ -> n
