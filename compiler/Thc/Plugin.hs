@@ -8,7 +8,7 @@ import qualified Thc.Demands as Demands
 import Thc.Wired (wiredApplication, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
-import GHC.Types.RepType (typePrimRep_maybe, unwrapType)
+import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
 import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
 import GHC.Core.Utils (exprIsHNF, exprOkForSpecEval)
@@ -16,6 +16,7 @@ import GHC.Builtin.PrimOps (primOpOcc)
 import qualified Data.ByteString as BS
 import Data.Char (ord)
 import Data.List (intercalate, nubBy, stripPrefix)
+import qualified Data.List.NonEmpty as NE
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
 import Data.Maybe (mapMaybe)
 import System.IO.Unsafe (unsafePerformIO)
@@ -183,7 +184,8 @@ typeRep ty evaluated = O $
         -- newtype aliases of known primitives scalar after unwrapType.
         | isPrimTyCon tc -> []
       _ -> case aggregateRuntimeKind ty of
-        Just (tag,field) -> [("aggregate",S tag),(field,Z)]
+        Just (tag,field) -> [("aggregate",S tag),(field,Z)] ++
+          if tag == "unboxed-sum" then [("tagSlot",num 0),("alternativeSlots",Z)] else []
         Nothing -> []
     -- GHC's kind-aware helper removes the RuntimeRep arguments, including
     -- representation variables. The remaining types are the ordered logical
@@ -191,7 +193,28 @@ typeRep ty evaluated = O $
     -- In particular an empty tuple and State# both use zero registers, but only
     -- the former has an aggregate boundary. Nested aggregates keep that shape.
     aggregate tag field args =
-      [("aggregate",S tag),(field,A (map component (dropRuntimeRepArgs args)))]
+      let types = dropRuntimeRepArgs args
+      in [("aggregate",S tag),(field,A (map component types))] ++
+         if tag == "unboxed-sum" then sumLayout types else []
+    -- These are physical projection indices, separate from the recursive
+    -- logical alternatives above. GHC's unariser uses these same APIs for
+    -- construction and case binders; its payload indices exclude the tag.
+    sumLayout types = [("tagSlot",num 0),("alternativeSlots",maybe Z (A . map (A . map num)) layout)]
+      where
+        layout = do
+          alternatives <- traverse typePrimReps types
+          physical <- reps
+          -- primRepSlot is partial for levity-polymorphic BoxedRep. Never call
+          -- it (or the merger which calls it) on unresolved representation.
+          if all knownSlot (concat alternatives) then do
+            let slots = ubxSumRepType alternatives
+            if physical == map slotPrimRep (NE.toList slots)
+              then Just [map (+1) (layoutUbxSum (NE.tail slots) (map primRepSlot alternative))
+                        | alternative <- alternatives]
+              else Nothing
+          else Nothing
+        knownSlot (BoxedRep Nothing) = False
+        knownSlot _ = True
     -- An evaluated tuple/sum does not evaluate its lifted payloads. This is a
     -- type layout, so only an unlifted component supplies a WHNF guarantee;
     -- unknown RuntimeRep/levity and lifted components stay conservative.
@@ -294,7 +317,7 @@ bindingGroup d b = map (binding rhsCtx) (flattenBind b)
       Rec vs -> d { recursiveIds = extendVarSetList (recursiveIds d) (map fst vs) }
 
 constructor :: Ctx -> DataCon -> J
-constructor d con = O
+constructor d con = O $
   [ ("id",S (nameKey (dataConName con))), ("name",S (occNameString (nameOccName (dataConName con))))
   , ("arity",num (dataConRepArity con)), ("tag",num (dataConTag con))
   , ("kind",S (if isUnboxedTupleDataCon con then "unboxed-tuple" else if isUnboxedSumDataCon con then "unboxed-sum" else if isNewTyCon (dataConTyCon con) then "newtype" else "boxed"))
@@ -311,7 +334,7 @@ constructor d con = O
   -- strict/unlifted-field obligation has been enforced. A lazy known-data
   -- field can still hold a THC thunk, so its evaluated flag remains false.
   , ("fieldTypes",A (zipWith fieldType workerTypes workerStrict))
-  ]
+  ] ++ [("sumArity",num (length (tyConDataCons (dataConTyCon con)))) | isUnboxedSumDataCon con]
   where
     workerTypes = map scaledThing (dataConRepArgTys con)
     marks = dataConRepStrictness con

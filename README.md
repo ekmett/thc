@@ -88,7 +88,8 @@ evaluated once.
 the suite; missing dependencies and unsupported constructs remain explicit.
 
 [Library coverage](docs/library-coverage.md) adds ordinary `Data.IntMap.Strict`
-and `Data.IntSet` operations, bitmap primitives and unsigned word boundaries,
+and `Data.IntSet` operations, four public `Data.Sequence` workloads, bitmap
+primitives and unsigned word boundaries,
 checked against native GHC and independent models. `scripts/try-libraries.sh`
 runs those checks on both backends.
 The [unsigned scalar primop slice](docs/integer-primops.md) adds native-checked
@@ -115,6 +116,10 @@ pack/length/unpack/uncons with ordered writes and contained copies and native/mo
 public `UArray`/`STUArray` examples with native-endian, full-width values.
 [Double-array operations](docs/double-arrays.md) add typed floating storage,
 public Double arrays and native-checked bit movement through tuple-returning reads.
+[Int32/Word32-array operations](docs/int32-arrays.md) add four-byte signed and
+unsigned elements, public accumulation/ST examples and cross-element byte aliases.
+[Float/Word-array operations](docs/float-word-arrays.md) add typed four-byte Float
+and eight-byte machine Word storage, public examples and native bit-movement checks.
 
 Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
 while preserving lazy lifted elements and closures.

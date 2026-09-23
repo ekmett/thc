@@ -42,6 +42,7 @@ tasks.test {
             "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
+            "sum-layout/**/*.json", "sum-layout/*.tsv", "sum-layout/native/**",
             "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
             "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
@@ -56,6 +57,11 @@ tasks.test {
             "int-arrays/NativeIntArray.hs", "int-arrays/native/int-array-oracle",
             "double-arrays/**/*.json", "double-arrays/oracle.tsv", "double-arrays/expected.tsv",
             "double-arrays/NativeDoubleArray.hs", "double-arrays/native/double-array-oracle",
+            "int32-arrays/**/*.json", "int32-arrays/oracle.tsv", "int32-arrays/expected.tsv",
+            "int32-arrays/literal-oracle.tsv",
+            "int32-arrays/NativeInt32Array.hs", "int32-arrays/native/int32-array-oracle",
+            "float-word-arrays/**/*.json", "float-word-arrays/oracle.tsv", "float-word-arrays/expected.tsv",
+            "float-word-arrays/NativeFloatWordArray.hs", "float-word-arrays/native/float-word-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
@@ -73,7 +79,10 @@ tasks.test {
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-double-arrays.py", "test-double-array-model.py",
-            "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
+            "prepare-int32-arrays.py", "test-int32-array-model.py",
+            "prepare-float-word-arrays.py", "test-float-word-array-model.py",
+            "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
+            "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)

@@ -1,0 +1,302 @@
+{
+  "sequenceAggregate": {
+    "accepted": false,
+    "roots": [
+      "main:THC.SequenceWorkload.sequenceAggregate"
+    ],
+    "issues": [],
+    "missingGlobals": [
+      {
+        "id": "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceAggregate",
+          "main:THC.SequenceWorkload.sequenceAggregate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+          "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "path": "/expr/body/alternatives/0/body/alternatives/0/body/arguments/1/scrutinee/function"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceAggregate",
+          "main:THC.SequenceWorkload.sequenceAggregate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+            "path": "/expr/body/scrutinee"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceAggregate",
+          "main:THC.SequenceWorkload.sequenceAggregate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Show.itos",
+          "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/0/body/function"
+          },
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/1/body/alternatives/0/body/arguments/1/function"
+          },
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/function"
+          },
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/arguments/1/function"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceAggregate",
+          "main:THC.SequenceWorkload.sequenceAggregate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+          "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+            "path": "/expr/body/arguments/0/arguments/0/alternatives/0/body"
+          }
+        ]
+      }
+    ]
+  },
+  "sequenceAppend": {
+    "accepted": true,
+    "roots": [
+      "main:THC.SequenceWorkload.sequenceAppend"
+    ],
+    "issues": [],
+    "missingGlobals": []
+  },
+  "sequenceBuild": {
+    "accepted": true,
+    "roots": [
+      "main:THC.SequenceWorkload.sequenceBuild"
+    ],
+    "issues": [],
+    "missingGlobals": []
+  },
+  "sequenceEnds": {
+    "accepted": true,
+    "roots": [
+      "main:THC.SequenceWorkload.sequenceEnds"
+    ],
+    "issues": [],
+    "missingGlobals": []
+  },
+  "sequenceIndexUpdate": {
+    "accepted": false,
+    "roots": [
+      "main:THC.SequenceWorkload.sequenceIndexUpdate"
+    ],
+    "issues": [],
+    "missingGlobals": [
+      {
+        "id": "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceIndexUpdate",
+          "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+          "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "path": "/expr/body/alternatives/0/body/alternatives/0/body/arguments/1/scrutinee/function"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceIndexUpdate",
+          "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+            "path": "/expr/body/scrutinee"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceIndexUpdate",
+          "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Show.itos",
+          "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/0/body/function"
+          },
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/1/body/alternatives/0/body/arguments/1/function"
+          },
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/function"
+          },
+          {
+            "owner": "ghc-internal:GHC.Internal.Show.itos",
+            "path": "/expr/body/alternatives/1/body/alternatives/1/body/arguments/1/alternatives/0/body/arguments/1/function"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceIndexUpdate",
+          "main:THC.SequenceWorkload.sequenceIndexUpdate2",
+          "main:THC.SequenceWorkload.$windexUpdateScore",
+          "main:Data.Sequence.Internal.$wlvl",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+          "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+            "path": "/expr/body/arguments/0/arguments/0/alternatives/0/body"
+          }
+        ]
+      }
+    ]
+  },
+  "sequenceLazyPayloads": {
+    "accepted": true,
+    "roots": [
+      "main:THC.SequenceWorkload.sequenceLazyPayloads"
+    ],
+    "issues": [],
+    "missingGlobals": []
+  },
+  "sequenceSplit": {
+    "accepted": false,
+    "roots": [
+      "main:THC.SequenceWorkload.sequenceSplit"
+    ],
+    "issues": [],
+    "missingGlobals": [
+      {
+        "id": "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceSplit",
+          "main:THC.SequenceWorkload.sequenceSplit2",
+          "main:THC.SequenceWorkload.$wsplitScore",
+          "main:Data.Sequence.Internal.$wsplitTreeE",
+          "main:Data.Sequence.Internal.$wsplitTreeN_rwz7",
+          "main:Data.Sequence.Internal.lvl84_rwz6",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+          "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+            "path": "/expr/body/alternatives/0/body/alternatives/0/body/arguments/1/scrutinee/function"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceSplit",
+          "main:THC.SequenceWorkload.sequenceSplit2",
+          "main:THC.SequenceWorkload.$wsplitScore",
+          "main:Data.Sequence.Internal.$wsplitTreeE",
+          "main:Data.Sequence.Internal.$wsplitTreeN_rwz7",
+          "main:Data.Sequence.Internal.lvl84_rwz6",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+          "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+            "path": "/expr/body/scrutinee"
+          }
+        ]
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+        "reachableVia": [
+          "main:THC.SequenceWorkload.sequenceSplit",
+          "main:THC.SequenceWorkload.sequenceSplit2",
+          "main:THC.SequenceWorkload.$wsplitScore",
+          "main:Data.Sequence.Internal.$wsplitTreeE",
+          "main:Data.Sequence.Internal.$wsplitTreeN_rwz7",
+          "main:Data.Sequence.Internal.lvl84_rwz6",
+          "ghc-internal:GHC.Internal.Err.error",
+          "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+          "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+          "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+        ],
+        "references": [
+          {
+            "owner": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+            "path": "/expr/body/arguments/0/arguments/0/alternatives/0/body"
+          }
+        ]
+      }
+    ]
+  }
+}

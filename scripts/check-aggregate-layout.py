@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+from sum_layout_model import alternative_slots
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/aggregate-layout'
@@ -52,7 +53,8 @@ def tup(children, reps, evaluated=True):
 
 
 def summ(children, reps, evaluated=True):
-    return aggregate('unboxed-sum', children, reps, evaluated)
+    return dict(aggregate('unboxed-sum', children, reps, evaluated), tagSlot=0,
+                alternativeSlots=alternative_slots(children, reps))
 
 
 LIFTED = 'BoxedRep (Just Lifted)'
@@ -216,7 +218,7 @@ def prepare():
             THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'),
             THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, Path(__file__).resolve(), ROOT / 'scripts/audit-core.py',
-               ROOT / 'scripts/core-capabilities.json', ROOT / 'compiler/build.sh',
+               ROOT / 'scripts/core-capabilities.json', ROOT / 'scripts/sum_layout_model.py', ROOT / 'compiler/build.sh',
                ROOT / 'compiler/export.sh', ROOT / 'compiler/toolchain.sh',
                *sorted((ROOT / 'compiler/Thc').glob('*.hs'))]
     artifacts = [p for directory in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')

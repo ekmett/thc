@@ -9,6 +9,7 @@ python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-sqrt-audit.py
 sh scripts/prepare-aggregate-frontier.sh
+python3 scripts/check-sum-layout.py --prepare
 python3 scripts/prepare-tuple-return-audit.py
 python3 scripts/prepare-state-tuple-audit.py
 python3 scripts/prepare-empty-tuple-input-audit.py
@@ -20,6 +21,8 @@ python3 scripts/prepare-boxed-arrays.py
 python3 scripts/prepare-mutvar.py
 python3 scripts/prepare-int-arrays.py
 python3 scripts/prepare-double-arrays.py
+python3 scripts/prepare-int32-arrays.py
+python3 scripts/prepare-float-word-arrays.py
 # GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately
 # validates pre-Core/model execution; the x86 job also requires native + post-Tidy.
 for simd_vector in int64x2 int32x4; do

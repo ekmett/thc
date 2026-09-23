@@ -309,13 +309,15 @@ class Audit:
 
     @staticmethod
     def literal_rep(expr):
-        # Carrier kinds are intrinsic to literals, but do not fabricate exact
-        # GHC register proofs (IntRep, WordRep, etc.) for legacy Core.
+        # New int32 and existing word32 literals retain exact narrow identity.
+        # Other legacy literal forms keep their historical carrier-only proof.
         if not isinstance(expr, list) or not expr:
             return None
         if expr[0] == 'void':
             return dict(kind='void', evaluated=True)
         if expr[0] == 'lit' and len(expr) >= 3:
+            if expr[1] in ('int32', 'word32'):
+                return dict(kind='long', primReps=['Int32Rep' if expr[1] == 'int32' else 'Word32Rep'], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
                     **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
                                      'word8', 'word16', 'word32', 'word64'), 'long')}.get(expr[1])
@@ -328,7 +330,15 @@ class Audit:
             return None
         index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4, 'case': 4, 'con': 3, 'prim': 2, 'void': 1}.get(expr[0])
         proof = expr[index].get('rep') if index is not None and len(expr) > index and isinstance(expr[index], dict) else None
-        return proof if proof is not None else cls.literal_rep(expr)
+        intrinsic = cls.literal_rep(expr)
+        # Noinline/unary-class erasure can clear the certificate, but literal
+        # syntax still constrains primitive operands and lexical comparisons.
+        # expression_metadata independently rejects malformed raw records.
+        if (intrinsic is not None and intrinsic.get('primReps') is not None and
+                isinstance(proof, dict) and proof.get('kind') == 'unknown' and proof.get('primReps') is None and
+                not cls.is_tuple(proof) and not is_vector(proof)):
+            return intrinsic
+        return proof if proof is not None else intrinsic
 
     def scalar_primitive(self, name, arguments, result, bound, owner, path):
         signature = SCALAR_SIGNATURES.get(name)
@@ -434,6 +444,11 @@ class Audit:
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
+                if expr[1] in ('int32', 'word32'):
+                    proof, intrinsic = self.expression_rep(expr), self.literal_rep(expr)
+                    if (not isinstance(proof, dict) or proof.get('kind') != 'long' or
+                            proof.get('primReps') != intrinsic['primReps'] or self.is_tuple(proof) or is_vector(proof)):
+                        self.issue('scalar-representation', owner, path + '/rep', '32-bit literal requires exact narrow identity')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':
