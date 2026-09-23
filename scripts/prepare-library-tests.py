@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tarfile
 import urllib.request
+from sequence_model import ENTRIES as SEQUENCE_ENTRIES, sequence_model
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/libraries'
@@ -164,6 +165,9 @@ def main():
     intset_primitive_cold = sorted((set(primitive_cold) |
                                    {signed(WORD_MASK ^ (1 << bit)) for bit in range(64)} |
                                    {signed(0xaaaaaaaaaaaaaaaa), 0x5555555555555555}) - set(primitive_warm))
+    sequence_supported = {'sequenceBuildViews', 'sequenceDequeViews', 'sequenceAppendViews', 'sequenceLazyLength'}
+    sequence_cold = sorted((set(range(18)) | {-3, -(1 << 63), (1 << 63) - 1,
+        20, 21, 22, 24, 25, 26, 33, 34, 159, 160, 161, 255, 256, 257, 512, 1024}) - set(warm))
     groups = [
         dict(id='set', module='THC.SetWorkload', source='examples/THC/SetWorkload.hs',
              execution='frontier', postTidy=True, names=['setAggregate'], warm=warm, cold=cold),
@@ -180,6 +184,8 @@ def main():
                  'unsignedLessEqualZero', 'unsignedLessEqualMaxSigned',
                  'unsignedLessEqualSignBit', 'unsignedLessEqualAllOnes'],
              warm=primitive_warm, cold=intset_primitive_cold),
+        dict(id='sequence', module='THC.SequenceWorkload', source='examples/THC/SequenceWorkload.hs',
+             execution='frontier', postTidy=True, names=list(SEQUENCE_ENTRIES), warm=warm, cold=sequence_cold),
     ]
     violations = []
     for group in groups:
@@ -219,6 +225,26 @@ def main():
             if any(item['id'].startswith('main:') for item in audit['missingGlobals']):
                 violations.append('set: source-library definitions must resolve at the post-Tidy boundary')
         group['audit'] = str(audit_path)
+        if group['id'] == 'sequence':
+            # One real source export, but distinct public-API slices have distinct
+            # frontiers. Acceptance is checked against an explicit expectation.
+            group['entryAudits'] = {}
+            for name in group['names']:
+                entry_path = output / (name + '.audit.json')
+                result = subprocess.run([sys.executable, 'scripts/audit-core.py', '--module-list', str(manifest),
+                                         '--entry', name, '--output', str(entry_path)], cwd=ROOT)
+                if result.returncode not in [0, 1]:
+                    raise RuntimeError('Sequence capability auditor failed: ' + str(result.returncode))
+                entry_audit = json.loads(entry_path.read_text())
+                execution = 'supported' if name in sequence_supported else 'frontier'
+                if entry_audit['accepted'] != (execution == 'supported'):
+                    violations.append(name + ': declared support disagrees with ' + str(entry_path))
+                if any(item['id'].startswith('main:') for item in entry_audit['missingGlobals']):
+                    violations.append(name + ': source-library definitions must resolve at the post-Tidy boundary')
+                if execution == 'frontier' and not any(issue['code'] == 'aggregate-representation' and
+                        issue['detail'] == 'unboxed-tuple' for issue in entry_audit['issues']):
+                    violations.append(name + ': expected aggregate frontier changed; review coverage')
+                group['entryAudits'][name] = dict(audit=str(entry_path), execution=execution)
         write_json(output / 'provenance.json', {
             'source': CONTAINERS_URL, 'sha256': CONTAINERS_SHA, 'sourcePatches': [],
             'containersUnitPolicy': 'Unmodified sources compiled with workload in the same main home unit',
@@ -229,6 +255,7 @@ def main():
             'initialMissingDefinitions': closure['missingDefinitions'],
             'bootExports': json.loads((BUILD / 'boot/boot-provenance.json').read_text()),
             'strictAccepted': audit['accepted'], 'execution': group['execution'],
+            'entryAudits': group.get('entryAudits', {}),
         })
     native = BUILD / 'native'
     native.mkdir(exist_ok=True)
@@ -240,6 +267,7 @@ def main():
         group['entries'] = []
         for name in group.pop('names'):
             entry = dict(name=name)
+            entry.update(group.get('entryAudits', {}).get(name, {}))
             for phase in ['warm', 'cold']:
                 entry[phase] = []
                 for value in group[phase]:
@@ -250,13 +278,15 @@ def main():
                     actual = int(fields[2])
                     model = {'setAggregate': set_model, 'intMapAggregate': intmap_model,
                              'intSetAggregate': intset_model}.get(name)
-                    expected = model(value) if model else primitive_model(name, value)
+                    expected = (sequence_model(name, value) if group['id'] == 'sequence' else
+                                model(value) if model else primitive_model(name, value))
                     if actual != expected:
                         raise RuntimeError(f'{name}({value}): native {actual} != independent model {expected}')
                     entry[phase].append([value, actual])
                     rows.append(row)
             group['entries'].append(entry)
         del group['warm'], group['cold']
+        group.pop('entryAudits', None)
     (BUILD / 'oracle.tsv').write_text('\n'.join(rows) + '\n')
     write_json(BUILD / 'oracle-validation.json', dict(compiler='9.14.1', nativeRows=len(rows),
                allNativeResultsMatchIndependentModels=True, staticSupportViolations=violations))
@@ -266,6 +296,7 @@ def main():
         ROOT / 'src/main/kotlin/thc/LibraryCheck.kt', ROOT / 'compiler/build.sh',
         ROOT / 'compiler/export.sh', ROOT / 'compiler/export-boot.py', ROOT / 'compiler/toolchain.sh',
         ROOT / 'compiler/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
+        ROOT / 'scripts/sequence_model.py',
     }
     inputs.update((ROOT / 'compiler/Thc').glob('*.hs'))
     inputs.update(path for path in containers.rglob('*') if path.is_file())
@@ -275,6 +306,7 @@ def main():
     for group in groups:
         artifacts.update(map(Path, group['modules']))
         artifacts.update([Path(group['audit']), BUILD / group['id'] / 'provenance.json'])
+        artifacts.update(Path(entry['audit']) for entry in group['entries'] if 'audit' in entry)
     write_json(BUILD / 'cases.json', dict(schema=1, groups=groups,
                inputHashes={str(path): digest(path) for path in sorted(inputs)},
                artifactHashes={str(path): digest(path) for path in sorted(artifacts)}))

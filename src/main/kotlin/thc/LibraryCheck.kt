@@ -32,7 +32,11 @@ fun main(args: Array<String>) {
             "unsignedLessThanMaxSigned", "unsignedLessThanSignBit", "unsignedLessThanAllOnes"),
         "intset" to setOf("intSetAggregate"),
         "intset-primops" to setOf("populationCount", "countTrailingZeros", "unsignedLessEqualZero",
-            "unsignedLessEqualMaxSigned", "unsignedLessEqualSignBit", "unsignedLessEqualAllOnes"))
+            "unsignedLessEqualMaxSigned", "unsignedLessEqualSignBit", "unsignedLessEqualAllOnes"),
+        "sequence" to setOf("sequenceBuild", "sequenceEnds", "sequenceAppend", "sequenceSplit",
+            "sequenceIndexUpdate", "sequenceAggregate", "sequenceLazyPayloads", "sequenceBuildViews",
+            "sequenceDequeViews", "sequenceAppendViews", "sequenceLazyLength"))
+    val sequenceSupported = setOf("sequenceBuildViews", "sequenceDequeViews", "sequenceAppendViews", "sequenceLazyLength")
     require(groups.size == expectedEntries.size && groups.map { it["id"] }.toSet() == expectedEntries.keys)
     val manifestRows = groups.flatMap { group ->
         val entries = group["entries"] as List<Map<String, Any?>>
@@ -54,15 +58,26 @@ fun main(args: Array<String>) {
     fun count(function: Value, name: String) = (diagnostics(function)[name] as Number).toLong()
     for (group in groups) {
         val modules = (group["modules"] as List<String>).also { require(it.isNotEmpty()) }
-        val execution = group["execution"] as String
-        require(execution in setOf("supported", "diagnostic", "frontier"))
-        val diagnostic = execution == "diagnostic"
+        val groupExecution = group["execution"] as String
+        require(groupExecution in setOf("supported", "diagnostic", "frontier"))
         val audit = Json.parse(File(group["audit"] as String).readText()) as Map<String, Any?>
-        require(audit["accepted"] == (execution == "supported")) { "Static audit disagrees with the declared coverage frontier" }
+        require(audit["accepted"] == (groupExecution == "supported")) { "Static audit disagrees with the declared coverage frontier" }
         val entries = group["entries"] as List<Map<String, Any?>>
         require(entries.isNotEmpty())
         for (entry in entries) {
             val name = entry["name"] as String
+            val execution = if (group["id"] == "sequence") {
+                val declared = if (name in sequenceSupported) "supported" else "frontier"
+                require(entry["execution"] == declared)
+                val path = entry["audit"] as String
+                require((cases["artifactHashes"] as Map<String, String>).containsKey(path))
+                val entryAudit = Json.parse(File(path).readText()) as Map<String, Any?>
+                require(entryAudit["accepted"] == (declared == "supported")) {
+                    "Static entry audit disagrees with the declared Sequence frontier: $name"
+                }
+                declared
+            } else groupExecution
+            val diagnostic = execution == "diagnostic"
             fun rows(key: String): List<Pair<Long, Long>> = (entry[key] as List<List<Number>>).map {
                 require(it.size == 2)
                 it[0].toLong() to it[1].toLong()

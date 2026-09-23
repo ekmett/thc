@@ -103,6 +103,43 @@ raising limits or adding Haskell optimizer fences. Regression tests exercise
 deep acyclic nesting, actual cloned compiled targets, shadowed ancestor jumps,
 full-width values and recursive/nonrecursive reference-result laziness.
 
+## Data.Sequence: executable slices and aggregate frontiers
+
+`THC.SequenceWorkload` exercises ordinary public `Data.Sequence` APIs from the
+same pinned, unmodified containers sources. Eleven entries share one post-Tidy
+export, with a separate strict audit and explicit support declaration for each
+entry. The full bundle's rejected audit cannot hide either supported slices or
+unsupported operations. All per-entry reports are fingerprinted artifacts.
+
+Four entries have accepted strict audits with no missing globals or capability
+issues: `sequenceBuildViews` builds with `fromList` and drains through alternating
+left/right views; `sequenceDequeViews` builds through alternating left/right
+insertion and observes both drain directions; `sequenceAppendViews` concatenates
+unequal sequences in both orders; `sequenceLazyLength` observes length/null with
+self-referential, unused lifted payloads at both ends. They retain respectively
+19, 18, 23 and 9 reachable definitions. These separate API slices do not replace
+the full workload or stand in for fold/split/index support.
+
+The remaining seven entries deliberately retain their strict unsupported
+frontiers. Specialized `foldl'`/`foldr` workers pass genuine zero-width unboxed
+`(# #)` **arguments**, so supporting only aggregate results will not unblock
+them. Split, lookup, index and update additionally reach unboxed pair/triple
+workers after GHC's constructor-result optimization. Cold error paths reach
+`readMutVar#`, `quotRemInt#` and missing exception/backtrace/call-stack/Show
+definitions. No `main:` source-library binding is missing. Boxed pairs, triples,
+unit, views and finger-tree nodes are not themselves aggregate-ABI failures;
+lifted element payloads must stay lazy. Nothing is boxed or substituted to make
+a rejected operation appear supported.
+
+The independent oracle uses Python lists/deques, not a second finger-tree
+implementation. It checks order-sensitive folds and both drain directions,
+both concatenation orders, negative/end/interior split positions, present/missing
+lookups and invalid/in-range updates. Each entry has 38 inputs, including empty
+and negative sizes, every size from 0 through 17, digit/node carry boundaries,
+25/160 bulk-builder boundaries, 255/256/257, 512/1024 and machine-Int extremes.
+Sizes are clamped to 0–1024 before arithmetic. The six focused model sanity tests
+are available through `python3 scripts/test-sequence-model.py`.
+
 ## Running the checks
 
 Run `scripts/try-libraries.sh` with the pinned GHC and GraalVM environments.

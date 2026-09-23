@@ -10,6 +10,7 @@ import qualified THC.IntMapWorkload as I
 import qualified THC.IntSetPrimops as SP
 import qualified THC.IntSetWorkload as IS
 import qualified THC.SetWorkload as S
+import qualified THC.SequenceWorkload as Q
 
 entries :: [(String, Int# -> Int#)]
 entries =
@@ -27,6 +28,17 @@ entries =
   , ("unsignedLessEqualMaxSigned", SP.unsignedLessEqualMaxSigned)
   , ("unsignedLessEqualSignBit", SP.unsignedLessEqualSignBit)
   , ("unsignedLessEqualAllOnes", SP.unsignedLessEqualAllOnes)
+  , ("sequenceBuild", Q.sequenceBuild)
+  , ("sequenceEnds", Q.sequenceEnds)
+  , ("sequenceAppend", Q.sequenceAppend)
+  , ("sequenceSplit", Q.sequenceSplit)
+  , ("sequenceIndexUpdate", Q.sequenceIndexUpdate)
+  , ("sequenceAggregate", Q.sequenceAggregate)
+  , ("sequenceLazyPayloads", Q.sequenceLazyPayloads)
+  , ("sequenceBuildViews", Q.sequenceBuildViews)
+  , ("sequenceDequeViews", Q.sequenceDequeViews)
+  , ("sequenceAppendViews", Q.sequenceAppendViews)
+  , ("sequenceLazyLength", Q.sequenceLazyLength)
   ]
 
 main :: IO ()
