@@ -28,33 +28,56 @@ interface HandoffFactory { fun create(layout: HandoffLayout): HandoffStorage }
 /** The key describes physical fields; signedness and liftedness stay in Core proofs. */
 class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
     @field:CompilationFinal(dimensions = 1)
-    private val primitive = reps.map { it == "long" }.toBooleanArray()
+    private val kinds = reps.map { when (it) {
+        "long" -> 0; "float" -> 1; "double" -> 2; "reference" -> 3
+        else -> fault("Invalid physical handoff field: $it")
+    } }.toIntArray()
     @field:CompilationFinal(dimensions = 1)
     private val fields = Array(reps.size) { DefaultStaticProperty("handoff_$it") }
     private val shape = StaticShape.newBuilder(language).also { builder ->
-        fields.indices.forEach { i -> builder.property(fields[i], if (primitive[i]) Long::class.javaPrimitiveType!! else Any::class.java, false) }
+        fields.indices.forEach { i -> builder.property(fields[i], when (kinds[i]) {
+            0 -> Long::class.javaPrimitiveType!!
+            1 -> Float::class.javaPrimitiveType!!
+            2 -> Double::class.javaPrimitiveType!!
+            else -> Any::class.java
+        }, false) }
     }.build(HandoffStorage::class.java, HandoffFactory::class.java)
     fun create(): HandoffStorage = shape.factory.create(this)
-    fun isLong(index: Int): Boolean = primitive[index]
+    fun isLong(index: Int): Boolean = kinds[index] == 0
+    fun isFloat(index: Int): Boolean = kinds[index] == 1
+    fun isDouble(index: Int): Boolean = kinds[index] == 2
+    fun isObject(index: Int): Boolean = kinds[index] == 3
     fun getLong(storage: HandoffStorage, index: Int): Long = fields[index].getLong(storage)
+    fun getFloat(storage: HandoffStorage, index: Int): Float = fields[index].getFloat(storage)
+    fun getDouble(storage: HandoffStorage, index: Int): Double = fields[index].getDouble(storage)
     fun getObject(storage: HandoffStorage, index: Int): Any? = fields[index].getObject(storage)
     fun setObject(storage: HandoffStorage, index: Int, value: Any?) = fields[index].setObject(storage, value)
     fun setLong(storage: HandoffStorage, index: Int, value: Long) = fields[index].setLong(storage, value)
+    fun setFloat(storage: HandoffStorage, index: Int, value: Float) = fields[index].setFloat(storage, value)
+    fun setDouble(storage: HandoffStorage, index: Int, value: Double) = fields[index].setDouble(storage, value)
     @ExplodeLoop fun copyIn(storage: HandoffStorage, values: Array<Any?>) {
         check(values.size == fields.size)
         for (i in fields.indices) {
-            if (primitive[i]) fields[i].setLong(storage, values[i] as? Long ?: fault("Invalid primitive handoff field"))
-            else fields[i].setObject(storage, values[i])
+            when (kinds[i]) {
+                0 -> fields[i].setLong(storage, values[i] as? Long ?: fault("Invalid primitive handoff field"))
+                1 -> fields[i].setFloat(storage, values[i] as? Float ?: fault("Invalid Float handoff field"))
+                2 -> fields[i].setDouble(storage, values[i] as? Double ?: fault("Invalid Double handoff field"))
+                else -> fields[i].setObject(storage, values[i])
+            }
         }
     }
     @ExplodeLoop fun clearReferences(storage: HandoffStorage) {
-        for (i in fields.indices) if (!primitive[i]) fields[i].setObject(storage, null)
+        for (i in fields.indices) if (isObject(i)) fields[i].setObject(storage, null)
     }
     companion object {
         private val LONG_REPS = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
+        // Scalar argument handoff still uses only Long/reference snapshots.
         internal fun supports(rep: String): Boolean = rep in LONG_REPS || rep.startsWith("BoxedRep ")
+        internal fun supportsResult(rep: String): Boolean = supports(rep) || rep == "FloatRep" || rep == "DoubleRep"
         internal fun fieldKind(rep: String): String = when {
             rep in LONG_REPS -> "long"
+            rep == "FloatRep" -> "float"
+            rep == "DoubleRep" -> "double"
             rep.startsWith("BoxedRep ") -> "reference"
             else -> fault("Unsupported handoff representation: $rep")
         }
@@ -101,7 +124,7 @@ internal class HandoffPool {
         active = null
     }
     internal fun retainedReferences(): Int = slots.sumOf { storage ->
-        if (storage == null) 0 else storage.layout.reps.indices.count { !storage.layout.isLong(it) && storage.layout.getObject(storage, it) != null }
+        if (storage == null) 0 else storage.layout.reps.indices.count { storage.layout.isObject(it) && storage.layout.getObject(storage, it) != null }
     }
 }
 

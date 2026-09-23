@@ -470,14 +470,14 @@ class AuditTest(unittest.TestCase):
         self.assertEqual({i['code'] for i in report['issues']}, {'primitive-arity', 'unsupported-literal', 'unsupported-primitive'})
         self.assertEqual([p['name'] for p in report['primitives']], ['+#', 'unsupported#'])
 
-    def test_floating_scalars_do_not_expand_aggregate_or_literal_alternative_support(self):
+    def test_floating_tuple_leaves_preserve_exact_proofs_and_reject_literal_alternatives(self):
         for kind, register in [('float', 'FloatRep'), ('double', 'DoubleRep')]:
             scalar = dict(kind=kind, primReps=[register], evaluated=True)
             audit = audit_core.Audit([], CAP)
             audit.representation(scalar, None, '/scalar')
             self.assertEqual([], audit.issues)
             audit.representation(tuple_rep(scalar), None, '/tuple')
-            self.assertIn('aggregate-representation', [i['code'] for i in audit.issues])
+            self.assertEqual([], audit.issues)
             report = run(['case', ['lit', kind, '0.0'], 'x',
                           [['lit', [kind, '-0.0'], [], lit(1)], ['default', None, [], lit(0)]]])
             self.assertIn('alternative-kind', [i['code'] for i in report['issues']])
