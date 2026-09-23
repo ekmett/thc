@@ -1,0 +1,47 @@
+name: Merge bot
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [labeled, unlabeled, ready_for_review, reopened, closed]
+  workflow_run:
+    workflows: [Build]
+    types: [requested, in_progress, completed]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  statuses: write
+
+concurrency:
+  group: thc-merge-bot
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.repository == 'ekmett/thc'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Never check out a PR or execute its artifacts with this token.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Publish verified Build result
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: python3 .github/scripts/merge_bot.py --publish-run "$RUN_ID"
+      - name: Reconcile merge queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/merge_bot.py
