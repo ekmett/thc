@@ -1,0 +1,254 @@
+{
+  "scope": "Same frozen JARs and identical exported Core; only sourceNotesEnabled differs. Exact node IDs/classes/block membership, every labeled/indexed edge, and scheduled blocks compare equal, not merely histograms. Selected bytecode node properties also compare equal. AST retains a per-process root bloom mask: its Constant150 value/stamp and dependent Or151 stamp differ and are reported explicitly. Source positions, compilation identifiers, machine code addresses and timing/profile annotations are excluded. This comparison proves equality only for these captured phases and this fixture.",
+  "comparisons": [
+    {
+      "backend": "ast",
+      "phase": "pe",
+      "onNodes": 343,
+      "offNodes": 343,
+      "onBlocks": 33,
+      "offBlocks": 33,
+      "onEdges": 984,
+      "offEdges": 984,
+      "exactLabeledTopologyEqual": true,
+      "selectedSemanticPropertiesEqual": false,
+      "onTopologySha256": "9253b0edbf4055a7d6bf1e2236698547a462a1edd742743948cc1f0b553af00e",
+      "offTopologySha256": "9253b0edbf4055a7d6bf1e2236698547a462a1edd742743948cc1f0b553af00e",
+      "comparedProperties": [
+        "stamp",
+        "value",
+        "rawvalue",
+        "targetMethod",
+        "field",
+        "instanceClass",
+        "elementType",
+        "keys",
+        "keySuccessors",
+        "negated",
+        "reason",
+        "action"
+      ],
+      "propertyDifferences": [
+        {
+          "node": 150,
+          "property": "stamp",
+          "on": "i64 [34361049216]",
+          "off": "i64 [1125900176334912]"
+        },
+        {
+          "node": 150,
+          "property": "value",
+          "on": "long[34361049216|0x800140080]",
+          "off": "long[1125900176334912|0x4000010102040]"
+        },
+        {
+          "node": 150,
+          "property": "rawvalue",
+          "on": "34361049216",
+          "off": "1125900176334912"
+        },
+        {
+          "node": 151,
+          "property": "stamp",
+          "on": "i64 [-9223372002493726592 - 9223372036854775807] bits:x...x1xxxxxxxxxxxxxx1x1xxxxxxxxxx1xxxxxxx",
+          "off": "i64 [-9222246136678440896 - 9223372036854775807] bits:x...x1xxxxxxxxxxxxxxxxxxxxx1xxxxxxx1xxxxxx1xxxxxx1xxxxxx"
+        }
+      ]
+    },
+    {
+      "backend": "ast",
+      "phase": "before-high",
+      "onNodes": 431,
+      "offNodes": 431,
+      "onBlocks": 29,
+      "offBlocks": 29,
+      "onEdges": 1213,
+      "offEdges": 1213,
+      "exactLabeledTopologyEqual": true,
+      "selectedSemanticPropertiesEqual": false,
+      "onTopologySha256": "4860f4603a8a8edef21a22613df46d4487f0ba8a878c445b9a7ae899ce9cfb2a",
+      "offTopologySha256": "4860f4603a8a8edef21a22613df46d4487f0ba8a878c445b9a7ae899ce9cfb2a",
+      "comparedProperties": [
+        "stamp",
+        "value",
+        "rawvalue",
+        "targetMethod",
+        "field",
+        "instanceClass",
+        "elementType",
+        "keys",
+        "keySuccessors",
+        "negated",
+        "reason",
+        "action"
+      ],
+      "propertyDifferences": [
+        {
+          "node": 150,
+          "property": "stamp",
+          "on": "i64 [34361049216]",
+          "off": "i64 [1125900176334912]"
+        },
+        {
+          "node": 150,
+          "property": "value",
+          "on": "long[34361049216|0x800140080]",
+          "off": "long[1125900176334912|0x4000010102040]"
+        },
+        {
+          "node": 150,
+          "property": "rawvalue",
+          "on": "34361049216",
+          "off": "1125900176334912"
+        },
+        {
+          "node": 151,
+          "property": "stamp",
+          "on": "i64 [-9223372002493726592 - 9223372036854775807] bits:x...x1xxxxxxxxxxxxxx1x1xxxxxxxxxx1xxxxxxx",
+          "off": "i64 [-9222246136678440896 - 9223372036854775807] bits:x...x1xxxxxxxxxxxxxxxxxxxxx1xxxxxxx1xxxxxx1xxxxxx1xxxxxx"
+        }
+      ]
+    },
+    {
+      "backend": "ast",
+      "phase": "after-mid",
+      "onNodes": 1178,
+      "offNodes": 1178,
+      "onBlocks": 174,
+      "offBlocks": 174,
+      "onEdges": 2602,
+      "offEdges": 2602,
+      "exactLabeledTopologyEqual": true,
+      "selectedSemanticPropertiesEqual": false,
+      "onTopologySha256": "58b23db4d3a82a8df8fc8bc140893ed9a8e5acfe5873ad7f77853479f195925d",
+      "offTopologySha256": "58b23db4d3a82a8df8fc8bc140893ed9a8e5acfe5873ad7f77853479f195925d",
+      "comparedProperties": [
+        "stamp",
+        "value",
+        "rawvalue",
+        "targetMethod",
+        "field",
+        "instanceClass",
+        "elementType",
+        "keys",
+        "keySuccessors",
+        "negated",
+        "reason",
+        "action"
+      ],
+      "propertyDifferences": [
+        {
+          "node": 150,
+          "property": "stamp",
+          "on": "i64 [34361049216]",
+          "off": "i64 [1125900176334912]"
+        },
+        {
+          "node": 150,
+          "property": "value",
+          "on": "long[34361049216|0x800140080]",
+          "off": "long[1125900176334912|0x4000010102040]"
+        },
+        {
+          "node": 150,
+          "property": "rawvalue",
+          "on": "34361049216",
+          "off": "1125900176334912"
+        },
+        {
+          "node": 151,
+          "property": "stamp",
+          "on": "i64 [-9223372002493726592 - 9223372036854775807] bits:x...x1xxxxxxxxxxxxxx1x1xxxxxxxxxx1xxxxxxx",
+          "off": "i64 [-9222246136678440896 - 9223372036854775807] bits:x...x1xxxxxxxxxxxxxxxxxxxxx1xxxxxxx1xxxxxx1xxxxxx1xxxxxx"
+        }
+      ]
+    },
+    {
+      "backend": "bytecode",
+      "phase": "pe",
+      "onNodes": 101,
+      "offNodes": 101,
+      "onBlocks": 8,
+      "offBlocks": 8,
+      "onEdges": 264,
+      "offEdges": 264,
+      "exactLabeledTopologyEqual": true,
+      "selectedSemanticPropertiesEqual": true,
+      "onTopologySha256": "dfa3ec9285b9779f0448cc6778140f8ac98988ab7034520f6dc96aa569474b6a",
+      "offTopologySha256": "dfa3ec9285b9779f0448cc6778140f8ac98988ab7034520f6dc96aa569474b6a",
+      "comparedProperties": [
+        "stamp",
+        "value",
+        "rawvalue",
+        "targetMethod",
+        "field",
+        "instanceClass",
+        "elementType",
+        "keys",
+        "keySuccessors",
+        "negated",
+        "reason",
+        "action"
+      ],
+      "propertyDifferences": []
+    },
+    {
+      "backend": "bytecode",
+      "phase": "before-high",
+      "onNodes": 101,
+      "offNodes": 101,
+      "onBlocks": 8,
+      "offBlocks": 8,
+      "onEdges": 263,
+      "offEdges": 263,
+      "exactLabeledTopologyEqual": true,
+      "selectedSemanticPropertiesEqual": true,
+      "onTopologySha256": "05ae67b420ca009558a45385ff6b7b56e5909316f280db50b2d131901774db92",
+      "offTopologySha256": "05ae67b420ca009558a45385ff6b7b56e5909316f280db50b2d131901774db92",
+      "comparedProperties": [
+        "stamp",
+        "value",
+        "rawvalue",
+        "targetMethod",
+        "field",
+        "instanceClass",
+        "elementType",
+        "keys",
+        "keySuccessors",
+        "negated",
+        "reason",
+        "action"
+      ],
+      "propertyDifferences": []
+    },
+    {
+      "backend": "bytecode",
+      "phase": "after-mid",
+      "onNodes": 137,
+      "offNodes": 137,
+      "onBlocks": 12,
+      "offBlocks": 12,
+      "onEdges": 274,
+      "offEdges": 274,
+      "exactLabeledTopologyEqual": true,
+      "selectedSemanticPropertiesEqual": true,
+      "onTopologySha256": "fef511fb236cd243ea41076ba16bd78aa73e0e965c84ed9b244c16278f22151e",
+      "offTopologySha256": "fef511fb236cd243ea41076ba16bd78aa73e0e965c84ed9b244c16278f22151e",
+      "comparedProperties": [
+        "stamp",
+        "value",
+        "rawvalue",
+        "targetMethod",
+        "field",
+        "instanceClass",
+        "elementType",
+        "keys",
+        "keySuccessors",
+        "negated",
+        "reason",
+        "action"
+      ],
+      "propertyDifferences": []
+    }
+  ]
+}

@@ -89,6 +89,25 @@ class AuditTest(unittest.TestCase):
         self.assertEqual({i['code'] for i in report['issues']}, {'constructor-kind', 'constructor-field-representation'})
         self.assertEqual(run(['con', 'missing', 0])['issues'][0]['code'], 'missing-constructor')
 
+    def test_optional_representation_and_pattern_metadata_preserves_scope(self):
+        long = dict(primReps=['IntRep'], kind='long', evaluated=True)
+        case_binder = dict(id='value', lifted=False, rep=long)
+        expr = ['case', [*lit(7), dict(rep=long)], 'value', [
+            ['default', None, [], ['var', 'value', dict(rep=long)], dict(binders=[])]],
+            dict(rep=long, binder=case_binder)]
+        self.assertTrue(run(expr)['accepted'])
+        expr[4]['binder'] = dict(case_binder, id='wrong')
+        self.assertIn('case-binder-metadata', {i['code'] for i in run(expr)['issues']})
+
+    def test_inconsistent_representation_and_join_prefix_are_rejected(self):
+        invalid = dict(primReps=['AddrRep'], kind='long', evaluated=True)
+        self.assertIn('representation-proof', {i['code'] for i in run([*lit(1), dict(rep=invalid)])['issues']})
+        join = bind('j', ['lam', [dict(id='x', lifted=False)], var('x')])
+        join.update(joinValueArity=2, joinResultRep=dict(primReps=['IntRep'], kind='long', evaluated=False),
+                    info=dict(joinArity=3))
+        report = run(['let', False, [join], ['app', var('j'), [lit(1)], [False]]])
+        self.assertIn('join-metadata', {i['code'] for i in report['issues']})
+
     def test_duplicate_definitions_fail_instead_of_silently_overwriting(self):
         module = dict(schema=1, ghc='9.14.1', bindings=[bind('root', lit(0))], constructors=[])
         report = audit_core.Audit([('a.json', module), ('b.json', module)], CAP).run(['root'])

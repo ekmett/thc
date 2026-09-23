@@ -1,0 +1,9 @@
+{
+  "equal": true,
+  "excludedModules": [],
+  "entry": null,
+  "reachableBindings": null,
+  "changedModules": [],
+  "beforeSha256": "39a6752e3aaebb39d9917a797e254a3e5dc1f19b4161b59a912b35c4711ab8a6",
+  "afterSha256": "39a6752e3aaebb39d9917a797e254a3e5dc1f19b4161b59a912b35c4711ab8a6"
+}

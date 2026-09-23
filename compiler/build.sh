@@ -6,14 +6,14 @@ root=$(pwd)
 out="$root/build/compiler"
 mkdir -p "$out"
 case "$(uname -s)" in Darwin) suffix=dylib ;; *) suffix=so ;; esac
-"$GHC" --make -O1 -dynamic -shared -fPIC -package ghc -package bytestring -package directory -package filepath \
+"$GHC" --make -O1 -dynamic -shared -fPIC -package ghc -package bytestring -package directory -package filepath -package containers \
   -this-unit-id thc-core-plugin-0.1 -hisuf dyn_hi -osuf dyn_o -icompiler -odir "$out" -hidir "$out" \
   compiler/Thc/Plugin.hs -o "$out/libHSthc-core-plugin-0.1-ghc$version.$suffix"
 if [ ! -d "$out/package.conf.d" ]; then
   "$GHC_PKG" init "$out/package.conf.d"
 fi
 depends=""
-for pkg in ghc base bytestring directory filepath; do
+for pkg in ghc base bytestring directory filepath containers; do
   pkg_id=$("$GHC_PKG" field "$pkg" id --simple-output)
   depends="$depends $pkg_id"
 done

@@ -1,0 +1,12 @@
+digraph actual_cfg {
+graph [rankdir=TB,bgcolor="white",labelloc=t,label="ast-v2-on: actual scheduled CFG before HighTierLowering\nNode IDs and all block edges preserved; debug/constant/bookkeeping labels omitted"];
+node [shape=box,fontname="Menlo",fontsize=10];
+"B0" [style=filled,fillcolor="#f4f5f7",label="B0\n0 StartNode void\n40 LoadIndexedNode a java.lang.Object [array=31, index=5:int[0|0x0]]\n58 LoadIndexedNode a java.lang.Object [array=31, index=22:int[1|0x1]]\n146 UnboxNode i64 [value=46]\n200 UnboxNode i64 [value=63]"];
+"B0" -> "B1";
+"B1" [style=filled,fillcolor="#def4e9",label="B1\n305 LoopBeginNode void\n761 IntegerLessThanNode void [x=1979, y=338:long[1|0x1]]\n1117 AddNode i64 [x=1979, y=1116:long[-1|0xffffffffffffffff]]\n1367 SubNode i64 [x=200, y=1979]\n1400 AddNode i64 [x=1367, y=1984]\n1430 AddNode i64 [x=1400, y=338:long[1|0x1]]\n942 IfNode void [condition=761]\n1979 ValuePhiNode i64 [values=200, values=1117]\n1983 ValuePhiNode i64 [values=278:long[0|0x0], values=1117]\n1987 ValuePhiNode i32 [0 - 1] bits:0...0x [values=5:int[0|0x0], values=22:int[1|0x1]]\n1982 ValuePhiNode i64 [0 - 1] bits:0...0x [values=278:long[0|0x0], values=763]\n1984 ValuePhiNode i64 [values=278:long[0|0x0], values=1430]"];
+"B1" -> "B2";
+"B1" -> "B3";
+"B2" [style=filled,fillcolor="#def4e9",label="B2\n1820 LoopEndNode void"];
+"B2" -> "B1";
+"B3" [style=filled,fillcolor="#f4f5f7",label="B3\n1696 LoopExitNode void\n1882 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=1870]\n1795 ReturnNode void [result=1882]"];
+}

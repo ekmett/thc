@@ -1,0 +1,9 @@
+{
+  "equal": true,
+  "excludedModules": [
+    "SourceNotes.json"
+  ],
+  "changedModules": [],
+  "beforeSha256": "629c3b7124ba4c2c128b14d2d4ebfee7b7e579eae0e97ce5b55bfc0216cfb152",
+  "afterSha256": "629c3b7124ba4c2c128b14d2d4ebfee7b7e579eae0e97ce5b55bfc0216cfb152"
+}

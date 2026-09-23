@@ -3,8 +3,13 @@
 set -eu
 cd "$(dirname "$0")/.."
 compiler/build.sh
-compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs
+compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs
 python3 scripts/check-speculation-metadata.py
+python3 scripts/check-representation-metadata.py
+# Exercise genuine GHC notes in CI even when ordinary workload exports opt out.
+THC_SOURCE_NOTES=true THC_CORE_OUT="$PWD/build/source-core" THC_GHC_OUT="$PWD/build/source-ghc" \
+  compiler/export.sh compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/RepresentationAudit.hs
+python3 scripts/check-source-metadata.py --fixture build/source-core/SourceNotes.json build/source-core/RepresentationAudit.json
 python3 compiler/export-boot.py
 mkdir -p build/native
 scripts/native-oracle.sh > build/native/oracle.tsv

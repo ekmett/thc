@@ -1,0 +1,8 @@
+{
+  "astAttachmentToggle": {
+    "unrelatedNativeCompilationObserved": true,
+    "observedDuring": "first fork; separate clang++ build outside THC, not stopped or modified",
+    "absentBy": "process snapshot during candidate fork 2 measurement",
+    "consequence": "The noisy first baseline process is retained. Before/after runtime comparisons are separate subsequent runs; the toggle result alone cannot exclude shared runtime overhead."
+  }
+}

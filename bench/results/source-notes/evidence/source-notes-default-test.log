@@ -1,0 +1,264 @@
+Reading package info from "/Users/ekmett/thc/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /Users/ekmett/thc/build/compiler
+[1 of 6] Compiling RepresentationAudit ( compiler/test-fixtures/RepresentationAudit.hs, /Users/ekmett/thc/build/ghc/RepresentationAudit.o )
+[2 of 6] Compiling SourceNotes      ( compiler/test-fixtures/SourceNotes.hs, /Users/ekmett/thc/build/ghc/SourceNotes.o )
+[3 of 6] Compiling SpeculationAudit ( compiler/test-fixtures/SpeculationAudit.hs, /Users/ekmett/thc/build/ghc/SpeculationAudit.o )
+[4 of 6] Compiling StrictFields     ( compiler/test-fixtures/StrictFields.hs, /Users/ekmett/thc/build/ghc/StrictFields.o )
+[5 of 6] Compiling THC.Prim         ( /Users/ekmett/thc/examples/THC/Prim.hs, /Users/ekmett/thc/build/ghc/THC/Prim.o )
+[6 of 6] Compiling THC.Fixtures     ( examples/THC/Fixtures.hs, /Users/ekmett/thc/build/ghc/THC/Fixtures.o )
+PASS: safe subtraction, safe constant division, unsafe divide-zero case, lazy bottom/PAP, enclosing recursive DFun guard
+PASS: primitive/boxed/newtype/family proofs, case and strict-field WHNF, erased type join prefix, function-returning join
+[1 of 2] Compiling RepresentationAudit ( compiler/test-fixtures/RepresentationAudit.hs, /Users/ekmett/thc/build/source-ghc/RepresentationAudit.o )
+[2 of 2] Compiling SourceNotes      ( compiler/test-fixtures/SourceNotes.hs, /Users/ekmett/thc/build/source-ghc/SourceNotes.o )
+PASS source metadata: {"files": 3, "missingContent": 1, "nestedNotes": 76, "references": 167, "spans": 94, "tabs": 1, "unicode": 1}
+[1 of 1] Compiling InterfaceRoots   ( compiler/package-roots/InterfaceRoots.hs, /Users/ekmett/thc/build/map/interface-ghc/InterfaceRoots.o )
+THC interface closure: 20 actual unfoldings, 4 missing source definitions
+[1 of 5] Compiling THC.MapWorkload  ( THC/MapWorkload.hs, /Users/ekmett/thc/build/native/THC/MapWorkload.o )
+[2 of 5] Compiling THC.Prim         ( THC/Prim.hs, /Users/ekmett/thc/build/native/THC/Prim.o )
+[3 of 5] Compiling THC.Fixtures     ( THC/Fixtures.hs, /Users/ekmett/thc/build/native/THC/Fixtures.o )
+[4 of 5] Compiling Main             ( NativeOracle.hs, /Users/ekmett/thc/build/native/Main.o )
+[5 of 5] Linking /Users/ekmett/thc/build/native/native-oracle [Objects changed]
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :kaptGenerateStubsKotlin
+> Task :kaptKotlin UP-TO-DATE
+> Task :compileKotlin
+> Task :compileJava UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar
+> Task :kaptGenerateStubsTestKotlin
+> Task :startScripts
+> Task :installDist
+> Task :kaptTestKotlin
+> Task :compileTestKotlin
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.nodes.NodeClassImpl$NodeFieldData (file:/Users/ekmett/thc/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-api/25.3.4.1/d0ad4561c54b72dae2918cf8ba0d899844912df8/truffle-api-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.nodes.NodeClassImpl$NodeFieldData
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+
+BloomHeaderTest > selfAndConservativeBloomHitsStillBounceBeforeWritingAnyHeader() PASSED
+
+BloomHeaderTest > compiledDynamicAncestryPreservesEveryBitAndStillDetectsBloomHits() PASSED
+
+BytecodeBackendTest > unsupportedCodeRejectsAtLoadOrTrapsOnlyWhenTheDiagnosticBranchIsEntered() PASSED
+
+BytecodeBackendTest > backendSelectionAndMutableProgramStateAreIsolatedWithinASharedEngine() PASSED
+
+BytecodeBackendTest > allExportedFixturesMatchNativeGhcBeforeAndAfterCompilation() PASSED
+
+BytecodeBackendTest > managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() PASSED
+
+BytecodeBackendTest > coldRaiseKeepsItsBottomPayloadLazyAndMemoizesTheGuestFailure() PASSED
+
+BytecodeBackendTest > unusedBottomStaysLazyAndFailedThunksAreNotReentered() PASSED
+
+BytecodeBackendTest > strictConstructorWorkersForceOnlyAtFullSaturationIncludingColdCompiledPaths() PASSED
+
+BytecodeBackendTest > sharingPartialAndOverapplicationPreserveTheirSemantics() PASSED
+
+BytecodeBackendTest > aSelfTailCallThroughAPapRestoresBothItsPrefixAndNewArguments() PASSED
+
+BytecodeBackendTest > compiledBaseCasesCanGrowIntoLongSelfMutualAndCapturedLoops() PASSED
+
+BytecodeBackendTest > wideArgumentsCapturesAndConstructorFieldsPreserveEveryOperand() PASSED
+
+BytecodeCoreProofTest > malformedJoinsAreRejectedEvenInDiagnosticMode() PASSED
+
+BytecodeCoreProofTest > adjustedJoinArityCanReturnTheRestOfAFlattenedLambda() PASSED
+
+BytecodeCoreProofTest > primitiveIdentityCompilesAfterOneOrdinaryInvocation() PASSED
+
+BytecodeCoreProofTest > capturedAddressesRemainObjectsAndCapturedLongsUsePrimitiveReads() PASSED
+
+BytecodeCoreProofTest > mutuallyRecursiveJoinsStayInsideTheirOwningRoot() PASSED
+
+BytecodeCoreProofTest > provenLongCaseAndLetOmitAdaptiveForcingInstructions() PASSED
+
+BytecodeCoreProofTest > diagnosticGlobalCannotRetainTheUnsupportedConstructorWhnfProof() PASSED
+
+BytecodeCoreProofTest > evaluatedCoreVarsStillForceOurCafAndRecursiveAliasThunks() PASSED
+
+BytecodeCoreProofTest > diagnosticSubstitutionCannotAcquireItsOriginalLongWhnfProof() PASSED
+
+BytecodeCoreProofTest > recursiveJoinUsesParallelMovesAndPreservesNonTailContinuation() PASSED
+
+BytecodeSourceNotesTest > sourceSectionsPreserveLocalJoinBackedgesAndTheirOuterContinuation() PASSED
+
+BytecodeSourceNotesTest > notesAttachToNativeBytecodeWithoutChangingInstructionsOrLocalWriteback() PASSED
+
+BytecodeSourceNotesTest > bytecodeKeepsSourceLocationsWhenOriginalFileContentIsUnavailable() PASSED
+
+CStringTest > literalPrimitivesExecuteInGuestCodeAndRejectNumericFakePointers() PASSED
+
+CStringTest > genuineGhcCStringDecoderConsumesLiteralBytesBeforeAndAfterCompilation() PASSED
+
+CStringTest > literalAddressBoundsRejectOverflowAndForeignMemoryAccess() PASSED
+
+CStringTest > literalStoragePreservesUnsignedBytesEmbeddedNulsAndImplicitTerminator() PASSED
+
+CasePrimitiveTest > nestedLiteralAndDefaultCasesFeedPrimitiveOperandsThroughLetAndEvaluation() PASSED
+
+CasePrimitiveTest > dataAndDefaultArmsPreserveFieldsAndWholeScrutineeBindingsInPrimitiveContext() PASSED
+
+CasePrimitiveTest > primitiveCaseForcesSharedScrutineesOnceAndKeepsUnselectedFailureLazy() PASSED
+
+CoreLinkerTest > shadowedGlobalsDoNotBringTheirUnsupportedDependenciesIntoTheProgram() PASSED
+
+CoreLinkerTest > nonrecursiveRhsAndCaseScrutineeRetainTheirOuterDependencies() PASSED
+
+CoreLinkerTest > linkedModulesPreserveSourceIdentityAndRejectConflictingText() PASSED
+
+CoreLinkerTest > recursiveGlobalClosureTerminatesAndKeepsAllTransitiveDependencies() PASSED
+
+DiagnosticModeTest > diagnosticPrimitiveGapsRemainExplicitAndMalformedCoreStillRejects() PASSED
+
+DiagnosticModeTest > normalExecutionStillRejectsUnavailableCodeAtLoad() PASSED
+
+DiagnosticModeTest > diagnosticBranchesCompileAndUnavailablePathsTrapExplicitly() PASSED
+
+FramesTest > supportedTagsAndUnwrittenNullRetainTheirValues() PASSED
+
+FramesTest > typedLongWritesWidenBooleanSlotsWithoutChangingSuspendedFrames() PASSED
+
+FramesTest > livePrimitiveFramesSurviveDescriptorWideningInAnotherActivation() PASSED
+
+FramesTest > typedLongWritesRespectDescriptorWideningAcrossActivations() PASSED
+
+FramesTest > unrelatedTruffleNumericTagsAreRejectedInsteadOfSilentlyBoxed() PASSED
+
+GuestExceptionsTest > coldRaiseBranchStaysLazyCompilesAndReportsAGuestException() PASSED
+
+GuestExceptionsTest > raisingAnEvaluatedConstructorPreservesItsPayloadIdentity() PASSED
+
+GuestExceptionsTest > raiseKeepsBottomPayloadUnevaluatedAndMemoizesTheSameGuestException() PASSED
+
+RealCoreJoinTest > exportedRecursiveJoinIsALocalLoopBeforeAndAfterCompilation() PASSED
+
+RealCoreJoinTest > erasedTypeJoinAndFunctionReturningJoinPreserveTheirValueArity() PASSED
+
+RuntimeTest > cadenzaTailLoopsAndProductiveCafUseBoundedHostStack() PASSED
+
+RuntimeTest > hostKernelAbiRejectsNonIntegralArgumentsAndWrongArity() PASSED
+
+RuntimeTest > constructorCasesDistinguishEqualArityAlternativesBeforeAndAfterCompilation() PASSED
+
+RuntimeTest > selfTailCallsRefreshChangingPrimitiveCapturesAndReplayOriginalCaf() PASSED
+
+RuntimeTest > transportRejectsAmbiguityAndRoundTripsControlCharacters() PASSED
+
+RuntimeTest > recursiveAliasStaysLazyUntilDemanded() PASSED
+
+RuntimeTest > sharingPapAndOverapplicationHaveObservableRuntimeCoverage() PASSED
+
+RuntimeTest > repeatedHostEntryKeepsGuestAndInteropCompilable() PASSED
+
+RuntimeTest > boundedDispatchCacheSurvivesMoreThanThreeTargets() PASSED
+
+RuntimeTest > constructorLayoutsRejectCrossConstructorReadsAndShareNullaryValues() PASSED
+
+RuntimeTest > papPrefixesSurviveRepeatedUnderapplicationAndMegamorphicOverapplication() PASSED
+
+RuntimeTest > recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() PASSED
+
+RuntimeTest > unusedBottomRemainsLazyAndDemandedBottomBlackholes() PASSED
+
+RuntimeTest > constructorLayoutsPreservePrimitiveWidthObjectIdentityAndVoidSlots() PASSED
+
+RuntimeTest > exportedHaskellMatchesNativeGhcBeforeAndAfterGuestCompilation() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRemainsStackSafeAndRecompiles() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRestoresChangingCaptures() PASSED
+
+StrictFieldsTest > unknownStrictFieldLevityStillFailsClosed() PASSED
+
+StrictFieldsTest > strictFieldsShareTheirWhnfWhileAnOrdinaryFieldKeepsItsUnevaluatedThunk() PASSED
+
+StrictFieldsTest > directSaturatedStrictOperandsDoNotAllocateAnImmediatelyForcedThunk() PASSED
+
+StrictFieldsTest > partialConstructorRetainsStrictArgumentLazilyUntilItIsSaturated() PASSED
+
+StrictFieldsTest > strictWorkerForcesIgnoredFieldsInDirectAndFirstClassApplications() PASSED
+
+StrictFieldsTest > realGhcStrictConstructorPreservesPrimitiveValuesBeforeAndAfterCompilation() PASSED
+
+TailCycleTest > twoRootCyclesReenterLocallyBeforeAndAfterCompilation() PASSED
+
+TailCycleTest > aNonTailEdgeRetainsEveryPendingAddition() PASSED
+
+TailCycleTest > aClonedRootConsumesTransfersTargetingItsOriginalBody() PASSED
+
+TailCycleTest > anInteriorRootHandlesABCDECReturnsAndCanRetargetOutwardToB() PASSED
+
+TailCycleTest > falsePositiveAncestryStillUsesTheTrampolineWhenNoActiveRootMatches() PASSED
+
+TailCycleTest > overapplicationAndNonTailWorkSurviveAnInnerTailCycle() PASSED
+
+TailCycleTest > reentryRestoresChangedCapturesAndPapPrefixesAcrossDifferentArities() PASSED
+
+ThunkDispatchTest > closedAndCapturedThunksKeepTheirArgumentsAfterTargetCacheSaturates() PASSED
+
+ThunkDispatchTest > capturedThunkTailBounceStillUpdatesTheOriginalThunk() PASSED
+
+ThunkRetentionTest > cafEntryTargetsRemainCompilableAfterValuesFunctionsAndFailuresAreMemoized() PASSED
+
+ThunkRetentionTest > unexpectedFailuresKeepTheSuspensionForAnActualRetry() PASSED
+
+ThunkRetentionTest > successfulUpdatesReleaseSuspensionsAndRemainShared() PASSED
+
+ThunkRetentionTest > memoizedGuestAndRuntimeFailuresReleaseSuspensionsWithoutRepeatingEffects() PASSED
+
+TypedApplicationTest > partialAndOverapplicationReachTheNumericResultAfterAnIntermediateCapturedFunction() PASSED
+
+TypedApplicationTest > aPolymorphicLiftedResultCanChangeFromDataToClosureAfterCompilation() PASSED
+
+TypedApplicationTest > closedAndCapturedLambdasForwardNumericCaseAndLetResultsToPrimitiveConsumers() PASSED
+
+CoreProofJoinTest > recursivePrimitiveJoinUsesParallelMovesAndReturnsToNonTailContinuation() PASSED
+
+CoreProofJoinTest > mutualJoinsAndNestedOuterTransfersStayInTheirLexicalRegion() PASSED
+
+CoreProofJoinTest > exportedEvaluatedCafAndRecursiveAliasesStillForceIntroducedThunks() PASSED
+
+CoreProofJoinTest > provenLongCapturesPreserveFullWidthValuesWithoutAnObjectArm() PASSED
+
+CoreProofJoinTest > invalidJoinUsesRejectAtLoadRatherThanEscapingIntoClosures() PASSED
+
+CoreProofJoinTest > representationMetadataRequiresExactCarriersAndPreservesLegacyUnknown() PASSED
+
+CoreSourceTest > unverifiedCoordinatesNeverIndexAvailableSourceText() PASSED
+
+CoreSourceTest > sourceNotesAttachToTypedAstAndRootsWithoutAddingExecutionNodes() PASSED
+
+CoreSourceTest > realGhcSourceNotesReachTypedRootsAndLocalJoinNodes() PASSED
+
+CoreSourceTest > characterOffsetsUseUtf16WithoutReencodingUnicodeSource() PASSED
+
+CoreSourceTest > missingSourceContentRetainsLocationsAndOriginalExclusiveProvenance() PASSED
+
+ForcedBindingTest > repeatedLocalDemandsBypassThunkHeadersButSeparateAliasesKeepSharing() PASSED
+
+ForcedBindingTest > recursiveCellIdentitySurvivesStrictRhsForcingBeforeGroupPublication() PASSED
+
+ForcedBindingTest > astForcingReplacesOnlyTheDemandedLocalAndRetainsSharedThunkAliases() PASSED
+
+ForcedBindingTest > preexistingCapturesKeepTheirFinalThunkReferenceWhileTheirRestoredLocalUpdates() PASSED
+
+ForcedBindingTest > failedForcingLeavesLocalLinksPointingAtTheMemoizedFailure() PASSED
+
+SourceCloneTest > actualClonedTargetsRetainRootAndChildLocationsBeforeAndAfterCompilation() PASSED
+
+TypedExecutionTest > typedEvaluationRunsItsChildOnceWhenACompiledLongPathReceivesAThunk() PASSED
+
+TypedExecutionTest > runtimeTypesPreserveUnexpectedValuesAndDoNotCoerceDistinctPrimitiveKinds() PASSED
+
+BUILD SUCCESSFUL in 14s
+11 actionable tasks: 9 executed, 2 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

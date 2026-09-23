@@ -1,0 +1,391 @@
+{
+  "schema": 1,
+  "recordedAtUtc": "2026-09-23T04:00:18.193730+00:00",
+  "recordingMode": "after-fresh-driver-export",
+  "recordingLimit": "Hashes describe files present at recording time; this helper does not replay compilation or prove byte-identical regeneration.",
+  "toolchain": {
+    "ghc": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-9.14.1",
+    "ghcPkg": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-pkg-9.14.1",
+    "version": "9.14.1",
+    "libdir": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib",
+    "ghcInfo": "[(\"Project name\",\"The Glorious Glasgow Haskell Compilation System\")\n ,(\"C compiler command\",\"gcc\")\n ,(\"C compiler flags\",\"--target=arm64-apple-darwin  -Qunused-arguments\")\n ,(\"C++ compiler command\",\"g++\")\n ,(\"C++ compiler flags\",\"--target=arm64-apple-darwin \")\n ,(\"C compiler link flags\",\"--target=arm64-apple-darwin   -Wl,-no_fixup_chains -Wl,-no_warn_duplicate_libraries\")\n ,(\"C compiler supports -no-pie\",\"NO\")\n ,(\"CPP command\",\"gcc\")\n ,(\"CPP flags\",\"-E\")\n ,(\"Haskell CPP command\",\"gcc\")\n ,(\"Haskell CPP flags\",\"-E -undef -traditional -Wno-invalid-pp-token -Wno-unicode -Wno-trigraphs\")\n ,(\"JavaScript CPP command\",\"gcc\")\n ,(\"JavaScript CPP flags\",\"-E -CC -Wno-unicode -nostdinc\")\n ,(\"C-- CPP command\",\"gcc\")\n ,(\"C-- CPP flags\",\"-E\")\n ,(\"C-- CPP supports -g0\",\"YES\")\n ,(\"ld supports compact unwind\",\"YES\")\n ,(\"ld supports filelist\",\"YES\")\n ,(\"ld supports single module\",\"NO\")\n ,(\"ld is GNU ld\",\"NO\")\n ,(\"Merge objects command\",\"ld\")\n ,(\"Merge objects flags\",\"-r\")\n ,(\"Merge objects supports response files\",\"YES\")\n ,(\"ar command\",\"ar\")\n ,(\"ar flags\",\"qcls\")\n ,(\"ar supports at file\",\"NO\")\n ,(\"ar supports -L\",\"NO\")\n ,(\"ranlib command\",\"ranlib\")\n ,(\"otool command\",\"otool\")\n ,(\"install_name_tool command\",\"install_name_tool\")\n ,(\"windres command\",\"/bin/false\")\n ,(\"unlit command\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/../bin/unlit\")\n ,(\"cross compiling\",\"NO\")\n ,(\"target platform string\",\"aarch64-apple-darwin\")\n ,(\"target os\",\"OSDarwin\")\n ,(\"target arch\",\"ArchAArch64\")\n ,(\"target word size\",\"8\")\n ,(\"target word big endian\",\"NO\")\n ,(\"target has GNU nonexec stack\",\"NO\")\n ,(\"target has .ident directive\",\"YES\")\n ,(\"target has subsections via symbols\",\"NO\")\n ,(\"target has libm\",\"YES\")\n ,(\"Unregisterised\",\"NO\")\n ,(\"LLVM target\",\"arm64-apple-darwin\")\n ,(\"LLVM llc command\",\"llc\")\n ,(\"LLVM opt command\",\"opt\")\n ,(\"LLVM llvm-as command\",\"clang\")\n ,(\"LLVM llvm-as flags\",\"\")\n ,(\"Use inplace MinGW toolchain\",\"NO\")\n ,(\"target RTS linker only supports shared libraries\",\"NO\")\n ,(\"Use interpreter\",\"YES\")\n ,(\"Support SMP\",\"YES\")\n ,(\"RTS ways\",\"v thr thr_debug thr_debug_p thr_debug_p_dyn thr_debug_dyn thr_p thr_p_dyn thr_dyn debug debug_p debug_p_dyn debug_dyn p p_dyn dyn\")\n ,(\"Tables next to code\",\"YES\")\n ,(\"Leading underscore\",\"YES\")\n ,(\"Use LibFFI\",\"YES\")\n ,(\"RTS expects libdw\",\"NO\")\n ,(\"Relative Global Package DB\",\"package.conf.d\")\n ,(\"base unit-id\",\"base-4.22.0.0-1f90\")\n ,(\"Project version\",\"9.14.1\")\n ,(\"Project Git commit id\",\"902339d332fb4ce2b3c87dcac1ee6495d41ad886\")\n ,(\"Project Version Int\",\"914\")\n ,(\"Project Patch Level\",\"1\")\n ,(\"Project Patch Level1\",\"1\")\n ,(\"Project Patch Level2\",\"0\")\n ,(\"Project Unit Id\",\"ghc-9.14.1-bcbf\")\n ,(\"ghc-internal Unit Id\",\"ghc-internal-9.1401.0-0c3b\")\n ,(\"Booter version\",\"9.10.1\")\n ,(\"Stage\",\"2\")\n ,(\"Build platform\",\"aarch64-apple-darwin\")\n ,(\"Host platform\",\"aarch64-apple-darwin\")\n ,(\"Target platform\",\"aarch64-apple-darwin\")\n ,(\"target os string\",\"darwin\")\n ,(\"target arch string\",\"aarch64\")\n ,(\"target word size in bits\",\"64\")\n ,(\"Have interpreter\",\"YES\")\n ,(\"Object splitting supported\",\"NO\")\n ,(\"Have native code generator\",\"YES\")\n ,(\"target has RTS linker\",\"YES\")\n ,(\"Target default backend\",\"native code generator\")\n ,(\"Support dynamic-too\",\"YES\")\n ,(\"Support parallel --make\",\"YES\")\n ,(\"Support reexported-modules\",\"YES\")\n ,(\"Support thinning and renaming package flags\",\"YES\")\n ,(\"Support Backpack\",\"YES\")\n ,(\"Requires unified installed package IDs\",\"YES\")\n ,(\"Uses package keys\",\"YES\")\n ,(\"Uses unit IDs\",\"YES\")\n ,(\"GHC Dynamic\",\"YES\")\n ,(\"GHC Profiled\",\"NO\")\n ,(\"Debug on\",\"NO\")\n ,(\"LibDir\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\")\n ,(\"Global Package DB\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/package.conf.d\")\n ]",
+    "packages": {
+      "containers": "name:                 containers\nversion:              0.8\nvisibility:           public\nid:                   containers-0.8-034d\nkey:                  containers-0.8-034d\nlicense:              BSD-3-Clause\nmaintainer:           libraries@haskell.org\nhomepage:             https://github.com/haskell/containers\nsynopsis:             Assorted concrete container types\ndescription:\n    This package contains efficient general-purpose implementations\n    of various immutable container types including sets, maps, sequences,\n    trees, and graphs.\n\n    For a walkthrough of what this package provides with examples of common\n    operations see the [containers\n    introduction](https://haskell-containers.readthedocs.io).\n\n    The declared cost of each operation is either worst-case or amortized, but\n    remains valid even if structures are shared.\n\ncategory:             Data Structures\nabi:                  af77343f566a59b084227c4739fe068a\nexposed:              True\nexposed-modules:\n    Data.Containers.ListUtils Data.Graph Data.IntMap\n    Data.IntMap.Internal Data.IntMap.Internal.Debug Data.IntMap.Lazy\n    Data.IntMap.Merge.Lazy Data.IntMap.Merge.Strict Data.IntMap.Strict\n    Data.IntMap.Strict.Internal Data.IntSet Data.IntSet.Internal\n    Data.IntSet.Internal.IntTreeCommons Data.Map Data.Map.Internal\n    Data.Map.Internal.Debug Data.Map.Lazy Data.Map.Merge.Lazy\n    Data.Map.Merge.Strict Data.Map.Strict Data.Map.Strict.Internal\n    Data.Sequence Data.Sequence.Internal Data.Sequence.Internal.Sorting\n    Data.Set Data.Set.Internal Data.Tree\n\nhidden-modules:\n    Utils.Containers.Internal.Prelude Utils.Containers.Internal.State\n    Utils.Containers.Internal.StrictMaybe\n    Utils.Containers.Internal.PtrEquality\n    Utils.Containers.Internal.EqOrdUtil\n    Utils.Containers.Internal.BitUtil\n    Utils.Containers.Internal.BitQueue\n    Utils.Containers.Internal.StrictPair\n\nimport-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/containers-0.8-034d\n\nlibrary-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/containers-0.8-034d\n\nlibrary-dirs-static:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/containers-0.8-034d\n\ndynamic-library-dirs: ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591\ndata-dir:\n    ${pkgroot}/../share/aarch64-osx-ghc-9.14.1-a591/containers-0.8\n\nhs-libraries:         HScontainers-0.8-034d\ndepends:\n    array-0.5.8.0-3b50 base-4.22.0.0-1f90 deepseq-1.5.1.0-f1e0\n    template-haskell-2.24.0.0-8dc5\n\nhaddock-interfaces:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/containers-0.8-034d/containers.haddock\n\nhaddock-html:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/containers-0.8-034d\npkgroot: \"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\"",
+      "base": "name:                 base\nversion:              4.22.0.0\nvisibility:           public\nid:                   base-4.22.0.0-1f90\nkey:                  base-4.22.0.0-1f90\nlicense:              BSD-3-Clause\nmaintainer:\n    Core Libraries Committee <core-libraries-committee@haskell.org>\n\nsynopsis:             Core data structures and operations\ndescription:\n    Haskell's base library provides, among other things, core types (e.g. [Bool](\"Data.Bool\") and [Int](\"Data.Int\")),\n    data structures (e.g. [List](\"Data.List\"), [Tuple](\"Data.Tuple\") and [Maybe](\"Data.Maybe\")),\n    the [Exception](\"Control.Exception\") mechanism, and the [IO](\"System.IO\") & [Concurrency](\"Control.Concurrent\") operations.\n    The \"Prelude\" module, which is imported by default, exposes a curated set of types and functions from other modules.\n\n    Other data structures like [Map](https://hackage.haskell.org/package/containers/docs/Data-Map.html),\n    [Set](https://hackage.haskell.org/package/containers/docs/Data-Set.html) are available in the [containers](https://hackage.haskell.org/package/containers) library.\n    To work with textual data, use the [text](https://hackage.haskell.org/package/text/docs/Data-Text.html) library.\n\ncategory:             Prelude\nabi:                  1e834b17f77878e322dfd3e614a2df5e\nexposed:              True\nexposed-modules:\n    Control.Applicative Control.Arrow Control.Category\n    Control.Concurrent Control.Concurrent.Chan Control.Concurrent.MVar\n    Control.Concurrent.QSem Control.Concurrent.QSemN Control.Exception\n    Control.Exception.Annotation Control.Exception.Backtrace\n    Control.Exception.Base Control.Exception.Context Control.Monad\n    Control.Monad.Fail Control.Monad.Fix Control.Monad.IO.Class\n    Control.Monad.Instances Control.Monad.ST Control.Monad.ST.Lazy\n    Control.Monad.ST.Lazy.Safe Control.Monad.ST.Lazy.Unsafe\n    Control.Monad.ST.Safe Control.Monad.ST.Strict\n    Control.Monad.ST.Unsafe Control.Monad.Zip Data.Array.Byte\n    Data.Bifoldable Data.Bifoldable1 Data.Bifunctor Data.Bitraversable\n    Data.Bits Data.Bool Data.Bounded Data.Char Data.Coerce Data.Complex\n    Data.Data Data.Dynamic Data.Either Data.Enum Data.Eq Data.Fixed\n    Data.Foldable Data.Foldable1 Data.Function Data.Functor\n    Data.Functor.Classes Data.Functor.Compose Data.Functor.Const\n    Data.Functor.Contravariant Data.Functor.Identity\n    Data.Functor.Product Data.Functor.Sum Data.IORef Data.Int Data.Ix\n    Data.Kind Data.List Data.List.NonEmpty Data.Maybe Data.Monoid\n    Data.Ord Data.Proxy Data.Ratio Data.STRef Data.STRef.Lazy\n    Data.STRef.Strict Data.Semigroup Data.String Data.Traversable\n    Data.Tuple Data.Type.Bool Data.Type.Coercion Data.Type.Equality\n    Data.Type.Ord Data.Typeable Data.Unique Data.Version Data.Void\n    Data.Word Debug.Trace Foreign Foreign.C Foreign.C.ConstPtr\n    Foreign.C.Error Foreign.C.String Foreign.C.Types Foreign.Concurrent\n    Foreign.ForeignPtr Foreign.ForeignPtr.Safe\n    Foreign.ForeignPtr.Unsafe Foreign.Marshal Foreign.Marshal.Alloc\n    Foreign.Marshal.Array Foreign.Marshal.Error Foreign.Marshal.Pool\n    Foreign.Marshal.Safe Foreign.Marshal.Unsafe Foreign.Marshal.Utils\n    Foreign.Ptr Foreign.Safe Foreign.StablePtr Foreign.Storable GHC.Arr\n    GHC.ArrayArray GHC.Base GHC.Bits GHC.ByteOrder GHC.Char GHC.Clock\n    GHC.Conc GHC.Conc.IO GHC.Conc.Signal GHC.Conc.Sync\n    GHC.ConsoleHandler GHC.Constants GHC.Desugar GHC.Encoding.UTF8\n    GHC.Enum GHC.Environment GHC.Err GHC.Event GHC.Event.TimeOut\n    GHC.Exception GHC.Exception.Type GHC.ExecutionStack GHC.Exts\n    GHC.Fingerprint GHC.Fingerprint.Type GHC.Float\n    GHC.Float.ConversionUtils GHC.Float.RealFracMethods GHC.Foreign\n    GHC.ForeignPtr GHC.GHCi GHC.GHCi.Helpers GHC.Generics GHC.IO\n    GHC.IO.Buffer GHC.IO.BufferedIO GHC.IO.Device GHC.IO.Encoding\n    GHC.IO.Encoding.CodePage GHC.IO.Encoding.Failure\n    GHC.IO.Encoding.Iconv GHC.IO.Encoding.Latin1 GHC.IO.Encoding.Types\n    GHC.IO.Encoding.UTF16 GHC.IO.Encoding.UTF32 GHC.IO.Encoding.UTF8\n    GHC.IO.Exception GHC.IO.FD GHC.IO.Handle GHC.IO.Handle.FD\n    GHC.IO.Handle.Internals GHC.IO.Handle.Lock GHC.IO.Handle.Text\n    GHC.IO.Handle.Types GHC.IO.IOMode GHC.IO.StdHandles\n    GHC.IO.SubSystem GHC.IO.Unsafe GHC.IOArray GHC.IORef GHC.InfoProv\n    GHC.Int GHC.Integer GHC.Integer.Logarithms GHC.IsList GHC.Ix\n    GHC.List GHC.MVar GHC.Maybe GHC.Natural GHC.Num GHC.Num.BigNat\n    GHC.Num.Integer GHC.Num.Natural GHC.OldList GHC.OverloadedLabels\n    GHC.Profiling GHC.Ptr GHC.RTS.Flags GHC.Read GHC.Real GHC.Records\n    GHC.ResponseFile GHC.ST GHC.STRef GHC.Show GHC.Stable\n    GHC.StableName GHC.Stack GHC.Stack.CCS GHC.Stack.CloneStack\n    GHC.Stack.Types GHC.StaticPtr GHC.Stats GHC.Storable GHC.TopHandler\n    GHC.TypeError GHC.TypeLits GHC.TypeNats GHC.Unicode GHC.Weak\n    GHC.Weak.Finalize GHC.Word Numeric Numeric.Natural Prelude\n    System.CPUTime System.Console.GetOpt System.Environment\n    System.Environment.Blank System.Exit System.IO System.IO.Error\n    System.IO.Unsafe System.Info System.Mem System.Mem.StableName\n    System.Mem.Weak System.Posix.Internals System.Posix.Types\n    System.Timeout Text.ParserCombinators.ReadP\n    Text.ParserCombinators.ReadPrec Text.Printf Text.Read Text.Read.Lex\n    Text.Show Text.Show.Functions Type.Reflection\n    Type.Reflection.Unsafe Unsafe.Coerce\n\nhidden-modules:\n    System.CPUTime.Unsupported System.CPUTime.Utils\n    System.CPUTime.Posix.ClockGetTime System.CPUTime.Posix.Times\n    System.CPUTime.Posix.RUsage\n\nimport-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/base-4.22.0.0-1f90\n\nlibrary-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/base-4.22.0.0-1f90\n\nlibrary-dirs-static:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/base-4.22.0.0-1f90\n\ndynamic-library-dirs: ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591\ndata-dir:\n    ${pkgroot}/../share/aarch64-osx-ghc-9.14.1-a591/base-4.22.0.0\n\nhs-libraries:         HSbase-4.22.0.0-1f90\ndepends:              ghc-internal-9.1401.0-0c3b ghc-prim-0.13.1-36ee\nhaddock-interfaces:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/base-4.22.0.0-1f90/base.haddock\n\nhaddock-html:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/base-4.22.0.0-1f90\npkgroot: \"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\"",
+      "ghc-internal": "name:                 ghc-internal\nversion:              9.1401.0\nvisibility:           public\nid:                   ghc-internal-9.1401.0-0c3b\nkey:                  ghc-internal-9.1401.0-0c3b\nlicense:              BSD-3-Clause\nmaintainer:           The GHC Developers <ghc-devs@haskell.org>\nsynopsis:             Basic libraries\ndescription:\n    This package contains the implementation of GHC's standard libraries and is\n    not intended for use by end-users.\n    .\n    Users should instead use either the @base@ or @ghc-experimental@ packages\n\ncategory:             Prelude\nabi:                  af846d1ad897c26e5754c81844269bc3\nexposed:              True\nexposed-modules:\n    GHC.Internal.AllocationLimitHandler GHC.Internal.Arr\n    GHC.Internal.ArrayArray GHC.Internal.Base\n    GHC.Internal.Bignum.Backend GHC.Internal.Bignum.Backend.Native\n    GHC.Internal.Bignum.Backend.Selected GHC.Internal.Bignum.BigNat\n    GHC.Internal.Bignum.Integer GHC.Internal.Bignum.Natural\n    GHC.Internal.Bignum.Primitives GHC.Internal.Bignum.WordArray\n    GHC.Internal.Bits GHC.Internal.ByteOrder GHC.Internal.CString\n    GHC.Internal.Char GHC.Internal.Classes GHC.Internal.Clock\n    GHC.Internal.ClosureTypes GHC.Internal.Conc.Bound\n    GHC.Internal.Conc.IO GHC.Internal.Conc.Signal\n    GHC.Internal.Conc.Sync GHC.Internal.ConsoleHandler\n    GHC.Internal.Control.Arrow GHC.Internal.Control.Category\n    GHC.Internal.Control.Concurrent.MVar GHC.Internal.Control.Exception\n    GHC.Internal.Control.Exception.Base GHC.Internal.Control.Monad\n    GHC.Internal.Control.Monad.Fail GHC.Internal.Control.Monad.Fix\n    GHC.Internal.Control.Monad.IO.Class GHC.Internal.Control.Monad.ST\n    GHC.Internal.Control.Monad.ST.Imp\n    GHC.Internal.Control.Monad.ST.Lazy\n    GHC.Internal.Control.Monad.ST.Lazy.Imp\n    GHC.Internal.Control.Monad.Zip GHC.Internal.Data.Bits\n    GHC.Internal.Data.Bool GHC.Internal.Data.Coerce\n    GHC.Internal.Data.Data GHC.Internal.Data.Dynamic\n    GHC.Internal.Data.Either GHC.Internal.Data.Eq\n    GHC.Internal.Data.Foldable GHC.Internal.Data.Function\n    GHC.Internal.Data.Functor GHC.Internal.Data.Functor.Const\n    GHC.Internal.Data.Functor.Identity GHC.Internal.Data.Functor.Utils\n    GHC.Internal.Data.IORef GHC.Internal.Data.Ix GHC.Internal.Data.List\n    GHC.Internal.Data.List.NonEmpty GHC.Internal.Data.Maybe\n    GHC.Internal.Data.Monoid GHC.Internal.Data.NonEmpty\n    GHC.Internal.Data.OldList GHC.Internal.Data.Ord\n    GHC.Internal.Data.Proxy GHC.Internal.Data.STRef\n    GHC.Internal.Data.STRef.Strict GHC.Internal.Data.Semigroup.Internal\n    GHC.Internal.Data.String GHC.Internal.Data.Traversable\n    GHC.Internal.Data.Tuple GHC.Internal.Data.Type.Bool\n    GHC.Internal.Data.Type.Coercion GHC.Internal.Data.Type.Equality\n    GHC.Internal.Data.Type.Ord GHC.Internal.Data.Typeable\n    GHC.Internal.Data.Unique GHC.Internal.Data.Version\n    GHC.Internal.Data.Void GHC.Internal.Debug GHC.Internal.Debug.Trace\n    GHC.Internal.Desugar GHC.Internal.Encoding.UTF8 GHC.Internal.Enum\n    GHC.Internal.Environment GHC.Internal.Err GHC.Internal.Event\n    GHC.Internal.Event.TimeOut GHC.Internal.Exception\n    GHC.Internal.Exception.Backtrace GHC.Internal.Exception.Context\n    GHC.Internal.Exception.Type GHC.Internal.ExecutionStack\n    GHC.Internal.ExecutionStack.Internal GHC.Internal.Exts\n    GHC.Internal.Fingerprint GHC.Internal.Fingerprint.Type\n    GHC.Internal.Float GHC.Internal.Float.ConversionUtils\n    GHC.Internal.Float.RealFracMethods GHC.Internal.Foreign.C.ConstPtr\n    GHC.Internal.Foreign.C.Error GHC.Internal.Foreign.C.String\n    GHC.Internal.Foreign.C.String.Encoding GHC.Internal.Foreign.C.Types\n    GHC.Internal.Foreign.Concurrent GHC.Internal.Foreign.ForeignPtr\n    GHC.Internal.Foreign.ForeignPtr.Imp\n    GHC.Internal.Foreign.ForeignPtr.Unsafe\n    GHC.Internal.Foreign.Marshal.Alloc\n    GHC.Internal.Foreign.Marshal.Array\n    GHC.Internal.Foreign.Marshal.Error\n    GHC.Internal.Foreign.Marshal.Pool GHC.Internal.Foreign.Marshal.Safe\n    GHC.Internal.Foreign.Marshal.Unsafe\n    GHC.Internal.Foreign.Marshal.Utils GHC.Internal.Foreign.Ptr\n    GHC.Internal.Foreign.StablePtr GHC.Internal.Foreign.Storable\n    GHC.Internal.ForeignPtr GHC.Internal.ForeignSrcLang\n    GHC.Internal.Functor.ZipList GHC.Internal.GHCi\n    GHC.Internal.GHCi.Helpers GHC.Internal.Generics\n    GHC.Internal.Heap.Closures GHC.Internal.Heap.Constants\n    GHC.Internal.Heap.InfoTable GHC.Internal.Heap.InfoTable.Types\n    GHC.Internal.Heap.InfoTableProf GHC.Internal.Heap.ProfInfo.Types\n    GHC.Internal.IO GHC.Internal.IO.Buffer GHC.Internal.IO.BufferedIO\n    GHC.Internal.IO.Device GHC.Internal.IO.Encoding\n    GHC.Internal.IO.Encoding.CodePage GHC.Internal.IO.Encoding.Failure\n    GHC.Internal.IO.Encoding.Iconv GHC.Internal.IO.Encoding.Latin1\n    GHC.Internal.IO.Encoding.Types GHC.Internal.IO.Encoding.UTF16\n    GHC.Internal.IO.Encoding.UTF32 GHC.Internal.IO.Encoding.UTF8\n    GHC.Internal.IO.Exception GHC.Internal.IO.FD GHC.Internal.IO.Handle\n    GHC.Internal.IO.Handle.FD GHC.Internal.IO.Handle.Internals\n    GHC.Internal.IO.Handle.Lock GHC.Internal.IO.Handle.Text\n    GHC.Internal.IO.Handle.Types GHC.Internal.IO.IOMode\n    GHC.Internal.IO.StdHandles GHC.Internal.IO.SubSystem\n    GHC.Internal.IO.Unsafe GHC.Internal.IOArray GHC.Internal.IORef\n    GHC.Internal.InfoProv GHC.Internal.InfoProv.Types GHC.Internal.Int\n    GHC.Internal.Integer GHC.Internal.Integer.Logarithms\n    GHC.Internal.IsList GHC.Internal.Ix GHC.Internal.LanguageExtensions\n    GHC.Internal.Lexeme GHC.Internal.List GHC.Internal.MVar\n    GHC.Internal.Magic GHC.Internal.Magic.Dict GHC.Internal.Maybe\n    GHC.Internal.Natural GHC.Internal.Num GHC.Internal.Numeric\n    GHC.Internal.Numeric.Natural GHC.Internal.OverloadedLabels\n    GHC.Internal.Pack GHC.Internal.Prim GHC.Internal.Prim.Exception\n    GHC.Internal.Prim.Ext GHC.Internal.Prim.Panic\n    GHC.Internal.Prim.PtrEq GHC.Internal.PrimopWrappers\n    GHC.Internal.Profiling GHC.Internal.Ptr GHC.Internal.RTS.Flags\n    GHC.Internal.RTS.Flags.Test GHC.Internal.Read GHC.Internal.Real\n    GHC.Internal.Records GHC.Internal.ResponseFile GHC.Internal.ST\n    GHC.Internal.STRef GHC.Internal.Show GHC.Internal.Stable\n    GHC.Internal.StableName GHC.Internal.Stack\n    GHC.Internal.Stack.Annotation GHC.Internal.Stack.CCS\n    GHC.Internal.Stack.CloneStack GHC.Internal.Stack.Constants\n    GHC.Internal.Stack.ConstantsProf GHC.Internal.Stack.Decode\n    GHC.Internal.Stack.Types GHC.Internal.StaticPtr GHC.Internal.Stats\n    GHC.Internal.Storable GHC.Internal.System.Environment\n    GHC.Internal.System.Environment.Blank GHC.Internal.System.Exit\n    GHC.Internal.System.IO GHC.Internal.System.IO.Error\n    GHC.Internal.System.Mem GHC.Internal.System.Mem.StableName\n    GHC.Internal.System.Posix.Internals GHC.Internal.System.Posix.Types\n    GHC.Internal.TH.Lib GHC.Internal.TH.Lift GHC.Internal.TH.Quote\n    GHC.Internal.TH.Syntax GHC.Internal.Text.ParserCombinators.ReadP\n    GHC.Internal.Text.ParserCombinators.ReadPrec GHC.Internal.Text.Read\n    GHC.Internal.Text.Read.Lex GHC.Internal.Text.Show\n    GHC.Internal.TopHandler GHC.Internal.Tuple\n    GHC.Internal.Type.Reflection GHC.Internal.Type.Reflection.Unsafe\n    GHC.Internal.TypeError GHC.Internal.TypeLits\n    GHC.Internal.TypeLits.Internal GHC.Internal.TypeNats\n    GHC.Internal.TypeNats.Internal GHC.Internal.Types\n    GHC.Internal.Unicode GHC.Internal.Unsafe.Coerce GHC.Internal.Weak\n    GHC.Internal.Weak.Finalize GHC.Internal.Word\n\nhidden-modules:\n    GHC.Internal.Data.Typeable.Internal\n    GHC.Internal.IO.Handle.Lock.Common\n    GHC.Internal.IO.Handle.Lock.Flock\n    GHC.Internal.IO.Handle.Lock.LinuxOFD\n    GHC.Internal.IO.Handle.Lock.NoOp\n    GHC.Internal.IO.Handle.Lock.Windows GHC.Internal.StaticPtr.Internal\n    GHC.Internal.Event.Arr GHC.Internal.Event.Array\n    GHC.Internal.Event.Internal GHC.Internal.Event.Internal.Types\n    GHC.Internal.Event.IntTable GHC.Internal.Event.IntVar\n    GHC.Internal.Event.PSQ GHC.Internal.Event.Unique\n    GHC.Internal.Unicode.Bits\n    GHC.Internal.Unicode.Char.DerivedCoreProperties\n    GHC.Internal.Unicode.Char.UnicodeData.GeneralCategory\n    GHC.Internal.Unicode.Char.UnicodeData.SimpleLowerCaseMapping\n    GHC.Internal.Unicode.Char.UnicodeData.SimpleTitleCaseMapping\n    GHC.Internal.Unicode.Char.UnicodeData.SimpleUpperCaseMapping\n    GHC.Internal.Unicode.Version\n    GHC.Internal.System.Environment.ExecutablePath\n    GHC.Internal.Bignum.Backend.GMP GHC.Internal.Event.Control\n    GHC.Internal.Event.EPoll GHC.Internal.Event.KQueue\n    GHC.Internal.Event.Manager GHC.Internal.Event.Poll\n    GHC.Internal.Event.Thread GHC.Internal.Event.TimerManager\n\nimport-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b\n\nlibrary-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b\n\nlibrary-dirs-static:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b\n\ndynamic-library-dirs: ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591\ndata-dir:\n    ${pkgroot}/../share/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0\n\nhs-libraries:         HSghc-internal-9.1401.0-0c3b\nextra-libraries:      iconv\ninclude-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/include\n\nincludes:             HsBase.h\ndepends:              rts-1.0.3\nhaddock-interfaces:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/ghc-internal-9.1401.0-0c3b/ghc-internal.haddock\n\nhaddock-html:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/ghc-internal-9.1401.0-0c3b\npkgroot: \"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\"",
+      "ghc-prim": "name:                 ghc-prim\nversion:              0.13.1\nvisibility:           public\nid:                   ghc-prim-0.13.1-36ee\nkey:                  ghc-prim-0.13.1-36ee\nlicense:              BSD-3-Clause\nmaintainer:           libraries@haskell.org\nsynopsis:             GHC primitives\ndescription:\n    This package used to contain the primitive types and operations supplied by\n    GHC. They are now exported by the ghc-internal package and ghc-prim is\n    deprecated.\n\ncategory:             GHC\nabi:                  58d8da4e4c1c51b92726bb8097eb8f26\nexposed:              True\nexposed-modules:\n    GHC.CString from ghc-internal-9.1401.0-0c3b:GHC.Internal.CString,\n    GHC.Classes from ghc-internal-9.1401.0-0c3b:GHC.Internal.Classes,\n    GHC.Debug from ghc-internal-9.1401.0-0c3b:GHC.Internal.Debug,\n    GHC.Magic from ghc-internal-9.1401.0-0c3b:GHC.Internal.Magic,\n    GHC.Magic.Dict from ghc-internal-9.1401.0-0c3b:GHC.Internal.Magic.Dict,\n    GHC.Prim from ghc-internal-9.1401.0-0c3b:GHC.Internal.Prim,\n    GHC.Prim.Exception from ghc-internal-9.1401.0-0c3b:GHC.Internal.Prim.Exception,\n    GHC.Prim.Ext from ghc-internal-9.1401.0-0c3b:GHC.Internal.Prim.Ext,\n    GHC.Prim.Panic from ghc-internal-9.1401.0-0c3b:GHC.Internal.Prim.Panic,\n    GHC.Prim.PtrEq from ghc-internal-9.1401.0-0c3b:GHC.Internal.Prim.PtrEq,\n    GHC.PrimopWrappers from ghc-internal-9.1401.0-0c3b:GHC.Internal.PrimopWrappers,\n    GHC.Tuple from ghc-internal-9.1401.0-0c3b:GHC.Internal.Tuple,\n    GHC.Types from ghc-internal-9.1401.0-0c3b:GHC.Internal.Types\n\nhidden-modules:       Dummy\nimport-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/ghc-prim-0.13.1-36ee\n\nlibrary-dirs:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/ghc-prim-0.13.1-36ee\n\nlibrary-dirs-static:\n    ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591/ghc-prim-0.13.1-36ee\n\ndynamic-library-dirs: ${pkgroot}/../lib/aarch64-osx-ghc-9.14.1-a591\ndata-dir:\n    ${pkgroot}/../share/aarch64-osx-ghc-9.14.1-a591/ghc-prim-0.13.1\n\nhs-libraries:         HSghc-prim-0.13.1-36ee\ndepends:              ghc-internal-9.1401.0-0c3b\nhaddock-interfaces:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/ghc-prim-0.13.1-36ee/ghc-prim.haddock\n\nhaddock-html:\n    ${pkgroot}/../../../share/doc/ghc-9.14.1/html/libraries/ghc-prim-0.13.1-36ee\npkgroot: \"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\""
+    },
+    "environment": {
+      "GHC": "/Users/ekmett/.ghcup/bin/ghc",
+      "GHC_PKG": "ghc-pkg"
+    }
+  },
+  "bundle": {
+    "manifest": {
+      "path": "build/map/modules.txt",
+      "sha256": "4e182b75f802ceed69ffa99b67631e5db3bc1a034df2935819db1aad1b9a7a77"
+    },
+    "originalProvenance": {
+      "path": "build/map/provenance.json",
+      "sha256": "dcc52343a4b0d5b4afdf320dd78ae787d567f4e2220e274c945435d0528a43c3"
+    },
+    "modules": [
+      {
+        "path": "build/map/core/Utils.Containers.Internal.BitUtil.json",
+        "sha256": "608aceaddce26d4854e598815b01c7fcaab210671018ccaca75a6276494657f1"
+      },
+      {
+        "path": "build/map/core/Utils.Containers.Internal.BitQueue.json",
+        "sha256": "fcc2bdf0989ad4cfe159b5d62f1fea3921bcbd685c13c4ac5e16ef8b4114b811"
+      },
+      {
+        "path": "build/map/core/Utils.Containers.Internal.Prelude.json",
+        "sha256": "ff747f6cdf96542413ab57ddbb330b4892a4c2c2d2501d87b66ed7e317fb610d"
+      },
+      {
+        "path": "build/map/core/Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "1fb3704aa15c48d0ec31b897886d612e845ad3acb3220510cb1222fd90636079"
+      },
+      {
+        "path": "build/map/core/Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "9d23dbad89194751e671fa85a48402b279c182a86f67adc8febdd489541cccb3"
+      },
+      {
+        "path": "build/map/core/Utils.Containers.Internal.StrictPair.json",
+        "sha256": "81af8a0eab844f1001457f2561dbfeb73d93cf013651ae9d36ca56acaad0176b"
+      },
+      {
+        "path": "build/map/core/Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "c8685641ee7c7434db7c2c25bef20b5a81d7024f15ba570e2c2fb7d072ad527c"
+      },
+      {
+        "path": "build/map/core/Data.Set.Internal.json",
+        "sha256": "ea46e71e6efa7d3e71f4cfa98c5485247acecdc01e2233db8cbf0e00c6c4b42a"
+      },
+      {
+        "path": "build/map/core/Data.Map.Internal.json",
+        "sha256": "cfff11106d6bc58d0d3d9fb2c7e7c57a0568b359f8426307ea06b817368b6aac"
+      },
+      {
+        "path": "build/map/core/Data.Map.Internal.Debug.json",
+        "sha256": "0ed4fc962d618d471afb4b201fd38cc588a4ff9ab987593b2e46e9f194fea341"
+      },
+      {
+        "path": "build/map/core/Data.Map.Strict.Internal.json",
+        "sha256": "aa56fd93873446bae6af996b6fd8cbf263a9be0a41cd6f04b9d7910f5887b9ce"
+      },
+      {
+        "path": "build/map/core/Data.Map.Strict.json",
+        "sha256": "cb93fa19db52aaf8c50d250cd89ffb56a7a638fdd9e5edb8b6c625cfcb300fcd"
+      },
+      {
+        "path": "build/map/core/THC.MapWorkload.json",
+        "sha256": "9af74e2add1d9d8f8423dfe19f2194037de43b74b0f0886c0e7e01ff00a3eccc"
+      },
+      {
+        "path": "build/map/core/THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+      },
+      {
+        "path": "build/map/core/GHC.Internal.CString.json",
+        "sha256": "c3aaae427fa511ec48097058d126d89cd9751c548d31fd5a8699c555fecb1079"
+      },
+      {
+        "path": "build/map/core/GHC.Internal.Err.json",
+        "sha256": "eda5b8685217e29b270f59d8f697638282220346a205456f7b4bd4cebbec27fb"
+      },
+      {
+        "path": "build/map/core/GHC.InterfaceClosure.json",
+        "sha256": "340ddc1339a053ec600ed311af7259b37a977c8211413e8d6035ab99fa0e40e0"
+      }
+    ]
+  },
+  "sources": [
+    {
+      "path": "compiler/package-roots/InterfaceRoots.hs",
+      "sha256": "9dcc070e8243ff7fbe51431d0bcaf6f35379ff467d301a4e590ae4ab6aef29f9"
+    },
+    {
+      "path": "examples/THC/MapWorkload.hs",
+      "sha256": "04ea4d64d7a6571c6f157fa283a030713377e431c0863d68ec893d94ab73c1d2"
+    },
+    {
+      "path": "vendor/archives/containers-0.8.tar.gz",
+      "sha256": "b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8"
+    },
+    {
+      "path": "vendor/containers-0.8/LICENSE",
+      "sha256": "7904b49880da042ab0e3125ef4da8ba2322b7b5e13de13bc6a322e5e2670bc5c"
+    },
+    {
+      "path": "vendor/containers-0.8/containers.cabal",
+      "sha256": "ddd5d7ee86afe3a61853c83514be167849e3e6a7f2c19190beedff2968e3be82"
+    },
+    {
+      "path": "vendor/containers-0.8/include/containers.h",
+      "sha256": "180267627f5fae368d6e4d326bf5f93adc06399d3b6e7ed377b2b09ecae2db2a"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Data/Map/Internal/Debug.hs",
+      "sha256": "fd032ef0a9efe71df710e9f6fcd718d546373ea50b50ebe27ca0512130b48ea6"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Data/Map/Internal.hs",
+      "sha256": "fe3ce5599c0627a99ec1121dedc9cd2d7dc6133135536a93f0463b59a8b933d9"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Data/Map/Strict/Internal.hs",
+      "sha256": "af8e4a0ba255d2209851f0f5022952612d351fb8621a699f53521af9667e53cb"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Data/Map/Strict.hs",
+      "sha256": "2bf8e0a72c1eeb2f44e8e763aff424fc9b2ca153967569b496bd16697f524492"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Data/Set/Internal.hs",
+      "sha256": "1557cac4fc324cb3bd7930e8d2d65180af608a0b7ee80c127120979a0b75e467"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Utils/Containers/Internal/BitQueue.hs",
+      "sha256": "c68b589c2e8fa7426f4e9b061397c1e10ece8500c83166eca98051d0fcd83eb8"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Utils/Containers/Internal/BitUtil.hs",
+      "sha256": "57c229a7c7ad0408a172f27a10919f6547e6977a9a9c34d1fe12fea5c46df7de"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Utils/Containers/Internal/EqOrdUtil.hs",
+      "sha256": "70c0b1189b85e634f74441a4b4e0cef0c5a2b6b180ee8af4976716dad75cb72e"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Utils/Containers/Internal/Prelude.hs",
+      "sha256": "9957701fe52159a47c0cb735a59eadc49385729154a1510468e372ea504640d5"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Utils/Containers/Internal/PtrEquality.hs",
+      "sha256": "80a708ccaad57d9ad011e2c816d10d4088e579a22d6dbb121784bf88fd41dec0"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Utils/Containers/Internal/StrictMaybe.hs",
+      "sha256": "c6d0f9f26a2f3e1f0c9341080c0ae18b77923d52c532eb0f0ca5179c064cfaef"
+    },
+    {
+      "path": "vendor/containers-0.8/src/Utils/Containers/Internal/StrictPair.hs",
+      "sha256": "7fe9a21305d62e56dabb4de7c5eaf99e17f6396fa647f099ed01383a0b01c73b"
+    },
+    {
+      "path": "vendor/ghc-9.14.1/GHC/Internal/CString.hs",
+      "sha256": "3b2e7a0fb2880d8f98cb002adfbaa36a8469667b7494f8f695fe1a6f181de573"
+    },
+    {
+      "path": "vendor/ghc-9.14.1/GHC/Internal/Err.hs",
+      "sha256": "f109ac925928a0e7fed063bcfd03c93e3d8629d8054d984e600aab26c0122478"
+    },
+    {
+      "path": "vendor/ghc-9.14.1/GHC/Internal/Exception/Type.hs-boot",
+      "sha256": "f2a0440d35e33a8688d692cf50e4d33e74e92f08e84b04ab8aec20fd4861d2e0"
+    },
+    {
+      "path": "vendor/ghc-9.14.1/GHC/Internal/Exception.hs-boot",
+      "sha256": "7422fa92308439db3c0ca034b02522c96e7961cff00754d0bdca964a4f98bc15"
+    },
+    {
+      "path": "vendor/ghc-9.14.1/LICENSE",
+      "sha256": "768c070bd0b7d820d169ee8153d5487acfc262cbbc10dfce18d05c0bb2d2800d"
+    }
+  ],
+  "exporters": [
+    {
+      "path": "compiler/Thc/Plugin.hs",
+      "sha256": "9b9cfc46efff2cb54d29a512dacb87fb4867a35363cc3c6c44dcb2b73fcd8a9d"
+    },
+    {
+      "path": "compiler/Thc/Sources.hs",
+      "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+    },
+    {
+      "path": "compiler/Thc/Wired.hs",
+      "sha256": "0fa673b5e3cd94e1398b69843644f8170d153819f45135a4d3913a10bdbfc48b"
+    },
+    {
+      "path": "compiler/build.sh",
+      "sha256": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb"
+    },
+    {
+      "path": "compiler/export-boot.py",
+      "sha256": "1a75235176dd25013300cda3ac740598860e5f620f9c565b8e81b9d09720253b"
+    },
+    {
+      "path": "compiler/export-map.sh",
+      "sha256": "6679c9f242450146e3485c57dbaa204c1ec87fc20c4f0c47c9a9941cf2106fa3"
+    },
+    {
+      "path": "compiler/export.sh",
+      "sha256": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489"
+    },
+    {
+      "path": "compiler/reproduction-provenance.py",
+      "sha256": "62be82def72fee8823bf1bd9a4952611cf82d89caa686d6c6ad0ec543237d44e"
+    },
+    {
+      "path": "compiler/toolchain.sh",
+      "sha256": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614"
+    }
+  ],
+  "sourceNotes": {
+    "driverDefault": true,
+    "bundleContainsMetadata": true,
+    "requestedForFreshExport": true
+  },
+  "compilerFlagRecipes": {
+    "pluginBuild": [
+      "--make",
+      "-O1",
+      "-dynamic",
+      "-shared",
+      "-fPIC",
+      "-package",
+      "ghc",
+      "-package",
+      "bytestring",
+      "-package",
+      "directory",
+      "-package",
+      "filepath",
+      "-package",
+      "containers",
+      "-this-unit-id",
+      "thc-core-plugin-0.1",
+      "-hisuf",
+      "dyn_hi",
+      "-osuf",
+      "dyn_o",
+      "-icompiler",
+      "-odir",
+      "$ROOT/build/compiler",
+      "-hidir",
+      "$ROOT/build/compiler",
+      "compiler/Thc/Plugin.hs",
+      "-o",
+      "$ROOT/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.{dylib,so}"
+    ],
+    "mapSource": [
+      "--make",
+      "-no-link",
+      "-O2",
+      "-dynamic",
+      "-fforce-recomp",
+      "-dcore-lint",
+      "-package-db",
+      "$ROOT/build/compiler/package.conf.d",
+      "-package",
+      "thc-core-plugin",
+      "-fplugin=Thc.Plugin",
+      "-i$ROOT/examples",
+      "-fplugin-opt=Thc.Plugin:$ROOT/build/map/core",
+      "-odir",
+      "$ROOT/build/map/ghc",
+      "-hidir",
+      "$ROOT/build/map/ghc",
+      "-i$ROOT/vendor/containers-0.8/src",
+      "-I$ROOT/vendor/containers-0.8/include",
+      "-fplugin-opt=Thc.Plugin:closure=mapAggregate",
+      "-g",
+      "-fplugin-opt=Thc.Plugin:source-notes",
+      "examples/THC/MapWorkload.hs"
+    ],
+    "bootSignatures": [
+      "-c",
+      "-dynamic",
+      "-fforce-recomp",
+      "-this-unit-id",
+      "ghc-internal",
+      "-package",
+      "ghc-internal",
+      "-odir",
+      "$ROOT/build/map/boot-ghc",
+      "-hidir",
+      "$ROOT/build/map/boot-ghc",
+      "$ROOT/vendor/ghc-9.14.1/{GHC/Internal/Exception/Type.hs-boot,GHC/Internal/Exception.hs-boot}"
+    ],
+    "bootSources": [
+      "-c",
+      "-dynamic",
+      "-fforce-recomp",
+      "-this-unit-id",
+      "ghc-internal",
+      "-package",
+      "ghc-internal",
+      "-odir",
+      "$ROOT/build/map/boot-ghc",
+      "-hidir",
+      "$ROOT/build/map/boot-ghc",
+      "-O2",
+      "-dcore-lint",
+      "-package-db",
+      "$ROOT/build/compiler/package.conf.d",
+      "-package",
+      "thc-core-plugin",
+      "-fplugin=Thc.Plugin",
+      "-fplugin-opt=Thc.Plugin:$ROOT/build/map/boot-core",
+      "-fplugin-opt=Thc.Plugin:post-tidy",
+      "-g",
+      "-fplugin-opt=Thc.Plugin:source-notes",
+      "$ROOT/vendor/ghc-9.14.1/GHC/Internal/{CString,Err}.hs"
+    ],
+    "installedInterfaceRoot": [
+      "--make",
+      "-no-link",
+      "-O2",
+      "-dynamic",
+      "-fforce-recomp",
+      "-dcore-lint",
+      "-package-db",
+      "$ROOT/build/compiler/package.conf.d",
+      "-package",
+      "thc-core-plugin",
+      "-fplugin=Thc.Plugin",
+      "-i$ROOT/examples",
+      "-fplugin-opt=Thc.Plugin:$ROOT/build/map/interface-core",
+      "-odir",
+      "$ROOT/build/map/interface-ghc",
+      "-hidir",
+      "$ROOT/build/map/interface-ghc",
+      "-package",
+      "ghc-internal",
+      "-fplugin-opt=Thc.Plugin:closure=exceptionInterfaceRoot",
+      "-g",
+      "-fplugin-opt=Thc.Plugin:source-notes",
+      "compiler/package-roots/InterfaceRoots.hs"
+    ]
+  },
+  "compilerFlagRecipesSha256": "49366f1ca9c3f1ef56f5684455afeb63fd344f83db88084d7f71abb4e6768a86",
+  "compilerFlagEncoding": "SHA256 of UTF-8 JSON with sorted keys and compact separators",
+  "installedInterfaces": [
+    {
+      "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Exception.dyn_hi",
+      "sha256": "a2352ebbfe4edc75ba6a662022a32f80048fc0efb6d2abc6fd3aefc0e8f3fcd0",
+      "owner": "ghc-internal:GHC.Internal.Exception",
+      "profile": "dynamic"
+    },
+    {
+      "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Exception/Backtrace.dyn_hi",
+      "sha256": "f4383f7e0e99dc6bd286829fab5c0714b2f60c7d27e989bce0c908cfe1ce9e8a",
+      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace",
+      "profile": "dynamic"
+    },
+    {
+      "path": "/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/aarch64-osx-ghc-9.14.1-a591/ghc-internal-9.1401.0-0c3b/GHC/Internal/Stack.dyn_hi",
+      "sha256": "1714d88837f2fb775bb86655da764b5cacf17e29a1a968005b29c4cc9d512713",
+      "owner": "ghc-internal:GHC.Internal.Stack",
+      "profile": "dynamic"
+    }
+  ],
+  "interfaceCoverage": "All dynamic interface files owning executable Core/DFun unfoldings actually included in this bundle. Does not cover every transitive type/rule interface consulted during source optimization.",
+  "sourceCoverage": "All supplied main-unit source modules, containers include files/archive/package metadata/license, boot source inputs, interface root and GHC license. GHC package source and boot source hashes are also pinned by the export drivers.",
+  "license": {
+    "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/LICENSE",
+    "path": "vendor/ghc-9.14.1/LICENSE",
+    "sha256": "768c070bd0b7d820d169ee8153d5487acfc262cbbc10dfce18d05c0bb2d2800d"
+  }
+}

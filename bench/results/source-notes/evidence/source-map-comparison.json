@@ -1,0 +1,91 @@
+{
+  "equal": false,
+  "excludedModules": [],
+  "changedModules": [
+    "Data.Map.Internal.json",
+    "Data.Set.Internal.json",
+    "GHC.Internal.CString.json"
+  ],
+  "beforeSha256": "62f298bd58b889e08d686eb436280aef772a207bf6165db4788533e95dabd4d0",
+  "afterSha256": "88da1fe31f314edfcc48f8bee5d1595b38f640ec18ce627140327234e35f68f8",
+  "changedBindings": {
+    "Data.Map.Internal.json": [
+      [
+        "global",
+        "Data.Map.Internal.json",
+        "name",
+        0
+      ],
+      [
+        "global",
+        "Data.Map.Internal.json",
+        "lookupLT",
+        0
+      ],
+      [
+        "global",
+        "Data.Map.Internal.json",
+        "lookupGT",
+        0
+      ],
+      [
+        "global",
+        "Data.Map.Internal.json",
+        "$cliftReadsPrec",
+        0
+      ],
+      [
+        "global",
+        "Data.Map.Internal.json",
+        "lookupGE",
+        0
+      ],
+      [
+        "global",
+        "Data.Map.Internal.json",
+        "lookupLE",
+        0
+      ],
+      [
+        "global",
+        "Data.Map.Internal.json",
+        "name",
+        1
+      ]
+    ],
+    "Data.Set.Internal.json": [
+      [
+        "global",
+        "Data.Set.Internal.json",
+        "lookupGE",
+        0
+      ],
+      [
+        "global",
+        "Data.Set.Internal.json",
+        "lookupLE",
+        0
+      ],
+      [
+        "global",
+        "Data.Set.Internal.json",
+        "lookupLT",
+        0
+      ],
+      [
+        "global",
+        "Data.Set.Internal.json",
+        "lookupGT",
+        0
+      ]
+    ],
+    "GHC.Internal.CString.json": [
+      [
+        "global",
+        "GHC.Internal.CString.json",
+        "c_strlen",
+        0
+      ]
+    ]
+  }
+}

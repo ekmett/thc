@@ -1,0 +1,4673 @@
+{
+  "name": "4: After mid tier",
+  "group": "TruffleIR.Tier2.lambda_n()",
+  "ordinal": 7,
+  "dumpId": 4,
+  "graphType": "StructuredGraph",
+  "nodes": [
+    {
+      "id": 0,
+      "nodeClass": "jdk.graal.compiler.nodes.StartNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget",
+        "value": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.hots..."
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2,
+      "nodeClass": "jdk.graal.compiler.nodes.ParameterNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object[]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 5,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [0]",
+        "value": "int[0|0x0]",
+        "rawvalue": "0"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:718) [bci:8]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 22,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [1]",
+        "value": "int[1|0x1]",
+        "rawvalue": "1"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1566) [bci:43]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 28,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [2]",
+        "value": "int[2|0x2]",
+        "rawvalue": "2"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1568) [bci:58]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 29,
+      "nodeClass": "jdk.graal.compiler.nodes.PiArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1568) [bci:59]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 31,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.unsafeCast(OptimizedCallTarget.java:-1) [bci:-1]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1568) [bci:68]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 62,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:63]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 80,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# thc.runtime.BytecodeRootGen",
+        "value": "Object[Instance<thc.runtime.BytecodeRootGen>]",
+        "rawvalue": "Object[Instance<thc.runtime.BytecodeRootGen>]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 84,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.frame.FrameDescriptor",
+        "value": "Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.api.frame.Fr..."
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 86,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.impl.FrameWithoutBoxing"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 87,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]",
+        "value": "Object[Instance<java.lang.Object[]>]",
+        "rawvalue": "Object[Instance<java.lang.Object[]>]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 90,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 91,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# long[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 92,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# byte[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 95,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i32 [5]",
+        "value": "int[5|0x5]",
+        "rawvalue": "5"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 97,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [7]",
+        "value": "int[7|0x7]",
+        "rawvalue": "7"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 116,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.runtime.CompilationState",
+        "value": "Object[Instance<com.oracle.truffle.runtime.CompilationState>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.Comp..."
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.getTier(OptimizedCallTarget.java:606) [bci:32]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:37]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 122,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# thc.runtime.BytecodeRootGen$CachedBytecodeNode",
+        "value": "Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>]",
+        "rawvalue": "Object[Instance<thc.runtime.BytecodeRootGen$Cac..."
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 129,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [0]",
+        "value": "long[0|0x0]",
+        "rawvalue": "0"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 130,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "2",
+      "properties": {
+        "stamp": "i64 [9]",
+        "value": "long[9|0x9]",
+        "rawvalue": "9"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:10]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 145,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# byte[]",
+        "value": "Object[Instance<byte[]>]",
+        "rawvalue": "Object[Instance<byte[]>]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 150,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object NULL",
+        "value": "Object[null]",
+        "rawvalue": "Object[null]"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5072) [bci:66]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 152,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [-1]",
+        "value": "long[-1|0xffffffffffffffff]",
+        "rawvalue": "-1"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5080) [bci:105]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 220,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64 [10]",
+        "value": "long[10|0xa]",
+        "rawvalue": "10"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadArgument$Long(BytecodeRootGen.java:5866) [bci:54]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5090) [bci:984]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 224,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [1]",
+        "value": "long[1|0x1]",
+        "rawvalue": "1"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5802) [bci:5111]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 311,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "2",
+      "properties": {
+        "stamp": "i64 [32]",
+        "value": "long[32|0x20]",
+        "rawvalue": "32"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleStoreLocal$Long$Long(BytecodeRootGen.java:6129) [bci:152]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5145) [bci:1300]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1052,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64 [246]",
+        "value": "long[246|0xf6]",
+        "rawvalue": "246"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Generic(BytecodeRootGen.java:6252) [bci:85]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5193) [bci:1587]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2184,
+      "nodeClass": "jdk.graal.compiler.nodes.ReturnNode",
+      "block": "11",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2190,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1576) [bci:2]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2191,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2192,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2193,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2201,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "4",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2202,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "2",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2251,
+      "nodeClass": "jdk.graal.compiler.nodes.IfNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6270) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2252,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "2",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.api.memory.UnsafeByteArraySupport.getIntUnaligned(UnsafeByteArraySupport.java:216) [bci:8]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6273) [bci:90]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2258,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "1",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2268,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.IntegerLessThanNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$LessEqual.apply(BytecodeRoot.java:381) [bci:3]",
+        "thc.runtime.BytecodeRootGen$LessEqual_Node.executeApply(BytecodeRootGen.java:25809) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLessEqual$Apply$unboxed_(BytecodeRootGen.java:8001) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5573) [bci:3786]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2269,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "2",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$Subtract.apply(BytecodeRoot.java:373) [bci:2]",
+        "thc.runtime.BytecodeRootGen$Subtract_Node.executeApply(BytecodeRootGen.java:25070) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleSubtract$Apply$unboxed_(BytecodeRootGen.java:7370) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5449) [bci:3074]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2272,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.ConditionalNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$LessEqual.apply(BytecodeRoot.java:381) [bci:3]",
+        "thc.runtime.BytecodeRootGen$LessEqual_Node.executeApply(BytecodeRootGen.java:25809) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLessEqual$Apply$unboxed_(BytecodeRootGen.java:8001) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5573) [bci:3786]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2273,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.ConditionalNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$MatchLiteral.number(BytecodeRoot.java:313) [bci:18]",
+        "thc.runtime.BytecodeRootGen$MatchLiteral_Node.executeNumber(BytecodeRootGen.java:24456) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMatchLiteral$Number$unboxed_(BytecodeRootGen.java:7009) [bci:80]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5375) [bci:2650]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2275,
+      "nodeClass": "jdk.graal.compiler.nodes.MergeNode",
+      "block": "6",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2276,
+      "nodeClass": "jdk.graal.compiler.nodes.EndNode",
+      "block": "5",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2277,
+      "nodeClass": "jdk.graal.compiler.nodes.EndNode",
+      "block": "1",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2288,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "6",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2289,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "6",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2290,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "6",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2291,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "6",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2295,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "6",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2296,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "6",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2297,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "6",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2298,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64 [-1 - 0]"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2300,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2301,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2302,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2351,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [16]",
+        "value": "long[16|0x10]",
+        "rawvalue": "16"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2353,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void*"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2355,
+      "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2359,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void*"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2361,
+      "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2363,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [20]",
+        "value": "long[20|0x14]",
+        "rawvalue": "20"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2364,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.FloatingReadNode",
+      "block": "0",
+      "properties": {
+        "stamp": "n java.lang.Object",
+        "field": null
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2365,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.FloatingReadNode",
+      "block": "0",
+      "properties": {
+        "stamp": "n java.lang.Object",
+        "field": null
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2419,
+      "nodeClass": "jdk.graal.compiler.nodes.IfNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6270) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2424,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2425,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopEndNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2426,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopExitNode",
+      "block": "5",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2432,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.IntegerLessThanNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$LessEqual.apply(BytecodeRoot.java:381) [bci:3]",
+        "thc.runtime.BytecodeRootGen$LessEqual_Node.executeApply(BytecodeRootGen.java:25809) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLessEqual$Apply$unboxed_(BytecodeRootGen.java:8001) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5573) [bci:3786]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2439,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.ConditionalNode",
+      "block": "5",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$LessEqual.apply(BytecodeRoot.java:381) [bci:3]",
+        "thc.runtime.BytecodeRootGen$LessEqual_Node.executeApply(BytecodeRootGen.java:25809) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLessEqual$Apply$unboxed_(BytecodeRootGen.java:8001) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5573) [bci:3786]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2440,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.ConditionalNode",
+      "block": "5",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$MatchLiteral.number(BytecodeRoot.java:313) [bci:18]",
+        "thc.runtime.BytecodeRootGen$MatchLiteral_Node.executeNumber(BytecodeRootGen.java:24456) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleMatchLiteral$Number$unboxed_(BytecodeRootGen.java:7009) [bci:80]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5375) [bci:2650]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2453,
+      "nodeClass": "jdk.graal.compiler.nodes.EndNode",
+      "block": "2",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2481,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2484,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "2",
+      "properties": {
+        "stamp": "i64 [4096]",
+        "value": "long[4096|0x1000]",
+        "rawvalue": "4096"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2498,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "2",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2499,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "2",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2500,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "2",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2501,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "2",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2507,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "4",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2527,
+      "nodeClass": "com.oracle.graal.compiler.enterprise.phases.CountedStripMiningUtility$OriginalLimitCheckedIVPhi",
+      "block": "3",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2529,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "3",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2535,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.UnsignedMinNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2538,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.NarrowNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i32"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2539,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i32 [0 - 4096] bits:0...0xxxxxxxxxxxxx"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2544,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "2",
+      "properties": {
+        "stamp": "i32 [-1]",
+        "value": "int[-1|0xffffffffffffffff]",
+        "rawvalue": "-1"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2546,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.SignExtendNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64 [-4096 - 0]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2550,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2559,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a empty",
+        "value": "Object[Instance<thc.runtime.BytecodeRootGen>]",
+        "rawvalue": "Object[Instance<thc.runtime.BytecodeRootGen>]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2560,
+      "nodeClass": "jdk.graal.compiler.truffle.nodes.TruffleSafepointNode",
+      "block": "11",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2561,
+      "nodeClass": "jdk.graal.compiler.truffle.nodes.TruffleSafepointNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2562,
+      "nodeClass": "jdk.graal.compiler.nodes.SafepointNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2567,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void*"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValue((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.longValue(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen.expectLong(BytecodeRootGen.java:1860) [bci:11]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadArgument$Long(BytecodeRootGen.java:5860) [bci:17]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2568,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.FloatingReadNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64",
+        "field": "java.lang.Long.value"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValue((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.longValue(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen.expectLong(BytecodeRootGen.java:1860) [bci:11]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadArgument$Long(BytecodeRootGen.java:5860) [bci:17]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2574,
+      "nodeClass": "jdk.graal.compiler.nodes.IfNode",
+      "block": "6",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2575,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64 [128]",
+        "value": "long[128|0x80]",
+        "rawvalue": "128"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2576,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2577,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64 [256]",
+        "value": "long[256|0x100]",
+        "rawvalue": "256"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2578,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.IntegerBelowNode",
+      "block": "6",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2579,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "7",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2580,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "10",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2581,
+      "nodeClass": "jdk.graal.compiler.nodes.EndNode",
+      "block": "10",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2582,
+      "nodeClass": "jdk.graal.compiler.nodes.MergeNode",
+      "block": "11",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2583,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "8",
+      "properties": {
+        "stamp": "a!# java.lang.Long[]",
+        "value": "Object[Instance<java.lang.Long[]>]",
+        "rawvalue": "Object[Instance<java.lang.Long[]>]"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2584,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.NarrowNode",
+      "block": "7",
+      "properties": {
+        "stamp": "i32"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2585,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "7",
+      "properties": {
+        "stamp": "i32 [128]",
+        "value": "int[128|0x80]",
+        "rawvalue": "128"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2586,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "7",
+      "properties": {
+        "stamp": "i32"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2587,
+      "nodeClass": "jdk.graal.compiler.nodes.EndNode",
+      "block": "8",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2588,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "11",
+      "properties": {
+        "stamp": "a# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2591,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "7",
+      "properties": {
+        "stamp": "i32 [256]",
+        "value": "int[256|0x100]",
+        "rawvalue": "256"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2592,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.IntegerBelowNode",
+      "block": "7",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2593,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "8",
+      "properties": {
+        "stamp": "i32 [0 - 2147483646] bits:0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2594,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.LeftShiftNode",
+      "block": "8",
+      "properties": {
+        "stamp": "i64 [0 - 8589934584] bits:0...0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx00"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2595,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "8",
+      "properties": {
+        "stamp": "i64 [16 - 8589934600] bits:0...0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx00"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2596,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+      "block": "8",
+      "properties": {
+        "stamp": "void*"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2597,
+      "nodeClass": "jdk.graal.compiler.hotspot.nodes.HotSpotCompressionNode",
+      "block": "8",
+      "properties": {
+        "stamp": "a# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2598,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.ZeroExtendNode",
+      "block": "8",
+      "properties": {
+        "stamp": "i64 [0 - 2147483646] bits:0...0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2599,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.FloatingReadNode",
+      "block": "8",
+      "properties": {
+        "stamp": "n# java.lang.Long",
+        "field": null
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2600,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "8",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2601,
+      "nodeClass": "jdk.graal.compiler.nodes.DeoptimizeNode",
+      "block": "9",
+      "properties": {
+        "stamp": "void",
+        "reason": "DeoptimizationReason.BoundsCheckException",
+        "action": "DeoptimizationAction.InvalidateReprofile"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2602,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "9",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2603,
+      "nodeClass": "jdk.graal.compiler.nodes.IfNode",
+      "block": "7",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2604,
+      "nodeClass": "jdk.graal.compiler.nodes.java.NewInstanceNode",
+      "block": "10",
+      "properties": {
+        "stamp": "a!# java.lang.Long",
+        "instanceClass": "java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2605,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.address.OffsetAddressNode",
+      "block": "10",
+      "properties": {
+        "stamp": "void*"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2606,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.WriteNode",
+      "block": "10",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2607,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.PublishWritesNode",
+      "block": "10",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2608,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.MembarNode",
+      "block": "10",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2609,
+      "nodeClass": "jdk.graal.compiler.nodes.memory.MemoryAnchorNode",
+      "block": "6",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2610,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "11",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2611,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "11",
+      "properties": {},
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleLoadLocal$Long(BytecodeRootGen.java:5946) [bci:28]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5114) [bci:1122]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2619,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "6",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleBranchFalse$Boolean(BytecodeRootGen.java:6271) [bci:75]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5197) [bci:1610]",
+        "thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:1647) [bci:28]",
+        "thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:1639) [bci:15]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2622,
+      "nodeClass": "jdk.graal.compiler.vector.nodes.producer.FillVectorNode",
+      "block": "2",
+      "properties": {
+        "stamp": "V i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$Add.apply(BytecodeRoot.java:372) [bci:2]",
+        "thc.runtime.BytecodeRootGen$Add_Node.executeApply(BytecodeRootGen.java:24976) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleAdd$Apply$unboxed_(BytecodeRootGen.java:7290) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5433) [bci:2982]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2623,
+      "nodeClass": "jdk.graal.compiler.vector.nodes.producer.FillVectorNode",
+      "block": "4",
+      "properties": {
+        "stamp": "V i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$Add.apply(BytecodeRoot.java:372) [bci:2]",
+        "thc.runtime.BytecodeRootGen$Add_Node.executeApply(BytecodeRootGen.java:24976) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleAdd$Apply$unboxed_(BytecodeRootGen.java:7290) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5433) [bci:2982]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2624,
+      "nodeClass": "jdk.graal.compiler.vector.nodes.producer.SequenceVectorNode",
+      "block": "2",
+      "properties": {
+        "stamp": "V i32"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$Add.apply(BytecodeRoot.java:372) [bci:2]",
+        "thc.runtime.BytecodeRootGen$Add_Node.executeApply(BytecodeRootGen.java:24976) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleAdd$Apply$unboxed_(BytecodeRootGen.java:7290) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5433) [bci:2982]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2627,
+      "nodeClass": "jdk.graal.compiler.vector.nodes.op.MapVectorNode",
+      "block": "4",
+      "properties": {
+        "stamp": "V i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.BytecodeRoot$Add.apply(BytecodeRoot.java:372) [bci:2]",
+        "thc.runtime.BytecodeRootGen$Add_Node.executeApply(BytecodeRootGen.java:24976) [bci:2]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.handleAdd$Apply$unboxed_(BytecodeRootGen.java:7290) [bci:72]",
+        "thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:5433) [bci:2982]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 2631,
+      "nodeClass": "jdk.graal.compiler.vector.nodes.consumer.FoldVectorNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2635,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.NegateNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i32 [-4096 - 0]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 2251,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2251,
+      "to": 2258,
+      "label": "trueSuccessor",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2251,
+      "to": 2252,
+      "label": "falseSuccessor",
+      "type": "Successor",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2252,
+      "to": 2453,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2258,
+      "to": 2277,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2275,
+      "to": 2609,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2419,
+      "to": 2426,
+      "label": "trueSuccessor",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2419,
+      "to": 2481,
+      "label": "falseSuccessor",
+      "type": "Successor",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2424,
+      "to": 2419,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2426,
+      "to": 2276,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2481,
+      "to": 2631,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2560,
+      "to": 2184,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2561,
+      "to": 2562,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2562,
+      "to": 2425,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2574,
+      "to": 2579,
+      "label": "trueSuccessor",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2574,
+      "to": 2580,
+      "label": "falseSuccessor",
+      "type": "Successor",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2579,
+      "to": 2603,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2580,
+      "to": 2604,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2582,
+      "to": 2560,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2600,
+      "to": 2587,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2602,
+      "to": 2601,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2603,
+      "to": 2600,
+      "label": "trueSuccessor",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2603,
+      "to": 2602,
+      "label": "falseSuccessor",
+      "type": "Successor",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2604,
+      "to": 2606,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2606,
+      "to": 2608,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2607,
+      "to": 2581,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2608,
+      "to": 2607,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2609,
+      "to": 2574,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2631,
+      "to": 2561,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2,
+      "to": 29,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 28,
+      "to": 29,
+      "label": "length",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 29,
+      "to": 31,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2361,
+      "to": 62,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2610,
+      "to": 2184,
+      "label": "result",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 86,
+      "to": 2191,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 84,
+      "to": 2191,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2190,
+      "to": 2191,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 90,
+      "to": 2191,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 91,
+      "to": 2191,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 92,
+      "to": 2191,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 87,
+      "to": 2191,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 2190,
+      "to": 2192,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2355,
+      "to": 2192,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 62,
+      "to": 2192,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 90,
+      "to": 2193,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 91,
+      "to": 2201,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 152,
+      "to": 2201,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2568,
+      "to": 2201,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 129,
+      "to": 2201,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 2550,
+      "to": 2201,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 2631,
+      "to": 2201,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 92,
+      "to": 2202,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 22,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 22,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 22,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 22,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 8
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 12,
+      "listIndex": 11
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 97,
+      "to": 2202,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 14,
+      "listIndex": 13
+    },
+    {
+      "from": 2268,
+      "to": 2251,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2568,
+      "to": 2268,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 224,
+      "to": 2268,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2568,
+      "to": 2269,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 152,
+      "to": 2269,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2268,
+      "to": 2272,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 224,
+      "to": 2272,
+      "label": "trueValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 129,
+      "to": 2272,
+      "label": "falseValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2268,
+      "to": 2273,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 22,
+      "to": 2273,
+      "label": "trueValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 2273,
+      "label": "falseValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2276,
+      "to": 2275,
+      "label": "ends",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2277,
+      "to": 2275,
+      "label": "ends",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 1,
+      "to": 2288,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2288,
+      "to": 2289,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 2289,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 86,
+      "to": 2289,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 116,
+      "to": 2289,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 2289,
+      "to": 2290,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2290,
+      "to": 2291,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 80,
+      "to": 2291,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 122,
+      "to": 2291,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 86,
+      "to": 2291,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 22,
+      "to": 2291,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 91,
+      "to": 2295,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 152,
+      "to": 2295,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2568,
+      "to": 2295,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2298,
+      "to": 2295,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 2619,
+      "to": 2295,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 2300,
+      "to": 2295,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 2301,
+      "to": 2295,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 2302,
+      "to": 2295,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 92,
+      "to": 2296,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 22,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 97,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 22,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 22,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 22,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 22,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 97,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 97,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 8
+    },
+    {
+      "from": 95,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 97,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 97,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 12,
+      "listIndex": 11
+    },
+    {
+      "from": 97,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 97,
+      "to": 2296,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 14,
+      "listIndex": 13
+    },
+    {
+      "from": 2291,
+      "to": 2297,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 122,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 86,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 145,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 5,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 8
+    },
+    {
+      "from": 150,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 1052,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 220,
+      "to": 2297,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 2191,
+      "to": 2297,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 14,
+      "listIndex": 0
+    },
+    {
+      "from": 2192,
+      "to": 2297,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 15,
+      "listIndex": 1
+    },
+    {
+      "from": 2193,
+      "to": 2297,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 16,
+      "listIndex": 2
+    },
+    {
+      "from": 2295,
+      "to": 2297,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 17,
+      "listIndex": 3
+    },
+    {
+      "from": 2296,
+      "to": 2297,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 18,
+      "listIndex": 4
+    },
+    {
+      "from": 2275,
+      "to": 2298,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 129,
+      "to": 2298,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 152,
+      "to": 2298,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2275,
+      "to": 2300,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2529,
+      "to": 2300,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 129,
+      "to": 2300,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2275,
+      "to": 2301,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2439,
+      "to": 2301,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2272,
+      "to": 2301,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2275,
+      "to": 2302,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2440,
+      "to": 2302,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2273,
+      "to": 2302,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 31,
+      "to": 2353,
+      "label": "base",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2351,
+      "to": 2353,
+      "label": "offset",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2364,
+      "to": 2355,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 31,
+      "to": 2359,
+      "label": "base",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2363,
+      "to": 2359,
+      "label": "offset",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2365,
+      "to": 2361,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2353,
+      "to": 2364,
+      "label": "address",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 0,
+      "to": 2364,
+      "label": "lastLocationAccess",
+      "type": "Memory",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2359,
+      "to": 2365,
+      "label": "address",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 0,
+      "to": 2365,
+      "label": "lastLocationAccess",
+      "type": "Memory",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2432,
+      "to": 2419,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2453,
+      "to": 2424,
+      "label": "ends",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 0
+    },
+    {
+      "from": 2424,
+      "to": 2425,
+      "label": "loopBegin",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2424,
+      "to": 2426,
+      "label": "loopBegin",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2527,
+      "to": 2432,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 224,
+      "to": 2432,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2432,
+      "to": 2439,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 224,
+      "to": 2439,
+      "label": "trueValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 129,
+      "to": 2439,
+      "label": "falseValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2432,
+      "to": 2440,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 22,
+      "to": 2440,
+      "label": "trueValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 2440,
+      "label": "falseValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 2498,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2498,
+      "to": 2499,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 2499,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 86,
+      "to": 2499,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 116,
+      "to": 2499,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 2499,
+      "to": 2500,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2500,
+      "to": 2501,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 80,
+      "to": 2501,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 122,
+      "to": 2501,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 86,
+      "to": 2501,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 22,
+      "to": 2501,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 2501,
+      "to": 2507,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 122,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 86,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 145,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 5,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 8
+    },
+    {
+      "from": 150,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 311,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 130,
+      "to": 2507,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 2191,
+      "to": 2507,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 14,
+      "listIndex": 0
+    },
+    {
+      "from": 2192,
+      "to": 2507,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 15,
+      "listIndex": 1
+    },
+    {
+      "from": 2193,
+      "to": 2507,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 16,
+      "listIndex": 2
+    },
+    {
+      "from": 2201,
+      "to": 2507,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 17,
+      "listIndex": 3
+    },
+    {
+      "from": 2202,
+      "to": 2507,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 18,
+      "listIndex": 4
+    },
+    {
+      "from": 2424,
+      "to": 2527,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2269,
+      "to": 2527,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2550,
+      "to": 2527,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2424,
+      "to": 2529,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 224,
+      "to": 2529,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2631,
+      "to": 2529,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2527,
+      "to": 2535,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2484,
+      "to": 2535,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2535,
+      "to": 2538,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2538,
+      "to": 2539,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2635,
+      "to": 2546,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2527,
+      "to": 2550,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2546,
+      "to": 2550,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2611,
+      "to": 2560,
+      "label": "stateBefore",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2559,
+      "to": 2560,
+      "label": "location",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2507,
+      "to": 2561,
+      "label": "stateBefore",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2559,
+      "to": 2561,
+      "label": "location",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2507,
+      "to": 2562,
+      "label": "stateBefore",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2424,
+      "to": 2562,
+      "label": "loopLink",
+      "type": "Guard",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 62,
+      "to": 2567,
+      "label": "base",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2351,
+      "to": 2567,
+      "label": "offset",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2567,
+      "to": 2568,
+      "label": "address",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 0,
+      "to": 2568,
+      "label": "lastLocationAccess",
+      "type": "Memory",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2578,
+      "to": 2574,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2300,
+      "to": 2576,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2575,
+      "to": 2576,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2576,
+      "to": 2578,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2577,
+      "to": 2578,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2581,
+      "to": 2582,
+      "label": "ends",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2587,
+      "to": 2582,
+      "label": "ends",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2300,
+      "to": 2584,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2584,
+      "to": 2586,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2585,
+      "to": 2586,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2582,
+      "to": 2588,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2607,
+      "to": 2588,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2597,
+      "to": 2588,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2586,
+      "to": 2592,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2591,
+      "to": 2592,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2600,
+      "to": 2593,
+      "label": "guard",
+      "type": "Guard",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2586,
+      "to": 2593,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2598,
+      "to": 2594,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 28,
+      "to": 2594,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2594,
+      "to": 2595,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2351,
+      "to": 2595,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2583,
+      "to": 2596,
+      "label": "base",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2595,
+      "to": 2596,
+      "label": "offset",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2599,
+      "to": 2597,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2593,
+      "to": 2598,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2600,
+      "to": 2599,
+      "label": "guard",
+      "type": "Guard",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2596,
+      "to": 2599,
+      "label": "address",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2609,
+      "to": 2599,
+      "label": "lastLocationAccess",
+      "type": "Memory",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 2297,
+      "to": 2601,
+      "label": "stateBefore",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2592,
+      "to": 2603,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2297,
+      "to": 2604,
+      "label": "stateBefore",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2604,
+      "to": 2605,
+      "label": "base",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2351,
+      "to": 2605,
+      "label": "offset",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2605,
+      "to": 2606,
+      "label": "address",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": -1
+    },
+    {
+      "from": 2300,
+      "to": 2606,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": -1
+    },
+    {
+      "from": 2604,
+      "to": 2607,
+      "label": "allocation",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2588,
+      "to": 2610,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2291,
+      "to": 2611,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 122,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 86,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 145,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 5,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 8
+    },
+    {
+      "from": 150,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 1052,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 220,
+      "to": 2611,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 2191,
+      "to": 2611,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 14,
+      "listIndex": 0
+    },
+    {
+      "from": 2192,
+      "to": 2611,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 15,
+      "listIndex": 1
+    },
+    {
+      "from": 2193,
+      "to": 2611,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 16,
+      "listIndex": 2
+    },
+    {
+      "from": 2295,
+      "to": 2611,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 17,
+      "listIndex": 3
+    },
+    {
+      "from": 2296,
+      "to": 2611,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 18,
+      "listIndex": 4
+    },
+    {
+      "from": 2275,
+      "to": 2619,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2527,
+      "to": 2619,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2568,
+      "to": 2619,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2568,
+      "to": 2622,
+      "label": "element",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2527,
+      "to": 2623,
+      "label": "element",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 2624,
+      "label": "initial",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 2544,
+      "to": 2624,
+      "label": "stride",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2622,
+      "to": 2627,
+      "label": "vectorInputs",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": 0
+    },
+    {
+      "from": 2623,
+      "to": 2627,
+      "label": "vectorInputs",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 1
+    },
+    {
+      "from": 2624,
+      "to": 2627,
+      "label": "vectorInputs",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 2
+    },
+    {
+      "from": 2529,
+      "to": 2631,
+      "label": "initial",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 2539,
+      "to": 2631,
+      "label": "length",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": -1
+    },
+    {
+      "from": 2627,
+      "to": 2631,
+      "label": "vectorInputs",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 0
+    },
+    {
+      "from": 2539,
+      "to": 2635,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    }
+  ],
+  "blocks": [
+    {
+      "name": "0",
+      "nodes": [
+        0,
+        2559,
+        1,
+        116,
+        80,
+        122,
+        145,
+        150,
+        86,
+        84,
+        2190,
+        90,
+        91,
+        92,
+        87,
+        2191,
+        2,
+        28,
+        29,
+        31,
+        2351,
+        2353,
+        2364,
+        2355,
+        2363,
+        2359,
+        2365,
+        2361,
+        62,
+        2192,
+        2193,
+        129,
+        22,
+        97,
+        5,
+        152,
+        2567,
+        2568,
+        224,
+        2268,
+        2251
+      ],
+      "successors": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "name": "1",
+      "nodes": [
+        2258,
+        2272,
+        2273,
+        2277
+      ],
+      "successors": [
+        "6"
+      ]
+    },
+    {
+      "name": "2",
+      "nodes": [
+        2252,
+        2498,
+        2499,
+        2500,
+        2501,
+        311,
+        130,
+        2202,
+        2622,
+        2544,
+        2624,
+        2484,
+        2269,
+        2453
+      ],
+      "successors": [
+        "3"
+      ]
+    },
+    {
+      "name": "3",
+      "nodes": [
+        2424,
+        2432,
+        2419,
+        2527,
+        2529
+      ],
+      "successors": [
+        "4",
+        "5"
+      ]
+    },
+    {
+      "name": "4",
+      "nodes": [
+        2481,
+        2535,
+        2538,
+        2539,
+        2623,
+        2627,
+        2631,
+        2635,
+        2546,
+        2550,
+        2201,
+        2507,
+        2561,
+        2562,
+        2425
+      ],
+      "successors": [
+        "3"
+      ]
+    },
+    {
+      "name": "5",
+      "nodes": [
+        2426,
+        2439,
+        2440,
+        2276
+      ],
+      "successors": [
+        "6"
+      ]
+    },
+    {
+      "name": "6",
+      "nodes": [
+        2275,
+        2609,
+        2288,
+        2289,
+        2290,
+        2291,
+        1052,
+        220,
+        2295,
+        95,
+        2296,
+        2297,
+        2575,
+        2576,
+        2577,
+        2578,
+        2574,
+        2298,
+        2619,
+        2300,
+        2301,
+        2302
+      ],
+      "successors": [
+        "10",
+        "7"
+      ]
+    },
+    {
+      "name": "7",
+      "nodes": [
+        2579,
+        2584,
+        2585,
+        2586,
+        2591,
+        2592,
+        2603
+      ],
+      "successors": [
+        "8",
+        "9"
+      ]
+    },
+    {
+      "name": "8",
+      "nodes": [
+        2600,
+        2583,
+        2593,
+        2598,
+        2594,
+        2595,
+        2596,
+        2599,
+        2597,
+        2587
+      ],
+      "successors": [
+        "11"
+      ]
+    },
+    {
+      "name": "9",
+      "nodes": [
+        2602,
+        2601
+      ],
+      "successors": []
+    },
+    {
+      "name": "10",
+      "nodes": [
+        2580,
+        2604,
+        2605,
+        2606,
+        2608,
+        2607,
+        2581
+      ],
+      "successors": [
+        "11"
+      ]
+    },
+    {
+      "name": "11",
+      "nodes": [
+        2582,
+        2611,
+        2560,
+        2610,
+        2184,
+        2588
+      ],
+      "successors": []
+    }
+  ]
+}

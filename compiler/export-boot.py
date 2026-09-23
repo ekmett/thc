@@ -58,6 +58,8 @@ for name in ['GHC/Internal/Exception/Type.hs-boot', 'GHC/Internal/Exception.hs-b
 plugin = ['-O2', '-dcore-lint', '-package-db', str(root / 'build/compiler/package.conf.d'),
           '-package', 'thc-core-plugin', '-fplugin=Thc.Plugin',
           '-fplugin-opt=Thc.Plugin:' + str(build / 'boot-core'), '-fplugin-opt=Thc.Plugin:post-tidy']
+if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
+    plugin += ['-g', '-fplugin-opt=Thc.Plugin:source-notes']
 for name in ['CString', 'Err']:
     subprocess.run(common + plugin + [str(source_root / 'GHC/Internal' / (name + '.hs'))], cwd=root, check=True)
     shutil.copyfile(build / 'boot-core' / ('GHC.Internal.' + name + '.json'),
@@ -73,6 +75,7 @@ subprocess.run([str(root / 'compiler/export.sh'), '-package', 'ghc-internal',
 shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
 (build / 'boot-provenance.json').write_text(json.dumps({
     'ghcTag': 'ghc-9.14.1-release', 'sourcePatches': [],
+    'sourceNotes': (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true',
     'sources': [{'url': source_url(name), 'path': str((source_root / name).relative_to(root)), 'sha256': digest}
                 for name, digest in sources.items()],
     'boundary': 'Original CString/Err source after Tidy, before CorePrep; explicit dependency boundary',

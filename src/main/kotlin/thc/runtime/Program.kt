@@ -12,6 +12,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.*
 import com.oracle.truffle.api.profiles.BranchProfile
 import com.oracle.truffle.api.profiles.CountingConditionProfile
+import com.oracle.truffle.api.source.SourceSection
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. Haskell thunks
@@ -58,12 +59,19 @@ internal class Metrics(val enabled: Boolean) {
     var indirectCalls = 0L
     var tailBounces = 0L
     var selfTailReentries = 0L
+    var localJoinTransfers = 0L
     var trampolineIterations = 0L
     var papAllocations = 0L
     var unsupportedTraps = 0L
 }
 @TypeSystemReference(RuntimeTypes::class)
 internal abstract class Expr : Node() {
+    // Assigned during lowering, before adoption. Evaluatedness describes our stored value.
+    @CompilationFinal var representation: CoreRepresentation = CoreRepresentation.UNKNOWN
+    @CompilationFinal var coreSourceLocation: CoreSourceLocation? = null
+    fun located(location: CoreSourceLocation?): Expr { coreSourceLocation = location; return this }
+    override fun getSourceSection(): SourceSection? = coreSourceLocation?.section ?: parent?.encapsulatingSourceSection
+    fun proven(proof: CoreRepresentation): Expr { representation = proof; return this }
     abstract fun execute(frame: VirtualFrame): Any?
     @Throws(UnexpectedResultException::class)
     open fun executeLong(frame: VirtualFrame): Long {
@@ -86,16 +94,22 @@ internal abstract class Expr : Node() {
     fun executeRequiredClosure(frame: VirtualFrame): Closure = try { executeClosure(frame) }
     catch (_: UnexpectedResultException) { fault("Application of a non-function") }
 
+    fun executeRequiredDataValue(frame: VirtualFrame): DataValue = try { executeDataValue(frame) }
+    catch (_: UnexpectedResultException) { fault("Expected constructor value") }
+
     fun executeRequiredAddress(frame: VirtualFrame): LiteralAddress = try { executeAddress(frame) }
     catch (_: UnexpectedResultException) { fault("Expected a managed literal Addr#") }
 }
 private class Literal(private val value: Any?) : Expr() {
+    init { representation = CoreRepresentation(when (value) {
+        is Long -> CoreKind.LONG; is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+    }, evaluated = true) }
     override fun execute(frame: VirtualFrame) = value
     override fun executeLong(frame: VirtualFrame) = RuntimeTypesGen.expectLong(value)
 }
 internal class LocalRead(private val slot: Int) : Expr() {
     override fun executeLong(frame: VirtualFrame): Long =
-        if (frame.isLong(slot)) frame.getLong(slot) else super.executeLong(frame)
+        if (representation.isLong || frame.isLong(slot)) frame.getLong(slot) else super.executeLong(frame)
 
     override fun execute(frame: VirtualFrame): Any? {
         val value = FrameAccess.read(frame, slot)
@@ -122,6 +136,7 @@ private class GlobalRead(private val binding: GlobalBinding) : Expr() {
 private class MakeClosure(private val target: RootCallTarget, private val arity: Int,
                           private val captureLayout: CaptureLayout?,
                           @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.CLOSURE, evaluated = true) }
     // Cadenza's closed-lambda optimization: immutable code needs no allocation.
     private val constantClosure = if (captureLayout == null) Closure(environment = null, arity = arity, target = target) else null
     override fun execute(frame: VirtualFrame): Closure = constantClosure ?: Closure(
@@ -185,6 +200,7 @@ internal class Force(private val metrics: Metrics) : Node() {
 }
 /** Typed execution widens per result kind; each fallback consumes the already evaluated value. */
 internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) : Expr() {
+    init { representation = value.representation.copy(evaluated = true); coreSourceLocation = value.coreSourceLocation }
     @Child private var force = Force(metrics)
     private fun forceResult(frame: VirtualFrame, original: Any?): Any? {
         val result = force.execute(frame, original)
@@ -192,9 +208,14 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         if (original is Thunk && value is LocalRead) (value as LocalRead).writeForced(frame, original, result)
         return result
     }
-    override fun execute(frame: VirtualFrame) = forceResult(frame, value.execute(frame))
+    override fun execute(frame: VirtualFrame): Any? = when {
+        value.representation.isLong -> value.executeRequiredLong(frame)
+        value.representation.evaluated -> value.execute(frame)
+        else -> forceResult(frame, value.execute(frame))
+    }
     @CompilationFinal private var genericLong = false
     override fun executeLong(frame: VirtualFrame): Long {
+        if (value.representation.evaluated || value.representation.isLong) return value.executeLong(frame)
         if (genericLong) return RuntimeTypesGen.expectLong(forceResult(frame, value.execute(frame)))
         return try { value.executeLong(frame) }
         catch (unexpected: UnexpectedResultException) {
@@ -206,7 +227,8 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericClosure = false
     override fun executeClosure(frame: VirtualFrame): Closure {
-        if (genericClosure) return RuntimeTypesGen.expectClosure(forceResult(frame, value.execute(frame)))
+        if (value.representation.evaluated || value.representation.isLong) return value.executeClosure(frame)
+        if (value.representation.kind == CoreKind.CLOSURE || genericClosure) return RuntimeTypesGen.expectClosure(forceResult(frame, value.execute(frame)))
         return try { value.executeClosure(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
@@ -217,7 +239,8 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericDataValue = false
     override fun executeDataValue(frame: VirtualFrame): DataValue {
-        if (genericDataValue) return RuntimeTypesGen.expectDataValue(forceResult(frame, value.execute(frame)))
+        if (value.representation.evaluated || value.representation.isLong) return value.executeDataValue(frame)
+        if (value.representation.kind == CoreKind.DATA || genericDataValue) return RuntimeTypesGen.expectDataValue(forceResult(frame, value.execute(frame)))
         return try { value.executeDataValue(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
@@ -228,7 +251,8 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericAddress = false
     override fun executeAddress(frame: VirtualFrame): LiteralAddress {
-        if (genericAddress) return RuntimeTypesGen.expectLiteralAddress(forceResult(frame, value.execute(frame)))
+        if (value.representation.evaluated || value.representation.isLong) return value.executeAddress(frame)
+        if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectLiteralAddress(forceResult(frame, value.execute(frame)))
         return try { value.executeAddress(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
@@ -240,6 +264,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
 }
 private class Application(function: Expr,
                           @field:Children private var arguments: Array<Expr>, tail: Boolean, metrics: Metrics) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     @Child private var function = Evaluate(function, metrics)
     @Child private var dispatch = Dispatch.create(arguments.size, tail, metrics)
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
@@ -252,9 +277,12 @@ private class Application(function: Expr,
 /** Each cloned root owns its widening state; recursive RHSs stay raw until publication. */
 private class LocalBinding(private val slot: Int, @field:Child private var value: Expr,
                            preferLong: Boolean) : Node() {
-    @CompilationFinal private var generic = !preferLong
+    private val exactLong = value.representation.isLong
+    @CompilationFinal private var generic = !preferLong ||
+        (value.representation.present && !exactLong)
     fun evaluate(frame: VirtualFrame): Any? = value.execute(frame)
     fun write(frame: VirtualFrame) {
+        if (exactLong) { FrameAccess.writeLong(frame, slot, value.executeRequiredLong(frame)); return }
         if (generic) { FrameAccess.write(frame, slot, value.execute(frame)); return }
         try { FrameAccess.writeLong(frame, slot, value.executeLong(frame)) }
         catch (unexpected: UnexpectedResultException) {
@@ -266,6 +294,7 @@ private class LocalBinding(private val slot: Int, @field:Child private var value
 private class Let(@field:CompilationFinal(dimensions = 1) private val slots: IntArray,
                   rhs: Array<Expr>, primitiveEligible: BooleanArray,
                   @field:Child private var body: Expr, private val recursive: Boolean) : Expr() {
+    init { representation = body.representation }
     @Children private var bindings = Array(rhs.size) { index ->
         LocalBinding(slots[index], rhs[index], !recursive && primitiveEligible[index])
     }
@@ -328,6 +357,16 @@ private class Alternative(val kind: Int, val value: Any?,
 }
 private class Case(scrutinee: Expr, private val binderSlot: Int,
                    @field:Children private var alternatives: Array<Alternative>, metrics: Metrics) : Expr() {
+    init {
+        val proofs = alternatives.map { it.body.representation }
+        val kinds = proofs.map { it.kind }.toSet()
+        val kind = when {
+            kinds.size == 1 -> kinds.single()
+            kinds.isNotEmpty() && kinds.all { it in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) } -> CoreKind.OBJECT
+            else -> CoreKind.UNKNOWN
+        }
+        representation = CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
+    }
     // Preserve primitive scrutinees through their frame write and literal comparisons.
     @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics), true)
 
@@ -406,6 +445,7 @@ private class Case(scrutinee: Expr, private val binderSlot: Int,
 }
 private class Construct(private val layout: DataLayout,
                         @field:Children private var fields: Array<Expr>) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.DATA, evaluated = true) }
     @ExplodeLoop override fun execute(frame: VirtualFrame): DataValue {
         val value = layout.allocate()
         for (i in fields.indices) {
@@ -418,6 +458,7 @@ private class Construct(private val layout: DataLayout,
 }
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     init {
+        representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
             "negateInt#", "not#", "notI#", "int2Word#", "word2Int#", "ord#", "chr#",
             "narrow8Int#", "narrow16Int#", "narrow32Int#" -> 1
@@ -462,12 +503,20 @@ private class Primitive(private val name: String, @field:Children private var ar
         }
     }
 }
-private class FunctionBody(expression: Expr, metrics: Metrics) : Node() {
+private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepresentation) : Node() {
     @Child private var value = Evaluate(expression, metrics)
-    @CompilationFinal private var genericResult = false
+    private val resultKind = if (result.kind == CoreKind.UNKNOWN) expression.representation.kind else result.kind
+    private val exactLong = resultKind == CoreKind.LONG
+    @CompilationFinal private var genericResult = result.present && !exactLong
 
     /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
     fun execute(frame: VirtualFrame): Any? {
+        // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
+        // cannot fold that lookup, even when this node's resultKind is constant.
+        if (resultKind == CoreKind.LONG) return value.executeRequiredLong(frame)
+        if (resultKind == CoreKind.DATA) return value.executeRequiredDataValue(frame)
+        if (resultKind == CoreKind.CLOSURE) return value.executeRequiredClosure(frame)
+        if (resultKind == CoreKind.ADDRESS) return value.executeRequiredAddress(frame)
         if (genericResult) return value.execute(frame)
         return try { value.executeLong(frame) }
         catch (unexpected: UnexpectedResultException) {
@@ -493,14 +542,22 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             @field:CompilationFinal(dimensions = 1) private val environmentSlots: IntArray,
                             @field:CompilationFinal(dimensions = 1) private val argumentSlots: IntArray,
                             @field:CompilationFinal(dimensions = 1) private val argumentIndices: IntArray,
-                            body: Expr, private val metrics: Metrics) : GuestRoot(language, descriptor) {
+                            body: Expr, private val metrics: Metrics,
+                            @field:CompilationFinal(dimensions = 1) private val argumentProofs: Array<CoreRepresentation> = emptyArray(),
+                            resultProof: CoreRepresentation = body.representation,
+                            private val coreSourceLocation: CoreSourceLocation? = body.coreSourceLocation) : GuestRoot(language, descriptor) {
     @field:CompilationFinal private var hasSelfTail = false
     private val tailCallProfile = BranchProfile.create()
-    @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics), metrics))
+    @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics, resultProof), metrics))
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
         val offset = if (captureLayout == null) 1 else 2
-        for (i in argumentSlots.indices) FrameAccess.write(frame, argumentSlots[i], arguments[argumentIndices[i] + offset])
+        for (i in argumentSlots.indices) {
+            val value = arguments[argumentIndices[i] + offset]
+            if (i < argumentProofs.size && argumentProofs[i].isLong)
+                FrameAccess.writeLong(frame, argumentSlots[i], value as? Long ?: fault("Expected primitive Long argument"))
+            else FrameAccess.write(frame, argumentSlots[i], value)
+        }
         if (captureLayout != null) {
             val environment = arguments[1] as? CapturedFrame ?: fault("Invalid captured frame")
             for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
@@ -525,6 +582,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             loop.execute(frame)
         }
     }
+    override fun getSourceSection(): SourceSection? = coreSourceLocation?.section
+    fun getCoreSourceNotes(): List<CoreSourceNote> = coreSourceLocation?.notes.orEmpty()
     override fun getName() = label
     override fun toString() = label
     override fun isCloningAllowed() = true
@@ -542,31 +601,54 @@ internal class EntryRoot(language: TruffleLanguage<*>?, private val arity: Int, 
     }
     override fun getName() = "THC host entry/$arity"
 }
-private data class Local(val slot: Int, val primitive: Boolean)
-private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Local> = linkedMapOf()) {
-    fun child() = Scope(layout.scope(), LinkedHashMap(locals))
-    fun bind(id: String, primitive: Boolean): Local = Local(layout.bind(id), primitive).also { locals[id] = it }
+private data class Local(val slot: Int, val primitive: Boolean, val proof: CoreRepresentation)
+private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Local> = linkedMapOf(),
+                    val joins: MutableMap<String, LocalJoinTarget> = linkedMapOf()) {
+    fun child() = Scope(layout.scope(), LinkedHashMap(locals), LinkedHashMap(joins))
+    fun bind(id: String, primitive: Boolean, proof: CoreRepresentation = CoreRepresentation.UNKNOWN): Local =
+        Local(layout.bind(id), if (proof.present) proof.isLong else primitive, proof).also { locals[id] = it; joins.remove(id) }
+    fun refine(id: String, proof: CoreRepresentation) { locals[id]?.let { locals[id] = it.copy(proof = proof, primitive = if (proof.present) proof.isLong else it.primitive) } }
+    fun bindJoin(id: String, target: LocalJoinTarget) { joins[id] = target; locals.remove(id) }
 }
 private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: IntArray)
 
 /** Exported GHC Core lowers lexical bindings to indexed frame slots, as Cadenza does. */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>) : ExecutableProgram {
     private val metrics = Metrics(moduleData["instrument"] != false)
+    private val sources = CoreSources(moduleData)
+    private var currentSource: CoreSourceLocation? = null
+    private var attachedRootCount = 0
+    private fun <T> withSource(location: CoreSourceLocation?, action: () -> T): T {
+        val previous = currentSource
+        currentSource = location
+        return try { action() } finally { currentSource = previous }
+    }
+    private fun rootSource(body: Expr): CoreSourceLocation? = (body.coreSourceLocation ?: currentSource).also {
+        if (it != null) attachedRootCount++
+    }
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
     private val deferredUnsupported = linkedSetOf<String>()
     private val bindings = moduleData["bindings"] as? List<Map<String, Any?>> ?: throw RuntimeFault("Missing bindings")
     private val constructors = (moduleData["constructors"] as? List<Map<String, Any?>> ?: emptyList()).associateBy { it["id"] as String }
     private val dataLayouts = mutableMapOf<String, DataLayout>()
     private val globals = bindings.associate { it["id"] as String to GlobalBinding(it["name"] as String) }
+    private val globalProofs = bindings.associate { binding ->
+        val expression = binding["expr"] as List<Any?>
+        val delayed = representation(binding) && expression[0] !in listOf("lam", "lit", "con", "void")
+        (binding["id"] as String) to if (diagnosticUnsupported) CoreRepresentation.UNKNOWN
+            else CoreRepresentations.binder(binding).copy(evaluated = !delayed && expression[0] in listOf("lam", "lit", "con", "void"))
+    }
     private val indices = bindings.withIndex().associate { it.value["id"] as String to it.index }
     private val names = bindings.withIndex().groupBy({ it.value["name"] as String }, { it.index })
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     init {
         val scope = Scope(FrameLayout())
         val initializers = bindings.map { binding ->
-            val expr = binding["expr"] as List<Any?>
-            if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
-            else argument(expr, scope, representation(binding), binding["name"] as String)
+            withSource(sources.binding(binding)) {
+                val expr = binding["expr"] as List<Any?>
+                if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
+                else argument(expr, scope, representation(binding), binding["name"] as String)
+            }
         }
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scope.layout.build())
         bindings.forEachIndexed { index, binding -> globals.getValue(binding["id"] as String).initialize(initializers[index].execute(frame)) }
@@ -582,10 +664,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return when (value) { is Closure -> value.target; is Thunk -> value.target ?: hostEntryTarget(0); else -> hostEntryTarget(0) }
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
-        "backend" to "ast", "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
+        "backend" to "ast", "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
+        "sourceRootCount" to attachedRootCount, "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
         "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
+        "localJoinTransfers" to metrics.localJoinTransfers,
         "selfTailReentries" to metrics.selfTailReentries, "trampolineIterations" to metrics.trampolineIterations,
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
@@ -608,28 +692,36 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         else -> emptySet()
     }
-    private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope): FunctionSpec {
+    private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
+                         resultProof: CoreRepresentation = CoreRepresentations.expression(expression)): FunctionSpec {
         val scope = Scope(FrameLayout())
         val free = freeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
         val captured = (free - argumentIds).filter { it in outer.locals }
         val captureSources = captured.map { outer.locals.getValue(it).slot }.toIntArray()
         val captureKinds = captured.map { outer.locals.getValue(it).primitive }.toBooleanArray()
-        val environmentSlots = captured.map { scope.bind(it, outer.locals.getValue(it).primitive).slot }.toIntArray()
+        val environmentSlots = captured.map { scope.bind(it, outer.locals.getValue(it).primitive, outer.locals.getValue(it).proof).slot }.toIntArray()
         val argumentSlots = arrayListOf<Int>(); val argumentIndices = arrayListOf<Int>()
+        val argumentProofs = arrayListOf<CoreRepresentation>()
         for ((index, arg) in args.withIndex()) {
             val lifted = representation(arg)
-            if (arg["id"] in free) { argumentIndices += index; argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true).slot }
+            if (arg["id"] in free) {
+                val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = false) else it }
+                argumentIndices += index; argumentProofs += proof
+                argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
+            }
         }
         val body = compile(expression, scope, true)
-        val captures = if (captured.isEmpty()) null else CaptureLayout(requireNotNull(language), captureKinds)
+        val captures = if (captured.isEmpty()) null else CaptureLayout(requireNotNull(language), captureKinds,
+            captured.map { outer.locals.getValue(it).proof.let { proof -> proof.isLong && proof.evaluated } }.toBooleanArray())
         val target = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
-            argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics).callTarget
+            argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof, rootSource(body)).callTarget
         return FunctionSpec(target, captures, captureSources)
     }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expr {
         val fn = function(label, emptyList(), expr, scope)
-        return Delay(fn.target, fn.captureLayout, fn.captures)
+        return Delay(fn.target, fn.captureLayout, fn.captures).proven(CoreRepresentations.expression(expr).copy(evaluated = false))
+            .located(sources.expression(expr, currentSource))
     }
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expr {
         if (!lifted) return Evaluate(compile(expr, scope, false), metrics)
@@ -648,8 +740,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "string-bytes" -> LiteralAddress.fromHex(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
-    private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = try {
-        compileSupported(expr, scope, tail)
+    private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr =
+        withSource(sources.expression(expr, currentSource)) { compileLocated(expr, scope, tail).located(currentSource) }
+    private fun compileLocated(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = try {
+        val lowered = compileSupported(expr, scope, tail)
+        val metadata = if (diagnosticUnsupported && lowered is GlobalRead) CoreRepresentation.UNKNOWN
+            else CoreRepresentations.expression(expr)
+        // GHC HNF can become a thunk in our lazy storage. Only retain evaluatedness
+        // established by the lowered producer or its lexical storage contract.
+        lowered.proven(lowered.representation.refine(metadata.copy(evaluated = false)))
     } catch (gap: UnsupportedCore) {
         if (!diagnosticUnsupported) throw gap
         val message = gap.message ?: "Unsupported Core"
@@ -657,27 +756,33 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         // An unavailable value stays lazy until demanded. This applies uniformly
         // to unknown globals/operations, without special-casing library names or
         // removing branches. The default mode still rejects the same Core.
+        val body = UnsupportedExpression(message, metrics).located(currentSource)
         val target = FunctionRoot(language, FrameLayout().build(), "unsupported: $message", null,
-            intArrayOf(), intArrayOf(), intArrayOf(), UnsupportedExpression(message, metrics), metrics).callTarget
+            intArrayOf(), intArrayOf(), intArrayOf(), body, metrics, coreSourceLocation = rootSource(body)).callTarget
         Delay(target, null, intArrayOf())
     }
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
-            scope.locals[id]?.let { LocalRead(it.slot) } ?: globals[id]?.let { GlobalRead(it) }
+            scope.joins[id]?.let { joinJump(it, emptyList(), emptyList<Boolean>(), scope) }
+                ?: scope.locals[id]?.let { LocalRead(it.slot).proven(it.proof) }
+                ?: globals[id]?.let { GlobalRead(it).proven(globalProofs.getValue(id)) }
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String))
         "void" -> Literal(Unit)
         "lam" -> {
             val args = expr[1] as List<Map<String, Any?>>
-            val fn = function("lambda ${args.joinToString { it["name"].toString() }}", args, expr[2] as List<Any?>, scope)
+            val fn = function("lambda ${args.joinToString { it["name"].toString() }}", args, expr[2] as List<Any?>, scope, CoreRepresentations.lambdaResult(expr))
             MakeClosure(fn.target, args.size, fn.captureLayout, fn.captures)
         }
         "app" -> {
             val fn = expr[1] as List<Any?>; val args = expr[2] as List<List<Any?>>
             val flags = expr.getOrNull(3) as? List<*> ?: throw RuntimeFault("Application lacks representation flags")
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
+            if (fn[0] == "var" && fn[1] in scope.joins) {
+                joinJump(scope.joins.getValue(fn[1] as String), args, flags, scope)
+            } else {
             val constructorStrictFields = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size)
                 strictConstructorFields(fn[1] as String, args.size) else null
             val nodes = args.mapIndexed { i, arg ->
@@ -692,22 +797,38 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 constructorStrictFields != null -> Construct(dataLayout(fn[1] as String), nodes)
                 else -> Application(compile(fn, scope, false), nodes, tail, metrics)
             }
+            }
         }
         "let" -> {
             val recursive = expr[1] as Boolean; val group = expr[2] as List<Map<String, Any?>>
-            val local = scope.child()
-            val slots = group.map { local.bind(it["id"] as String, !representation(it)).slot }.toIntArray()
-            val rhs = group.map {
-                val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
-                if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
-                if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, local, it["name"].toString())
-                else argument(rhsExpr, if (recursive) local else scope, lifted, it["name"].toString())
-            }.toTypedArray()
-            Let(slots, rhs, group.map { !representation(it) }.toBooleanArray(),
-                compile(expr[3] as List<Any?>, local, tail), recursive)
+            val definitions = CoreJoins.definitions(group)
+            if (definitions != null) compileJoins(expr, scope, tail, definitions) else {
+                val local = scope.child()
+                val slots = group.map { local.bind(it["id"] as String, !representation(it),
+                    CoreRepresentations.binder(it).copy(evaluated = false)).slot }.toIntArray()
+                val rhs = group.map { binding -> withSource(sources.binding(binding, currentSource)) {
+                    val it = binding
+                    val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
+                    if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
+                    val node = if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, local, it["name"].toString())
+                    else argument(rhsExpr, if (recursive) local else scope, lifted, it["name"].toString())
+                    node.proven(node.representation.refine(CoreRepresentations.binder(it).copy(evaluated = false)))
+                } }.toTypedArray()
+                group.forEachIndexed { index, binding -> local.refine(binding["id"] as String, rhs[index].representation) }
+                Let(slots, rhs, group.map { !representation(it) }.toBooleanArray(),
+                    compile(expr[3] as List<Any?>, local, tail), recursive)
+            }
         }
         "case" -> {
-            val local = scope.child(); val binder = local.bind(expr[2] as String, true).slot
+            val scrutineeExpr = expr[1] as List<Any?>
+            val scrutinee = compile(scrutineeExpr, scope, false)
+            val local = scope.child()
+            if (scrutineeExpr[0] == "var") {
+                val id = scrutineeExpr[1] as String
+                local.locals[id]?.let { local.refine(id, it.proof.copy(evaluated = true)) }
+            }
+            val binderProof = scrutinee.representation.refine(CoreRepresentations.caseBinder(expr).copy(evaluated = false)).copy(evaluated = true)
+            val binder = local.bind(expr[2] as String, !binderProof.present || binderProof.isLong, binderProof).slot
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
@@ -718,7 +839,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val ids = alt[2] as List<String>
                 val layout = value as? DataLayout
                 if (layout != null && layout.arity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
-                val slots = ids.mapIndexed { index, id -> child.bind(id, layout?.isLong(index) == true).slot }.toIntArray()
+                val metadata = CoreRepresentations.alternativeBinders(alt)
+                val strict = if (kind == "data") strictConstructorFields(alt[1] as String, ids.size) else null
+                val slots = ids.mapIndexed { index, id ->
+                    val raw = metadata.getOrNull(index)?.let(CoreRepresentations::binder) ?: CoreRepresentation.UNKNOWN
+                    val proof = if (layout?.isLong(index) == true) raw.refine(CoreRepresentation(CoreKind.LONG, true))
+                        else raw.copy(evaluated = strict?.get(index) == true ||
+                            ((constructors[alt[1] as? String]?.get("fieldLifted") as? List<*>)?.getOrNull(index) == false))
+                    child.bind(id, layout?.isLong(index) == true, proof).slot
+                }.toIntArray()
                 val tag = when (kind) {
                     "default" -> DEFAULT_ALTERNATIVE
                     "data" -> DATA_ALTERNATIVE
@@ -727,19 +856,70 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail))
             }.toTypedArray()
-            Case(compile(expr[1] as List<Any?>, scope, false), binder, alternatives, metrics)
+            Case(scrutinee, binder, alternatives, metrics)
         }
         "con" -> {
             val id = expr[1] as String; val arity = (expr[2] as Number).toInt()
             if (arity == 0) construct(id, emptyArray()) else {
                 val layout = FrameLayout(); val slots = IntArray(arity) { layout.bind("field$it") }
                 val body = construct(id, Array(arity) { LocalRead(slots[it]) })
-                val target = FunctionRoot(language, layout.build(), "constructor $id", null, intArrayOf(), slots, IntArray(arity) { it }, body, metrics).callTarget
+                val target = FunctionRoot(language, layout.build(), "constructor $id", null, intArrayOf(), slots, IntArray(arity) { it }, body, metrics,
+                    coreSourceLocation = rootSource(body)).callTarget
                 MakeClosure(target, arity, null, intArrayOf())
             }
         }
         "prim" -> throw UnsupportedCore("Unsaturated primitive ${expr[1]}")
         else -> throw UnsupportedCore("Unsupported Core node ${expr[0]}")
+    }
+    private fun joinJump(target: LocalJoinTarget, args: List<List<Any?>>, flags: List<*>, scope: Scope): Expr {
+        if (args.size != target.slots.size) throw RuntimeFault("Local join arity mismatch")
+        val nodes = args.mapIndexed { index, arg ->
+            argument(arg, scope, flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity"))
+        }.toTypedArray()
+        val temps = IntArray(nodes.size) { scope.layout.bind("<join argument $it>") }
+        return LocalJoinCall(target, nodes, temps, metrics)
+    }
+    private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
+                             definitions: List<CoreJoinDefinition>): Expr {
+        val recursive = expr[1] == true
+        CoreJoins.validate(expr[2] as List<Map<String, Any?>>, expr[3] as List<Any?>, recursive)
+        val identity = Any()
+        val local = outer.child()
+        val bodyScopes = definitions.map { definition ->
+            val scope = local.child()
+            definition.parameters.forEach { parameter ->
+                val lifted = representation(parameter)
+                val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = false) else it }
+                scope.bind(parameter["id"] as String, !lifted && parameter["coercion"] != true, proof)
+            }
+            scope
+        }
+        val targets = definitions.mapIndexed { index, definition ->
+            val parameters = definition.parameters.map { bodyScopes[index].locals.getValue(it["id"] as String) }
+            LocalJoinTarget(identity, index + 1, parameters.map { it.slot }.toIntArray(),
+                parameters.map { it.proof }.toTypedArray())
+        }
+        definitions.forEachIndexed { index, definition -> local.bindJoin(definition.id, targets[index]) }
+        if (recursive) bodyScopes.forEachIndexed { index, scope ->
+            val parameters = definitions[index].parameters.map { it["id"] as String }.toSet()
+            definitions.forEachIndexed { targetIndex, definition ->
+                if (definition.id !in parameters) scope.bindJoin(definition.id, targets[targetIndex])
+            }
+        }
+        val entry = compile(expr[3] as List<Any?>, local, tail)
+        val bodies = definitions.mapIndexed { index, definition ->
+            withSource(sources.binding(definition.binding, currentSource)) {
+                compile(definition.body, bodyScopes[index], tail).also { node ->
+                    node.representation = node.representation.refine(definition.result.copy(evaluated = false))
+                }
+            }
+        }
+        val result = CoreRepresentations.expression(expr).let { proof ->
+            val inferred = entry.representation.refine(proof.copy(evaluated = false))
+            inferred.copy(evaluated = entry.representation.evaluated && bodies.all { it.representation.evaluated })
+        }
+        return LocalJoinRegion(identity, local.layout.bind("<join selector>"), local.layout.bind("<join result>"),
+            (listOf(entry) + bodies).toTypedArray(), result)
     }
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")

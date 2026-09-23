@@ -2,7 +2,9 @@
 module Thc.Plugin (plugin) where
 
 import GHC.Plugins
+import qualified Thc.Sources as Sources
 import Thc.Wired (wiredApplication, wiredRhs, isWiredVoid)
+import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
 import GHC.Types.RepType (typePrimRep_maybe)
 import GHC.Core.TyCo.Rep (scaledThing)
@@ -51,8 +53,47 @@ data Ctx = Ctx
   -- As in CorePrep, exclude every enclosing recursive group while traversing
   -- its RHSs: speculative calls can otherwise destroy guarded recursion.
   , recursiveIds :: VarSet
+  -- Lexical WHNF facts from successful cases and strict worker fields. These
+  -- are facts about already evaluated values, never demand predictions.
+  , evaluatedIds :: VarSet
   , canCertify :: Bool
+  , sourceTable :: Maybe Sources.SourceTable
+  , activeSources :: [String]
   }
+
+-- Source notes are side metadata: they never become executable wrappers.
+sourceFields :: Ctx -> [(String,J)]
+sourceFields d = case activeSources d of
+  [] -> []
+  notes -> [("source",S (last notes)),("sourceNotes",A (map S notes))]
+
+binderSource :: Ctx -> Var -> [(String,J)]
+binderSource d v = case (sourceTable d, Sources.binderNote v) of
+  (Just table, Just note) | Sources.hasNote table note -> [("source",S (Sources.noteKey note))]
+  _ -> []
+
+underTick :: Ctx -> CoreTickish -> Ctx
+underTick d tick = case (sourceTable d, Sources.tickNote tick) of
+  (Just table, Just note) | Sources.hasNote table note ->
+    d { activeSources = activeSources d ++ [Sources.noteKey note] }
+  _ -> d
+
+sourceTableFields :: Maybe Sources.SourceTable -> [(String,J)]
+sourceTableFields Nothing = []
+sourceTableFields (Just table) =
+  [("sourceFiles",A [O [("id",S (Sources.sourceFileId file)),("path",S (Sources.sourceFilePath file)),
+                       ("content",maybe Z S (Sources.sourceFileContent file))] | file <- Sources.sourceFiles table])
+  ,("sourceSpans",A (map spanRecord (Sources.sourceSpans table)))]
+  where
+    spanRecord record = let Sources.Note span label = Sources.sourceSpanNote record in O
+      [("id",S (Sources.sourceSpanId record)),("file",S (Sources.sourceSpanFile record))
+      ,("startLine",num (srcSpanStartLine span)),("startColumn",num (srcSpanStartCol span))
+      ,("endLine",num (srcSpanEndLine span)),("endColumn",num (srcSpanEndCol span))
+      ,("charIndex",maybe Z num (Sources.sourceCharIndex record))
+      ,("charLength",maybe Z num (Sources.sourceCharLength record)),("label",S label)]
+
+loadSources :: Bool -> [(Id,CoreExpr)] -> IO (Maybe Sources.SourceTable)
+loadSources enabled bindings = if enabled then Just <$> Sources.buildSourceTable bindings else pure Nothing
 
 pretty :: Outputable a => Ctx -> a -> String
 pretty d = showSDoc (dynFlags d) . ppr
@@ -77,21 +118,87 @@ liftedType ty = case typeLevity_maybe ty of
   Just Unlifted -> B False
   Nothing -> Z
 
+-- Runtime categories are evidence from GHC types, never parsed pretty text.
+-- A category describes a value after evaluation; evaluated is a separate WHNF
+-- fact, not demand/strictness and not permission to speculate an arbitrary RHS.
+unknownRep :: J
+unknownRep = unknownRepWithState False
+
+unknownRepWithState :: Bool -> J
+unknownRepWithState evaluated = O [("primReps",Z),("kind",S "unknown"),("evaluated",B evaluated)]
+
+voidRep :: J
+voidRep = O [("primReps",A []),("kind",S "void"),("evaluated",B True)]
+
+typeRep :: Type -> Bool -> J
+typeRep ty evaluated = O
+  [("primReps",maybe Z (A . map (S . show)) reps),("kind",S kind),("evaluated",B evaluated)]
+  where
+    reps = typePrimRep_maybe ty
+    -- Type abstraction erases, but a newtype/family is not evidence for either
+    -- a data object or a closure. isBoxedDataTyCon makes that distinction in GHC.
+    (_,rho) = splitForAllTyVars ty
+    unsupportedAggregate = case splitTyConApp_maybe rho of
+      Just (tc,_) -> isUnboxedTupleTyCon tc || isUnboxedSumTyCon tc
+      _ -> False
+    kind | unsupportedAggregate = "unknown"
+         | otherwise = case reps of
+      Just [] -> "void"
+      Just [r] | longRep r -> "long"
+      Just [AddrRep] -> "address"
+      Just [BoxedRep _]
+        | isFunTy rho -> "closure"
+        | Just (tc,_) <- splitTyConApp_maybe rho, isBoxedDataTyCon tc -> "data"
+        | otherwise -> "object"
+      _ -> "unknown"
+    longRep = \case
+      IntRep -> True; Int8Rep -> True; Int16Rep -> True; Int32Rep -> True; Int64Rep -> True
+      WordRep -> True; Word8Rep -> True; Word16Rep -> True; Word32Rep -> True; Word64Rep -> True
+      _ -> False
+
+exprRep :: Ctx -> CoreExpr -> J
+exprRep d (Tick _ e) = exprRep d e
+exprRep d e
+  | not (canCertify d) = unknownRep
+  | Coercion{} <- e = voidRep
+  | otherwise = typeRep (exprType e) (exprIsHNF e || case e of
+      Var v -> v `elemVarSet` evaluatedIds d
+      _ -> False)
+
+binderRep :: Ctx -> Bool -> Var -> J
+binderRep d evaluated v
+  | isCoVar v = voidRep
+  | not (canCertify d) = unknownRepWithState evaluated
+  | otherwise = typeRep (varType v) (evaluated || v `elemVarSet` evaluatedIds d || exprIsHNF (Var v))
+
 binder :: Ctx -> Var -> J
-binder d v = O
+binder d = binderWithState d False
+
+binderWithState :: Ctx -> Bool -> Var -> J
+binderWithState d evaluated v = O $
   [ ("id",S (varKey d v)), ("name",S (occNameString (nameOccName (varName v))))
   , ("type",S (pretty d (varType v))), ("lifted",lifted v)
-  , ("coercion",B (isCoVar v))
+  , ("coercion",B (isCoVar v)), ("rep",binderRep d evaluated v)
   , ("info",if isId v then idMetadata d v else Z)
-  ]
+  ] ++ binderSource d v
 
 binding :: Ctx -> (Id,CoreExpr) -> J
 binding d (v,e) = O $
   [ ("id",S (varKey d v)), ("name",S (occNameString (nameOccName (varName v))))
   , ("type",S (pretty d (varType v))), ("lifted",lifted v)
-  , ("arity",num (idArity v)), ("expr",expr d e)
+  , ("arity",num (idArity v)), ("expr",expr d e), ("rep",exprRep d e)
   , ("info",idMetadata d v)
-  ]
+  ] ++ joinMetadata d v e ++ binderSource d v
+
+joinMetadata :: Ctx -> Id -> CoreExpr -> [(String,J)]
+joinMetadata d v e
+  | not (isJoinId v) = []
+  | otherwise =
+      -- GHC.Core, Note [Invariants on join points]: join arity counts type
+      -- lambdas too, and the RHS can return further lambdas after this prefix.
+      let (prefix,result) = collectNBinders (idJoinArity v) e
+      in [("joinValueArity",num (length (filter (not . isTyVar) prefix)))
+         ,("joinResultRep",exprRep d result)]
 
 idMetadata :: Ctx -> Id -> J
 idMetadata d v = O
@@ -136,42 +243,74 @@ constructor d con = O
 expr :: Ctx -> CoreExpr -> J
 expr d original
   | Just lowered <- wiredApplication original = expr (d { canCertify = False }) lowered
-  | Var v <- original, isWiredVoid v = A [S "void"]
+  | Var v <- original, isWiredVoid v = A [S "void",O (("rep",voidRep) : sourceFields d)]
   | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = False }) lowered
   | otherwise = exprRaw d original
 
+-- Erasing a cast, tick or type-only application preserves the original result
+-- type, without moving the metadata of lambda bodies or case binders.
+withRep :: J -> J -> J
+withRep rep (A xs) = case reverse xs of
+  O fields : rest -> A (reverse rest ++ [O (("rep",rep) : filter ((/= "rep") . fst) fields)])
+  _ -> A (xs ++ [O [("rep",rep)]])
+withRep _ node = node
+
 exprRaw :: Ctx -> CoreExpr -> J
-exprRaw d = \case
-  Var v | Just p <- isPrimOpId_maybe v -> A [S "prim",S (occNameString (primOpOcc p))]
-        | Just con <- isDataConWorkId_maybe v -> A [S "con",S (nameKey (dataConName con)),num (dataConRepArity con)]
-        | otherwise -> A [S "var",S (varKey d v)]
-  Lit l -> let (k,v) = literal d l in A [S "lit",S k,S v]
+exprRaw d original = case original of
+  Var v | Just p <- isPrimOpId_maybe v -> node [S "prim",S (occNameString (primOpOcc p))] []
+        | Just con <- isDataConWorkId_maybe v -> node [S "con",S (nameKey (dataConName con)),num (dataConRepArity con)] []
+        | otherwise -> node [S "var",S (varKey d v)] []
+  Lit l -> let (k,v) = literal d l in node [S "lit",S k,S v] []
   a@App{} -> let (f,args) = collectArgs a
                  vals = filter (not . isTypeArg) args
              -- Analyse the original Core application, before erasing type or
-                 -- coercion information. A false result is conservative.
-             in if null vals then expr d f else A [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals),B (canCertify d && exprIsHNF a),B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)]
+             -- coercion information. A false result is conservative.
+             in if null vals then withRep (exprRep d a) (expr d f) else node
+               [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals)
+               ,B (canCertify d && exprIsHNF a)
+               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] []
   l@Lam{} -> let (bs,body) = collectBinders l
                  vals = filter (not . isTyVar) bs
-             in if null vals then expr d body else A [S "lam",A (map (binder d) vals),expr d body]
-  Let b body -> A [S "let",B (isRec b),A (bindingGroup d b),expr d body]
-  Case scrut b _ alts -> A [S "case",expr d scrut,S (varKey d b),A (map alt alts)]
-  Cast e _ -> expr d e
-  Tick _ e -> expr d e
+             in if null vals then withRep (exprRep d l) (expr d body)
+                else node [S "lam",A (map (binder d) vals),expr d body] [("resultRep",exprRep d body)]
+  Let b body -> node [S "let",B (isRec b),A (bindingGroup d b),expr d body] []
+  Case scrut b _ alts ->
+    let branchCtx = d { evaluatedIds = extendVarSetList (evaluatedIds d) (b : scrutineeVars scrut) }
+    in node [S "case",expr d scrut,S (varKey d b),A (map (alt branchCtx) alts)]
+      [("binder",binderWithState d True b)]
+  Cast e _ -> withRep (exprRep d original) (expr d e)
+  Tick tick e -> expr (underTick d tick) e
   Type _ -> A [S "unsupported",S "type-as-value"]
-  Coercion _ -> A [S "void"]
+  Coercion _ -> node [S "void"] []
   where
+    node fields metadata = A (fields ++ [O (("rep",exprRep d original) : metadata ++ sourceFields d)])
     isTypeArg Type{} = True
     isTypeArg _ = False
     argLifted Coercion{} = B False
     argLifted e = liftedType (exprType e)
     isRec Rec{} = True
     isRec _ = False
-    alt (Alt ac bs body) = let ids = A [S (varKey d b) | b <- bs, not (isTyVar b)]
-                          in case ac of
-      DEFAULT -> A [S "default",Z,ids,expr d body]
-      DataAlt c -> A [S "data",S (nameKey (dataConName c)),ids,expr d body]
-      LitAlt l -> let (k,v) = literal d l in A [S "lit",A [S k,S v],ids,expr d body]
+    scrutineeVars (Var v) = [v]
+    scrutineeVars (Cast e _) = scrutineeVars e
+    scrutineeVars (Tick _ e) = scrutineeVars e
+    scrutineeVars _ = []
+    alt branchCtx (Alt ac bs body) =
+      let vals = filter (not . isTyVar) bs
+          ids = A (map (S . varKey d) vals)
+          -- Core alternatives retain worker slots after type-variable erasure,
+          -- including zero-width coercions. Only exactly aligned strictness
+          -- marks certify fields; lazy fields keep their independent evidence.
+          strictFields = case ac of
+            DataAlt c | canCertify d
+                      , let marks = dataConRepStrictness c
+                      , length marks == length vals -> [v | (v,mark) <- zip vals marks, isMarkedStrict mark]
+            _ -> []
+          bodyCtx = branchCtx { evaluatedIds = extendVarSetList (evaluatedIds branchCtx) strictFields }
+          metadata = O [("binders",A (map (binder bodyCtx) vals))]
+      in case ac of
+        DEFAULT -> A [S "default",Z,ids,expr bodyCtx body,metadata]
+        DataAlt c -> A [S "data",S (nameKey (dataConName c)),ids,expr bodyCtx body,metadata]
+        LitAlt l -> let (k,v) = literal d l in A [S "lit",A [S k,S v],ids,expr bodyCtx body,metadata]
 
 literal :: Ctx -> Literal -> (String,String)
 literal d = \case
@@ -210,13 +349,14 @@ exprCons = \case
 exportModule :: [CommandLineOption] -> ModGuts -> CoreM ModGuts
 exportModule opts guts = do
   flags <- getDynFlags
-  let d = Ctx flags (unitString (moduleUnit (mg_module guts)) ++ ":" ++ moduleNameString (moduleName (mg_module guts))) emptyVarSet True
+  sources <- liftIO $ loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
+  let d = Ctx flags (unitString (moduleUnit (mg_module guts)) ++ ":" ++ moduleNameString (moduleName (mg_module guts))) emptyVarSet emptyVarSet True sources []
       dir = case opts of [] -> "build/core"; x:_ -> x
       closureRoots = mapMaybe (stripPrefix "closure=") (drop 1 opts)
       modName = moduleNameString (moduleName (mg_module guts))
       binds = concatMap flattenBind (mg_binds guts)
       cons = nubBy (\a b -> dataConName a == dataConName b) $ concatMap tyConDataCons (mg_tcs guts) ++ concatMap (exprCons . snd) binds
-      result = O
+      result = O $
         [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName)
         , ("unit",S (unitString (moduleUnit (mg_module guts))))
         , ("boundary",S "optimized-Core-before-Tidy")
@@ -224,8 +364,8 @@ exportModule opts guts = do
         , ("bindings",A (concatMap (bindingGroup d) (mg_binds guts))), ("constructors",A (map (constructor d) cons))
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- mg_binds guts])
         , ("rules",S (pretty d (mg_rules guts)))
-        , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S "erased")])
-        ]
+        , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
+        ] ++ sourceTableFields sources
   liftIO $ do
     createDirectoryIfMissing True dir
     writeFile (dir </> modName ++ ".json") (json result ++ "\n")
@@ -242,19 +382,20 @@ exportLate :: LatePlugin
 exportLate hsc opts pair@(guts,_)
   | not ("post-tidy" `elem` opts) = pure pair
   | otherwise = do
+      sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (cg_binds guts))
       let m = cg_module guts
-          d = Ctx (hsc_dflags hsc) (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)) emptyVarSet True
+          d = Ctx (hsc_dflags hsc) (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)) emptyVarSet emptyVarSet True sources []
           dir = case opts of [] -> "build/core"; x:_ -> x
           modName = moduleNameString (moduleName m)
           binds = concatMap flattenBind (cg_binds guts)
           cons = nubBy (\a b -> dataConName a == dataConName b) (concatMap tyConDataCons (cg_tycons guts) ++ concatMap (exprCons . snd) binds)
-          result = O
+          result = O $
             [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName), ("unit",S (unitString (moduleUnit m)))
             , ("boundary",S "optimized-Core-after-Tidy-before-CorePrep")
             , ("sourceCore",S (pretty d (cg_binds guts)))
             , ("bindings",A (concatMap (bindingGroup d) (cg_binds guts))), ("constructors",A (map (constructor d) cons))
             , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- cg_binds guts])
-            ]
+            ] ++ sourceTableFields sources
       createDirectoryIfMissing True dir
       writeFile (dir </> modName ++ ".json") (json result ++ "\n")
       modifyIORef' sourceDefinitions ((d,binds):)
@@ -314,11 +455,12 @@ exportInterfaceClosure dir rootCtx roots = do
       -- Conservatively forbid speculation of every imported definition while
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]
-      importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds }) (v,e) of
+  sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) [(v,e) | (_,v,e,_) <- imports]
+  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, sourceTable = sources, activeSources = [] }) (v,e) of
         O fields -> O (fields ++ [("origin",S kind),("originModule",S (modulePrefix d))])
         _ -> error "binding was not an object"
       cons = nubBy (\a b -> dataConName a == dataConName b) (concat [exprCons e | (_,_,e,_) <- imports])
-      result = O
+      result = O $
         [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S "THC.InterfaceClosure"), ("unit",S "dependency-closure")
         , ("boundary",S "actual-interface-unfoldings"), ("roots",A [S (varKey rootCtx v) | v <- roots])
         , ("sourceModules",A [S (modulePrefix d) | (d,_) <- reverse modules])
@@ -326,6 +468,6 @@ exportInterfaceClosure dir rootCtx roots = do
         , ("groups",A [O [("recursive",B True),("ids",A [S (varKey d v) | (d,v,_,_) <- imports])]])
         , ("missingDefinitions",A [O [("id",S (varKey d v)),("type",S (pretty d (varType v))), ("reason",S "No executable interface unfolding; source export required")] | (d,v) <- missing])
         , ("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports]))
-        ]
+        ] ++ sourceTableFields sources
   writeFile (dir </> "THC.InterfaceClosure.json") (json result ++ "\n")
   putStrLn ("THC interface closure: " ++ show (length imports) ++ " actual unfoldings, " ++ show (length missing) ++ " missing source definitions")

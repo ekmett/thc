@@ -1,0 +1,19 @@
+digraph actual_cfg {
+graph [rankdir=TB,bgcolor="white",labelloc=t,label="bytecode-on: actual scheduled CFG before HighTierLowering\nNode IDs and all block edges preserved; debug/constant/bookkeeping labels omitted"];
+node [shape=box,fontname="Menlo",fontsize=10];
+"B0" [style=filled,fillcolor="#f4f5f7",label="B0\n0 StartNode void\n40 LoadIndexedNode a java.lang.Object [array=31, index=5:int[0|0x0]]\n58 LoadIndexedNode a java.lang.Object [array=31, index=22:int[1|0x1]]\n211 UnboxNode i64 [value=63]\n2268 IntegerLessThanNode void [x=211, y=224:long[1|0x1]]\n2269 AddNode i64 [x=211, y=152:long[-1|0xffffffffffffffff]]\n2251 IfNode void [condition=2268]"];
+"B0" -> "B1";
+"B0" -> "B2";
+"B1" [style=filled,fillcolor="#f4f5f7",label="B1"];
+"B1" -> "B6";
+"B2" [style=filled,fillcolor="#f4f5f7",label="B2"];
+"B2" -> "B3";
+"B3" [style=filled,fillcolor="#def4e9",label="B3\n2147 LoopBeginNode void\n2212 IntegerLessThanNode void [x=2305, y=224:long[1|0x1]]\n2218 AddNode i64 [x=2305, y=152:long[-1|0xffffffffffffffff]]\n1758 SubNode i64 [x=211, y=2305]\n1788 AddNode i64 [x=1758, y=2306]\n2223 AddNode i64 [x=1788, y=224:long[1|0x1]]\n1045 IfNode void [condition=2212]\n2305 ValuePhiNode i64 [values=2269, values=2218]\n2306 ValuePhiNode i64 [values=224:long[1|0x1], values=2223]"];
+"B3" -> "B4";
+"B3" -> "B5";
+"B4" [style=filled,fillcolor="#def4e9",label="B4\n2148 LoopEndNode void"];
+"B4" -> "B3";
+"B5" [style=filled,fillcolor="#f4f5f7",label="B5\n2149 LoopExitNode void"];
+"B5" -> "B6";
+"B6" [style=filled,fillcolor="#f4f5f7",label="B6\n2275 MergeNode void\n2237 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=2300]\n2184 ReturnNode void [result=2237]\n2298 ValuePhiNode i64 [-1 - 0] [values=129:long[0|0x0], values=152:long[-1|0xffffffffffffffff]]\n2299 ValuePhiNode i64 [values=2225, values=211]\n2300 ValuePhiNode i64 [values=2226, values=129:long[0|0x0]]\n2301 ValuePhiNode i64 [0 - 1] bits:0...0x [values=2227, values=2272]\n2302 ValuePhiNode i32 [0 - 1] bits:0...0x [values=2228, values=2273]"];
+}

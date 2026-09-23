@@ -1,0 +1,291 @@
+{
+  "countScope": "Binder declarations in all 52 syntactically reachable globals, including cold error paths. IDs are lexical and are not deduplicated across scopes.",
+  "lambdaFormals": {
+    "object evaluated=False": 8,
+    "data evaluated=False": 20,
+    "long evaluated=True": 17,
+    "address evaluated=True": 1,
+    "unknown evaluated=False": 3,
+    "closure evaluated=False": 1,
+    "void evaluated=True": 2
+  },
+  "caseBinders": {
+    "data evaluated=True": 55,
+    "long evaluated=True": 23,
+    "unknown evaluated=True": 8
+  },
+  "patternBinders": {
+    "long evaluated=True": 49,
+    "object evaluated=True": 29,
+    "object evaluated=False": 31,
+    "data evaluated=True": 83,
+    "data evaluated=False": 13,
+    "unknown evaluated=False": 10,
+    "void evaluated=True": 2,
+    "closure evaluated=False": 1
+  },
+  "joins": [
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "$j",
+      "rawArity": 1,
+      "valueArity": 1,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "$j",
+      "rawArity": 1,
+      "valueArity": 1,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "$j",
+      "rawArity": 1,
+      "valueArity": 1,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "$j",
+      "rawArity": 1,
+      "valueArity": 1,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "exit",
+      "rawArity": 2,
+      "valueArity": 2,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "$wgo",
+      "rawArity": 2,
+      "valueArity": 2,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "exit",
+      "rawArity": 2,
+      "valueArity": 2,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "go",
+      "rawArity": 2,
+      "valueArity": 2,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "exit",
+      "rawArity": 2,
+      "valueArity": 2,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    },
+    {
+      "owner": "main:THC.MapWorkload.$j_s14y5",
+      "name": "go",
+      "rawArity": 2,
+      "valueArity": 2,
+      "result": {
+        "primReps": [
+          "IntRep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      }
+    }
+  ],
+  "unevaluatedDataFormalExamples": [
+    {
+      "owner": "main:Data.Map.Internal.balanceL_",
+      "name": "l",
+      "type": "Map k a",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:Data.Map.Internal.balanceL_",
+      "name": "r",
+      "type": "Map k a",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:Data.Map.Internal.balanceR_",
+      "name": "l",
+      "type": "Map k a",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:Data.Map.Internal.balanceR_",
+      "name": "r",
+      "type": "Map k a",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:THC.MapWorkload.$wgo13_s14wZ",
+      "name": "def",
+      "type": "Int",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "ML"
+    },
+    {
+      "owner": "main:THC.MapWorkload.$wgo13_s14wZ",
+      "name": "ds1",
+      "type": "Map Int Int",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:THC.MapWorkload.$wgo13_s14wQ",
+      "name": "ds",
+      "type": "Map Int Int",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:THC.MapWorkload.$s$sgo8_s14yV",
+      "name": "x",
+      "type": "Int",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:THC.MapWorkload.$s$sgo8_s14yV",
+      "name": "ds1",
+      "type": "Map Int Int",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    },
+    {
+      "owner": "main:THC.MapWorkload.$s$w$sgo8_s14zc",
+      "name": "ds2",
+      "type": "Map Int Int",
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "data",
+        "evaluated": false
+      },
+      "demand": "1L"
+    }
+  ]
+}

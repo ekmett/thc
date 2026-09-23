@@ -1,0 +1,19 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/work/source-notes-v1/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/thc/work/source-notes-graph-review/bytecode-off
+[engine] opt done   engine=1  id=2     lambda n                                           |Tier 2|Time    62(  49+13  )ms|AST    2|Inlined   0Y   0N|IR    101/   226|CodeSize     968|Addr 0x000137b73ec0|CompId 1958   |UTC 2026-09-23T03:47:31.758|Src n/a
+PHASE WARM BEGIN
+Dumping IGV graphs in /Users/ekmett/thc/work/source-notes-graph-review/bytecode-off
+[engine] opt done   engine=1  id=36    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time    78(  45+33  )ms|AST   10|Inlined   2Y   0N|IR    395/  1737|CodeSize    5820|Addr 0x000137b94500|CompId 2212   |UTC 2026-09-23T03:47:31.908|Src n/a
+PHASE WARM END calls=2020352 elapsedNs=10000899292 checksum=101179314024960
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"backend":"bytecode","bytecodeRootCount":2,"sourceNotesEnabled":false,"sourceSpanCount":0,"sourceRootCount":0,"localJoinCount":1,"localJoinTransfers":0,"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"selfTailReentries":0,"trampolineIterations":0,"papAllocations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

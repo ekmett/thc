@@ -1,0 +1,3435 @@
+{
+  "name": "0: After PE Tier",
+  "group": "TruffleIR.Tier2.lambda_n()",
+  "ordinal": 0,
+  "dumpId": 0,
+  "graphType": "StructuredGraph",
+  "nodes": [
+    {
+      "id": 0,
+      "nodeClass": "jdk.graal.compiler.nodes.StartNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget",
+        "value": "Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.hots..."
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 2,
+      "nodeClass": "jdk.graal.compiler.nodes.ParameterNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object[]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 3,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 5,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [0]",
+        "value": "int[0|0x0]",
+        "rawvalue": "0"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:718) [bci:8]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 22,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [1]",
+        "value": "int[1|0x1]",
+        "rawvalue": "1"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1566) [bci:43]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 28,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [2]",
+        "value": "int[2|0x2]",
+        "rawvalue": "2"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1568) [bci:58]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 29,
+      "nodeClass": "jdk.graal.compiler.nodes.PiArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1568) [bci:59]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 31,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.unsafeCast(OptimizedCallTarget.java:-1) [bci:-1]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1568) [bci:68]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 40,
+      "nodeClass": "jdk.graal.compiler.nodes.java.LoadIndexedNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 45,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:63]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 46,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:63]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 58,
+      "nodeClass": "jdk.graal.compiler.nodes.java.LoadIndexedNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a java.lang.Object"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:72]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 62,
+      "nodeClass": "jdk.graal.compiler.nodes.PiNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:63]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 63,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.BoxNode$TrustedBoxedValue",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1582) [bci:63]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 80,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# thc.runtime.FunctionRoot",
+        "value": "Object[Instance<thc.runtime.FunctionRoot>]",
+        "rawvalue": "Object[Instance<thc.runtime.FunctionRoot>]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 84,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.frame.FrameDescriptor",
+        "value": "Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.api.frame.Fr..."
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 86,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualInstanceNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.impl.FrameWithoutBoxing"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 87,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]",
+        "value": "Object[Instance<java.lang.Object[]>]",
+        "rawvalue": "Object[Instance<java.lang.Object[]>]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 90,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 91,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# long[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 92,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# byte[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 116,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.runtime.CompilationState",
+        "value": "Object[Instance<com.oracle.truffle.runtime.CompilationState>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.Comp..."
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.getTier(OptimizedCallTarget.java:606) [bci:32]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:37]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 141,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 142,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 146,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.UnboxNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.longValue(Long.java:-1) [bci:-1]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:568) [bci:63]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 150,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [34361049216]",
+        "value": "long[34361049216|0x800140080]",
+        "rawvalue": "34361049216"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 151,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.OrNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [-9223372002493726592 - 9223372036854775807] bits:x...x1xxxxxxxxxxxxxx1x1xxxxxxxxxx1xxxxxxx"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.FunctionRoot.execute(Program.kt:568) [bci:88]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 200,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.UnboxNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.longValue(Long.java:-1) [bci:-1]",
+        "thc.runtime.FunctionRoot.buildFrame(Program.kt:558) [bci:101]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:569) [bci:102]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 258,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# thc.runtime.LocalJoinRegion",
+        "value": "Object[Instance<thc.runtime.LocalJoinRegion>]",
+        "rawvalue": "Object[Instance<thc.runtime.LocalJoinRegion>]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 278,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [0]",
+        "value": "long[0|0x0]",
+        "rawvalue": "0"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:65) [bci:11]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 299,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.runtime.OptimizedOSRLoopNode$OptimizedDefaultOSRLoopNode",
+        "value": "Object[Instance<com.oracle.truffle.runtime.OptimizedOSRLoopNode$OptimizedDefaultOSRLoopNode>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.runtime.Opti..."
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 302,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# thc.runtime.LocalJoinRepeater",
+        "value": "Object[Instance<thc.runtime.LocalJoinRepeater>]",
+        "rawvalue": "Object[Instance<thc.runtime.LocalJoinRepeater>]"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 304,
+      "nodeClass": "jdk.graal.compiler.nodes.EndNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 305,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "1",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 306,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "1",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 307,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 308,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 309,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 310,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 311,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 312,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [
+        "thc.runtime.SelfRepeater.once(Program.kt:529) [bci:5]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:573) [bci:139]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 313,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 326,
+      "nodeClass": "jdk.graal.compiler.nodes.IfNode",
+      "block": "1",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:44) [bci:34]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 327,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.IntegerEqualsNode",
+      "block": "1",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:44) [bci:34]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 329,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:44) [bci:29]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 334,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "2",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalRead.executeLong(Program.kt:112) [bci:23]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinCall.execute(LocalJoins.kt:23) [bci:48]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 338,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [1]",
+        "value": "long[1|0x1]",
+        "rawvalue": "1"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:44) [bci:32]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 761,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.IntegerLessThanNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Primitive.executeLong(Program.kt:489) [bci:1075]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalBinding.write(Program.kt:285) [bci:23]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 763,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.ConditionalNode",
+      "block": "3",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Primitive.executeLong$b(Program.kt:477) [bci:1]",
+        "thc.runtime.Primitive.executeLong(Program.kt:488) [bci:1065]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 942,
+      "nodeClass": "jdk.graal.compiler.nodes.IfNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Case.executeLong(Program.kt:391) [bci:59]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:45) [bci:63]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 944,
+      "nodeClass": "jdk.graal.compiler.nodes.BeginNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalRead.executeLong(Program.kt:112) [bci:23]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.Primitive.executeLong(Program.kt:475) [bci:7]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:36",
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1116,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i64 [-1]",
+        "value": "long[-1|0xffffffffffffffff]",
+        "rawvalue": "-1"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Primitive.executeLong(Program.kt:480) [bci:969]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinCall.execute(LocalJoins.kt:23) [bci:48]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:36",
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1117,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Primitive.executeLong(Program.kt:480) [bci:969]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinCall.execute(LocalJoins.kt:23) [bci:48]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:36",
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1367,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.SubNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Primitive.executeLong(Program.kt:480) [bci:969]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.Primitive.executeLong(Program.kt:476) [bci:27]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:36",
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1400,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Primitive.executeLong(Program.kt:479) [bci:962]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.Primitive.executeLong(Program.kt:476) [bci:27]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:36",
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1430,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.AddNode",
+      "block": "4",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Primitive.executeLong(Program.kt:479) [bci:962]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinCall.execute(LocalJoins.kt:23) [bci:48]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:36",
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1659,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# com.oracle.truffle.api.nodes.RepeatingNode$2",
+        "value": "Object[Instance<com.oracle.truffle.api.nodes.RepeatingNode$2>]",
+        "rawvalue": "Object[Instance<com.oracle.truffle.api.nodes.Re..."
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:115) [bci:14]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1696,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopExitNode",
+      "block": "5",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalRead.executeLong(Program.kt:112) [bci:23]",
+        "thc.runtime.Case.executeLong(Program.kt:393) [bci:75]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:45) [bci:63]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:35",
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1699,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopEndNode",
+      "block": "2",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:159) [bci:244]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1702,
+      "nodeClass": "jdk.graal.compiler.nodes.FrameState",
+      "block": "5",
+      "properties": {},
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:161) [bci:247]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1795,
+      "nodeClass": "jdk.graal.compiler.nodes.ReturnNode",
+      "block": "5",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1798,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.TransferToInterpreter",
+        "action": "DeoptimizationAction.InvalidateReprofile"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:44) [bci:34]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1820,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopEndNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:7]",
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1825,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# java.lang.Object[]"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.castArgumentsImpl(OptimizedCallTarget.java:1576) [bci:2]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.injectArgumentsProfile(OptimizedCallTarget.java:1569) [bci:79]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:721) [bci:21]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1827,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1828,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1829,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "0",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1834,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1835,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1836,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1837,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1838,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1839,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1840,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1841,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1843,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1847,
+      "nodeClass": "jdk.graal.compiler.nodes.ValuePhiNode",
+      "block": "1",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1848,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "1",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1849,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "1",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1851,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.RuntimeConstraint",
+        "action": "DeoptimizationAction.InvalidateRecompile"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1858,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.RuntimeConstraint",
+        "action": "DeoptimizationAction.InvalidateRecompile"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1860,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "4",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.RuntimeConstraint",
+        "action": "DeoptimizationAction.InvalidateRecompile"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1864,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.RuntimeConstraint",
+        "action": "DeoptimizationAction.InvalidateRecompile"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1865,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1867,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1868,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1869,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1870,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1871,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i64 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1872,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i64"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1873,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1875,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1877,
+      "nodeClass": "jdk.graal.compiler.nodes.ValueProxyNode",
+      "block": "(no block)",
+      "properties": {
+        "stamp": "i32 [0 - 1] bits:0...0x"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1879,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "5",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1880,
+      "nodeClass": "jdk.graal.compiler.nodes.virtual.VirtualObjectState",
+      "block": "5",
+      "properties": {},
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 1882,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.BoxNode$AllocatingBoxNode",
+      "block": "5",
+      "properties": {
+        "stamp": "a!# java.lang.Long"
+      },
+      "javaSourcePosition": [
+        "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+        "thc.runtime.FunctionBody.execute(Program.kt:516) [bci:18]",
+        "thc.runtime.SelfRepeater.once(Program.kt:529) [bci:5]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:573) [bci:139]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1883,
+      "nodeClass": "jdk.graal.compiler.nodes.calc.IntegerEqualsNode",
+      "block": "3",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [],
+      "guestSourcePositions": []
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 40,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 40,
+      "to": 58,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 58,
+      "to": 146,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 146,
+      "to": 200,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 200,
+      "to": 304,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 305,
+      "to": 326,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 326,
+      "to": 334,
+      "label": "trueSuccessor",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 326,
+      "to": 329,
+      "label": "falseSuccessor",
+      "type": "Successor",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 329,
+      "to": 1798,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 334,
+      "to": 1699,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 942,
+      "to": 1696,
+      "label": "trueSuccessor",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 942,
+      "to": 944,
+      "label": "falseSuccessor",
+      "type": "Successor",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 944,
+      "to": 1858,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1882,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1798,
+      "to": 1851,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1851,
+      "to": 1864,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1858,
+      "to": 1860,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1860,
+      "to": 1820,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1864,
+      "to": 942,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1882,
+      "to": 1795,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 3,
+      "to": 0,
+      "label": "stateAfter",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 3,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 2,
+      "to": 29,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 28,
+      "to": 29,
+      "label": "length",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 29,
+      "to": 31,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 31,
+      "to": 40,
+      "label": "array",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 40,
+      "label": "index",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 40,
+      "to": 45,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 45,
+      "to": 46,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 31,
+      "to": 58,
+      "label": "array",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 22,
+      "to": 58,
+      "label": "index",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 58,
+      "to": 62,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 62,
+      "to": 63,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 142,
+      "to": 141,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1,
+      "to": 141,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 86,
+      "to": 141,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 116,
+      "to": 141,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 1,
+      "to": 142,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 46,
+      "to": 146,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 146,
+      "to": 151,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 150,
+      "to": 151,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 63,
+      "to": 200,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 306,
+      "to": 305,
+      "label": "stateAfter",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 304,
+      "to": 305,
+      "label": "ends",
+      "type": "Association",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 0
+    },
+    {
+      "from": 307,
+      "to": 306,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 299,
+      "to": 306,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 86,
+      "to": 306,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 302,
+      "to": 306,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 1827,
+      "to": 306,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 0
+    },
+    {
+      "from": 1828,
+      "to": 306,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 1
+    },
+    {
+      "from": 1829,
+      "to": 306,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 2
+    },
+    {
+      "from": 1848,
+      "to": 306,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 3
+    },
+    {
+      "from": 1849,
+      "to": 306,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 4
+    },
+    {
+      "from": 308,
+      "to": 307,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 309,
+      "to": 308,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 258,
+      "to": 308,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 86,
+      "to": 308,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 310,
+      "to": 309,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 311,
+      "to": 310,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 313,
+      "to": 311,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 141,
+      "to": 312,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 80,
+      "to": 312,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 86,
+      "to": 312,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 312,
+      "to": 313,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 327,
+      "to": 326,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1840,
+      "to": 327,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 327,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1834,
+      "to": 761,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 338,
+      "to": 761,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 761,
+      "to": 763,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 338,
+      "to": 763,
+      "label": "trueValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 763,
+      "label": "falseValue",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 761,
+      "to": 942,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1834,
+      "to": 1117,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1116,
+      "to": 1117,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 200,
+      "to": 1367,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1834,
+      "to": 1367,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1367,
+      "to": 1400,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1835,
+      "to": 1400,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1400,
+      "to": 1430,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 338,
+      "to": 1430,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1702,
+      "to": 1696,
+      "label": "stateAfter",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 305,
+      "to": 1696,
+      "label": "loopBegin",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 305,
+      "to": 1699,
+      "label": "loopBegin",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 307,
+      "to": 1702,
+      "label": "outerFrameState",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1659,
+      "to": 1702,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 1827,
+      "to": 1702,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 0
+    },
+    {
+      "from": 1828,
+      "to": 1702,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 1
+    },
+    {
+      "from": 1829,
+      "to": 1702,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 2
+    },
+    {
+      "from": 1879,
+      "to": 1702,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 3
+    },
+    {
+      "from": 1880,
+      "to": 1702,
+      "label": "virtualObjectMappings",
+      "type": "State",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 4
+    },
+    {
+      "from": 1882,
+      "to": 1795,
+      "label": "result",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 327,
+      "to": 1798,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 305,
+      "to": 1820,
+      "label": "loopBegin",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 86,
+      "to": 1827,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 84,
+      "to": 1827,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 1825,
+      "to": 1827,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 90,
+      "to": 1827,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 91,
+      "to": 1827,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 4,
+      "listIndex": 3
+    },
+    {
+      "from": 92,
+      "to": 1827,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 87,
+      "to": 1827,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 1825,
+      "to": 1828,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 46,
+      "to": 1828,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 63,
+      "to": 1828,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 90,
+      "to": 1829,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 305,
+      "to": 1834,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 1834,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 200,
+      "to": 1834,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 1117,
+      "to": 1834,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1835,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 1835,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 278,
+      "to": 1835,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 1430,
+      "to": 1835,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1836,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 1836,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 200,
+      "to": 1836,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 1836,
+      "to": 1836,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1837,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 1837,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 1837,
+      "to": 1837,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 763,
+      "to": 1837,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1838,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 1838,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 1838,
+      "to": 1838,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 1117,
+      "to": 1838,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1839,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 1839,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 1839,
+      "to": 1839,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 1430,
+      "to": 1839,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1840,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 278,
+      "to": 1840,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 338,
+      "to": 1840,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 338,
+      "to": 1840,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1841,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 1841,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 1841,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 22,
+      "to": 1841,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1843,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 1843,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 1843,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 1843,
+      "to": 1843,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 305,
+      "to": 1847,
+      "label": "merge",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 1847,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 1847,
+      "to": 1847,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": 1
+    },
+    {
+      "from": 22,
+      "to": 1847,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 3,
+      "listIndex": 2
+    },
+    {
+      "from": 91,
+      "to": 1848,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 151,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 200,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 1834,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 1835,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 1836,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 1837,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 1838,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 1839,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 12,
+      "listIndex": 11
+    },
+    {
+      "from": 1840,
+      "to": 1848,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 92,
+      "to": 1849,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 22,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 1841,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 1841,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 1843,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 1843,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 8
+    },
+    {
+      "from": 1847,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 1847,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 1847,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 12,
+      "listIndex": 11
+    },
+    {
+      "from": 22,
+      "to": 1849,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 1883,
+      "to": 1851,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 1883,
+      "to": 1858,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 1883,
+      "to": 1860,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 1883,
+      "to": 1864,
+      "label": "condition",
+      "type": "Condition",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1865,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1834,
+      "to": 1865,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1867,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1836,
+      "to": 1867,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1868,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 763,
+      "to": 1868,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1869,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1838,
+      "to": 1869,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1870,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1839,
+      "to": 1870,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1871,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1840,
+      "to": 1871,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1872,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1835,
+      "to": 1872,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1873,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1841,
+      "to": 1873,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1875,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1843,
+      "to": 1875,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1696,
+      "to": 1877,
+      "label": "loopExit",
+      "type": "Association",
+      "fromIndex": 1,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 1847,
+      "to": 1877,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 91,
+      "to": 1879,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 151,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 200,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 1865,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 1872,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 1867,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 1868,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 1869,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 1870,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 12,
+      "listIndex": 11
+    },
+    {
+      "from": 1871,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 1872,
+      "to": 1879,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 14,
+      "listIndex": 13
+    },
+    {
+      "from": 92,
+      "to": 1880,
+      "label": "object",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 22,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": 0
+    },
+    {
+      "from": 22,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 5,
+      "listIndex": 4
+    },
+    {
+      "from": 1873,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 6,
+      "listIndex": 5
+    },
+    {
+      "from": 1873,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 7,
+      "listIndex": 6
+    },
+    {
+      "from": 1875,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 8,
+      "listIndex": 7
+    },
+    {
+      "from": 1875,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 9,
+      "listIndex": 8
+    },
+    {
+      "from": 22,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 10,
+      "listIndex": 9
+    },
+    {
+      "from": 1877,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 11,
+      "listIndex": 10
+    },
+    {
+      "from": 1877,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 12,
+      "listIndex": 11
+    },
+    {
+      "from": 22,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 13,
+      "listIndex": 12
+    },
+    {
+      "from": 22,
+      "to": 1880,
+      "label": "values",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 14,
+      "listIndex": 13
+    },
+    {
+      "from": 1872,
+      "to": 1882,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 1841,
+      "to": 1883,
+      "label": "x",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 1883,
+      "label": "y",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    }
+  ],
+  "blocks": [
+    {
+      "name": "0",
+      "nodes": [
+        1,
+        2,
+        3,
+        0,
+        28,
+        29,
+        31,
+        5,
+        40,
+        22,
+        58,
+        45,
+        46,
+        146,
+        62,
+        63,
+        200,
+        150,
+        151,
+        1825,
+        1828,
+        1116,
+        1659,
+        338,
+        142,
+        86,
+        116,
+        141,
+        80,
+        312,
+        313,
+        311,
+        310,
+        309,
+        258,
+        308,
+        307,
+        299,
+        302,
+        84,
+        90,
+        91,
+        92,
+        87,
+        1827,
+        1829,
+        278,
+        304
+      ],
+      "successors": [
+        "1"
+      ]
+    },
+    {
+      "name": "1",
+      "nodes": [
+        1848,
+        1849,
+        306,
+        305,
+        327,
+        326,
+        1834,
+        1835,
+        1836,
+        1837,
+        1838,
+        1839,
+        1840,
+        1841,
+        1847,
+        1843
+      ],
+      "successors": [
+        "2",
+        "3"
+      ]
+    },
+    {
+      "name": "2",
+      "nodes": [
+        334,
+        1699
+      ],
+      "successors": [
+        "1"
+      ]
+    },
+    {
+      "name": "3",
+      "nodes": [
+        329,
+        1798,
+        1883,
+        1851,
+        1864,
+        761,
+        763,
+        942
+      ],
+      "successors": [
+        "4",
+        "5"
+      ]
+    },
+    {
+      "name": "4",
+      "nodes": [
+        944,
+        1858,
+        1860,
+        1367,
+        1400,
+        1430,
+        1117,
+        1820
+      ],
+      "successors": [
+        "1"
+      ]
+    },
+    {
+      "name": "5",
+      "nodes": [
+        1879,
+        1880,
+        1702,
+        1696,
+        1882,
+        1795
+      ],
+      "successors": []
+    },
+    {
+      "name": "(no block)",
+      "nodes": [
+        1865,
+        1867,
+        1868,
+        1869,
+        1870,
+        1871,
+        1872,
+        1873,
+        1875,
+        1877
+      ],
+      "successors": []
+    }
+  ]
+}

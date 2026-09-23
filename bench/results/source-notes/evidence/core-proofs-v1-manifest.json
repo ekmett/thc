@@ -1,0 +1,197 @@
+{
+  "revision": "90acd610bc254f8367e23eb16dbb969e8fc73cc3",
+  "status": "Validated source tree preceding source-note attachment; uncommitted source hashes are authoritative",
+  "sources": [
+    {
+      "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+      "sha256": "2a6847f8e65a49a70e9b13c689a586f14c55f212a6df59d84cafe3f43b3887d0"
+    },
+    {
+      "path": "src/main/java/thc/runtime/Calls.java",
+      "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+    },
+    {
+      "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+      "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+    },
+    {
+      "path": "src/main/kotlin/thc/Json.kt",
+      "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+    },
+    {
+      "path": "src/main/kotlin/thc/Language.kt",
+      "sha256": "4918f1eac62092244b8d9b4b8b3e6ddd6843d4bde5995c2dd3199aaa6b824365"
+    },
+    {
+      "path": "src/main/kotlin/thc/Main.kt",
+      "sha256": "e1c739771dfde00c774c03808471f4d7bee74b3d45089e1d7159e067c07d27ac"
+    },
+    {
+      "path": "src/main/kotlin/thc/MapCheck.kt",
+      "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+    },
+    {
+      "path": "src/main/kotlin/thc/Probe.kt",
+      "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Application.kt",
+      "sha256": "b85a7188fa80226680cecd32a1324c727907aee15ec1d86c4537d3ff7db1dc5c"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+      "sha256": "2ff54d8cac78d6e76150946daa155d0767dc88f591badcff079711e2e866884f"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+      "sha256": "463ee9a842c630e9f27eeaddbcb4568c7051fbbd52de23de7c060579629380b7"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+      "sha256": "f041aa7be387d947af945a64919529aeaee54a9bda3b1b164150806fa003bdd3"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Frames.kt",
+      "sha256": "d6e27e494396da7182591ac863dfcd403918af6a4af7240756f09864f57c6a75"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+      "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+      "sha256": "30e246ea31ff26828b31e23da0b29bf774d17798320469fe1d228d3cfed44860"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+      "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+      "sha256": "5a0f27fd1e3bc1bf30da93347aaf20a704826afbaaa04e2f3e2c9a774343fd10"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Program.kt",
+      "sha256": "f8c7f4a4b0a5074023b70595c877a1c45c4706899f49b3a24027904f383ced6c"
+    }
+  ],
+  "jars": [
+    {
+      "path": "work/core-proofs-v1/lib/annotations-13.0.jar",
+      "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/collections-25.3.4.1.jar",
+      "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/jniutils-25.3.4.1.jar",
+      "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/kotlin-stdlib-2.4.20.jar",
+      "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/nativeimage-25.3.4.1.jar",
+      "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/polyglot-25.3.4.1.jar",
+      "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/thc-0.1-experiment.jar",
+      "sha256": "ed9e74901be1958972c0379b34ec4f22e6dc3bd5ac018d24f8a41f42b25dd78d"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/truffle-api-25.3.4.1.jar",
+      "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/truffle-compiler-25.3.4.1.jar",
+      "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/truffle-runtime-25.3.4.1.jar",
+      "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+    },
+    {
+      "path": "work/core-proofs-v1/lib/word-25.3.4.1.jar",
+      "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    }
+  ],
+  "modules": [
+    {
+      "path": "work/core-proofs-v1/map/00-Utils.Containers.Internal.BitUtil.json",
+      "sha256": "91a5d3dc125ccd23512b1436211156242bba1c6e625fa57094e25d409b8460a6"
+    },
+    {
+      "path": "work/core-proofs-v1/map/01-Utils.Containers.Internal.BitQueue.json",
+      "sha256": "25749f7aab3c6b1d779496f5199743fb7d9e4666aefcc8e14dcae96c11516d78"
+    },
+    {
+      "path": "work/core-proofs-v1/map/02-Utils.Containers.Internal.Prelude.json",
+      "sha256": "8e0bd7510cf75d61e6ad70a0f9a7a1a3fa41df4b87e1b7d8e32ea161180fd99b"
+    },
+    {
+      "path": "work/core-proofs-v1/map/03-Utils.Containers.Internal.PtrEquality.json",
+      "sha256": "26fe58fc26865964a537e5e748e81f671a85e8e924b50f46e108f7e65ce8f71d"
+    },
+    {
+      "path": "work/core-proofs-v1/map/04-Utils.Containers.Internal.StrictMaybe.json",
+      "sha256": "eeeeed161ad12bdda4db90adb76b0ce13f77091dc1a2edcad33116d9ee681beb"
+    },
+    {
+      "path": "work/core-proofs-v1/map/05-Utils.Containers.Internal.StrictPair.json",
+      "sha256": "74ac3000cd869290509981e889ddfc5e4bd45cb3c1c25083c05b127e247a3092"
+    },
+    {
+      "path": "work/core-proofs-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+      "sha256": "73ca2f3f2bb01f44c74b0863cb9cac521209629fd097d2a1bad2150a7a32c6f2"
+    },
+    {
+      "path": "work/core-proofs-v1/map/07-Data.Set.Internal.json",
+      "sha256": "394d763661687bd79fee5f62f1085975f3bfb55bf85b9f338d1efc4d8a966c85"
+    },
+    {
+      "path": "work/core-proofs-v1/map/08-Data.Map.Internal.json",
+      "sha256": "c2763c2c0091f4cb969a52ad051fc927cc48247aa2b82786bb1be2bacdad1b09"
+    },
+    {
+      "path": "work/core-proofs-v1/map/09-Data.Map.Internal.Debug.json",
+      "sha256": "588523aec384ae33bf94d3be768fa6c2a3921942368b05bb624258c4a6142a5b"
+    },
+    {
+      "path": "work/core-proofs-v1/map/10-Data.Map.Strict.Internal.json",
+      "sha256": "703990bd164b42b34ce2cc4158d4e591c145490d2454ea7a56fed84fbd8dae9d"
+    },
+    {
+      "path": "work/core-proofs-v1/map/11-Data.Map.Strict.json",
+      "sha256": "32d57eea66f7d23a83c4d2833692a42d0240919332b8ebbdbf582cea7fbcf30c"
+    },
+    {
+      "path": "work/core-proofs-v1/map/12-THC.MapWorkload.json",
+      "sha256": "6a7d1636d3cdc506e13cfb68f28a82158657e6c445b54936c2c493e868eb3924"
+    },
+    {
+      "path": "work/core-proofs-v1/map/13-THC.InterfaceClosure.json",
+      "sha256": "02bae9cbccff1319e3cc5163e3ed10814d32cd733ea1e0cbd6eeb134f1267827"
+    },
+    {
+      "path": "work/core-proofs-v1/map/14-GHC.Internal.CString.json",
+      "sha256": "f7b9ff676d6b3a4f8d9179749bca07cf18fc78b041e9dd30ccf1246ad9f685ae"
+    },
+    {
+      "path": "work/core-proofs-v1/map/15-GHC.Internal.Err.json",
+      "sha256": "57c7d7df0b077bb8c445ebe6b7acf727539c5be5a6dc860382c27a537d2782cd"
+    },
+    {
+      "path": "work/core-proofs-v1/map/16-GHC.InterfaceClosure.json",
+      "sha256": "acd40f0f8f72ce600c6bf9514a57dc7d250583876298b7d1b9c0bb73d1542b89"
+    }
+  ],
+  "tests": 98,
+  "failures": 0,
+  "errors": 0
+}

@@ -92,24 +92,31 @@ exporter_paths = sorted(set((root / 'compiler/Thc').rglob('*.hs')) | {
 shared_export = ['--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint',
                  '-package-db', '$ROOT/build/compiler/package.conf.d', '-package', 'thc-core-plugin',
                  '-fplugin=Thc.Plugin', '-i$ROOT/examples']
+# Existing-bundle supplements describe the actual files, even if today's driver
+# default differs from the setting used to produce them.
+source_notes_exported = any('sourceFiles' in m for m in module_data)
+source_notes_requested = (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true'
+if args.fresh_export and source_notes_exported != source_notes_requested:
+    raise SystemExit('Fresh export source-note metadata differs from its driver setting')
+source_note_flags = ['-g', '-fplugin-opt=Thc.Plugin:source-notes'] if source_notes_exported else []
 boot_common = ['-c', '-dynamic', '-fforce-recomp', '-this-unit-id', 'ghc-internal', '-package', 'ghc-internal',
                '-odir', '$ROOT/build/map/boot-ghc', '-hidir', '$ROOT/build/map/boot-ghc']
 recipes = {
     'pluginBuild': ['--make', '-O1', '-dynamic', '-shared', '-fPIC', '-package', 'ghc', '-package', 'bytestring',
-                    '-package', 'directory', '-package', 'filepath', '-this-unit-id', 'thc-core-plugin-0.1',
+                    '-package', 'directory', '-package', 'filepath', '-package', 'containers', '-this-unit-id', 'thc-core-plugin-0.1',
                     '-hisuf', 'dyn_hi', '-osuf', 'dyn_o', '-icompiler', '-odir', '$ROOT/build/compiler',
                     '-hidir', '$ROOT/build/compiler', 'compiler/Thc/Plugin.hs', '-o', '$ROOT/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.{dylib,so}'],
     'mapSource': shared_export + ['-fplugin-opt=Thc.Plugin:$ROOT/build/map/core', '-odir', '$ROOT/build/map/ghc',
                   '-hidir', '$ROOT/build/map/ghc', '-i$ROOT/vendor/containers-0.8/src', '-I$ROOT/vendor/containers-0.8/include',
-                  '-fplugin-opt=Thc.Plugin:closure=mapAggregate', 'examples/THC/MapWorkload.hs'],
+                  '-fplugin-opt=Thc.Plugin:closure=mapAggregate'] + source_note_flags + ['examples/THC/MapWorkload.hs'],
     'bootSignatures': boot_common + ['$ROOT/vendor/ghc-9.14.1/{GHC/Internal/Exception/Type.hs-boot,GHC/Internal/Exception.hs-boot}'],
     'bootSources': boot_common + ['-O2', '-dcore-lint', '-package-db', '$ROOT/build/compiler/package.conf.d',
                     '-package', 'thc-core-plugin', '-fplugin=Thc.Plugin', '-fplugin-opt=Thc.Plugin:$ROOT/build/map/boot-core',
-                    '-fplugin-opt=Thc.Plugin:post-tidy', '$ROOT/vendor/ghc-9.14.1/GHC/Internal/{CString,Err}.hs'],
+                    '-fplugin-opt=Thc.Plugin:post-tidy'] + source_note_flags + ['$ROOT/vendor/ghc-9.14.1/GHC/Internal/{CString,Err}.hs'],
     'installedInterfaceRoot': shared_export + ['-fplugin-opt=Thc.Plugin:$ROOT/build/map/interface-core',
                     '-odir', '$ROOT/build/map/interface-ghc', '-hidir', '$ROOT/build/map/interface-ghc',
                     '-package', 'ghc-internal', '-fplugin-opt=Thc.Plugin:closure=exceptionInterfaceRoot',
-                    'compiler/package-roots/InterfaceRoots.hs'],
+                    ] + source_note_flags + ['compiler/package-roots/InterfaceRoots.hs'],
 }
 flags_bytes = json.dumps(recipes, sort_keys=True, separators=(',', ':')).encode()
 result = {
@@ -123,11 +130,13 @@ result = {
         'version': '9.14.1', 'libdir': output([ghc, '--print-libdir']),
         'ghcInfo': output([ghc, '--info']),
         'packages': {p: output([ghc_pkg, 'describe', p]) for p in ['containers', 'base', 'ghc-internal', 'ghc-prim']},
-        'environment': {key: os.environ[key] for key in ['GHC', 'GHC_PKG', 'GHC_ENVIRONMENT', 'GHC_PACKAGE_PATH', 'GHCRTS'] if key in os.environ},
+        'environment': {key: os.environ[key] for key in ['GHC', 'GHC_PKG', 'GHC_ENVIRONMENT', 'GHC_PACKAGE_PATH', 'GHCRTS', 'THC_SOURCE_NOTES'] if key in os.environ},
     },
     'bundle': {'manifest': record(manifest), 'originalProvenance': record(build / 'provenance.json'), 'modules': [record(p) for p in modules]},
     'sources': [record(p) for p in sorted(source_paths)],
     'exporters': [record(p) for p in exporter_paths],
+    'sourceNotes': {'driverDefault': True, 'bundleContainsMetadata': source_notes_exported,
+                    'requestedForFreshExport': source_notes_requested if args.fresh_export else None},
     'compilerFlagRecipes': recipes,
     'compilerFlagRecipesSha256': hashlib.sha256(flags_bytes).hexdigest(),
     'compilerFlagEncoding': 'SHA256 of UTF-8 JSON with sorted keys and compact separators',

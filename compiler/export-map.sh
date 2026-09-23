@@ -45,6 +45,7 @@ provenance = {
     "source": "https://hackage.haskell.org/package/containers-0.8/containers-0.8.tar.gz",
     "sha256": "b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8",
     "sourcePatches": [],
+    "sourceNotes": (os.environ.get("THC_SOURCE_NOTES") or "true") == "true",
     "containersUnitPolicy": "Unmodified sources compiled with workload in the same main home unit",
     "compiler": subprocess.check_output([os.environ["GHC"], "--numeric-version"], text=True).strip(),
     "packages": packages,

@@ -23,20 +23,20 @@ def calls(value, name):
 doc = json.loads((Path(__file__).resolve().parent.parent / "build/core/SpeculationAudit.json").read_text())
 bindings = {binding["name"]: binding for binding in doc["bindings"]}
 all_apps = apps(doc["bindings"])
-assert all(len(node) == 6 and type(node[4]) is bool and type(node[5]) is bool
+assert all(len(node) >= 6 and type(node[4]) is bool and type(node[5]) is bool
            for node in all_apps), "Expected separate WHNF and speculation flags"
-assert calls(bindings["safe"], "ignore")[0][4:] == [False, False]
-assert calls(bindings["safe"], "-#")[0][4:] == [False, True]
-assert calls(bindings["safe"], "Box")[0][4:] == [False, True]
-assert calls(bindings["unsafe"], "quotInt#")[0][4:] == [False, False]
+assert calls(bindings["safe"], "ignore")[0][4:6] == [False, False]
+assert calls(bindings["safe"], "-#")[0][4:6] == [False, True]
+assert calls(bindings["safe"], "Box")[0][4:6] == [False, True]
+assert calls(bindings["unsafe"], "quotInt#")[0][4:6] == [False, False]
 assert calls(bindings["unsafe"], "ignore")[0][2][0][0] == "case"
-assert calls(bindings["safeDivision"], "quotInt#")[0][4:] == [False, True]
+assert calls(bindings["safeDivision"], "quotInt#")[0][4:6] == [False, True]
 paps = calls(doc["bindings"], "addBox")
-assert len(paps) == 1 and paps[0][4:] == [True, True]
-assert paps[0][2][0] == ["var", "main:SpeculationAudit.bottom"]
+assert len(paps) == 1 and paps[0][4:6] == [True, True]
+assert paps[0][2][0][:2] == ["var", "main:SpeculationAudit.bottom"]
 lazy = calls(doc["bindings"], "Lazy")
-assert len(lazy) == 1 and lazy[0][4:] == [True, True]
-assert lazy[0][2][0] == ["var", "main:SpeculationAudit.bottom"]
+assert len(lazy) == 1 and lazy[0][4:6] == [True, True]
+assert lazy[0][2][0][:2] == ["var", "main:SpeculationAudit.bottom"]
 dfun_id = bindings["$fFooWrap"]["id"]
 rec_group = next(group for group in doc["groups"]
                  if group["recursive"] and dfun_id in group["ids"])

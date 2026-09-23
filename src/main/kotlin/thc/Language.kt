@@ -27,9 +27,22 @@ object CoreModules {
         require(modules.isNotEmpty()) { "No Core modules supplied" }
         val bindings = linkedMapOf<String, Map<String, Any?>>()
         val constructors = linkedMapOf<String, Map<String, Any?>>()
+        val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
+        val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
         for (module in modules) {
             require((module["schema"] as? Number)?.toInt() == 1) { "Unsupported Core schema: ${module["schema"]}" }
             require(module["ghc"] == "9.14.1") { "This adapter requires GHC 9.14.1 exports" }
+            for ((key, table) in listOf("sourceFiles" to sourceFiles, "sourceSpans" to sourceSpans)) {
+                val records = module[key] ?: continue
+                require(records is List<*>) { "Invalid $key table" }
+                for (record in records) {
+                    require(record is Map<*, *>) { "Invalid $key record" }
+                    val id = record["id"] as? String ?: error("Missing $key identity")
+                    val source = record as Map<String, Any?>
+                    val old = table.putIfAbsent(id, source)
+                    require(old == null || old == source) { "Inconsistent $key record: $id" }
+                }
+            }
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
@@ -41,7 +54,8 @@ object CoreModules {
             }
         }
         return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
-            "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList())
+            "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
+            "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -92,9 +106,9 @@ object CoreModules {
 
     @Suppress("UNCHECKED_CAST")
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
-                backend: String = "ast"): String = Json.stringify(mapOf(
+                backend: String = "ast", sourceNotesEnabled: Boolean = true): String = Json.stringify(mapOf(
         "modules" to paths.map { Json.parse(File(it).readText()) as Map<String, Any?> },
-        "entry" to entry, "instrument" to instrument, "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend))
+        "entry" to entry, "instrument" to instrument, "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend, "sourceNotesEnabled" to sourceNotesEnabled))
 }
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
@@ -109,7 +123,8 @@ class Language : TruffleLanguage<Language.State>() {
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
         val entry = input["entry"] as? String ?: error("Expected entry name")
         val linked = CoreModules.reachable(CoreModules.merge(modules), entry) + mapOf("instrument" to (input["instrument"] != false),
-            "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true))
+            "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
+            "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val program = when (val backend = input["backend"] ?: "ast") {

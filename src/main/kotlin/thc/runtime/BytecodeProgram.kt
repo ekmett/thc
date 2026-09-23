@@ -5,6 +5,7 @@ import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.bytecode.BytecodeConfig
 import com.oracle.truffle.api.bytecode.BytecodeLabel
 import com.oracle.truffle.api.bytecode.BytecodeLocal
+import com.oracle.truffle.api.source.SourceSection
 import thc.Language
 
 /**
@@ -14,6 +15,7 @@ import thc.Language
  * same selective captures, lazy update protocol and PAP convention as the AST backend.
  */
 class BytecodeProgram(private val language: Language, moduleData: Map<String, Any?>) : ExecutableProgram {
+    private val sources = CoreSources(moduleData)
     private val metrics = Metrics(moduleData["instrument"] != false)
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
     private val deferredUnsupported = linkedSetOf<String>()
@@ -23,31 +25,71 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private val globals = bindings.associate { it["id"] as String to GlobalBinding(it["name"] as String) }
     private val indices = bindings.withIndex().associate { it.value["id"] as String to it.index }
     private val names = bindings.withIndex().groupBy({ it.value["name"] as String }, { it.index })
+    private val globalProofs = bindings.associate { binding ->
+        val rhs = binding["expr"] as List<Any?>
+        val proof = CoreRepresentations.binder(binding)
+        binding["id"] as String to if (diagnosticUnsupported) CoreRepresentation.UNKNOWN
+        else proof.copy(evaluated = binding["lifted"] == false || rhs[0] in listOf("lam", "lit", "con", "void"))
+    }
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val roots = arrayListOf<BytecodeRoot>()
     private var nextLocal = 0
+    private var localJoinCount = 0
 
-    private data class Local(val id: Int, val name: String, val primitive: Boolean)
+    private data class Local(val id: Int, val name: String, val primitive: Boolean,
+                             val proof: CoreRepresentation = CoreRepresentation.UNKNOWN)
     private class FunctionContext(val formalArity: Int) {
         var arguments: List<Local?> = emptyList()
         var captures: List<Local> = emptyList()
         var captureLayout: CaptureLayout? = null
         var mayLoop = false
     }
-    private class Scope(val function: FunctionContext, val locals: MutableMap<String, Local> = linkedMapOf()) {
-        fun child() = Scope(function, LinkedHashMap(locals))
+    private class Scope(val function: FunctionContext, val locals: MutableMap<String, Local> = linkedMapOf(),
+                        val joins: MutableMap<String, JoinTarget> = linkedMapOf(),
+                        val source: CoreSourceLocation? = null) {
+        fun child() = Scope(function, LinkedHashMap(locals), LinkedHashMap(joins), source)
+        fun withSource(location: CoreSourceLocation?) = Scope(function, locals, joins, location)
+    }
+    private class JoinRegion
+    private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>, val locals: List<Local>)
+    private class JoinEmission(val selector: BytecodeLocal, val next: BytecodeLabel, val labels: List<BytecodeLabel>) {
+        var emittedIndex = -1
     }
     private class Emission(val builder: BytecodeRootGen.Builder) {
         val locals = mutableMapOf<Int, BytecodeLocal>()
         var continueLabel: BytecodeLabel? = null
+        val joins = mutableMapOf<JoinRegion, JoinEmission>()
     }
-    private fun interface Expression { fun emit(emission: Emission) }
+    private fun interface Expression {
+        fun emit(emission: Emission)
+        val proof: CoreRepresentation get() = CoreRepresentation.UNKNOWN
+        val source: CoreSourceLocation? get() = null
+    }
+    private class ProvenExpression(val expression: Expression, override val proof: CoreRepresentation) : Expression {
+        override fun emit(emission: Emission) = expression.emit(emission)
+        override val source get() = expression.source
+    }
+    /** Source operations are builder metadata; they emit no guest instruction. */
+    private class SourcedExpression(val expression: Expression, override val source: CoreSourceLocation) : Expression {
+        override val proof get() = expression.proof
+        override fun emit(emission: Emission) {
+            val sections = source.notes.map { it.section }.distinct().let {
+                if (it.lastOrNull() == source.section) it else it + source.section
+            }
+            sections.forEach { BytecodeSources.begin(emission.builder, it) }
+            expression.emit(emission)
+            sections.asReversed().forEach { _ -> BytecodeSources.end(emission.builder) }
+        }
+    }
     private class LocalExpression(val local: Local, val resolve: Boolean) : Expression {
+        override val proof get() = local.proof
         override fun emit(emission: Emission) {
             val b = emission.builder
-            if (resolve) b.beginReadCellIfNeeded()
+            if (local.proof.isLong && local.proof.evaluated) b.beginToLong()
+            else if (resolve) b.beginReadCellIfNeeded()
             b.emitLoadLocal(emission.locals.getValue(local.id))
-            if (resolve) b.endReadCellIfNeeded()
+            if (local.proof.isLong && local.proof.evaluated) b.endToLong()
+            else if (resolve) b.endReadCellIfNeeded()
         }
     }
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
@@ -56,8 +98,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val scope = Scope(FunctionContext(0))
         val initializers = bindings.map { binding ->
             val expr = binding["expr"] as List<Any?>
-            if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
-            else argument(expr, scope, representation(binding), binding["name"] as String)
+            val bindingScope = scope.withSource(sources.binding(binding))
+            if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, bindingScope, binding["name"] as String)
+            else argument(expr, bindingScope, representation(binding), binding["name"] as String)
         }
         val body = Expression { e ->
             val b = e.builder
@@ -87,6 +130,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
         "backend" to "bytecode", "bytecodeRootCount" to roots.size,
+        "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
+        "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
+        "localJoinTransfers" to metrics.localJoinTransfers,
         "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
         "compiledEntries" to metrics.compiledEntries, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
@@ -101,7 +147,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     /** Actual decoded instruction listings, available without a Graal graph viewer. */
     fun bytecodeDump(): String = roots.joinToString("\n\n") { "${it.name}\n${it.bytecodeNode.dump()}" }
 
-    private fun bind(scope: Scope, name: String, primitive: Boolean): Local = Local(nextLocal++, name, primitive).also { scope.locals[name] = it }
+    private fun bind(scope: Scope, name: String, primitive: Boolean,
+                     proof: CoreRepresentation = CoreRepresentation.UNKNOWN): Local =
+        Local(nextLocal++, name, if (proof.present) proof.isLong else primitive, proof).also { scope.locals[name] = it; scope.joins.remove(name) }
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
@@ -120,24 +168,31 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         else -> emptySet()
     }
 
-    private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope): FunctionSpec {
+    private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
+                         resultProof: CoreRepresentation = CoreRepresentations.expression(expression)): FunctionSpec {
         val context = FunctionContext(args.size)
-        val scope = Scope(context)
+        val scope = Scope(context, source = outer.source)
         val free = freeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
         val captureSources = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
-        context.captures = captureSources.map { bind(scope, it.name, it.primitive) }
-        context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray())
+        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof) }
+        context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
+            captureSources.map { it.proof.isLong && it.proof.evaluated }.toBooleanArray())
         context.arguments = args.map { arg ->
             val lifted = representation(arg)
-            if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true) else null
+            if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
+                CoreRepresentations.binder(arg).copy(evaluated = !lifted)) else null
         }
-        val body = compile(expression, scope, true)
-        return FunctionSpec(build(label, context, body), context.captureLayout, captureSources)
+        val compiled = compile(expression, scope, true)
+        val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
+        return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
     }
 
     private fun build(label: String, context: FunctionContext, body: Expression, forceResult: Boolean = true): RootCallTarget {
-        val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+        val source = body.source
+        val config = if (sources.enabled && sources.spanCount > 0) BytecodeConfig.WITH_SOURCE else BytecodeConfig.DEFAULT
+        val root = BytecodeRootGen.create(language, config) { b ->
+            source?.let { BytecodeSources.begin(b, it.section) }
             b.beginRoot()
             val e = Emission(b)
             b.emitEnterRoot(metrics)
@@ -146,9 +201,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             context.captures.forEachIndexed { index, local ->
                 b.beginStoreLocal(e.locals.getValue(local.id))
-                b.beginCaptureRead(context.captureLayout!!, index)
+                if (local.proof.isLong && local.proof.evaluated) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
                 b.emitLoadArgument(1)
-                b.endCaptureRead()
+                if (local.proof.isLong && local.proof.evaluated) b.endCaptureReadLong() else b.endCaptureRead()
                 b.endStoreLocal()
             }
             val offset = if (context.captureLayout == null) 1 else 2
@@ -176,23 +231,36 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endReturn()
             }
             b.endRoot()
+            source?.let { BytecodeSources.end(b) }
         }.getNode(0)
         root.setLabel(label)
         roots += root
         return root.callTarget
     }
 
+    private fun sourced(value: Expression, source: CoreSourceLocation?): Expression =
+        if (source == null || value.source == source) value else SourcedExpression(value, source)
+    private tailrec fun undecorated(value: Expression): Expression = when (value) {
+        is ProvenExpression -> undecorated(value.expression)
+        is SourcedExpression -> undecorated(value.expression)
+        else -> value
+    }
     private fun read(local: Local, resolve: Boolean = true): Expression = LocalExpression(local, resolve)
-    private fun force(value: Expression) = Expression { e ->
-        val b = e.builder
-        if (value is LocalExpression && value.resolve) {
-            val local = e.locals.getValue(value.local.id)
-            b.beginForceLocal(metrics, local)
-            b.emitLoadLocal(local)
-            b.endForceLocal()
-        } else {
-            b.beginForceValue(metrics); value.emit(e); b.endForceValue()
-        }
+    private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.copy(evaluated = true))
+    private fun force(value: Expression): Expression {
+        if (value.proof.evaluated) return value
+        return evaluated(Expression { e ->
+            val b = e.builder
+            val localValue = undecorated(value)
+            if (localValue is LocalExpression && localValue.resolve) {
+                val local = e.locals.getValue(localValue.local.id)
+                b.beginForceLocal(metrics, local)
+                b.emitLoadLocal(local)
+                b.endForceLocal()
+            } else {
+                b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+            }
+        }).let { sourced(ProvenExpression(it, value.proof.copy(evaluated = true)), value.source) }
     }
     private fun requireClosure(value: Expression) = Expression { e ->
         e.builder.beginRequireClosure(); force(value).emit(e); e.builder.endRequireClosure()
@@ -200,19 +268,19 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expression {
         val fn = function(label, emptyList(), expr, scope)
         val template = BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout)
-        return Expression { e ->
+        return sourced(Expression { e ->
             e.builder.beginMakeThunk(template)
             fn.captures.forEach { read(it, false).emit(e) }
             e.builder.endMakeThunk()
-        }
+        }, sources.expression(expr, scope.source))
     }
     private fun closure(fn: FunctionSpec, arity: Int): Expression {
         val template = BytecodeRoot.ClosureTemplate(fn.target, arity, fn.captureLayout)
-        return Expression { e ->
+        return evaluated(Expression { e ->
             e.builder.beginMakeClosure(template)
             fn.captures.forEach { read(it, false).emit(e) }
             e.builder.endMakeClosure()
-        }
+        })
     }
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expression {
         if (!lifted) return force(compile(expr, scope, false))
@@ -225,16 +293,26 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "string-bytes" -> LiteralAddress.fromHex(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
-    private fun constant(value: Any) = Expression { it.builder.emitLoadConstant(value) }
-    private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression = try {
-        compileSupported(expr, scope, tail)
-    } catch (gap: UnsupportedCore) {
-        if (!diagnosticUnsupported) throw gap
-        val message = gap.message ?: "Unsupported Core"
-        deferredUnsupported += message
-        val target = build("unsupported: $message", FunctionContext(0), Expression { it.builder.emitUnsupported(message, metrics) })
-        val template = BytecodeRoot.ClosureTemplate(target, 0, null)
-        Expression { e -> e.builder.beginMakeThunk(template); e.builder.endMakeThunk() }
+    private fun constant(value: Any) = evaluated(Expression { it.builder.emitLoadConstant(value) })
+    private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
+        val source = sources.expression(expr, scope.source)
+        val value = try {
+            val lowered = compileSupported(expr, scope.withSource(source), tail)
+            val proof = CoreRepresentations.expression(expr)
+            // Core describes the denoted value; our lowering may introduce an extra
+            // thunk (notably for CAFs). Only the lowered storage proves WHNF here.
+            val diagnosticGlobal = diagnosticUnsupported && expr[0] == "var" && expr[1] !in scope.locals && expr[1] !in scope.joins && expr[1] in globals
+            if (proof.present && !diagnosticGlobal) ProvenExpression(lowered, lowered.proof.refine(proof).copy(evaluated = lowered.proof.evaluated)) else lowered
+        } catch (gap: UnsupportedCore) {
+            if (!diagnosticUnsupported) throw gap
+            val message = gap.message ?: "Unsupported Core"
+            deferredUnsupported += message
+            val body = sourced(Expression { it.builder.emitUnsupported(message, metrics) }, source)
+            val target = build("unsupported: $message", FunctionContext(0), body)
+            val template = BytecodeRoot.ClosureTemplate(target, 0, null)
+            Expression { e -> e.builder.beginMakeThunk(template); e.builder.endMakeThunk() }
+        }
+        return sourced(value, source)
     }
 
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
@@ -242,7 +320,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val loop = tail && arguments.size <= context.formalArity && context.formalArity > 0
         // Even a root without a direct self-call can receive A -> B -> ... -> A.
         if (tail) context.mayLoop = true
-        return Expression { e ->
+        return evaluated(Expression { e ->
             val b = e.builder
             val reentryResult = if (tail) {
                 b.beginBlock()
@@ -268,9 +346,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginBlock()
                 context.captures.forEachIndexed { index, local ->
                     b.beginStoreLocal(e.locals.getValue(local.id))
-                    b.beginCaptureRead(context.captureLayout!!, index)
+                    if (local.proof.isLong && local.proof.evaluated) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
                     b.beginClosureEnvironment(); b.emitLoadLocal(fn); b.endClosureEnvironment()
-                    b.endCaptureRead()
+                    if (local.proof.isLong && local.proof.evaluated) b.endCaptureReadLong() else b.endCaptureRead()
                     b.endStoreLocal()
                 }
                 val prefix = context.formalArity - arguments.size
@@ -301,9 +379,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 // packet's environment and value arguments replace lexical locals.
                 context.captures.forEachIndexed { index, local ->
                     b.beginStoreLocal(e.locals.getValue(local.id))
-                    b.beginCaptureRead(context.captureLayout!!, index)
+                    if (local.proof.isLong && local.proof.evaluated) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
                     b.beginTailArgument(1); b.emitLoadLocal(reentryResult); b.endTailArgument()
-                    b.endCaptureRead()
+                    if (local.proof.isLong && local.proof.evaluated) b.endCaptureReadLong() else b.endCaptureRead()
                     b.endStoreLocal()
                 }
                 val offset = if (context.captureLayout == null) 1 else 2
@@ -319,20 +397,123 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endConditional()
                 b.endBlock()
             }
+        })
+    }
+
+    /** A join transfer is a parallel move into this activation followed by bytecode control flow. */
+    private fun joinCall(target: JoinTarget, arguments: List<Expression>): Expression {
+        if (arguments.size != target.parameters.size) throw UnsupportedCore("Local join is not exactly saturated")
+        return evaluated(Expression { e ->
+            val b = e.builder
+            val region = e.joins[target.region] ?: throw RuntimeFault("Local join escapes its owning activation")
+            b.beginBlock()
+            b.emitJoinTransfer(metrics)
+            // Saving all operands first is required for swaps and mutually recursive joins.
+            val temporaries = arguments.mapIndexed { index, argument ->
+                b.createLocal("join operand $index", null).also { temporary ->
+                    b.beginStoreLocal(temporary)
+                    argument.emit(e)
+                    b.endStoreLocal()
+                }
+            }
+            target.locals.forEachIndexed { index, local ->
+                b.beginStoreLocal(e.locals.getValue(local.id))
+                if (local.proof.isLong && local.proof.evaluated) b.beginToLong()
+                b.emitLoadLocal(temporaries[index])
+                if (local.proof.isLong && local.proof.evaluated) b.endToLong()
+                b.endStoreLocal()
+            }
+            if (target.index > region.emittedIndex) {
+                b.emitBranch(region.labels[target.index])
+            } else {
+                b.beginStoreLocal(region.selector); b.emitLoadConstant(target.index.toLong()); b.endStoreLocal()
+                b.emitBranch(region.next)
+            }
+            // Unreachable value preserves the surrounding expression's builder signature.
+            b.emitLoadConstant(Unit)
+            b.endBlock()
+        })
+    }
+
+    private fun joinRegion(group: List<Map<String, Any?>>, expression: List<Any?>, recursive: Boolean,
+                           scope: Scope, tail: Boolean): Expression {
+        CoreJoins.validate(group, expression, recursive)
+        val definitions = CoreJoins.definitions(group) ?: throw RuntimeFault("Missing local join definitions")
+        val region = JoinRegion()
+        val local = scope.child()
+        val targets = definitions.mapIndexed { index, definition ->
+            val parameters = definition.parameters.map { parameter ->
+                // Join formal names have lexical scope only in their own body.
+                val proof = CoreRepresentations.binder(parameter).copy(evaluated = !representation(parameter))
+                Local(nextLocal++, parameter["id"] as String,
+                    if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
+            }
+            JoinTarget(region, index, definition.parameters, parameters).also { local.joins[definition.id] = it; local.locals.remove(definition.id) }
         }
+        localJoinCount += targets.size
+        val bodies = definitions.mapIndexed { index, definition ->
+            val bodyScope = (if (recursive) local else scope).child()
+            targets[index].locals.forEach { bodyScope.locals[it.name] = it; bodyScope.joins.remove(it.name) }
+            compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
+        }
+        val entry = compile(expression, local, tail)
+        return ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val result = b.createLocal("join result", null)
+            val selector = b.createLocal("join selector", "primitive")
+            val exit = b.createLabel()
+            targets.flatMap { it.locals }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+            b.beginStoreLocal(selector); b.emitLoadConstant(-1L); b.endStoreLocal()
+            b.beginWhile()
+            b.emitLoadConstant(true)
+            b.beginBlock()
+            val next = b.createLabel()
+            val labels = targets.map { b.createLabel() }
+            val active = JoinEmission(selector, next, labels)
+            e.joins[region] = active
+            // The DSL supports only forward Branch. Only backward join edges
+            // visit this primitive selector; forward edges jump to a body directly.
+            targets.forEachIndexed { index, _ ->
+                b.beginIfThen()
+                b.beginMatchLiteral(index.toLong()); b.emitLoadLocal(selector); b.endMatchLiteral()
+                b.emitBranch(labels[index])
+                b.endIfThen()
+            }
+            b.beginStoreLocal(result); entry.emit(e); b.endStoreLocal()
+            b.emitBranch(exit)
+            targets.forEachIndexed { index, _ ->
+                b.emitLabel(labels[index])
+                active.emittedIndex = index
+                b.beginStoreLocal(result); bodies[index].emit(e); b.endStoreLocal()
+                b.emitBranch(exit)
+            }
+            b.emitLabel(next)
+            b.endBlock()
+            b.endWhile()
+            b.emitLabel(exit)
+            b.emitLoadLocal(result)
+            b.endBlock()
+            e.joins.remove(region)
+            targets.flatMap { it.locals }.forEach { e.locals.remove(it.id) }
+        }, CoreRepresentations.expression(expression).copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
     }
 
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expression = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
-            scope.locals[id]?.let { read(it) } ?: globals[id]?.let { binding -> Expression { it.builder.emitReadGlobal(binding) } }
-                ?: throw UnsupportedCore("Unresolved external binding $id")
+            scope.joins[id]?.let { joinCall(it, emptyList()) }
+                ?: scope.locals[id]?.let { read(it) } ?: globals[id]?.let { binding ->
+                    val stored = globalProofs.getValue(id)
+                    ProvenExpression(if (stored.isLong && stored.evaluated) Expression { it.builder.emitReadGlobalLong(binding) }
+                    else Expression { it.builder.emitReadGlobal(binding) }, stored)
+                } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String))
         "void" -> constant(Unit)
         "lam" -> {
             val args = expr[1] as List<Map<String, Any?>>
-            closure(function("lambda ${args.joinToString { it["name"].toString() }}", args, expr[2] as List<Any?>, scope), args.size)
+            closure(function("lambda ${args.joinToString { it["name"].toString() }}", args, expr[2] as List<Any?>, scope, CoreRepresentations.lambdaResult(expr)), args.size)
         }
         "app" -> {
             val fn = expr[1] as List<Any?>; val args = expr[2] as List<List<Any?>>
@@ -344,6 +525,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 argument(arg, scope, lifted && strict?.get(index) != true)
             }
             when {
+                fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
                 fn[0] == "prim" -> primitive(fn[1] as String, operands)
                 strict != null -> construct(dataLayout(fn[1] as String), operands)
                 else -> application(compile(fn, scope, false), operands, scope, tail)
@@ -351,38 +533,52 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }
         "let" -> {
             val recursive = expr[1] as Boolean; val group = expr[2] as List<Map<String, Any?>>
-            val local = scope.child()
-            val slots = group.map { bind(local, it["id"] as String, !representation(it)) }
-            val rhs = group.map {
-                val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
-                if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
-                if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, local, it["name"].toString())
-                else argument(rhsExpr, if (recursive) local else scope, lifted, it["name"].toString())
-            }
-            val body = compile(expr[3] as List<Any?>, local, tail)
-            Expression { e ->
-                val b = e.builder
-                b.beginBlock()
-                slots.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
-                if (recursive) {
-                    slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); b.emitNewCell(); b.endStoreLocal() }
-                    slots.forEachIndexed { index, slot ->
-                        b.beginInitializeCell(); read(slot, false).emit(e); rhs[index].emit(e); b.endInitializeCell()
-                    }
-                    // Every RHS has captured the group before publication removes its indirections.
-                    slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); read(it).emit(e); b.endStoreLocal() }
-                } else slots.forEachIndexed { index, slot ->
-                    b.beginStoreLocal(e.locals.getValue(slot.id)); rhs[index].emit(e); b.endStoreLocal()
+            if (group.any { CoreRepresentations.joinArity(it) != null }) {
+                joinRegion(group, expr[3] as List<Any?>, recursive, scope, tail)
+            } else {
+                val local = scope.child()
+                val slots = group.map { bind(local, it["id"] as String, !representation(it), CoreRepresentations.binder(it).copy(evaluated = false)) }
+                val rhs = group.map {
+                    val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
+                    if (recursive && !lifted) throw UnsupportedCore("Recursive unlifted binding unsupported")
+                    val rhsScope = (if (recursive) local else scope).withSource(sources.binding(it, scope.source))
+                    if (recursive && lifted && rhsExpr[0] !in listOf("lam", "lit", "con", "void")) delay(rhsExpr, rhsScope, it["name"].toString())
+                    else argument(rhsExpr, rhsScope, lifted, it["name"].toString())
                 }
-                body.emit(e)
-                b.endBlock()
-                slots.forEach { e.locals.remove(it.id) }
+                slots.forEachIndexed { index, slot ->
+                    local.locals[slot.name] = slot.copy(proof = slot.proof.refine(rhs[index].proof).copy(evaluated = rhs[index].proof.evaluated))
+                }
+                val body = compile(expr[3] as List<Any?>, local, tail)
+                ProvenExpression(Expression { e ->
+                    val b = e.builder
+                    b.beginBlock()
+                    slots.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
+                    if (recursive) {
+                        slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); b.emitNewCell(); b.endStoreLocal() }
+                        slots.forEachIndexed { index, slot ->
+                            b.beginInitializeCell(); read(slot, false).emit(e); rhs[index].emit(e); b.endInitializeCell()
+                        }
+                        // Every RHS has captured the group before publication removes its indirections.
+                        slots.forEach { b.beginStoreLocal(e.locals.getValue(it.id)); read(it).emit(e); b.endStoreLocal() }
+                    } else slots.forEachIndexed { index, slot ->
+                        b.beginStoreLocal(e.locals.getValue(slot.id)); rhs[index].emit(e); b.endStoreLocal()
+                    }
+                    body.emit(e)
+                    b.endBlock()
+                    slots.forEach { e.locals.remove(it.id) }
+                }, body.proof)
             }
         }
         "case" -> {
             val local = scope.child()
-            val binder = bind(local, expr[2] as String, true)
-            val scrutinee = force(compile(expr[1] as List<Any?>, scope, false))
+            val scrutineeExpr = expr[1] as List<Any?>
+            val scrutinee = force(compile(scrutineeExpr, scope, false))
+            val binderProof = scrutinee.proof.refine(CoreRepresentations.caseBinder(expr)).copy(evaluated = true)
+            val binder = bind(local, expr[2] as String, true, binderProof)
+            if (scrutineeExpr[0] == "var") {
+                val id = scrutineeExpr[1] as String
+                scope.locals[id]?.let { local.locals[id] = it.copy(proof = it.proof.copy(evaluated = true)) }
+            }
             data class Alternative(val kind: String, val value: Any?, val fields: List<Local>, val body: Expression)
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
@@ -394,12 +590,15 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
                 val ids = alt[2] as List<String>; val layout = value as? DataLayout
                 if (layout != null && layout.arity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
-                val fields = ids.mapIndexed { index, id -> bind(child, id, layout?.isLong(index) == true) }
+                val metadata = CoreRepresentations.alternativeBinders(alt)
+                val fields = ids.mapIndexed { index, id -> bind(child, id, layout?.isLong(index) == true,
+                    (metadata.getOrNull(index)?.let { CoreRepresentations.binder(it) } ?: CoreRepresentation.UNKNOWN)
+                        .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) }) }
                 Alternative(kind, value, fields, compile(alt[3] as List<Any?>, child, tail))
             }
             val explicit = alternatives.filter { it.kind != "default" }
             val fallback = alternatives.lastOrNull { it.kind == "default" }
-            Expression { e ->
+            ProvenExpression(Expression { e ->
                 val b = e.builder
                 b.beginBlock()
                 e.locals[binder.id] = b.createLocal(binder.name, null)
@@ -435,7 +634,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 emitChoice(0)
                 b.endBlock()
                 e.locals.remove(binder.id)
-            }
+            }, CoreRepresentations.expression(expr).copy(evaluated = alternatives.all { it.body.proof.evaluated }))
         }
         "con" -> {
             val id = expr[1] as String; val arity = (expr[2] as Number).toInt()
@@ -454,9 +653,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         else -> throw UnsupportedCore("Unsupported Core node ${expr[0]}")
     }
 
-    private fun construct(layout: DataLayout, args: List<Expression>) = Expression { e ->
+    private fun construct(layout: DataLayout, args: List<Expression>) = evaluated(Expression { e ->
         e.builder.beginConstruct(layout); args.forEach { it.emit(e) }; e.builder.endConstruct()
-    }
+    })
     private fun primitive(name: String, args: List<Expression>): Expression {
         val operation = when (name) {
             "+#", "plusWord#" -> "Add"
@@ -489,8 +688,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }
         val unary = operation in setOf("Negate", "BitNot", "Narrow8", "Narrow16", "Narrow32", "Identity", "Raise")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
-        if (operation == "Identity") return Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() }
-        return Expression { e ->
+        if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
+        return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
@@ -513,7 +712,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()
             }
-        }
+        })
     }
 
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
@@ -536,6 +735,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }.toTypedArray()
         DataLayout(language, id, info["name"] as String, fields)
     }
+    /** The constructor adapter enforces strict fields before storing them. */
+    private fun fieldIsEvaluated(id: String, index: Int): Boolean {
+        val constructor = constructors.getValue(id)
+        val lifted = (constructor["fieldLifted"] as? List<*>)?.getOrNull(index)
+        val strict = (constructor["strictFields"] as? List<*>)?.getOrNull(index)
+        return lifted == false || strict == true
+    }
+
     private fun strictConstructorFields(id: String, arity: Int): BooleanArray {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")
         if ((info["kind"] ?: "boxed") != "boxed") throw UnsupportedCore("Unsupported constructor representation ${info["kind"]}: $id")
@@ -547,5 +754,22 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val strictField = strict[i] as? Boolean ?: throw RuntimeFault("Unknown constructor field strictness: $id")
             strictField && (lifted[i] as? Boolean ?: throw UnsupportedCore("Unknown strict constructor field levity: $id field $i"))
         }
+    }
+}
+
+/** Immutable source sections can be reused by every replay; builder state cannot. */
+private object BytecodeSources {
+    fun begin(builder: BytecodeRootGen.Builder, section: SourceSection) {
+        builder.beginSource(section.source)
+        when {
+            !section.isAvailable -> builder.beginSourceSectionUnavailable()
+            section.hasCharIndex() -> builder.beginSourceSection(section.charIndex, section.charLength)
+            section.hasColumns() -> builder.beginSourceSection(section.startLine, section.startColumn, section.endLine, section.endColumn)
+            else -> builder.beginSourceSection(section.startLine)
+        }
+    }
+    fun end(builder: BytecodeRootGen.Builder) {
+        builder.endSourceSection()
+        builder.endSource()
     }
 }

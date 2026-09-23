@@ -74,7 +74,7 @@ def read_windows(path, base, cycle_sum):
     return rows
 
 
-def validate_jvm_log(path, cycle_sum, backend):
+def validate_jvm_log(path, cycle_sum, backend, source_notes=None):
     expected = ['PHASE WARM BEGIN', 'PHASE WARM END']
     expected += [f'PHASE MEASURE {i} {edge}' for i in range(1, SAMPLES + 1) for edge in ('BEGIN', 'END')]
     expected += ['PHASE VERIFY BEGIN', 'PHASE VERIFY END']
@@ -111,6 +111,16 @@ def validate_jvm_log(path, cycle_sum, backend):
     require(diagnostics.get('backend', 'ast') == backend, f'{path}: wrong Core backend')
     require(diagnostics.get('unsupportedPolicy') == 'diagnostic-traps', f'{path}: incorrect unsupported policy')
     require(diagnostics.get('unsupportedTraps') == 0, f'{path}: unsupported path entered')
+    if source_notes is not None:
+        enabled = source_notes == 'on'
+        require(diagnostics.get('sourceNotesEnabled') is enabled, f'{path}: wrong source-note mode')
+        spans = diagnostics.get('sourceSpanCount')
+        roots = diagnostics.get('sourceRootCount')
+        require(type(spans) is int and type(roots) is int, f'{path}: missing source attachment counts')
+        if enabled:
+            require(spans > 0 and roots > 0, f'{path}: source notes requested but no tree locations attached')
+        else:
+            require(spans == 0 and roots == 0, f'{path}: source locations attached in disabled mode')
     require(not measured_events, f'{path}: compilation/deoptimization during measurement: {measured_events}')
     require(not verify_events, f'{path}: final verification compiled or deoptimized code: {verify_events}')
     return {'lastTierVerified': True, 'warmup': warm, 'diagnostics': diagnostics,
@@ -144,6 +154,8 @@ def main():
     parser.add_argument('--input-base', type=int, default=10000, help='first of sixteen varying inputs (default: 10000)')
     parser.add_argument('--baseline-backend', choices=('ast', 'bytecode'), default='ast')
     parser.add_argument('--candidate-backend', choices=('ast', 'bytecode'), default='ast')
+    parser.add_argument('--baseline-source-notes', choices=('on', 'off'), help='explicit source attachment mode; also validates attached spans/roots')
+    parser.add_argument('--candidate-source-notes', choices=('on', 'off'), help='explicit source attachment mode; also validates attached spans/roots')
     parser.add_argument('--process-timeout', type=int, default=300, help='maximum seconds for each timing process (default: 300)')
     args = parser.parse_args()
     require(args.java_home is not None, 'Set JAVA_HOME or pass --java-home')
@@ -187,11 +199,16 @@ def main():
                            f'-Dthc.backend={getattr(args, engine + "_backend")}',
                            '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules)),
                            ENTRY, '--steady', str(JVM_WARM_SECONDS), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
+            if engine != 'native':
+                notes = getattr(args, engine + '_source_notes')
+                if notes is not None:
+                    command.insert(1, '-Dthc.sourceNotesEnabled=' + ('true' if notes == 'on' else 'false'))
             commands.append({'fork': fork, 'position': position, 'engine': engine, 'argv': command})
     config = {'schema': 1, 'recordedAtUtc': datetime.now(timezone.utc).isoformat(), 'entry': ENTRY,
               'baselineCommit': args.baseline_commit, 'backends': {e: getattr(args, e + '_backend') for e in ENGINES[:2]}, 'inputBase': args.input_base, 'forks': FORKS, 'samples': SAMPLES,
               'sampleSeconds': SAMPLE_SECONDS, 'jvmWarmSeconds': JVM_WARM_SECONDS, 'nativeWarmSeconds': NATIVE_WARM_SECONDS,
               'minimumJvmWarmCalls': MINIMUM_WARM_CALLS, 'diagnosticUnsupported': True, 'instrumented': False,
+              'sourceNotesModes': {e: getattr(args, e + '_source_notes') for e in ENGINES[:2]},
               'protocol': 'serialized rotated engine order; median of per-fork window medians; signed64 checksums',
               'candidateSourceNote': 'Recorded source hashes identify the supplied tree; the caller must build these runtime JARs from that tree.',
               'commands': commands, 'provenance': provenance}
@@ -228,7 +245,7 @@ def main():
                 with raw.open('w') as output, log.open('w') as errors:
                     subprocess.run(spec['argv'], stdout=output, stderr=errors, check=True, timeout=args.process_timeout)
                 windows = read_windows(raw, args.input_base, cycle_sum)
-                check = validate_jvm_log(log, cycle_sum, getattr(args, engine + '_backend')) if engine != 'native' else {'nativeProcessSucceeded': True}
+                check = validate_jvm_log(log, cycle_sum, getattr(args, engine + '_backend'), getattr(args, engine + '_source_notes')) if engine != 'native' else {'nativeProcessSucceeded': True}
                 process_checks.append({'engine': engine, 'fork': fork, **check})
                 for window in windows:
                     row = {'engine': engine, 'fork': fork, **window}

@@ -56,6 +56,62 @@ class Audit:
     def location(self, owner, path):
         return dict(owner=owner, path=path)
 
+    def representation(self, rep, owner, path):
+        if not isinstance(rep, dict):
+            self.issue('representation-proof', owner, path, 'Expected representation record')
+            return
+        kind, registers, evaluated = rep.get('kind'), rep.get('primReps'), rep.get('evaluated')
+        kinds = {'long', 'address', 'void', 'data', 'closure', 'object', 'unknown'}
+        if kind not in kinds or type(evaluated) is not bool or (registers is not None and
+                (not isinstance(registers, list) or any(not isinstance(r, str) for r in registers))):
+            self.issue('representation-proof', owner, path, 'Invalid kind, register list, or WHNF evidence')
+            return
+        longs = {'IntRep', 'Int8Rep', 'Int16Rep', 'Int32Rep', 'Int64Rep',
+                 'WordRep', 'Word8Rep', 'Word16Rep', 'Word32Rep', 'Word64Rep'}
+        valid = (kind == 'unknown' or
+                 kind == 'long' and isinstance(registers, list) and len(registers) == 1 and registers[0] in longs or
+                 kind == 'address' and registers == ['AddrRep'] or
+                 kind == 'void' and registers == [] or
+                 kind in {'data', 'closure', 'object'} and isinstance(registers, list) and len(registers) == 1
+                 and registers[0] in {'BoxedRep (Just Lifted)', 'BoxedRep (Just Unlifted)', 'BoxedRep Nothing'})
+        if not valid:
+            self.issue('representation-proof', owner, path, f'{kind}: inconsistent primitive registers {registers!r}')
+
+    def binding_metadata(self, binding, owner, path):
+        if 'rep' in binding:
+            self.representation(binding['rep'], owner, path + '/rep')
+        if 'joinValueArity' in binding:
+            arity = binding['joinValueArity']
+            expr = binding.get('expr')
+            available = len(expr[1]) if isinstance(expr, list) and expr and expr[0] == 'lam' else 0
+            info = binding.get('info')
+            raw = info.get('joinArity') if isinstance(info, dict) else None
+            if type(arity) is not int or arity < 0 or arity > available or type(raw) is not int or arity > raw:
+                self.issue('join-metadata', owner, path, 'Join prefix disagrees with erased lambdas/raw join arity')
+            self.representation(binding.get('joinResultRep'), owner, path + '/joinResultRep')
+
+    def expression_metadata(self, expr, owner, path):
+        index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4,
+                 'case': 4, 'con': 3, 'prim': 2, 'void': 1}.get(expr[0])
+        if index is None or len(expr) <= index:
+            return
+        metadata = expr[index]
+        if not isinstance(metadata, dict):
+            self.issue('expression-metadata', owner, path, 'Expected metadata record')
+            return
+        self.representation(metadata.get('rep'), owner, path + '/rep')
+        if expr[0] == 'lam':
+            self.representation(metadata.get('resultRep'), owner, path + '/resultRep')
+        if expr[0] == 'case':
+            binder = metadata.get('binder')
+            if not isinstance(binder, dict) or binder.get('id') != expr[2]:
+                self.issue('case-binder-metadata', owner, path, 'Case binder metadata must match its positional id')
+            else:
+                self.binder_ids([binder], owner, path + '/binder')
+                proof = binder.get('rep')
+                if not isinstance(proof, dict) or proof.get('evaluated') is not True:
+                    self.issue('case-binder-metadata', owner, path, 'Case binder must be in WHNF')
+
     def binder_ids(self, binders, owner, path):
         if not isinstance(binders, list):
             self.issue('binder-list', owner, path, 'Expected binder records')
@@ -68,6 +124,7 @@ class Audit:
             if binder['id'] in ids:
                 self.issue('duplicate-local-binder', owner, f'{path}/{i}', binder['id'])
             ids.add(binder['id'])
+            self.binding_metadata(binder, owner, f'{path}/{i}')
             if type(binder.get('lifted')) is not bool:
                 self.issue('unknown-binder-levity', owner, f'{path}/{i}', binder['id'])
         return ids
@@ -141,6 +198,7 @@ class Audit:
             return
         tag = expr[0]
         try:
+            self.expression_metadata(expr, owner, path)
             if tag == 'var':
                 if not isinstance(expr[1], str):
                     raise ValueError('Variable id must be a string')
@@ -182,7 +240,13 @@ class Audit:
                     raise ValueError('Case binder must be a string')
                 for index, alternative in enumerate(expr[3]):
                     altpath = f'{path}/alternatives/{index}'
-                    kind, value, ids, rhs = alternative
+                    kind, value, ids, rhs = alternative[:4]
+                    if len(alternative) > 4:
+                        metadata = alternative[4]
+                        records = metadata.get('binders') if isinstance(metadata, dict) else None
+                        self.binder_ids(records, owner, altpath + '/binders')
+                        if not isinstance(records, list) or [b.get('id') for b in records if isinstance(b, dict)] != ids:
+                            self.issue('alternative-binder-metadata', owner, altpath, 'Pattern metadata must preserve binder order')
                     if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids):
                         raise ValueError('Alternative binders must be strings')
                     if kind == 'data':
@@ -223,6 +287,7 @@ class Audit:
             key = self.queue.popleft()
             self.reachable.append(key)
             binding = self.bindings[key]
+            self.binding_metadata(binding, key, '/binding')
             if type(binding.get('lifted')) is not bool:
                 self.issue('unknown-binder-levity', key, '/binding', key)
             self.walk(binding.get('expr'), set(), key, '/expr')

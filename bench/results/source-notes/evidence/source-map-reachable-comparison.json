@@ -1,0 +1,12 @@
+{
+  "equal": true,
+  "excludedModules": [],
+  "entry": "mapAggregate",
+  "reachableBindings": [
+    52,
+    52
+  ],
+  "changedModules": [],
+  "beforeSha256": "c9530532240552bdde7203d16da97ccb6f240f67b30405aff0076a070c5dba38",
+  "afterSha256": "c9530532240552bdde7203d16da97ccb6f240f67b30405aff0076a070c5dba38"
+}

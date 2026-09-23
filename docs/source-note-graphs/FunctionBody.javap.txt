@@ -1,0 +1,127 @@
+Compiled from "Program.kt"
+final class thc.runtime.FunctionBody extends com.oracle.truffle.api.nodes.Node {
+  private thc.runtime.Evaluate value;
+
+  private final thc.runtime.CoreKind resultKind;
+
+  private final boolean exactLong;
+
+  private boolean genericResult;
+
+  public thc.runtime.FunctionBody(thc.runtime.Expr, thc.runtime.Metrics, thc.runtime.CoreRepresentation);
+    Code:
+         0: aload_0
+         1: invokespecial #10                 // Method com/oracle/truffle/api/nodes/Node."<init>":()V
+         4: aload_0
+         5: new           #12                 // class thc/runtime/Evaluate
+         8: dup
+         9: aload_1
+        10: aload_2
+        11: invokespecial #15                 // Method thc/runtime/Evaluate."<init>":(Lthc/runtime/Expr;Lthc/runtime/Metrics;)V
+        14: putfield      #19                 // Field value:Lthc/runtime/Evaluate;
+        17: aload_0
+        18: aload_3
+        19: invokevirtual #25                 // Method thc/runtime/CoreRepresentation.getKind:()Lthc/runtime/CoreKind;
+        22: getstatic     #31                 // Field thc/runtime/CoreKind.UNKNOWN:Lthc/runtime/CoreKind;
+        25: if_acmpne     38
+        28: aload_1
+        29: invokevirtual #37                 // Method thc/runtime/Expr.getRepresentation:()Lthc/runtime/CoreRepresentation;
+        32: invokevirtual #25                 // Method thc/runtime/CoreRepresentation.getKind:()Lthc/runtime/CoreKind;
+        35: goto          42
+        38: aload_3
+        39: invokevirtual #25                 // Method thc/runtime/CoreRepresentation.getKind:()Lthc/runtime/CoreKind;
+        42: putfield      #40                 // Field resultKind:Lthc/runtime/CoreKind;
+        45: aload_0
+        46: aload_0
+        47: getfield      #40                 // Field resultKind:Lthc/runtime/CoreKind;
+        50: getstatic     #43                 // Field thc/runtime/CoreKind.LONG:Lthc/runtime/CoreKind;
+        53: if_acmpne     60
+        56: iconst_1
+        57: goto          61
+        60: iconst_0
+        61: putfield      #47                 // Field exactLong:Z
+        64: aload_0
+        65: aload_3
+        66: invokevirtual #51                 // Method thc/runtime/CoreRepresentation.getPresent:()Z
+        69: ifeq          83
+        72: aload_0
+        73: getfield      #47                 // Field exactLong:Z
+        76: ifne          83
+        79: iconst_1
+        80: goto          84
+        83: iconst_0
+        84: putfield      #54                 // Field genericResult:Z
+        87: return
+
+  public final java.lang.Object execute(com.oracle.truffle.api.frame.VirtualFrame);
+    Code:
+         0: aload_0
+         1: getfield      #40                 // Field resultKind:Lthc/runtime/CoreKind;
+         4: getstatic     #75                 // Field thc/runtime/FunctionBody$WhenMappings.$EnumSwitchMapping$0:[I
+         7: swap
+         8: invokevirtual #79                 // Method thc/runtime/CoreKind.ordinal:()I
+        11: iaload
+        12: tableswitch   { // 1 to 4
+                       1: 44
+                       2: 56
+                       3: 65
+                       4: 74
+                 default: 83
+            }
+        44: aload_0
+        45: getfield      #19                 // Field value:Lthc/runtime/Evaluate;
+        48: aload_1
+        49: invokevirtual #83                 // Method thc/runtime/Evaluate.executeRequiredLong:(Lcom/oracle/truffle/api/frame/VirtualFrame;)J
+        52: invokestatic  #89                 // Method java/lang/Long.valueOf:(J)Ljava/lang/Long;
+        55: areturn
+        56: aload_0
+        57: getfield      #19                 // Field value:Lthc/runtime/Evaluate;
+        60: aload_1
+        61: invokevirtual #93                 // Method thc/runtime/Evaluate.executeRequiredDataValue:(Lcom/oracle/truffle/api/frame/VirtualFrame;)Lthc/runtime/DataValue;
+        64: areturn
+        65: aload_0
+        66: getfield      #19                 // Field value:Lthc/runtime/Evaluate;
+        69: aload_1
+        70: invokevirtual #97                 // Method thc/runtime/Evaluate.executeRequiredClosure:(Lcom/oracle/truffle/api/frame/VirtualFrame;)Lthc/runtime/Closure;
+        73: areturn
+        74: aload_0
+        75: getfield      #19                 // Field value:Lthc/runtime/Evaluate;
+        78: aload_1
+        79: invokevirtual #101                // Method thc/runtime/Evaluate.executeRequiredAddress:(Lcom/oracle/truffle/api/frame/VirtualFrame;)Lthc/runtime/LiteralAddress;
+        82: areturn
+        83: nop
+        84: aload_0
+        85: getfield      #54                 // Field genericResult:Z
+        88: ifeq          100
+        91: aload_0
+        92: getfield      #19                 // Field value:Lthc/runtime/Evaluate;
+        95: aload_1
+        96: invokevirtual #103                // Method thc/runtime/Evaluate.execute:(Lcom/oracle/truffle/api/frame/VirtualFrame;)Ljava/lang/Object;
+        99: areturn
+       100: nop
+       101: aload_0
+       102: getfield      #19                 // Field value:Lthc/runtime/Evaluate;
+       105: aload_1
+       106: invokevirtual #106                // Method thc/runtime/Evaluate.executeLong:(Lcom/oracle/truffle/api/frame/VirtualFrame;)J
+       109: lstore_2
+       110: goto          126
+       113: astore        4
+       115: aload_0
+       116: iconst_1
+       117: putfield      #54                 // Field genericResult:Z
+       120: aload         4
+       122: invokevirtual #110                // Method com/oracle/truffle/api/nodes/UnexpectedResultException.getResult:()Ljava/lang/Object;
+       125: areturn
+       126: lload_2
+       127: invokestatic  #89                 // Method java/lang/Long.valueOf:(J)Ljava/lang/Long;
+       130: areturn
+      Exception table:
+         from    to  target type
+           100   110   113   Class com/oracle/truffle/api/nodes/UnexpectedResultException
+
+  public java.lang.Object clone();
+    Code:
+         0: aload_0
+         1: invokespecial #119                // Method java/lang/Object.clone:()Ljava/lang/Object;
+         4: areturn
+}

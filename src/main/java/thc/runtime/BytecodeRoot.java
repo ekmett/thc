@@ -20,8 +20,10 @@ import com.oracle.truffle.api.nodes.Node;
 import thc.Language;
 
 /** Concrete Core instructions sharing the AST backend's heap and application ABI. */
+// An explicit compile request must work after the first ordinary invocation, even
+// when Core proofs eliminate every operation that otherwise forces the cached tier.
 @GenerateBytecode(languageClass = Language.class, enableUncachedInterpreter = true,
-        boxingEliminationTypes = {long.class, boolean.class})
+        defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
 
@@ -62,9 +64,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class JoinTransfer {
+        @Specialization public static void record(Metrics metrics) {
+            if (metrics.getEnabled()) metrics.setLocalJoinTransfers(metrics.getLocalJoinTransfers() + 1);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = GlobalBinding.class, name = "binding")
     public static final class ReadGlobal {
         @Specialization public static Object read(GlobalBinding binding) { return binding.read(); }
+    }
+
+    /** Core's single-register integer representation guarantees a primitive value. */
+    @Operation
+    @ConstantOperand(type = GlobalBinding.class, name = "binding")
+    public static final class ReadGlobalLong {
+        @Specialization public static long read(GlobalBinding binding) { return (long) binding.read(); }
     }
 
     @Operation
@@ -130,6 +147,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization(guards = "layout.isObject(environment, index)")
         public static Object object(CaptureLayout layout, int index, CapturedFrame environment) {
             return layout.readObject(environment, index);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = CaptureLayout.class, name = "layout")
+    @ConstantOperand(type = int.class, name = "index")
+    public static final class CaptureReadLong {
+        @Specialization public static long read(CaptureLayout layout, int index, CapturedFrame environment) {
+            return layout.readLong(environment, index);
         }
     }
 

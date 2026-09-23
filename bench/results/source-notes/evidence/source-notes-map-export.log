@@ -1,0 +1,27 @@
+Reading package info from "/Users/ekmett/thc/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /Users/ekmett/thc/build/compiler
+<no location info>: warning: [GHC-98887]
+    -XGeneralizedNewtypeDeriving is not allowed in Safe Haskell; ignoring -XGeneralizedNewtypeDeriving
+
+<no location info>: warning: [GHC-98887]
+    -XGeneralizedNewtypeDeriving is not allowed in Safe Haskell; ignoring -XGeneralizedNewtypeDeriving
+
+[ 1 of 13] Compiling Utils.Containers.Internal.BitUtil ( /Users/ekmett/thc/vendor/containers-0.8/src/Utils/Containers/Internal/BitUtil.hs, /Users/ekmett/thc/build/map/ghc/Utils/Containers/Internal/BitUtil.o )
+[ 2 of 13] Compiling Utils.Containers.Internal.BitQueue ( /Users/ekmett/thc/vendor/containers-0.8/src/Utils/Containers/Internal/BitQueue.hs, /Users/ekmett/thc/build/map/ghc/Utils/Containers/Internal/BitQueue.o )
+[ 3 of 13] Compiling Utils.Containers.Internal.Prelude ( /Users/ekmett/thc/vendor/containers-0.8/src/Utils/Containers/Internal/Prelude.hs, /Users/ekmett/thc/build/map/ghc/Utils/Containers/Internal/Prelude.o )
+[ 4 of 13] Compiling Utils.Containers.Internal.PtrEquality ( /Users/ekmett/thc/vendor/containers-0.8/src/Utils/Containers/Internal/PtrEquality.hs, /Users/ekmett/thc/build/map/ghc/Utils/Containers/Internal/PtrEquality.o )
+[ 5 of 13] Compiling Utils.Containers.Internal.StrictMaybe ( /Users/ekmett/thc/vendor/containers-0.8/src/Utils/Containers/Internal/StrictMaybe.hs, /Users/ekmett/thc/build/map/ghc/Utils/Containers/Internal/StrictMaybe.o )
+[ 6 of 13] Compiling Utils.Containers.Internal.StrictPair ( /Users/ekmett/thc/vendor/containers-0.8/src/Utils/Containers/Internal/StrictPair.hs, /Users/ekmett/thc/build/map/ghc/Utils/Containers/Internal/StrictPair.o )
+[ 7 of 13] Compiling Utils.Containers.Internal.EqOrdUtil ( /Users/ekmett/thc/vendor/containers-0.8/src/Utils/Containers/Internal/EqOrdUtil.hs, /Users/ekmett/thc/build/map/ghc/Utils/Containers/Internal/EqOrdUtil.o )
+[ 8 of 13] Compiling Data.Set.Internal ( /Users/ekmett/thc/vendor/containers-0.8/src/Data/Set/Internal.hs, /Users/ekmett/thc/build/map/ghc/Data/Set/Internal.o )
+[ 9 of 13] Compiling Data.Map.Internal ( /Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal.hs, /Users/ekmett/thc/build/map/ghc/Data/Map/Internal.o )
+[10 of 13] Compiling Data.Map.Internal.Debug ( /Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Internal/Debug.hs, /Users/ekmett/thc/build/map/ghc/Data/Map/Internal/Debug.o )
+[11 of 13] Compiling Data.Map.Strict.Internal ( /Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs, /Users/ekmett/thc/build/map/ghc/Data/Map/Strict/Internal.o )
+[12 of 13] Compiling Data.Map.Strict  ( /Users/ekmett/thc/vendor/containers-0.8/src/Data/Map/Strict.hs, /Users/ekmett/thc/build/map/ghc/Data/Map/Strict.o )
+[13 of 13] Compiling THC.MapWorkload  ( examples/THC/MapWorkload.hs, /Users/ekmett/thc/build/map/ghc/THC/MapWorkload.o )
+THC interface closure: 0 actual unfoldings, 2 missing source definitions
+[1 of 1] Compiling InterfaceRoots   ( compiler/package-roots/InterfaceRoots.hs, /Users/ekmett/thc/build/map/interface-ghc/InterfaceRoots.o )
+THC interface closure: 20 actual unfoldings, 4 missing source definitions
+Map bundle: /Users/ekmett/thc/build/map/modules.txt
+Compatibility status: bounded frontier; inspect reachable audit for remaining gaps
+Reproduction provenance: /Users/ekmett/thc/build/map/reproduction-provenance.json

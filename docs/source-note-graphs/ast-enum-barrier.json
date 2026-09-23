@@ -1,0 +1,341 @@
+{
+  "compilationId": 1910,
+  "source": "frozen FunctionBody.execute, Program.kt:514",
+  "chain": "constant ordinal 0 (5) -> synthetic enum mapping int[] (254) -> LoadIndexed (253) -> IntegerSwitch (255)",
+  "nodes": [
+    {
+      "id": 5,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32 [0]",
+        "value": "int[0|0x0]",
+        "rawvalue": "0"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:718) [bci:8]"
+      ],
+      "guestSourcePositions": []
+    },
+    {
+      "id": 253,
+      "nodeClass": "jdk.graal.compiler.nodes.java.LoadIndexedNode",
+      "block": "0",
+      "properties": {
+        "stamp": "i32"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.FunctionBody.execute(Program.kt:514) [bci:11]",
+        "thc.runtime.SelfRepeater.once(Program.kt:530) [bci:5]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:574) [bci:139]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 254,
+      "nodeClass": "jdk.graal.compiler.nodes.ConstantNode",
+      "block": "0",
+      "properties": {
+        "stamp": "a!# int[]",
+        "value": "Object[Instance<int[]>]",
+        "rawvalue": "Object[Instance<int[]>]"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.FunctionBody.execute(Program.kt:514) [bci:4]",
+        "thc.runtime.SelfRepeater.once(Program.kt:530) [bci:5]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:574) [bci:139]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 255,
+      "nodeClass": "jdk.graal.compiler.nodes.extended.IntegerSwitchNode",
+      "block": "0",
+      "properties": {
+        "stamp": "void",
+        "keys": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "keySuccessors": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "javaSourcePosition": [
+        "thc.runtime.FunctionBody.execute(Program.kt:514) [bci:12]",
+        "thc.runtime.SelfRepeater.once(Program.kt:530) [bci:5]",
+        "thc.runtime.FunctionRoot.execute(Program.kt:574) [bci:139]",
+        "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 7846,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "16",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.TransferToInterpreter",
+        "action": "DeoptimizationAction.InvalidateReprofile"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Case.executeLong(Program.kt:391) [bci:59]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:45) [bci:63]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 7847,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "14",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.TransferToInterpreter",
+        "action": "DeoptimizationAction.InvalidateReprofile"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Case.executeLong(Program.kt:391) [bci:59]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:45) [bci:63]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 7848,
+      "nodeClass": "jdk.graal.compiler.nodes.FixedGuardNode",
+      "block": "12",
+      "properties": {
+        "stamp": "void",
+        "negated": true,
+        "reason": "DeoptimizationReason.TransferToInterpreter",
+        "action": "DeoptimizationAction.InvalidateReprofile"
+      },
+      "javaSourcePosition": [
+        "thc.runtime.Case.executeLong(Program.kt:391) [bci:59]",
+        "thc.runtime.Expr.executeRequiredLong(Program.kt:91) [bci:3]",
+        "thc.runtime.LocalJoinRepeater.executeRepeating(LocalJoins.kt:45) [bci:63]",
+        "com.oracle.truffle.api.nodes.RepeatingNode.executeRepeatingWithValue(RepeatingNode.java:112) [bci:2]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": 253,
+      "to": 255,
+      "label": "next",
+      "type": "Successor",
+      "fromIndex": 0,
+      "toIndex": 0,
+      "listIndex": -1
+    },
+    {
+      "from": 254,
+      "to": 253,
+      "label": "array",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 1,
+      "listIndex": -1
+    },
+    {
+      "from": 5,
+      "to": 253,
+      "label": "index",
+      "type": "Value",
+      "fromIndex": 0,
+      "toIndex": 2,
+      "listIndex": -1
+    },
+    {
+      "from": 253,
+      "to": 255,
+      "label": "value",
+      "type": "Value",
+      "fromIndex": 1,
+      "toIndex": 1,
+      "listIndex": -1
+    }
+  ],
+  "loopEntries": [
+    {
+      "id": 315,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "18",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 1795,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "16",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeAddress(LocalJoins.kt:75) [bci:2]",
+        "thc.runtime.Evaluate.executeAddress(Program.kt:254) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 3206,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "14",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeClosure(LocalJoins.kt:73) [bci:2]",
+        "thc.runtime.Evaluate.executeClosure(Program.kt:230) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 4616,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "12",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeDataValue(LocalJoins.kt:74) [bci:2]",
+        "thc.runtime.Evaluate.executeDataValue(Program.kt:242) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 6026,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "2",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 8241,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "5",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 8333,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "8",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 8473,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "21",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    },
+    {
+      "id": 8561,
+      "nodeClass": "jdk.graal.compiler.nodes.LoopBeginNode",
+      "block": "24",
+      "properties": {
+        "stamp": "void"
+      },
+      "javaSourcePosition": [
+        "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+        "thc.runtime.LocalJoinRegion.run(LocalJoins.kt:66) [bci:20]",
+        "thc.runtime.LocalJoinRegion.executeLong(LocalJoins.kt:70) [bci:2]",
+        "thc.runtime.Evaluate.executeLong(Program.kt:218) [bci:31]"
+      ],
+      "guestSourcePositions": [
+        "cea9bd9601514d9e719fb3495f681d23d3e858d1e55e6dda1ff99cc979f56037/compiler/test-fixtures/RepresentationAudit.hs:34"
+      ]
+    }
+  ],
+  "status": "Fixed in the separate v2 capture: direct enum identity comparisons remove the indexed array load and IntegerSwitch, reducing before-high nodes from 431 to 86 and loops from 9 to 1. Performance validation is recorded separately."
+}

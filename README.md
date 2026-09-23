@@ -67,23 +67,26 @@ support for the paths exercised; they don't make the gaps disappear.
 ## Where things stand
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before
-and after requested compilation. Recent macOS ARM64 comparisons put both
-interpreters at about **1.87 times the cost of GHC**. A workload over roughly
-10,000 input items takes **2.43 ms with the AST interpreter** and **2.36 ms with
-bytecode**, against native references of 1.29 ms and 1.26 ms in their respective
-runs. No unsupported trap was entered.
+and after requested compilation. The latest macOS ARM64 measurements take
+**2.51 ms with the AST interpreter** and **2.38 ms with bytecode**, against native
+GHC references of 1.28 ms and 1.29 ms: **1.96 times and 1.84 times GHC's cost**,
+respectively. No unsupported trap was entered. AST remains the default.
 
-Typed execution through cases, lets and lambda bodies reduced the AST time by
-14.1% against its preceding build. Bytecode was 1.1% slower in its comparison.
-The new bytecode handler for longer tail cycles is included, though this Map
-workload uses direct-self loops. AST remains the default.
+Core exports now retain [representation evidence and local joins](docs/core-evidence.md),
+along with [source locations](docs/debug-locations.md) in both executable trees.
+Adding source notes left AST throughput unchanged; bytecode measured 2.7% lower.
+Graph inspection also caught a Kotlin enum-switch table preventing Graal from
+folding the result-type dispatch. Replacing it with direct comparisons removed
+the irrelevant typed branches and reduced AST time by 27.4% in a separate run.
 
-The [typed execution and tail-cycle report](docs/typed-tail.md) has the current
-measurements and compiled graph evidence. Each comparison uses three fresh
-processes per engine, five measured windows per process, and at least 12,000
-warmup workloads. All 90 windows passed validation.
+Each comparison uses three fresh processes per engine, five measured windows
+per process, and at least 12,000 warmup workloads. All 180 windows across the
+source-note checks and dispatch repair passed validation. The
+[source-location report](docs/debug-locations.md) records the measurements and
+[actual compiled graphs](docs/source-note-graphs/README.md).
 
-The [initial bytecode report](docs/bytecode.md), [original Map report](docs/map-example.md),
+The [typed execution and tail-cycle report](docs/typed-tail.md),
+[initial bytecode report](docs/bytecode.md), [original Map report](docs/map-example.md),
 [call-packet follow-up](docs/call-packets.md), and [inlining report](docs/map-inlining.md)
 record the preceding experiments. There is plenty left to do.
 

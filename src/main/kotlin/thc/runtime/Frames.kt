@@ -110,9 +110,14 @@ internal object FrameAccess {
 }
 
 /** A closure/thunk's selective capture representation, fixed during root compilation. */
-class CaptureLayout(language: TruffleLanguage<*>, primitiveEligible: BooleanArray) {
+class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, primitiveEligible: BooleanArray,
+                                              exactLong: BooleanArray = BooleanArray(primitiveEligible.size)) {
+    init {
+        require(exactLong.size == primitiveEligible.size)
+        require(exactLong.indices.all { !exactLong[it] || primitiveEligible[it] })
+    }
     @CompilationFinal(dimensions = 1)
-    private val fields = Array(primitiveEligible.size) { CaptureField(it, primitiveEligible[it]) }
+    private val fields = Array(primitiveEligible.size) { CaptureField(it, primitiveEligible[it], exactLong[it]) }
     private val shape = StaticShape.newBuilder(language).also { builder ->
         fields.forEach { it.register(builder) }
     }.build(CapturedFrame::class.java, CapturedFrameFactory::class.java)
@@ -122,7 +127,8 @@ class CaptureLayout(language: TruffleLanguage<*>, primitiveEligible: BooleanArra
         check(sourceSlots.size == fields.size)
         val environment = shape.factory.create(this)
         for (index in fields.indices) {
-            fields[index].initialize(environment, FrameAccess.read(frame, sourceSlots[index]))
+            if (fields[index].exactLong) fields[index].initializeLong(environment, frame.getLong(sourceSlots[index]))
+            else fields[index].initialize(environment, FrameAccess.read(frame, sourceSlots[index]))
         }
         return environment
     }
@@ -153,23 +159,27 @@ class CaptureLayout(language: TruffleLanguage<*>, primitiveEligible: BooleanArra
     fun readLong(environment: CapturedFrame, index: Int): Long = fields[index].readLong(environment)
     fun readObject(environment: CapturedFrame, index: Int): Any? = fields[index].readObject(environment)
 
-    private class CaptureField(private val index: Int, private val primitiveEligible: Boolean) {
+    private class CaptureField(private val index: Int, private val primitiveEligible: Boolean, val exactLong: Boolean) {
         private val objectValue = DefaultStaticProperty("capture_${index}_object")
         private val primitiveValue = DefaultStaticProperty("capture_${index}_primitive")
         private val hasPrimitive = DefaultStaticProperty("capture_${index}_tag")
 
         fun register(builder: StaticShape.Builder) {
-            builder.property(objectValue, Any::class.java, true)
+            if (!exactLong) builder.property(objectValue, Any::class.java, true)
             if (primitiveEligible) {
                 builder.property(primitiveValue, Long::class.javaPrimitiveType, true)
-                builder.property(hasPrimitive, Boolean::class.javaPrimitiveType, true)
+                if (!exactLong) builder.property(hasPrimitive, Boolean::class.javaPrimitiveType, true)
             }
         }
 
         // Final properties are initialized once before escape. Retaining the object
         // arm also supports recursive indirections and values outside the Long subset.
+        fun initializeLong(storage: CapturedFrame, value: Long) { primitiveValue.setLong(storage, value) }
+
         fun initialize(storage: CapturedFrame, value: Any?) {
-            if (primitiveEligible && value is Long) {
+            if (exactLong) {
+                initializeLong(storage, value as? Long ?: fault("Expected primitive Long capture"))
+            } else if (primitiveEligible && value is Long) {
                 primitiveValue.setLong(storage, value)
                 hasPrimitive.setBoolean(storage, true)
             } else {
@@ -178,17 +188,16 @@ class CaptureLayout(language: TruffleLanguage<*>, primitiveEligible: BooleanArra
             }
         }
 
-        fun isLong(storage: CapturedFrame): Boolean = primitiveEligible && hasPrimitive.getBoolean(storage)
-        fun isObject(storage: CapturedFrame): Boolean = !primitiveEligible || !hasPrimitive.getBoolean(storage)
+        fun isLong(storage: CapturedFrame): Boolean = exactLong || primitiveEligible && hasPrimitive.getBoolean(storage)
+        fun isObject(storage: CapturedFrame): Boolean = !exactLong && (!primitiveEligible || !hasPrimitive.getBoolean(storage))
         fun kind(storage: CapturedFrame): FrameSlotKind =
             if (isObject(storage)) FrameSlotKind.Object else FrameSlotKind.Long
 
         fun read(storage: CapturedFrame): Any? =
-            if (!primitiveEligible || !hasPrimitive.getBoolean(storage)) objectValue.getObject(storage)
-            else primitiveValue.getLong(storage)
+            if (isObject(storage)) objectValue.getObject(storage) else primitiveValue.getLong(storage)
 
         fun restore(storage: CapturedFrame, frame: Frame, slot: Int) {
-            if (!primitiveEligible || !hasPrimitive.getBoolean(storage)) {
+            if (isObject(storage)) {
                 FrameAccess.write(frame, slot, objectValue.getObject(storage))
             } else {
                 FrameAccess.writeLong(frame, slot, primitiveValue.getLong(storage))
