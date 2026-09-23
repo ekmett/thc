@@ -2,6 +2,10 @@
 
 Truffle 25.3.4.1 has no public primitive-argument or primitive-result `CallTarget` entry. Typed locals and bytecode operations can eliminate boxes inside a compiled region; a residual call still uses `Object[] → Object`. This is a source/graph audit, not a new timing result.
 
+THC's default-off [dense handoff experiment](handoff-slabs.md) now supplies an
+explicit storage and snapshot protocol for eligible direct AST calls. It
+preserves the ABI described here.
+
 ## The pinned ABI
 
 These are the signatures in `org.graalvm.truffle:truffle-api:25.3.4.1`:

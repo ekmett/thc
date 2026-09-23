@@ -579,13 +579,25 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
             return unexpected.result
         }
     }
+    fun executeLong(frame: VirtualFrame): Long = value.executeRequiredLong(frame)
 }
 private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
-    fun once(frame: VirtualFrame): Any? = body.execute(frame)
+    fun once(frame: VirtualFrame): Any? {
+        val entry = (rootNode as FunctionRoot).handoff
+        return if (entry != null && entry.resultLong && entry.destination(frame) >= 0) entry.finishLong(frame, body.executeLong(frame))
+        else body.execute(frame)
+    }
     override fun executeRepeating(frame: VirtualFrame): Boolean = error("value loop")
     override fun executeRepeatingWithValue(frame: VirtualFrame): Any? = try { once(frame) }
     catch (_: AstSelfCall) {
         if (metrics.enabled) metrics.selfTailReentries++
+        RepeatingNode.CONTINUE_LOOP_STATUS
+    }
+    catch (tail: HandoffTailCall) {
+        val root = rootNode as FunctionRoot
+        if (!root.isSelf(tail.target)) throw tail
+        if (metrics.enabled) metrics.selfTailReentries++
+        root.restoreHandoff(frame, tail.arguments, false)
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
     catch (tail: TailCall) {
@@ -605,7 +617,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             @field:CompilationFinal(dimensions = 1) private val argumentProofs: Array<CoreRepresentation> = emptyArray(),
                             resultProof: CoreRepresentation = body.representation,
                             private val coreSourceLocation: CoreSourceLocation? = body.coreSourceLocation,
-                            entryStrict: BooleanArray = booleanArrayOf()) : GuestRoot(language, descriptor) {
+                            entryStrict: BooleanArray = booleanArrayOf(),
+                            internal val handoff: HandoffEntry? = null) : GuestRoot(language, descriptor) {
     init { configureEntry(entryStrict, captureLayout != null) }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
@@ -629,10 +642,52 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
         }
     }
+    fun handoffDestination(frame: VirtualFrame): Int = handoff?.destination(frame) ?: -1
+
+    @ExplodeLoop internal fun restoreHandoff(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
+        val entry = handoff ?: fault("Target does not support the handoff ABI")
+        check(input.layout === entry.arguments && input.live)
+        if (!initial) check(entry.destination(frame) >= 0)
+        try {
+            if (initial) {
+                entry.snapshot(frame, input)
+                frame.setLong(entry.destinationSlot, 0L)
+                frame.setLong(FrameLayout.BLOOM_FILTER, entry.arguments.getLong(input, 0) or mask)
+            }
+            val offset = if (captureLayout == null) 1 else 2
+            for (i in argumentSlots.indices) {
+                val position = argumentIndices[i] + offset
+                if (entry.arguments.isLong(position)) FrameAccess.writeLong(frame, argumentSlots[i], entry.arguments.getLong(input, position))
+                else {
+                    val value = entry.arguments.getObject(input, position)
+                    val reference = argumentReferences.getOrNull(i)
+                    FrameAccess.write(frame, argumentSlots[i], if (reference != null) requireReferenceCarrier(value, reference) else value)
+                }
+            }
+            if (captureLayout != null) {
+                val environment = entry.arguments.getObject(input, 1) as? CapturedFrame ?: fault("Invalid captured frame")
+                for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
+            }
+        } finally { entry.state().arguments.release(input, entry.arguments) }
+    }
+
     override fun execute(frame: VirtualFrame): Any? {
         if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.compiledEntries++
-        frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
-        buildFrame(frame.arguments, frame)
+        val entry = handoff
+        if (entry != null && frame.arguments.isEmpty()) {
+            val state = entry.state()
+            val input = state.pending ?: fault("Missing typed argument loan")
+            state.pending = null
+            restoreHandoff(frame, input, true)
+        } else {
+            entry?.initializeOrdinary(frame)
+            frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
+            buildFrame(frame.arguments, frame)
+        }
+        return executeBody(frame)
+    }
+
+    private fun executeBody(frame: VirtualFrame): Any? {
         // Non-looping roots retain entry argument facts. Once self recursion
         // is observed, PE selects only the loop body instead of duplicating it.
         if (hasSelfTail) return loop.execute(frame)
@@ -642,6 +697,15 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             if (metrics.enabled) metrics.selfTailReentries++
             CompilerDirectives.transferToInterpreterAndInvalidate()
             hasSelfTail = true
+            loop.execute(frame)
+        }
+        catch (tail: HandoffTailCall) {
+            tailCallProfile.enter()
+            if (!isSelf(tail.target)) throw tail
+            if (metrics.enabled) metrics.selfTailReentries++
+            CompilerDirectives.transferToInterpreterAndInvalidate()
+            hasSelfTail = true
+            restoreHandoff(frame, tail.arguments, false)
             loop.execute(frame)
         }
         catch (tail: TailCall) {
@@ -810,9 +874,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf())
         val body = compile(expression, scope, true)
+        val handoff = HandoffEntry.create(language, scope.layout, args.map(CoreRepresentations::binder), resultProof, captures != null)
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
-            rootSource(body), entryStrict)
+            rootSource(body), entryStrict, handoff)
         if (body is Case) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
             ::dataLayout, sources, body.coreSourceLocation))

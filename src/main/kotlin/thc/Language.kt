@@ -115,6 +115,8 @@ object CoreModules {
     characterMimeTypes = ["application/x-thc-core"], defaultMimeType = "application/x-thc-core",
     contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
 class Language : TruffleLanguage<Language.State>() {
+    internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
+    internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
     class State
     override fun createContext(env: Env): State = State()
     @Suppress("UNCHECKED_CAST")
