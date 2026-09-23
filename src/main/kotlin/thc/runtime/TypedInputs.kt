@@ -30,14 +30,24 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
         validate(input)
         return input
     }
-    fun validate(input: HandoffStorage) {
+    fun validate(input: HandoffStorage) = validate(input, true)
+    fun validateTail(input: HandoffStorage) {
+        // A TailCall deliberately owns a materialized transfer. A mode-2
+        // direct ingress cannot legally arrive through this control object.
+        if (input.inputMode == 2) {
+            releaseUnexpected(input)
+            fault("Direct typed input cannot be restored from a tail transfer")
+        }
+        validate(input, false)
+    }
+    private fun validate(input: HandoffStorage, direct: Boolean) {
         if (input.layout !== packet || input.inputMode !in 1..3 || input.live != (input.inputMode == 1)) {
             releaseUnexpected(input)
             fault("Conflicting typed input layout or ownership")
         }
         // The caller, not the callee, owns the incoming transport choice. An
         // inlined fresh ingress must disappear; a residual edge may materialize.
-        if (CompilerDirectives.inCompiledCode() && !CompilerDirectives.inCompilationRoot() && input.inputMode == 2)
+        if (direct && CompilerDirectives.inCompiledCode() && !CompilerDirectives.inCompilationRoot() && input.inputMode == 2)
             CompilerDirectives.ensureVirtualizedHere(input)
     }
     fun release(input: HandoffStorage) {

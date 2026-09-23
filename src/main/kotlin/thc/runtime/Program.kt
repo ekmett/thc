@@ -894,7 +894,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     @ExplodeLoop private fun restoreTypedInput(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
         val entry = typedInput ?: fault("Target does not support typed tuple inputs")
         try {
-            entry.validate(input)
+            if (initial) entry.validate(input) else entry.validateTail(input)
             if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entry.packet.getLong(input, 0) or mask)
             for (i in argumentSlots.indices) {
                 val from = argumentIndices[i] + entry.header
