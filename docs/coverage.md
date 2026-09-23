@@ -6,8 +6,12 @@ repeatable answer against native GHC, across both executable backends.
 
 Run `scripts/try.sh` from a fresh checkout. It builds the exporter, prepares the
 native oracles and runs the JVM tests. The additional corpus is described in
-[`examples/coverage.json`](../examples/coverage.json); it currently has 26 entries
-and 484 distinct entry/input pairs, alongside the original fixtures and Map.
+[`examples/coverage.json`](../examples/coverage.json); it currently has 28 entries
+and 507 distinct entry/input pairs, alongside the original fixtures and Map.
+
+The [unsigned primop suite](integer-primops.md) adds 40 operations checked against
+56,791 native/model rows on both backends, including installed-code checks for
+each row.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
@@ -21,6 +25,7 @@ and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
 | Pointers | Non-strict reference-identity shortcuts with value-based equality fallbacks and untouched bottom-valued payloads |
 | Functions | Lists of captured closures, genuine overapplication, reused partial application with an unused bottom argument, a shared thunk captured by an escaping closure |
 | Trees | Three constructor layouts, recursive construction/folds, a captured higher-order map, selective traversal past bottom, shared subtrees |
+| Int64 conversions | Exact `Int#`/`Int64#` argument and result boundaries, canonical literals and full-width endpoints |
 | Narrow integers | Ordinary `Data.Int` conversions, truncation/sign extension and unpacked `Int8Rep`/`Int16Rep`/`Int32Rep` fields |
 | Narrow words | Ordinary `Data.Word` conversions, modular arithmetic, unsigned comparisons and shared records with unpacked `Word8Rep`/`Word16Rep`/`Word32Rep` fields |
 | Numeric | Word wraparound and rotations, signed quotient/remainder, signed narrowing, mixed primitive/reference fields and captures, Unicode characters through U+10FFFF |
