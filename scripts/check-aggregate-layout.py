@@ -93,6 +93,12 @@ EXPECTED = {
     'familyTupleIdentity': tup(None, ['IntRep']),
     'abstractComponentIdentity': tup([tup(None, ['IntRep']), INT], ['IntRep', 'IntRep']),
 }
+BOXED_CONTROLS = {
+    'boxedPairIdentity': leaf('data', [LIFTED], False),
+    'boxedUnitIdentity': leaf('data', [LIFTED], False),
+    'boxedSoloIdentity': leaf('data', [LIFTED], False),
+    'unliftedProductIdentity': leaf('data', ['BoxedRep (Just Unlifted)']),
+}
 
 
 def inventory(stage):
@@ -142,8 +148,35 @@ def inventory(stage):
               f'{name}: an exposed zero-width primitive must not become an empty tuple')
         check(audit_core.Audit([(str(path), module)], CAP).run([name])['accepted'],
               f'{name}: a known primitive/alias must remain supported')
+    for name, expected in BOXED_CONTROLS.items():
+        expr = bindings[name]['expr']
+        check(expr[1][0]['rep'] == expected and expr[3]['resultRep'] == expected,
+              f'{stage}/{name}: boxedness must not be inferred from liftedness or tuple syntax')
+        check(not any(isinstance(value, dict) and {'aggregate', 'components', 'alternatives'} & value.keys()
+                      for value in walk(bindings[name])), f'{stage}/{name}: boxed value acquired an aggregate layout')
+        check(audit_core.Audit([(str(path), module)], CAP).run([name])['accepted'],
+              f'{stage}/{name}: ordinary boxed control must remain accepted')
+    for name, register in (('boxedLazy', LIFTED), ('unliftedLazy', 'BoxedRep (Just Unlifted)')):
+        expr = bindings[name]['expr']
+        check(expr[3]['resultRep'] == leaf('data', [register]),
+              f'{stage}/{name}: constructed boxed object should be in WHNF')
+        payloads = [value for value in walk(expr) if isinstance(value, list) and len(value) == 3
+                    and value[0] == 'var' and value[1] == bindings['bottomBox']['id']]
+        check(payloads and all(value[2]['rep'] == BOX for value in payloads),
+              f'{stage}/{name}: enclosing WHNF must not evaluate the bottom payload')
+        check(audit_core.Audit([(str(path), module)], CAP).run([name + 'Use'])['accepted'],
+              f'{stage}/{name}: lazy payload observer must remain accepted')
+    constructors = {c['name']: c for c in module['constructors']}
+    for name in ('UnliftedProduct', '(,)'):
+        con = constructors[name]
+        check(con['kind'] == 'boxed' and con['fieldReps'] == [[LIFTED], [LIFTED]],
+              f'{stage}/{name}: boxed product lost its lazy reference fields')
+        check(con['strictFields'] == [False, False] and
+              all(field['evaluated'] is False for field in con['fieldTypes']),
+              f'{stage}/{name}: product evaluatedness must not make its lifted fields strict')
     return dict(stage=stage, boundary=module['boundary'], aggregateRecords=records,
-                checkedLayouts=list(EXPECTED), supportedEntries=0)
+                checkedLayouts=list(EXPECTED), boxedControls=list(BOXED_CONTROLS),
+                lazyBoxedObservers=['boxedLazyUse', 'unliftedLazyUse'], supportedEntries=0)
 
 
 def output(command):

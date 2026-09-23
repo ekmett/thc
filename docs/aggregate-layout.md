@@ -3,7 +3,16 @@
 The exporter preserves logical unboxed tuple components and sum alternatives in
 addition to GHC 9.14.1's physical `primReps` vector. This is metadata groundwork:
 both runtime backends and the strict auditor still reject aggregate boundaries.
-None of these fixtures adds a supported execution or benchmark claim.
+These fixtures establish no aggregate execution support or benchmark claim.
+
+Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one
+`BoxedRep (Just Lifted)` carrier with ordinary `data` evidence. They have no
+`aggregate`, `components`, or `alternatives` fields. Boxed unit is an object,
+not a zero-width token. Conversely, a product declared with `UnliftedDatatypes`
+can be boxed but unlifted: it retains one `BoxedRep (Just Unlifted)` carrier and
+ordinary `data` evidence. Its outer value is evaluated, while its lazy lifted
+fields remain unevaluated. Only logical unboxed `(# ... #)` tuples use tuple
+aggregate layouts; unboxed empty/singleton tuples retain that distinction.
 
 A tuple adds `components`, and a sum adds `alternatives`, to the existing
 representation record. Each element is another complete representation record:
@@ -80,6 +89,12 @@ a newtype over the zero-width state primitive, and the zero-width `Proxy#` primi
 The existing aggregate frontier driver
 runs this check during normal test preparation. `AggregateLayoutTest` checks
 strict loading on both backends at both stages before invoking any guest input.
+Additional controls load boxed tuple/unit/Solo and unlifted boxed product identities
+on both backends. Boxed and unlifted boxed producers each store a lazy bottom in
+their unused second field; observers return the first field at five integer
+inputs on both backends and both export stages. These controls establish that
+outer evaluatedness does not force the lifted payload. They add no unboxed
+aggregate execution support.
 
 `build/aggregate-layout/provenance.json` records full GHC `--info`, package
 descriptions, compiler executable hashes, commands and environment overrides,

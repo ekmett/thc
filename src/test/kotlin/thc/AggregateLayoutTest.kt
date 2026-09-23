@@ -44,4 +44,25 @@ class AggregateLayoutTest {
             }
         }
     }
+
+    @Test fun boxedTuplesAndUnliftedBoxedProductsRemainObjectsWithLazyPayloads() {
+        for (stage in listOf("pre", "post")) {
+            val module = Json.parse(File(root,
+                "build/aggregate-layout/$stage-core/AggregateLayoutAudit.json").readText()) as Map<String, Any?>
+            for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+                fun request(entry: String) = Json.stringify(mapOf("modules" to listOf(module),
+                    "entry" to entry, "backend" to backend, "diagnosticUnsupported" to false))
+                for (entry in listOf("boxedPairIdentity", "boxedUnitIdentity", "boxedSoloIdentity",
+                        "unliftedProductIdentity")) {
+                    context.eval("thc", request(entry))
+                }
+                for (entry in listOf("boxedLazyUse", "unliftedLazyUse")) {
+                    val observer = context.eval("thc", request(entry))
+                    for (input in listOf(Long.MIN_VALUE, -4097L, 0L, 4097L, Long.MAX_VALUE)) {
+                        assertEquals(input, observer.execute(input).asLong(), "$stage/$backend/$entry")
+                    }
+                }
+            }
+        }
+    }
 }
