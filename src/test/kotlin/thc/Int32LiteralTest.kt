@@ -56,4 +56,31 @@ class Int32LiteralTest {
             }
         }
     }
+
+    @Test fun intrinsicNarrowLiteralsRefineUnconstrainedButNotMalformedProofs() {
+        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) executionContext().use { context ->
+            for (kind in listOf("int32", "word32")) {
+                for (evaluated in listOf(false, true)) for (registers in listOf(emptyMap(), mapOf("primReps" to null))) {
+                    val proof = mapOf("kind" to "unknown", "evaluated" to evaluated) + registers
+                    assertEquals(1L, context.eval("thc", request(backend,
+                        listOf("lit", kind, "1", mapOf("rep" to proof)), diagnostic)).execute(0L).asLong())
+                    for ((operation, expected, result) in listOf(Triple("int32ToInt#", "int32", "IntRep"),
+                        Triple("word32ToWord#", "word32", "WordRep"))) {
+                        val body = listOf("app", listOf("prim", operation), listOf(listOf("lit", kind, "1", mapOf("rep" to proof))),
+                            listOf(false), false, false, mapOf("rep" to mapOf("kind" to "long", "primReps" to listOf(result), "evaluated" to true)))
+                        if (kind == expected) assertEquals(1L, context.eval("thc", request(backend, body, diagnostic)).execute(0L).asLong())
+                        else assertThrows(PolyglotException::class.java) { context.eval("thc", request(backend, body, diagnostic)) }
+                    }
+                }
+                val malformed = listOf(emptyList<Any?>(), "unknown", mapOf("kind" to "unknown", "primReps" to null),
+                    mapOf("kind" to "unknown", "primReps" to null, "evaluated" to "false"),
+                    mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to false),
+                    mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to false,
+                        "aggregate" to "unboxed-tuple", "components" to emptyList<Any?>()))
+                for (proof in malformed) assertThrows(PolyglotException::class.java, {
+                    context.eval("thc", request(backend, listOf("lit", kind, "1", mapOf("rep" to proof)), diagnostic))
+                }, "$backend/$kind/diagnostic=$diagnostic/proof=$proof")
+            }
+        }
+    }
 }

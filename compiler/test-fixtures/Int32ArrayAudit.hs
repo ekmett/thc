@@ -3,6 +3,22 @@ module Int32ArrayAudit where
 
 import GHC.Exts
 
+-- noinline erasure deliberately drops type certificates on retained operands.
+-- Narrow literal syntax still proves the exact rep, independently of metadata.
+{-# OPAQUE literalInt32Worker #-}
+literalInt32Worker :: Int# -> Int32# -> Int#
+literalInt32Worker x value = x +# int32ToInt# value
+
+{-# OPAQUE literalWord32Worker #-}
+literalWord32Worker :: Int# -> Word32# -> Int#
+literalWord32Worker x value = x +# word2Int# (word32ToWord# value)
+
+noinlineInt32Literal :: Int# -> Int#
+noinlineInt32Literal x = noinline literalInt32Worker x (intToInt32# (-2147483648#))
+
+noinlineWord32Literal :: Int# -> Int#
+noinlineWord32Literal x = noinline literalWord32Worker x (wordToWord32# 4294967295##)
+
 -- Typed indices are 4-byte elements; Word8 indices are bytes. The byte writes
 -- straddle element offsets 3/4, and subsequent typed reads share that storage.
 -- Explicit narrowing uses the low 32 bits; the Int32 path sign-extends them.
