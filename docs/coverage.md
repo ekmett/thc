@@ -30,10 +30,16 @@ The [scalar bit suite](bit-primops.md) adds 21 population/zero-count, byte-swap,
 and bit-reversal operations with 11,923 native/model rows, pre/post-Tidy exports,
 and exact compiled-entry checks for every row on both backends.
 
-The first [SIMD slice](simd.md) supports six local `Int64X2#` operations. Exact
-vector metadata keeps these values distinct from unboxed tuples. Both backends
-have actual Core graph evidence showing packed AArch64 arithmetic with temporary
-carriers eliminated. Vector calling conventions and other shapes remain work.
+The [floating suite](floating-primitives.md) adds 28 scalar `Float#`/`Double#`
+operations and 412 native/model rows, with primitive locals, fields and captures.
+Its compiled loop retains both precisions without boxing in the continuing loop;
+generic call boundaries and floating tuple leaves remain separate work.
+
+The [SIMD slice](simd.md) supports six local operations each for `Int64X2#` and
+`Int32X4#`. Exact vector metadata keeps these values distinct from each other and
+from unboxed tuples. The Int64 controls include actual Core graph evidence of
+packed arithmetic with temporary carriers eliminated on AArch64 and x86. Vector
+calling conventions and other shapes remain work.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
