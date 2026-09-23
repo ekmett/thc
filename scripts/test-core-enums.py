@@ -48,7 +48,7 @@ class EnumTests(unittest.TestCase):
                 elif variant=='newtype':con['kind']='newtype'
                 result=run(m);self.assertFalse(result['accepted']);self.assertTrue(any(x['code']=='enum-family' for x in result['issues']))
     def test_bare_partial_overapplied_and_invalid_proofs(self):
-        for variant in ['bare','zero','two','lifted','word','unknown','malformed','result','aggregate']:
+        for variant in ['bare','zero','two','lifted','word','unknown','malformed','function-proof','result','aggregate']:
             with self.subTest(variant=variant):
                 m=fixture();app=m['bindings'][0]['expr'][2]
                 if variant=='bare':m['bindings'][0]['expr'][2]=app[1]
@@ -58,6 +58,7 @@ class EnumTests(unittest.TestCase):
                 elif variant=='word':app[2][0][2]['rep']=dict(LONG,primReps=['WordRep'])
                 elif variant=='unknown':app[2][0]=['lit','int','0']
                 elif variant=='malformed':app[2][0][2]['rep']=[]
+                elif variant=='function-proof':app[1][2]['rep']=[]
                 elif variant=='result':app[6]['rep']=LONG
                 elif variant=='aggregate':app[6]['rep']=dict(kind='unknown',aggregate='unboxed-tuple',components=[DATA],primReps=DATA['primReps'],evaluated=True)
                 self.assertFalse(run(m)['accepted'])

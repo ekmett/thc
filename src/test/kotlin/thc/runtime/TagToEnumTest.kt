@@ -132,7 +132,7 @@ class TagToEnumTest {
         }
     }
     @Test fun malformedOrUnsaturatedEnumProofsRejectAtLoad() {
-        for (backend in listOf("ast", "bytecode")) for (variant in listOf("missing", "family", "empty", "reverse", "duplicate", "missing-con", "wrong-tag", "float-tag", "fields", "newtype", "word", "unknown", "aggregate", "result", "lifted", "zero", "two", "bare")) context().use { context ->
+        for (backend in listOf("ast", "bytecode")) for (variant in listOf("missing", "family", "empty", "reverse", "duplicate", "missing-con", "wrong-tag", "float-tag", "fields", "newtype", "word", "unknown", "aggregate", "function-proof", "result", "lifted", "zero", "two", "bare")) context().use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -156,6 +156,7 @@ class TagToEnumTest {
                     "word" -> ((app[2] as List<List<Any?>>)[0][2] as MutableMap<String, Any?>)["rep"] = mapOf("kind" to "long", "primReps" to listOf("WordRep"), "evaluated" to true)
                     "unknown" -> app[2] = listOf(listOf("lit", "int", "0"))
                     "aggregate" -> metadata["rep"] = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple", "components" to emptyList<Any?>(), "primReps" to emptyList<String>(), "evaluated" to true)
+                    "function-proof" -> (app[1] as MutableList<Any?>)[2] = mapOf("rep" to emptyList<Any?>())
                     "result" -> metadata["rep"] = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to false)
                     "lifted" -> app[3] = listOf(true)
                     "zero" -> { app[2] = emptyList<Any?>(); app[3] = emptyList<Boolean>() }

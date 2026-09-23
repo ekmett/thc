@@ -9,6 +9,11 @@ internal object CoreEnums {
     fun validate(expression: List<Any?>, operand: CoreRepresentation,
                  constructors: Map<String, Map<String, Any?>>): List<String> {
         fun bad(message: String): Nothing = throw RuntimeFault("tagToEnum#: $message")
+        // Special primitive lowering bypasses ordinary function compilation;
+        // still validate any supplied function-node representation record.
+        @Suppress("UNCHECKED_CAST")
+        val function = expression.getOrNull(1) as? List<Any?> ?: bad("Missing primitive function")
+        CoreRepresentations.expression(function)
         val args = expression.getOrNull(2) as? List<*> ?: bad("Missing operands")
         if (args.size != 1 || expression.getOrNull(3) != listOf(false)) bad("Exactly one unlifted Int# operand required")
         if (!operand.present || operand.kind != CoreKind.LONG || operand.primReps != listOf("IntRep") || operand.isTuple || operand.isVector)
