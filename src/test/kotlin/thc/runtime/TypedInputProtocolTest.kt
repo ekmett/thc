@@ -28,9 +28,9 @@ class TypedInputProtocolTest {
     private fun call(id: String, args: List<List<Any?>>, rep: Map<String, Any?> = integer) = app(v(id, closure), args, rep)
     private fun prim(name: String, left: List<Any?>, right: List<Any?>) = app(listOf("prim", name), listOf(left, right))
     private fun pack(a: List<Any?>, b: List<Any?>) = app(listOf("con", "Pair", 2), listOf(a, b), pair)
-    private fun unpack(value: List<Any?>, body: List<Any?>): List<Any?> = listOf("case", value, "whole", listOf(
+    private fun unpack(value: List<Any?>, body: List<Any?>, result: Map<String, Any?> = integer): List<Any?> = listOf("case", value, "whole", listOf(
         listOf("data", "Pair", listOf("a", "b"), body, mapOf("binders" to listOf(arg("a"), arg("b"))))),
-        mapOf("rep" to integer, "binder" to arg("whole", pair)))
+        mapOf("rep" to result, "binder" to arg("whole", pair)))
     private fun lam(args: List<Map<String, Any?>>, body: List<Any?>, result: Map<String, Any?> = integer,
         strict: List<Boolean> = List(args.size) { false }): List<Any?> = listOf("lam", args, body,
         mapOf("rep" to closure, "resultRep" to result, "entryStrict" to strict))
@@ -103,6 +103,43 @@ class TypedInputProtocolTest {
             calls++
             if (fail) throw GuestException("strict prefix", this)
             return 123L
+        }
+    }
+    @Test fun cyclicIntermediateClosureIsAppliedBeforeFinalTupleConsumptionInPicAndGenericRoutes() {
+        for (backend in listOf("ast", "bytecode")) for (inlining in listOf(true, false)) withLanguage(inlining) { context, language ->
+            fun worker(id: String, next: String) = bind(id, lam(listOf(arg("p", pair), arg("depth")),
+                listOf("case", prim("<=#", v("depth"), n(0)), "done", listOf(
+                    listOf("lit", listOf("int", "1"), emptyList<String>(), unpack(v("p", pair),
+                        lam(listOf(arg("z")), pack(prim("+#", v("a"), v("z")), v("b")), pair), closure)),
+                    listOf("default", null, emptyList<String>(), call(next,
+                        listOf(v("p", pair), prim("-#", v("depth"), n(1))), closure))),
+                    mapOf("rep" to closure, "binder" to arg("done"))), closure))
+            val workers = (0..4).map { worker("w$it", "loop") } + worker("loop", "w0")
+            fun body(f: String) = unpack(call(f, listOf(pack(v("x"), n(7)), n(4), n(9)), pair), prim("+#", v("a"), v("b")))
+            val p = program(language, backend, workers + listOf(
+                bind("direct", lam(listOf(arg("x")), body("w0"))),
+                bind("generic", lam(listOf(arg("f", closure), arg("x")), body("f")))))
+            val functions = (0..4).map { p.entryValue("w$it") }
+            val inputs = listOf(Long.MIN_VALUE, -1L, 0L, Long.MAX_VALUE)
+            for (name in listOf("direct", "generic")) {
+                val arity = if (name == "direct") 1 else 2
+                val fn = context.asValue(EntryValue(p, name, arity))
+                fun invoke(f: Any?, x: Long): Long = if (arity == 1) fn.execute(x).asLong() else
+                    run(p, name, f, x) as Long
+                for (f in functions) for (x in inputs) { assertEquals(x + 16L, invoke(f, x)); clear(language) }
+                assertTrue(fn.invokeMember("compile").asBoolean(), "$backend/$name/inline=$inlining")
+                val original = p.entryTarget(name); val host = p.hostEntryTarget(arity)
+                fun active() = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                    .filter { it.callTarget === original }.map { it.currentCallTarget as RootCallTarget }.toSet()
+                val observed = active(); assertTrue(observed.isNotEmpty())
+                for (f in functions.asReversed()) for (x in inputs.asReversed()) {
+                    val before = p.diagnostics()["compiledEntries"] as Long
+                    assertEquals(x + 16L, invoke(f, x), "$backend/$name/$x/inline=$inlining")
+                    assertTrue((p.diagnostics()["compiledEntries"] as Long) > before)
+                    valid(original, name); valid(host, name); assertEquals(observed, active()); observed.forEach { valid(it, name) }
+                    clear(language)
+                }
+            }
         }
     }
     @Test fun durableTypedPapPrefixSurvivesReuseAndStrictPrefixFailureBeforeLoan() {
