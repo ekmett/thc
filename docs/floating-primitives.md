@@ -83,7 +83,15 @@ The AST uses separate typed unary nodes; BytecodeDSL uses typed unary operations
 Both call JVM `Math.sqrt`, whose [specified behavior](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Math.html#sqrt(double))
 preserves signed zero and returns the correctly rounded binary64 root. Float
 operands are widened exactly, then the result is narrowed to binary32. The native
-and independent bit checks cover this path at both precision boundaries. Generic
+and independent bit checks cover this path at both precision boundaries. This
+widening does not introduce double rounding: every positive finite binary32 root
+is normal. In a result binade `[2^e, 2^(e+1))`, a binary32 midpoint has a 25-bit
+significand, so its square is an odd integer times `2^(2e-48)`. A binary32 input
+cannot equal that midpoint square and differs by at least `2^(2e-48)`. Dividing
+by the sum of the root and midpoint puts their distance above `2^(e-50)`, while
+binary64 rounding changes the root by at most `2^(e-53)`. It therefore cannot
+cross a binary32 rounding midpoint. Zeros, infinities and NaNs follow their
+separate IEEE rules. Generic
 Object call/return boxing and optional scalar handoff eligibility remain unchanged.
 `SqrtPrimitiveTest` runs both exports and backends with guest inlining enabled and
 disabled. Every measured row requires the exact guest-entry count (one primitive
@@ -91,6 +99,11 @@ producer or two roots for a scalar consumer) and the selected target still
 installed. Cold special values are checked without a compilation retry. The CI
 handoff run repeats the same tests; source, auditor, native and export hashes are
 validated before execution.
+The [sqrt production graphs](../bench/experiments/sqrt-graphs/README.md) check
+dynamic native-backed scalar consumers on both backends. The recorded graphs
+contain one square-root node, no intermediate floating boxes or guest calls,
+and final `FSQRT SINGLE`/`FSQRT DOUBLE` instructions. One host-result Long box
+remains.
 
 For actual compiler evidence, `floatingLoop` has both f32 and f64 accumulators.
 Capture its graph with `scripts/dump-graph.sh`, selecting

@@ -126,13 +126,16 @@ class SqrtPrimitiveTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (entry in listOf("sqrtFloat", "sqrtDouble")) for (variant in listOf("argument", "result")) {
+                for (entry in listOf("sqrtFloat", "sqrtDouble")) for (variant in listOf("argument", "result", "arity")) {
                     val linked = CoreModules.reachable(module(stage), entry)
                     val lambda = ((linked["bindings"] as List<Map<String, Any?>>).single()["expr"] as List<Any?>)
                     val body = lambda[2] as List<Any?>
                     val other = if (entry == "sqrtFloat") "double" else "float"
                     val proof = mapOf("kind" to other, "primReps" to listOf(if (other == "float") "FloatRep" else "DoubleRep"), "evaluated" to true)
-                    if (variant == "argument") {
+                    if (variant == "arity") {
+                        (body[2] as MutableList<Any?>).clear()
+                        (body[3] as MutableList<Any?>).clear()
+                    } else if (variant == "argument") {
                         ((lambda[1] as List<MutableMap<String, Any?>>)[0])["rep"] = proof
                         (((body[2] as List<List<Any?>>)[0])[2] as MutableMap<String, Any?>)["rep"] = proof
                     } else {
@@ -140,7 +143,8 @@ class SqrtPrimitiveTest {
                         (body[6] as MutableMap<String, Any?>)["rep"] = proof
                     }
                     val failure = assertThrows(RuntimeFault::class.java) { program(language, linked, backend) }
-                    assertTrue(failure.message.orEmpty().contains("Primitive representation mismatch: $entry#"), failure.message)
+                    val detail = if (variant == "arity") "arity" else "representation"
+                    assertTrue(failure.message.orEmpty().contains("Primitive $detail mismatch: $entry#"), failure.message)
                 }
             } finally { context.leave() }
         }
