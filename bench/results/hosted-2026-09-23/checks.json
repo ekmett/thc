@@ -1,0 +1,205 @@
+{
+  "passed": true,
+  "configurations": [
+    {
+      "configuration": "original",
+      "beforeRows": 18,
+      "afterRows": 18,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 62,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 19,
+        "localJoinCount": 10,
+        "localJoinTransfers": 874750,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3,
+          "argument thunk": 502086
+        },
+        "compiledEntries": 6425337,
+        "thunkEvaluations": 502089,
+        "thunkHits": 977357,
+        "blackholes": 0,
+        "directCacheMisses": 30,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    },
+    {
+      "configuration": "current-default",
+      "beforeRows": 18,
+      "afterRows": 18,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 58,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 15,
+        "localJoinCount": 10,
+        "localJoinTransfers": 874750,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3,
+          "argument thunk": 16408
+        },
+        "compiledEntries": 5947487,
+        "thunkEvaluations": 16411,
+        "thunkHits": 588723,
+        "blackholes": 0,
+        "directCacheMisses": 25,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    },
+    {
+      "configuration": "checked-class-off",
+      "beforeRows": 18,
+      "afterRows": 18,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 58,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 15,
+        "localJoinCount": 10,
+        "localJoinTransfers": 874750,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3,
+          "argument thunk": 16408
+        },
+        "compiledEntries": 5947487,
+        "thunkEvaluations": 16411,
+        "thunkHits": 588723,
+        "blackholes": 0,
+        "directCacheMisses": 25,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    },
+    {
+      "configuration": "checked-class-on",
+      "beforeRows": 18,
+      "afterRows": 18,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 58,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 15,
+        "localJoinCount": 10,
+        "localJoinTransfers": 874750,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3,
+          "argument thunk": 16408
+        },
+        "compiledEntries": 5947487,
+        "thunkEvaluations": 16411,
+        "thunkHits": 588723,
+        "blackholes": 0,
+        "directCacheMisses": 25,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    },
+    {
+      "configuration": "unchecked-class-on",
+      "beforeRows": 18,
+      "afterRows": 18,
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 58,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 15,
+        "localJoinCount": 10,
+        "localJoinTransfers": 874750,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "lvl": 3,
+          "argument thunk": 16408
+        },
+        "compiledEntries": 5947487,
+        "thunkEvaluations": 16411,
+        "thunkHits": 588723,
+        "blackholes": 0,
+        "directCacheMisses": 25,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+          "Unsupported primitive readMutVar#"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      }
+    }
+  ]
+}

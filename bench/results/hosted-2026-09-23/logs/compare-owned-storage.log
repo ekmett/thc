@@ -1,0 +1,19 @@
+Fork 1/3, position 1/3: baseline starting
+Fork 1/3: baseline validated; 6,057,895.5 ns/call; process 92.1s
+Fork 1/3, position 2/3: candidate starting
+Fork 1/3: candidate validated; 5,409,529.1 ns/call; process 85.1s
+Fork 1/3, position 3/3: native starting
+Fork 1/3: native validated; 2,937,570.3 ns/call; process 13.2s
+Fork 2/3, position 1/3: candidate starting
+Fork 2/3: candidate validated; 3,448,212.0 ns/call; process 83.0s
+Fork 2/3, position 2/3: native starting
+Fork 2/3: native validated; 2,240,560.5 ns/call; process 13.3s
+Fork 2/3, position 3/3: baseline starting
+Fork 2/3: baseline validated; 3,484,685.5 ns/call; process 71.6s
+Fork 3/3, position 1/3: native starting
+Fork 3/3: native validated; 3,121,643.2 ns/call; process 13.3s
+Fork 3/3, position 2/3: baseline starting
+Fork 3/3: baseline validated; 3,338,519.9 ns/call; process 67.2s
+Fork 3/3, position 3/3: candidate starting
+Fork 3/3: candidate validated; 3,538,459.7 ns/call; process 71.9s
+VALIDATED: 45 windows; candidate/baseline=1.015; candidate/native=1.205; results: /Users/runner/work/thc/thc/work/ci-performance/comparisons/owned-storage

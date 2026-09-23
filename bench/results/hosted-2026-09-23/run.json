@@ -1,0 +1,391 @@
+{
+  "recordedAtUtc": "2026-09-23T07:06:06.252610+00:00",
+  "scope": "New GitHub-hosted macOS hardware; compare only within this run, not absolute local M3 timings.",
+  "originalCommit": "4c116a8493eafad4077a1c5eb9c046bff56fe3c4",
+  "currentCommit": "894648c26c99887b0227b70aab40758ce53dcd71",
+  "repository": "/Users/runner/work/thc/thc",
+  "host": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "githubRunId": "35828824528",
+  "githubRunAttempt": "1",
+  "policy": [
+    "-Dpolyglot.compiler.InliningRecursionDepth=2",
+    "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+    "-Dpolyglot.compiler.InliningInliningBudget=12000"
+  ],
+  "configurations": {
+    "original": [
+      "original",
+      []
+    ],
+    "current-default": [
+      "current",
+      []
+    ],
+    "checked-class-off": [
+      "current",
+      [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false"
+      ]
+    ],
+    "checked-class-on": [
+      "current",
+      [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true"
+      ]
+    ],
+    "unchecked-class-on": [
+      "current",
+      [
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true"
+      ]
+    ],
+    "compact-checked-class-off": [
+      "current",
+      [
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-XX:+UseCompactObjectHeaders"
+      ]
+    ]
+  },
+  "comparisons": {
+    "original-vs-current": [
+      "original",
+      "current-default"
+    ],
+    "constructor-class": [
+      "checked-class-off",
+      "checked-class-on"
+    ],
+    "owned-storage": [
+      "checked-class-on",
+      "unchecked-class-on"
+    ],
+    "compact-headers": [
+      "checked-class-off",
+      "compact-checked-class-off"
+    ]
+  },
+  "sharedCore": "Both original and current JARs use this one current exported Core/native corpus.",
+  "protocol": "Full MapCheck uses counters to verify installed code; timing harness instrumentation is disabled.",
+  "commands": [
+    {
+      "argv": [
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/original/lib/*",
+        "thc.MapCheckKt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/oracle.tsv"
+      ],
+      "log": "logs/check-original.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/oracle.tsv"
+      ],
+      "log": "logs/check-current-default.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/oracle.tsv"
+      ],
+      "log": "logs/check-checked-class-off.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/oracle.tsv"
+      ],
+      "log": "logs/check-checked-class-on.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/oracle.tsv"
+      ],
+      "log": "logs/check-unchecked-class-on.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/helpers/compare-map-runtimes.py",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/original/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/native-oracle",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/comparisons/original-vs-current",
+        "--java-home",
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--baseline-commit",
+        "4c116a8493eafad4077a1c5eb9c046bff56fe3c4",
+        "--candidate-source-dir",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/src/main",
+        "--baseline-backend",
+        "bytecode",
+        "--candidate-backend",
+        "bytecode",
+        "--baseline-source-notes",
+        "on",
+        "--candidate-source-notes",
+        "on",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000"
+      ],
+      "log": "logs/compare-original-vs-current.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/helpers/compare-map-runtimes.py",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/native-oracle",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/comparisons/constructor-class",
+        "--java-home",
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--baseline-commit",
+        "894648c26c99887b0227b70aab40758ce53dcd71",
+        "--candidate-source-dir",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/src/main",
+        "--baseline-backend",
+        "bytecode",
+        "--candidate-backend",
+        "bytecode",
+        "--baseline-source-notes",
+        "on",
+        "--candidate-source-notes",
+        "on",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--baseline-jvm-option=-Dthc.staticShapeUnchecked=false",
+        "--baseline-jvm-option=-Dthc.constructorClassIdentity=false",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--candidate-jvm-option=-Dthc.staticShapeUnchecked=false",
+        "--candidate-jvm-option=-Dthc.constructorClassIdentity=true"
+      ],
+      "log": "logs/compare-constructor-class.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/helpers/compare-map-runtimes.py",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/native-oracle",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/comparisons/owned-storage",
+        "--java-home",
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--baseline-commit",
+        "894648c26c99887b0227b70aab40758ce53dcd71",
+        "--candidate-source-dir",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/src/main",
+        "--baseline-backend",
+        "bytecode",
+        "--candidate-backend",
+        "bytecode",
+        "--baseline-source-notes",
+        "on",
+        "--candidate-source-notes",
+        "on",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--baseline-jvm-option=-Dthc.staticShapeUnchecked=false",
+        "--baseline-jvm-option=-Dthc.constructorClassIdentity=true",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--candidate-jvm-option=-Dthc.staticShapeUnchecked=true",
+        "--candidate-jvm-option=-Dthc.constructorClassIdentity=true"
+      ],
+      "log": "logs/compare-owned-storage.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/runner/work/thc/thc/scripts/gradle.sh",
+        "--no-daemon",
+        "test",
+        "--rerun"
+      ],
+      "log": "logs/compact-full-tests.log",
+      "environmentOverrides": {
+        "JAVA_TOOL_OPTIONS": "-XX:+UseCompactObjectHeaders"
+      },
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dthc.backend=bytecode",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Dthc.traceCompilation=true",
+        "-cp",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib/*",
+        "thc.MapCheckKt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/oracle.tsv"
+      ],
+      "log": "logs/check-compact-checked-class-off.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/helpers/object-sizes.py",
+        "/Users/runner/work/thc/thc/work/ci-performance/compact-object-sizes-input",
+        "/Users/runner/work/thc/thc/work/ci-performance/compact-object-sizes",
+        "--java-home",
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--backend",
+        "bytecode",
+        "--jvm-option=-Dthc.staticShapeUnchecked=false",
+        "--jvm-option=-Dthc.constructorClassIdentity=false",
+        "--jvm-option=-XX:+UseCompactObjectHeaders"
+      ],
+      "log": "logs/compact-object-sizes.log",
+      "returncode": 0
+    },
+    {
+      "argv": [
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/helpers/compare-map-runtimes.py",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/native-oracle",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/map/modules.txt",
+        "/Users/runner/work/thc/thc/work/ci-performance/comparisons/compact-headers",
+        "--java-home",
+        "/Users/runner/hostedtoolcache/graalvm-jdk-25.3.4.1_macos-aarch64_bin/25.3.4-1/arm64/graalvm-25.3.4.1+1.1/Contents/Home",
+        "--baseline-commit",
+        "894648c26c99887b0227b70aab40758ce53dcd71",
+        "--candidate-source-dir",
+        "/Users/runner/work/thc/thc/work/ci-performance/frozen/current/src/main",
+        "--baseline-backend",
+        "bytecode",
+        "--candidate-backend",
+        "bytecode",
+        "--baseline-source-notes",
+        "on",
+        "--candidate-source-notes",
+        "on",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--baseline-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--baseline-jvm-option=-Dthc.staticShapeUnchecked=false",
+        "--baseline-jvm-option=-Dthc.constructorClassIdentity=false",
+        "--baseline-jvm-option=-XX:-UseCompactObjectHeaders",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "--candidate-jvm-option=-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "--candidate-jvm-option=-Dthc.staticShapeUnchecked=false",
+        "--candidate-jvm-option=-Dthc.constructorClassIdentity=false",
+        "--candidate-jvm-option=-XX:+UseCompactObjectHeaders"
+      ],
+      "log": "logs/compare-compact-headers.log",
+      "returncode": 0
+    }
+  ]
+}

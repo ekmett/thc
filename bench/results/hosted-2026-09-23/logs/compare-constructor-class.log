@@ -1,0 +1,19 @@
+Fork 1/3, position 1/3: baseline starting
+Fork 1/3: baseline validated; 2,824,019.7 ns/call; process 54.7s
+Fork 1/3, position 2/3: candidate starting
+Fork 1/3: candidate validated; 2,613,804.4 ns/call; process 60.9s
+Fork 1/3, position 3/3: native starting
+Fork 1/3: native validated; 1,997,583.0 ns/call; process 12.2s
+Fork 2/3, position 1/3: candidate starting
+Fork 2/3: candidate validated; 2,909,766.8 ns/call; process 58.4s
+Fork 2/3, position 2/3: native starting
+Fork 2/3: native validated; 2,054,574.2 ns/call; process 12.5s
+Fork 2/3, position 3/3: baseline starting
+Fork 2/3: baseline validated; 2,867,600.7 ns/call; process 65.0s
+Fork 3/3, position 1/3: native starting
+Fork 3/3: native validated; 2,203,634.8 ns/call; process 12.6s
+Fork 3/3, position 2/3: baseline starting
+Fork 3/3: baseline validated; 2,833,972.2 ns/call; process 65.2s
+Fork 3/3, position 3/3: candidate starting
+Fork 3/3: candidate validated; 3,962,988.2 ns/call; process 67.4s
+VALIDATED: 45 windows; candidate/baseline=1.027; candidate/native=1.416; results: /Users/runner/work/thc/thc/work/ci-performance/comparisons/constructor-class

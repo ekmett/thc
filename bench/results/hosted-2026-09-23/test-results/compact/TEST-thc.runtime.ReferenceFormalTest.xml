@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.ReferenceFormalTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:30:21.946Z" hostname="sat12-bq167-7d5c7206-1b1f-48a4-a0ef-01c6aceeb362-8AA2F5F6261E.local" time="0.417">
+  <properties/>
+  <testcase name="concreteReferenceFormalsSurviveDirectAndAncestorParallelMoves()" classname="thc.runtime.ReferenceFormalTest" time="0.368"/>
+  <testcase name="checkedReferenceEntryRejectsNullButDoesNotStrictifyLazyData()" classname="thc.runtime.ReferenceFormalTest" time="0.048"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

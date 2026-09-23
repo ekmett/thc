@@ -24,7 +24,9 @@ To open the graphs in Ideal Graph Visualizer, extract the archive or use the has
 python3 bench/results/entry-contracts/graphs/selected-bgv.py extract /tmp/thc-selected-raw
 ```
 
-The initial verification run stopped at its authorized 2% battery floor after five successful graph parses. The candidate worker and final topology comparison remain pending; [status and logs](reparse-status.json) distinguish this from a parser failure. The archive and all six original BGV hashes passed verification.
+Hosted verification is complete: [GitHub run 35828824528, attempt 1](https://github.com/ekmett/thc/actions/runs/35828824528), commit `894648c26c99887b0227b70aab40758ce53dcd71`, verified the archive and all six original BGV hashes, then reproduced **all 18 selected graph-phase topologies exactly**. The [unaltered hosted report](hosted-topology-verification.json) records every phase digest and node/edge/block count. [Independent provenance checks](hosted-reparse-provenance.json) tie it to the downloaded artifact, its verified GitHub SHA-256 digest, the committed parser and the original capture inventories.
+
+The initial local attempt stopped at its authorized 2% battery floor after five successful graph parses. Its incomplete state and logs remain under [localAttempt in the status record](reparse-status.json); it is not relabeled as a successful local verification. The hosted run completed the full six-graph reparse independently. No guest program was rerun by either reparse.
 
 To independently reproduce the parser output with GraalVM 25.3.4.1:
 

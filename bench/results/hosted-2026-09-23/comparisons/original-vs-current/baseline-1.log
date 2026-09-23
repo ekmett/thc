@@ -1,0 +1,41 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/runner/work/thc/thc/work/ci-performance/frozen/original/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time   613( 365+247 )ms|AST    2|Inlined   8Y  41N|IR   6365/ 13266|CodeSize   65932|Addr 0x000119df91c0|CompId 2658   |UTC 2026-09-23T07:07:04.372|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2
+[engine] opt inval. engine=1  id=21    lambda sc, x, ds1                                                                                                                                                                 |UTC 2026-09-23T07:07:04.435|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason validRootAssumption local tags updated
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:07:04.436|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:07:04.437|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:07:04.437|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:07:04.437|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:07:04.437|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:07:04.437|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time   584( 345+239 )ms|AST    2|Inlined   7Y  35N|IR   6493/ 13649|CodeSize   68588|Addr 0x000119e24a00|CompId 2758   |UTC 2026-09-23T07:07:05.022|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2
+[engine] opt done   engine=1  id=22    lambda ww, ds2                                     |Tier 2|Time   395( 155+240 )ms|AST    2|Inlined  14Y  16N|IR   5371/ 11667|CodeSize   52520|Addr 0x000119e4c1c0|CompId 2830   |UTC 2026-09-23T07:07:05.458|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649 0x573a55c2
+[engine] opt done   engine=1  id=17    lambda def, ww, ds1                                |Tier 2|Time    19(   8+11  )ms|AST    2|Inlined   1Y   0N|IR    462/   906|CodeSize    4016|Addr 0x000119e64600|CompId 2890   |UTC 2026-09-23T07:07:05.609|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649 0xf2f99fe6
+[engine] opt done   engine=1  id=26    argument thunk                                     |Tier 2|Time   568( 269+300 )ms|AST    2|Inlined   8Y  35N|IR   6548/ 13741|CodeSize   69076|Addr 0x000119e790c0|CompId 2903   |UTC 2026-09-23T07:07:06.188|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:494 0x573a55c2
+[engine] opt done   engine=1  id=18    lambda ww, ds                                      |Tier 2|Time   798( 244+554 )ms|AST    2|Inlined  19Y  18N|IR   6249/ 13609|CodeSize   61888|Addr 0x000119e8ec00|CompId 2920   |UTC 2026-09-23T07:07:07.009|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:3426 0xf2f99fe6
+[engine] opt done   engine=1  id=27    lambda ww                                          |Tier 2|Time  1698( 383+1315)ms|AST    2|Inlined  24Y  53N|IR  11529/ 29644|CodeSize  146992|Addr 0x000119eadc40|CompId 2941   |UTC 2026-09-23T07:07:08.765|Src n/a
+[engine] opt done   engine=1  id=10    lambda k, x, l, r                                  |Tier 2|Time    32(  21+11  )ms|AST    2|Inlined   0Y   0N|IR    850/  1020|CodeSize    3972|Addr 0x000119ed3d40|CompId 2959   |UTC 2026-09-23T07:07:08.907|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4272 0xf2f99fe6
+[engine] opt done   engine=1  id=15    lambda k, x, l, r                                  |Tier 2|Time   966( 425+542 )ms|AST    2|Inlined   8Y  29N|IR   7281/ 15958|CodeSize   74748|Addr 0x000119ee3440|CompId 2965   |UTC 2026-09-23T07:07:09.990|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302 0xf2f99fe6
+[engine] opt done   engine=1  id=30    lambda n                                           |Tier 2|Time   705( 701+5   )ms|AST    2|Inlined   1Y   1N|IR    133/   313|CodeSize    1140|Addr 0x000119ef8100|CompId 2996   |UTC 2026-09-23T07:07:11.797|Src examples/THC/MapWorkload.hs:30 0xd633756a
+PHASE WARM BEGIN
+[engine] opt done   engine=1  id=96    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time   694( 681+13  )ms|AST   10|Inlined   3Y   1N|IR    416/   979|CodeSize    4908|Addr 0x000119d65540|CompId 3079   |UTC 2026-09-23T07:08:01.871|Src n/a
+PHASE WARM END calls=12032 elapsedNs=59784368375 checksum=678375231696
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE MEASURE 2 BEGIN
+PHASE MEASURE 2 END
+PHASE MEASURE 3 BEGIN
+PHASE MEASURE 3 END
+PHASE MEASURE 4 BEGIN
+PHASE MEASURE 4 END
+PHASE MEASURE 5 BEGIN
+PHASE MEASURE 5 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"backend":"bytecode","bytecodeRootCount":62,"sourceNotesEnabled":true,"sourceSpanCount":8656,"sourceRootCount":19,"localJoinCount":10,"localJoinTransfers":0,"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"selfTailReentries":0,"trampolineIterations":0,"papAllocations":0,"unsupportedPolicy":"diagnostic-traps","deferredUnsupported":["Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)","Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1","Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef","Unsupported primitive readMutVar#"],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

@@ -1,0 +1,19 @@
+Fork 1/3, position 1/3: baseline starting
+Fork 1/3: baseline validated; 4,252,172.5 ns/call; process 83.2s
+Fork 1/3, position 2/3: candidate starting
+Fork 1/3: candidate validated; 2,612,561.4 ns/call; process 57.2s
+Fork 1/3, position 3/3: native starting
+Fork 1/3: native validated; 2,224,469.7 ns/call; process 13.3s
+Fork 2/3, position 1/3: candidate starting
+Fork 2/3: candidate validated; 3,042,640.1 ns/call; process 61.6s
+Fork 2/3, position 2/3: native starting
+Fork 2/3: native validated; 2,605,766.9 ns/call; process 13.9s
+Fork 2/3, position 3/3: baseline starting
+Fork 2/3: baseline validated; 4,390,976.5 ns/call; process 73.1s
+Fork 3/3, position 1/3: native starting
+Fork 3/3: native validated; 2,143,703.1 ns/call; process 12.0s
+Fork 3/3, position 2/3: baseline starting
+Fork 3/3: baseline validated; 4,307,904.1 ns/call; process 70.7s
+Fork 3/3, position 3/3: candidate starting
+Fork 3/3: candidate validated; 2,808,611.9 ns/call; process 57.8s
+VALIDATED: 45 windows; candidate/baseline=0.652; candidate/native=1.263; results: /Users/runner/work/thc/thc/work/ci-performance/comparisons/original-vs-current

@@ -1,0 +1,205 @@
+{
+  "supported": true,
+  "criticalBatteryPercent": 10,
+  "samples": [
+    {
+      "engine": "baseline",
+      "fork": 1,
+      "position": 1,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:21:17.372886+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "baseline",
+      "fork": 1,
+      "position": 1,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:22:49.461377+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "candidate",
+      "fork": 1,
+      "position": 2,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:22:49.492895+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "candidate",
+      "fork": 1,
+      "position": 2,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:24:14.571179+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "native",
+      "fork": 1,
+      "position": 3,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:24:14.617012+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "native",
+      "fork": 1,
+      "position": 3,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:24:27.793194+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "candidate",
+      "fork": 2,
+      "position": 1,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:24:27.837297+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "candidate",
+      "fork": 2,
+      "position": 1,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:25:50.871947+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "native",
+      "fork": 2,
+      "position": 2,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:25:50.913073+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "native",
+      "fork": 2,
+      "position": 2,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:26:04.207533+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "baseline",
+      "fork": 2,
+      "position": 3,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:26:04.237905+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "baseline",
+      "fork": 2,
+      "position": 3,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:27:15.843350+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "native",
+      "fork": 3,
+      "position": 1,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:27:15.888076+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "native",
+      "fork": 3,
+      "position": 1,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:27:29.255362+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "baseline",
+      "fork": 3,
+      "position": 2,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:27:29.278106+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "baseline",
+      "fork": 3,
+      "position": 2,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:28:36.483011+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "candidate",
+      "fork": 3,
+      "position": 3,
+      "phase": "before",
+      "recordedAtUtc": "2026-09-23T07:28:36.520118+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    },
+    {
+      "engine": "candidate",
+      "fork": 3,
+      "position": 3,
+      "phase": "after",
+      "recordedAtUtc": "2026-09-23T07:29:48.476283+00:00",
+      "raw": "Now drawing from 'AC Power'\n",
+      "stderr": "",
+      "returncode": 0,
+      "source": "AC Power"
+    }
+  ],
+  "warnings": []
+}

@@ -1,0 +1,19 @@
+Fork 1/3, position 1/3: baseline starting
+Fork 1/3: baseline validated; 3,124,025.9 ns/call; process 74.7s
+Fork 1/3, position 2/3: candidate starting
+Fork 1/3: candidate validated; 3,166,549.0 ns/call; process 78.7s
+Fork 1/3, position 3/3: native starting
+Fork 1/3: native validated; 2,767,651.0 ns/call; process 14.3s
+Fork 2/3, position 1/3: candidate starting
+Fork 2/3: candidate validated; 3,712,725.6 ns/call; process 75.8s
+Fork 2/3, position 2/3: native starting
+Fork 2/3: native validated; 2,479,436.5 ns/call; process 13.6s
+Fork 2/3, position 3/3: baseline starting
+Fork 2/3: baseline validated; 3,743,789.8 ns/call; process 81.3s
+Fork 3/3, position 1/3: native starting
+Fork 3/3: native validated; 2,606,251.0 ns/call; process 13.3s
+Fork 3/3, position 2/3: baseline starting
+Fork 3/3: baseline validated; 3,271,727.4 ns/call; process 73.4s
+Fork 3/3, position 3/3: candidate starting
+Fork 3/3: candidate validated; 3,162,290.6 ns/call; process 75.4s
+VALIDATED: 45 windows; candidate/baseline=0.968; candidate/native=1.215; results: /Users/runner/work/thc/thc/work/ci-performance/comparisons/compact-headers

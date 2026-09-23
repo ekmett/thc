@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.BytecodeBackendTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:04:06.761Z" hostname="sat12-bq167-7d5c7206-1b1f-48a4-a0ef-01c6aceeb362-8AA2F5F6261E.local" time="4.395">
+  <properties/>
+  <testcase name="unsupportedCodeRejectsAtLoadOrTrapsOnlyWhenTheDiagnosticBranchIsEntered()" classname="thc.BytecodeBackendTest" time="0.277"/>
+  <testcase name="backendSelectionAndMutableProgramStateAreIsolatedWithinASharedEngine()" classname="thc.BytecodeBackendTest" time="0.395"/>
+  <testcase name="allExportedFixturesMatchNativeGhcBeforeAndAfterCompilation()" classname="thc.BytecodeBackendTest" time="1.916"/>
+  <testcase name="managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation()" classname="thc.BytecodeBackendTest" time="0.043"/>
+  <testcase name="coldRaiseKeepsItsBottomPayloadLazyAndMemoizesTheGuestFailure()" classname="thc.BytecodeBackendTest" time="0.018"/>
+  <testcase name="unusedBottomStaysLazyAndFailedThunksAreNotReentered()" classname="thc.BytecodeBackendTest" time="0.075"/>
+  <testcase name="strictConstructorWorkersForceOnlyAtFullSaturationIncludingColdCompiledPaths()" classname="thc.BytecodeBackendTest" time="0.038"/>
+  <testcase name="sharingPartialAndOverapplicationPreserveTheirSemantics()" classname="thc.BytecodeBackendTest" time="0.27"/>
+  <testcase name="aSelfTailCallThroughAPapRestoresBothItsPrefixAndNewArguments()" classname="thc.BytecodeBackendTest" time="0.141"/>
+  <testcase name="compiledBaseCasesCanGrowIntoLongSelfMutualAndCapturedLoops()" classname="thc.BytecodeBackendTest" time="1.171"/>
+  <testcase name="wideArgumentsCapturesAndConstructorFieldsPreserveEveryOperand()" classname="thc.BytecodeBackendTest" time="0.047"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

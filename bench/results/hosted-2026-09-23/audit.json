@@ -1,0 +1,100 @@
+{
+  "runId": 35828824528,
+  "headSha": "894648c26c99887b0227b70aab40758ce53dcd71",
+  "artifactId": 10737792076,
+  "artifactZipSha256": "79f073703781ec50e790e18df1dc5f3edfee3281bb361dfe9fa9158d062a6723",
+  "artifactDigestVerified": true,
+  "candidateJarSha256": "4829e1da3c877c3fd985c2f4d1c3a8eba15a4b7e4199f3dbc158b1e4138c5afd",
+  "sourceProvenance": {
+    "current": {
+      "commit": "894648c26c99887b0227b70aab40758ce53dcd71",
+      "sourceFiles": 25,
+      "allSourceBytesMatchCommit": true
+    },
+    "original": {
+      "commit": "4c116a8493eafad4077a1c5eb9c046bff56fe3c4",
+      "sourceFiles": 19,
+      "allSourceBytesMatchCommit": true
+    }
+  },
+  "host": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "independentlyRevalidatedWindows": 180,
+  "fullMapConfigurations": 6,
+  "compactTests": {
+    "tests": 148,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "comparisons": {
+    "compact-headers": {
+      "guardedWindows": 45,
+      "jvmForksWithLastTierAndNoCompilationEvents": 6,
+      "nativeForkNs": [
+        2767651.0416666665,
+        2479436.5234375,
+        2606250.9765625
+      ],
+      "nativeForkSpreadPercent": 11.624194267719545,
+      "ratios": {
+        "candidate/baseline": 0.9678523219544746,
+        "candidate/native": 1.2149823709848229
+      },
+      "powerWarnings": []
+    },
+    "constructor-class": {
+      "guardedWindows": 45,
+      "jvmForksWithLastTierAndNoCompilationEvents": 6,
+      "nativeForkNs": [
+        1997583.0078125,
+        2054574.21875,
+        2203634.765625
+      ],
+      "nativeForkSpreadPercent": 10.315053592598478,
+      "ratios": {
+        "candidate/baseline": 1.02674500280777,
+        "candidate/native": 1.4162383578815816
+      },
+      "powerWarnings": []
+    },
+    "original-vs-current": {
+      "guardedWindows": 45,
+      "jvmForksWithLastTierAndNoCompilationEvents": 6,
+      "nativeForkNs": [
+        2224469.7265625,
+        2605766.9270833335,
+        2143703.125
+      ],
+      "nativeForkSpreadPercent": 21.55446790624673,
+      "ratios": {
+        "candidate/baseline": 0.6519671371251033,
+        "candidate/native": 1.2625984030896875
+      },
+      "powerWarnings": []
+    },
+    "owned-storage": {
+      "guardedWindows": 45,
+      "jvmForksWithLastTierAndNoCompilationEvents": 6,
+      "nativeForkNs": [
+        2937570.3125,
+        2240560.546875,
+        3121643.2291666665
+      ],
+      "nativeForkSpreadPercent": 39.32420766403961,
+      "ratios": {
+        "candidate/baseline": 1.0154315779404564,
+        "candidate/native": 1.2045532079462637
+      },
+      "powerWarnings": []
+    }
+  },
+  "limitations": [
+    "New hosted arm64 Mac; absolute times are not comparable to local M3.",
+    "Native fork spreads of 10.3\u201339.3% and much larger JVM dispersion overwhelm the 1.5\u20133.2% flag deltas.",
+    "Compiled JAR binaries were not uploaded; JAR digest association is supported by frozen manifest, per-run harness hashes, exact source match and successful build at recorded commit."
+  ]
+}

@@ -1,0 +1,198 @@
+{
+  "sourceVerification": [
+    {
+      "snapshot": "source-notes-v2",
+      "sourceCommit": "4c116a8493eafad4077a1c5eb9c046bff56fe3c4",
+      "sources": [
+        {
+          "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+          "sha256": "2a6847f8e65a49a70e9b13c689a586f14c55f212a6df59d84cafe3f43b3887d0"
+        },
+        {
+          "path": "src/main/java/thc/runtime/Calls.java",
+          "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+        },
+        {
+          "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+          "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+        },
+        {
+          "path": "src/main/kotlin/thc/Json.kt",
+          "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+        },
+        {
+          "path": "src/main/kotlin/thc/Language.kt",
+          "sha256": "6f04e547c64c40a0b6062aa5fcd2086d25bc59883f095c9fd587d635fe983fd8"
+        },
+        {
+          "path": "src/main/kotlin/thc/Main.kt",
+          "sha256": "ec9468fae080a4ec23866769c66fbd7660110cb26d1b4cc71769af225c92fd5d"
+        },
+        {
+          "path": "src/main/kotlin/thc/MapCheck.kt",
+          "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+        },
+        {
+          "path": "src/main/kotlin/thc/Probe.kt",
+          "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/Application.kt",
+          "sha256": "b85a7188fa80226680cecd32a1324c727907aee15ec1d86c4537d3ff7db1dc5c"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+          "sha256": "6c023bcb91d7db54b895b877b9a7e14a5fef0f3516be22664dd304c3d2c846dd"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+          "sha256": "463ee9a842c630e9f27eeaddbcb4568c7051fbbd52de23de7c060579629380b7"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+          "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+          "sha256": "f041aa7be387d947af945a64919529aeaee54a9bda3b1b164150806fa003bdd3"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/Frames.kt",
+          "sha256": "d6e27e494396da7182591ac863dfcd403918af6a4af7240756f09864f57c6a75"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+          "sha256": "d1cb8f96ba2db3a4a4cca2fbf94da18a8a9f78e8674b747d5f8328191df2e026"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+          "sha256": "30e246ea31ff26828b31e23da0b29bf774d17798320469fe1d228d3cfed44860"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+          "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+          "sha256": "5a0f27fd1e3bc1bf30da93347aaf20a704826afbaaa04e2f3e2c9a774343fd10"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/Program.kt",
+          "sha256": "b1c8653d30eec6fa797b6ff6d461ad1e55dc3a72d0cacfb7a6feb20df9483e3f"
+        }
+      ]
+    },
+    {
+      "snapshot": "constructor-class-v6",
+      "sourceCommit": "fab44ea7225073c45b1ed911a1ae3ddf52085cb7",
+      "sources": [
+        {
+          "path": "src/main/java/thc/runtime/BytecodeRoot.java",
+          "sha256": "cb56b04a9e0593ea84e16e301a8de0b7744b85d14779ce001be4dcdfc3908656"
+        },
+        {
+          "path": "src/main/java/thc/runtime/Calls.java",
+          "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+        },
+        {
+          "path": "src/main/java/thc/runtime/RuntimeTypes.java",
+          "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+        },
+        {
+          "path": "src/main/kotlin/thc/Json.kt",
+          "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+        },
+        {
+          "path": "src/main/kotlin/thc/Language.kt",
+          "sha256": "0bcf93c9d7b3757b982d459823658094a2d6d0f8f95fd656f1bb9b6876991bf5"
+        },
+        {
+          "path": "src/main/kotlin/thc/Main.kt",
+          "sha256": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6"
+        },
+        {
+          "path": "src/main/kotlin/thc/MapCheck.kt",
+          "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+        },
+        {
+          "path": "src/main/kotlin/thc/Probe.kt",
+          "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/Application.kt",
+          "sha256": "983555586726fb402891770d8e348d9348fb2657d7260773a1ee1387fd7b6078"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+          "sha256": "7c6102b8852f5db93e07abd5ac05583a85f241c42eddf8736d070c4db0c5c1da"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/BloomValue.kt",
+          "sha256": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+          "sha256": "8c71c0ea57d4276b9067b03edf9b2889fa7f8809435ce797c47736119e663bbc"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt",
+          "sha256": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/CoreEntries.kt",
+          "sha256": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/CoreFields.kt",
+          "sha256": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+          "sha256": "578b57e67f93c61f498ad503c078299c5c269e3f966efabbb4ff6b4ee78b8d30"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/CoreSources.kt",
+          "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/DataValues.kt",
+          "sha256": "604d7861514c30136520c183afb61367d8a1fa6ebeeb6dce64a561818cc01c53"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/EntryArguments.kt",
+          "sha256": "9c7af82a990fe84121de81070323258cd1654b86c3d00ebc494b5923d468e1ce"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/Frames.kt",
+          "sha256": "6846ac154751c3d8485d82a1adc0939ae8ca596774189f1d44c0446b3fae7185"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/GuestExceptions.kt",
+          "sha256": "91cb6c35d5ef04c3006dc3ff732fa2fa4786e121ec588f3e8362c96af4d82e37"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/GuestRoot.kt",
+          "sha256": "95d26f02c73e26857461e42350b1b14a535153647d588582002c26d3dab312c3"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+          "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/LocalJoins.kt",
+          "sha256": "404f83c6e543764458bb426ceb7188226372485a2f91b4f0a0f342c3c75ea9b7"
+        },
+        {
+          "path": "src/main/kotlin/thc/runtime/Program.kt",
+          "sha256": "0507878739789835c758bb66d315a4e231ebc528de07d2aafff4cfcdad5fd3ad"
+        }
+      ]
+    }
+  ],
+  "observedEnvironmentOverrides": {
+    "JAVA_TOOL_OPTIONS": null,
+    "JDK_JAVA_OPTIONS": null,
+    "_JAVA_OPTIONS": null
+  },
+  "notes": "Current default, all storage/class/header toggles disabled. Local M3 power recovered; full per-process power observations retained. This comparison predates boxed value caching."
+}

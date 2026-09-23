@@ -1,0 +1,142 @@
+{
+  "entry": "mapAggregate",
+  "powerWarnings": [],
+  "windowCount": 45,
+  "cycleChecksumSigned64": 902094723,
+  "engines": {
+    "baseline": {
+      "medianNsPerCall": 3484685.546875,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 6057895.5078125,
+          "windowNsPerCall": [
+            6057895.5078125,
+            7674870.279296875,
+            8177728.515625,
+            5453901.529296875,
+            4400506.427734375
+          ],
+          "lastVsFirstPercent": -27.359155963332327
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 3484685.546875,
+          "windowNsPerCall": [
+            3344005.6419270835,
+            4986232.095703125,
+            4333066.40625,
+            3484685.546875,
+            3367658.80078125
+          ],
+          "lastVsFirstPercent": 0.7073301120549491
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 3338519.8567708335,
+          "windowNsPerCall": [
+            3338519.8567708335,
+            3092484.75390625,
+            2962268.8255208335,
+            5764868.083984375,
+            4640307.779296875
+          ],
+          "lastVsFirstPercent": 38.99296629570414
+        }
+      ],
+      "minWindowNsPerCall": 2962268.8255208335,
+      "maxWindowNsPerCall": 8177728.515625
+    },
+    "candidate": {
+      "medianNsPerCall": 3538459.7434895835,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 5409529.134765625,
+          "windowNsPerCall": [
+            3915123.53515625,
+            5409529.134765625,
+            8794352.5390625,
+            5858771.240234375,
+            4028490.640625
+          ],
+          "lastVsFirstPercent": 2.895620136906496
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 3448212.0221354165,
+          "windowNsPerCall": [
+            4952901.693359375,
+            5432500.89453125,
+            3448212.0221354165,
+            3059191.2981770835,
+            2890797.7434895835
+          ],
+          "lastVsFirstPercent": -41.63425962268879
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 3538459.7434895835,
+          "windowNsPerCall": [
+            3538459.7434895835,
+            2912229.8723958335,
+            2930612.4127604165,
+            3939258.8971354165,
+            5158237.22265625
+          ],
+          "lastVsFirstPercent": 45.77634328458582
+        }
+      ],
+      "minWindowNsPerCall": 2890797.7434895835,
+      "maxWindowNsPerCall": 8794352.5390625
+    },
+    "native": {
+      "medianNsPerCall": 2937570.3125,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 2937570.3125,
+          "windowNsPerCall": [
+            3317195.3125,
+            3174988.28125,
+            2721559.8958333335,
+            2937570.3125,
+            2680748.6979166665
+          ],
+          "lastVsFirstPercent": -19.186287047526196
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 2240560.546875,
+          "windowNsPerCall": [
+            2181105.46875,
+            2552792.96875,
+            2360717.7734375,
+            2080094.7265625,
+            2240560.546875
+          ],
+          "lastVsFirstPercent": 2.7259148618371976
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 3121643.2291666665,
+          "windowNsPerCall": [
+            3121643.2291666665,
+            3331871.09375,
+            3166057.2916666665,
+            3089549.4791666665,
+            2672838.5416666665
+          ],
+          "lastVsFirstPercent": -14.377193502020091
+        }
+      ],
+      "minWindowNsPerCall": 2080094.7265625,
+      "maxWindowNsPerCall": 3331871.09375
+    }
+  },
+  "ratios": {
+    "candidate/baseline": 1.0154315779404564,
+    "candidate/native": 1.2045532079462637
+  },
+  "limits": "Exploratory workload comparison. No measured Truffle events does not establish absence of host JIT/GC or external machine contention."
+}

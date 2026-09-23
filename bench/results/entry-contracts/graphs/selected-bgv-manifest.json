@@ -1,5 +1,5 @@
 {
-  "status": "Six original BGVs archived with validated original hashes; topology digests are from the original parsed captures.",
+  "status": "Six original BGVs archived with validated original hashes; hosted reparse independently reproduced all 18 recorded graph-phase topologies.",
   "scope": "Six selected raw bytecode compiler outputs: original-runtime baseline versus cumulative typed-frames-v4 candidate. This is not an entry-contract-only ablation or a throughput measurement.",
   "topologyScope": "Each reparse must reproduce its own recorded capture exactly: node IDs/classes/block assignment, all indexed/labeled edges, complete ordered block node lists and successors. This does not assert baseline/candidate graph equality.",
   "graalVersion": "25.3.4.1",
@@ -390,6 +390,8 @@
       ]
     }
   ],
-  "reparseStatus": "Stopped at 2% battery after 5/6 parsers; final candidate-worker parse and 18-phase topology comparison pending. See reparse-status.json.",
-  "reparseStatusFile": "reparse-status.json"
+  "reparseStatus": "Completed on GitHub run 35828824528 (attempt 1): all six source BGV hashes and 18 exact original phase topologies pass. The interrupted local attempt is retained in reparse-status.json.localAttempt.",
+  "reparseStatusFile": "reparse-status.json",
+  "hostedTopologyVerification": "hosted-topology-verification.json",
+  "hostedReparseProvenance": "hosted-reparse-provenance.json"
 }

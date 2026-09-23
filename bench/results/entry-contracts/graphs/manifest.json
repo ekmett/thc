@@ -1,6 +1,6 @@
 {
-  "recordedUtc": "2026-09-23T06:39:10.396377+00:00",
-  "scope": "Original compact evidence plus six byte-identical selected BGVs and reproduction tools. No guest recapture.",
+  "recordedUtc": "2026-09-23T07:44:50.195662+00:00",
+  "scope": "Original compact evidence, six byte-identical selected BGVs, reproduction tools and independently audited hosted reparse proof. The interrupted local verification remains in the status history. No guest recapture.",
   "originalCompactManifest": {
     "path": "compact-manifest-original.json",
     "sha256": "344f0c4cb5165a266dd43fbe5f565ac70999652dd018763c331fd29faf00b042",
@@ -9,8 +9,8 @@
   "files": [
     {
       "path": "README.md",
-      "sha256": "7052bd252554fa870f4fdac00ac5ad31c3f9185e4b44cf6f9adbb81df2992434",
-      "bytes": 10206
+      "sha256": "ef3893c702b3156df881903b1ca3d8d8736cfebd48e38e7f5d734a4b192f75ea",
+      "bytes": 10728
     },
     {
       "path": "baseline/allocation/allocation-classes.tsv",
@@ -263,6 +263,16 @@
       "bytes": 4108
     },
     {
+      "path": "hosted-reparse-provenance.json",
+      "sha256": "27a8524d59649e1db3659163733ea1a9a54f791c05931e3b371cf0a76708b915",
+      "bytes": 10963
+    },
+    {
+      "path": "hosted-topology-verification.json",
+      "sha256": "2e27ff0bb4cc79010ec6177903ae57d63279cd4adeb1be933939c7216f5de3d4",
+      "bytes": 6603
+    },
+    {
       "path": "native-allocation/count0-repeat1.log",
       "sha256": "946eb8aa4aa84cbee13cd67ce87d3a65d5993037683136537ba65a3f295afca2",
       "bytes": 866
@@ -419,8 +429,8 @@
     },
     {
       "path": "reparse-status.json",
-      "sha256": "3f262a3626fe3083e52202eb70eed11622ab7c310665ef36c07bc191780d6961",
-      "bytes": 759
+      "sha256": "f62b2573d1a645ea2f271f30d681531c66b4480df4029272a6211150d7dafc47",
+      "bytes": 1608
     },
     {
       "path": "reparse.sh",
@@ -429,13 +439,13 @@
     },
     {
       "path": "selected-bgv-README.md",
-      "sha256": "977a34d9449bd90ae1f03f5dfa5b6f643ca60495b5f4786b8ca80e0873d9fa2f",
-      "bytes": 3403
+      "sha256": "4204f3ad37c12edabf3b93517a326020ffe122a4edb8b9a836a32269ae27e0e1",
+      "bytes": 4072
     },
     {
       "path": "selected-bgv-manifest.json",
-      "sha256": "0a4b0c72f0def938c9a081e4db1a7739fe1b7869339700afed4ee77d2a22f5ca",
-      "bytes": 16758
+      "sha256": "bfacc7ff0e176d75b3c0822eb350a7ff194c9d522714b4399c3abc05ece9181d",
+      "bytes": 16976
     },
     {
       "path": "selected-bgv-plan.json",

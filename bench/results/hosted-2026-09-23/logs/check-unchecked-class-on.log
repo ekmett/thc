@@ -1,0 +1,64 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/runner/work/thc/thc/work/ci-performance/frozen/current/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+VERIFIED_MAP	before-requested-compilation	-3	0
+VERIFIED_MAP	before-requested-compilation	0	0
+VERIFIED_MAP	before-requested-compilation	1	59
+VERIFIED_MAP	before-requested-compilation	2	3811
+VERIFIED_MAP	before-requested-compilation	3	7160
+VERIFIED_MAP	before-requested-compilation	4	10512
+VERIFIED_MAP	before-requested-compilation	7	16932
+VERIFIED_MAP	before-requested-compilation	15	65471
+VERIFIED_MAP	before-requested-compilation	16	71366
+VERIFIED_MAP	before-requested-compilation	31	143361
+VERIFIED_MAP	before-requested-compilation	100	573630
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time  1162( 796+367 )ms|AST    2|Inlined  12Y  44N|IR   4535/ 10683|CodeSize   49272|Addr 0x00011a2b8b80|CompId 2695   |UTC 2026-09-23T07:06:51.937|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2
+[engine] opt done   engine=1  id=17    lambda def, ww, ds1                                |Tier 2|Time    32(  21+11  )ms|AST    2|Inlined   1Y   0N|IR    291/   457|CodeSize    2376|Addr 0x00011a2cea80|CompId 2785   |UTC 2026-09-23T07:06:52.107|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:649 0xf2f99fe6
+VERIFIED_MAP	before-requested-compilation	1024	5779685
+[engine] opt done   engine=1  id=22    lambda ww, ds2                                     |Tier 2|Time   317( 212+105 )ms|AST    2|Inlined  14Y  16N|IR   2186/  4975|CodeSize   25220|Addr 0x00011a2e4280|CompId 2803   |UTC 2026-09-23T07:06:52.556|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:649 0x573a55c2
+[engine] opt done   engine=1  id=18    lambda ww, ds                                      |Tier 2|Time   102(  69+33  )ms|AST    2|Inlined   5Y   1N|IR    698/  1028|CodeSize    4416|Addr 0x00011a2f22c0|CompId 2828   |UTC 2026-09-23T07:06:52.663|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:3426 0xf2f99fe6
+VERIFIED_MAP	before-requested-compilation	4095	23067517
+[engine] opt done   engine=1  id=23    lambda ww                                          |Tier 2|Time  1308( 734+574 )ms|AST    2|Inlined  33Y  67N|IR   7814/ 22243|CodeSize  111872|Addr 0x00011a2f6600|CompId 2839   |UTC 2026-09-23T07:06:53.975|Src n/a
+VERIFIED_MAP	before-requested-compilation	4096	23069687
+[engine] opt inval. engine=1  id=23    lambda ww                                                                                                                                                                         |UTC 2026-09-23T07:06:53.989|Src n/a|Reason validRootAssumption local tags updated
+[engine] opt inval. engine=1  id=21    lambda sc, x, ds1                                                                                                                                                                 |UTC 2026-09-23T07:06:53.991|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason validRootAssumption local tags updated
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:06:53.992|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:06:53.993|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:06:53.994|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:06:53.994|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:06:53.994|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=21    lambda sc, x, ds1                                  |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:06:53.994|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2|Reason uncommon trap
+[engine] opt deopt  engine=1  id=23    lambda ww                                          |Invalidated  true|                                                                                                            |UTC 2026-09-23T07:06:53.997|Src n/a|Reason JVMCI invalidate
+VERIFIED_MAP	before-requested-compilation	4097	23069746
+[engine] opt done   engine=1  id=23    lambda ww                                          |Tier 2|Time  1135( 550+585 )ms|AST    2|Inlined  32Y  68N|IR   8025/ 24962|CodeSize  128728|Addr 0x00011a315900|CompId 2897   |UTC 2026-09-23T07:06:55.133|Src n/a
+[engine] opt done   engine=1  id=21    lambda sc, x, ds1                                  |Tier 2|Time   789( 554+235 )ms|AST    2|Inlined  12Y  44N|IR   4746/ 12480|CodeSize   62116|Addr 0x00011a336c40|CompId 2920   |UTC 2026-09-23T07:06:55.926|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs:497 0x573a55c2
+[engine] opt done   engine=1  id=10    lambda k, x, l, r                                  |Tier 2|Time    26(  20+6   )ms|AST    2|Inlined   0Y   0N|IR    631/   433|CodeSize    1768|Addr 0x00011a347c80|CompId 2941   |UTC 2026-09-23T07:06:56.006|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4272 0xf2f99fe6
+VERIFIED_MAP	before-requested-compilation	10000	56348923
+VERIFIED_MAP	before-requested-compilation	65536	370634752
+VERIFIED_MAP	before-requested-compilation	100000	566683714
+[engine] opt done   engine=1  id=26    lambda n                                           |Tier 2|Time   744( 735+9   )ms|AST    2|Inlined   1Y   2N|IR    270/   604|CodeSize    2952|Addr 0x00011a357ec0|CompId 2963   |UTC 2026-09-23T07:06:56.944|Src examples/THC/MapWorkload.hs:30 0xd633756a
+VERIFIED_MAP	after-requested-compilation	-3	0
+VERIFIED_MAP	after-requested-compilation	0	0
+VERIFIED_MAP	after-requested-compilation	1	59
+VERIFIED_MAP	after-requested-compilation	2	3811
+VERIFIED_MAP	after-requested-compilation	3	7160
+VERIFIED_MAP	after-requested-compilation	4	10512
+VERIFIED_MAP	after-requested-compilation	7	16932
+VERIFIED_MAP	after-requested-compilation	15	65471
+VERIFIED_MAP	after-requested-compilation	16	71366
+VERIFIED_MAP	after-requested-compilation	31	143361
+VERIFIED_MAP	after-requested-compilation	100	573630
+VERIFIED_MAP	after-requested-compilation	1024	5779685
+VERIFIED_MAP	after-requested-compilation	4095	23067517
+VERIFIED_MAP	after-requested-compilation	4096	23069687
+VERIFIED_MAP	after-requested-compilation	4097	23069746
+VERIFIED_MAP	after-requested-compilation	10000	56348923
+VERIFIED_MAP	after-requested-compilation	65536	370634752
+[engine] opt done   engine=1  id=15    lambda k, x, l, r                                  |Tier 2|Time   936( 548+389 )ms|AST    2|Inlined  14Y  38N|IR   4663/ 11463|CodeSize   57684|Addr 0x00011a35ca00|CompId 2994   |UTC 2026-09-23T07:06:57.992|Src /Users/runner/work/thc/thc/vendor/containers-0.8/src/Data/Map/Internal.hs:4302 0xf2f99fe6
+VERIFIED_MAP	after-requested-compilation	100000	566683714
+MAP_DIAGNOSTICS {"backend":"bytecode","bytecodeRootCount":58,"sourceNotesEnabled":true,"sourceSpanCount":8656,"sourceRootCount":15,"localJoinCount":10,"localJoinTransfers":874750,"instrumented":true,"thunkEvaluationsByLabel":{"lvl":3,"argument thunk":16408},"compiledEntries":5947487,"thunkEvaluations":16411,"thunkHits":588723,"blackholes":0,"directCacheMisses":25,"indirectCalls":0,"tailBounces":0,"selfTailReentries":0,"trampolineIterations":0,"papAllocations":0,"unsupportedPolicy":"diagnostic-traps","deferredUnsupported":["Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)","Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1","Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef","Unsupported primitive readMutVar#"],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

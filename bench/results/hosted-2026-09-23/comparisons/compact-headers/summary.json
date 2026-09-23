@@ -1,0 +1,142 @@
+{
+  "entry": "mapAggregate",
+  "powerWarnings": [],
+  "windowCount": 45,
+  "cycleChecksumSigned64": 902094723,
+  "engines": {
+    "baseline": {
+      "medianNsPerCall": 3271727.4309895835,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 3124025.87890625,
+          "windowNsPerCall": [
+            2939214.8984375,
+            3664277.5611979165,
+            3057959.5260416665,
+            3124025.87890625,
+            3337283.80078125
+          ],
+          "lastVsFirstPercent": 13.543375224294252
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 3743789.7682291665,
+          "windowNsPerCall": [
+            3743789.7682291665,
+            3400870.9309895835,
+            4735737.630859375,
+            4154976.5625,
+            3305959.3098958335
+          ],
+          "lastVsFirstPercent": -11.694846277130278
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 3271727.4309895835,
+          "windowNsPerCall": [
+            2600577.921875,
+            3590047.8515625,
+            3533290.4192708335,
+            3271727.4309895835,
+            2512579.875
+          ],
+          "lastVsFirstPercent": -3.3837881239702994
+        }
+      ],
+      "minWindowNsPerCall": 2512579.875,
+      "maxWindowNsPerCall": 4735737.630859375
+    },
+    "candidate": {
+      "medianNsPerCall": 3166548.9908854165,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 3166548.9908854165,
+          "windowNsPerCall": [
+            2870265.0286458335,
+            2880369.68359375,
+            3166548.9908854165,
+            3494007.1614583335,
+            5355443.115234375
+          ],
+          "lastVsFirstPercent": 86.58357544637707
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 3712725.640625,
+          "windowNsPerCall": [
+            3712725.640625,
+            3976760.986328125,
+            3923114.9088541665,
+            3381060.4934895835,
+            2775958.1705729165
+          ],
+          "lastVsFirstPercent": -25.231260284947645
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 3162290.58203125,
+          "windowNsPerCall": [
+            3390301.6497395835,
+            3610197.3203125,
+            2814036.1328125,
+            3162290.58203125,
+            3001073.5677083335
+          ],
+          "lastVsFirstPercent": -11.480632764967902
+        }
+      ],
+      "minWindowNsPerCall": 2775958.1705729165,
+      "maxWindowNsPerCall": 5355443.115234375
+    },
+    "native": {
+      "medianNsPerCall": 2606250.9765625,
+      "forks": [
+        {
+          "fork": 1,
+          "medianNsPerCall": 2767651.0416666665,
+          "windowNsPerCall": [
+            3703708.3333333335,
+            2989536.4583333335,
+            2398995.1171875,
+            2767651.0416666665,
+            2462401.3671875
+          ],
+          "lastVsFirstPercent": -33.51524619187977
+        },
+        {
+          "fork": 2,
+          "medianNsPerCall": 2479436.5234375,
+          "windowNsPerCall": [
+            2385278.3203125,
+            2742894.53125,
+            2385400.390625,
+            2497005.859375,
+            2479436.5234375
+          ],
+          "lastVsFirstPercent": 3.9474723902518827
+        },
+        {
+          "fork": 3,
+          "medianNsPerCall": 2606250.9765625,
+          "windowNsPerCall": [
+            2453831.0546875,
+            2616339.84375,
+            2845381.5104166665,
+            2606250.9765625,
+            2164414.0625
+          ],
+          "lastVsFirstPercent": -11.794495453736841
+        }
+      ],
+      "minWindowNsPerCall": 2164414.0625,
+      "maxWindowNsPerCall": 3703708.3333333335
+    }
+  },
+  "ratios": {
+    "candidate/baseline": 0.9678523219544746,
+    "candidate/native": 1.2149823709848229
+  },
+  "limits": "Exploratory workload comparison. No measured Truffle events does not establish absence of host JIT/GC or external machine contention."
+}

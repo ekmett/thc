@@ -1,0 +1,218 @@
+{
+  "recordedUtc": "2026-09-23T07:44:50.195662+00:00",
+  "scope": "Independent local hash/metadata audit of the downloaded hosted reparse result. No local JVM, BGV decompression, graph reparse, guest execution or throughput measurement was performed for this audit.",
+  "passed": true,
+  "run": {
+    "id": 35828824528,
+    "html_url": "https://github.com/ekmett/thc/actions/runs/35828824528",
+    "head_sha": "894648c26c99887b0227b70aab40758ce53dcd71",
+    "path": ".github/workflows/performance.yml",
+    "run_number": 2,
+    "run_attempt": 1,
+    "event": "workflow_dispatch",
+    "status": "completed",
+    "conclusion": "success",
+    "run_started_at": "2026-09-23T06:52:34Z",
+    "updated_at": "2026-09-23T07:39:21Z"
+  },
+  "artifact": {
+    "id": 10737792076,
+    "name": "map-performance-35828824528-1",
+    "size_in_bytes": 344185,
+    "url": "https://api.github.com/repos/ekmett/thc/actions/artifacts/10737792076",
+    "archive_download_url": "https://api.github.com/repos/ekmett/thc/actions/artifacts/10737792076/zip",
+    "digest": "sha256:79f073703781ec50e790e18df1dc5f3edfee3281bb361dfe9fa9158d062a6723",
+    "created_at": "2026-09-23T07:39:10Z",
+    "expires_at": "2026-10-23T07:39:09Z",
+    "workflow_run": {
+      "id": 35828824528,
+      "repository_id": 42295821,
+      "head_repository_id": 42295821,
+      "head_branch": "main",
+      "head_sha": "894648c26c99887b0227b70aab40758ce53dcd71"
+    }
+  },
+  "artifactDigestVerification": {
+    "download": {
+      "path": "work/hosted-performance-35828824528/artifact.zip",
+      "sha256": "79f073703781ec50e790e18df1dc5f3edfee3281bb361dfe9fa9158d062a6723",
+      "bytes": 344185
+    },
+    "computedSha256": "79f073703781ec50e790e18df1dc5f3edfee3281bb361dfe9fa9158d062a6723",
+    "matchesGitHubApiDigest": true,
+    "reportLogAndToolchainBytesMatchZip": true
+  },
+  "apiEvidence": [
+    {
+      "path": "work/hosted-performance-35828824528/run-api.json",
+      "sha256": "01a94fd85cd7481b4883d58f959ed06b0dea3f3781a9202837c5748a83550383",
+      "bytes": 11266
+    },
+    {
+      "path": "work/hosted-performance-35828824528/artifacts-api.json",
+      "sha256": "ccd375e42f52adbe68b59abfb0eabd201969d0ecfe9b98f28152b6b6f88cd1c3",
+      "bytes": 705
+    }
+  ],
+  "hostedEvidence": {
+    "report": {
+      "path": "work/hosted-performance-35828824528/artifact/work/ci-graph-reparse/topology-verification.json",
+      "sha256": "2e27ff0bb4cc79010ec6177903ae57d63279cd4adeb1be933939c7216f5de3d4",
+      "bytes": 6603
+    },
+    "reparseLog": {
+      "path": "work/hosted-performance-35828824528/artifact/work/ci-performance/logs/graph-reparse.log",
+      "sha256": "bf280f6913f43650178662f5c61bdf95acaf80301c5d034620b565db7eae15b2",
+      "bytes": 1061
+    },
+    "toolchainLog": {
+      "path": "work/hosted-performance-35828824528/artifact/work/ci-performance/logs/toolchain.log",
+      "sha256": "9515c0e54a57bb90d3d55faf1250b198c73738caafe65ea215ac95348aeb4ddb",
+      "bytes": 248
+    },
+    "reparseLogText": "Verified compressed archive and all six original BGV hashes.\nRead 9 graphs; selected 3. Index: /Users/runner/work/thc/thc/work/ci-graph-reparse/baseline/parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/index.json\nRead 9 graphs; selected 3. Index: /Users/runner/work/thc/thc/work/ci-graph-reparse/baseline/parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/index.json\nRead 9 graphs; selected 3. Index: /Users/runner/work/thc/thc/work/ci-graph-reparse/baseline/parsed-TruffleHotSpotCompilation-3281[lambda_ww]/index.json\nRead 9 graphs; selected 3. Index: /Users/runner/work/thc/thc/work/ci-graph-reparse/candidate/parsed-TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1]/index.json\nRead 9 graphs; selected 3. Index: /Users/runner/work/thc/thc/work/ci-graph-reparse/candidate/parsed-TruffleHotSpotCompilation-3236[lambda_ww,_ds]/index.json\nRead 9 graphs; selected 3. Index: /Users/runner/work/thc/thc/work/ci-graph-reparse/candidate/parsed-TruffleHotSpotCompilation-3270[lambda_ww]/index.json\nVerified exact original topology for 18 reparsed phases.\n",
+    "toolchainLogText": "java 25.0.4.1 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)\n"
+  },
+  "workflow": {
+    "path": ".github/workflows/performance.yml",
+    "commit": "894648c26c99887b0227b70aab40758ce53dcd71",
+    "sha256": "8084f908a73e366efa8629d8b9d06d23ebd159fc37a585dc7bfdd9c02758a1fd",
+    "command": "bash bench/results/entry-contracts/graphs/reparse.sh work/ci-graph-reparse",
+    "shell": "bash with set -euo pipefail; parser commands are serial; stdout/stderr are piped through tee",
+    "graphCompilation": false
+  },
+  "committedReparseInputs": [
+    {
+      "path": "bench/results/entry-contracts/graphs/selected-bgv-manifest.json",
+      "sha256": "0a4b0c72f0def938c9a081e4db1a7739fe1b7869339700afed4ee77d2a22f5ca",
+      "bytes": 16758,
+      "matchesRunCommit": true
+    },
+    {
+      "path": "bench/results/entry-contracts/graphs/selected-bgv-plan.json",
+      "sha256": "ec4eb8292aef262ee8f9eb3a64bd21c8ade3d0aa2c84bb435bfc4159af88e075",
+      "bytes": 12896,
+      "matchesRunCommit": true
+    },
+    {
+      "path": "bench/results/entry-contracts/graphs/selected-bgv.py",
+      "sha256": "89cbbb4be10639172afda9ddb59db5f1d79ffc4584a9e615d53bc3d1b56872d2",
+      "bytes": 11331,
+      "matchesRunCommit": true
+    },
+    {
+      "path": "bench/results/entry-contracts/graphs/reparse.sh",
+      "sha256": "b0ac92250eedd1d786ea717d1c85051029095a32a3bf160b22e8b2e14d1ff058",
+      "bytes": 1267,
+      "matchesRunCommit": true
+    },
+    {
+      "path": "bench/results/entry-contracts/graphs/tools/original/work/perf-sprint-v2/GraphInspect.java",
+      "sha256": "af0499bfd02f46d5833bcf509885206602d89fa4f8fdb06b9b53ef06400b18a4",
+      "bytes": 9160,
+      "matchesRunCommit": true
+    },
+    {
+      "path": "bench/results/entry-contracts/graphs/baseline/graphs/capture-config.json",
+      "sha256": "8fb40ef129d8ae9a98fe9865f4b489a26ab473fd84147b1ead5a1b1d00d157c6",
+      "bytes": 55512,
+      "matchesRunCommit": true
+    },
+    {
+      "path": "bench/results/entry-contracts/graphs/candidate/graphs/capture-config.json",
+      "sha256": "5dde48ea2a700cf7c225e50097d704dc4ced156cee7cc28130afe475f0e3142f",
+      "bytes": 54553,
+      "matchesRunCommit": true
+    },
+    {
+      "path": "bench/results/entry-contracts/graphs/selected-bgv.tar.xz",
+      "sha256": "e4136fc589cc84bf046879d252d80bcc516b6e60d97b68c4cef093a4e77f1653",
+      "bytes": 5773620,
+      "matchesRunCommit": true
+    }
+  ],
+  "archiveVerification": {
+    "path": "selected-bgv.tar.xz",
+    "sha256": "e4136fc589cc84bf046879d252d80bcc516b6e60d97b68c4cef093a4e77f1653",
+    "bytes": 5773620,
+    "matchesRunCommitAndReport": true,
+    "rawMemberVerification": "The hosted hash-validating extractor verified all six raw member sizes and SHA-256 hashes before parsing. This local audit checked those references against the original committed capture inventories; it did not decompress or rehash raw BGVs."
+  },
+  "sourceBgvs": [
+    {
+      "capture": "baseline",
+      "role": "lookup",
+      "compilationId": 3224,
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "sha256": "15b00c3ab811ce5c0e6a3acf669e3d820b573aca0fd59cab753f30a86e860c79",
+      "bytes": 786584,
+      "matchesOriginalCaptureInventory": true
+    },
+    {
+      "capture": "candidate",
+      "role": "lookup",
+      "compilationId": 3219,
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "sha256": "f81588d804397aea199e1a8fdcc53e97c8d54daecb96ca0333bb8db7902339db",
+      "bytes": 470452,
+      "matchesOriginalCaptureInventory": true
+    },
+    {
+      "capture": "baseline",
+      "role": "fold",
+      "compilationId": 3269,
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "sha256": "4389bb9207cfdb21d67f9febec33fd1af4b3a49c19eb065af62245e9aafb0b21",
+      "bytes": 41738130,
+      "matchesOriginalCaptureInventory": true
+    },
+    {
+      "capture": "candidate",
+      "role": "fold",
+      "compilationId": 3236,
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "sha256": "aa8c3518f730ca47741367d3c45a404b060ecd2acf1fcbaf7d7062de9a4033be",
+      "bytes": 2158764,
+      "matchesOriginalCaptureInventory": true
+    },
+    {
+      "capture": "baseline",
+      "role": "worker",
+      "compilationId": 3281,
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "sha256": "7ff63dd1cb11a83493530d4518eb1e9be1cb7685cbe7b35d8447a2f061d914ca",
+      "bytes": 77445930,
+      "matchesOriginalCaptureInventory": true
+    },
+    {
+      "capture": "candidate",
+      "role": "worker",
+      "compilationId": 3270,
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+      "sha256": "4540410d56c42eefd7231157e1de3ded9e98445be1b2e076e87639c385c21a03",
+      "bytes": 64288928,
+      "matchesOriginalCaptureInventory": true
+    }
+  ],
+  "topologyVerification": {
+    "phasesVerified": 18,
+    "uniqueExpectedPhaseIdentities": 18,
+    "allTopologyDigestsAndCountsMatch": true,
+    "missingPhases": [],
+    "unexpectedPhases": [],
+    "scope": "Each reparse must reproduce its own recorded capture exactly: node IDs/classes/block assignment, all indexed/labeled edges, complete ordered block node lists and successors. This does not assert baseline/candidate graph equality.",
+    "exclusions": "Source text/stack properties, timing and machine-address annotations are excluded from topology hashes. Original source positions remain in the archived BGVs. This is reproduction of archived compiler output, not a new compilation or a cross-runtime equality claim."
+  },
+  "preservedLocalAttempt": {
+    "path": "reparse-status.json",
+    "field": "localAttempt",
+    "originalFileSha256": "3f262a3626fe3083e52202eb70eed11622ab7c310665ef36c07bc191780d6961"
+  },
+  "publicReport": "hosted-topology-verification.json"
+}

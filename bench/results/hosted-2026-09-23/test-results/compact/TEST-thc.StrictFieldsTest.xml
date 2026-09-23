@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.StrictFieldsTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-23T07:30:17.714Z" hostname="sat12-bq167-7d5c7206-1b1f-48a4-a0ef-01c6aceeb362-8AA2F5F6261E.local" time="0.143">
+  <properties/>
+  <testcase name="unknownStrictFieldLevityStillFailsClosed()" classname="thc.StrictFieldsTest" time="0.021"/>
+  <testcase name="strictFieldsShareTheirWhnfWhileAnOrdinaryFieldKeepsItsUnevaluatedThunk()" classname="thc.StrictFieldsTest" time="0.012"/>
+  <testcase name="directSaturatedStrictOperandsDoNotAllocateAnImmediatelyForcedThunk()" classname="thc.StrictFieldsTest" time="0.014"/>
+  <testcase name="partialConstructorRetainsStrictArgumentLazilyUntilItIsSaturated()" classname="thc.StrictFieldsTest" time="0.022"/>
+  <testcase name="strictWorkerForcesIgnoredFieldsInDirectAndFirstClassApplications()" classname="thc.StrictFieldsTest" time="0.026"/>
+  <testcase name="realGhcStrictConstructorPreservesPrimitiveValuesBeforeAndAfterCompilation()" classname="thc.StrictFieldsTest" time="0.046"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

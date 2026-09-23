@@ -1,0 +1,242 @@
+{
+  "scope": "Each reparse must reproduce its own recorded capture exactly: node IDs/classes/block assignment, all indexed/labeled edges, complete ordered block node lists and successors. This does not assert baseline/candidate graph equality.",
+  "archiveSha256": "e4136fc589cc84bf046879d252d80bcc516b6e60d97b68c4cef093a4e77f1653",
+  "passed": true,
+  "phasesVerified": 18,
+  "results": [
+    {
+      "capture": "baseline",
+      "role": "lookup",
+      "compilationId": 3224,
+      "phase": "After PE Tier",
+      "topology": {
+        "sha256": "ce5942e41a2927d6156a1d5af9e4c18420dec2d1650dcdd555cf0b2e9ccc32e6",
+        "nodes": 537,
+        "edges": 1517,
+        "blocks": 70
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "lookup",
+      "compilationId": 3224,
+      "phase": "Before phase HighTierLowering",
+      "topology": {
+        "sha256": "c6bb75874f096ea077549ac1b5b2e60019720ca8dd0ffa04c54d5683513dce0d",
+        "nodes": 480,
+        "edges": 1388,
+        "blocks": 67
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "lookup",
+      "compilationId": 3224,
+      "phase": "After mid tier",
+      "topology": {
+        "sha256": "fd29cd6f43853efb9dadb10e36899411721cb04360a479675f5952d6f442eb49",
+        "nodes": 860,
+        "edges": 2081,
+        "blocks": 146
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "lookup",
+      "compilationId": 3219,
+      "phase": "After PE Tier",
+      "topology": {
+        "sha256": "5ab896c331d144f8bfad452cf2f24d46f27db51aa66865f1ee7f870793f0d0c9",
+        "nodes": 272,
+        "edges": 792,
+        "blocks": 22
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "lookup",
+      "compilationId": 3219,
+      "phase": "Before phase HighTierLowering",
+      "topology": {
+        "sha256": "b3a501743f1c3116a52e16ad66fced684895f7d09cbbafb4f09b11d7e44dd6b7",
+        "nodes": 273,
+        "edges": 795,
+        "blocks": 25
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "lookup",
+      "compilationId": 3219,
+      "phase": "After mid tier",
+      "topology": {
+        "sha256": "46439af05caaf38803a668777fea8859831679221c65b8831efaa455fbed60eb",
+        "nodes": 375,
+        "edges": 853,
+        "blocks": 56
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "fold",
+      "compilationId": 3269,
+      "phase": "After PE Tier",
+      "topology": {
+        "sha256": "0900eeff82afc3e67d01dd2964e0331add50953e6ef2a6835b5d8e269786b56a",
+        "nodes": 489,
+        "edges": 1324,
+        "blocks": 57
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "fold",
+      "compilationId": 3269,
+      "phase": "Before phase HighTierLowering",
+      "topology": {
+        "sha256": "cd38fca3046adf324cdb4bc2bcfee03267c511b452bd054e458b7eadce9471a5",
+        "nodes": 6118,
+        "edges": 22954,
+        "blocks": 708
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "fold",
+      "compilationId": 3269,
+      "phase": "After mid tier",
+      "topology": {
+        "sha256": "d2db66698fdf6483cb4a4246cdee478be9cdc3ad3e46dda5953e0066a496516b",
+        "nodes": 11955,
+        "edges": 33102,
+        "blocks": 2052
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "fold",
+      "compilationId": 3236,
+      "phase": "After PE Tier",
+      "topology": {
+        "sha256": "3c50e3bb66dc1dc297f4731899d95e5a9069718ef9039b626d0c88bb880b1697",
+        "nodes": 221,
+        "edges": 582,
+        "blocks": 13
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "fold",
+      "compilationId": 3236,
+      "phase": "Before phase HighTierLowering",
+      "topology": {
+        "sha256": "c2bc4db73135ddd2ea129e396b6897ffe6444f7971de2524f29a76b2b6e0dbef",
+        "nodes": 568,
+        "edges": 1847,
+        "blocks": 22
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "fold",
+      "compilationId": 3236,
+      "phase": "After mid tier",
+      "topology": {
+        "sha256": "a321d7c021ac72173047054b74be80781b6b77a847a47abadab53f6525282594",
+        "nodes": 996,
+        "edges": 2501,
+        "blocks": 143
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "worker",
+      "compilationId": 3281,
+      "phase": "After PE Tier",
+      "topology": {
+        "sha256": "f3373a6c03977eb9d57563d64859f2b7dd9716ab8dfc74a930f0db172445f8d3",
+        "nodes": 858,
+        "edges": 2884,
+        "blocks": 101
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "worker",
+      "compilationId": 3281,
+      "phase": "Before phase HighTierLowering",
+      "topology": {
+        "sha256": "4fd753202dc1f808eb495c8855a62a6f1d6c856fab8d0fafe1e603527950ce10",
+        "nodes": 10893,
+        "edges": 42775,
+        "blocks": 1249
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "baseline",
+      "role": "worker",
+      "compilationId": 3281,
+      "phase": "After mid tier",
+      "topology": {
+        "sha256": "22b696837d4decc37035c5f206a3922e5bbb94d26a8c6d63efa94f41d073da3b",
+        "nodes": 23452,
+        "edges": 67305,
+        "blocks": 3475
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "worker",
+      "compilationId": 3270,
+      "phase": "After PE Tier",
+      "topology": {
+        "sha256": "d1efaa4a29d12f98a1d1aad9fa2ac2121358510260e557d1373c7ff6e74cfcba",
+        "nodes": 682,
+        "edges": 2443,
+        "blocks": 56
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "worker",
+      "compilationId": 3270,
+      "phase": "Before phase HighTierLowering",
+      "topology": {
+        "sha256": "24bee782625360e1c8ce59f8239a53d49c2d3a9c7ef6182104595c72692008a8",
+        "nodes": 7340,
+        "edges": 24597,
+        "blocks": 548
+      },
+      "matchesOriginal": true
+    },
+    {
+      "capture": "candidate",
+      "role": "worker",
+      "compilationId": 3270,
+      "phase": "After mid tier",
+      "topology": {
+        "sha256": "c42da063ff4c44895f0d42e8d82bb6fb20c94e984d0542069347e7d02faba8e0",
+        "nodes": 16859,
+        "edges": 43178,
+        "blocks": 2051
+      },
+      "matchesOriginal": true
+    }
+  ]
+}

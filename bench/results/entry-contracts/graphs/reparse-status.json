@@ -1,24 +1,46 @@
 {
-  "status": "Stopped at the authorized battery threshold after completing the active parser; no parser failure.",
-  "batteryPercentAtStop": 2,
-  "driverExitCode": 75,
+  "status": "Completed on GitHub-hosted macOS: all six original BGVs and all 18 selected graph-phase topologies verified.",
   "guestExecuted": false,
-  "rawArchiveHashVerification": "passed for archive and all six BGV members",
-  "successfulParses": [
-    "baseline-lookup",
-    "candidate-lookup",
-    "baseline-fold",
-    "candidate-fold",
-    "baseline-worker"
-  ],
-  "parsedGraphs": 5,
+  "parsedGraphs": 6,
   "totalSelectedGraphs": 6,
-  "parsedPhases": 15,
-  "topologyVerificationPerformed": false,
-  "pending": [
-    "candidate-worker parser (compilation 3270)",
-    "exact comparison of all 18 reparsed phase topologies against their original captures"
-  ],
-  "logs": "reparse/",
-  "workingOutput": "work/selected-bgv-reparse"
+  "parsedPhases": 18,
+  "topologyVerificationPerformed": true,
+  "pending": [],
+  "hostedAttempt": {
+    "runUrl": "https://github.com/ekmett/thc/actions/runs/35828824528",
+    "runId": 35828824528,
+    "runAttempt": 1,
+    "headSha": "894648c26c99887b0227b70aab40758ce53dcd71",
+    "runConclusion": "success",
+    "report": "hosted-topology-verification.json",
+    "provenance": "hosted-reparse-provenance.json",
+    "archiveSha256": "e4136fc589cc84bf046879d252d80bcc516b6e60d97b68c4cef093a4e77f1653",
+    "sourceBgvsVerified": 6,
+    "phasesVerified": 18,
+    "passed": true
+  },
+  "localAttempt": {
+    "status": "Stopped at the authorized battery threshold after completing the active parser; no parser failure.",
+    "batteryPercentAtStop": 2,
+    "driverExitCode": 75,
+    "guestExecuted": false,
+    "rawArchiveHashVerification": "passed for archive and all six BGV members",
+    "successfulParses": [
+      "baseline-lookup",
+      "candidate-lookup",
+      "baseline-fold",
+      "candidate-fold",
+      "baseline-worker"
+    ],
+    "parsedGraphs": 5,
+    "totalSelectedGraphs": 6,
+    "parsedPhases": 15,
+    "topologyVerificationPerformed": false,
+    "pending": [
+      "candidate-worker parser (compilation 3270)",
+      "exact comparison of all 18 reparsed phase topologies against their original captures"
+    ],
+    "logs": "reparse/",
+    "workingOutput": "work/selected-bgv-reparse"
+  }
 }
