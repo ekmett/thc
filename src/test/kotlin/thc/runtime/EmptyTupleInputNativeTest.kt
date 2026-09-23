@@ -47,20 +47,25 @@ class EmptyTupleInputNativeTest {
     }
     @Test fun genuineEmptyInputsExecuteInlinedWithInstalledHostAndGuestEntries() = native(true)
     @Test fun genuineEmptyInputsExecuteAcrossResidualCallsWithInstalledHostAndGuestEntries() = native(false)
-    private fun native(inlining: Boolean) {
-        val rows = File(folder, "oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(118, rows.values.sumOf { it.size }); assertEquals(17, rows.size)
+    @Test fun independentScalarInputsKeepCompiledEntryAndCompactPositions() {
+        native(true, 2); native(false, 2)
+    }
+    private fun native(inlining: Boolean, arity: Int = 1) {
+        val rows = File(folder, if (arity == 1) "oracle.tsv" else "oracle-pairs.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        assertEquals(if (arity == 1) 118 else 7, rows.values.sumOf { it.size }); assertEquals(if (arity == 1) 17 else 1, rows.size)
         for (stage in listOf("pre", "post")) for ((name, cases) in rows) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val linked = CoreModules.reachable(module(stage), name) + ("instrument" to true)
                 val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
-                val host = program.hostEntryTarget(1)
-                val function = context.asValue(EntryValue(program, name, 1))
+                val host = program.hostEntryTarget(arity)
+                val function = context.asValue(EntryValue(program, name, arity))
                 val label = "$stage/$backend/$name/inlining=$inlining"
                 fun check(row: List<String>) {
-                    assertEquals(row[2].toLong(), function.execute(row[1].toLong()).asLong(), "$label/${row[1]}")
+                    val inputs = row.subList(1, row.lastIndex).map { it.toLong() as Any }.toTypedArray()
+                    assertEquals(arity, inputs.size)
+                    assertEquals(row.last().toLong(), function.execute(*inputs).asLong(), "$label/${inputs.toList()}")
                     released(language)
                 }
                 cases.forEach(::check)
