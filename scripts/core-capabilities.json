@@ -336,7 +336,7 @@
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
-    "Unboxed tuples require exact recursive result layouts; aggregate arguments, captures, ordinary let bindings, join arguments/captures, sums, scalar void tuple components, and first-class tuple constructors remain unsupported."
+    "Unboxed tuples require exact recursive result layouts; aggregate arguments, captures, ordinary let bindings, join arguments/captures, sums, and first-class tuple constructors remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots."
   ],
   "aggregateResults": [
     "unboxed-tuple"

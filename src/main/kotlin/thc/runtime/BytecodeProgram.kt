@@ -63,6 +63,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         fun child() = Scope(function, LinkedHashMap(locals), LinkedHashMap(joins), source, LinkedHashMap(tuples))
         fun withSource(location: CoreSourceLocation?) = Scope(function, locals, joins, location, tuples)
         fun bindLocal(name: String, value: Local) { locals[name] = value; joins.remove(name); tuples.remove(name) }
+        fun bindVoid(name: String, proof: CoreRepresentation) = bindLocal(name, Local(-1, name, false, proof.copy(evaluated = true)))
         fun bindTuple(name: String, proof: CoreRepresentation, fields: List<Local>) {
             tuples[name] = proof to fields; locals.remove(name); joins.remove(name)
         }
@@ -232,7 +233,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val argumentIds = args.map { it["id"] as String }.toSet()
         args.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "formal argument") }
         if ((free - argumentIds).any { it in outer.tuples }) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
-        val captureSources = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
+        val freeLocals = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
+        freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
+        val captureSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
         captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
         context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry) }
         context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
@@ -338,7 +341,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         is SourcedExpression -> undecorated(value.expression)
         else -> value
     }
-    private fun read(local: Local, resolve: Boolean = true): Expression = LocalExpression(local, resolve)
+    private fun read(local: Local, resolve: Boolean = true): Expression =
+        if (local.id < 0 && local.proof.kind == CoreKind.VOID) ProvenExpression(constant(Unit), local.proof)
+        else LocalExpression(local, resolve)
     private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.copy(evaluated = true))
     private fun force(value: Expression): Expression {
         if (value.proof.isTuple) return value
@@ -699,7 +704,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         val component = shape.components[index]
                         val offset = shape.offsets[index]
                         if (component.isTuple) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.flatten(component).size))
-                        else if (component.kind == CoreKind.VOID) throw UnsupportedCore("Unsupported Core aggregate void component")
+                        else if (component.kind == CoreKind.VOID) {
+                            e.builder.beginDiscardVoid(); operand.emit(e); e.builder.endDiscardVoid()
+                        }
                         else {
                             e.builder.beginStoreLocal(destination[offset]); operand.emit(e); e.builder.endStoreLocal()
                         }
@@ -1000,7 +1007,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val offset = shape.offsets[index]
                 val width = TupleShape.flatten(component).size
                 if (component.isTuple) scope.bindTuple(id, component, fields.subList(offset, offset + width))
-                else if (component.kind == CoreKind.VOID) throw UnsupportedCore("Unsupported Core aggregate void component binding")
+                else if (component.kind == CoreKind.VOID) scope.bindVoid(id, component)
                 else scope.bindLocal(id, fields[offset].copy(name = id))
             }
         } else if (alt[0] != "default" || ids.isNotEmpty()) throw RuntimeFault("Invalid tuple alternative")

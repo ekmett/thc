@@ -967,6 +967,8 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
         Local(layout.bind(id), if (proof.present) proof.isLong else primitive, proof, cell, entry).also { locals[id] = it; joins.remove(id) }
     fun bindTuple(id: String, proof: CoreRepresentation, slots: IntArray): Local =
         Local(-1, false, proof, false, tupleSlots = slots).also { locals[id] = it; joins.remove(id) }
+    fun bindVoid(id: String, proof: CoreRepresentation): Local =
+        Local(-1, false, proof.copy(evaluated = true), false).also { locals[id] = it; joins.remove(id) }
     fun refine(id: String, proof: CoreRepresentation) { locals[id]?.let { locals[id] = it.copy(proof = proof, primitive = if (proof.present) proof.isLong else it.primitive) } }
     fun publish(id: String, proof: CoreRepresentation) {
         refine(id, proof)
@@ -1068,7 +1070,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val free = freeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
         args.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "formal argument") }
-        val captured = (free - argumentIds).filter { it in outer.locals }
+        val freeLocals = (free - argumentIds).filter { it in outer.locals }
+        freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot < 0 && local.proof.kind == CoreKind.VOID } }
+            .forEach { scope.bindVoid(it, outer.locals.getValue(it).proof) }
+        val captured = freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot >= 0 || local.proof.kind != CoreKind.VOID } }
         captured.forEach { CoreRepresentations.requireScalar(outer.locals.getValue(it).proof, "capture") }
         val captureSources = captured.map { outer.locals.getValue(it).slot }.toIntArray()
         val captureKinds = captured.map { outer.locals.getValue(it).primitive }.toBooleanArray()
@@ -1171,6 +1176,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             scope.joins[id]?.let { joinJump(it, emptyList(), emptyList<Boolean>(), scope) }
                 ?: scope.locals[id]?.let {
                     if (it.tupleSlots != null) TupleLocalRead(TupleShape(it.proof, language as thc.Language), it.tupleSlots)
+                    else if (it.slot < 0 && it.proof.kind == CoreKind.VOID) Literal(Unit).proven(it.proof)
                     else LocalRead(it.slot, it.cell).proven(it.proof)
                 }
                 ?: globals[id]?.let { GlobalRead(it).proven(globalProofs.getValue(id)) }
@@ -1368,7 +1374,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val width = TupleShape.flatten(component).size
                 val offset = shape.offsets[index]
                 if (component.isTuple) local.bindTuple(id, component.copy(evaluated = true), slots.copyOfRange(offset, offset + width))
-                else if (component.kind == CoreKind.VOID) throw UnsupportedCore("Unsupported Core aggregate void component binding")
+                else if (component.kind == CoreKind.VOID) local.bindVoid(id, field)
                 else local.locals[id] = Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false)
             }
         } else if (alt[0] != "default" || ids.isNotEmpty()) throw RuntimeFault("Invalid tuple alternative")

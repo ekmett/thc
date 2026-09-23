@@ -5,7 +5,7 @@ import GHC.Plugins
 import qualified Thc.Sources as Sources
 import qualified Thc.Cbv as Cbv
 import qualified Thc.Demands as Demands
-import Thc.Wired (wiredApplication, wiredRhs, isWiredVoid)
+import Thc.Wired (wiredApplication, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType)
@@ -323,9 +323,9 @@ constructor d con = O
 
 expr :: Ctx -> CoreExpr -> J
 expr d original
-  | Just lowered <- wiredApplication original = expr (d { canCertify = False }) lowered
+  | Just lowered <- wiredApplication original = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
   | Var v <- original, isWiredVoid v = A [S "void",O (("rep",voidRep) : sourceFields d)]
-  | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = False }) lowered
+  | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
   | otherwise = exprRaw d original
 
 -- Erasing a cast, tick or type-only application preserves the original result

@@ -73,8 +73,8 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             listOf("tuple", proof.components.map(::signature)) else listOf("scalar", proof.primReps ?: listOf("?"))
         fun validate(proof: CoreRepresentation) {
             if (proof.kind != CoreKind.UNKNOWN) throw RuntimeFault("Tuple proof must retain its aggregate kind")
-            if (proof.primReps == null || proof.components!!.any { !it.isTuple && it.kind == CoreKind.VOID })
-                throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved or void fields")
+            if (proof.primReps == null)
+                throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved fields")
             val fields = flatten(proof)
             if (fields.any { (!it.isLong && it.kind !in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
                     it.primReps?.singleOrNull()?.let(HandoffLayout::supports) != true })
