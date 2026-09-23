@@ -54,3 +54,8 @@ It makes no native or post-Tidy claim. Linux x86 preparation requires the native
 oracle. Production graph captures are a separate gate: actual packed floating
 ADD/SUB/MUL, no surviving vector/wrapper/array allocations or intermediate lane
 boxes, no residual field traffic/calls, and no unintended fused arithmetic.
+
+The [retained x86-64 graph checks](../bench/experiments/floatx4-foundation/README.md)
+pass all twelve pre/post-Tidy × backend × arithmetic captures with physical
+`VADDPS`/`VSUBPS`/`VMULPS`. Full default and handoff suites each pass 355 tests;
+the public scalar Long result box remains and is accounted for separately.
