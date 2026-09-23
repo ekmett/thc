@@ -88,10 +88,13 @@ def publish_result(api, sha, state, run):
     # GitHub's actual Build run/attempt, without executing any PR artifacts.
     target = (f"{run['html_url']}/attempts/{run['run_attempt']}" if run
               else f"https://github.com/{api.repo}/actions/workflows/build.yml")
-    existing = api.call("GET", f"commits/{sha}/status")["statuses"]
-    if any(status["context"] == REQUIRED_STATUS and status["state"] == state
-           and status.get("creator", {}).get("login") == "github-actions[bot]"
-           and status.get("target_url") == target for status in existing):
+    # The combined status response omits creator. The reverse-chronological
+    # status history retains it; only this context's latest entry counts.
+    existing = next((status for status in api.pages(f"commits/{sha}/statuses")
+                     if status["context"].casefold() == REQUIRED_STATUS.casefold()), None)
+    if (existing and existing["state"] == state
+            and (existing.get("creator") or {}).get("login") == "github-actions[bot]"
+            and existing.get("target_url") == target):
         return
     api.call("POST", f"statuses/{sha}", {
         "context": REQUIRED_STATUS, "state": state, "target_url": target,
@@ -172,7 +175,30 @@ def reconcile(api, report=print, sleep=time.sleep):
             if not still_authorized(api, fresh) or fresh["head"]["sha"] != sha:
                 report(f"#{number}: changed while inspecting; waiting")
                 return
-            api.call("PUT", f"{path}/update-branch", {"expected_head_sha": sha})
+            try:
+                api.call("PUT", f"{path}/update-branch", {"expected_head_sha": sha})
+            except HTTPError as error:
+                if error.code in (403, 405):
+                    error.close()
+                    headers = error.headers or {}
+                    if error.code == 403 and (headers.get("Retry-After")
+                                              or headers.get("X-RateLimit-Remaining") == "0"):
+                        report(f"#{number}: branch update rate limited; waiting for a later run")
+                        return
+                    # The built-in token cannot update some workflow-changing
+                    # branches. Keep this PR blocked without starving others.
+                    report(f"#{number}: GitHub refused branch update (HTTP {error.code}); "
+                           "a maintainer must update the branch against main and push "
+                           "(workflow edits can require a manual update)")
+                    continue
+                if error.code in (409, 422):
+                    error.close()
+                    # 422 also covers an expected_head_sha race. Re-read all
+                    # state on the next run; never dispatch this rejected head.
+                    report(f"#{number}: GitHub rejected branch update (HTTP {error.code}); "
+                           "a later run will recheck the branch; update manually if it persists")
+                    return
+                raise
             for _ in range(15):
                 sleep(2)
                 updated = api.call("GET", path)
