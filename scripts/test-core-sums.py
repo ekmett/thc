@@ -136,7 +136,9 @@ class SumAuditTest(unittest.TestCase):
 
     def test_capability_and_constructor_saturation(self):
         module=fixture();self.accepted(module)
-        self.assertFalse(run(module,cap=CAP)['accepted'])
+        disabled=copy.deepcopy(CAP)
+        disabled['aggregateResults']=[kind for kind in disabled.get('aggregateResults',[]) if kind!='unboxed-sum']
+        self.assertFalse(run(module,cap=disabled)['accepted'])
         for args in ([],[lit(),lit()]):
             forged=fixture();value=forged['bindings'][1]['expr'][2];value[2]=args;value[3]=[False]*len(args)
             self.rejected(forged)

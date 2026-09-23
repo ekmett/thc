@@ -62,8 +62,9 @@ remain unsupported, including unused formals and nested zero-width tuples. Exact
 join results use typed local slots inside the same guest root; no result carrier
 or pool loan is needed for that local control flow. Join captures of whole tuples
 remain unsupported; individual scalar/reference fields can be used normally.
-Sums, unknown/null aggregate layouts and unsupported physical leaves are also
-rejected. Host entries must return a
+[Binary sum results](sum-results.md) reuse this completion protocol with exact tag
+and projection validation. Nested sums, unknown/null aggregate layouts and
+unsupported physical leaves remain rejected. Host entries must return a
 scalar/reference result; diagnostic mode defers an unsupported host result to a
 trap without executing a tuple producer.
 

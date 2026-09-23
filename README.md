@@ -104,7 +104,9 @@ operations with exact typed lanes and bit-sensitive correctness gates.
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
 [Exact empty tuple inputs](docs/empty-tuple-inputs.md) retain logical arity with no payload fields.
-Other aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
+Other aggregate arguments, join captures and ordinary captures remain explicit boundaries.
+[Binary unboxed sum results](docs/sum-results.md) use exact typed destinations; sum inputs,
+storage, joins, nested sums and unresolved layouts remain rejected.
 
 [Managed MutVar operations](docs/mutvars.md) execute ordinary ST/STRef code with
 lazy reference storage and exact State sequencing on both backends.

@@ -131,6 +131,7 @@ jobs:
         run: |
           python3 scripts/test-audit-core.py
           python3 scripts/test-sum-layout.py
+          python3 scripts/test-core-sums.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-core-vectors.py
           python3 scripts/test-floatx4-model.py
@@ -181,6 +182,7 @@ jobs:
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
             build/sum-layout/
+            build/sum-result/
             build/tuple-return/
             build/state-tuple/checks.json
             build/state-tuple/provenance.json

@@ -36,6 +36,7 @@ internal class CoreFields(info: Map<String, Any?>) {
                 throw RuntimeFault("Constructor field type count mismatch: $id")
             for (index in types.indices) {
                 val proof = CoreRepresentations.parse(types[index])
+                CoreRepresentations.requireNoSum(proof, "constructor field")
                 if (!proof.present || proof.primReps != reps[index])
                     throw RuntimeFault("Constructor field type disagrees with its primitive representation: $id field $index")
                 val strictField = strict[index] as? Boolean ?: throw RuntimeFault("Unknown constructor field strictness: $id")

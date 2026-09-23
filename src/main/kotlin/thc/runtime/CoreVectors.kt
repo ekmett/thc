@@ -7,16 +7,16 @@ internal data class CoreVector(val lanes: Int, val element: String) {
         val INT32X4 = CoreVector(4, "Int32ElemRep")
         val FLOATX4 = CoreVector(4, "FloatElemRep")
         val DOUBLEX2 = CoreVector(2, "DoubleElemRep")
-        fun parse(raw: Any?, kind: CoreKind, reps: List<String>?, components: List<CoreRepresentation>?): CoreVector? {
+        fun parse(raw: Any?, kind: CoreKind, reps: List<String>?, aggregate: Boolean): CoreVector? {
             if (kind != CoreKind.VECTOR) {
-                if (raw != null || components == null && reps?.any { it.startsWith("VecRep ") } == true)
+                if (raw != null || !aggregate && reps?.any { it.startsWith("VecRep ") } == true)
                     throw RuntimeFault("Vector representation lacks exact vector metadata")
                 return null
             }
             val record = raw as? Map<*, *> ?: throw RuntimeFault("Missing Core vector shape")
             val lanes = record["lanes"] as? Number ?: throw RuntimeFault("Invalid vector lane count")
             val element = record["element"] as? String ?: throw RuntimeFault("Invalid vector element kind")
-            if (lanes.toDouble() != lanes.toInt().toDouble() || components != null)
+            if (lanes.toDouble() != lanes.toInt().toDouble() || aggregate)
                 throw RuntimeFault("Invalid Core vector shape")
             val vector = CoreVector(lanes.toInt(), element)
             if (reps != listOf("VecRep ${vector.lanes} $element")) throw RuntimeFault("Vector shape disagrees with primitive representation")
