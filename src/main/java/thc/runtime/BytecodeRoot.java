@@ -490,6 +490,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class LessThanNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) < (y & mask) ? 1L : 0L; } }
     @Operation @ConstantOperand(type = long.class, name = "mask")
     public static final class LessEqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) <= (y & mask) ? 1L : 0L; } }
+    @Operation public static final class QuotientUnsigned { @Specialization public static long apply(long x, long y) { return Long.divideUnsigned(x, y); } }
+    @Operation public static final class RemainderUnsigned { @Specialization public static long apply(long x, long y) { return Long.remainderUnsigned(x, y); } }
+    @Operation public static final class GreaterThanUnsigned { @Specialization public static long apply(long x, long y) { return Long.compareUnsigned(x, y) > 0 ? 1L : 0L; } }
+    @Operation public static final class GreaterEqualUnsigned { @Specialization public static long apply(long x, long y) { return Long.compareUnsigned(x, y) >= 0 ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class QuotientNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) / (y & mask); } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class RemainderNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) % (y & mask); } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class EqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) == (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class NotEqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) != (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class GreaterThanNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) > (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class GreaterEqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) >= (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitAndNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitOrNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x | y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitXorNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x ^ y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitNotNarrowWord { @Specialization public static long apply(long mask, long x) { return ~x & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class ShiftLeftNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x << (int) y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class ShiftRightNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) >>> (int) y; } }
     @Operation public static final class ToLong { @Specialization public static long apply(long x) { return x; } }
 
     private static RuntimeFault fail(String message) {
