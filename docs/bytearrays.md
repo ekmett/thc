@@ -7,6 +7,9 @@ The bounded runtime supports the GHC 9.14.1 operations `newByteArray#`,
 installed bytestring `$wpack`/`$wgo` bodies and the original, source-exported
 `GHC.Internal.List.$wlenAcc`. Preparation requires those exact dependencies and
 all five primitives to remain reachable; it does not substitute library bodies.
+The [Int-array extension](int-arrays.md) adds `readIntArray#`, `writeIntArray#`,
+and `indexIntArray#` over the same backing storage, with element rather than
+byte offsets.
 
 `ByteArray#` and `MutableByteArray# s` are each one unlifted boxed reference,
 represented directly by a mutable JVM primitive `byte[]`, with no wrapper

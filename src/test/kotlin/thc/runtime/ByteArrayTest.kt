@@ -20,6 +20,7 @@ import java.security.MessageDigest
 class ByteArrayTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val names = listOf("shortBytes", "orderedBytes")
+    private val byteOperations = listOf(ByteArrayOp.NEW, ByteArrayOp.WRITE, ByteArrayOp.FREEZE, ByteArrayOp.SIZE, ByteArrayOp.INDEX)
     private fun manifest() = Json.parse(File(root, "build/bytearray/manifest.json").readText()) as Map<String, Any?>
     private fun merged(paths: List<String>) = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
@@ -176,7 +177,7 @@ class ByteArrayTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (operation in ByteArrayOp.entries) for (mutation in 0..6) for (diagnostic in listOf(false, true)) {
+                for (operation in byteOperations) for (mutation in 0..6) for (diagnostic in listOf(false, true)) {
                     val module = CoreModules.reachable(merged(paths), "orderedBytes")
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val args = app[2] as MutableList<Any?>
@@ -206,7 +207,7 @@ class ByteArrayTest {
                         program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
                     }, "$backend/${operation.primitive}/mutation$mutation/$diagnostic")
                 }
-                for (operation in ByteArrayOp.entries) {
+                for (operation in byteOperations) {
                     val module = CoreModules.reachable(merged(paths), "orderedBytes")
                     val app = applications(module).first { (it[1] as List<*>).take(2) == listOf("prim", operation.primitive) }
                     val primitive = (app[1] as List<*>).toList(); app.clear(); app.addAll(primitive)

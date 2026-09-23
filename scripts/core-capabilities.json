@@ -337,7 +337,10 @@
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
-    "indexWord8Array#": 2
+    "indexWord8Array#": 2,
+    "readIntArray#": 3,
+    "writeIntArray#": 4,
+    "indexIntArray#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -424,6 +427,36 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "readIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "writeIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "indexIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] }
+      ],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
     "newByteArray#": {
       "arguments": [
         {

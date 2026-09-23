@@ -103,6 +103,8 @@ aggregate arguments, join captures, ordinary captures and sums remain explicit b
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
 pack/length/unpack with ordered writes and native/model checks on both backends.
+[Int-array operations](docs/int-arrays.md) extend the same byte storage to
+public `UArray`/`STUArray` examples with native-endian, full-width values.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 28 arithmetic/comparison/conversion primops, checked against
