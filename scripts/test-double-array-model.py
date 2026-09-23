@@ -11,6 +11,14 @@ model = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model)
 
 
+def state_root(body):
+    void_rep = dict(primReps=[], kind='void', evaluated=True)
+    formal = dict(id='test.state', type='State# RealWorld', rep=copy.deepcopy(void_rep),
+                  lifted=False, coercion=False)
+    return ['lam', [{}], ['app', ['lam', [formal], body, {}],
+                          [['void', dict(rep=void_rep)]], [False], False, False, {}], {}]
+
+
 class DoubleArrayModelTest(unittest.TestCase):
     def test_public_models_against_rational_cell_updates(self):
         for raw in model.inputs():
@@ -82,19 +90,48 @@ class DoubleArrayModelTest(unittest.TestCase):
         helper = dict(id='test.readDoubleSlot', name='readDoubleSlot', arity=2,
                       expr=['lam', [{}, {}], ['app', ['prim', 'readDoubleArray#'], []], dict(resultRep=result)])
         root = dict(id='test.moveDoubleBits', name='moveDoubleBits',
-                    expr=['lam', [{}], ['app', ['var', helper['id']], [['var', 'a'], ['var', 's']]]])
+                    expr=state_root(['app', ['var', helper['id']], [['var', 'a'], ['var', 's']]]))
         report = dict(roots=[root['id']], reachableBindings=[dict(id=root['id']), dict(id=helper['id'])])
         modules = [('test', dict(bindings=[root, helper]))]
-        self.assertEqual(model.check_structure('moveDoubleBits', report, modules), 2)
+        self.assertEqual(model.check_structure('moveDoubleBits', report, modules), 3)
         for mutation in ('shape', 'lane', 'saturation', 'missing', 'duplicate'):
             bad = copy.deepcopy(modules)
             rr, hh = bad[0][1]['bindings']
             if mutation == 'shape': hh['expr'][-1]['resultRep'].pop('aggregate')
             elif mutation == 'lane': hh['expr'][-1]['resultRep']['components'][1]['primReps'] = ['FloatRep']
-            elif mutation == 'saturation': rr['expr'][2][2].pop()
+            elif mutation == 'saturation': rr['expr'][2][1][2][2].pop()
             elif mutation == 'missing': hh['name'] = 'wrongHelper'
             else: rr['expr'].append(copy.deepcopy(rr['expr'][2]))
             with self.assertRaises(AssertionError): model.check_structure('moveDoubleBits', report, bad)
+
+    def test_structure_counts_exactly_one_immediate_zero_slot_state_lambda(self):
+        root = dict(id='test.unboxedDoubleST', name='unboxedDoubleST',
+                    expr=state_root(['lit', 'int', '0']))
+        report = dict(roots=[root['id']], reachableBindings=[dict(id=root['id'])])
+        modules = [('test', dict(bindings=[root]))]
+        self.assertEqual(model.check_structure('unboxedDoubleST', report, modules), 2)
+        for mutation in ('missing', 'conditional', 'extra', 'formal_count', 'non_state',
+                         'nonzero_formal', 'lifted', 'coercion', 'arg_count', 'nonvoid_arg',
+                         'nonzero_arg', 'flags'):
+            with self.subTest(mutation=mutation):
+                bad = copy.deepcopy(modules)
+                expr = bad[0][1]['bindings'][0]['expr']
+                call = expr[2]
+                local = call[1]
+                if mutation == 'missing': expr[2] = local[2]
+                elif mutation == 'conditional': expr[2] = ['case', ['lit', 'int', '0'], 'v',
+                                                          [['default', None, [], call]]]
+                elif mutation == 'extra': local[2] = ['lam', [], local[2]]
+                elif mutation == 'formal_count': local[1].append(copy.deepcopy(local[1][0]))
+                elif mutation == 'non_state': local[1][0]['type'] = 'Proxy# RealWorld'
+                elif mutation == 'nonzero_formal': local[1][0]['rep']['primReps'] = ['IntRep']
+                elif mutation == 'lifted': local[1][0]['lifted'] = True
+                elif mutation == 'coercion': local[1][0]['coercion'] = True
+                elif mutation == 'arg_count': call[2].clear()
+                elif mutation == 'nonvoid_arg': call[2][0][0] = 'var'
+                elif mutation == 'nonzero_arg': call[2][0][-1]['rep']['primReps'] = ['IntRep']
+                else: call[3] = [True]
+                with self.assertRaises(AssertionError): model.check_structure('unboxedDoubleST', report, bad)
 
 
 if __name__ == '__main__':

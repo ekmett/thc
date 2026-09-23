@@ -22,7 +22,9 @@ GROUPS = [dict(source='examples/THC/UnboxedDoubleArrays.hs', module='THC.Unboxed
                entries=['moveDoubleBits', 'indexDoubleBits'])]
 ENTRIES = [name for group in GROUPS for name in group['entries']]
 HELPERS = {'moveDoubleBits': 'readDoubleSlot', 'indexDoubleBits': 'indexDoubleSlot'}
-EXPECTED_CALLS = {name: 2 if name in HELPERS else 1 for name in ENTRIES}
+# All actual guest roots: public entry, its immediate runRW# State# lambda,
+# and (for movement entries) the retained primitive helper. No host bridge.
+EXPECTED_CALLS = {name: 3 if name in HELPERS else 2 for name in ENTRIES}
 REQUIRED = {name: DOUBLE_PRIMITIVES | STORAGE for name in ENTRIES[:2]}
 EXACT_MOVEMENT = {
     'moveDoubleBits': {'newByteArray#': 2, 'writeIntArray#': 1, 'readDoubleArray#': 1,
@@ -107,13 +109,35 @@ def nodes(value):
             yield from nodes(item)
 
 
+def check_state_lambda(name, expr):
+    check(expr[0] == 'lam', name+': entry lost its outer lambda')
+    call = expr[2]
+    check(call[0] == 'app' and call[1][0] == 'lam',
+          name+': State# lambda must be called immediately, not conditionally')
+    state_lambda = call[1]
+    check(len(state_lambda[1]) == 1, name+': State# lambda must have one formal')
+    formal = state_lambda[1][0]
+    void_rep = dict(primReps=[], kind='void', evaluated=True)
+    check(formal.get('type') == 'State# RealWorld' and formal.get('rep') == void_rep
+          and formal.get('lifted') is False and formal.get('coercion') is False,
+          name+': local lambda must have an actual zero-slot State# formal')
+    check(len(call[2]) == 1 and call[2][0][0] == 'void'
+          and call[2][0][-1].get('rep') == void_rep,
+          name+': State# lambda must receive exactly one zero-slot void argument')
+    check(call[3:6] == [[False], False, False], name+': State# call flags changed')
+    lambdas = [node for node in nodes(expr) if node and node[0] == 'lam']
+    check(len(lambdas) == 2 and lambdas[0] is expr and lambdas[1] is state_lambda,
+          name+': unexpected additional local lambda')
+
+
 def check_structure(name, report, modules):
-    """Pin the real closure and straight-line residual calls, not just a helper's name."""
+    """Pin every guest root, including the immediate State# lambda and residual calls."""
     bindings = {b['id']: b for _, module in modules for b in module['bindings']}
     reachable = {b['id'] for b in report['reachableBindings']}
     roots = report['roots']
     check(len(roots) == 1, name+': expected one root')
     root = bindings[roots[0]]
+    check_state_lambda(name, root['expr'])
     helper_name = HELPERS.get(name)
     helper = None
     if helper_name:
@@ -136,6 +160,8 @@ def check_structure(name, report, modules):
     if helper:
         check(len(calls[0][2]) == helper['arity'], name+': residual helper is not saturated')
         expr = helper['expr']
+        check(sum(bool(node) and node[0] == 'lam' for node in nodes(expr)) == 1,
+              name+': helper gained an additional local lambda')
         check(expr[0] == 'lam' and expr[2][0] == 'app' and expr[2][1][0] == 'prim',
               name+': helper is no longer a direct primitive')
         primitive = 'readDoubleArray#' if name == 'moveDoubleBits' else 'indexDoubleArray#'
@@ -150,7 +176,9 @@ def check_structure(name, report, modules):
         else:
             check(rep == dict(primReps=['DoubleRep'], kind='double', evaluated=False),
                   name+': helper lost its scalar Double# result')
-    return EXPECTED_CALLS[name]
+    guest_calls = 2 + len(calls)  # Entry + unconditional State# lambda + residual helper.
+    check(guest_calls == EXPECTED_CALLS[name], name+': actual guest root count changed')
+    return guest_calls
 
 
 def hashes(paths):
@@ -249,7 +277,7 @@ def main():
                     'Public arithmetic is bounded exact dyadic arithmetic, not arbitrary floating arithmetic.',
                     'Movement excludes signaling NaNs; neither arithmetic NaN payloads nor floating host arguments are claimed.',
                     'Machine Int width is 64 bits; Int/Double storage follows recorded native byte order.',
-                    'Guest call counts describe uninlined Core roots/helpers, not an additional host bridge root.']),indent=2)+'\n')
+                    'Guest call counts cover all actual roots, including the immediate local State# lambda and residual helper, but exclude the host bridge.']),indent=2)+'\n')
     print(f'Prepared {len(ENTRIES)} Double array entries / {len(actual)} native-model rows / strict pre+post Core')
 
 
