@@ -95,7 +95,10 @@ being lowered to `LoopNode`, causing Graal escape analysis to exceed the existin
 30-second compilation limit. Nonrecursive groups now dispatch once without a
 loop; their RHS lexical scopes cannot jump back into the same group. Recursive
 joins still use loops, and ancestor transfers, typed results and lazy values
-retain their semantics. The unchanged workload then passed compilation without
+retain their semantics. Catch dispatch structurally excludes the entry body so
+opaque exception edges cannot make partial evaluation expand it twice. This
+also avoids exceeding the graph-size limit with opt-in handoff transport.
+The unchanged workload then passed compilation without
 raising limits or adding Haskell optimizer fences. Regression tests exercise
 deep acyclic nesting, actual cloned compiled targets, shadowed ancestor jumps,
 full-width values and recursive/nonrecursive reference-result laziness.
@@ -121,6 +124,9 @@ IntMap, IntSet or the primitive entries. The existing Linux/macOS library CI ste
 prepares all groups and runs both explicit backends; no separate opt-in is needed
 for the IntSet workload.
 
+To additionally exercise opt-in dense argument handoff transport, run
+`JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/try-libraries.sh --rerun-tasks`.
+
 The initial Set/IntMap checkpoint was validated on Linux x86-64 with GHC 9.14.1
 and GraalVM 25.3.4.1: 225 JVM tests
 passed, and each backend passed 2,916 native-oracle comparisons (972 interpreted,
@@ -130,3 +136,15 @@ entry counter delta. All six supported entries recorded zero unsupported traps
 and blackholes. Set was rejected for its explicit unboxed-tuple representation
 on both backends and is excluded from those execution counts. A deliberately
 stale source fingerprint was also rejected before guest loading.
+
+The IntSet checkpoint was validated on the same Linux x86-64 toolchain:
+242 JVM tests passed in both default and opt-in handoff configurations. Default
+AST, default bytecode and opt-in AST handoff each passed 7,572 native-oracle
+comparisons: 2,524 interpreted, 72 compiled-warm, 2,452 after-compilation cold and
+2,524 final compiled. Each configuration required installed-code entry on all
+2,596 compiled-warm/final calls, with zero unsupported traps or blackholes across
+all 13 supported entries. The 22 Set oracle rows remain an explicit unsupported
+frontier and are excluded from execution counts. A deliberately modified IntSet
+expected value in the manifest was rejected against the fingerprinted native
+oracle before guest loading. The 30-second compilation timeout and 100,000 graph
+size limit remain unchanged.
