@@ -5,6 +5,7 @@
     "src/main/kotlin/thc/runtime/DataValues.kt"
   ],
   "externalBindings": [],
+  "tagToEnum": "concrete-nullary-family",
   "literalKinds": [
     "float",
     "double",
