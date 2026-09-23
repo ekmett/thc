@@ -20,14 +20,27 @@ def run(command, **kwargs):
 
 PRIMITIVES = {'newByteArray#', 'writeWord8Array#', 'unsafeFreezeByteArray#',
               'sizeofByteArray#', 'indexWord8Array#'}
-ENTRIES = ['shortBytes', 'orderedBytes']
+ENTRIES = ['shortBytes', 'orderedBytes', 'shortUncons', 'copiedBytes']
 
 
 def mathematical(name, x):
     if name == 'orderedBytes':
         return 3 + x % 256 + ((x + 17) % 256) * 257 + ((x + 2) % 256) * 65537 + ((x + 71) % 256) * 16777259
+    if name == 'copiedBytes':
+        source = [x % 256, (x + 17) % 256, 0, 255]
+        destination = [11, 22, 33, 44, 55, 66]
+        key = x % 1024
+        start, end = key % 5, key // 5 % 7
+        count = min(key // 35 % 5, 4 - start, 6 - end)
+        destination[end:end + count] = source[start:start + count]
+        value = 10 + sum(byte * 257**i for i, byte in enumerate(source + destination))
+        value %= 2**64
+        return value if value < 2**63 else value - 2**64
     value = 0
     n = abs(x) % 33
+    if name == 'shortUncons':
+        value = sum(((x + i * 17) % 256) * 33**i for i in range(n)) % 2**64
+        return value if value < 2**63 else value - 2**64
     for i in range(n):
         value = value * 33 + (x + i * 17) % 256
     value = (value + n) % 2**64
@@ -73,13 +86,21 @@ def main():
             report_path.write_text(json.dumps(report, indent=2) + '\n')
             artifacts.append(str(report_path.relative_to(ROOT)))
             assert report['accepted'], (stage, name, report_path)
-            assert PRIMITIVES <= {p['name'] for p in report['primitives']}, (stage, name, report)
+            required = PRIMITIVES | ({'copyByteArray#'} if name in ('shortUncons', 'copiedBytes') else set())
+            assert required <= {p['name'] for p in report['primitives']}, (stage, name, report)
             if name == 'orderedBytes':
                 counts = {primitive['name']: len(primitive['uses']) for primitive in report['primitives']}
                 for primitive, count in {'newByteArray#': 2, 'unsafeFreezeByteArray#': 2,
                                          'writeWord8Array#': 5, 'indexWord8Array#': 4}.items():
                     assert counts[primitive] == count, (stage, primitive, counts)
             identities = {binding['id'] for binding in report['reachableBindings']}
+            if name == 'shortUncons':
+                for suffix in ('Data.ByteString.Short.Internal.$wuncons', 'Data.ByteString.Short.Internal.$wpack',
+                               'GHC.Internal.List.$wlenAcc'):
+                    assert any(identity.endswith(':' + suffix) for identity in identities), (stage, suffix, identities)
+            if name == 'copiedBytes':
+                copies = next(p for p in report['primitives'] if p['name'] == 'copyByteArray#')
+                assert len(copies['uses']) == 3, (stage, copies)
             if name == 'shortBytes':
                 for suffix in ('Data.ByteString.Short.Internal.$wpack', 'Data.ByteString.Short.Internal.$wgo',
                                'GHC.Internal.List.$wlenAcc'):

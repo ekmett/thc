@@ -349,7 +349,8 @@
     "broadcastDoubleX2#": 1,
     "plusDoubleX2#": 2,
     "minusDoubleX2#": 2,
-    "timesDoubleX2#": 2
+    "timesDoubleX2#": 2,
+    "copyByteArray#": 6
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -578,6 +579,48 @@
         "primReps": [
           "Word8Rep"
         ]
+      }
+    },
+    "copyByteArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
       }
     }
   }
