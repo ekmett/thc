@@ -5,7 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
-from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_REP, VECTOR_FLOAT_REP, LANE_FLOAT_REP, TUPLE_FLOAT_REP, signature_matches
+from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_REP, VECTOR_FLOAT_REP, LANE_FLOAT_REP, TUPLE_FLOAT_REP, VECTOR_DOUBLE_REP, LANE_DOUBLE_REP, TUPLE_DOUBLE_REP, signature_matches
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
 audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
@@ -21,6 +21,34 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def test_double_local_shape_requires_exact_binary64_lanes(self):
+        m=fixture(); body=m['bindings'][0]['expr'][2]
+        body[1][1][1]='broadcastDoubleX2#'
+        body[1][2][0]=['lit','double','1.0000000000000002',dict(rep=copy.deepcopy(LANE_DOUBLE_REP))]
+        body[1][6]['rep']=copy.deepcopy(VECTOR_DOUBLE_REP)
+        body[4]['binder']['rep']=copy.deepcopy(VECTOR_DOUBLE_REP)
+        self.assertTrue(run(m)['accepted'])
+        for kind in ('unknown', 'float', 'long'):
+            bad=copy.deepcopy(m)
+            bad['bindings'][0]['expr'][2][1][2][0]=['lit','float','1.0',dict(rep=dict(LANE_DOUBLE_REP,kind=kind))]
+            self.assertFalse(run(bad)['accepted'],kind)
+        for wrong in (VECTOR32_REP, VECTOR_REP, VECTOR_FLOAT_REP, TUPLE_DOUBLE_REP):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][6]['rep']=copy.deepcopy(wrong)
+            self.assertFalse(run(bad)['accepted'])
+        self.assertTrue(signature_matches(TUPLE_DOUBLE_REP,TUPLE_DOUBLE_REP))
+        for wrong in (dict(LANE_DOUBLE_REP,kind='unknown'), LANE_FLOAT_REP,
+                      dict(kind='unknown',aggregate='unboxed-tuple',primReps=['DoubleRep'],components=[LANE_DOUBLE_REP])):
+            bad=copy.deepcopy(TUPLE_DOUBLE_REP); bad['components'][0]=wrong
+            self.assertFalse(signature_matches(TUPLE_DOUBLE_REP,bad))
+        bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2]=[]
+        self.assertFalse(run(bad)['accepted'])
+    def test_real_double_core_local_entries_and_formal_frontier(self):
+        from doublex2_model import entries
+        path=ROOT.parent/'build/simd-doublex2/pre-core/SimdDoubleX2.json'
+        if not path.exists(): self.skipTest('Double SIMD Core export not generated')
+        m=json.loads(path.read_text())
+        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_float_local_shape_requires_concrete_float_lanes(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastFloatX4#'

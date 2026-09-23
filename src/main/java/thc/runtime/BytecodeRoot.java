@@ -609,6 +609,35 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class VectorDoublePack {
+        @Specialization public static DoubleX2 pack(double first, double second) {
+            return DoubleX2.pack(first, second);
+        }
+    }
+    @Operation public static final class VectorDoubleBroadcast {
+        @Specialization public static DoubleX2 broadcast(double value) { return DoubleX2.broadcast(value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorDoubleBinary {
+        @Specialization public static DoubleX2 binary(int operation, DoubleX2 first, DoubleX2 second) {
+            return switch (operation) {
+                case 0 -> DoubleX2.add(first, second);
+                case 1 -> DoubleX2.subtract(first, second);
+                case 2 -> DoubleX2.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid DoubleX2 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    public static final class VectorDoubleUnpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second, DoubleX2 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setDouble(bytecode, frame, value.lane(0)); second.setDouble(bytecode, frame, value.lane(1));
+        }
+    }
+
     /** Evaluates a zero-width field for effects while producing no destination value. */
     @Operation public static final class DiscardVoid {
         @Specialization public static void discard(Object value) { TupleResultsKt.requireVoidCarrier(value); }
