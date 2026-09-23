@@ -56,5 +56,12 @@ allocation reuse. Cases include two differently weighted outstanding pairs,
 lazy bottom fields, empty/singleton/nested results, 20,000 self-tail and 20,001
 mutual-tail iterations, PAPs and overapplication. `TupleRepresentationTest` covers
 logical-shape forgeries, mismatched-layout cleanup, fresh-carrier ownership and
-independence from scalar handoff. Graph evidence is reported separately; these
-semantic tests do not by themselves establish register allocation or no spills.
+independence from scalar handoff. The [production graph experiment](../bench/experiments/tuple-runtime-graphs/README.md)
+executes five real exported Haskell consumers on both backends, with normal and
+disabled guest inlining. All twenty configurations agree with native GHC and keep
+the selected entry compiled after execution. The ten normal-inlining graphs
+eliminate tuple carriers, their field traffic and guest calls; their final AArch64
+LIR computes the dynamic leaves in scalar registers. A host-result `Long` box
+remains. Residual controls retain a call boundary and typed slab traffic. This
+proves those compiled entries, not the inlining frequency of arbitrary programs
+or a multiple-register return convention across residual calls.
