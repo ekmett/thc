@@ -38,6 +38,7 @@ tasks.test {
         include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
+            "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
             "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
@@ -63,7 +64,7 @@ tasks.test {
     inputs.files(fileTree("scripts") {
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutvar.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "core_vectors.py",
-            "prepare-state-tuple-audit.py", "core_*.py", "generate-scalar-signatures.py",
+            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "core_*.py", "generate-scalar-signatures.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)

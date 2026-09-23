@@ -99,7 +99,8 @@ fields and joins remain explicit boundaries.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
-aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
+[Exact empty tuple inputs](docs/empty-tuple-inputs.md) retain logical arity with no payload fields.
+Other aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
 
 [Managed MutVar operations](docs/mutvars.md) execute ordinary ST/STRef code with
 lazy reference storage and exact State sequencing on both backends.
