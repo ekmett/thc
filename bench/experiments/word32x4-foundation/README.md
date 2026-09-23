@@ -90,6 +90,20 @@ python3 bench/experiments/word32x4-foundation/test-runtime-audit.py
 python3 -O bench/experiments/word32x4-foundation/test-runtime-audit.py
 ```
 
-This initial harness commit makes no actual Word32X4 capture claim. Native
-fixtures, exact source snapshots and successful production captures are separate
-required evidence.
+## Retained x86-64 capture
+
+[evidence-x86_64/README.md](evidence-x86_64/README.md) records twelve actual
+captures at runtime `b048144c75a775f6f1538bf7e1b04119f39a1163` on eak-quartus.
+Every root checks 466 native rows twice after compilation: 11,184 comparisons.
+All twelve pass their first check, with no reader correction or guest replay.
+All 48 result-connected lanes have exact ZeroExtend32-to-64 observations;
+allocated-register LIR contains four each of XMM VPADDD, VPSUBD and VPMULLD.
+
+The selected inlined graphs retain no local vector carrier, payload or lane box.
+The public Long box remains; six bytecode captures retain exactly proved virtual
+frame indexedTags metadata, not vector data. This does not establish throughput,
+no spills, a globally allocation-free ABI, cross-platform execution or machine-code
+disassembly. The separate instrumented tests establish exact compiled-entry counts.
+
+The harness alone is not execution evidence. These claims depend on the retained
+native fixtures, exact source snapshots and successful actual runtime captures.

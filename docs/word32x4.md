@@ -90,9 +90,9 @@ closure membership, no hidden lambda or alias, saturated unconditional helper
 calls using original scalar inputs, machine-Int formals/results, all four
 unsigned tuple leaves and exact vector primitive counts. Counts exclude the
 public host bridge. Static proof alone is not compiled execution. The full
-pre/post × AST/bytecode × inlining-on/off corpus would require 39,056 compiled
-invocations and 46,512 guest entries per handoff mode; runtime tests must verify
-those counts separately with unchanged targets and empty handoff pools.
+pre/post × AST/bytecode × inlining-on/off runtime corpus checks 39,056 compiled
+invocations and 46,512 guest entries per handoff mode, requiring those exact
+per-call deltas separately from static proof, unchanged targets and empty pools.
 
 The genuine `vectorArgument` negative must fail each stage with exactly one
 vector-formal issue and no missing globals. Two additional controls deliberately
@@ -130,3 +130,26 @@ Fixture/model/native evidence alone establishes no JVM compilation, packed
 machine instructions, allocation elimination, throughput, vector calling
 conventions or cross-architecture execution. Those require separately retained
 runtime tests and graph/LIR evidence.
+
+## Retained compiled-code evidence
+
+The [x86-64 evidence](../bench/experiments/word32x4-foundation/evidence-x86_64/README.md)
+retains twelve actual pre/post × AST/bytecode × plus/minus/times captures at
+runtime `b048144c75a775f6f1538bf7e1b04119f39a1163`. All pass on their first check,
+without reader correction or guest replay. Every output lane feeds an exact
+unsigned 32-to-64-bit extension; all 48 observations are connected to the public
+checksum. Each graph has one live i32x4 arithmetic node and one corresponding
+physical XMM VPADDD, VPSUBD or VPMULLD instruction.
+
+The captures check 11,184 native answers, with installed entry validity and
+active-target identity checked after every input. Selected inlined graphs
+eliminate the local vector carrier, payload and lane boxes. The public Long
+result box and precisely proved virtual frame-tag deoptimization metadata remain.
+This is bounded packed-code evidence, not throughput, globally allocation-free
+execution, no spills, vector ABI or cross-platform native conformance.
+
+The complete JVM suite passes 481 tests in each of default and dense-handoff
+modes with zero failures, errors or skips. All 198 suite reports and both full
+logs are retained. Classes, seven focused tests, both complete modes and the
+twelve graph captures pass first time. The forced dense rebuild executes all
+twelve Gradle tasks and preserves every frozen source, JAR and JDK snapshot hash.
