@@ -133,6 +133,46 @@ class DoubleArrayModelTest(unittest.TestCase):
                 else: call[3] = [True]
                 with self.assertRaises(AssertionError): model.check_structure('unboxedDoubleST', report, bad)
 
+    def test_structure_rejects_lambda_hidden_in_let_binding_dictionary(self):
+        leaf = ['lit', 'int', '0']
+        hidden = dict(id='test.local', name='local', expr=['lam', [{}], leaf])
+        root = dict(id='test.unboxedDoubleST', name='unboxedDoubleST',
+                    expr=state_root(['let', False, [hidden], leaf]))
+        report = dict(roots=[root['id']], reachableBindings=[dict(id=root['id'])])
+        modules = [('test', dict(bindings=[root]))]
+        with self.assertRaisesRegex(AssertionError, 'unexpected additional local lambda'):
+            model.check_structure('unboxedDoubleST', report, modules)
+
+    def test_only_complete_proven_join_prefix_is_exempt_not_its_body(self):
+        leaf = ['lit', 'int', '0']
+        result = dict(primReps=['IntRep'], kind='long', evaluated=False)
+        join = dict(id='test.join', name='join', joinValueArity=1, joinResultRep=result,
+                    info=dict(joinArity=1),
+                    expr=['lam', [{}], leaf, dict(resultRep=copy.deepcopy(result))])
+        root = dict(id='test.unboxedDoubleST', name='unboxedDoubleST',
+                    expr=state_root(['let', False, [join], ['app', ['var', 'test.join'], [leaf]]]))
+        report = dict(roots=[root['id']], reachableBindings=[dict(id=root['id'])])
+        modules = [('test', dict(bindings=[root]))]
+        self.assertEqual(model.check_structure('unboxedDoubleST', report, modules), 2)
+        for mutation in ('diagnostic_only', 'partial', 'oversized', 'zero', 'boolean',
+                         'fractional', 'missing_result', 'empty_result', 'wrong_result', 'nested_lambda'):
+            with self.subTest(mutation=mutation):
+                bad = copy.deepcopy(modules)
+                binding = bad[0][1]['bindings'][0]['expr'][2][1][2][2][0]
+                if mutation == 'diagnostic_only': binding.pop('joinValueArity')
+                elif mutation == 'partial': binding['expr'][1].append({})
+                elif mutation == 'oversized': binding['joinValueArity'] = 2
+                elif mutation == 'zero': binding['joinValueArity'] = 0
+                elif mutation == 'boolean': binding['joinValueArity'] = True
+                elif mutation == 'fractional': binding['joinValueArity'] = 1.5
+                elif mutation == 'missing_result': binding.pop('joinResultRep')
+                elif mutation == 'empty_result':
+                    binding['joinResultRep'] = {}
+                    binding['expr'][-1]['resultRep'] = {}
+                elif mutation == 'wrong_result': binding['joinResultRep']['primReps'] = ['DoubleRep']
+                else: binding['expr'][2] = ['lam', [{}], leaf]
+                with self.assertRaises(AssertionError): model.check_structure('unboxedDoubleST', report, bad)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -107,6 +107,32 @@ def nodes(value):
         yield value
         for item in value:
             yield from nodes(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from nodes(item)
+
+
+def guest_lambdas(name, expr):
+    # CoreJoins consumes a positive joinValueArity prefix, not info.joinArity.
+    # Exempt only an entire proven prefix; keep traversing its body so a join
+    # returning a function or containing another local function cannot hide it.
+    join_prefixes = set()
+    for node in nodes(expr):
+        if node and node[0] == 'let':
+            for binding in node[2]:
+                arity, rhs = binding.get('joinValueArity'), binding.get('expr')
+                if (type(arity) is int and arity > 0 and isinstance(rhs, list)
+                        and rhs[0] == 'lam' and arity == len(rhs[1])):
+                    result = binding.get('joinResultRep')
+                    # These fixtures' local joins return scalar Int#, and the
+                    # complete-prefix result must agree with lambdaResult.
+                    check(isinstance(result, dict) and result.get('primReps') == ['IntRep']
+                          and result.get('kind') == 'long' and isinstance(rhs[-1], dict)
+                          and result == rhs[-1].get('resultRep'),
+                          name+': join result proof changed')
+                    join_prefixes.add(id(rhs))
+    return [node for node in nodes(expr)
+            if node and node[0] == 'lam' and id(node) not in join_prefixes]
 
 
 def check_state_lambda(name, expr):
@@ -125,7 +151,7 @@ def check_state_lambda(name, expr):
           and call[2][0][-1].get('rep') == void_rep,
           name+': State# lambda must receive exactly one zero-slot void argument')
     check(call[3:6] == [[False], False, False], name+': State# call flags changed')
-    lambdas = [node for node in nodes(expr) if node and node[0] == 'lam']
+    lambdas = guest_lambdas(name, expr)
     check(len(lambdas) == 2 and lambdas[0] is expr and lambdas[1] is state_lambda,
           name+': unexpected additional local lambda')
 
@@ -160,7 +186,7 @@ def check_structure(name, report, modules):
     if helper:
         check(len(calls[0][2]) == helper['arity'], name+': residual helper is not saturated')
         expr = helper['expr']
-        check(sum(bool(node) and node[0] == 'lam' for node in nodes(expr)) == 1,
+        check(len(guest_lambdas(name, expr)) == 1,
               name+': helper gained an additional local lambda')
         check(expr[0] == 'lam' and expr[2][0] == 'app' and expr[2][1][0] == 'prim',
               name+': helper is no longer a direct primitive')
