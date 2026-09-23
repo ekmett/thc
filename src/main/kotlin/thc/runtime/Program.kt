@@ -874,8 +874,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val fn = expr[1] as List<Any?>; val args = expr[2] as List<List<Any?>>
             val flags = expr.getOrNull(3) as? List<*> ?: throw RuntimeFault("Application lacks representation flags")
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
+            val callStrict = CoreCallDemands.application(expr)
             if (fn[0] == "var" && fn[1] in scope.joins) {
-                joinJump(scope.joins.getValue(fn[1] as String), args, flags, scope)
+                joinJump(scope.joins.getValue(fn[1] as String), args, flags, scope, callStrict)
             } else {
             val constructorStrictFields = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size)
                 strictConstructorFields(fn[1] as String, args.size) else null
@@ -889,7 +890,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 // A saturated constructor's strict operand is already a CBV
                 // context. Compile it directly, without an allocate/force thunk.
                 // Partial constructors deliberately take the ordinary lazy path.
-                argument(arg, scope, lifted && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true)
+                argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true)
             }.toTypedArray()
             when {
                 fn[0] == "prim" -> primitive(fn[1] as String, nodes)
@@ -985,11 +986,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "prim" -> throw UnsupportedCore("Unsaturated primitive ${expr[1]}")
         else -> throw UnsupportedCore("Unsupported Core node ${expr[0]}")
     }
-    private fun joinJump(target: LocalJoinTarget, args: List<List<Any?>>, flags: List<*>, scope: Scope): Expr {
+    private fun joinJump(target: LocalJoinTarget, args: List<List<Any?>>, flags: List<*>, scope: Scope,
+                         callStrict: BooleanArray = BooleanArray(args.size)): Expr {
         if (args.size != target.slots.size) throw RuntimeFault("Local join arity mismatch")
         val nodes = args.mapIndexed { index, arg ->
             val lifted = flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity")
-            argument(arg, scope, lifted && !target.entryStrict[index])
+            argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index])
         }.toTypedArray()
         val temps = IntArray(nodes.size) { scope.layout.bind("<join argument $it>") }
         return LocalJoinCall(target, nodes, temps, metrics)

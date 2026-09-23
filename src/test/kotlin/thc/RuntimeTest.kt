@@ -50,9 +50,9 @@ class RuntimeTest {
         executionContext().use { context ->
             val shared = loadEntry(context, modules, "shared")
             assertEquals(120L, shared.execute(7L).asLong())
-            // costlyBox's shared x is entered once; a second field demand hits its update.
+            // The shared x is entered once. A demanded call can then pass its
+            // evaluated value twice without revisiting the update thunk.
             assertTrue(count(shared, "thunkEvaluations") > 0)
-            assertTrue(count(shared, "thunkHits") > 0)
             val entries = diagnostics(shared)["thunkEvaluationsByLabel"] as Map<*, *>
             assertEquals(1L, (entries["x"] as Number).toLong(), "Shared Core binding x entered exactly once")
             val under = loadEntry(context, modules, "under")
