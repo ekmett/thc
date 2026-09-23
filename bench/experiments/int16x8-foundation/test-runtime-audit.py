@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Mutation tests for the gate, using synthetic parser data, never runtime evidence."""
 from collections import Counter
+import copy
 import importlib.util
 import hashlib
 from pathlib import Path
@@ -149,6 +150,13 @@ class LirGateTest(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 audit.inspect_lir(value, 'lambda a, b', 'plusCase', 'x86_64')
 
+    def test_identical_metadata_headers_are_not_recompilations(self):
+        header = 'begin_compilation\n  method "TruffleHotSpotCompilation-123[lambda a, b]"\nend_compilation\n'
+        audit.inspect_lir(header + cfg(), 'lambda a, b', 'plusCase', 'x86_64')
+        for bad in (header.replace('-123[', '-124['), header.replace('lambda a, b', 'lambda c, d')):
+            with self.assertRaises(AssertionError):
+                audit.inspect_lir(bad + cfg(), 'lambda a, b', 'plusCase', 'x86_64')
+
     def test_different_root_or_architecture_fails(self):
         for target, arch in (('lambda c, d', 'x86_64'), ('lambda a, b', 'aarch64')):
             with self.assertRaises(AssertionError):
@@ -156,6 +164,25 @@ class LirGateTest(unittest.TestCase):
 
 
 class OracleGateTest(unittest.TestCase):
+    def test_offline_checker_correction_cannot_change_runtime_or_probe(self):
+        root = Path('/test')
+        sources = [dict(path=str(root / 'bench/experiments/int16x8-foundation' / name), sha256='old')
+                   for name in ('runtime-audit.py', 'test-runtime-audit.py', 'Int16X8RuntimeGraphProbe.java', 'run-runtime.sh')]
+        sources.append(dict(path='/test/src/main/java/thc/runtime/Int16X8.java', sha256='runtime'))
+        initial = dict(sources=sources, runtimeJars=['jar'], jdkFiles=['jdk'], sourceRevision='old')
+        current = copy.deepcopy(initial)
+        current['sources'][0]['sha256'] = 'fixed'
+        current['sourceRevision'] = 'fixed'
+        with self.assertRaises(AssertionError): audit.verify_snapshot(initial, current, root)
+        correction = audit.verify_snapshot(initial, current, root, True)
+        self.assertFalse(correction['guestExecutionRepeated'])
+        for index in (2, 3, 4):
+            bad = copy.deepcopy(current); bad['sources'][index]['sha256'] = 'changed'
+            with self.assertRaises(AssertionError): audit.verify_snapshot(initial, bad, root, True)
+        for key in ('runtimeJars', 'jdkFiles'):
+            bad = copy.deepcopy(current); bad[key] = ['changed']
+            with self.assertRaises(AssertionError): audit.verify_snapshot(initial, bad, root, True)
+
     def test_digest_matches_sha256(self):
         source = Path(__file__)
         self.assertEqual(audit.digest(source), hashlib.sha256(source.read_bytes()).hexdigest())

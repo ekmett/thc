@@ -185,8 +185,10 @@ def inspect_graph(graph, entry):
 
 def inspect_lir(text, target, entry, arch):
     require(arch in ('x86_64', 'amd64'), 'This bounded gate proves x86 XMM word instructions only: ' + arch)
-    roots = re.findall(r'  method "TruffleHotSpotCompilation-\d+\[(.*?)\]"', text)
-    require(len(roots) == 1 and roots[0] == target, 'Unexpected or repeated compilation roots: ' + str(roots))
+    # Graal can repeat metadata headers for the SAME compilation. Different
+    # compilation IDs are still retries, even if their human root names match.
+    roots = set(re.findall(r'  method "TruffleHotSpotCompilation-(\d+)\[(.*?)\]"', text))
+    require(len(roots) == 1 and next(iter(roots))[1] == target, 'Unexpected compilation identities: ' + str(roots))
     starts = [match.end() for match in re.finditer(r'^  name "After FinalCodeAnalysisStage"$', text, re.M)]
     require(len(starts) == 1, 'Expected exactly one final allocated-register LIR')
     start = text.rfind('  name ', 0, starts[0])
@@ -217,11 +219,40 @@ def prepare(root, out, java_home):
     shutil.copyfile(root / CORE / 'oracle.tsv', out / 'oracle.tsv')
 
 
-def check_capture(root, out, java_home):
+def verify_snapshot(initial, current, root, checker_fix=False):
+    require(all(current[key] == initial[key] for key in ('runtimeJars', 'jdkFiles')),
+            'Runtime JAR/JDK changed during capture')
+    if not checker_fix:
+        require(current['sources'] == initial['sources'], 'Runtime source/harness changed during capture')
+        return None
+    # Explicit offline recheck permits ONLY the diagnostic reader and its tests
+    # to change. The guest runtime, capture probe and runner remain exact.
+    allowed = {str(root / 'bench/experiments/int16x8-foundation' / name)
+               for name in ('runtime-audit.py', 'test-runtime-audit.py')}
+    before = [item for item in initial['sources'] if item['path'] not in allowed]
+    after = [item for item in current['sources'] if item['path'] not in allowed]
+    require(before == after, 'Non-checker source changed before offline recheck')
+    old = [item for item in initial['sources'] if item['path'] in allowed]
+    new = [item for item in current['sources'] if item['path'] in allowed]
+    require({item['path'] for item in old} == {item['path'] for item in new} == allowed,
+            'Checker source inventory changed')
+    return dict(originalCheckerSources=old, correctedCheckerSources=new,
+                checkerRevision=current['sourceRevision'], guestExecutionRepeated=False)
+
+
+def check_capture(root, out, java_home, checker_fix=False):
     initial = json.loads((out / 'runtime-snapshot.json').read_text())
     current = snapshot(root, java_home)
-    require(all(current[key] == initial[key] for key in ('sources', 'runtimeJars', 'jdkFiles')),
-            'Runtime source/JAR/JDK changed during capture')
+    correction = verify_snapshot(initial, current, root, checker_fix)
+    require(not (out / 'evidence.json').exists(), 'Do not overwrite completed capture evidence')
+    if checker_fix:
+        require((out / 'check.exit-status.txt').read_text().strip() not in ('', '0'),
+                'Offline correction requires the retained original checker failure')
+        correction['originalFailure'] = record(out / 'check.log')
+        correction['originalExitStatus'] = record(out / 'check.exit-status.txt')
+        for item in correction['originalCheckerSources']:
+            archived = out / ('capture-' + Path(item['path']).name)
+            require(digest(archived) == item['sha256'], 'Original checker source not retained')
     inputs = json.loads((out / 'input-provenance.json').read_text())
     original = inputs['originalProvenance']
     require(digest(Path(original['path'])) == original['sha256'], 'Core provenance changed during capture')
@@ -270,7 +301,7 @@ def check_capture(root, out, java_home):
                     command=record(path / 'run.command.txt'), exitStatus=record(path / 'run.exit-status.txt'),
                     lir=record(path / 'final-lir.txt')))
     write_json(out / 'evidence.json', dict(schema=1, vector='int16x8', architecture=arch,
-        results=results, **initial, inputProvenance=record(out / 'input-provenance.json'),
+        results=results, **initial, checkerCorrection=correction, inputProvenance=record(out / 'input-provenance.json'),
         jdkRelease=record(out / 'jdk-release.txt'), javaVersion=record(out / 'java-version.txt'),
         claim='Native-backed real pre/post Core on AST and bytecode; compiled i16x8 arithmetic in 128-bit XMM registers with temporary carrier/vector/array allocations removed.',
         limitations=['The host Long result may allocate; this is not a globally allocation-free ABI.',
@@ -286,9 +317,14 @@ def main():
     parser.add_argument('root', type=Path)
     parser.add_argument('out', type=Path)
     parser.add_argument('java_home', type=Path)
+    parser.add_argument('--recheck-after-checker-fix', action='store_true',
+                        help='Offline only: retain failed original checker and verify all non-checker sources unchanged')
     args = parser.parse_args()
-    function = prepare if args.mode == 'prepare' else check_capture
-    function(args.root.resolve(), args.out.resolve(), args.java_home.resolve())
+    require(args.mode == 'check' or not args.recheck_after_checker_fix, 'Recheck applies only to retained captures')
+    if args.mode == 'prepare':
+        prepare(args.root.resolve(), args.out.resolve(), args.java_home.resolve())
+    else:
+        check_capture(args.root.resolve(), args.out.resolve(), args.java_home.resolve(), args.recheck_after_checker_fix)
 
 
 if __name__ == '__main__':
