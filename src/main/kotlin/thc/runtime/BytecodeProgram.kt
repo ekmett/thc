@@ -752,6 +752,29 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } else ProvenExpression(Expression { e ->
                     e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && ArrayOp.named(fn[1] as String) != null) {
+                val operation = ArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        ArrayOp.NEW -> e.builder.beginNewArray(destination[0])
+                        ArrayOp.READ -> e.builder.beginReadArray(destination[0])
+                        ArrayOp.FREEZE -> e.builder.beginFreezeArray(destination[0])
+                        ArrayOp.INDEX -> e.builder.beginIndexArray(destination[0])
+                        else -> error("Not a tuple array operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        ArrayOp.NEW -> e.builder.endNewArray()
+                        ArrayOp.READ -> e.builder.endReadArray()
+                        ArrayOp.FREEZE -> e.builder.endFreezeArray()
+                        ArrayOp.INDEX -> e.builder.endIndexArray()
+                        else -> error("Not a tuple array operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginWriteArray(); operands.forEach { it.emit(e) }; e.builder.endWriteArray()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

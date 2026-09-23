@@ -361,7 +361,12 @@
     "broadcastDoubleX2#": 1,
     "plusDoubleX2#": 2,
     "minusDoubleX2#": 2,
-    "timesDoubleX2#": 2
+    "timesDoubleX2#": 2,
+    "newArray#": 3,
+    "readArray#": 3,
+    "writeArray#": 4,
+    "unsafeFreezeArray#": 2,
+    "indexArray#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -726,6 +731,58 @@
         "state"
       ],
       "result": "state"
+    }
+  },
+  "managedArrayPrimitives": {
+    "newArray#": {
+      "arguments": [
+        "int",
+        "element",
+        "state"
+      ],
+      "result": [
+        "state",
+        "array"
+      ]
+    },
+    "readArray#": {
+      "arguments": [
+        "array",
+        "int",
+        "state"
+      ],
+      "result": [
+        "state",
+        "element"
+      ]
+    },
+    "writeArray#": {
+      "arguments": [
+        "array",
+        "int",
+        "element",
+        "state"
+      ],
+      "result": "state"
+    },
+    "unsafeFreezeArray#": {
+      "arguments": [
+        "array",
+        "state"
+      ],
+      "result": [
+        "state",
+        "array"
+      ]
+    },
+    "indexArray#": {
+      "arguments": [
+        "array",
+        "int"
+      ],
+      "result": [
+        "element"
+      ]
     }
   }
 }

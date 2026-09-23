@@ -570,6 +570,53 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewArray {
+        @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
+                long size, Object initial, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.allocate(size, initial));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            Object[] array = ManagedArray.require(value);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.read(array, index));
+        }
+    }
+    @Operation public static final class WriteArray {
+        @Specialization public static Object write(Object reference, long index, Object value, Object state) {
+            Object[] array = ManagedArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedArray.write(array, index, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FreezeArray {
+        @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
+                Object reference, Object state, @Bind("$node") Node node) {
+            Object[] array = ManagedArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.freeze(array));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class IndexArray {
+        @Specialization public static void index(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long index, @Bind("$node") Node node) {
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedArray.read(ManagedArray.require(reference), index));
+        }
+    }
+
     /** State operands are evaluated before each effect; only the array has a tuple slot. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
