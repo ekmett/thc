@@ -1,0 +1,225 @@
+{
+  "schema": 1,
+  "baselineCommit": "d45e330d39193473c397a01cafc840ccce063c1d",
+  "newWriterCommit": "7b16ffb4d0dbc79b7a4098a9a4c2ea2cd2ccef4c",
+  "baselineJsonSourceSha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80",
+  "newJsonSourceSha256": "688131684693befbd3c1d1921f61f0c129e92eca97fa40d37f1d59d4bfe9d093",
+  "probeSourceSha256": "1076fed3a5aca8b745db52db6ea1de2bfa98b02af7da23486a98e3a5ab21a391",
+  "loaderProbeSourceSha256": "f554c37765b5faff471f62a66b69c32cd02f92c7c3aef6fb83f56edaabb2c9ce",
+  "oldJsonClassSha256": "ec9b682a0e567d12577c74a5e0cb789787ed9fb816c36cc74ebecf8a82216baf",
+  "newJsonClassSha256": "7f1be414486ccacdec5f34a45b79551e289576038a6593d77e6ae6cc75703b01",
+  "javaReleaseSha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05",
+  "compactHeaders": true,
+  "jvmciCompilationForAllocationProbe": false,
+  "intmap": {
+    "entry": "intMapAggregate",
+    "inputFiles": [
+      {
+        "path": "build/libraries/intmap/core/Utils.Containers.Internal.BitUtil.json",
+        "sha256": "9f1e37f41c21658dd02a639f2f521c303ab4c48be82ee4207a422a41cbead632",
+        "bytes": 28270
+      },
+      {
+        "path": "build/libraries/intmap/core/Data.IntSet.Internal.IntTreeCommons.json",
+        "sha256": "c41660e5b6edbe6a110e130fe4afabffa71dd94b6a27016d780539c4336f1b10",
+        "bytes": 548462
+      },
+      {
+        "path": "build/libraries/intmap/core/Utils.Containers.Internal.Prelude.json",
+        "sha256": "f69415f7079fcb8e8947fe3d6d35d055d64668a5c1bf8e4aad01369a5ae149fd",
+        "bytes": 7882
+      },
+      {
+        "path": "build/libraries/intmap/core/Utils.Containers.Internal.StrictPair.json",
+        "sha256": "f72f745b47e8afa9c246524b75a93e51019b4bdce88b5af84a9bf200eecef893",
+        "bytes": 38901
+      },
+      {
+        "path": "build/libraries/intmap/core/Data.IntSet.Internal.json",
+        "sha256": "d63db364eb83c39d656cdb59efbbdcdaef4d67ea47f586394f5407ef4010e952",
+        "bytes": 23149711
+      },
+      {
+        "path": "build/libraries/intmap/core/Data.IntMap.Internal.json",
+        "sha256": "eadc0fde22eceb5a84a78f586e1d07e27eb80379331a3177fec7a96cf5424a52",
+        "bytes": 78893753
+      },
+      {
+        "path": "build/libraries/intmap/core/Data.IntMap.Strict.Internal.json",
+        "sha256": "743f2971dbc9fa1b3e1a2949773d328b50125a7b73a8e261ae0849a06635784b",
+        "bytes": 23574207
+      },
+      {
+        "path": "build/libraries/intmap/core/Data.IntMap.Strict.json",
+        "sha256": "476d1fa234fd2686cd6e9ac3b316e0635b918f982a2db22a57e506c3e07ab991",
+        "bytes": 15706
+      },
+      {
+        "path": "build/libraries/intmap/core/THC.IntMapWorkload.json",
+        "sha256": "49a9e07c43122fcc0c7106f9e535ed2e98f2a2833a5794e9ce82d8abac93e791",
+        "bytes": 1036958
+      },
+      {
+        "path": "build/libraries/intmap/core/THC.InterfaceClosure.json",
+        "sha256": "f253cdfae76d7953c90b17ce2cf77ec19e367180adcb8b56dfb5a2bc6769e788",
+        "bytes": 5440
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.Internal.CString.json",
+        "sha256": "fc28017605c7605638494634307608bfb516efd334f1c7733f78314d2fecd66a",
+        "bytes": 1606863
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.Internal.Err.json",
+        "sha256": "815f29870bd7eac87e630ee2dfc6920bc4d4af92e3608b34bd529bd57f2308dd",
+        "bytes": 41903
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.InterfaceClosure.json",
+        "sha256": "b34fb5dd3d490a7aff82da8c4be3461ef908f0074ffcf894c1346c7f73ab57b4",
+        "bytes": 68343
+      }
+    ],
+    "runs": [
+      {
+        "writer": "old",
+        "maxHeapMiB": 1024,
+        "outcome": "success",
+        "chars": 128530070,
+        "allocated": 18125631744,
+        "heapBefore": 276076480,
+        "heapAfter": 1052109368,
+        "sha256": "b7080f902e924e6c54089ba975fd85dfd506e7e7fcc5955e4db00610eb29e435",
+        "maxResidentSetBytes": 1281835008
+      },
+      {
+        "writer": "new",
+        "maxHeapMiB": 1024,
+        "outcome": "success",
+        "chars": 128530070,
+        "allocated": 881026808,
+        "heapBefore": 276017504,
+        "heapAfter": 840285816,
+        "sha256": "b7080f902e924e6c54089ba975fd85dfd506e7e7fcc5955e4db00610eb29e435",
+        "maxResidentSetBytes": 1202601984
+      },
+      {
+        "writer": "old",
+        "maxHeapMiB": 896,
+        "outcome": "heap-exhausted",
+        "maxResidentSetBytes": 1140555776
+      },
+      {
+        "writer": "new",
+        "maxHeapMiB": 896,
+        "outcome": "success",
+        "chars": 128530070,
+        "allocated": 881026808,
+        "heapBefore": 276151816,
+        "heapAfter": 840286400,
+        "sha256": "b7080f902e924e6c54089ba975fd85dfd506e7e7fcc5955e4db00610eb29e435",
+        "maxResidentSetBytes": 1033879552
+      }
+    ]
+  },
+  "sequence": {
+    "entry": "sequenceBuild",
+    "provenance": "Equivalent genuine GHC 9.14.1 containers-0.8 post-Tidy exports with source notes; not the original macOS CI exports.",
+    "inputArchiveSha256": "2cc2757b7d912520950a5de4f9bfeb05f3230dadddd343d79e30a35ecd10484a",
+    "inputFiles": [
+      {
+        "path": "build/libraries/sequence/core/Utils.Containers.Internal.Prelude.json",
+        "sha256": "3610856d3f22c42e303727cf8d79fdc8e4a2433caadd1a8a6721ff1189409d75",
+        "bytes": 7927
+      },
+      {
+        "path": "build/libraries/sequence/core/Utils.Containers.Internal.State.json",
+        "sha256": "96fe52a26a15aa09c7fa89f3518a030b9cd562c238ae37eb0523f6ccde13552d",
+        "bytes": 239667
+      },
+      {
+        "path": "build/libraries/sequence/core/Utils.Containers.Internal.StrictPair.json",
+        "sha256": "20599fae412196882d4a9bfb9815eae7f996a367d0aa0e17ca27fecb4a2b7df5",
+        "bytes": 39369
+      },
+      {
+        "path": "build/libraries/sequence/core/Data.Sequence.Internal.json",
+        "sha256": "2505706d383b7cd659ef985b108f425a50ff7777eec20111b767022619d999ca",
+        "bytes": 233173350
+      },
+      {
+        "path": "build/libraries/sequence/core/Data.Sequence.Internal.Sorting.json",
+        "sha256": "a1cdd0ec261f7209bd51de4ad27b847a002c7095c43d41a6c2f2903282efef21",
+        "bytes": 15106383
+      },
+      {
+        "path": "build/libraries/sequence/core/Data.Sequence.json",
+        "sha256": "f38af066fb7349ae0ae76cdbe0b409bc2083061219aaa201d15ce2f36cd10998",
+        "bytes": 20493
+      },
+      {
+        "path": "build/libraries/sequence/core/THC.SequenceWorkload.json",
+        "sha256": "28a06a8f87cb5034382118eb05c0628df2f3b8262ccf509f5b7b1a9be9903319",
+        "bytes": 16768816
+      },
+      {
+        "path": "build/libraries/sequence/core/THC.InterfaceClosure.json",
+        "sha256": "48957ee411a22621fc30abb5a8f72f11e7902d7a16d7997048d2584db1ed19a4",
+        "bytes": 18068
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.Internal.CString.json",
+        "sha256": "d39eb4c2ff9cad200685d8567f36e9a7dcec4cd1ed3276dbb1c16f41eeed701c",
+        "bytes": 1703694
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.Internal.Err.json",
+        "sha256": "13433b0eb4dac60fa9805847fed141932b0b0f840c5461e6da7c60500b698021",
+        "bytes": 43199
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.InterfaceClosure.json",
+        "sha256": "75222651c7d7e0727525b6f6605e0e8c5fe4f1752c088865e17679fb21531f5b",
+        "bytes": 67874
+      }
+    ],
+    "runs": [
+      {
+        "writer": "old",
+        "maxHeapMiB": 2048,
+        "outcome": "heap-exhausted",
+        "maxResidentSetBytes": 2220376064
+      },
+      {
+        "writer": "new",
+        "maxHeapMiB": 2048,
+        "outcome": "success",
+        "chars": 266271307,
+        "allocated": 1765976880,
+        "heapBefore": 565294480,
+        "heapAfter": 1709662128,
+        "sha256": "ac189a5ce01567cd2a978854278e035d6e894ba7e76db504fd22091bb53b66ac",
+        "maxResidentSetBytes": 2466955264
+      },
+      {
+        "writer": "old",
+        "maxHeapMiB": 3072,
+        "outcome": "success",
+        "chars": 266271307,
+        "allocated": 46950688008,
+        "heapBefore": 564677904,
+        "heapAfter": 2701902600,
+        "sha256": "ac189a5ce01567cd2a978854278e035d6e894ba7e76db504fd22091bb53b66ac",
+        "maxResidentSetBytes": 3328081920
+      }
+    ]
+  },
+  "validation": {
+    "jsonAndLinkerTests": 7,
+    "nativeLibraryCheckedRows": {
+      "ast": 7572,
+      "bytecode": 7572
+    },
+    "setFrontier": "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+  }
+}
