@@ -151,3 +151,10 @@ but the next sustained JVM screen slowed again and was stopped. The
 retains its raw timings. Compiler and checksum checks alone do not detect this
 kind of host interference; future comparisons also record power status around
 each process.
+
+The manual [hosted performance workflow](../.github/workflows/performance.yml)
+rebuilds the original and current runtimes, freezes one shared Core/native
+corpus, verifies the archived graphs, and runs the comparisons serially. It
+also tests compact JVM object headers before considering a timing comparison.
+Hosted results belong to that runner; their absolute times cannot be combined
+with the local M3 measurements above.

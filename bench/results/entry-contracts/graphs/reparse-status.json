@@ -1,0 +1,24 @@
+{
+  "status": "Stopped at the authorized battery threshold after completing the active parser; no parser failure.",
+  "batteryPercentAtStop": 2,
+  "driverExitCode": 75,
+  "guestExecuted": false,
+  "rawArchiveHashVerification": "passed for archive and all six BGV members",
+  "successfulParses": [
+    "baseline-lookup",
+    "candidate-lookup",
+    "baseline-fold",
+    "candidate-fold",
+    "baseline-worker"
+  ],
+  "parsedGraphs": 5,
+  "totalSelectedGraphs": 6,
+  "parsedPhases": 15,
+  "topologyVerificationPerformed": false,
+  "pending": [
+    "candidate-worker parser (compilation 3270)",
+    "exact comparison of all 18 reparsed phase topologies against their original captures"
+  ],
+  "logs": "reparse/",
+  "workingOutput": "work/selected-bgv-reparse"
+}

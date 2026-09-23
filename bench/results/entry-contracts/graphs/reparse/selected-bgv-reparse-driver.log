@@ -1,0 +1,23 @@
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	3%; discharging; 0:36 remaining present: true | 	Battery Warning: Early
+START extract
+END extract exit=0 seconds=0.59
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	3%; discharging; 0:36 remaining present: true | 	Battery Warning: Early
+START javac
+END javac exit=0 seconds=0.35
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	3%; discharging; 0:36 remaining present: true | 	Battery Warning: Early
+START baseline-lookup
+END baseline-lookup exit=0 seconds=0.25
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	3%; discharging; 0:36 remaining present: true | 	Battery Warning: Early
+START candidate-lookup
+END candidate-lookup exit=0 seconds=0.19
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	3%; discharging; 0:36 remaining present: true | 	Battery Warning: Early
+START baseline-fold
+END baseline-fold exit=0 seconds=7.08
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	3%; discharging; 0:36 remaining present: true | 	Battery Warning: Early
+START candidate-fold
+END candidate-fold exit=0 seconds=0.56
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	3%; discharging; 0:36 remaining present: true | 	Battery Warning: Early
+START baseline-worker
+END baseline-worker exit=0 seconds=18.66
+POWER Now drawing from 'Battery Power' |  -InternalBattery-0 (id=20643939)	2%; discharging; 0:33 remaining present: true | 	Battery Warning: Final
+STOP battery <=2%; pending phase candidate-worker

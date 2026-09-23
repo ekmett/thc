@@ -1,5 +1,5 @@
 {
-  "status": "Raw BGV/JFR files retained in work; publication archives pending. Hashes copied from completed immutable capture configs, not recomputed during CPU pause. No archive is claimed to exist.",
+  "status": "Six selected BGVs are published in selected-bgv.tar.xz; other listed BGVs/JFRs remain original work-path references.",
   "captures": [
     {
       "publishedPath": "candidate/graphs",
@@ -73,7 +73,9 @@
       "path": "TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
       "sha256": "f81588d804397aea199e1a8fdcc53e97c8d54daecb96ca0333bb8db7902339db",
       "bytes": 470452,
-      "archived": false
+      "archived": true,
+      "archive": "selected-bgv.tar.xz",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv"
     },
     {
       "capture": "candidate/graphs",
@@ -81,7 +83,9 @@
       "path": "TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
       "sha256": "aa8c3518f730ca47741367d3c45a404b060ecd2acf1fcbaf7d7062de9a4033be",
       "bytes": 2158764,
-      "archived": false
+      "archived": true,
+      "archive": "selected-bgv.tar.xz",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv"
     },
     {
       "capture": "candidate/graphs",
@@ -97,7 +101,9 @@
       "path": "TruffleHotSpotCompilation-3270[lambda_ww].bgv",
       "sha256": "4540410d56c42eefd7231157e1de3ded9e98445be1b2e076e87639c385c21a03",
       "bytes": 64288928,
-      "archived": false
+      "archived": true,
+      "archive": "selected-bgv.tar.xz",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3270[lambda_ww].bgv"
     },
     {
       "capture": "candidate/graphs",
@@ -161,7 +167,9 @@
       "path": "TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
       "sha256": "15b00c3ab811ce5c0e6a3acf669e3d820b573aca0fd59cab753f30a86e860c79",
       "bytes": 786584,
-      "archived": false
+      "archived": true,
+      "archive": "selected-bgv.tar.xz",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv"
     },
     {
       "capture": "baseline/graphs",
@@ -177,7 +185,9 @@
       "path": "TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
       "sha256": "4389bb9207cfdb21d67f9febec33fd1af4b3a49c19eb065af62245e9aafb0b21",
       "bytes": 41738130,
-      "archived": false
+      "archived": true,
+      "archive": "selected-bgv.tar.xz",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv"
     },
     {
       "capture": "baseline/graphs",
@@ -185,7 +195,9 @@
       "path": "TruffleHotSpotCompilation-3281[lambda_ww].bgv",
       "sha256": "7ff63dd1cb11a83493530d4518eb1e9be1cb7685cbe7b35d8447a2f061d914ca",
       "bytes": 77445930,
-      "archived": false
+      "archived": true,
+      "archive": "selected-bgv.tar.xz",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3281[lambda_ww].bgv"
     },
     {
       "capture": "baseline/graphs",

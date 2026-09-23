@@ -1,16 +1,11 @@
 {
-  "recordedUtc": "2026-09-23T06:39:10.396377+00:00",
-  "scope": "Original compact evidence plus six byte-identical selected BGVs and reproduction tools. No guest recapture.",
-  "originalCompactManifest": {
-    "path": "compact-manifest-original.json",
-    "sha256": "344f0c4cb5165a266dd43fbe5f565ac70999652dd018763c331fd29faf00b042",
-    "recordedUtc": "2026-09-23T06:27:06.306175+00:00"
-  },
+  "recordedUtc": "2026-09-23T06:27:06.306175+00:00",
+  "scope": "Compact light-copy publication; original raw hashes retained without copying or rehashing large raw artifacts.",
   "files": [
     {
       "path": "README.md",
-      "sha256": "7052bd252554fa870f4fdac00ac5ad31c3f9185e4b44cf6f9adbb81df2992434",
-      "bytes": 10206
+      "sha256": "b742b04aef64994d27de3abd44161891d7eb01eb2a1601e81fd064d552f7b5b3",
+      "bytes": 9711
     },
     {
       "path": "baseline/allocation/allocation-classes.tsv",
@@ -248,11 +243,6 @@
       "bytes": 11295
     },
     {
-      "path": "compact-manifest-original.json",
-      "sha256": "344f0c4cb5165a266dd43fbe5f565ac70999652dd018763c331fd29faf00b042",
-      "bytes": 14068
-    },
-    {
       "path": "diagnostic-provenance.json",
       "sha256": "847d0b20d021232c8a7647049784c7019ef42869e8d218f57b2cc722766f8a2a",
       "bytes": 9250
@@ -364,93 +354,8 @@
     },
     {
       "path": "raw-artifacts.json",
-      "sha256": "31b036aeb3081ad2ed60721c657a84ef642c97042c42c65ce817fbab34f91eaa",
-      "bytes": 12170
-    },
-    {
-      "path": "reparse/baseline-fold.log",
-      "sha256": "e831b7ae715dd718993aa22d855ea868a7760f34434ea8a5575100dc204de45c",
-      "bytes": 151
-    },
-    {
-      "path": "reparse/baseline-lookup.log",
-      "sha256": "b29063db6e857d7b2d1b2c7c9256d873c0180863551f4d99f11a15700f04c10d",
-      "bytes": 157
-    },
-    {
-      "path": "reparse/baseline-worker.log",
-      "sha256": "f5dbbe65ef5d86ca471030a1240aa37a106e2421d324a9e857e4e613cd00adcf",
-      "bytes": 147
-    },
-    {
-      "path": "reparse/candidate-fold.log",
-      "sha256": "af143615d94dd2fb8b1ffcf09aa166541513e861ab5d1f19d04aff7344024253",
-      "bytes": 152
-    },
-    {
-      "path": "reparse/candidate-lookup.log",
-      "sha256": "672e10b8d5cc49298b145d728231cba2d618e96ece4c40fc13edd7b5e07aeee5",
-      "bytes": 158
-    },
-    {
-      "path": "reparse/commands.json",
-      "sha256": "d78290fc45293a103984f5338702bfacd1f961890badb3e46c9bdf690f169f0c",
-      "bytes": 6885
-    },
-    {
-      "path": "reparse/extract.log",
-      "sha256": "65918cff8aace7c372b6c4f854108bf6bf0b5638bcd768030e8c7fe187c48b76",
-      "bytes": 61
-    },
-    {
-      "path": "reparse/javac.log",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "bytes": 0
-    },
-    {
-      "path": "reparse/selected-bgv-publication.log",
-      "sha256": "46d546c9d2136a0d7a131fe9859b7c2b6c12369df1dae01e37dfd90498bbc1bd",
-      "bytes": 209
-    },
-    {
-      "path": "reparse/selected-bgv-reparse-driver.log",
-      "sha256": "7b72c57958d38bccc38666b454102014b7f986c03fa84dd61b3c1699e89f5bc9",
-      "bytes": 1621
-    },
-    {
-      "path": "reparse-status.json",
-      "sha256": "3f262a3626fe3083e52202eb70eed11622ab7c310665ef36c07bc191780d6961",
-      "bytes": 759
-    },
-    {
-      "path": "reparse.sh",
-      "sha256": "b0ac92250eedd1d786ea717d1c85051029095a32a3bf160b22e8b2e14d1ff058",
-      "bytes": 1267
-    },
-    {
-      "path": "selected-bgv-README.md",
-      "sha256": "977a34d9449bd90ae1f03f5dfa5b6f643ca60495b5f4786b8ca80e0873d9fa2f",
-      "bytes": 3403
-    },
-    {
-      "path": "selected-bgv-manifest.json",
-      "sha256": "0a4b0c72f0def938c9a081e4db1a7739fe1b7869339700afed4ee77d2a22f5ca",
-      "bytes": 16758
-    },
-    {
-      "path": "selected-bgv-plan.json",
-      "sha256": "ec4eb8292aef262ee8f9eb3a64bd21c8ade3d0aa2c84bb435bfc4159af88e075",
-      "bytes": 12896
-    },
-    {
-      "path": "selected-bgv.py",
-      "sha256": "89cbbb4be10639172afda9ddb59db5f1d79ffc4584a9e615d53bc3d1b56872d2",
-      "bytes": 11331
-    },
-    {
-      "path": "selected-bgv.tar.xz",
-      "sha256": "e4136fc589cc84bf046879d252d80bcc516b6e60d97b68c4cef093a4e77f1653",
-      "bytes": 5773620
+      "sha256": "ac7e0d7967d0f2701ae480349ccb151fe05ed4bb7c1672a1857159fe31aac96a",
+      "bytes": 11489
     },
     {
       "path": "tools/original/tools/audit-call-packets.py",

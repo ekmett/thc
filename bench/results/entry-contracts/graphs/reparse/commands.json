@@ -1,0 +1,154 @@
+[
+  {
+    "phase": "extract",
+    "command": [
+      "python3",
+      "/Users/ekmett/thc/bench/results/entry-contracts/graphs/selected-bgv.py",
+      "extract",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/raw"
+    ],
+    "battery": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t3%; discharging; 0:36 remaining present: true\n\tBattery Warning: Early\n",
+    "startedUnix": 1790145620.959876,
+    "exitCode": 0,
+    "elapsedSeconds": 0.593066930770874
+  },
+  {
+    "phase": "javac",
+    "command": [
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/javac",
+      "--add-modules",
+      "jdk.graal.compiler",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+      "-d",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/tools",
+      "/Users/ekmett/thc/bench/results/entry-contracts/graphs/tools/original/work/perf-sprint-v2/GraphInspect.java"
+    ],
+    "battery": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t3%; discharging; 0:36 remaining present: true\n\tBattery Warning: Early\n",
+    "startedUnix": 1790145621.559934,
+    "exitCode": 0,
+    "elapsedSeconds": 0.34743809700012207
+  },
+  {
+    "phase": "baseline-lookup",
+    "command": [
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+      "-XX:-UseJVMCICompiler",
+      "-Xmx4g",
+      "--add-modules",
+      "jdk.graal.compiler",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+      "-cp",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/tools",
+      "GraphInspect",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/raw/baseline/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/baseline/parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]",
+      "(?i)After PE Tier|Before phase HighTierLowering|After mid tier"
+    ],
+    "battery": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t3%; discharging; 0:36 remaining present: true\n\tBattery Warning: Early\n",
+    "startedUnix": 1790145621.9145842,
+    "exitCode": 0,
+    "elapsedSeconds": 0.24770474433898926
+  },
+  {
+    "phase": "candidate-lookup",
+    "command": [
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+      "-XX:-UseJVMCICompiler",
+      "-Xmx4g",
+      "--add-modules",
+      "jdk.graal.compiler",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+      "-cp",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/tools",
+      "GraphInspect",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/raw/candidate/TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/candidate/parsed-TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1]",
+      "(?i)After PE Tier|Before phase HighTierLowering|After mid tier"
+    ],
+    "battery": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t3%; discharging; 0:36 remaining present: true\n\tBattery Warning: Early\n",
+    "startedUnix": 1790145622.169709,
+    "exitCode": 0,
+    "elapsedSeconds": 0.18803906440734863
+  },
+  {
+    "phase": "baseline-fold",
+    "command": [
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+      "-XX:-UseJVMCICompiler",
+      "-Xmx4g",
+      "--add-modules",
+      "jdk.graal.compiler",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+      "-cp",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/tools",
+      "GraphInspect",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/raw/baseline/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/baseline/parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]",
+      "(?i)After PE Tier|Before phase HighTierLowering|After mid tier"
+    ],
+    "battery": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t3%; discharging; 0:36 remaining present: true\n\tBattery Warning: Early\n",
+    "startedUnix": 1790145622.3645709,
+    "exitCode": 0,
+    "elapsedSeconds": 7.084161043167114
+  },
+  {
+    "phase": "candidate-fold",
+    "command": [
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+      "-XX:-UseJVMCICompiler",
+      "-Xmx4g",
+      "--add-modules",
+      "jdk.graal.compiler",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+      "-cp",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/tools",
+      "GraphInspect",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/raw/candidate/TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/candidate/parsed-TruffleHotSpotCompilation-3236[lambda_ww,_ds]",
+      "(?i)After PE Tier|Before phase HighTierLowering|After mid tier"
+    ],
+    "battery": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t3%; discharging; 0:36 remaining present: true\n\tBattery Warning: Early\n",
+    "startedUnix": 1790145629.455926,
+    "exitCode": 0,
+    "elapsedSeconds": 0.5584290027618408
+  },
+  {
+    "phase": "baseline-worker",
+    "command": [
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+      "-XX:-UseJVMCICompiler",
+      "-Xmx4g",
+      "--add-modules",
+      "jdk.graal.compiler",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing=ALL-UNNAMED",
+      "--add-exports",
+      "jdk.graal.compiler/jdk.graal.compiler.graphio.parsing.model=ALL-UNNAMED",
+      "-cp",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/tools",
+      "GraphInspect",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/raw/baseline/TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "/Users/ekmett/thc/work/selected-bgv-reparse/baseline/parsed-TruffleHotSpotCompilation-3281[lambda_ww]",
+      "(?i)After PE Tier|Before phase HighTierLowering|After mid tier"
+    ],
+    "battery": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=20643939)\t3%; discharging; 0:36 remaining present: true\n\tBattery Warning: Early\n",
+    "startedUnix": 1790145630.021408,
+    "exitCode": 0,
+    "elapsedSeconds": 18.6599280834198
+  }
+]

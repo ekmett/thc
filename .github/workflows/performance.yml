@@ -1,0 +1,121 @@
+name: Manual Map performance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Preserve queued manual requests and run only one performance job at a time.
+concurrency:
+  group: thc-manual-performance
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  performance:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      THC_DIAGNOSTIC_UNSUPPORTED: 'true'
+      THC_SOURCE_NOTES: 'true'
+      THC_BACKEND: bytecode
+      THC_GRADLE_USER_HOME: ${{ runner.temp }}/thc-performance-gradle
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out original runtime separately
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: 4c116a8493eafad4077a1c5eb9c046bff56fe3c4
+          path: work/ci-baseline-checkout
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-update: false
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - name: Verify pinned toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work/ci-performance/logs
+          test "$(ghc --numeric-version)" = 9.14.1
+          test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          release = dict(line.split('=', 1) for line in (Path(os.environ['JAVA_HOME']) / 'release').read_text().splitlines() if '=' in line)
+          assert release['GRAALVM_VERSION'].strip('"') == '25.3.4.1', release.get('GRAALVM_VERSION')
+          assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
+          PY
+          java --version 2>&1 | tee work/ci-performance/logs/toolchain.log
+          echo 'GitHub-hosted macOS run: compare configurations within this run; absolute timings are not comparable to the local M3 measurements.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Build, test, export current Core and native oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/try-map.sh 2>&1 | tee work/ci-performance/logs/current-build.log
+          python3 tools/test-compare-map-runtimes.py
+      - name: Build original runtime in isolated checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          work/ci-baseline-checkout/scripts/gradle.sh --no-daemon installDist \
+            2>&1 | tee work/ci-performance/logs/original-build.log
+      - name: Reparse and verify published compiler graphs once
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash bench/results/entry-contracts/graphs/reparse.sh work/ci-graph-reparse \
+            2>&1 | tee work/ci-performance/logs/graph-reparse.log
+      - name: Freeze both runtimes and the shared current corpus
+        run: python3 tools/ci-performance.py freeze work/ci-performance --baseline-checkout work/ci-baseline-checkout
+      - name: Full Map checks before timings
+        run: python3 work/ci-performance/frozen/helpers/ci-performance.py check work/ci-performance
+      - name: Original bytecode versus current default bytecode
+        run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison original-vs-current
+      - name: Checked storage with constructor class matching off versus on
+        run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison constructor-class
+      - name: Constructor class matching with checked versus unchecked storage
+        run: python3 work/ci-performance/frozen/helpers/ci-performance.py compare work/ci-performance --comparison owned-storage
+      - name: Optional compact headers — full tests, Map check, sizes, then timing
+        run: python3 work/ci-performance/frozen/helpers/ci-performance.py compact work/ci-performance
+      - name: Verify immutable inputs and summarize completed comparisons
+        run: python3 work/ci-performance/frozen/helpers/ci-performance.py finish work/ci-performance
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: map-performance-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            work/ci-performance/run.json
+            work/ci-performance/immutable-manifest.json
+            work/ci-performance/checks.json
+            work/ci-performance/summary.json
+            work/ci-performance/compact-status.json
+            work/ci-performance/test-results/
+            work/ci-performance/compact-object-sizes/*.json
+            work/ci-performance/compact-object-sizes/*.out
+            work/ci-performance/compact-object-sizes/*.err
+            work/ci-performance/logs/
+            work/ci-performance/comparisons/
+            work/ci-graph-reparse/topology-verification.json
+            build/map/audit.json
+            build/map/oracle.tsv
+            build/map/oracle-validation.json
+            build/map/provenance.json
+            build/map/reproduction-provenance.json
+            build/reports/tests/
+            build/test-results/

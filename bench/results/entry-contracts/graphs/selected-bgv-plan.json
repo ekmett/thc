@@ -1,0 +1,282 @@
+{
+  "status": "Prepared selection only: no compression, raw rehashing or JVM reparse has run. Build with selected-bgv.py publish after obtaining the CPU lane.",
+  "scope": "Six selected raw bytecode compiler outputs: original-runtime baseline versus cumulative typed-frames-v4 candidate. This is not an entry-contract-only ablation or a throughput measurement.",
+  "graalVersion": "25.3.4.1",
+  "archive": "selected-bgv.tar.xz",
+  "compression": "Single-thread Python liblzma XZ preset 3; tar timestamps/ownership normalized; original member bytes preserved.",
+  "topologyScope": "Each reparse must reproduce its own recorded capture exactly: node IDs/classes/block assignment, all indexed/labeled edges, complete ordered block node lists and successors. This does not assert baseline/candidate graph equality.",
+  "originalCompactManifestSha256": "344f0c4cb5165a266dd43fbe5f565ac70999652dd018763c331fd29faf00b042",
+  "totalRawBytes": 186888788,
+  "selected": [
+    {
+      "capture": "baseline",
+      "role": "lookup",
+      "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "rootId": 17,
+      "compilationId": 3224,
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "roleAmbiguous": false,
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1].bgv",
+      "sha256": "15b00c3ab811ce5c0e6a3acf669e3d820b573aca0fd59cab753f30a86e860c79",
+      "bytes": 786584,
+      "phases": [
+        {
+          "phase": "After PE Tier",
+          "name": "0: After PE Tier",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00000.json",
+          "sha256": "3199a83714fd1369e5734ca0792087ed4aa2d799d82eeeda5f248b2978bac4e6",
+          "bytes": 1981955,
+          "nodes": 537,
+          "edges": 1517,
+          "blocks": 70
+        },
+        {
+          "phase": "Before phase HighTierLowering",
+          "name": "2: Before phase HighTierLowering",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00005.json",
+          "sha256": "a7741ed6d9acf8f7659cc5bd1b484f1dc2f2dff5e6ccf84c32397dfed0379960",
+          "bytes": 1661470,
+          "nodes": 480,
+          "edges": 1388,
+          "blocks": 67
+        },
+        {
+          "phase": "After mid tier",
+          "name": "4: After mid tier",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3224[lambda_def,_ww,_ds1]/graph-00007.json",
+          "sha256": "38f2fb00ca548193b0663de11440a337c2ade7e50b777e16ad81bd675ab40043",
+          "bytes": 2962280,
+          "nodes": 860,
+          "edges": 2081,
+          "blocks": 146
+        }
+      ]
+    },
+    {
+      "capture": "candidate",
+      "role": "lookup",
+      "roleKey": "lambda def, ww, ds1 @ vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "rootId": 17,
+      "compilationId": 3219,
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:649",
+      "roleAmbiguous": false,
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1].bgv",
+      "sha256": "f81588d804397aea199e1a8fdcc53e97c8d54daecb96ca0333bb8db7902339db",
+      "bytes": 470452,
+      "phases": [
+        {
+          "phase": "After PE Tier",
+          "name": "0: After PE Tier",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1]/graph-00000.json",
+          "sha256": "444c03710fe8a024d34c0910508071fc4050ca2182f5fda80fc56f9f9bf7f685",
+          "bytes": 960692,
+          "nodes": 272,
+          "edges": 792,
+          "blocks": 22
+        },
+        {
+          "phase": "Before phase HighTierLowering",
+          "name": "2: Before phase HighTierLowering",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1]/graph-00005.json",
+          "sha256": "a1ac64aed574885ea081ced90c534798657a6838f245622d1c2847678d42072d",
+          "bytes": 819651,
+          "nodes": 273,
+          "edges": 795,
+          "blocks": 25
+        },
+        {
+          "phase": "After mid tier",
+          "name": "4: After mid tier",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3219[lambda_def,_ww,_ds1]/graph-00007.json",
+          "sha256": "f6a3d279e3d1cb0046d99e00b8f05864dd4e27e1c3bd53b8566174aa520de078",
+          "bytes": 1347323,
+          "nodes": 375,
+          "edges": 853,
+          "blocks": 56
+        }
+      ]
+    },
+    {
+      "capture": "baseline",
+      "role": "fold",
+      "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "rootId": 18,
+      "compilationId": 3269,
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "roleAmbiguous": false,
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3269[lambda_ww,_ds].bgv",
+      "sha256": "4389bb9207cfdb21d67f9febec33fd1af4b3a49c19eb065af62245e9aafb0b21",
+      "bytes": 41738130,
+      "phases": [
+        {
+          "phase": "After PE Tier",
+          "name": "0: After PE Tier",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00000.json",
+          "sha256": "45f14b77ed73ddf4ddfd249968f875a286c1a9c17867dad59133c712a5774edc",
+          "bytes": 1968893,
+          "nodes": 489,
+          "edges": 1324,
+          "blocks": 57
+        },
+        {
+          "phase": "Before phase HighTierLowering",
+          "name": "2: Before phase HighTierLowering",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00005.json",
+          "sha256": "addb624de4591cbf37455107dd420b6933c51d173f53297270651c0843aca7b8",
+          "bytes": 142679786,
+          "nodes": 6118,
+          "edges": 22954,
+          "blocks": 708
+        },
+        {
+          "phase": "After mid tier",
+          "name": "4: After mid tier",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3269[lambda_ww,_ds]/graph-00007.json",
+          "sha256": "7d99276f8eb71d1f7d88d8820d3b41a5677c535b48c5c6d214aaf3b2a3f68e4e",
+          "bytes": 115328613,
+          "nodes": 11955,
+          "edges": 33102,
+          "blocks": 2052
+        }
+      ]
+    },
+    {
+      "capture": "candidate",
+      "role": "fold",
+      "roleKey": "lambda ww, ds @ vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "rootId": 18,
+      "compilationId": 3236,
+      "source": "vendor/containers-0.8/src/Data/Map/Internal.hs:3426",
+      "roleAmbiguous": false,
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3236[lambda_ww,_ds].bgv",
+      "sha256": "aa8c3518f730ca47741367d3c45a404b060ecd2acf1fcbaf7d7062de9a4033be",
+      "bytes": 2158764,
+      "phases": [
+        {
+          "phase": "After PE Tier",
+          "name": "0: After PE Tier",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3236[lambda_ww,_ds]/graph-00000.json",
+          "sha256": "6aa3336716cdacb2a25b12eddc328c15316e65d4557bd99d68c8cfe2571854cb",
+          "bytes": 793836,
+          "nodes": 221,
+          "edges": 582,
+          "blocks": 13
+        },
+        {
+          "phase": "Before phase HighTierLowering",
+          "name": "2: Before phase HighTierLowering",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3236[lambda_ww,_ds]/graph-00005.json",
+          "sha256": "d37fe974cd052daee25201f16bf045fe1cee9db982c7b4b617def546e40dc973",
+          "bytes": 8667976,
+          "nodes": 568,
+          "edges": 1847,
+          "blocks": 22
+        },
+        {
+          "phase": "After mid tier",
+          "name": "4: After mid tier",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3236[lambda_ww,_ds]/graph-00007.json",
+          "sha256": "bc7514aa414f3642911dd3a2547bc9e2c85e44e62536713b95563d2a6689244b",
+          "bytes": 8677315,
+          "nodes": 996,
+          "edges": 2501,
+          "blocks": 143
+        }
+      ]
+    },
+    {
+      "capture": "baseline",
+      "role": "worker",
+      "roleKey": "lambda ww @ n/a",
+      "rootId": 27,
+      "compilationId": 3281,
+      "source": "n/a",
+      "roleAmbiguous": false,
+      "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "archiveMember": "baseline/TruffleHotSpotCompilation-3281[lambda_ww].bgv",
+      "sha256": "7ff63dd1cb11a83493530d4518eb1e9be1cb7685cbe7b35d8447a2f061d914ca",
+      "bytes": 77445930,
+      "phases": [
+        {
+          "phase": "After PE Tier",
+          "name": "0: After PE Tier",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00000.json",
+          "sha256": "866896ed59836778189023738cf3f27b51b88277b9e6d629509154f96590a51f",
+          "bytes": 1253904,
+          "nodes": 858,
+          "edges": 2884,
+          "blocks": 101
+        },
+        {
+          "phase": "Before phase HighTierLowering",
+          "name": "2: Before phase HighTierLowering",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00005.json",
+          "sha256": "d2784efccb83ed0738091a5bdeeca741be9e23a2d4027e6f9743dd3cde5e017d",
+          "bytes": 173015376,
+          "nodes": 10893,
+          "edges": 42775,
+          "blocks": 1249
+        },
+        {
+          "phase": "After mid tier",
+          "name": "4: After mid tier",
+          "originalPath": "work/perf-sprint-typed-frames/baseline-bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3281[lambda_ww]/graph-00007.json",
+          "sha256": "63ac6b53b50c5f70163680ff7ea218405995a4b9e1565475288f1ca9aae238f8",
+          "bytes": 199968329,
+          "nodes": 23452,
+          "edges": 67305,
+          "blocks": 3475
+        }
+      ]
+    },
+    {
+      "capture": "candidate",
+      "role": "worker",
+      "roleKey": "lambda ww @ n/a",
+      "rootId": 23,
+      "compilationId": 3270,
+      "source": "n/a",
+      "roleAmbiguous": false,
+      "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+      "archiveMember": "candidate/TruffleHotSpotCompilation-3270[lambda_ww].bgv",
+      "sha256": "4540410d56c42eefd7231157e1de3ded9e98445be1b2e076e87639c385c21a03",
+      "bytes": 64288928,
+      "phases": [
+        {
+          "phase": "After PE Tier",
+          "name": "0: After PE Tier",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3270[lambda_ww]/graph-00000.json",
+          "sha256": "9e492e9250637726905758364d54e1832b1c21de8e52e2945f5ae81dd11f80ca",
+          "bytes": 975877,
+          "nodes": 682,
+          "edges": 2443,
+          "blocks": 56
+        },
+        {
+          "phase": "Before phase HighTierLowering",
+          "name": "2: Before phase HighTierLowering",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3270[lambda_ww]/graph-00005.json",
+          "sha256": "1cfc34291eff1e9f3e91eb5e6633d4f6dfc2504bb05ced7bc17b54cd99da4618",
+          "bytes": 96932702,
+          "nodes": 7340,
+          "edges": 24597,
+          "blocks": 548
+        },
+        {
+          "phase": "After mid tier",
+          "name": "4: After mid tier",
+          "originalPath": "work/perf-sprint-typed-frames/bytecode-default-graphs/parsed-TruffleHotSpotCompilation-3270[lambda_ww]/graph-00007.json",
+          "sha256": "d4195d17640ebbdcec2ceb3ab666468c29d7f5341582b4ab67068858d914c37d",
+          "bytes": 152029849,
+          "nodes": 16859,
+          "edges": 43178,
+          "blocks": 2051
+        }
+      ]
+    }
+  ]
+}
