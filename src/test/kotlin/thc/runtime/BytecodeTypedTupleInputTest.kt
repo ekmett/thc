@@ -68,7 +68,8 @@ class BytecodeTypedTupleInputTest {
         val values = listOf(Long.MIN_VALUE, -17L, 0L, 1L, Long.MAX_VALUE)
         val fn = context.asValue(EntryValue(p, name, 1))
         for (x in values) assertEquals(expected(x), fn.execute(x).asLong(), "$name/$x interpreted")
-        assertTrue(fn.invokeMember("compile").asBoolean())
+        try { assertTrue(fn.invokeMember("compile").asBoolean()) }
+        catch (failure: Throwable) { throw AssertionError("Compilation failed for bytecode tuple-input control $name", failure) }
         val original = p.entryTarget(name); val host = p.hostEntryTarget(1)
         fun active() = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
             .filter { it.callTarget === original }.map { it.currentCallTarget as RootCallTarget }.toSet()
@@ -120,7 +121,7 @@ class BytecodeTypedTupleInputTest {
             val worker = bind("worker", lam(listOf(arg("before"), arg("p", pair), arg("after")),
                 unpack(v("p", pair), pair, listOf("a", "b"), prim("+#", prim("+#", bare("before"), unknown("after")),
                     prim("+#", bare("a"), unknown("b"))))))
-            val payload = pack(pair, unknown("x"), n(7))
+            val payload = pack(pair, v("x"), n(7))
             val p = BytecodeProgram(language, module(worker,
                 bind("interleaved", lam(listOf(arg("x")), call("worker", listOf(bare("x"), payload, unknown("x"))))),
                 bind("scalarPrefix", lam(listOf(arg("x")), app(call("worker", listOf(bare("x")), closure), listOf(payload, unknown("x"))))),
