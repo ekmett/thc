@@ -177,12 +177,15 @@ and public bridge are installed, and require compiled entry for every 64-bit
 boundary input while preserving the closure's original target identity. This
 changes neither the guest call ABI nor the compilation limits.
 
-Investigation also observed site-dependent interpreted public calls despite
-valid installed guest code. The underlying HotSpot call-boundary bypass
-mechanism remains unresolved; compiling the public bridge is not a claim of
-an upstream VM fix. Post-compilation settling calls did not resolve the failure
-and have been removed. The checker retains its fixed warmup and mandatory
-per-call compiled-entry assertions, without retries or diagnostic JVM flags.
+Investigation also observed interpreted public calls despite valid installed
+guest code. The shared HotSpot call-boundary stub can be retired independently
+of those targets. Explicit compilation now asks the pinned runtime to restore
+that prerequisite after compiling the active targets and public bridge, without
+executing the guest. This is not sufficient to fix the Sequence replay failure;
+the evidence and remaining boundary problem are recorded below. Post-compilation
+settling calls did not resolve the failure and have been removed. The checker
+retains its fixed warmup and mandatory per-call compiled-entry assertions,
+without retries or diagnostic JVM flags.
 
 ## Running the checks
 
@@ -252,6 +255,7 @@ GraalVM 25.3.4.1, with no post-compilation settling or retries:
 | --- | --- | --- | --- |
 | `613dc1f` (main `000dfa3` integration) | Pass | Fail | Pass |
 | `bbc8ee4` (main `60c39ff` integration) | Fail | Fail | Pass |
+| `3e5ee6d` (explicit boundary-stub restoration) | Fail | Fail | Pass |
 
 Every complete pass includes 8,028 comparisons: 2,676 interpreted, 84
 compiled-warm, 2,592 after-compilation cold and 2,676 final compiled. All 2,760
@@ -272,9 +276,55 @@ target/call-count instrumentation was added; call count alone is not proof of
 compiled execution. The diagnostic still terminates with the original failure
 and is not a replacement coverage pass.
 
-This evidence is consistent with a site-dependent public-call-boundary bypass;
-its underlying VM mechanism remains unresolved. Neither compiling the bridge
-nor a successful mode/revision establishes a general fix. The strict default
-compiled-replay failures remain a completion blocker; no `Value.execute`
-bypass, relaxed counter requirement, optimizer fence or increased compilation
-limit is used to turn them into passes.
+The separate-site result alone does not distinguish a persistent caller-site
+problem from a one-call repair. A later build-only probe at `8a91433` reinvoked
+the same checker source/bytecode call site after the miss, then a separate cold
+site: both entered compiled code, with unchanged target identities, validity and
+code addresses. Both probes still terminate with the original assertion. No
+claim is made that the source site identifies a particular inlined machine-code
+caller.
+
+### Boundary-stub prerequisite experiment
+
+An untouched failing run with HotSpot compilation logging recorded a late
+`callBoundary` stub installation immediately after the first Sequence public
+call. A separate, more heavily logged run directly observed HotSpot flushing
+the original stub as cold while over 117 MB of code-cache space remained. That
+second run did not reproduce the failure, so its lifecycle observation must not
+be conflated with the failing run or treated as proof of the whole failure path.
+
+At `3e5ee6d3506b6ebbb19322eb91df6eed5c250952`, the explicit compilation operation
+invokes the pinned runtime's public `bypassedInstalledCode` hook after compiling
+the active guest targets and stable host bridge. This runtime-internal API
+installs missing shared boundary code without executing guest code. It is a
+GraalVM-version-specific prerequisite, not a guarantee against later VM code
+retirement or stale caller links.
+
+The isolated regression retires only `callBoundary` through JVMCI `reprofile()`
+while both targets remain valid, then checks restoration **before** the next
+public call. Without the repair both backends fail that restoration assertion;
+their subsequent tiny guest call already had a positive compiled-entry delta.
+Thus the red test demonstrates a missing compilation prerequisite, not a
+deterministic recreation of the production zero-delta miss. With the repair both
+restoration checks pass. The follow-up test-only commit `9582dad` additionally
+checks unchanged host/guest call counts and compiled-entry counts across
+compilation. It restores the JVM-wide stub in `finally` and isolates the test
+class from parallel execution. Both default and handoff suites pass all 312 tests
+with no skips.
+
+The strict replays used the unchanged checker and source/native artifacts from
+`8a91433`: all 70 input hashes and 67 artifact hashes matched, and candidate
+inputs were identical. The tested runtime JAR SHA256 was
+`ce0b5621f91f91461cabb371a386123ce54fb2f4bc939241398cbc7c4b2f46de`.
+AST handoff passed all 8,028 comparisons, but default AST and bytecode still
+failed the first compiled `sequenceBuildViews(1)` call. A build-only failure hook
+on this candidate found last-tier boundary code immediately after the miss,
+before any further guest calls; both active targets also remained valid and
+unchanged. One diagnostic same-site call and one separate cold-site call each
+increased the compiled-entry count by seven, without recompilation. The original
+assertion still terminated the run. This post-miss sample does not establish
+whether the stub was present before the failed call or repaired during it.
+
+The strict default compiled-replay failures remain a completion blocker; no `Value.execute`
+bypass, settling call, relaxed counter requirement, optimizer fence or increased
+compilation limit is used to turn them into passes.
