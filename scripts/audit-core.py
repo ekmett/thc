@@ -86,7 +86,7 @@ class Audit:
                     else:
                         physical.extend(registers)
                         if 'aggregate' not in component and (component.get('kind') == 'unknown' or
-                                any(r not in self.cap['fieldRepresentations'] for r in registers)):
+                                any(r not in self.cap['aggregateFieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
                 if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:
                     self.issue('representation-proof', owner, path, 'Tuple components disagree with physical representations')
@@ -409,6 +409,26 @@ class Audit:
                     self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: {registers!r}')
                 elif registers and registers[0] not in self.cap['fieldRepresentations']:
                     self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: {registers[0]}')
+        # AddrRep always denotes the managed LiteralAddress carrier, including
+        # legacy constructor records without the optional precise fieldTypes.
+        for index, registers in enumerate(reps if isinstance(reps, list) else []):
+            if registers != ['AddrRep']:
+                continue
+            lifted = info.get('fieldLifted')
+            if 'fieldLifted' in info and (not isinstance(lifted, list) or len(lifted) != expected or lifted[index] is not False):
+                self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: address field must be unlifted')
+            if 'fieldTypes' in info:
+                types, strict = info['fieldTypes'], info.get('strictFields')
+                if (not isinstance(types, list) or len(types) != expected or
+                        not isinstance(strict, list) or len(strict) != expected or type(strict[index]) is not bool or
+                        not isinstance(lifted, list) or len(lifted) != expected or lifted[index] is not False):
+                    self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: malformed address field metadata')
+                    continue
+                proof = types[index]
+                self.representation(proof, owner, path + f'/fieldTypes/{index}')
+                if (not isinstance(proof, dict) or proof.get('kind') != 'address' or
+                        proof.get('primReps') != ['AddrRep'] or proof.get('evaluated') is not True):
+                    self.issue('constructor-field-representation', owner, path, f'{key}[{index}]: address field lacks its exact evaluated carrier')
         # Matching only needs a layout; strictness is checked when constructing.
         if constructing:
             strict, lifted = info.get('strictFields'), info.get('fieldLifted')
