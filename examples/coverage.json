@@ -1,0 +1,566 @@
+{
+  "schema": 1,
+  "groups": [
+    {
+      "id": "lists",
+      "source": "examples/THC/ListCoverage.hs",
+      "module": "THC.ListCoverage",
+      "entries": [
+        {
+          "name": "listPipeline",
+          "focus": "ordinary list map/filter construction and recursive checksum consumption",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "listAppendReverse",
+          "focus": "source-defined append and fold reversal with independently input-sized lists",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "listSpineLazy",
+          "focus": "consume list spine without evaluating bottom-valued heads",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "listTailLazy",
+          "focus": "consume exact finite prefix without forcing bottom tail",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "streamPrefix",
+          "focus": "bounded consumption of input-dependent infinite productive stream",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "streamKnot",
+          "focus": "bounded consumption of a local input-dependent cyclic list",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "sharedListConsumers",
+          "focus": "two consumers reuse one input-dependent lazy spine",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "sharedBindings": [
+            "spine"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "functions",
+      "source": "examples/THC/FunctionCoverage.hs",
+      "module": "THC.FunctionCoverage",
+      "entries": [
+        {
+          "name": "closurePipeline",
+          "focus": "a list of captured closures transported and applied through an unknown function",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "capturedOverapply",
+          "focus": "overapplication of an opaque one-argument function returning a captured function",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "reusedLazyPAP",
+          "focus": "reused partial application retains an unused bottom argument lazily",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "sharedCapturedThunk",
+          "focus": "an escaping closure retains an input-dependent shared thunk used by two calls",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "sharedBindings": [
+            "sharedValue"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trees",
+      "source": "examples/THC/TreeCoverage.hs",
+      "module": "THC.TreeCoverage",
+      "entries": [
+        {
+          "name": "treeFold",
+          "focus": "recursive three-constructor ADT construction and exhaustive fold",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "treeMapFold",
+          "focus": "higher-order map with captured input across mixed-layout recursive constructors",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "treeSelective",
+          "focus": "nested pattern matching selects the sole terminating branch; unused subtree is bottom",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ]
+        },
+        {
+          "name": "treeShared",
+          "focus": "two branches of a recursive ADT share one input-dependent subtree",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            63,
+            64,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "sharedBindings": [
+            "tree"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "numeric",
+      "source": "examples/THC/NumericCoverage.hs",
+      "module": "THC.NumericCoverage",
+      "entries": [
+        {
+          "name": "wordMixer",
+          "focus": "Word# wraparound, variable rotations, shifts, masks and bit complements",
+          "warmInputs": [
+            0,
+            1,
+            7,
+            31,
+            127,
+            65535
+          ],
+          "coldInputs": [
+            -1,
+            -128,
+            128,
+            255,
+            2147483648,
+            -2147483648,
+            4294967295,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "timesWord#",
+            "plusWord#",
+            "minusWord#",
+            "xor#",
+            "and#",
+            "or#",
+            "not#",
+            "uncheckedShiftL#",
+            "uncheckedShiftRL#"
+          ]
+        },
+        {
+          "name": "signedRadix",
+          "focus": "Signed quotient/remainder for both divisor signs, arithmetic versus logical shifts, Int# wraparound",
+          "warmInputs": [
+            0,
+            1,
+            7,
+            31,
+            127,
+            65535
+          ],
+          "coldInputs": [
+            -1,
+            -7,
+            -10,
+            -99,
+            -128,
+            -2147483648,
+            4294967295,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "quotInt#",
+            "remInt#",
+            "uncheckedIShiftRA#",
+            "uncheckedIShiftRL#"
+          ]
+        },
+        {
+          "name": "packedSamples",
+          "focus": "Signed 8/16/32-bit narrowing, mixed primitive/reference fields, escaped mixed captures, Int# wraparound",
+          "warmInputs": [
+            0,
+            1,
+            7,
+            31,
+            127,
+            65535
+          ],
+          "coldInputs": [
+            -1,
+            -128,
+            128,
+            255,
+            8388607,
+            8388608,
+            140737488355327,
+            140737488355328,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "narrow8Int#",
+            "narrow16Int#",
+            "narrow32Int#"
+          ]
+        },
+        {
+          "name": "unicodeChecksum",
+          "focus": "Unicode Char# constructors, chr#/ord#, literal cases, ASCII/Latin/BMP/supplementary comparisons",
+          "warmInputs": [
+            0,
+            8,
+            16,
+            24
+          ],
+          "coldInputs": [
+            -1,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "chr#",
+            "ord#",
+            "ltChar#",
+            "leChar#"
+          ],
+          "requiredLiteralKinds": [
+            "char"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "narrow-ints",
+      "source": "examples/THC/NarrowIntCoverage.hs",
+      "module": "THC.NarrowIntCoverage",
+      "entries": [
+        {
+          "name": "narrowRecordChecksum",
+          "focus": "Ordinary Data.Int Int8/16/32 conversion with truncation/sign extension and unpacked narrow representation fields",
+          "warmInputs": [
+            0,
+            1,
+            31,
+            63
+          ],
+          "coldInputs": [
+            127,
+            128,
+            129,
+            255,
+            256,
+            -128,
+            -129,
+            -255,
+            -256,
+            32767,
+            32768,
+            32769,
+            65535,
+            65536,
+            -32768,
+            -32769,
+            -65535,
+            -65536,
+            2147483647,
+            2147483648,
+            2147483649,
+            4294967295,
+            4294967296,
+            -2147483648,
+            -2147483649,
+            -4294967295,
+            -4294967296,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "intToInt8#",
+            "int8ToInt#",
+            "intToInt16#",
+            "int16ToInt#",
+            "intToInt32#",
+            "int32ToInt#"
+          ]
+        }
+      ]
+    }
+  ]
+}

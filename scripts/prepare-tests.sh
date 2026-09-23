@@ -3,6 +3,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 compiler/build.sh
+sh scripts/prepare-aggregate-frontier.sh
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs
 python3 scripts/check-speculation-metadata.py
 python3 scripts/check-representation-metadata.py
@@ -19,3 +20,4 @@ python3 scripts/check-source-metadata.py --fixture build/source-core/SourceNotes
 python3 compiler/export-boot.py
 mkdir -p build/native
 scripts/native-oracle.sh > build/native/oracle.tsv
+python3 scripts/prepare-corpus.py

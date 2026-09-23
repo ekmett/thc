@@ -135,17 +135,22 @@ voidRep :: J
 voidRep = O [("primReps",A []),("kind",S "void"),("evaluated",B True)]
 
 typeRep :: Type -> Bool -> J
-typeRep ty evaluated = O
+typeRep ty evaluated = O $
   [("primReps",maybe Z (A . map (S . show)) reps),("kind",S kind),("evaluated",B evaluated)]
+  ++ maybe [] (\aggregate -> [("aggregate",S aggregate)]) aggregateKind
   where
     reps = typePrimRep_maybe ty
     -- Type abstraction erases, but a newtype/family is not evidence for either
     -- a data object or a closure. isBoxedDataTyCon makes that distinction in GHC.
     (_,rho) = splitForAllTyVars ty
-    unsupportedAggregate = case splitTyConApp_maybe rho of
-      Just (tc,_) -> isUnboxedTupleTyCon tc || isUnboxedSumTyCon tc
-      _ -> False
-    kind | unsupportedAggregate = "unknown"
+    -- Physical register counts do not distinguish a singleton/empty unboxed
+    -- tuple from a scalar/state token. Preserve the logical GHC type evidence
+    -- even where no constructor is reachable (for example an identity).
+    aggregateKind = case splitTyConApp_maybe rho of
+      Just (tc,_) | isUnboxedTupleTyCon tc -> Just "unboxed-tuple"
+                  | isUnboxedSumTyCon tc -> Just "unboxed-sum"
+      _ -> Nothing
+    kind | Just _ <- aggregateKind = "unknown"
          | otherwise = case reps of
       Just [] -> "void"
       Just [r] | longRep r -> "long"

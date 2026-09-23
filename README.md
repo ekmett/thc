@@ -72,6 +72,18 @@ parts of GHC's runtime. Diagnostic mode leaves explicit traps at those gaps.
 Normal mode rejects them when loading the program. Successful runs establish
 support for the paths exercised; they don't make the gaps disappear.
 
+## Coverage
+
+The next step is breadth. A [native-GHC corpus](docs/coverage.md) exercises lazy
+lists and streams, sharing, captured functions, partial and overapplication,
+recursive trees, and numeric representation boundaries. Both backends check
+warm inputs, cold paths and recompiled code. The corpus also checks that the
+intended structures survive GHC optimization and that shared producers are
+evaluated once.
+
+`examples/coverage.json` describes the inputs. `scripts/try.sh` prepares and runs
+the suite; missing dependencies and unsupported constructs remain explicit.
+
 ## Where things stand
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before

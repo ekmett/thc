@@ -114,6 +114,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        if (!diagnosticUnsupported) CoreRepresentations.validateAggregates(bindings)
         val scope = Scope(FunctionContext(0))
         val initializers = bindings.map { binding ->
             val expr = binding["expr"] as List<Any?>
@@ -203,8 +204,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray())
         context.arguments = args.mapIndexed { index, arg ->
             val lifted = representation(arg)
+            val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
             if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
-                CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])) else null
+                proof) else null
         }
         val compiled = compile(expression, scope, true)
         if (compiled.loweredCase) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
@@ -758,9 +760,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "uncheckedIShiftL#", "uncheckedShiftL#" -> "ShiftLeft"
             "uncheckedIShiftRA#" -> "ShiftRight"
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> "ShiftRightUnsigned"
-            "narrow8Int#" -> "Narrow8"
-            "narrow16Int#" -> "Narrow16"
-            "narrow32Int#" -> "Narrow32"
+            // Match AST sign-normalized Long carriers in both conversion directions.
+            "narrow8Int#", "intToInt8#", "int8ToInt#" -> "Narrow8"
+            "narrow16Int#", "intToInt16#", "int16ToInt#" -> "Narrow16"
+            "narrow32Int#", "intToInt32#", "int32ToInt#" -> "Narrow32"
             "int2Word#", "word2Int#", "ord#", "chr#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"

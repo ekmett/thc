@@ -1,5 +1,12 @@
 # Executable Haskell fixtures
 
+The broader [coverage corpus](../docs/coverage.md) is described by
+[`coverage.json`](coverage.json), with separate ordinary list/function/tree and
+numeric modules. `scripts/prepare-corpus.py` generates its native driver and
+strict Core bundles; `scripts/try.sh` runs both backends through interpreted,
+compiled, cold-input and recompiled checks. The fixtures below remain as
+smaller tests of individual runtime mechanisms.
+
 These are real Haskell modules compiled by GHC 9.14.1 at `-O2`. The THC
 prototype exports `THC.Prim` and `THC.Fixtures`; `NativeOracle.hs` is only the
 native GHC oracle and benchmark driver. The prototype does not need to execute

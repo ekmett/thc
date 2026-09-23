@@ -511,7 +511,8 @@ private class Primitive(private val name: String, @field:Children private var ar
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
             "negateInt#", "not#", "notI#", "int2Word#", "word2Int#", "ord#", "chr#",
-            "narrow8Int#", "narrow16Int#", "narrow32Int#" -> 1
+            "narrow8Int#", "narrow16Int#", "narrow32Int#",
+            "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
             "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltChar#", "<=#", "leChar#",
             ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
@@ -545,9 +546,11 @@ private class Primitive(private val name: String, @field:Children private var ar
             "uncheckedIShiftL#", "uncheckedShiftL#" -> x shl y.toInt()
             "uncheckedIShiftRA#" -> x shr y.toInt()
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> x ushr y.toInt()
-            "narrow8Int#" -> x.toByte().toLong()
-            "narrow16Int#" -> x.toShort().toLong()
-            "narrow32Int#" -> x.toInt().toLong()
+            // Narrow signed values use sign-normalized Long carriers. Truncation
+            // and signed widening therefore share the width-specific conversion.
+            "narrow8Int#", "intToInt8#", "int8ToInt#" -> x.toByte().toLong()
+            "narrow16Int#", "intToInt16#", "int16ToInt#" -> x.toShort().toLong()
+            "narrow32Int#", "intToInt32#", "int32ToInt#" -> x.toInt().toLong()
             "int2Word#", "word2Int#", "ord#", "chr#" -> x
             else -> fault("Unsupported primitive")
         }
@@ -719,6 +722,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
+        if (!diagnosticUnsupported) CoreRepresentations.validateAggregates(bindings)
         val scope = Scope(FrameLayout())
         val initializers = bindings.map { binding ->
             withSource(sources.binding(binding)) {
@@ -787,8 +791,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val argumentProofs = arrayListOf<CoreRepresentation>()
         for ((index, arg) in args.withIndex()) {
             val lifted = representation(arg)
+            val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
             if (arg["id"] in free) {
-                val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
                 argumentIndices += index; argumentProofs += proof
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }

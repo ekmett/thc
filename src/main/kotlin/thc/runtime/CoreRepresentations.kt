@@ -38,9 +38,31 @@ internal data class CoreRepresentation(
 internal object CoreRepresentations {
     private val longs = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
         "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
+    private fun rejectAggregate(map: Map<*, *>) {
+        // This is logical type evidence, not an inference from physical width:
+        // empty and singleton tuples also require aggregate semantics.
+        if (map.containsKey("aggregate")) when (val aggregate = map["aggregate"]) {
+            "unboxed-tuple", "unboxed-sum" -> throw UnsupportedCore("Unsupported Core aggregate representation: $aggregate")
+            else -> throw RuntimeFault("Invalid Core aggregate representation: $aggregate")
+        }
+    }
+    /** Check reachable metadata before lowering can discard unused binders. */
+    fun validateAggregates(bindings: List<Map<String, Any?>>) {
+        fun visit(value: Any?) {
+            when (value) {
+                is Map<*, *> -> value.forEach { (key, child) ->
+                    if (key in setOf("rep", "resultRep", "joinResultRep") && child is Map<*, *>) rejectAggregate(child)
+                    visit(child)
+                }
+                is List<*> -> value.forEach(::visit)
+            }
+        }
+        visit(bindings)
+    }
     fun parse(value: Any?): CoreRepresentation {
         if (value == null) return CoreRepresentation.UNKNOWN
         val map = value as? Map<String, Any?> ?: throw RuntimeFault("Invalid Core representation metadata")
+        rejectAggregate(map)
         val kind = when (map["kind"]) {
             "long" -> CoreKind.LONG; "address" -> CoreKind.ADDRESS; "void" -> CoreKind.VOID
             "data" -> CoreKind.DATA; "closure" -> CoreKind.CLOSURE; "object" -> CoreKind.OBJECT

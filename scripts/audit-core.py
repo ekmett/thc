@@ -60,6 +60,14 @@ class Audit:
         if not isinstance(rep, dict):
             self.issue('representation-proof', owner, path, 'Expected representation record')
             return
+        # A logical empty/singleton tuple is not a scalar or a state token.
+        # Unknown metadata without this GHC-derived evidence remains valid.
+        if 'aggregate' in rep:
+            aggregate = rep['aggregate']
+            if aggregate in ('unboxed-tuple', 'unboxed-sum'):
+                self.issue('aggregate-representation', owner, path, aggregate)
+            else:
+                self.issue('representation-proof', owner, path, 'Invalid aggregate kind')
         kind, registers, evaluated = rep.get('kind'), rep.get('primReps'), rep.get('evaluated')
         kinds = {'long', 'address', 'void', 'data', 'closure', 'object', 'unknown'}
         if kind not in kinds or type(evaluated) is not bool or (registers is not None and
