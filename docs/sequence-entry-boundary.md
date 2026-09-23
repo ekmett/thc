@@ -218,3 +218,11 @@ records configuration, compiler-selection evidence, results, artifact hashes and
 retained full-log locations. Neither a Java-Graal compiler-host switch nor a GC
 change is adopted in production. Default-runtime Sequence coverage remains
 blocked at the original strict entry gate.
+
+Later native-compiler [follow-ups](../bench/experiments/sequence-boundary-lifetime/native-followups.md)
+also pass under added observation: neither per-call nor constructor-only weak
+dispatch tracing reproduces the failure, so neither supplies cache attribution.
+An unmodified checker with external output timestamps measures a 47.530-second
+frontier-processing interval, but records no boundary retirement. It does not
+establish that any earlier retirement happened during genuine idleness. The
+preserved failures and the default strict integration gap remain open.

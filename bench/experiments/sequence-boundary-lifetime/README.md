@@ -103,6 +103,7 @@ the barrier cannot prevent genuine idle retirement or repair compiled caller
 links already pointing at the interpreter adapter. Active fast-path aging is
 therefore not a demonstrated cause of the observed retirement.
 
-The next diagnostic distinguishes the public host-dispatch cache from the
-host-to-guest route at the original failure. Production code, collector choice
-and strict compiled-entry gates remain unchanged.
+The [native follow-ups](native-followups.md) retain two dispatch-trace
+non-reproductions and an externally timestamped, unmodified checker replay.
+None yields failure-time cache attribution or a fix. Production code, collector
+choice and strict compiled-entry gates remain unchanged.
