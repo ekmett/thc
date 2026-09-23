@@ -3,28 +3,58 @@ package thc
 /** Small strict JSON transport reader; Core is exported structurally, never parsed from dumps. */
 object Json {
     fun parse(text: String): Any? = Reader(text).readDocument()
-    fun stringify(value: Any?): String = when (value) {
-        null -> "null"
-        is String -> buildString {
-            append('"')
-            for (c in value) when (c) {
-                '"' -> append("\\\"")
-                '\\' -> append("\\\\")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> if (c.code < 32) append("\\u%04x".format(c.code)) else append(c)
+    fun stringify(value: Any?): String = buildString { appendJson(value) }
+
+    // Write each value into the document buffer. Returning strings recursively
+    // copies complete Core subtrees once for every enclosing object and array.
+    private fun StringBuilder.appendJson(value: Any?) {
+        when (value) {
+            null -> append("null")
+            is String -> {
+                append('"')
+                for (c in value) when (c) {
+                    '"' -> append("\\\"")
+                    '\\' -> append("\\\\")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> if (c.code < 32) {
+                        append("\\u00")
+                        append("0123456789abcdef"[c.code ushr 4])
+                        append("0123456789abcdef"[c.code and 15])
+                    } else append(c)
+                }
+                append('"')
             }
-            append('"')
+            is Boolean, is Number -> append(value.toString())
+            is Map<*, *> -> {
+                append('{')
+                var first = true
+                for ((key, field) in value) {
+                    require(key is String) { "JSON object key must be a string" }
+                    if (!first) append(',')
+                    first = false
+                    appendJson(key)
+                    append(':')
+                    appendJson(field)
+                }
+                append('}')
+            }
+            is Iterable<*> -> appendArray(value.iterator())
+            is Array<*> -> appendArray(value.iterator())
+            else -> error("Unsupported JSON value: ${value.javaClass.name}")
         }
-        is Boolean, is Number -> value.toString()
-        is Map<*, *> -> value.entries.joinToString(",", "{", "}") {
-            require(it.key is String) { "JSON object key must be a string" }
-            stringify(it.key) + ":" + stringify(it.value)
+    }
+
+    private fun StringBuilder.appendArray(values: Iterator<*>) {
+        append('[')
+        var first = true
+        while (values.hasNext()) {
+            if (!first) append(',')
+            first = false
+            appendJson(values.next())
         }
-        is Iterable<*> -> value.joinToString(",", "[", "]") { stringify(it) }
-        is Array<*> -> value.joinToString(",", "[", "]") { stringify(it) }
-        else -> error("Unsupported JSON value: ${value.javaClass.name}")
+        append(']')
     }
 
     private class Reader(val text: String) {
