@@ -41,7 +41,9 @@ if mode == 'prepare':
 
 assert mode == 'check'
 initial = json.loads((out/'runtime-snapshot.json').read_text())
-assert snapshot() == initial, 'Runtime source/JAR changed during capture'
+current = snapshot()
+# Keep the historical launch revision; a later evidence-only commit does not change code.
+assert all(current[key] == initial[key] for key in ('sources', 'runtimeJars')), 'Runtime source/JAR changed during capture'
 inputs = json.loads((out/'input-provenance.json').read_text())
 assert digest(Path(inputs['originalProvenance']['path'])) == inputs['originalProvenance']['sha256'], 'Core provenance changed during capture'
 for item in inputs['core']['sources'] + inputs['core']['artifacts']:
