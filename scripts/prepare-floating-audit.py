@@ -45,6 +45,8 @@ def expected(name, n):
         return int(n >= 0)
     if name == 'floatingFields':
         return int(x) + int((float(n) + 0.5) * 2.0)
+    if name == 'floatingTupleFrontier':
+        return int(x) + n
     if name == 'floatingCaptures':
         return int(f32(x + f32(3))) + int(float(n) - 3.0)
     if name == 'floatingLoop':
@@ -81,7 +83,7 @@ def main():
         name, arg, answer = line.split('\t')
         assert int(answer) == expected(name, int(arg)), (name, arg, answer, expected(name, int(arg)))
         entries.add(name)
-    assert len(entries) == 14 and len(rows.splitlines()) == 412
+    assert len(entries) == 15 and len(rows.splitlines()) == 441
     (OUT / 'oracle.tsv').write_text(rows)
     subprocess.run(['compiler/export.sh', str(FIXTURE)], cwd=ROOT, check=True,
                    env=dict(os.environ, THC_CORE_OUT=str(OUT / 'core'), THC_GHC_OUT=str(OUT / 'ghc')))
@@ -117,12 +119,10 @@ def main():
         report = auditor.Audit([(str(module_path), module)], capabilities).run([entry])
         assert report['accepted'], (entry, report['issues'], report['missingGlobals'])
         audits[entry] = report['summary']
-    frontier = auditor.Audit([(str(module_path), module)], capabilities).run(['floatingTupleFrontier'])
-    assert not frontier['accepted'] and any(i['code'] == 'aggregate-representation' for i in frontier['issues'])
     (OUT / 'checks.json').write_text(json.dumps(dict(nativeRows=len(rows.splitlines()),
         primitives=PRIMITIVES, entries=sorted(entries), audit=audits, floatingCaptureKinds=sorted(capture_kinds),
         floatingJoinFormals=join_formals,
-        ordinaryCprFrontier=dict(entry='floatingTupleFrontier', summary=frontier['summary'], issues=frontier['issues']),
+        ordinaryCprResult=dict(entry='floatingTupleFrontier', summary=audits['floatingTupleFrontier']),
         conversionDomain='Finite representable Int results only; non-finite/out-of-range conversions excluded',
         artifacts=[record(module_path), record(OUT / 'oracle.tsv'), record(native / 'floating-oracle')],
         toolchain=dict(ghc=GHC, version='9.14.1', nativeFlags=['-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint']),

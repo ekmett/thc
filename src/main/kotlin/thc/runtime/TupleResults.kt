@@ -31,12 +31,16 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
         check(storage.layout === layout)
         for (index in leaves.indices) {
             if (layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], layout.getLong(storage, index))
+            else if (layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], layout.getFloat(storage, index))
+            else if (layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], layout.getDouble(storage, index))
             else FrameAccess.write(frame, slots[offset + index], layout.getObject(storage, index))
         }
     }
     @ExplodeLoop private fun write(frame: VirtualFrame, slots: IntArray, storage: HandoffStorage) {
         for (index in leaves.indices) {
             if (layout.isLong(index)) layout.setLong(storage, index, frame.getLong(slots[index]))
+            else if (layout.isFloat(index)) layout.setFloat(storage, index, frame.getFloat(slots[index]))
+            else if (layout.isDouble(index)) layout.setDouble(storage, index, frame.getDouble(slots[index]))
             else layout.setObject(storage, index, frame.getObject(slots[index]))
         }
     }
@@ -81,8 +85,9 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             if (proof.primReps == null)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved fields")
             val fields = flatten(proof)
-            if (fields.any { (!it.isLong && it.kind !in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
-                    it.primReps?.singleOrNull()?.let(HandoffLayout::supports) != true })
+            if (fields.any { (it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE,
+                    CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
+                    it.primReps?.singleOrNull()?.let(HandoffLayout::supportsResult) != true })
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unsupported fields")
             val reps = fields.map { it.primReps!!.single() }
             if (proof.primReps != reps) throw RuntimeFault("Tuple components disagree with primitive representations")
@@ -277,6 +282,8 @@ internal class TupleLocalRead(private val shape: TupleShape,
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         for (index in sources.indices) {
             if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(sources[index]))
+            else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], frame.getFloat(sources[index]))
+            else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], frame.getDouble(sources[index]))
             else FrameAccess.write(frame, slots[offset + index], frame.getObject(sources[index]))
         }
         return null
@@ -291,6 +298,8 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
             val target = offset + shape.offsets[index]
             if (component.isTuple) fields[index].executeTuple(frame, slots, target)
             else if (component.isLong) FrameAccess.writeLong(frame, slots[target], fields[index].executeRequiredLong(frame))
+            else if (component.isFloat) FrameAccess.writeFloat(frame, slots[target], fields[index].executeRequiredFloat(frame))
+            else if (component.isDouble) FrameAccess.writeDouble(frame, slots[target], fields[index].executeRequiredDouble(frame))
             else if (component.kind == CoreKind.VOID) requireVoidCarrier(fields[index].execute(frame))
             else FrameAccess.write(frame, slots[target], fields[index].execute(frame))
         }
@@ -327,6 +336,8 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
     private fun prepare(frame: VirtualFrame) { scrutinee.executeTuple(frame, slots, 0) }
     override fun execute(frame: VirtualFrame): Any? { prepare(frame); return body.execute(frame) }
     override fun executeLong(frame: VirtualFrame): Long { prepare(frame); return body.executeLong(frame) }
+    override fun executeFloat(frame: VirtualFrame): Float { prepare(frame); return body.executeFloat(frame) }
+    override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return body.executeDataValue(frame) }
     override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return body.executeAddress(frame) }
@@ -339,6 +350,8 @@ internal class BytecodeTupleSlots(shape: TupleShape,
     @ExplodeLoop private fun write(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode, output: HandoffStorage) {
         for (index in slots.indices) {
             if (shape.layout.isLong(index)) shape.layout.setLong(output, index, slots[index].getLong(node, frame))
+            else if (shape.layout.isFloat(index)) shape.layout.setFloat(output, index, slots[index].getFloat(node, frame))
+            else if (shape.layout.isDouble(index)) shape.layout.setDouble(output, index, slots[index].getDouble(node, frame))
             else shape.layout.setObject(output, index, slots[index].getObject(node, frame))
         }
     }
@@ -357,6 +370,8 @@ internal class BytecodeTupleSlots(shape: TupleShape,
     @ExplodeLoop fun copyFrom(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode, receiver: HandoffStorage) {
         for (index in slots.indices) {
             if (shape.layout.isLong(index)) slots[index].setLong(node, frame, shape.layout.getLong(receiver, index))
+            else if (shape.layout.isFloat(index)) slots[index].setFloat(node, frame, shape.layout.getFloat(receiver, index))
+            else if (shape.layout.isDouble(index)) slots[index].setDouble(node, frame, shape.layout.getDouble(receiver, index))
             else slots[index].setObject(node, frame, shape.layout.getObject(receiver, index))
         }
     }

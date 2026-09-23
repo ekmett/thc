@@ -153,6 +153,8 @@ internal class LocalJoinRegion(group: Any, private val selector: Int, private va
         run(frame)
         for (index in tupleSlots.indices) {
             if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(tupleSlots[index]))
+            else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], frame.getFloat(tupleSlots[index]))
+            else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], frame.getDouble(tupleSlots[index]))
             else FrameAccess.write(frame, slots[offset + index], frame.getObject(tupleSlots[index]))
         }
         // Compiler-created region temporaries are distinct from enclosing
