@@ -234,7 +234,10 @@ def reconcile(api, report=print, sleep=time.sleep):
         if api.call("GET", "branches/main")["commit"]["sha"] != base:
             report(f"#{number}: main advanced; waiting for an updated build")
             return
-        if fresh["mergeable_state"] != "clean":
+        # An unrelated approval-required run can leave an otherwise eligible
+        # PR unstable. Our trusted Build gate still must pass; GitHub decides
+        # atomically whether protection permits the expected-head merge.
+        if fresh["mergeable_state"] not in ("clean", "unstable"):
             report(f"#{number}: GitHub merge state is {fresh['mergeable_state']}")
             continue
         final_state, final_run = build_result(api, sha)
