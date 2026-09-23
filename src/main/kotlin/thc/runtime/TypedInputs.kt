@@ -149,9 +149,18 @@ internal class AstInputSource(layout: ArgumentLayout,
 internal class BytecodeInputSource(layout: ArgumentLayout,
     @field:CompilationFinal(dimensions = 1) val slots: Array<LocalAccessor>) : InputSource(layout) {
     private fun bytecode(node: Node): BytecodeNode = (node.rootNode as BytecodeRoot).bytecodeNode
-    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getLong(bytecode(node), frame)
-    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getFloat(bytecode(node), frame)
-    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getDouble(bytecode(node), frame)
+    // Exact tuple leaves retain primitive access. A legacy unknown scalar beside
+    // a tuple can generalize its local to Object after another numeric target;
+    // read that existing scalar carrier generically, then check the target kind.
+    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long =
+        if (physicalProofs!![index].isLong) slots[index].getLong(bytecode(node), frame)
+        else slots[index].getObject(bytecode(node), frame) as? Long ?: fault("Expected primitive Long input")
+    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float =
+        if (physicalProofs!![index].isFloat) slots[index].getFloat(bytecode(node), frame)
+        else slots[index].getObject(bytecode(node), frame) as? Float ?: fault("Expected primitive Float input")
+    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double =
+        if (physicalProofs!![index].isDouble) slots[index].getDouble(bytecode(node), frame)
+        else slots[index].getObject(bytecode(node), frame) as? Double ?: fault("Expected primitive Double input")
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getObject(bytecode(node), frame)
     override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
         slots[index].setObject(bytecode(node), frame, value)
