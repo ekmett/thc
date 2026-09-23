@@ -153,7 +153,7 @@ internal object CoreRepresentations {
      * Long carrier. Missing legacy metadata is fine; a contradictory proof is not. */
     fun narrowLiteralProof(expr: List<Any?>): CoreRepresentation {
         val expected = when (expr[1]) {
-            "int8" -> "Int8Rep"
+            "int8" -> "Int8Rep"; "word8" -> "Word8Rep"
             "int16" -> "Int16Rep"; "word16" -> "Word16Rep"
             "int32" -> "Int32Rep"; "word32" -> "Word32Rep"
             else -> throw RuntimeFault("Not a supported narrow literal: ${expr[1]}")

@@ -206,6 +206,38 @@ class AuditTest(unittest.TestCase):
                 if not valid:
                     self.assertIn('invalid-literal-value', {i['code'] for i in report['issues']})
 
+    def test_word8_literals_and_alternatives_require_canonical_unsigned_range(self):
+        for text in ('0', '1', '127', '128', '255', '-1', '-128', '256',
+                     '', '+1', '01', '-0', ' 1', '1.0', '18446744073709551616'):
+            valid = text in ('0', '1', '127', '128', '255')
+            literal = ['lit', 'word8', text]
+            alternative = ['case', lit(0), 'x', [['lit', ['word8', text], [], lit(1)], ['default', None, [], lit(2)]]]
+            for expression in (literal, alternative):
+                report = run(expression)
+                self.assertEqual(valid, report['accepted'], text)
+                if not valid: self.assertIn('invalid-literal-value', {i['code'] for i in report['issues']})
+
+    def test_word8_literals_retain_unsigned_scalar_identity(self):
+        for rep in ('Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'IntRep', 'WordRep'):
+            for carrier in ('long', 'unknown'):
+                proof = dict(kind=carrier, primReps=[rep], evaluated=True)
+                self.assertEqual(carrier == 'long' and rep == 'Word8Rep',
+                                 run(['lit', 'word8', '255', dict(rep=proof)])['accepted'], proof)
+        for proof in (None, dict(kind='unknown', evaluated=False), dict(kind='unknown', primReps=None, evaluated=True)):
+            literal = ['lit', 'word8', '255'] + ([] if proof is None else [dict(rep=proof)])
+            self.assertTrue(run(literal)['accepted'])
+            for operation, accepted, result in (('word8ToWord#', True, 'WordRep'),
+                                                ('int8ToInt#', False, 'IntRep'),
+                                                ('word16ToWord#', False, 'WordRep')):
+                expression = ['app', ['prim', operation], [literal], [False], False, False,
+                              dict(rep=dict(kind='long', primReps=[result], evaluated=True))]
+                self.assertEqual(accepted, run(expression)['accepted'])
+        lane = dict(kind='long', primReps=['Word8Rep'], evaluated=True)
+        for proof in (dict(kind='unknown',primReps=[],evaluated=False),
+                      dict(kind='unknown',primReps=None,evaluated=False,aggregate='unboxed-tuple',components=[]),
+                      dict(kind='long',primReps=['Word8Rep'],evaluated=True,aggregate='unboxed-tuple',components=[lane])):
+            self.assertFalse(run(['lit','word8','1',dict(rep=proof)])['accepted'],proof)
+
     def test_int8_literals_and_alternatives_require_canonical_signed_range(self):
         for text in ('-128', '-1', '0', '1', '127', '-129', '128', '255',
                      '', '+1', '01', '-0', ' 1', '1.0', '18446744073709551616'):

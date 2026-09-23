@@ -122,7 +122,7 @@ internal object CoreVectors {
         if (flags.any { it != false }) throw RuntimeFault("Vector primitive operands must be unlifted")
     }
     fun argumentProof(expression: List<Any?>): CoreRepresentation =
-        if (expression.firstOrNull() == "lit" && expression.getOrNull(1) in listOf("int8", "int16", "word16", "int32", "word32"))
+        if (expression.firstOrNull() == "lit" && expression.getOrNull(1) in listOf("int8", "word8", "int16", "word16", "int32", "word32"))
             CoreRepresentations.narrowLiteralProof(expression)
         else CoreRepresentations.expression(expression)
 }

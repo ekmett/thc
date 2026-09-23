@@ -1232,7 +1232,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> Literal(Unit)
         "lam" -> {

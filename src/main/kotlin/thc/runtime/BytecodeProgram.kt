@@ -727,7 +727,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
