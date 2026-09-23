@@ -30,7 +30,7 @@ Run each of `pairCase`, `forwardedCase`, `outstandingCase`, `mixedCase`, and `la
 
 ## Observed result and limits
 
-All twenty combinations (five entries, two backends, normal and disabled guest inlining) pass the native oracle and remain compiled after execution. Tuple carriers and their field traffic disappear from their final caller graphs. The mixed case also removes the temporary Box allocation and never demands its unused bottom field. Final AArch64 LIR computes both dynamic leaves in scalar registers, subject to ordinary register allocation and spills.
+All twenty combinations (five entries, two backends, normal and disabled guest inlining) pass the native oracle and remain compiled after execution. In the ten normal-inlining configurations, tuple carriers and their field traffic disappear from the final caller graphs. The mixed case also removes the temporary Box allocation and never demands its unused bottom field. Final AArch64 LIR computes both dynamic leaves in scalar registers, subject to ordinary register allocation and spills.
 
 The checked-in `captured/evidence.json` records the native checks, source/runtime artifact hashes, graph hashes, memory locations and phase counts. `captured/lir-excerpts.txt` shows actual post-allocation arithmetic and return instructions; full CFG/LIR is reproduced by the script.
 
