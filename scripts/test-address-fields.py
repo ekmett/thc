@@ -54,7 +54,7 @@ class AddressFields(unittest.TestCase):
     def test_address_sum_is_still_rejected(self):
         instance=audit.Audit([],CAP)
         instance.representation(dict(kind='unknown',aggregate='unboxed-sum',alternatives=[ADDRESS,LONG],
-            primReps=['WordRep','AddrRep'],evaluated=True),None,'/rep')
+            primReps=['WordRep','WordRep'],tagSlot=0,alternativeSlots=[[1],[1]],evaluated=True),None,'/rep')
         self.assertIn('aggregate-representation',{i['code'] for i in instance.issues})
 
     def test_genuine_pre_and_post_inputs(self):

@@ -172,7 +172,10 @@ class AddressFieldTest {
         }
         val tuple=mapOf("kind" to "unknown","aggregate" to "unboxed-tuple","components" to listOf(address),"primReps" to listOf("AddrRep"),"evaluated" to true)
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(tuple) }
-        val sum=mapOf("kind" to "unknown","aggregate" to "unboxed-sum","alternatives" to listOf(address,long),"primReps" to listOf("WordRep","AddrRep"),"evaluated" to true)
+        // GHC places both AddrRep and IntRep payloads in the shared WordSlot;
+        // the runtime still rejects address payloads before creating a carrier.
+        val sum=mapOf("kind" to "unknown","aggregate" to "unboxed-sum","alternatives" to listOf(address,long),
+            "primReps" to listOf("WordRep","WordRep"),"tagSlot" to 0,"alternativeSlots" to listOf(listOf(1),listOf(1)),"evaluated" to true)
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(sum) }
     }
 }
