@@ -31,7 +31,7 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
         return input
     }
     fun validate(input: HandoffStorage) {
-        if (input.layout !== packet || input.inputMode !in 1..2 || input.live != (input.inputMode == 1)) {
+        if (input.layout !== packet || input.inputMode !in 1..3 || input.live != (input.inputMode == 1)) {
             releaseUnexpected(input)
             fault("Conflicting typed input layout or ownership")
         }
@@ -44,7 +44,7 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
         check(input.layout === packet)
         when (input.inputMode) {
             1 -> state().arguments.release(input, packet)
-            2 -> packet.clearReferences(input)
+            2, 3 -> packet.clearReferences(input)
             else -> fault("Typed input carrier was already consumed")
         }
         input.inputMode = 0
@@ -77,7 +77,7 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
 internal fun discardTypedInput(language: Language, input: HandoffStorage) {
     when (input.inputMode) {
         1 -> language.handoffState.get().arguments.release(input)
-        2 -> input.layout.clearReferences(input)
+        2, 3 -> input.layout.clearReferences(input)
     }
     input.inputMode = 0
 }
@@ -411,6 +411,9 @@ private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.t
     val mask = source?.bloom(frame) ?: 0L
     if (source == null || mask and targetRoot.mask == targetRoot.mask) {
         if (metrics.enabled) { metrics.tailBounces++; targetRoot.typedInput!!.state().tailTransfers++ }
+        // A tail transfer deliberately materializes this carrier in a control
+        // exception. It remains unpooled, but is no longer an inline-only input.
+        if (loan.inputMode == 2) loan.inputMode = 3
         throw TailCall(target, NO_PAP_ARGUMENTS, loan)
     }
     packet.setLong(loan, 0, mask)
