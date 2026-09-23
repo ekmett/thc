@@ -93,7 +93,7 @@ class ByteArrayContracts(unittest.TestCase):
 
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
         for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',
-                     'readIntArray#', 'writeIntArray#', 'indexIntArray#',
+                     'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#',
                      'readDoubleArray#', 'writeDoubleArray#', 'indexDoubleArray#'):
             module, _ = fixture(name)
             parameter = module['bindings'][0]['expr'][1][0]
@@ -127,6 +127,27 @@ class ByteArrayContracts(unittest.TestCase):
                     app[6]['rep']['primReps'] = [rep]
                 report = check(module)
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, kind, rep))
+
+    def test_copy_requires_exact_proofs_for_both_references_offsets_count_and_state(self):
+        for argument in range(6):
+            for mutation in ('missing', 'wrong-rep', 'tuple-state'):
+                module, app = fixture('copyByteArray#')
+                metadata = app[2][argument][2]
+                if mutation == 'missing':
+                    metadata.pop('rep')
+                elif mutation == 'wrong-rep':
+                    metadata['rep']['primReps'] = ['BoxedRep (Just Lifted)'] if argument in (0, 2) else ['WordRep']
+                else:
+                    metadata['rep'].update(kind='unknown', aggregate='unboxed-tuple', components=[], primReps=[])
+                report = check(module)
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (argument, mutation))
+        module, app = fixture('copyByteArray#')
+        app[6]['rep'].update(kind='unknown', aggregate='unboxed-tuple', components=[])
+        self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']})
+        for argument in (0, 2):
+            module, _ = fixture('copyByteArray#')
+            module['bindings'][0]['expr'][1][argument]['rep']['primReps'] = ['BoxedRep (Just Lifted)']
+            self.assertIn('scalar-representation', {i['code'] for i in check(module)['issues']}, argument)
 
 
 if __name__ == '__main__':
