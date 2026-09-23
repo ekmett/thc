@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check the unsupported aggregate frontier separately from executable coverage.
+"""Check staged aggregate support against genuine GHC exports and a native oracle.
 
-Requires genuine GHC -O2 pre/post-Tidy exports and a native oracle. Rejection is
-the expected capability result; no row contributes to the supported corpus.
+Result-only tuples execute in the JVM suite; sums and aggregate argument
+boundaries remain rejected. These rows stay separate from the library corpus.
 """
 import argparse
 import importlib.util
@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'scripts/audit-core.py')
 audit_core = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit_core)
+SUPPORTED = {'tupleOutstanding', 'tupleZeroLazy', 'coldTuple'}
 CAP = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
 CASES = {
     'tupleOutstanding': ['tuple', 'opaque-producer', 'forwarder', 'two-outstanding-results', 'unequal-weights'],
@@ -76,17 +77,20 @@ def inventory(path, stage):
     for entry, features in CASES.items():
         report = audit_core.Audit([(str(path), module)], CAP).run([entry])
         codes = sorted({i['code'] for i in report['issues']})
-        check(not report['accepted'] and 'aggregate-representation' in codes, f'{stage}/{entry}: must reject aggregate type evidence')
+        supported = entry in SUPPORTED
+        check(report['accepted'] == supported, f'{stage}/{entry}: staged aggregate capability mismatch: {report["issues"]}')
+        if not supported:
+            check(any(code in codes for code in ('aggregate-representation', 'aggregate-boundary')), f'{stage}/{entry}: missing boundary rejection')
         check(not report['missingGlobals'], f'{stage}/{entry}: unrelated missing globals')
         constructors = report['constructors']
         if 'constructor-free' in features:
             check(not constructors, f'{entry}: must expose a constructor-free boundary')
-        else:
+        elif not supported:
             check('constructor-kind' in codes, f'{entry}: must also exercise constructor rejection')
         if entry in ('sumPayload', 'sumZeroLazy'):
             tags = {c['metadata']['tag'] for c in constructors if c['metadata']['kind'] == 'unboxed-sum'}
             check(tags == {1, 2}, f'{entry}: both sum alternatives must survive')
-        rows.append(dict(entry=entry, supported=False, expected='reject-at-load', features=features,
+        rows.append(dict(entry=entry, supported=supported, expected='execute' if supported else 'reject-at-load', features=features,
                          auditAccepted=report['accepted'], issueCodes=codes,
                          aggregateKinds=sorted({i['detail'] for i in report['issues'] if i['code'] == 'aggregate-representation'}),
                          reachableBindings=sorted(r['id'].split('.')[-1] for r in report['reachableBindings']),
@@ -119,7 +123,7 @@ def check_native(path):
     check(actual == expected, 'Native aggregate oracle disagrees with bounded independent wraparound formulas')
     check(31337 not in INPUTS, 'Cold branch inputs accidentally exercised')
     return dict(rows=len(actual), inputs=INPUTS, coldBranchInput=31337, coldBranchesExecuted=False,
-                purpose='future semantic oracle only; no THC execution success claimed')
+                purpose='native semantic oracle; result-only tuple subset also executed by JVM tests')
 
 
 def check_unknown_compatibility():
@@ -143,12 +147,12 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT / 'build/aggregate-frontier.json')
     args = parser.parse_args()
     check_unknown_compatibility()
-    report = dict(schema=1, category='unsupported-aggregate-frontier', supportedEntries=0,
+    report = dict(schema=1, category='staged-aggregate-frontier', supportedEntries=len(SUPPORTED),
                   coverage=[inventory(args.pre, 'pre-tidy'), inventory(args.post, 'post-tidy')],
                   nativeOracle=check_native(args.oracle))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + '\n')
-    print(f'Aggregate frontier: {len(CASES)} unsupported entries in both export stages; {report["nativeOracle"]["rows"]} native-only oracle rows; 0 supported entries')
+    print(f'Aggregate frontier: {len(SUPPORTED)} supported result-only entries, {len(CASES)-len(SUPPORTED)} rejected boundaries; {report["nativeOracle"]["rows"]} native oracle rows')
 
 
 if __name__ == '__main__':

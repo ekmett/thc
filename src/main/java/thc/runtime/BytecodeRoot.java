@@ -205,6 +205,53 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    /** Tuple operands are scalar inputs; each dispatch arm consumes into typed locals. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = int.class, name = "arity")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyTuple {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeTupleSlots destination, int arity, Metrics metrics,
+                Closure function, @Variadic Object[] arguments,
+                @Cached(value = "create(destination, arity, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            dispatch.execute(frame, function, arguments);
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, int arity, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, arity, false);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = int.class, name = "arity")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class TailApplyTuple {
+        @Specialization public static Object apply(VirtualFrame frame, BytecodeTupleSlots destination, int arity, Metrics metrics,
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                @Cached(value = "create(destination, arity, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            try {
+                dispatch.execute(frame, function, arguments);
+                return null;
+            } catch (TailCall transfer) {
+                if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return transfer;
+            }
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, int arity, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, arity, true);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "source")
+    public static final class FinishTuple {
+        @Specialization public static Object finish(VirtualFrame frame, BytecodeTupleSlots source,
+                @Bind("$node") Node node) {
+            return source.finish(frame, ((BytecodeRoot) node.getRootNode()).getBytecodeNode());
+        }
+    }
+
     @Operation
     public static final class RequireClosure {
         @Specialization public static Closure require(Object value) {

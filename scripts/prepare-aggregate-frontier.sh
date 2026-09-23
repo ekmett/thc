@@ -1,5 +1,5 @@
 #!/bin/sh
-# Separate negative coverage; never append these native rows to oracle.tsv.
+# Staged aggregate coverage; retain its native oracle separately from library rows.
 set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd)

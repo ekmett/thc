@@ -10,8 +10,9 @@ Eligible arguments have one supported Long or boxed-reference representation.
 Captured environments occupy another reference field. Results use either a
 private completion token with an immediately consumed Long register, or the
 ordinary reference return. Bytecode, indirect calls, unsupported signatures,
-and tail chains without a handoff receiver retain ordinary dispatch. Aggregate
-metadata remains rejected, including zero-width and singleton unboxed tuples.
+and tail chains without a handoff receiver retain ordinary dispatch. Exact unboxed
+tuple results use a separate [mandatory result protocol](tuple-results.md) on
+both backends; singleton-reference tuples never select this scalar handoff path.
 
 ## Ownership and reentrancy
 
