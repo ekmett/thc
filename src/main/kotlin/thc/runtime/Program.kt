@@ -627,9 +627,17 @@ private class Primitive(private val name: String, @field:Children private var ar
     private val operation = scalar64PrimitiveOperation(name)
     private val wordMask = narrowWordPrimitiveMask(name)
     private val intShift = narrowIntPrimitiveShift(name)
+    private val bitShift = scalarBitPrimitiveShift(name)
+    private val bitMask = -1L ushr bitShift
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (operation) {
+            "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> 1
+            "clz8#", "clz16#", "clz32#", "clz64#" -> 1
+            "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> 1
+            "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> 1
+            "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> 1
+
             "negateInt8#", "negateInt16#", "negateInt32#" -> 1
             "plusInt8#", "plusInt16#", "plusInt32#" -> 2
             "subInt8#", "subInt16#", "subInt32#" -> 2
@@ -680,6 +688,11 @@ private class Primitive(private val name: String, @field:Children private var ar
         val y = if (arguments.size == 2) arguments[1].executeRequiredLong(frame) else 0L
         fun b(value: Boolean) = if (value) 1L else 0L
         return when (operation) {
+            "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> java.lang.Long.bitCount(x and bitMask).toLong()
+            "clz8#", "clz16#", "clz32#", "clz64#" -> (java.lang.Long.numberOfLeadingZeros(x and bitMask) - bitShift).toLong()
+            "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> minOf(java.lang.Long.numberOfTrailingZeros(x and bitMask), 64 - bitShift).toLong()
+            "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> java.lang.Long.reverseBytes(x) ushr bitShift
+            "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> java.lang.Long.reverse(x) ushr bitShift
             "negateInt8#", "negateInt16#", "negateInt32#" -> signedNarrow(-x, intShift)
             "plusInt8#", "plusInt16#", "plusInt32#" -> signedNarrow(x + y, intShift)
             "subInt8#", "subInt16#", "subInt32#" -> signedNarrow(x - y, intShift)

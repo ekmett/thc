@@ -26,6 +26,10 @@ literals and 66,117 native/model rows with exact representation checks. The
 native two-field rows, exact local destinations and pre/post-Tidy compiled-entry
 checks on both backends.
 
+The [scalar bit suite](bit-primops.md) adds 21 population/zero-count, byte-swap,
+and bit-reversal operations with 11,923 native/model rows, pre/post-Tidy exports,
+and exact compiled-entry checks for every row on both backends.
+
 The first [SIMD slice](simd.md) supports six local `Int64X2#` operations. Exact
 vector metadata keeps these values distinct from unboxed tuples. Both backends
 have actual Core graph evidence showing packed AArch64 arithmetic with temporary

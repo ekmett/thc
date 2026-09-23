@@ -109,6 +109,11 @@ jobs:
             build/integer-primops/manifest.json
             build/integer-primops/oracle.tsv
             build/integer-primops/*.audit.json
+            build/bit-primops/manifest.json
+            build/bit-primops/oracle.tsv
+            build/bit-primops/NativeBitPrimops.hs
+            build/bit-primops/*-core/*.json
+            build/bit-primops/*.audit.json
             build/simd/
             build/explicit64-primops/manifest.json
             build/explicit64-primops/oracle.tsv

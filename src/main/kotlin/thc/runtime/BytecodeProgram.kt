@@ -1101,7 +1101,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
         val intShift = narrowIntPrimitiveShift(name)
+        val bitShift = scalarBitPrimitiveShift(name)
         val operation = when (scalar64PrimitiveOperation(name)) {
+            "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> "PopulationCountWidth"
+            "clz8#", "clz16#", "clz32#", "clz64#" -> "CountLeadingZerosWidth"
+            "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> "CountTrailingZerosWidth"
+            "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> "ByteSwapWidth"
+            "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> "BitReverseWidth"
+
             "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
             "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
             "subInt8#", "subInt16#", "subInt32#" -> "SubtractNarrowInt"
@@ -1172,7 +1179,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
-        val unary = operation in setOf("NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
+        val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
             "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
@@ -1218,6 +1225,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "LessEqualUnsigned" -> b.beginLessEqualUnsigned()
                 "LessThanNarrowWord" -> b.beginLessThanNarrowWord(wordMask); "LessEqualNarrowWord" -> b.beginLessEqualNarrowWord(wordMask)
                 "BitAnd" -> b.beginBitAnd(); "BitOr" -> b.beginBitOr(); "BitXor" -> b.beginBitXor(); "BitNot" -> b.beginBitNot()
+                "PopulationCountWidth" -> b.beginPopulationCountWidth(bitShift)
+                "CountLeadingZerosWidth" -> b.beginCountLeadingZerosWidth(bitShift)
+                "CountTrailingZerosWidth" -> b.beginCountTrailingZerosWidth(bitShift)
+                "ByteSwapWidth" -> b.beginByteSwapWidth(bitShift)
+                "BitReverseWidth" -> b.beginBitReverseWidth(bitShift)
                 "CountLeadingZeros" -> b.beginCountLeadingZeros()
                 "CountTrailingZeros" -> b.beginCountTrailingZeros(); "PopulationCount" -> b.beginPopulationCount()
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
@@ -1266,6 +1278,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "LessEqualUnsigned" -> b.endLessEqualUnsigned()
                 "LessThanNarrowWord" -> b.endLessThanNarrowWord(); "LessEqualNarrowWord" -> b.endLessEqualNarrowWord()
                 "BitAnd" -> b.endBitAnd(); "BitOr" -> b.endBitOr(); "BitXor" -> b.endBitXor(); "BitNot" -> b.endBitNot()
+                "PopulationCountWidth" -> b.endPopulationCountWidth()
+                "CountLeadingZerosWidth" -> b.endCountLeadingZerosWidth()
+                "CountTrailingZerosWidth" -> b.endCountTrailingZerosWidth()
+                "ByteSwapWidth" -> b.endByteSwapWidth()
+                "BitReverseWidth" -> b.endBitReverseWidth()
                 "CountLeadingZeros" -> b.endCountLeadingZeros()
                 "CountTrailingZeros" -> b.endCountTrailingZeros(); "PopulationCount" -> b.endPopulationCount()
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()
