@@ -32,6 +32,18 @@ application {
 }
 tasks.test {
     useJUnitPlatform()
+    // Exported Core and native expectations are test inputs even when JVM sources
+    // are unchanged. Source inputs also make stale corpus fingerprints observable.
+    inputs.files(fileTree(layout.buildDirectory) {
+        include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
+            "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
+            "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
+    })
+    inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
+    inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh") })
+    inputs.files(fileTree("scripts") {
+        include("prepare-corpus.py", "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
+    })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)
     // Keep the default tests independent of THC_BACKEND; bytecode tests select their backend explicitly.
