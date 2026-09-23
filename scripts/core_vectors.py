@@ -53,6 +53,19 @@ OPERATIONS.update({
     'negateInt8X16#': ([VECTOR8_REP], VECTOR8_REP),
     'timesInt8X16#': ([VECTOR8_REP, VECTOR8_REP], VECTOR8_REP),
 })
+VECTOR_WORD8_REP = {'kind': 'vector', 'primReps': ['VecRep 16 Word8ElemRep'], 'evaluated': True,
+                    'vector': {'lanes': 16, 'element': 'Word8ElemRep'}}
+LANE_WORD8_REP = {'kind': 'long', 'primReps': ['Word8Rep'], 'evaluated': True}
+TUPLE_WORD8_REP = {'kind': 'unknown', 'primReps': ['Word8Rep'] * 16, 'evaluated': True,
+                  'aggregate': 'unboxed-tuple', 'components': [LANE_WORD8_REP] * 16}
+OPERATIONS.update({
+    'packWord8X16#': ([TUPLE_WORD8_REP], VECTOR_WORD8_REP),
+    'unpackWord8X16#': ([VECTOR_WORD8_REP], TUPLE_WORD8_REP),
+    'broadcastWord8X16#': ([LANE_WORD8_REP], VECTOR_WORD8_REP),
+    'plusWord8X16#': ([VECTOR_WORD8_REP, VECTOR_WORD8_REP], VECTOR_WORD8_REP),
+    'minusWord8X16#': ([VECTOR_WORD8_REP, VECTOR_WORD8_REP], VECTOR_WORD8_REP),
+    'timesWord8X16#': ([VECTOR_WORD8_REP, VECTOR_WORD8_REP], VECTOR_WORD8_REP),
+})
 VECTOR_FLOAT_REP = {'kind': 'vector', 'primReps': ['VecRep 4 FloatElemRep'], 'evaluated': True,
                     'vector': {'lanes': 4, 'element': 'FloatElemRep'}}
 LANE_FLOAT_REP = {'kind': 'float', 'primReps': ['FloatRep'], 'evaluated': True}
@@ -97,6 +110,6 @@ def proof_error(rep):
         return 'Invalid Core vector shape'
     if registers != [f"VecRep {shape['lanes']} {shape['element']}"]:
         return 'Vector shape disagrees with primitive representation'
-    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
+    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_WORD8_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
         return 'Unsupported Core vector representation'
     return None

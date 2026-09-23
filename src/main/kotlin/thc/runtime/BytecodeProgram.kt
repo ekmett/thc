@@ -734,7 +734,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
@@ -1169,6 +1169,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operationsWord8 -> vectorWord8Primitive(name, operands)
         in CoreVectors.operations8 -> vector8Primitive(name, operands)
         in CoreVectors.operations16 -> vector16Primitive(name, operands)
         in CoreVectors.operationsDouble -> vectorDoublePrimitive(name, operands)
@@ -1197,6 +1198,35 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof)
+    }
+
+    private fun vectorWord8Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackWord8X16#" -> tupleExpression(CoreVectors.unpackedWord8) { e, destination ->
+            e.builder.beginVectorWord8Unpack(destination[0], destination[1], destination[2], destination[3],
+                destination[4], destination[5], destination[6], destination[7],
+                destination[8], destination[9], destination[10], destination[11],
+                destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endVectorWord8Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packWord8X16#" -> {
+                    b.beginBlock()
+                    val lanes = List(16) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorWord8Pack(); lanes.forEach(b::emitLoadLocal); b.endVectorWord8Pack()
+                    b.endBlock()
+                }
+                "broadcastWord8X16#" -> { b.beginVectorWord8Broadcast(); operands[0].emit(e); b.endVectorWord8Broadcast() }
+                else -> {
+                    val operation = when (name) { "plusWord8X16#" -> 0; "minusWord8X16#" -> 1; "timesWord8X16#" -> 2; else -> error("Invalid Word8X16 operation") }
+                    b.beginVectorWord8Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVectorWord8Binary()
+                }
+            }
+        }, CoreVectors.proofWord8)
     }
 
     private fun vector8Primitive(name: String, operands: List<Expression>): Expression = when (name) {

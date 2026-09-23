@@ -1238,7 +1238,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> Literal(Unit)
         "lam" -> {
@@ -1287,6 +1287,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "packInt8X16#" -> Vector8Pack(operands[0], IntArray(16) { scope.layout.bind("<int8 vector lane $it>") })
                     "unpackInt8X16#" -> Vector8Unpack(operands[0])
                     in CoreVectors.operations8 -> Vector8Operation(name, operands)
+                    "packWord8X16#" -> VectorWord8Pack(operands[0], IntArray(16) { scope.layout.bind("<word8 vector lane $it>") })
+                    "unpackWord8X16#" -> VectorWord8Unpack(operands[0])
+                    in CoreVectors.operationsWord8 -> VectorWord8Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
