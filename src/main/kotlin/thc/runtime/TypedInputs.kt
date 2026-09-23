@@ -90,8 +90,7 @@ internal abstract class InputSource(val layout: ArgumentLayout?) {
     abstract fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Any?
     abstract fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?)
     @ExplodeLoop fun copy(frame: VirtualFrame, node: Node, values: Array<Any?>?, sourceOffset: Int,
-        destination: HandoffStorage, targetOffset: Int, count: Int) {
-        val shape = destination.layout
+        destination: HandoffStorage, targetOffset: Int, count: Int, shape: HandoffLayout = destination.layout) {
         for (i in 0 until count) {
             val source = sourceOffset + i
             val target = targetOffset + i
@@ -152,9 +151,8 @@ internal fun writeInputReference(frame: VirtualFrame, slot: Int, value: Any?) {
 
 /** Copies between separately owned typed storage; logical compatibility is checked before this operation. */
 @ExplodeLoop
-internal fun copyInputFields(source: HandoffStorage, destination: HandoffStorage, sourceOffset: Int, targetOffset: Int, count: Int) {
-    val from = source.layout
-    val into = destination.layout
+internal fun copyInputFields(source: HandoffStorage, destination: HandoffStorage, sourceOffset: Int, targetOffset: Int,
+    count: Int, from: HandoffLayout = source.layout, into: HandoffLayout = destination.layout) {
     for (i in 0 until count) {
         val s = sourceOffset + i
         val d = targetOffset + i
@@ -173,12 +171,13 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
     val prefixWidth = input.logical.offset(oldCount)
     val sourceOffset = ArgumentLayout.offset(source.layout, offset)
     val sourceWidth = ArgumentLayout.offset(source.layout, offset + count) - sourceOffset
-    val storage = input.prefix(oldCount + count).create()
-    function.typedSupplied?.let { copyInputFields(it, storage, 0, 0, prefixWidth) } ?: run {
+    val layout = input.prefix(oldCount + count)
+    val storage = layout.create()
+    function.typedSupplied?.let { copyInputFields(it, storage, 0, 0, prefixWidth, input.prefix(oldCount), layout) } ?: run {
         check(prefixWidth == function.supplied.size)
-        ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, storage, 0, prefixWidth)
+        ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, storage, 0, prefixWidth, layout)
     }
-    source.copy(frame, node, values, sourceOffset, storage, prefixWidth, sourceWidth)
+    source.copy(frame, node, values, sourceOffset, storage, prefixWidth, sourceWidth, layout)
     return Closure(function.environment, NO_PAP_ARGUMENTS, function.arity - count, function.target, oldCount + count, storage)
 }
 
@@ -211,7 +210,7 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
     for (i in strictPositions) {
         val physical = input.logical.offset(i)
         if (i < prefixCount) {
-            val raw = function.typedSupplied?.let { it.layout.getObject(it, physical) } ?: function.supplied[physical]
+            val raw = function.typedSupplied?.let { input.prefix(prefixCount).getObject(it, physical) } ?: function.supplied[physical]
             overrides!![physical] = force.execute(frame, raw)
         } else {
             val position = ArgumentLayout.offset(source.layout, logicalOffset + i - prefixCount)
@@ -223,13 +222,13 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
     try {
         input.packet.setLong(loan, 0, 0L)
         if (input.hasEnvironment) input.packet.setObject(loan, 1, function.environment)
-        function.typedSupplied?.let { copyInputFields(it, loan, 0, input.header, prefixWidth) } ?: run {
+        function.typedSupplied?.let { copyInputFields(it, loan, 0, input.header, prefixWidth, input.prefix(prefixCount), input.packet) } ?: run {
             check(function.supplied.size == prefixWidth)
-            ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, loan, input.header, prefixWidth)
+            ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, loan, input.header, prefixWidth, input.packet)
         }
         val from = ArgumentLayout.offset(source.layout, logicalOffset)
         val width = ArgumentLayout.offset(source.layout, logicalOffset + count) - from
-        source.copy(frame, node, values, from, loan, input.header + prefixWidth, width)
+        source.copy(frame, node, values, from, loan, input.header + prefixWidth, width, input.packet)
         if (overrides != null) for (i in strictPositions) {
             if (i < prefixCount) {
                 val physical = input.logical.offset(i)
@@ -248,7 +247,7 @@ private inline fun callTypedInput(frame: VirtualFrame, node: Node, function: Clo
     val generation = loan.generation
     var transferred = false
     try {
-        if (tail) try { checkTypedTail(frame, node, function.target, loan, metrics) }
+        if (tail) try { checkTypedTail(frame, node, function.target, loan, input.packet, metrics) }
         catch (transfer: TailCall) { transferred = transfer.input === loan; throw transfer }
         if (metrics.enabled) input.state().calls++
         return invokeTypedInput(input, loan, action)
@@ -379,7 +378,7 @@ private fun checkResult(root: GuestRoot, destination: TupleDestination?, exact: 
     if (!exact && root.tupleResult != null) fault("Cannot overapply an unboxed aggregate")
 }
 private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.truffle.api.RootCallTarget,
-    loan: HandoffStorage, metrics: Metrics) {
+    loan: HandoffStorage, packet: HandoffLayout, metrics: Metrics) {
     val source = node.rootNode as? GuestRoot
     val targetRoot = target.rootNode as GuestRoot
     val mask = source?.bloom(frame) ?: 0L
@@ -387,7 +386,7 @@ private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.t
         if (metrics.enabled) { metrics.tailBounces++; targetRoot.typedInput!!.state().tailTransfers++ }
         throw TailCall(target, NO_PAP_ARGUMENTS, loan)
     }
-    loan.layout.setLong(loan, 0, mask)
+    packet.setLong(loan, 0, mask)
 }
 
 /** A crossing back into the scalar ABI can contain only scalar logical arguments. */
