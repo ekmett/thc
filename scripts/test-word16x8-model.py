@@ -2,6 +2,7 @@
 """Independent per-lane integer checks and strict fixture-proof negative controls."""
 import copy
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 import word16x8_model as model
@@ -125,6 +126,25 @@ class Word16X8ModelTest(unittest.TestCase):
                 vector_proof = prepare.representation(altered_plus[2][0])
                 self.assertEqual(vector_proof['vector'], dict(lanes=8, element='Int16ElemRep'))
                 self.assertEqual(vector_proof['primReps'], ['VecRep 8 Int16ElemRep'])
+
+    def test_prepared_signed_mutations_match_the_current_auditor(self):
+        spec = importlib.util.spec_from_file_location('word16x8_current_audit',
+                                                     prepare.ROOT/'scripts/audit-core.py')
+        auditor = importlib.util.module_from_spec(spec); spec.loader.exec_module(auditor)
+        capabilities = json.loads((prepare.ROOT/'scripts/core-capabilities.json').read_text())
+        provenance = json.loads((prepare.OUT/'provenance.json').read_text())
+        self.assertIn(provenance['stages'], [['pre'], ['pre', 'post']])
+        for stage in provenance['stages']:
+            path = prepare.OUT/f'{stage}-core/SimdWord16X8.json'
+            module = json.loads(path.read_text())
+            self.assertTrue(auditor.Audit([(str(path), module)], capabilities).run(['plusCase'])['accepted'])
+            controls = prepare.audit_signed_controls(module, path, auditor, capabilities)
+            self.assertEqual(set(controls), {'signedLaneTuple', 'signedVectorOperand'})
+            for name, count in [('signedLaneTuple', 18), ('signedVectorOperand', 4)]:
+                report = controls[name]['report']
+                self.assertFalse(report['accepted'])
+                self.assertFalse(report['missingGlobals'])
+                self.assertEqual(len(report['issues']), count)
 
     def test_each_lane_observes_complete_independent_operand_grid(self):
         cases = model.lane_cases()

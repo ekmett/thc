@@ -146,7 +146,7 @@ def signed_control(module, variant):
 
 def audit_signed_controls(module, module_path, auditor, capabilities):
     argument = ('vector-shape', 'Exact vector primitive argument representation required')
-    aggregate = ('aggregate-shape', 'Conflicting or missing logical tuple representation proofs')
+    aggregate = ('aggregate-shape', 'Conflicting or missing logical aggregate representation proofs')
     expected = {
         'signedLaneTuple': {argument: 1, aggregate: 9,
                             ('scalar-representation', 'Conflicting exact scalar primitive representations'): 8},
