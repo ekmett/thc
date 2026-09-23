@@ -85,6 +85,10 @@ match the source-verified x86 native rows and show packed `V128_DWORD` ADD/SUB
 without surviving carrier allocation, field traffic, or residual calls. Lane
 extraction/reinsertion still appears between some operations. Their runtime
 revision and the separate local pre-Core/native-x86 origins are recorded.
+The [eight x86 Int32X4 controls](../bench/experiments/simd-foundation/evidence-int32x4-x86_64/runtime/README.md)
+cover both export stages and both backends, with final `VPADDD`/`VPSUBD` on an
+AVX2 host. Their separate instrumented tests require compiled entry for every
+native input. These are code-generation checks, not a throughput comparison.
 
 The [JDK 25 Vector API documentation](https://docs.oracle.com/en/java/javase/25/docs/api/jdk.incubator.vector/jdk/incubator/vector/package-summary.html)
 explains its compiler-dependent SIMD lowering and scalar fallback. The pinned
