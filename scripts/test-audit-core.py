@@ -220,6 +220,33 @@ class AuditTest(unittest.TestCase):
         inner = ['lam', [dict(id='x', lifted=False, rep=word)], ['var', 'x', dict(rep=word)]]
         self.assertTrue(run(['lam', [dict(id='x', lifted=False, rep=LONG)], inner])['accepted'])
 
+    def test_boxed_lexical_and_case_proofs_cannot_change_exact_levity(self):
+        lifted = dict(REFERENCE, kind='object')
+        unlifted = dict(lifted, primReps=['BoxedRep (Just Unlifted)'])
+        for stored, occurrence in [(lifted, unlifted), (unlifted, lifted)]:
+            for stored_kind in ('object', 'data', 'closure'):
+                binder = dict(id='x', lifted=True, rep=dict(stored, kind=stored_kind))
+                variable = ['var', 'x', dict(rep=occurrence)]
+                case = ['case', ['var', 'x', dict(rep=stored)], 'b',
+                        [['default', None, [], ['var', 'b', dict(rep=occurrence)]]],
+                        dict(rep=occurrence, binder=dict(id='b', rep=occurrence))]
+                for body in (variable, case):
+                    report = run(['lam', [binder], body])
+                    self.assertIn('scalar-representation', {i['code'] for i in report['issues']})
+
+    def test_unknown_boxed_levity_and_class_refinements_remain_compatible(self):
+        legacy = dict(kind='unknown', primReps=None, evaluated=False)
+        unknown = dict(REFERENCE, kind='object', primReps=['BoxedRep Nothing'])
+        for levity in ('Lifted', 'Unlifted'):
+            exact = dict(REFERENCE, primReps=[f'BoxedRep (Just {levity})'])
+            for stored, occurrence in [(None, exact), (exact, None), (legacy, exact), (exact, legacy),
+                    (unknown, exact), (exact, unknown), (exact, dict(exact, kind='object', evaluated=True))]:
+                binder = dict(id='x', lifted=True)
+                if stored is not None:
+                    binder['rep'] = stored
+                body = ['var', 'x'] + ([dict(rep=occurrence)] if occurrence is not None else [])
+                self.assertTrue(run(['lam', [binder], body])['accepted'], (stored, occurrence))
+
     def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
         for name, contract in CAP['tuplePrimitives'].items():
             scalar = dict(LONG, primReps=[contract['arguments'][0]])

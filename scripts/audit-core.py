@@ -233,6 +233,10 @@ class Audit:
                isinstance(rep.get('primReps'), list) and len(rep['primReps']) == 1 for rep in (expected, actual)):
             if expected['primReps'] != actual['primReps']:
                 self.issue('scalar-representation', owner, path, 'Conflicting exact scalar primitive representations')
+        if all(isinstance(rep, dict) and rep.get('kind') in ('object', 'data', 'closure') and
+               rep.get('primReps') in (['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
+               for rep in (expected, actual)) and expected['primReps'] != actual['primReps']:
+            self.issue('scalar-representation', owner, path, 'Conflicting exact boxed levities')
         if not component and not (self.is_tuple(expected) or self.is_tuple(actual) or is_vector(expected) or is_vector(actual)):
             return
         left, right = self.shape(expected), self.shape(actual)
