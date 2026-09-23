@@ -393,6 +393,7 @@
     "sizeofByteArray#": 1,
     "indexWord8Array#": 2,
     "copyByteArray#": 6,
+    "compareByteArrays#": 5,
     "sqrtFloat#": 1,
     "sqrtDouble#": 1,
     "newMutVar#": 2,
@@ -544,6 +545,16 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "compareByteArrays#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] }
+      ],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
     "readFloatArray#": {
       "arguments": [
         {

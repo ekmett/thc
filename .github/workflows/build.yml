@@ -209,6 +209,12 @@ jobs:
             build/boxed-arrays/
             build/address-fields/
             build/data-to-tag/
+            build/compare-byte-arrays/manifest.json
+            build/compare-byte-arrays/oracle.tsv
+            build/compare-byte-arrays/NativeCompareByteArrays.hs
+            build/compare-byte-arrays/*/*.audit.json
+            build/compare-byte-arrays/*/boot-provenance.json
+            build/compare-byte-arrays/*/core/*.json
             build/bytearray/manifest.json
             build/bytearray/oracle.tsv
             build/bytearray/NativeByteArray.hs

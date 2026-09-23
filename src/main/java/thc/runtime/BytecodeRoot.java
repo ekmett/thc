@@ -676,6 +676,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return kotlin.Unit.INSTANCE;
         }
     }
+    @Operation public static final class CompareByteArrays {
+        @Specialization public static long compare(Object first, long firstOffset, Object second,
+                long secondOffset, long count) {
+            return ManagedByteArray.compare(ManagedByteArray.require(first), firstOffset,
+                ManagedByteArray.require(second), secondOffset, count);
+        }
+    }
     @Operation public static final class SizeByteArray {
         @Specialization public static long size(Object value) { return ManagedByteArray.size(ManagedByteArray.require(value)); }
     }
