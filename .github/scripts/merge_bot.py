@@ -61,7 +61,11 @@ def build_result(api, sha):
             and run["event"] in ("push", "pull_request", "workflow_dispatch", "merge_group")]
     if not runs:
         return "missing", None
-    run = max(runs, key=lambda item: item["id"])
+    # Rerunning an old run does not change its ID. Any active execution holds
+    # the gate; otherwise the most recently updated result wins, so a failed
+    # rerun cannot hide behind a higher-ID success.
+    active = [run for run in runs if run["status"] != "completed"]
+    run = max(active or runs, key=lambda item: (item["updated_at"], item["id"]))
     if run["status"] != "completed":
         return "pending", run
     if run["conclusion"] != "success":
@@ -86,6 +90,7 @@ def publish_result(api, sha, state, run):
               else f"https://github.com/{api.repo}/actions/workflows/build.yml")
     existing = api.call("GET", f"commits/{sha}/status")["statuses"]
     if any(status["context"] == REQUIRED_STATUS and status["state"] == state
+           and status.get("creator", {}).get("login") == "github-actions[bot]"
            and status.get("target_url") == target for status in existing):
         return
     api.call("POST", f"statuses/{sha}", {
@@ -139,6 +144,12 @@ def reconcile(api, report=print, sleep=time.sleep):
                        for check in protection.get("checks", []))):
         raise RuntimeError("main lacks enforced required-tests protection; refusing to merge")
     candidates = list(api.pages("pulls?state=open&base=main&sort=created&direction=asc"))
+    # Events can be coalesced by workflow concurrency. Recover gate publication
+    # for every PR, including forks and manually merged/unlabelled work.
+    for candidate in candidates:
+        state, run = build_result(api, candidate["head"]["sha"])
+        if run:
+            publish_result(api, candidate["head"]["sha"], state, run)
     for candidate in candidates:
         number = candidate["number"]
         path = f"pulls/{number}"

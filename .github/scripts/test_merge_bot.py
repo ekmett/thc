@@ -15,6 +15,7 @@ def pull(number=1):
 def build(run_id=1):
     return {"id": run_id, "head_sha": "head", "workflow_id": 17, "event": "pull_request",
             "run_attempt": 1, "status": "completed", "conclusion": "success",
+            "updated_at": f"2026-09-23T00:00:0{run_id}Z",
             "html_url": f"https://github.com/ekmett/thc/actions/runs/{run_id}"}
 
 
@@ -54,7 +55,7 @@ class FakeAPI:
         if method != "GET":
             self.mutations.append((method, path, body))
             if path.startswith("statuses/"):
-                self.statuses = [body]
+                self.statuses = [{**body, "creator": {"login": "github-actions[bot]"}}]
             if path.endswith("/update-branch") and not self.delayed_update:
                 self.pr["head"]["sha"] = "updated"
                 self.behind = 0
@@ -112,7 +113,7 @@ class MergeBotTest(unittest.TestCase):
                 api = FakeAPI()
                 api.events[0]["actor"] = {"login": actor}
                 self.run_bot(api)
-                self.assertEqual(api.mutations, [])
+                self.assertEqual(api.actions, [])
 
     def test_removal_or_other_actor_reapplication_revokes_authority(self):
         for event, actor in (("unlabeled", "ekmett"), ("labeled", "collaborator")):
@@ -120,13 +121,13 @@ class MergeBotTest(unittest.TestCase):
             api.events.insert(0, {"id": 2, "event": event, "label": {"name": "auto-merge"}, "actor": {"login": actor}})
             self.assertFalse(owner_authorized(api, 1))
             self.run_bot(api)
-            self.assertEqual(api.mutations, [])
+            self.assertEqual(api.actions, [])
 
     def test_missing_history_fails_closed(self):
         api = FakeAPI()
         api.events = []
         self.run_bot(api)
-        self.assertEqual(api.mutations, [])
+        self.assertEqual(api.actions, [])
 
     def test_ineligible_prs_do_nothing(self):
         changes = [lambda p: p.update(draft=True), lambda p: p.update(state="closed"),
@@ -137,7 +138,7 @@ class MergeBotTest(unittest.TestCase):
             api = FakeAPI()
             change(api.pr)
             self.run_bot(api)
-            self.assertEqual(api.mutations, [])
+            self.assertEqual(api.actions, [])
 
     def test_inadequate_protection_fails_closed(self):
         for mutate in (lambda a: setattr(a, "protected", False),
@@ -194,6 +195,23 @@ class MergeBotTest(unittest.TestCase):
         api.runs.insert(0, build(2))
         api.runs[0]["conclusion"] = "failure"
         self.assertEqual(build_result(api, "head")[0], "failure")
+
+    def test_old_run_id_rerun_supersedes_newer_success(self):
+        for status, conclusion, expected in (("in_progress", None, "pending"),
+                                              ("completed", "failure", "failure")):
+            api = FakeAPI()
+            api.runs.append(build(2))
+            api.runs[0].update(run_attempt=2, updated_at="2026-09-23T00:00:03Z",
+                               status=status, conclusion=conclusion)
+            self.assertEqual(build_result(api, "head")[0], expected)
+            self.run_bot(api)
+            self.assertEqual(api.actions, [])
+
+    def test_active_older_execution_holds_gate_even_with_later_update(self):
+        api = FakeAPI()
+        api.runs.append(build(2))
+        api.runs[0].update(status="in_progress", conclusion=None)
+        self.assertEqual(build_result(api, "head")[0], "pending")
 
     def test_attempt_changed_during_job_read_cannot_pass(self):
         api = FakeAPI()
@@ -281,6 +299,22 @@ class MergeBotTest(unittest.TestCase):
         publish_run(api, 1)
         publish_run(api, 1)
         self.assertEqual(len(api.mutations), 1)
+
+    def test_identical_status_from_wrong_publisher_is_replaced(self):
+        api = FakeAPI()
+        publish_run(api, 1)
+        api.statuses[0]["creator"]["login"] = "someone-else"
+        publish_run(api, 1)
+        self.assertEqual(len(api.mutations), 2)
+
+    def test_reconcile_recovers_dropped_completion_for_unlabelled_fork(self):
+        api = FakeAPI()
+        api.pr["labels"] = []
+        api.pr["head"]["repo"]["full_name"] = "outsider/thc"
+        api.statuses = [{"context": REQUIRED_STATUS, "state": "pending", "target_url": "old"}]
+        self.run_bot(api)
+        self.assertEqual(api.statuses[0]["state"], "success")
+        self.assertEqual(api.actions, [])
 
     def test_terminal_incomplete_build_does_not_starve_next_pr(self):
         api = FakeAPI()
