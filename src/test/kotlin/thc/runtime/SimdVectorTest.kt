@@ -154,19 +154,23 @@ class SimdVectorTest {
         for (stage in stages) for (backend in listOf("ast", "bytecode")) withLanguage { language ->
             for (entry in listOf("vectorCase", "subtractCase")) {
                 val program = program(language, backend, module(stage), entry)
-                fun checkRows() {
+                fun checkRows(requireCompiledEntry: Boolean = false) {
                     for (a in inputs) for (b in inputs) {
                         val expected = if (entry == "vectorCase") ((a+a+91)*7) xor ((b+a+91)*11)
                             else ((a+b-19)*13) xor ((b+b-19)*17)
                         if (oracle != null) assertEquals(expected, oracle[Triple(entry, a, b)])
+                        val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         val result = Calls.target(program.hostEntryTarget(2), arrayOf(program.entryValue(entry), arrayOf(a, b)))
                         assertEquals(expected, result, "$stage/$backend/$entry/$a/$b")
+                        if (requireCompiledEntry) assertEquals(before + 1,
+                            (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                            "$stage/$backend/$entry/$a/$b must enter compiled code exactly once")
                     }
                 }
                 checkRows(); checkRows()
                 val target = program.entryTarget(entry)
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-                checkRows()
+                checkRows(requireCompiledEntry = true)
                 assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$entry after execution")
                 assertEquals(0, language.handoffState.get().results.depth)
             }
