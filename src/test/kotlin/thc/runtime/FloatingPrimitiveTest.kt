@@ -34,8 +34,8 @@ class FloatingPrimitiveTest {
             assertEquals(record["sha256"], hash, "Stale floating fixture: $file; rerun scripts/prepare-tests.sh")
         }
         val entries = rows().groupBy { it.entry }
-        assertEquals(14, entries.size)
-        assertEquals(412, entries.values.sumOf { it.size })
+        assertEquals(15, entries.size)
+        assertEquals(441, entries.values.sumOf { it.size })
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for ((entry, rows) in entries) {
                 val fn = loadEntry(context, listOf(module.path), entry, backend = backend)
@@ -160,20 +160,14 @@ class FloatingPrimitiveTest {
         }
     }
 
-    @Test fun scalarProofsDoNotEnableFloatingTupleResultsOrFloatingLiteralAlternatives() {
-        for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-            val failure = assertThrows(PolyglotException::class.java) {
-                loadEntry(context, listOf(module.path), "floatingTupleFrontier", backend = backend)
-            }
-            assertTrue(failure.message.orEmpty().contains("unboxed-tuple has unsupported fields"), failure.message)
-        }
+    @Test fun exactFloatingTupleProofsDoNotEnableFloatingLiteralAlternatives() {
         for ((kind, register) in listOf("float" to "FloatRep", "double" to "DoubleRep")) {
             val proof = mapOf("kind" to kind, "primReps" to listOf(register), "evaluated" to true)
             assertEquals(kind.uppercase(), CoreRepresentations.parse(proof).kind.name)
             assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(proof + ("primReps" to listOf("IntRep"))) }
-            assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(mapOf(
+            assertTrue(CoreRepresentations.parse(mapOf(
                 "kind" to "unknown", "evaluated" to true, "aggregate" to "unboxed-tuple",
-                "components" to listOf(proof), "primReps" to listOf(register))) }
+                "components" to listOf(proof), "primReps" to listOf(register))).isTuple)
             val body = listOf("case", listOf("lit", kind, "0.0"), "scrutinee", listOf(
                 listOf("lit", listOf(kind, "-0.0"), emptyList<String>(), listOf("lit", "int", "1")),
                 listOf("default", null, emptyList<String>(), listOf("lit", "int", "0"))))

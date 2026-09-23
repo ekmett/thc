@@ -2,7 +2,7 @@
 
 Both execution backends support exact unboxed tuple results from functions whose
 inputs use the ordinary scalar/reference ABI. This includes empty and singleton
-tuples, nested tuples, lazy lifted references, boxed unlifted reference fields,
+tuples, nested tuples, concrete Long/Float/Double fields, lazy lifted references, boxed unlifted reference fields,
 non-tail calls, tail forwarding, scalar PAP prefixes and overapplication.
 Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
 typed local destinations without using the function-return carrier.
@@ -43,6 +43,13 @@ still follow the existing ABI. Bounded direct caches specialize target, remainin
 arity, PAP prefix length and environment presence before making those packets.
 Each arm consumes its result before control flow merges.
 
+Floating leaves retain JVM `float` and `double` fields in the result slab, with
+typed frame and BytecodeDSL local accesses throughout construction, forwarding,
+case binding and local join results. Layout interning distinguishes both widths
+from Longs and references. Cleanup touches only reference fields. This does not
+expand the optional scalar handoff ABI: its arguments remain Long/reference
+only, and residual scalar floating inputs still travel through Object packets.
+
 The compiler and auditor compare tagged recursive tuple/scalar layouts, not
 register counts or pretty names. They reject equal-width but differently nested
 proofs. Scalar reference kind/evaluatedness may refine at each use without forcing
@@ -58,6 +65,26 @@ Sums, unknown/null aggregate layouts and unsupported physical leaves are also
 rejected. Host entries must return a
 scalar/reference result; diagnostic mode defers an unsupported host result to a
 trap without executing a tuple producer.
+
+`scripts/prepare-floating-tuples.py` checks genuine `Data.Complex` multiplication
+and `conjugate`: ordinary NOINLINE boxed producers become GHC CPR workers returning
+`(# Float#, Float# #)` and `(# Double#, Double# #)`. The public `Complex` datatype
+itself remains boxed. Both export stages are strict-audited, and 44 native results
+match independent formulas. Eight additional native bit rows cover opposite zero
+signs, subnormals, infinities, NaNs and finite values; arithmetic NaN payload/sign
+is not specified, so that row checks NaN classification. JVM protocol tests also
+preserve deliberately chosen NaN payload bits without performing arithmetic.
+The suite covers a genuine tuple-result join, nested empty and State# fields,
+two outstanding mixed results, and an ignored lifted leaf that is itself bottom.
+Every measured row checks its exact compiled-entry increment and installed target
+validity on AST and BytecodeDSL, with guest inlining enabled and disabled. The CI
+handoff run repeats these checks with the optional scalar handoff enabled. Source,
+auditor, native executable, oracle and export hashes are checked before execution.
+The [floating result graph experiment](../bench/experiments/floating-tuple-graphs/README.md)
+checks six normally inlined production graphs and two residual controls against
+the native oracle. Inlined Float/Double tuple fields become scalar floating
+register values with no tuple carrier allocation or field traffic. Residual calls
+retain the typed result slab and existing Object argument ABI.
 
 The exporter preserves native proofs through `runRW# f` to `f realWorld#` only
 when GHC's exact type equality confirms the rewrite. Representation-changing
