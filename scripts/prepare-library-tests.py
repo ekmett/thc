@@ -24,9 +24,6 @@ WORD_MASK = (1 << 64) - 1
 SET_EXCEPTION = 'ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException'
 SET_BACKTRACE = 'ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1'
 SET_FRONTIER_ISSUES = Counter({
-    ('constructor-kind', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple'): 1,
-    ('constructor-field-representation', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#)[0]: None'): 1,
-    ('constructor-field-representation', SET_EXCEPTION, 'ghc-internal:GHC.Internal.Types.(#,#)[1]: None'): 1,
     ('unsupported-primitive', SET_BACKTRACE, 'readMutVar#'): 1,
 })
 SET_FRONTIER_MISSING = {

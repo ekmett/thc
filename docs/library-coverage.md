@@ -12,18 +12,16 @@ queries membership, and folds in ascending order with an order-sensitive checksu
 Empty and negative workloads are defined. Native GHC 9.14.1 agreed with an
 independent Python set model for all 1,041 inputs from -16 through 1024.
 
-This is **not currently an executable THC coverage claim**. Its strict reachable
-audit exposes these gaps:
+Strict loading still rejects this workload. Cold backtrace collection reaches
+unsupported `readMutVar#`, and three exception-construction, backtrace and
+call-stack bindings remain missing.
 
-- A cold exception interface unfolding still lacks the exact tuple case layout,
-  producing one constructor-kind and two constructor-field diagnostics.
-- Cold backtrace collection reaches unsupported `readMutVar#`. Three
-  exception-construction, backtrace and call-stack bindings remain missing.
-
-The current strict audit has 71 reachable bindings, four issues and three missing
+The current strict audit has 71 reachable bindings, one issue and three missing
 definitions. Collection tuple results and the two reachable min/max tuple-result
 joins now lower directly, and zero-width `State#` tuple components no longer add
-capability gaps. Preparation pins the exact remaining diagnostics; neither new
+capability gaps. Fresh `runRW#` exports also retain the exact
+`(# State# RealWorld, SomeException #)` layout in the cold exception case.
+Preparation pins the exact remaining diagnostics; neither new
 gaps nor resolved gaps silently change the declared frontier.
 
 Insertion, deletion, union and intersection retain the real
