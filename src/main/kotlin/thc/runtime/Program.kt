@@ -1209,6 +1209,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     in CoreVectors.operations32 -> Vector32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
+            } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
+                val operation = ByteArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                byteArrayExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (tupleOperation != null) {
                 tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 TupleArithmeticExpression(tupleOperation, tupleProof,

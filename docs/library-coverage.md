@@ -159,3 +159,10 @@ frontier and are excluded from execution counts. A deliberately modified IntSet
 expected value in the manifest was rejected against the fingerprinted native
 oracle before guest loading. The 30-second compilation timeout and 100,000 graph
 size limit remain unchanged.
+
+## ShortByteString and managed bytes
+
+The [managed ByteArray workload](bytearrays.md) executes the installed
+ShortByteString pack/unpack workers and genuine GHC List length body. Strict
+pre/post-Tidy audits retain all five byte primitives, and native/model checks
+cover empty arrays, every byte value, and ordered writes on both backends.

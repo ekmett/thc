@@ -77,6 +77,7 @@ jobs:
           python3 scripts/test-audit-core.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-core-vectors.py
+          python3 scripts/test-core-bytearrays.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py

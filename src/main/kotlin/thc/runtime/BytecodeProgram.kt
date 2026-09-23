@@ -681,6 +681,31 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
+                val operation = ByteArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    if (operation == ByteArrayOp.NEW) e.builder.beginNewByteArray(destination[0])
+                    else e.builder.beginFreezeByteArray(destination[0])
+                    operands.forEach { it.emit(e) }
+                    if (operation == ByteArrayOp.NEW) e.builder.endNewByteArray()
+                    else e.builder.endFreezeByteArray()
+                } else ProvenExpression(Expression { e ->
+                    when (operation) {
+                        ByteArrayOp.WRITE -> e.builder.beginWriteByteArray()
+                        ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
+                        ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        else -> error("Tuple ByteArray operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        ByteArrayOp.WRITE -> e.builder.endWriteByteArray()
+                        ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
+                        ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        else -> error("Tuple ByteArray operation")
+                    }
+                }, tupleProof.copy(evaluated = true))
             } else if (tupleOperation != null) {
                 tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { argument(it, scope, false) }

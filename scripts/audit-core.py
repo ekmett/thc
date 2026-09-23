@@ -422,6 +422,19 @@ class Audit:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact scalar arguments required')
                     if self.shape(proof) != expected_result:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact logical tuple result required')
+                bytearray_primitive = self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if bytearray_primitive is not None:
+                    def exact(actual, expected):
+                        return (isinstance(actual, dict) and actual.get('kind') == expected['kind'] and
+                                self.shape(actual) == self.shape(expected) and
+                                (not self.is_tuple(expected) or all(exact(a, e) for a, e in
+                                    zip(actual.get('components', []), expected['components']))))
+                    expected = bytearray_primitive['arguments']
+                    if (len(arguments) != len(expected) or flags != [False] * len(expected) or
+                            any(not exact(self.expression_rep(a), e) for a, e in zip(arguments, expected))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray arguments required')
+                    if not exact(proof, bytearray_primitive['result']):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray result required')
                 target = bound.get(function[1]) if function[0] == 'var' else None
                 if isinstance(target, dict) and '_join_result' in target:
                     self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')

@@ -99,6 +99,9 @@ Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends wi
 scalar/reference inputs, local join results and zero-width State# components;
 aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
 
+[Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
+pack/length/unpack with ordered writes and native/model checks on both backends.
+
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 28 arithmetic/comparison/conversion primops, checked against
 native GHC. Floating tuple results and an unboxed floating call ABI remain out of scope.
