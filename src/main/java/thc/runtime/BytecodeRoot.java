@@ -479,6 +479,42 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** State operands are evaluated before each effect; only the array has a tuple slot. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewByteArray {
+        @Specialization public static void allocate(VirtualFrame frame, LocalAccessor destination,
+                long size, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            byte[] array = ManagedByteArray.allocate(size);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, array);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FreezeByteArray {
+        @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedByteArray.freeze(array));
+        }
+    }
+    @Operation public static final class WriteByteArray {
+        @Specialization public static Object write(Object value, long offset, long byteValue, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedByteArray.write(array, offset, byteValue);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class SizeByteArray {
+        @Specialization public static long size(Object value) { return ManagedByteArray.size(ManagedByteArray.require(value)); }
+    }
+    @Operation public static final class IndexByteArray {
+        @Specialization public static long index(Object value, long offset) { return ManagedByteArray.read(ManagedByteArray.require(value), offset); }
+    }
+
     // GHC machine integers wrap. Comparisons return Int# 0/1, not boxed Bool.
     @Operation public static final class VectorPack {
         @Specialization public static Int64X2 pack(long first, long second) { return new Int64X2(first, second); }
@@ -538,6 +574,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
             third.setLong(bytecode, frame, value.third); fourth.setLong(bytecode, frame, value.fourth);
         }
+    }
+
+    /** Evaluates a zero-width field for effects while producing no destination value. */
+    @Operation public static final class DiscardVoid {
+        @Specialization public static void discard(Object value) { TupleResultsKt.requireVoidCarrier(value); }
     }
 
     @Operation public static final class Add { @Specialization public static long apply(long x, long y) { return x + y; } }

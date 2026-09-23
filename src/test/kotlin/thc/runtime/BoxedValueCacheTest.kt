@@ -158,8 +158,11 @@ class BoxedValueCacheTest {
         val parameter = mapOf("id" to "x", "name" to "x", "lifted" to false, "coercion" to false, "rep" to proof)
         // The primitive operation ensures the field expression still executes before
         // lookup, and exercises the primitive AST constructor path as well as BC create.
-        val operand = listOf("app", listOf("prim", "+#"),
-            listOf(listOf("var", "x"), listOf("lit", "int", "1")), listOf(false, false), true, true)
+        val word = builtin.rep == "WordRep"
+        val operand = listOf("app", listOf("prim", if (word) "plusWord#" else "+#"),
+            listOf(listOf("var", "x", mapOf("rep" to proof)),
+                listOf("lit", if (word) "word" else "int", "1", mapOf("rep" to proof))),
+            listOf(false, false), true, true, mapOf("rep" to proof))
         val construct = listOf("app", listOf("con", builtin.id, 1), listOf(operand), listOf(false), true, true)
         return mapOf("instrument" to true, "constructors" to listOf(metadata(builtin)), "bindings" to listOf(
             mapOf("id" to "make", "name" to "make", "lifted" to true,

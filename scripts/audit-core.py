@@ -15,6 +15,11 @@ import sys
 from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error
 
 
+# The identical checked-in resource is packaged in the JVM runtime jar.
+SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
+    'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
+
+
 class Audit:
     def __init__(self, modules, capabilities):
         self.cap = capabilities
@@ -80,7 +85,7 @@ class Audit:
                         self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
                     else:
                         physical.extend(registers)
-                        if 'aggregate' not in component and (component.get('kind') in ('unknown', 'void', 'float', 'double') or
+                        if 'aggregate' not in component and (component.get('kind') in ('unknown', 'float', 'double') or
                                 any(r not in self.cap['fieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
                 if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:
@@ -228,6 +233,10 @@ class Audit:
                isinstance(rep.get('primReps'), list) and len(rep['primReps']) == 1 for rep in (expected, actual)):
             if expected['primReps'] != actual['primReps']:
                 self.issue('scalar-representation', owner, path, 'Conflicting exact scalar primitive representations')
+        if all(isinstance(rep, dict) and rep.get('kind') in ('object', 'data', 'closure') and
+               rep.get('primReps') in (['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
+               for rep in (expected, actual)) and expected['primReps'] != actual['primReps']:
+            self.issue('scalar-representation', owner, path, 'Conflicting exact boxed levities')
         if not component and not (self.is_tuple(expected) or self.is_tuple(actual) or is_vector(expected) or is_vector(actual)):
             return
         left, right = self.shape(expected), self.shape(actual)
@@ -267,6 +276,30 @@ class Audit:
         index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4, 'case': 4, 'con': 3, 'prim': 2, 'void': 1}.get(expr[0])
         proof = expr[index].get('rep') if index is not None and len(expr) > index and isinstance(expr[index], dict) else None
         return proof if proof is not None else cls.literal_rep(expr)
+
+    def scalar_primitive(self, name, arguments, result, bound, owner, path):
+        signature = SCALAR_SIGNATURES.get(name)
+        if signature is None:
+            return
+
+        def check(expected, proof, position):
+            if not isinstance(proof, dict) or proof.get('primReps') is None:
+                return
+            if proof.get('kind') == 'unknown' and not self.is_tuple(proof) and not is_vector(proof):
+                return
+            if self.is_tuple(proof) or is_vector(proof) or proof.get('primReps') != [expected]:
+                self.issue('primitive-representation', owner, path + '/' + position,
+                           f'{name}: expected {expected}, found {proof.get("primReps")}')
+
+        for index, (argument, expected) in enumerate(zip(arguments, signature['arguments'])):
+            proof = self.expression_rep(argument)
+            check(expected, proof, f'arguments/{index}')
+            # The runtime lowers the lexical value before checking an operand.
+            # An absent/unknown occurrence must not hide a contradictory binder.
+            if argument[0] == 'var':
+                stored = bound.get(argument[1]) if argument[1] in bound else self.bindings.get(argument[1], {}).get('rep')
+                check(expected, stored, f'arguments/{index}/binder')
+        check(signature['result'], result, 'rep')
 
     def free_variables(self, expr):
         if not isinstance(expr, list) or not expr:
@@ -376,6 +409,8 @@ class Audit:
                 function = expr[1]
                 tuple_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-tuple'
                 proof = self.expression_rep(expr)
+                if function[0] == 'prim':
+                    self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
                 tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if tuple_primitive is not None:
                     expected_args = [('scalar', (rep,)) for rep in tuple_primitive['arguments']]
@@ -387,6 +422,19 @@ class Audit:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact scalar arguments required')
                     if self.shape(proof) != expected_result:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact logical tuple result required')
+                bytearray_primitive = self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if bytearray_primitive is not None:
+                    def exact(actual, expected):
+                        return (isinstance(actual, dict) and actual.get('kind') == expected['kind'] and
+                                self.shape(actual) == self.shape(expected) and
+                                (not self.is_tuple(expected) or all(exact(a, e) for a, e in
+                                    zip(actual.get('components', []), expected['components']))))
+                    expected = bytearray_primitive['arguments']
+                    if (len(arguments) != len(expected) or flags != [False] * len(expected) or
+                            any(not exact(self.expression_rep(a), e) for a, e in zip(arguments, expected))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray arguments required')
+                    if not exact(proof, bytearray_primitive['result']):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray result required')
                 target = bound.get(function[1]) if function[0] == 'var' else None
                 if isinstance(target, dict) and '_join_result' in target:
                     self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')
