@@ -106,6 +106,8 @@ each add seven local narrow-integer vector operations, including wrapping
 multiplication, with primitive lane carriers and native/model edge checks.
 The [Word8X16 foundation](docs/word8x16.md) adds six unsigned counterparts with
 distinct proofs, zero-extended lanes and native/model high-bit checks.
+The [Word16X8 foundation](docs/word16x8.md) provides the six unsigned 16-bit
+counterparts with eight primitive short fields and independently observed lanes.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;

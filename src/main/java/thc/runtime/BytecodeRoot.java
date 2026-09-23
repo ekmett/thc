@@ -972,6 +972,48 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             fifteenth.setLong(bytecode, frame, value.fifteenth); sixteenth.setLong(bytecode, frame, value.sixteenth);
         }
     }
+    @Operation public static final class VectorWord16Pack {
+        @Specialization public static Word16X8 pack(long first, long second, long third, long fourth,
+                long fifth, long sixth, long seventh, long eighth) {
+            return new Word16X8((short) first, (short) second, (short) third, (short) fourth,
+                (short) fifth, (short) sixth, (short) seventh, (short) eighth);
+        }
+    }
+    @Operation public static final class VectorWord16Broadcast {
+        @Specialization public static Word16X8 broadcast(long value) { return Word16X8.broadcast((short) value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorWord16Binary {
+        @Specialization public static Word16X8 binary(int operation, Word16X8 first, Word16X8 second) {
+            return switch (operation) {
+                case 0 -> Word16X8.add(first, second);
+                case 1 -> Word16X8.subtract(first, second);
+                case 2 -> Word16X8.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid Word16X8 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    @ConstantOperand(type = LocalAccessor.class, name = "fifth")
+    @ConstantOperand(type = LocalAccessor.class, name = "sixth")
+    @ConstantOperand(type = LocalAccessor.class, name = "seventh")
+    @ConstantOperand(type = LocalAccessor.class, name = "eighth")
+    public static final class VectorWord16Unpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, LocalAccessor fifth, LocalAccessor sixth,
+                LocalAccessor seventh, LocalAccessor eighth, Word16X8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first & 0xffffL); second.setLong(bytecode, frame, value.second & 0xffffL);
+            third.setLong(bytecode, frame, value.third & 0xffffL); fourth.setLong(bytecode, frame, value.fourth & 0xffffL);
+            fifth.setLong(bytecode, frame, value.fifth & 0xffffL); sixth.setLong(bytecode, frame, value.sixth & 0xffffL);
+            seventh.setLong(bytecode, frame, value.seventh & 0xffffL); eighth.setLong(bytecode, frame, value.eighth & 0xffffL);
+        }
+    }
+
     @Operation public static final class Vector16Pack {
         @Specialization public static Int16X8 pack(long first, long second, long third, long fourth,
                 long fifth, long sixth, long seventh, long eighth) {

@@ -1171,6 +1171,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operationsWord16 -> vectorWord16Primitive(name, operands)
         in CoreVectors.operationsWord8 -> vectorWord8Primitive(name, operands)
         in CoreVectors.operations8 -> vector8Primitive(name, operands)
         in CoreVectors.operations16 -> vector16Primitive(name, operands)
@@ -1259,6 +1260,33 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof8)
+    }
+
+    private fun vectorWord16Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackWord16X8#" -> tupleExpression(CoreVectors.unpackedWord16) { e, destination ->
+            e.builder.beginVectorWord16Unpack(destination[0], destination[1], destination[2], destination[3],
+                destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endVectorWord16Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packWord16X8#" -> {
+                    b.beginBlock()
+                    val lanes = List(8) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorWord16Pack(); lanes.forEach(b::emitLoadLocal); b.endVectorWord16Pack()
+                    b.endBlock()
+                }
+                "broadcastWord16X8#" -> { b.beginVectorWord16Broadcast(); operands[0].emit(e); b.endVectorWord16Broadcast() }
+                else -> {
+                    val operation = when (name) { "plusWord16X8#" -> 0; "minusWord16X8#" -> 1; "timesWord16X8#" -> 2; else -> error("Invalid Word16X8 operation") }
+                    b.beginVectorWord16Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVectorWord16Binary()
+                }
+            }
+        }, CoreVectors.proofWord16)
     }
 
     private fun vector16Primitive(name: String, operands: List<Expression>): Expression = when (name) {
