@@ -15,7 +15,10 @@ class AggregateLayoutTest {
         "polymorphicSum" to "unboxed-sum", "polymorphicNested" to "unboxed-tuple",
         "levityPolymorphic" to "unboxed-tuple", "tupleAliasIdentity" to "unboxed-tuple",
         "sumAliasIdentity" to "unboxed-sum", "nestedAliasIdentity" to "unboxed-tuple",
-        "emptyAliasIdentity" to "unboxed-tuple")
+        "emptyAliasIdentity" to "unboxed-tuple", "abstractTupleRep" to "unboxed-tuple",
+        "abstractFixedTupleIdentity" to "unboxed-tuple", "abstractEmptyIdentity" to "unboxed-tuple",
+        "abstractSumIdentity" to "unboxed-sum", "familyTupleIdentity" to "unboxed-tuple",
+        "abstractSumRep" to "unboxed-sum", "abstractComponentIdentity" to "unboxed-tuple")
 
     @Test fun strictLoadingRejectsRecursivePolymorphicAndNewtypeAggregateBoundaries() {
         for (stage in listOf("pre", "post")) {
@@ -34,6 +37,10 @@ class AggregateLayoutTest {
                 context.eval("thc", Json.stringify(mapOf("modules" to listOf(module),
                     "entry" to "recursiveNewtypeIdentity", "backend" to backend,
                     "diagnosticUnsupported" to false)))
+                for (entry in listOf("stateAliasIdentity", "proxyIdentity")) {
+                    context.eval("thc", Json.stringify(mapOf("modules" to listOf(module),
+                        "entry" to entry, "backend" to backend, "diagnosticUnsupported" to false)))
+                }
             }
         }
     }
