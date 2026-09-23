@@ -155,13 +155,19 @@ class FloatingPrimitiveTest {
                 assertTrue(error.message.orEmpty().contains("Floating literal alternatives"), error.message)
             }
             val opposite = if (kind == "float") "double" else "float"
-            val contradictory = mapOf("kind" to opposite,
-                "primReps" to listOf(if (opposite == "float") "FloatRep" else "DoubleRep"), "evaluated" to true)
-            val malformed = listOf(
-                listOf("lit", kind, "1.0", mapOf("rep" to contradictory)),
-                listOf("case", listOf("lit", "int", "0"), "s", listOf(
-                    listOf("default", null, emptyList<String>(), listOf("lit", kind, "1.0"))),
-                    mapOf("rep" to contradictory)))
+            val carriers = listOf(
+                Triple(opposite, listOf(if (opposite == "float") "FloatRep" else "DoubleRep"), listOf("lit", opposite, "1.0")),
+                Triple("long", listOf("IntRep"), listOf("lit", "int", "1")),
+                Triple("address", listOf("AddrRep"), listOf("lit", "string-bytes", "41")),
+                Triple("void", emptyList<String>(), listOf("void")))
+            val malformed = carriers.flatMap { (otherKind, registers, otherLiteral) ->
+                val otherProof = mapOf("kind" to otherKind, "primReps" to registers, "evaluated" to true)
+                listOf(listOf("lit", kind, "1.0") to otherProof, otherLiteral to proof).flatMap { (literal, declared) ->
+                    listOf(literal + mapOf("rep" to declared),
+                        listOf("case", listOf("lit", "int", "0"), "s", listOf(
+                            listOf("default", null, emptyList<String>(), literal)), mapOf("rep" to declared)))
+                }
+            }
             for (expr in malformed) for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
                 val request = Json.stringify(mapOf("entry" to "entry", "backend" to backend,
                     "modules" to listOf(mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "Floating.Invalid",

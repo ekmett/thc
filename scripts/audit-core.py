@@ -221,6 +221,9 @@ class Audit:
     def compare_shapes(self, expected, actual, owner, path, component=False):
         # Exact scalar register names constrain the same lexical value too.
         # Missing/unknown legacy proofs and boxed kind refinements remain compatible.
+        kinds = [rep.get('kind', 'unknown') if isinstance(rep, dict) else 'unknown' for rep in (expected, actual)]
+        if any(kind in ('float', 'double') for kind in kinds) and 'unknown' not in kinds and kinds[0] != kinds[1]:
+            self.issue('scalar-representation', owner, path, 'Conflicting floating scalar carrier kinds')
         if all(isinstance(rep, dict) and rep.get('kind') == 'long' and
                isinstance(rep.get('primReps'), list) and len(rep['primReps']) == 1 for rep in (expected, actual)):
             if expected['primReps'] != actual['primReps']:
@@ -243,11 +246,27 @@ class Audit:
         return scope
 
     @staticmethod
-    def expression_rep(expr):
+    def literal_rep(expr):
+        # Carrier kinds are intrinsic to literals, but do not fabricate exact
+        # GHC register proofs (IntRep, WordRep, etc.) for legacy Core.
+        if not isinstance(expr, list) or not expr:
+            return None
+        if expr[0] == 'void':
+            return dict(kind='void', evaluated=True)
+        if expr[0] == 'lit' and len(expr) >= 3:
+            kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
+                    **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
+                                     'word8', 'word16', 'word32', 'word64'), 'long')}.get(expr[1])
+            return dict(kind=kind, evaluated=True) if kind else None
+        return None
+
+    @classmethod
+    def expression_rep(cls, expr):
         if not isinstance(expr, list) or not expr:
             return None
         index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4, 'case': 4, 'con': 3, 'prim': 2, 'void': 1}.get(expr[0])
-        return expr[index].get('rep') if index is not None and len(expr) > index and isinstance(expr[index], dict) else None
+        proof = expr[index].get('rep') if index is not None and len(expr) > index and isinstance(expr[index], dict) else None
+        return proof if proof is not None else cls.literal_rep(expr)
 
     def free_variables(self, expr):
         if not isinstance(expr, list) or not expr:
@@ -325,8 +344,9 @@ class Audit:
                     self.compare_shapes(proof, self.expression_rep(expr), owner, path + '/rep')
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
+                self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'void':
-                pass
+                self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':
                 ids = self.binder_ids(expr[1], owner, path + '/binders')
                 for binder in expr[1]:

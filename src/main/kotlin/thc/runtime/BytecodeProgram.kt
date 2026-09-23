@@ -398,8 +398,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
-        CoreRepresentation(if (value is Float) CoreKind.FLOAT else if (value is Double) CoreKind.DOUBLE else CoreKind.UNKNOWN,
-            evaluated = true))
+        CoreRepresentation(when (value) {
+            is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
+            is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+        }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
         val source = sources.expression(expr, scope.source)
         val value = try {

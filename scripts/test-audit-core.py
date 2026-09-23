@@ -103,6 +103,24 @@ class AuditTest(unittest.TestCase):
         for value in ('-1', '18446744073709551616', '', '+1', '01', '-0', ' 1', '1.0'):
             self.assertIn('invalid-literal-value', {i['code'] for i in run(['lit', 'word64', value])['issues']}, value)
 
+    def test_floating_literal_carriers_cannot_be_overridden_by_metadata(self):
+        carriers = [(['lit', 'float', '1.0'], dict(kind='float', primReps=['FloatRep'], evaluated=True)),
+                    (['lit', 'double', '1.0'], dict(kind='double', primReps=['DoubleRep'], evaluated=True)),
+                    (lit(1), LONG),
+                    (['lit', 'string-bytes', '41'], dict(kind='address', primReps=['AddrRep'], evaluated=True)),
+                    (['void'], dict(kind='void', primReps=[], evaluated=True))]
+        for literal, actual in carriers:
+            self.assertTrue(run(literal)['accepted'], literal)
+            self.assertTrue(run([*literal, dict(rep=actual)])['accepted'], literal)
+            for _, declared in carriers:
+                if actual['kind'] == declared['kind'] or not {'float', 'double'} & {actual['kind'], declared['kind']}:
+                    continue
+                case = ['case', [*lit(0), dict(rep=LONG)], 's', [['default', None, [], literal]],
+                        dict(rep=declared, binder=dict(id='s', lifted=False, rep=LONG))]
+                for expr in [[*literal, dict(rep=declared)], case]:
+                    report = run(expr)
+                    self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, expr)
+
     def test_scalar_lexical_occurrences_cannot_replace_exact_binder_registers(self):
         for primitive, expected, declared in [('quotRemInt#', 'IntRep', 'WordRep'), ('plusInt8#', 'Int8Rep', 'Word8Rep')]:
             scalar = dict(LONG, primReps=[expected])
