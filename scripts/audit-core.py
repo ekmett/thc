@@ -421,7 +421,9 @@ class Audit:
                 key = candidates[0]
                 roots.append(key)
                 expression = self.bindings[key].get('expr')
-                if isinstance(expression, list) and expression and expression[0] == 'lam' and len(expression) > 3 and self.is_tuple(expression[3].get('resultRep')):
+                if (isinstance(expression, list) and expression and expression[0] == 'lam' and
+                        len(expression) > 3 and isinstance(expression[3], dict) and
+                        self.is_tuple(expression[3].get('resultRep'))):
                     self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
                 if key not in self.chains:
                     self.chains[key] = [key]
