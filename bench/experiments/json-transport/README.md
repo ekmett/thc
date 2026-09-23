@@ -45,13 +45,27 @@ java -XX:-UseJVMCICompiler -XX:+UseCompactObjectHeaders -Xmx1024m \
   -cp "probe-classes:$THC_DIST/lib/*" JsonAllocationProbe paths.txt
 ```
 
-Repeat with `-Xmx896m` for the bounded-heap control. For a prepared Sequence bundle,
-pass its ordered module paths and `request sequenceBuild` after `paths.txt`, using
+Repeat with `-Xmx896m` for the bounded-heap control. To regenerate the Sequence
+bundle, use a separate checkout of published branch
+[`codex/sequence-boundary-lifetime`](https://github.com/ekmett/thc/tree/codex/sequence-boundary-lifetime)
+at exact revision
+[`ffdbca6f091b6ee48cd9baed2a8f61e3a6eb5a3d`](https://github.com/ekmett/thc/commit/ffdbca6f091b6ee48cd9baed2a8f61e3a6eb5a3d),
+run `scripts/prepare-library-tests.py`, and extract the `sequence` group's ordered
+`modules` paths from its `build/libraries/cases.json`. That revision's Sequence
+workload, preparation script and independent model are unchanged from the failing
+CI revision `a52df35207318982705cb3ba5efb449e30783367`. The baseline main revision's
+preparer has only five groups and does not generate Sequence. These regenerated
+inputs remain equivalent genuine exports, not the original CI artifact.
+
+Invoke `JsonAllocationProbe sequence-paths.txt request sequenceBuild`, using
 `-Xmx2048m` (and `-Xmx3072m` only for the successful old-writer baseline).
 `RequestLoadProbe` additionally runs the actual `CoreModules.request` and
 `Context.eval` path: compile it against the distribution, then pass the Sequence
-paths file and `ast` or `bytecode`. It must report the existing strict rejection.
- Measure process peak RSS using
+paths file and `ast` or `bytecode`. It requires the exact
+`Unsupported Core aggregate representation: unboxed-tuple (formal argument)`
+marker; a different unsupported frontier fails the control.
+
+Measure process peak RSS using
 an OS process-memory tool if desired. `allocated` counts current-thread allocated
 bytes only during `Json.stringify`; parsing, the explicit pre-measurement GC, and
 the final streaming SHA-256 are outside that interval. The probe's

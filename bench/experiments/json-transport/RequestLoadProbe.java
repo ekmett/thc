@@ -9,7 +9,7 @@ public final class RequestLoadProbe {
       try { context.eval("thc", request); throw new AssertionError("Expected existing Sequence frontier"); }
       catch (PolyglotException e) {
         String message=e.getMessage();
-        if (!(message.contains("Unsupported") || message.contains("unsupported") || message.contains("Unresolved"))) throw e;
+        if (message == null || !message.contains("Unsupported Core aggregate representation: unboxed-tuple (formal argument)")) throw e;
         System.out.println("EXPECTED_REJECTION " + args[1] + " " + message);
       }
     }

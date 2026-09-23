@@ -5,7 +5,7 @@
   "baselineJsonSourceSha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80",
   "newJsonSourceSha256": "688131684693befbd3c1d1921f61f0c129e92eca97fa40d37f1d59d4bfe9d093",
   "probeSourceSha256": "1076fed3a5aca8b745db52db6ea1de2bfa98b02af7da23486a98e3a5ab21a391",
-  "loaderProbeSourceSha256": "f554c37765b5faff471f62a66b69c32cd02f92c7c3aef6fb83f56edaabb2c9ce",
+  "loaderProbeSourceSha256": "2e6a3af601333295fed19e213b83438a44afa830aeec4754e3582ee70b19280c",
   "oldJsonClassSha256": "ec9b682a0e567d12577c74a5e0cb789787ed9fb816c36cc74ebecf8a82216baf",
   "newJsonClassSha256": "7f1be414486ccacdec5f34a45b79551e289576038a6593d77e6ae6cc75703b01",
   "javaReleaseSha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05",
@@ -212,7 +212,9 @@
         "sha256": "ac189a5ce01567cd2a978854278e035d6e894ba7e76db504fd22091bb53b66ac",
         "maxResidentSetBytes": 3328081920
       }
-    ]
+    ],
+    "sourceBranch": "codex/sequence-boundary-lifetime",
+    "sourceCommit": "ffdbca6f091b6ee48cd9baed2a8f61e3a6eb5a3d"
   },
   "validation": {
     "jsonAndLinkerTests": 7,
@@ -220,6 +222,7 @@
       "ast": 7572,
       "bytecode": 7572
     },
-    "setFrontier": "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+    "setFrontier": "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+    "sequenceFrontier": "Unsupported Core aggregate representation: unboxed-tuple (formal argument)"
   }
 }
