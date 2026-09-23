@@ -337,7 +337,10 @@
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
-    "indexWord8Array#": 2
+    "indexWord8Array#": 2,
+    "newMutVar#": 2,
+    "readMutVar#": 2,
+    "writeMutVar#": 3
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -557,6 +560,36 @@
           "Word8Rep"
         ]
       }
+    }
+  },
+  "managedMutVarPrimitives": {
+    "newMutVar#": {
+      "arguments": [
+        "boxed",
+        "state"
+      ],
+      "result": [
+        "state",
+        "mutvar"
+      ]
+    },
+    "readMutVar#": {
+      "arguments": [
+        "mutvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "writeMutVar#": {
+      "arguments": [
+        "mutvar",
+        "boxed",
+        "state"
+      ],
+      "result": "state"
     }
   }
 }

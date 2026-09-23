@@ -127,6 +127,7 @@ jobs:
           python3 scripts/test-library-frontier.py
           python3 scripts/test-core-vectors.py
           python3 scripts/test-core-bytearrays.py
+          python3 scripts/test-core-mutvars.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -162,6 +163,11 @@ jobs:
             build/state-tuple/oracle.tsv
             build/state-tuple/*-audit.json
             build/state-tuple/*-core/*.json
+            build/mutvar/manifest.json
+            build/mutvar/oracle.tsv
+            build/mutvar/NativeMutVar.hs
+            build/mutvar/*/*.audit.json
+            build/mutvar/*/core/*.json
             build/bytearray/manifest.json
             build/bytearray/oracle.tsv
             build/bytearray/NativeByteArray.hs

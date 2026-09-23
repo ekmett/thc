@@ -697,6 +697,18 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
+                val operation = MutVarOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    if (operation == MutVarOp.NEW) e.builder.beginNewMutVar(destination[0])
+                    else e.builder.beginReadMutVar(destination[0])
+                    operands.forEach { it.emit(e) }
+                    if (operation == MutVarOp.NEW) e.builder.endNewMutVar() else e.builder.endReadMutVar()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

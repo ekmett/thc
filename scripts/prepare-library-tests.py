@@ -18,14 +18,13 @@ CONTAINERS_URL = 'https://hackage.haskell.org/package/containers-0.8/containers-
 CONTAINERS_SHA = 'b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8'
 WORD_MASK = (1 << 64) - 1
 
-# State# tuple components and collection tuple results are supported. The
-# remaining cold exception/interface gaps still require exact owners, details
-# and multiplicities so both new gaps and resolved gaps fail closed for review.
+# State# tuples, collection tuple results and managed MutVar reads are supported.
+# The remaining cold exception/interface definitions are still missing. Require
+# exact identities and no capability issues so both new and resolved gaps fail
+# closed for review.
 SET_EXCEPTION = 'ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException'
 SET_BACKTRACE = 'ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1'
-SET_FRONTIER_ISSUES = Counter({
-    ('unsupported-primitive', SET_BACKTRACE, 'readMutVar#'): 1,
-})
+SET_FRONTIER_ISSUES = Counter()
 SET_FRONTIER_MISSING = {
     'ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException',
     'ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef',
