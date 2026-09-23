@@ -614,6 +614,38 @@ class EmptyTupleInputTests(unittest.TestCase):
         module['bindings'][1]['expr'][1][0]['lifted'] = True
         self.assertIn('application-levity', {i['code'] for i in self.audit(module)['issues']})
 
+    def test_empty_actual_raw_lifted_flag_is_not_erased_by_entry_strictness(self):
+        module = self.fixture([self.empty])
+        module['bindings'][1]['expr'][3]['entryStrict'] = [True]
+        self.assertTrue(self.audit(module)['accepted'])
+        module['bindings'][0]['expr'][3][0] = True
+        report = self.audit(module)
+        self.assertFalse(report['accepted'])
+        self.assertIn('application-levity', {i['code'] for i in report['issues']})
+
+    def test_recursive_alias_chain_preserves_known_positional_input_proofs(self):
+        module = self.fixture([self.empty])
+        call = module['bindings'][0]['expr']
+        worker = self.fixture([self.state])['bindings'][1]
+        alias = dict(bind('alias', [*var('worker'), dict(rep=CLOSURE)]), rep=CLOSURE)
+        second = dict(bind('second', [*var('alias'), dict(rep=CLOSURE)]), rep=CLOSURE)
+        call[1] = [*var('second'), dict(rep=CLOSURE)]
+        # Reversed dependency order requires a fixed point, not a single scan.
+        module['bindings'] = [bind('root', ['let', True, [second, alias, worker], call, dict(rep=LONG)])]
+        report = self.audit(module)
+        self.assertFalse(report['accepted'])
+        self.assertIn('aggregate-shape', {i['code'] for i in report['issues']})
+        call[2][0] = ['void', dict(rep=self.state)]
+        self.assertTrue(self.audit(module)['accepted'])
+
+    def test_known_empty_input_rejects_legacy_scalar_actual_without_metadata(self):
+        module = self.fixture([self.empty])
+        self.assertTrue(self.audit(module)['accepted'])
+        module['bindings'][0]['expr'][2][0] = lit(1)
+        report = self.audit(module)
+        self.assertFalse(report['accepted'])
+        self.assertIn('aggregate-shape', {i['code'] for i in report['issues']})
+
     def test_join_formals_and_ordinary_empty_let_values_stay_rejected(self):
         module = self.fixture([self.empty])
         worker = module['bindings'].pop()
