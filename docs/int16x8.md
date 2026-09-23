@@ -134,3 +134,9 @@ and allocated XMM word instructions. It disallows surviving vector/carrier/array
 allocations, lane boxing, field traffic and fallback calls, while allowing the
 public host Long result box. Instrumentation is disabled only for these graph
 captures, not for the correctness tests above.
+
+The retained [x86-64 evidence](../bench/experiments/int16x8-foundation/evidence-x86_64/README.md)
+passes all16 graph controls and453 JVM tests in each handoff mode. The initial
+reader rejected duplicate metadata headers for one compilation; a separately
+tracked offline correction passed the original captures without replaying guest
+code. Original failure and both reader revisions remain in the evidence.

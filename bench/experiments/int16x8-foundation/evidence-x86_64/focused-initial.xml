@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdInt16VectorTest" tests="6" skipped="0" failures="1" errors="0" timestamp="2026-09-23T20:34:59.911Z" hostname="eak-quartus" time="6.138">
+  <properties/>
+  <testcase name="literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution()" classname="thc.runtime.SimdInt16VectorTest" time="0.213">
+    <failure message="org.opentest4j.AssertionFailedError: expected: &lt;1&gt; but was: &lt;thc.runtime.Closure@5c089b2f&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: expected: &lt;1&gt; but was: &lt;thc.runtime.Closure@5c089b2f&gt;
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:177)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1145)
+	at thc.runtime.SimdInt16VectorTest.literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution$lambda$0(SimdInt16VectorTest.kt:107)
+	at thc.runtime.SimdInt16VectorTest.withLanguage(SimdInt16VectorTest.kt:32)
+	at thc.runtime.SimdInt16VectorTest.withLanguage$default(SimdInt16VectorTest.kt:27)
+	at thc.runtime.SimdInt16VectorTest.literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution(SimdInt16VectorTest.kt:100)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+</failure>
+  </testcase>
+  <testcase name="allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct()" classname="thc.runtime.SimdInt16VectorTest" time="0.159"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithoutInlining()" classname="thc.runtime.SimdInt16VectorTest" time="3.38"/>
+  <testcase name="exactShapeRequiresEightShortFieldsAndEightInt16TupleLanes()" classname="thc.runtime.SimdInt16VectorTest" time="0.002"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithInlining()" classname="thc.runtime.SimdInt16VectorTest" time="2.304"/>
+  <testcase name="bothLoadersRetainVectorBoundaryAndRejectForgedShapes()" classname="thc.runtime.SimdInt16VectorTest" time="0.072"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
