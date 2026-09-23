@@ -22,7 +22,7 @@ class LibraryFrontierTest(unittest.TestCase):
 
     def test_actual_set_frontier_is_exception_state_not_collection_tuple_results(self):
         self.assertEqual([], self.violations())
-        self.assertEqual(17, len(self.audit['issues']))
+        self.assertEqual(1, len(self.audit['issues']))
         self.assertEqual(3, len(self.audit['missingGlobals']))
         self.assertNotIn('aggregate-boundary', {i['code'] for i in self.audit['issues']})
 
@@ -33,10 +33,20 @@ class LibraryFrontierTest(unittest.TestCase):
         self.assertTrue(self.violations(), 'Even newly accepted Core requires explicit coverage review')
 
     def test_additional_gap_with_existing_diagnostic_kind_is_rejected(self):
-        extra = copy.deepcopy(next(i for i in self.audit['issues'] if i['code'] == 'aggregate-representation'))
+        extra = copy.deepcopy(next(i for i in self.audit['issues'] if i['code'] == 'unsupported-primitive'))
         extra['owner'] = 'main:Data.Set.Internal.newUnsupportedPath'
         self.audit['issues'].append(extra)
         self.assertTrue(self.violations())
+
+    def test_reintroduced_zero_width_tuple_gap_is_rejected(self):
+        self.audit['issues'].append(dict(code='aggregate-representation', owner=prepare.SET_BACKTRACE,
+                                        detail='unboxed-tuple: unsupported component'))
+        self.assertTrue(self.violations(), 'State# tuple support must not silently regress')
+
+    def test_lost_runrw_tuple_case_proof_is_rejected(self):
+        self.audit['issues'].append(dict(code='constructor-kind', owner=prepare.SET_EXCEPTION,
+                                        detail='ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple'))
+        self.assertTrue(self.violations(), 'Fresh runRW# exports must retain the exact exception tuple layout')
 
     def test_duplicate_gap_and_changed_primitive_are_rejected(self):
         original = copy.deepcopy(self.audit)

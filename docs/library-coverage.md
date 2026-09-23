@@ -12,21 +12,24 @@ queries membership, and folds in ascending order with an order-sensitive checksu
 Empty and negative workloads are defined. Native GHC 9.14.1 agreed with an
 independent Python set model for all 1,041 inputs from -16 through 1024.
 
-This is **not currently an executable THC coverage claim**. Its strict reachable
-audit exposes these gaps:
+Strict loading still rejects this workload. Cold backtrace collection reaches
+unsupported `readMutVar#`, and three exception-construction, backtrace and
+call-stack bindings remain missing.
 
-- Deletion reaches unboxed pairs through `glue` and min/max extraction workers.
-  Union/difference use pairs in split workers; intersection uses triples in
-  `splitMember`. These must retain their unboxed representation when supported.
-- Existing cold exception paths additionally reach `readMutVar#` and missing
-  exception-construction, backtrace and call-stack bindings.
+The current strict audit has 71 reachable bindings, one issue and three missing
+definitions. Collection tuple results and the two reachable min/max tuple-result
+joins now lower directly, and zero-width `State#` tuple components no longer add
+capability gaps. Fresh `runRW#` exports also retain the exact
+`(# State# RealWorld, SomeException #)` layout in the cold exception case.
+Preparation pins the exact remaining diagnostics; neither new
+gaps nor resolved gaps silently change the declared frontier.
 
 Insertion, deletion, union and intersection retain the real
 `reallyUnsafePtrEquality#` primitive. It is now supported on both backends as
 non-strict reference identity, without following thunk indirections. Separate
 native-oracle fixtures test identity shortcuts with valid value-based fallbacks;
 they do not require GHC and THC to make identical allocation choices. This does
-not make the Set workload executable while its aggregate and cold-path gaps remain.
+not make the Set workload strictly supported while its cold-path gaps remain.
 
 The initial post-Tidy source export had 71 reachable bindings, three missing
 boot-library definitions and 210 capability issues, including 101 explicit
@@ -154,3 +157,10 @@ frontier and are excluded from execution counts. A deliberately modified IntSet
 expected value in the manifest was rejected against the fingerprinted native
 oracle before guest loading. The 30-second compilation timeout and 100,000 graph
 size limit remain unchanged.
+
+## ShortByteString and managed bytes
+
+The [managed ByteArray workload](bytearrays.md) executes the installed
+ShortByteString pack/unpack workers and genuine GHC List length body. Strict
+pre/post-Tidy audits retain all five byte primitives, and native/model checks
+cover empty arrays, every byte value, and ordered writes on both backends.

@@ -172,7 +172,7 @@ def main():
     run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-i'+str(ROOT/'compiler/test-fixtures'),'-odir',native,'-hidir',native,source,'-o',executable])
     requests=''.join(f'{e["name"]}\t{x}\t{y}\n' for e in entries() for x,y in operands(e))
     result=run([executable],input=requests,text=True,capture_output=True,timeout=60);(OUT/'oracle.tsv').write_text(result.stdout)
-    inputs=[ROOT/p for p in [SOURCE,'scripts/prepare-explicit64-primops.py','scripts/core-capabilities.json','scripts/audit-core.py','scripts/core_vectors.py',
+    inputs=[ROOT/p for p in [SOURCE,'scripts/prepare-explicit64-primops.py','scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json','scripts/audit-core.py','scripts/core_vectors.py',
                             'compiler/build.sh','compiler/export.sh','compiler/toolchain.sh']]+sorted((ROOT/'compiler/Thc').glob('*.hs'))
     artifacts=[OUT/'core/Explicit64PrimopsAudit.json', OUT/'oracle.tsv',source]
     manifest.write_text(json.dumps(dict(schema=1,ghc='9.14.1',ghcInfo=subprocess.check_output([ghc,'--info'],text=True),entries=entries(),commands=commands,

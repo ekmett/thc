@@ -50,6 +50,8 @@ def tuple_fixture(proof=None):
         if not audit_core.Audit.is_tuple(rep):
             if rep['kind'] == 'long':
                 return [*var('x'), dict(rep=copy.deepcopy(rep))]
+            if rep['kind'] == 'void':
+                return ['void', dict(rep=copy.deepcopy(rep))]
             constructors['Box'] = dict(id='Box', kind='boxed', arity=0, fieldReps=[], strictFields=[], fieldLifted=[])
             return ['con', 'Box', 0, dict(rep=copy.deepcopy(rep))]
         children = rep['components']
@@ -97,6 +99,53 @@ def tuple_join_fixture(zero=False):
 
 
 class AuditTest(unittest.TestCase):
+    def test_scalar_primitive_signatures_reject_consistent_forgery_and_hidden_binder_proofs(self):
+        for primitive, expected, result in [('plusInt64#', 'Int64Rep', 'Int64Rep'),
+                ('ltWord64#', 'Word64Rep', 'IntRep'), ('int64ToWord64#', 'Int64Rep', 'Word64Rep')]:
+            arity = CAP['primitives'][primitive]
+            for mode in ('argument', 'result', 'omitted', 'unknown'):
+                wrong = 'Word64Rep' if expected != 'Word64Rep' else 'Int64Rep'
+                argument_rep = dict(LONG, primReps=[wrong if mode != 'result' else expected])
+                result_rep = dict(LONG, primReps=['WordRep' if mode == 'result' else result])
+                argument = ['var', 'x']
+                if mode != 'omitted':
+                    argument += [dict(rep=dict(kind='unknown', primReps=None, evaluated=False) if mode == 'unknown' else argument_rep)]
+                body = ['app', ['prim', primitive], [argument] * arity, [False] * arity, False, False, dict(rep=result_rep)]
+                expression = ['lam', [dict(id='x', lifted=False, rep=argument_rep)], body, dict(resultRep=result_rep)]
+                report = run(expression)
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (primitive, mode))
+                self.assertNotIn('scalar-representation', {i['code'] for i in report['issues']})
+
+    def test_scalar_signature_checks_keep_unknown_absent_and_intrinsic_literal_carriers(self):
+        for proof in (None, dict(kind='unknown', primReps=None, evaluated=False), dict(LONG, primReps=['Int64Rep'])):
+            binder = dict(id='x', lifted=False)
+            argument = ['var', 'x']
+            if proof is not None:
+                binder['rep'] = proof
+                argument += [dict(rep=proof)]
+            body = ['app', ['prim', 'plusInt64#'], [argument, argument], [False, False]]
+            if proof is not None:
+                body += [False, False, dict(rep=proof)]
+            self.assertTrue(run(['lam', [binder], body])['accepted'])
+            self.assertTrue(run(['lam', [binder], ['app', ['prim', 'plusInt64#'], [body, argument], [False, False]]])['accepted'])
+        # Literal kind supplies a carrier, not a fabricated exact GHC register proof.
+        self.assertTrue(run(['app', ['prim', 'plusInt64#'], [lit(1), lit(2)], [False, False]])['accepted'])
+        word = dict(LONG, primReps=['Word64Rep'])
+        binding = dict(bind('x', ['lit', 'word64', '1', dict(rep=word)], False), rep=word)
+        report = run(['app', ['prim', 'plusInt64#'], [var('x'), var('x')], [False, False]], [binding])
+        self.assertIn('primitive-representation', {i['code'] for i in report['issues']})
+
+    def test_zero_width_state_components_preserve_logical_shape(self):
+        void = dict(kind='void', primReps=[], evaluated=True)
+        proof = tuple_rep(void, tuple_rep(), LONG)
+        module = tuple_fixture(proof)
+        self.assertTrue(run_tuple(module)['accepted'])
+        forged = copy.deepcopy(module)
+        forged['bindings'][1]['expr'][3]['resultRep']['components'][0] = tuple_rep()
+        self.assertFalse(run_tuple(forged)['accepted'], 'State# is not the empty unboxed tuple')
+        byte_array = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        self.assertTrue(run_tuple(tuple_fixture(tuple_rep(void, byte_array)))['accepted'])
+
     def test_word64_literals_are_canonical_unsigned_values(self):
         for value in ('0', '1', '9223372036854775808', '18446744073709551615'):
             self.assertTrue(run(['lit', 'word64', value])['accepted'], value)
@@ -170,6 +219,33 @@ class AuditTest(unittest.TestCase):
         word = dict(LONG, primReps=['WordRep'])
         inner = ['lam', [dict(id='x', lifted=False, rep=word)], ['var', 'x', dict(rep=word)]]
         self.assertTrue(run(['lam', [dict(id='x', lifted=False, rep=LONG)], inner])['accepted'])
+
+    def test_boxed_lexical_and_case_proofs_cannot_change_exact_levity(self):
+        lifted = dict(REFERENCE, kind='object')
+        unlifted = dict(lifted, primReps=['BoxedRep (Just Unlifted)'])
+        for stored, occurrence in [(lifted, unlifted), (unlifted, lifted)]:
+            for stored_kind in ('object', 'data', 'closure'):
+                binder = dict(id='x', lifted=True, rep=dict(stored, kind=stored_kind))
+                variable = ['var', 'x', dict(rep=occurrence)]
+                case = ['case', ['var', 'x', dict(rep=stored)], 'b',
+                        [['default', None, [], ['var', 'b', dict(rep=occurrence)]]],
+                        dict(rep=occurrence, binder=dict(id='b', rep=occurrence))]
+                for body in (variable, case):
+                    report = run(['lam', [binder], body])
+                    self.assertIn('scalar-representation', {i['code'] for i in report['issues']})
+
+    def test_unknown_boxed_levity_and_class_refinements_remain_compatible(self):
+        legacy = dict(kind='unknown', primReps=None, evaluated=False)
+        unknown = dict(REFERENCE, kind='object', primReps=['BoxedRep Nothing'])
+        for levity in ('Lifted', 'Unlifted'):
+            exact = dict(REFERENCE, primReps=[f'BoxedRep (Just {levity})'])
+            for stored, occurrence in [(None, exact), (exact, None), (legacy, exact), (exact, legacy),
+                    (unknown, exact), (exact, unknown), (exact, dict(exact, kind='object', evaluated=True))]:
+                binder = dict(id='x', lifted=True)
+                if stored is not None:
+                    binder['rep'] = stored
+                body = ['var', 'x'] + ([dict(rep=occurrence)] if occurrence is not None else [])
+                self.assertTrue(run(['lam', [binder], body])['accepted'], (stored, occurrence))
 
     def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
         for name, contract in CAP['tuplePrimitives'].items():
