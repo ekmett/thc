@@ -132,6 +132,8 @@ unsigned elements, public accumulation/ST examples and cross-element byte aliase
 and eight-byte machine Word storage, public examples and native bit-movement checks.
 [Int16/Word16-array operations](docs/int16-arrays.md) add two-byte signed/unsigned
 storage and exact narrow literal proofs.
+[Int8/Word8-array operations](docs/int8-arrays.md) complete signed and unsigned
+single-byte storage with public arrays and raw narrow-result controls.
 
 Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
 while preserving lazy lifted elements and closures.
