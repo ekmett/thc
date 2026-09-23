@@ -52,10 +52,18 @@ left by an earlier run cannot silently expand the claim.
 
 The separate Vector API mechanism probe has installed-code and final-register
 checks on AArch64 ASIMD and x86 SSE2/AVX. This mechanism evidence is distinct from
-the four production AArch64 Core graph controls, which use the source-matched
-x86 native oracle and verify packed ADD/SUB with no vector carrier allocation
-or field traffic on either backend. Compact headers are enabled; the outer scalar `Long`
-box needed by the public `Object` result is accounted for separately.
+the production Core graph controls: four on AArch64 using the source-matched
+x86 native oracle, and [eight on x86](../bench/experiments/simd-foundation/evidence-x86_64/runtime/README.md)
+using fresh pre/post-Tidy exports and native rows. Both backends emit packed
+ADD/SUB with no vector carrier allocation, field traffic or residual calls in
+the inspected graphs. The x86 output uses `VPADDQ`/`VPSUBQ` on an AVX2 host;
+it does not establish behavior on an SSE2-only machine.
+
+Graph captures retain installed-target validity after execution; instrumentation
+is disabled in those captures, so this is separate from per-call compiled-entry
+measurement. Each record identifies its tested source revision and runtime.
+Compact headers are enabled; the outer scalar `Long` box needed by the public
+`Object` result is accounted for separately.
 
 The [JDK 25 Vector API documentation](https://docs.oracle.com/en/java/javase/25/docs/api/jdk.incubator.vector/jdk/incubator/vector/package-summary.html)
 explains its compiler-dependent SIMD lowering and scalar fallback. The pinned
