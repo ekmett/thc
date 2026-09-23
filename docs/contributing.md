@@ -6,12 +6,22 @@ separate tasks; PRs carry the implementation discussion and merge status.
 
 `Build` runs the full test suite, native oracles, both execution backends, the
 dense handoff control, library checks, and the explicit Map/Set frontiers. It
-also checks the merge automation. A trusted workflow verifies both build jobs
-and the `automation` job in the latest Build run and attempt, and publishes the
+also checks the merge automation. Native library inputs are freshly prepared in
+both build jobs, then eight parallel jobs cover both platforms, backends and
+handoff modes using the same platform's verified runtime and oracle artifacts.
+A trusted workflow requires both build jobs, all eight named library jobs and
+`automation` exactly once in the latest Build run and attempt, and publishes the
 `required-tests` commit status required by `main`, including for administrators.
 This explicit status also covers bot-dispatched builds, whose workflow job checks
 are not always eligible for GitHub PR requirements. A failed,
 skipped or missing required check does not pass the bot's gate.
+Library artifacts are bound to the checkout SHA/tree, workspace path, platform,
+pinned JDK and exact workflow run/attempt. The original source/native provenance
+and manifest bytes are preserved; consumer jobs do not install GHC or execute
+native oracle binaries. A failed-job-only rerun cannot reuse an earlier attempt's
+artifacts: choose **Re-run all jobs**. Artifact transfer and execution occur only
+in the read-only Build workflow, never in the privileged merge bot.
+
 After all its checks pass, the bot may attempt a protected merge for GitHub's
 `clean` or `unstable` state; GitHub can still refuse it.
 

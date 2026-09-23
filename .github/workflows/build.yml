@@ -112,21 +112,18 @@ jobs:
           scripts/gradle.sh --no-daemon test --rerun
           cp -R build/test-results/test build/test-results/handoff
           cp -R build/reports/tests/test build/reports/tests/handoff
-      - name: Check real libraries on both backends and handoff modes
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/prepare-library-tests.py
-          matrix_status=0
-          for handoff in false true; do
-            for backend in ast bytecode; do
-              java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
-                "-Dthc.handoffSlabs=$handoff" -cp 'build/install/thc/lib/*' \
-                thc.LibraryCheckKt build/libraries/cases.json "$backend" \
-                2>&1 | tee "build/libraries/check-$backend-handoff-$handoff.log" || matrix_status=1
-            done
-          done
-          exit "$matrix_status"
+      - name: Prepare fresh library source and native oracles
+        run: python3 scripts/prepare-library-tests.py
+      - name: Package verified library inputs and installed runtime
+        run: python3 .github/scripts/library_bundle.py pack --output build/library-transfer.tar.gz
+      - name: Share this platform's library inputs with this Build attempt
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: library-inputs-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/library-transfer.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
       - name: Check exact dependency auditor and library frontier
         run: |
           python3 scripts/test-audit-core.py
@@ -168,7 +165,7 @@ jobs:
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: test-results-${{ runner.os }}
+          name: test-results-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             build/reports/tests/
             build/floating/core/
@@ -270,3 +267,60 @@ jobs:
             build/map/oracle-validation.json
             build/map/provenance.json
             build/map/reproduction-provenance.json
+
+  library:
+    name: library (${{ matrix.os }}, ${{ matrix.backend }}, handoff=${{ matrix.handoff }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        backend: [ast, bytecode]
+        handoff: ['false', 'true']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: test -z "$EXPECTED_SHA" || test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - name: Download only this platform and Build attempt
+        uses: actions/download-artifact@v8
+        with:
+          name: library-inputs-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/library-download
+          digest-mismatch: error
+      - name: Verify source, platform, pinned JDK and original library fingerprints
+        run: python3 .github/scripts/library_bundle.py restore --archive build/library-download/library-transfer.tar.gz
+      - name: Run the complete strict and compiled library checks
+        shell: bash
+        env:
+          BACKEND: ${{ matrix.backend }}
+          HANDOFF: ${{ matrix.handoff }}
+        run: |
+          set -euo pipefail
+          "$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+            "-Dthc.handoffSlabs=$HANDOFF" -cp 'build/install/thc/lib/*' \
+            thc.LibraryCheckKt build/libraries/cases.json "$BACKEND" \
+            2>&1 | tee "build/libraries/check-$BACKEND-handoff-$HANDOFF.log"
+      - name: Preserve each library mode's results
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: library-results-${{ runner.os }}-${{ matrix.backend }}-handoff-${{ matrix.handoff }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/library-transfer-verified.json
+            build/libraries/check-*.log

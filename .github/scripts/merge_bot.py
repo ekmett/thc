@@ -11,7 +11,12 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 LABEL = "auto-merge"
-CHECKS = {"build (ubuntu-latest)", "build (macos-latest)", "automation"}
+CHECKS = {"build (ubuntu-latest)", "build (macos-latest)", "automation"} | {
+    f"library ({os}, {backend}, handoff={handoff})"
+    for os in ("ubuntu-latest", "macos-latest")
+    for backend in ("ast", "bytecode")
+    for handoff in ("false", "true")
+}
 REQUIRED_STATUS = "required-tests"
 ACTIONS_APP = 15368
 
