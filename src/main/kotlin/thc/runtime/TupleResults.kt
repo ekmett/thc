@@ -10,6 +10,11 @@ import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
 import thc.Language
 
+/** Erasure follows evaluation; malformed legacy values cannot masquerade as State#. */
+internal fun requireVoidCarrier(value: Any?) {
+    if (value !== Unit) fault("Invalid zero-width scalar carrier")
+}
+
 /** Logical tuple boundaries remain distinct even when their physical widths agree. */
 internal class TupleShape(val proof: CoreRepresentation, val language: Language) {
     @field:CompilationFinal(dimensions = 1) val components = (proof.components ?: fault("Missing tuple components")).toTypedArray()
@@ -286,7 +291,7 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
             val target = offset + shape.offsets[index]
             if (component.isTuple) fields[index].executeTuple(frame, slots, target)
             else if (component.isLong) FrameAccess.writeLong(frame, slots[target], fields[index].executeRequiredLong(frame))
-            else if (component.kind == CoreKind.VOID) fields[index].execute(frame)
+            else if (component.kind == CoreKind.VOID) requireVoidCarrier(fields[index].execute(frame))
             else FrameAccess.write(frame, slots[target], fields[index].execute(frame))
         }
         return null

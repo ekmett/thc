@@ -41,6 +41,7 @@ tasks.test {
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
             "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
             "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
+            "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
             "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv",
@@ -58,7 +59,8 @@ tasks.test {
     inputs.files(fileTree("scripts") {
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "core_vectors.py",
-            "audit-core.py", "core-capabilities.json", "generate-scalar-signatures.py", "check-corpus-structure.py")
+            "prepare-state-tuple-audit.py", "core_*.py", "generate-scalar-signatures.py",
+            "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)
