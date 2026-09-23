@@ -308,7 +308,7 @@ def main():
         ROOT / 'src/main/kotlin/thc/LibraryCheck.kt', ROOT / 'compiler/build.sh',
         ROOT / 'compiler/export.sh', ROOT / 'compiler/export-boot.py', ROOT / 'compiler/toolchain.sh',
         ROOT / 'compiler/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
-        ROOT / 'scripts/sequence_model.py',
+        ROOT / 'scripts/sequence_model.py', ROOT / 'scripts/test-library-frontiers.py',
     }
     inputs.update((ROOT / 'compiler/Thc').glob('*.hs'))
     inputs.update(path for path in containers.rglob('*') if path.is_file())

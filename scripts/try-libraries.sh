@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 . "$ROOT/scripts/java-home.sh"
+python3 scripts/test-library-frontiers.py
 scripts/prepare-tests.sh
 python3 scripts/prepare-library-tests.py
 scripts/gradle.sh --no-daemon test installDist "$@"
