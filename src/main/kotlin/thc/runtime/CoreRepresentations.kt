@@ -209,9 +209,9 @@ internal object CoreRepresentations {
         // Export-only identity rewrites retain an explicit unconstrained proof.
         // The literal still supplies its own exact representation; malformed
         // records have already failed parse(), and retained constraints must match.
-        val unconstrained = proof.kind == CoreKind.UNKNOWN && proof.primReps == null && !proof.isTuple && !proof.isVector
+        val unconstrained = proof.kind == CoreKind.UNKNOWN && proof.primReps == null && !proof.isAggregate && !proof.isVector
         if (proof.present && !unconstrained &&
-            (proof.kind != CoreKind.LONG || proof.primReps != listOf(expected) || proof.isTuple || proof.isVector))
+            (proof.kind != CoreKind.LONG || proof.primReps != listOf(expected) || proof.isAggregate || proof.isVector))
             throw RuntimeFault("${expr[1]} literal requires exact $expected metadata")
         return CoreRepresentation(CoreKind.LONG, evaluated = true, present = true, primReps = listOf(expected))
     }

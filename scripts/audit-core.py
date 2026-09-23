@@ -356,7 +356,7 @@ class Audit:
         # expression_metadata independently rejects malformed raw records.
         if (intrinsic is not None and intrinsic.get('primReps') is not None and
                 isinstance(proof, dict) and proof.get('kind') == 'unknown' and proof.get('primReps') is None and
-                not cls.is_tuple(proof) and not is_vector(proof)):
+                'aggregate' not in proof and not is_vector(proof)):
             return intrinsic
         return proof if proof is not None else intrinsic
 
@@ -503,7 +503,7 @@ class Audit:
                 if expr[1] in ('int16', 'word16', 'int32', 'word32'):
                     proof, intrinsic = self.expression_rep(expr), self.literal_rep(expr)
                     if (not isinstance(proof, dict) or proof.get('kind') != 'long' or
-                            proof.get('primReps') != intrinsic['primReps'] or self.is_tuple(proof) or is_vector(proof)):
+                            proof.get('primReps') != intrinsic['primReps'] or 'aggregate' in proof or is_vector(proof)):
                         self.issue('scalar-representation', owner, path + '/rep', 'Narrow literal requires exact signed/unsigned identity')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')

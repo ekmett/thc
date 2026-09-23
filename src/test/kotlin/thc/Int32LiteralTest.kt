@@ -76,7 +76,11 @@ class Int32LiteralTest {
                     mapOf("kind" to "unknown", "primReps" to null, "evaluated" to "false"),
                     mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to false),
                     mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to false,
-                        "aggregate" to "unboxed-tuple", "components" to emptyList<Any?>()))
+                        "aggregate" to "unboxed-tuple", "components" to emptyList<Any?>()),
+                    mapOf("kind" to "unknown", "primReps" to listOf("WordRep"), "evaluated" to true,
+                        "aggregate" to "unboxed-sum", "tagSlot" to 0,
+                        "alternativeSlots" to listOf(emptyList<Int>(), emptyList<Int>()),
+                        "alternatives" to List(2) { mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true) }))
                 for (proof in malformed) assertThrows(PolyglotException::class.java, {
                     context.eval("thc", request(backend, listOf("lit", kind, "1", mapOf("rep" to proof)), diagnostic))
                 }, "$backend/$kind/diagnostic=$diagnostic/proof=$proof")

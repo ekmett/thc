@@ -268,11 +268,12 @@ class SumAuditTest(unittest.TestCase):
         self.assertIn('primitive-representation',{i['code'] for i in report['issues']})
 
     def test_literal_intrinsic_fallback_cannot_erase_sum_marker(self):
-        for reps in (None,['WordRep','WordRep']):
-            expression=['lit','word32','0',dict(rep=dict(summ(),primReps=reps))]
-            self.assertTrue(sums.is_sum(audit.Audit.expression_rep(expression)))
-            module=fixture();module['bindings'][0]['expr'][2]=expression
-            self.rejected(module)
+        for kind in ('int16','word16','int32','word32'):
+            for reps in (None,['WordRep','WordRep']):
+                expression=['lit',kind,'0',dict(rep=dict(summ(),primReps=reps))]
+                self.assertTrue(sums.is_sum(audit.Audit.expression_rep(expression)))
+                module=fixture();module['bindings'][0]['expr'][2]=expression
+                self.rejected(module)
 
     def test_new_host_resolver_does_not_bypass_malformed_expression_reporting(self):
         for expression in (['var'],['app',['var'],[]]):
