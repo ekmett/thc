@@ -115,6 +115,8 @@ pack/length/unpack/uncons with ordered writes and contained copies and native/mo
 public `UArray`/`STUArray` examples with native-endian, full-width values.
 [Double-array operations](docs/double-arrays.md) add typed floating storage,
 public Double arrays and native-checked bit movement through tuple-returning reads.
+[Int32/Word32-array operations](docs/int32-arrays.md) add four-byte signed and
+unsigned elements, public accumulation/ST examples and cross-element byte aliases.
 
 Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
 while preserving lazy lifted elements and closures.
