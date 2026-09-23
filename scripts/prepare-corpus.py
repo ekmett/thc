@@ -54,7 +54,7 @@ def prepare():
     inputs = set((ROOT / 'examples').rglob('*.hs')) | set((ROOT / 'compiler').rglob('*.hs'))
     inputs.update(ROOT / p for p in ['examples/coverage.json', 'compiler/build.sh', 'compiler/export.sh',
         'compiler/toolchain.sh', 'compiler/export-boot.py', 'scripts/prepare-corpus.py', 'scripts/audit-core.py',
-        'scripts/core-capabilities.json', 'scripts/check-corpus-structure.py'])
+        'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json', 'scripts/check-corpus-structure.py'])
     input_hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     for group in groups:
         directory = BUILD / 'groups' / group['id']

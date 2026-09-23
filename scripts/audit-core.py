@@ -15,6 +15,11 @@ import sys
 from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error
 
 
+# The identical checked-in resource is packaged in the JVM runtime jar.
+SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
+    'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
+
+
 class Audit:
     def __init__(self, modules, capabilities):
         self.cap = capabilities
@@ -268,6 +273,30 @@ class Audit:
         proof = expr[index].get('rep') if index is not None and len(expr) > index and isinstance(expr[index], dict) else None
         return proof if proof is not None else cls.literal_rep(expr)
 
+    def scalar_primitive(self, name, arguments, result, bound, owner, path):
+        signature = SCALAR_SIGNATURES.get(name)
+        if signature is None:
+            return
+
+        def check(expected, proof, position):
+            if not isinstance(proof, dict) or proof.get('primReps') is None:
+                return
+            if proof.get('kind') == 'unknown' and not self.is_tuple(proof) and not is_vector(proof):
+                return
+            if self.is_tuple(proof) or is_vector(proof) or proof.get('primReps') != [expected]:
+                self.issue('primitive-representation', owner, path + '/' + position,
+                           f'{name}: expected {expected}, found {proof.get("primReps")}')
+
+        for index, (argument, expected) in enumerate(zip(arguments, signature['arguments'])):
+            proof = self.expression_rep(argument)
+            check(expected, proof, f'arguments/{index}')
+            # The runtime lowers the lexical value before checking an operand.
+            # An absent/unknown occurrence must not hide a contradictory binder.
+            if argument[0] == 'var':
+                stored = bound.get(argument[1]) if argument[1] in bound else self.bindings.get(argument[1], {}).get('rep')
+                check(expected, stored, f'arguments/{index}/binder')
+        check(signature['result'], result, 'rep')
+
     def free_variables(self, expr):
         if not isinstance(expr, list) or not expr:
             return set()
@@ -376,6 +405,8 @@ class Audit:
                 function = expr[1]
                 tuple_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-tuple'
                 proof = self.expression_rep(expr)
+                if function[0] == 'prim':
+                    self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
                 tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if tuple_primitive is not None:
                     expected_args = [('scalar', (rep,)) for rep in tuple_primitive['arguments']]

@@ -103,6 +103,7 @@ jobs:
             build/test-results/
             build/aggregate-frontier.json
             build/primop-coverage.json
+            build/scalar-signatures/provenance.json
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
             build/tuple-return/

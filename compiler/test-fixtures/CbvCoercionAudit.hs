@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -fno-cpr-anal #-}
 -- A worker retains an equality coercion before the strict boxed tree slot.
 module CbvCoercionAudit where
-import GHC.Exts (Int(I#), Int#, (+#))
+import GHC.Exts (Int(I#), Int#, Word#, (+#), int2Word#)
 
 data Spine = Done | More Int# Spine
 data Witness a where
@@ -32,3 +32,15 @@ unwrapRaw (RawInt x) = x
 {-# OPAQUE scalarCastEntry #-}
 scalarCastEntry :: Int# -> Int#
 scalarCastEntry x = unwrapRaw (wrapRaw x)
+
+-- These casts surround primitive applications themselves. Signature validation
+-- must see their unchanged primitive representations after newtype erasure.
+newtype RawWord = RawWord Word#
+
+{-# OPAQUE addRaw #-}
+addRaw :: RawInt -> RawInt -> RawInt
+addRaw (RawInt x) (RawInt y) = RawInt (x +# y)
+
+{-# OPAQUE rawToWord #-}
+rawToWord :: RawInt -> RawWord
+rawToWord (RawInt x) = RawWord (int2Word# x)

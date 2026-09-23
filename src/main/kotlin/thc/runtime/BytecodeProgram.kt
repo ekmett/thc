@@ -722,7 +722,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
-                fn[0] == "prim" -> primitive(fn[1] as String, operands)
+                fn[0] == "prim" -> {
+                    ScalarPrimitiveSignatures.validate(fn[1] as String, operands.map { it.proof }, tupleProof)
+                    primitive(fn[1] as String, operands)
+                }
                 strict != null -> construct(dataLayout(fn[1] as String), operands)
                 else -> if (tupleProof.isTuple) tupleApplication(TupleShape(tupleProof, language), compile(fn, scope, false), operands, scope, tail)
                     else application(compile(fn, scope, false), operands, scope, tail)

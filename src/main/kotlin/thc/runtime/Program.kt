@@ -1236,7 +1236,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true)
             }.toTypedArray()
             when {
-                fn[0] == "prim" -> primitive(fn[1] as String, nodes)
+                fn[0] == "prim" -> {
+                    ScalarPrimitiveSignatures.validate(fn[1] as String, nodes.map { it.representation }, tupleProof)
+                    primitive(fn[1] as String, nodes)
+                }
                 constructorStrictFields != null -> Construct(dataLayout(fn[1] as String), nodes)
                 else -> {
                     val function = compile(fn, scope, false)

@@ -103,7 +103,7 @@ def main():
     actual = {(name, int(x), int(y)) for name, x, y, _ in rows}
     assert actual == wanted and len(rows) == len(wanted)
     (BUILD / 'oracle.tsv').write_text(completed.stdout)
-    inputs = [SOURCE, 'scripts/prepare-signed-narrow-primops.py', 'scripts/core-capabilities.json',
+    inputs = [SOURCE, 'scripts/prepare-signed-narrow-primops.py', 'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json',
               'scripts/audit-core.py', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']
     inputs += [str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/Thc').glob('*.hs')]
     artifacts = [str(p.relative_to(ROOT)) for p in paths] + ['build/signed-narrow-primops/oracle.tsv']
