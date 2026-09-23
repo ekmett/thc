@@ -35,6 +35,14 @@ internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {
     "quotWord32#", "remWord32#", "eqWord32#", "neWord32#", "gtWord32#", "geWord32#", "andWord32#", "orWord32#", "xorWord32#", "notWord32#", "uncheckedShiftLWord32#", "uncheckedShiftRLWord32#" -> 0xffff_ffffL
     else -> 0L
 }
+/** Fixed-width signed arithmetic retains canonical sign-extended Long carriers. */
+internal fun narrowIntPrimitiveShift(name: String): Int = when (name) {
+    "negateInt8#", "plusInt8#", "subInt8#", "timesInt8#", "quotInt8#", "remInt8#", "eqInt8#", "neInt8#", "ltInt8#", "leInt8#", "gtInt8#", "geInt8#" -> 56
+    "negateInt16#", "plusInt16#", "subInt16#", "timesInt16#", "quotInt16#", "remInt16#", "eqInt16#", "neInt16#", "ltInt16#", "leInt16#", "gtInt16#", "geInt16#" -> 48
+    "negateInt32#", "plusInt32#", "subInt32#", "timesInt32#", "quotInt32#", "remInt32#", "eqInt32#", "neInt32#", "ltInt32#", "leInt32#", "gtInt32#", "geInt32#" -> 32
+    else -> 0
+}
+private fun signedNarrow(value: Long, shift: Int): Long = (value shl shift) shr shift
 internal fun narrowWordLiteral(kind: String, value: String): Long {
     val maximum = when (kind) {
         "word8" -> 0xffL; "word16" -> 0xffffL; "word32" -> 0xffff_ffffL
@@ -557,9 +565,23 @@ private class PointerEquality(@field:Child private var left: Expr, @field:Child 
 }
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val wordMask = narrowWordPrimitiveMask(name)
+    private val intShift = narrowIntPrimitiveShift(name)
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
+            "negateInt8#", "negateInt16#", "negateInt32#" -> 1
+            "plusInt8#", "plusInt16#", "plusInt32#" -> 2
+            "subInt8#", "subInt16#", "subInt32#" -> 2
+            "timesInt8#", "timesInt16#", "timesInt32#" -> 2
+            "quotInt8#", "quotInt16#", "quotInt32#" -> 2
+            "remInt8#", "remInt16#", "remInt32#" -> 2
+            "eqInt8#", "eqInt16#", "eqInt32#" -> 2
+            "neInt8#", "neInt16#", "neInt32#" -> 2
+            "ltInt8#", "ltInt16#", "ltInt32#" -> 2
+            "leInt8#", "leInt16#", "leInt32#" -> 2
+            "gtInt8#", "gtInt16#", "gtInt32#" -> 2
+            "geInt8#", "geInt16#", "geInt32#" -> 2
+
             "quotWord#" -> 2
             "remWord#" -> 2
             "gtWord#" -> 2
@@ -597,6 +619,19 @@ private class Primitive(private val name: String, @field:Children private var ar
         val y = if (arguments.size == 2) arguments[1].executeRequiredLong(frame) else 0L
         fun b(value: Boolean) = if (value) 1L else 0L
         return when (name) {
+            "negateInt8#", "negateInt16#", "negateInt32#" -> signedNarrow(-x, intShift)
+            "plusInt8#", "plusInt16#", "plusInt32#" -> signedNarrow(x + y, intShift)
+            "subInt8#", "subInt16#", "subInt32#" -> signedNarrow(x - y, intShift)
+            "timesInt8#", "timesInt16#", "timesInt32#" -> signedNarrow(x * y, intShift)
+            "quotInt8#", "quotInt16#", "quotInt32#" -> signedNarrow(signedNarrow(x, intShift) / signedNarrow(y, intShift), intShift)
+            "remInt8#", "remInt16#", "remInt32#" -> signedNarrow(signedNarrow(x, intShift) % signedNarrow(y, intShift), intShift)
+            "eqInt8#", "eqInt16#", "eqInt32#" -> b(signedNarrow(x, intShift) == signedNarrow(y, intShift))
+            "neInt8#", "neInt16#", "neInt32#" -> b(signedNarrow(x, intShift) != signedNarrow(y, intShift))
+            "ltInt8#", "ltInt16#", "ltInt32#" -> b(signedNarrow(x, intShift) < signedNarrow(y, intShift))
+            "leInt8#", "leInt16#", "leInt32#" -> b(signedNarrow(x, intShift) <= signedNarrow(y, intShift))
+            "gtInt8#", "gtInt16#", "gtInt32#" -> b(signedNarrow(x, intShift) > signedNarrow(y, intShift))
+            "geInt8#", "geInt16#", "geInt32#" -> b(signedNarrow(x, intShift) >= signedNarrow(y, intShift))
+
             "quotWord#" -> java.lang.Long.divideUnsigned(x, y)
             "remWord#" -> java.lang.Long.remainderUnsigned(x, y)
             "gtWord#" -> b(java.lang.Long.compareUnsigned(x, y) > 0)

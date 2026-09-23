@@ -961,7 +961,21 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     })
     private fun primitive(name: String, args: List<Expression>): Expression {
         val wordMask = narrowWordPrimitiveMask(name)
+        val intShift = narrowIntPrimitiveShift(name)
         val operation = when (name) {
+            "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
+            "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
+            "subInt8#", "subInt16#", "subInt32#" -> "SubtractNarrowInt"
+            "timesInt8#", "timesInt16#", "timesInt32#" -> "MultiplyNarrowInt"
+            "quotInt8#", "quotInt16#", "quotInt32#" -> "QuotientNarrowInt"
+            "remInt8#", "remInt16#", "remInt32#" -> "RemainderNarrowInt"
+            "eqInt8#", "eqInt16#", "eqInt32#" -> "EqualNarrowInt"
+            "neInt8#", "neInt16#", "neInt32#" -> "NotEqualNarrowInt"
+            "ltInt8#", "ltInt16#", "ltInt32#" -> "LessThanNarrowInt"
+            "leInt8#", "leInt16#", "leInt32#" -> "LessEqualNarrowInt"
+            "gtInt8#", "gtInt16#", "gtInt32#" -> "GreaterThanNarrowInt"
+            "geInt8#", "geInt16#", "geInt32#" -> "GreaterEqualNarrowInt"
+
             "quotWord#" -> "QuotientUnsigned"
             "remWord#" -> "RemainderUnsigned"
             "gtWord#" -> "GreaterThanUnsigned"
@@ -1019,13 +1033,25 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
-        val unary = operation in setOf("BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
+        val unary = operation in setOf("NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
             "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
+                "NegateNarrowInt" -> b.beginNegateNarrowInt(intShift)
+                "AddNarrowInt" -> b.beginAddNarrowInt(intShift)
+                "SubtractNarrowInt" -> b.beginSubtractNarrowInt(intShift)
+                "MultiplyNarrowInt" -> b.beginMultiplyNarrowInt(intShift)
+                "QuotientNarrowInt" -> b.beginQuotientNarrowInt(intShift)
+                "RemainderNarrowInt" -> b.beginRemainderNarrowInt(intShift)
+                "EqualNarrowInt" -> b.beginEqualNarrowInt(intShift)
+                "NotEqualNarrowInt" -> b.beginNotEqualNarrowInt(intShift)
+                "LessThanNarrowInt" -> b.beginLessThanNarrowInt(intShift)
+                "LessEqualNarrowInt" -> b.beginLessEqualNarrowInt(intShift)
+                "GreaterThanNarrowInt" -> b.beginGreaterThanNarrowInt(intShift)
+                "GreaterEqualNarrowInt" -> b.beginGreaterEqualNarrowInt(intShift)
                 "QuotientUnsigned" -> b.beginQuotientUnsigned()
                 "RemainderUnsigned" -> b.beginRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
@@ -1062,6 +1088,18 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             args.forEach { it.emit(e) }
             when (operation) {
+                "NegateNarrowInt" -> b.endNegateNarrowInt()
+                "AddNarrowInt" -> b.endAddNarrowInt()
+                "SubtractNarrowInt" -> b.endSubtractNarrowInt()
+                "MultiplyNarrowInt" -> b.endMultiplyNarrowInt()
+                "QuotientNarrowInt" -> b.endQuotientNarrowInt()
+                "RemainderNarrowInt" -> b.endRemainderNarrowInt()
+                "EqualNarrowInt" -> b.endEqualNarrowInt()
+                "NotEqualNarrowInt" -> b.endNotEqualNarrowInt()
+                "LessThanNarrowInt" -> b.endLessThanNarrowInt()
+                "LessEqualNarrowInt" -> b.endLessEqualNarrowInt()
+                "GreaterThanNarrowInt" -> b.endGreaterThanNarrowInt()
+                "GreaterEqualNarrowInt" -> b.endGreaterEqualNarrowInt()
                 "QuotientUnsigned" -> b.endQuotientUnsigned()
                 "RemainderUnsigned" -> b.endRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()

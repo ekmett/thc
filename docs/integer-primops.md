@@ -37,12 +37,15 @@ Division by zero and unchecked shifts outside `[0, width)` are outside the
 numeric oracle. No semantics for those inputs are promised. This slice leaves
 existing signed division and overflow behavior unchanged.
 
-The next scalar candidates are signed narrow arithmetic/comparisons/shifts,
-cross-signedness narrow conversions, width-specific counts, byte swaps and bit
-reversal. Explicit Int64/Word64 arithmetic remains separate from the small
+The separate [signed narrow slice](signed-narrow-primops.md) adds 36 arithmetic,
+division and comparison operations with native/model checks. Remaining scalar
+candidates include signed narrow shifts, cross-signedness narrow conversions,
+width-specific counts, byte swaps and bit reversal. Explicit Int64/Word64
+arithmetic remains separate from the small
 [Int64 conversion/literal foundation](int64-conversions.md). The separate
 [tuple arithmetic slice](tuple-arithmetic.md) now lowers quotient/remainder,
-carry, overflow and full-width multiplication directly into exact result slots. Aggregate arguments, PAPs, captures and sums remain
+carry, overflow and full-width multiplication directly into exact result slots.
+Aggregate arguments, PAPs, captures and sums remain
 outside this slice; these additions do not establish complete GHC.Prim coverage.
 
 Validation on Linux x86-64 with the pinned GHC/GraalVM toolchain: a fresh
