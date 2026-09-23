@@ -150,3 +150,20 @@ allocation elimination, packed instructions, or performance. Those require
 separate runtime tests and retained graph/final-LIR evidence. In particular,
 unsigned low-byte multiplication may lower through wider lanes; no packed-byte
 multiply instruction is implied by the GHC primitive's name.
+
+## Retained compiled-code evidence
+
+The [x86-64 evidence](../bench/experiments/word8x16-foundation/evidence-x86_64/README.md)
+retains twelve actual pre/post × AST/bytecode × plus/minus/times captures at
+runtime `cf0f03df51346bfdd96a104f952ad37eef99d88a`. All passed their first graph
+check. Every one of the sixteen result lanes feeds an exact unsigned 8-to-64-bit
+extension. Addition/subtraction use packed XMM byte instructions; multiplication
+uses two packed XMM short products with checked byte reconstruction. No local
+vector payload, carrier or lane box survives in these selected inlined graphs.
+The public Long result box and virtual deoptimization metadata are explicitly
+allowed; this is not a globally allocation-free or throughput claim.
+
+The complete JVM suite passes 467 tests in each of default and dense-handoff
+modes, with zero failures, errors or skips. All 194 suite reports and both logs
+are retained alongside the native and compiled-code evidence, including the
+initial focused diagnostic-expectation failure and its test-only correction.

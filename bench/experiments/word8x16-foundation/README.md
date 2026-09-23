@@ -92,10 +92,24 @@ hashes remain frozen. The evidence stores `physicalPackedInstructions` as a list
 of one byte instruction or two word-product instructions, alongside the graph
 expansion details.
 
-No Word8X16 runtime capture is claimed by this harness's source or synthetic tests.
 The separate parser mutation tests use synthetic graph/LIR data and are not
 themselves SIMD evidence:
 
 ```sh
 python3 bench/experiments/word8x16-foundation/test-runtime-audit.py
 ```
+
+## Retained x86-64 capture
+
+[evidence-x86_64/README.md](evidence-x86_64/README.md) records twelve real captures
+from runtime `cf0f03df51346bfdd96a104f952ad37eef99d88a` on eak-quartus with
+GHC 9.14.1 and Oracle Graal 25.3.4.1/JDK 25. All twelve pass on their first check,
+without a reader correction or guest replay. Each validates 176 native rows twice:
+4,224 compiled comparisons, with every active target and last-tier entry retained.
+The actual graphs contain all 192 required unsigned lane extensions. Final LIR
+contains four XMM `VPADDB`, four XMM `VPSUBB`, and eight XMM `VPMULLW` instructions
+across the captures. The selected inlined graphs eliminate local vector carriers,
+payloads and lane boxes; the public Long result box remains.
+
+This is bounded packed-code evidence, not a throughput, no-spill, globally
+allocation-free, vector-ABI, cross-platform or machine-code-disassembly claim.
