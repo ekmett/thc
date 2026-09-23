@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdInt8VectorTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-09-23T21:45:32.017Z" hostname="eak-quartus" time="15.576">
+  <properties/>
+  <testcase name="literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution()" classname="thc.runtime.SimdInt8VectorTest" time="0.008"/>
+  <testcase name="allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct()" classname="thc.runtime.SimdInt8VectorTest" time="0.188"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithoutInlining()" classname="thc.runtime.SimdInt8VectorTest" time="7.652"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithInlining()" classname="thc.runtime.SimdInt8VectorTest" time="7.561"/>
+  <testcase name="canonicalInt8LiteralsAndAlternativesRejectOutOfRangeAndNoncanonicalText()" classname="thc.runtime.SimdInt8VectorTest" time="0.01"/>
+  <testcase name="exactShapeRequiresSixteenByteFieldsAndSixteenInt8TupleLanes()" classname="thc.runtime.SimdInt8VectorTest" time="0.001"/>
+  <testcase name="bothLoadersRetainVectorBoundaryAndRejectForgedShapes()" classname="thc.runtime.SimdInt8VectorTest" time="0.156"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

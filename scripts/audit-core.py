@@ -329,14 +329,14 @@ class Audit:
 
     @staticmethod
     def literal_rep(expr):
-        # Signed/unsigned 16- and 32-bit literals retain exact narrow identity.
+        # Signed 8-bit and signed/unsigned 16- and 32-bit literals retain exact identity.
         # Other legacy literal forms keep their historical carrier-only proof.
         if not isinstance(expr, list) or not expr:
             return None
         if expr[0] == 'void':
             return dict(kind='void', evaluated=True)
         if expr[0] == 'lit' and len(expr) >= 3:
-            narrow = {'int16': 'Int16Rep', 'word16': 'Word16Rep', 'int32': 'Int32Rep', 'word32': 'Word32Rep'}
+            narrow = {'int8': 'Int8Rep', 'int16': 'Int16Rep', 'word16': 'Word16Rep', 'int32': 'Int32Rep', 'word32': 'Word32Rep'}
             if expr[1] in narrow:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
@@ -574,7 +574,7 @@ class Audit:
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
-                if expr[1] in ('int16', 'word16', 'int32', 'word32'):
+                if expr[1] in ('int8', 'int16', 'word16', 'int32', 'word32'):
                     proof, intrinsic = self.expression_rep(expr), self.literal_rep(expr)
                     if (not isinstance(proof, dict) or proof.get('kind') != 'long' or
                             proof.get('primReps') != intrinsic['primReps'] or 'aggregate' in proof or is_vector(proof)):

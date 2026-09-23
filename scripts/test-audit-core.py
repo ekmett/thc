@@ -206,6 +206,36 @@ class AuditTest(unittest.TestCase):
                 if not valid:
                     self.assertIn('invalid-literal-value', {i['code'] for i in report['issues']})
 
+    def test_int8_literals_and_alternatives_require_canonical_signed_range(self):
+        for text in ('-128', '-1', '0', '1', '127', '-129', '128', '255',
+                     '', '+1', '01', '-0', ' 1', '1.0', '18446744073709551616'):
+            valid = text in ('-128', '-1', '0', '1', '127')
+            literal = ['lit', 'int8', text]
+            alternative = ['case', lit(0), 'x', [['lit', ['int8', text], [], lit(1)], ['default', None, [], lit(2)]]]
+            for expression in (literal, alternative):
+                report = run(expression)
+                self.assertEqual(valid, report['accepted'], text)
+                if not valid: self.assertIn('invalid-literal-value', {i['code'] for i in report['issues']})
+
+    def test_int8_literals_refine_only_unconstrained_metadata(self):
+        for rep in ('Int8Rep', 'Word8Rep', 'Int16Rep', 'Int32Rep', 'IntRep', 'WordRep'):
+            for carrier in ('long', 'unknown'):
+                proof = dict(kind=carrier, primReps=[rep], evaluated=True)
+                self.assertEqual(carrier == 'long' and rep == 'Int8Rep',
+                                 run(['lit', 'int8', '1', dict(rep=proof)])['accepted'], proof)
+        for evaluated in (False, True):
+            for registers in ({}, {'primReps': None}):
+                proof = dict(kind='unknown', evaluated=evaluated, **registers)
+                self.assertTrue(run(['lit', 'int8', '1', dict(rep=proof)])['accepted'])
+                for operation, accepted in (('int8ToInt#', True), ('int16ToInt#', False), ('word8ToWord#', False)):
+                    expression = ['app', ['prim', operation], [['lit', 'int8', '1', dict(rep=proof)]],
+                                  [False], False, False, dict(rep=dict(kind='long', primReps=['WordRep' if operation == 'word8ToWord#' else 'IntRep'], evaluated=True))]
+                    self.assertEqual(accepted, run(expression)['accepted'])
+        for proof in ([], 'unknown', dict(kind='unknown', primReps=None),
+                      dict(kind='unknown', primReps=None, evaluated='false'),
+                      dict(kind='unknown', primReps=[], evaluated=False)):
+            self.assertFalse(run(['lit', 'int8', '1', dict(rep=proof)])['accepted'], proof)
+
     def test_narrow_16bit_literals_cannot_change_exact_rep_or_hide_it_with_unknown_kind(self):
         for kind, expected in (('int16', 'Int16Rep'), ('word16', 'Word16Rep')):
             for rep in ('Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep', 'IntRep', 'WordRep', 'Int64Rep', 'Word64Rep'):

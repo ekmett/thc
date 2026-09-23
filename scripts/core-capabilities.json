@@ -10,6 +10,7 @@
     "float",
     "double",
     "int",
+    "int8",
     "int16",
     "int32",
     "int64",
@@ -22,6 +23,10 @@
     "string-bytes"
   ],
   "integerLiteralRanges": {
+    "int8": [
+      -128,
+      127
+    ],
     "int16": [
       -32768,
       32767
@@ -369,6 +374,13 @@
     "minusInt16X8#": 2,
     "negateInt16X8#": 1,
     "timesInt16X8#": 2,
+    "packInt8X16#": 1,
+    "unpackInt8X16#": 1,
+    "broadcastInt8X16#": 1,
+    "plusInt8X16#": 2,
+    "minusInt8X16#": 2,
+    "negateInt8X16#": 1,
+    "timesInt8X16#": 2,
     "packFloatX4#": 1,
     "unpackFloatX4#": 1,
     "broadcastFloatX4#": 1,
@@ -438,6 +450,11 @@
     "unboxed-tuple"
   ],
   "vectorRepresentations": [
+    {
+      "lanes": 16,
+      "element": "Int8ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
     {
       "lanes": 8,
       "element": "Int16ElemRep",
