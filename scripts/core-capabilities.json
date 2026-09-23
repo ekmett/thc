@@ -145,5 +145,8 @@
   ],
   "aggregateResults": [
     "unboxed-tuple"
+  ],
+  "aggregateJoinResults": [
+    "unboxed-tuple"
   ]
 }

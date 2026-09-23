@@ -3,7 +3,7 @@
 The exporter preserves logical unboxed tuple components and sum alternatives in
 addition to GHC 9.14.1's physical `primReps` vector. Both runtime backends support
 [exact tuple results](tuple-results.md) with scalar/reference inputs. Aggregate
-arguments, joins, captures, sums and unresolved layouts remain explicit boundaries.
+arguments, join arguments/captures, ordinary captures, sums and unresolved layouts remain explicit boundaries. Exact tuple join results use local destination slots within the same root.
 The metadata fixtures below test these boundaries independently of execution.
 
 Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one

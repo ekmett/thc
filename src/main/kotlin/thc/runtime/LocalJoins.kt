@@ -9,7 +9,8 @@ import com.oracle.truffle.api.nodes.*
 internal class LocalJoinTarget(val group: Any, val index: Int,
     @field:CompilationFinal(dimensions = 1) val slots: IntArray,
     @field:CompilationFinal(dimensions = 1) val proofs: Array<CoreRepresentation>,
-    @field:CompilationFinal(dimensions = 1) val entryStrict: BooleanArray = BooleanArray(slots.size)) {
+    @field:CompilationFinal(dimensions = 1) val entryStrict: BooleanArray = BooleanArray(slots.size),
+    val result: CoreRepresentation = CoreRepresentation.UNKNOWN) {
     val jump = LocalJoinJump(this)
 }
 internal class LocalJoinJump(val target: LocalJoinTarget) : ControlFlowException()
@@ -20,7 +21,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     private val metrics: Metrics) : Expr() {
     // This node never returns a value. It must not weaken the WHNF proof
     // contributed by the region's actual returning branches.
-    init { representation = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
+    init { representation = target.result.copy(evaluated = true) }
     @field:CompilationFinal(dimensions = 1)
     private val referenceKinds = target.proofs.map { if (it.evaluated) it.kind else CoreKind.UNKNOWN }.toTypedArray()
     @ExplodeLoop override fun execute(frame: VirtualFrame): Nothing {
@@ -52,14 +53,18 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     override fun executeClosure(frame: VirtualFrame): Closure = execute(frame)
     override fun executeDataValue(frame: VirtualFrame): DataValue = execute(frame)
     override fun executeAddress(frame: VirtualFrame): LiteralAddress = execute(frame)
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? = execute(frame)
 }
 
 private class LocalJoinRepeater(private val group: Any, private val selector: Int, private val result: Int,
-    @field:Children private var bodies: Array<Expr>, proof: CoreRepresentation) : Node(), RepeatingNode {
+    @field:Children private var bodies: Array<Expr>, proof: CoreRepresentation,
+    @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray) : Node(), RepeatingNode {
+    private val tuple = proof.isTuple
     private val exactLong = proof.isLong
     private val referenceKind = if (proof.evaluated) proof.kind else CoreKind.UNKNOWN
     private fun executeBody(frame: VirtualFrame, body: Expr) {
-        if (exactLong) FrameAccess.writeLong(frame, result, body.executeRequiredLong(frame))
+        if (tuple) body.executeTuple(frame, tupleSlots, 0)
+        else if (exactLong) FrameAccess.writeLong(frame, result, body.executeRequiredLong(frame))
         else if (referenceKind == CoreKind.DATA) FrameAccess.write(frame, result, body.executeRequiredDataValue(frame))
         else if (referenceKind == CoreKind.CLOSURE) FrameAccess.write(frame, result, body.executeRequiredClosure(frame))
         else if (referenceKind == CoreKind.ADDRESS) FrameAccess.write(frame, result, body.executeRequiredAddress(frame))
@@ -99,12 +104,14 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
 
 /** Only recursive groups need loops; all regions preserve their typed result through a frame slot. */
 internal class LocalJoinRegion(group: Any, private val selector: Int, private val result: Int,
-    bodies: Array<Expr>, proof: CoreRepresentation, recursive: Boolean) : Expr() {
+    bodies: Array<Expr>, proof: CoreRepresentation, recursive: Boolean,
+    private val tuple: TupleShape? = null,
+    @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray = intArrayOf()) : Expr() {
     init { representation = proof }
     @Child private var single: LocalJoinRepeater? =
-        if (recursive) null else LocalJoinRepeater(group, selector, result, bodies, proof)
+        if (recursive) null else LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots)
     @Child private var loop: LoopNode? = if (recursive) Truffle.getRuntime().createLoopNode(
-        LocalJoinRepeater(group, selector, result, bodies, proof)) else null
+        LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots)) else null
     private fun run(frame: VirtualFrame) {
         val once = single
         if (once != null) once.executeOnce(frame)
@@ -123,4 +130,21 @@ internal class LocalJoinRegion(group: Any, private val selector: Int, private va
     override fun executeClosure(frame: VirtualFrame): Closure { run(frame); return RuntimeTypesGen.expectClosure(resultValue(frame)) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { run(frame); return RuntimeTypesGen.expectDataValue(resultValue(frame)) }
     override fun executeAddress(frame: VirtualFrame): LiteralAddress { run(frame); return RuntimeTypesGen.expectLiteralAddress(resultValue(frame)) }
+    @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val shape = tuple ?: fault("Scalar join region cannot write a tuple")
+        run(frame)
+        for (index in tupleSlots.indices) {
+            if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(tupleSlots[index]))
+            else FrameAccess.write(frame, slots[offset + index], frame.getObject(tupleSlots[index]))
+        }
+        // Compiler-created region temporaries are distinct from enclosing
+        // destinations. Preserve an aliased destination if invoked directly.
+        // Clear only after every copy succeeds, as with join argument moves.
+        for (source in tupleSlots) {
+            var destination = false
+            for (index in tupleSlots.indices) if (slots[offset + index] == source) destination = true
+            if (!destination) frame.clear(source)
+        }
+        return null
+    }
 }

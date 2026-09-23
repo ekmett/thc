@@ -87,6 +87,7 @@ jobs:
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
             build/tuple-return/
+            build/tuple-join/
             build/corpus/corpus.json
             build/corpus/oracle.tsv
             build/corpus/structure.json

@@ -68,7 +68,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private class JoinRegion
     private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
-                             val locals: List<Local>, val entryStrict: BooleanArray)
+                             val locals: List<Local>, val entryStrict: BooleanArray, val result: CoreRepresentation)
     private class JoinEmission(val selector: BytecodeLocal?, val next: BytecodeLabel?, val labels: List<BytecodeLabel>) {
         var emittedIndex = -1
     }
@@ -502,7 +502,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     /** A join transfer is a parallel move into this activation followed by bytecode control flow. */
     private fun joinCall(target: JoinTarget, arguments: List<Expression>): Expression {
         if (arguments.size != target.parameters.size) throw UnsupportedCore("Local join is not exactly saturated")
-        return evaluated(Expression { e ->
+        return ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             val region = e.joins[target.region] ?: throw RuntimeFault("Local join escapes its owning activation")
             b.beginBlock()
@@ -527,18 +527,21 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.emitBranch(next)
             }
             // Unreachable value preserves the surrounding expression's builder signature.
-            b.emitLoadConstant(Unit)
+            if (destination == null) b.emitLoadConstant(Unit)
             b.endBlock()
-        })
+        }, target.result.copy(evaluated = true))
     }
 
     private fun joinRegion(group: List<Map<String, Any?>>, expression: List<Any?>, recursive: Boolean,
                            scope: Scope, tail: Boolean): Expression {
         CoreJoins.validate(group, expression, recursive)
         val definitions = CoreJoins.definitions(group) ?: throw RuntimeFault("Missing local join definitions")
+        val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
         definitions.forEach { definition ->
-            CoreRepresentations.requireScalar(definition.result, "join result")
             definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            val formals = definition.parameters.map { it["id"] as String }.toSet()
+            if ((freeVariables(definition.body) - formals - shadowed).any { it in scope.tuples })
+                throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (join capture)")
         }
         val region = JoinRegion()
         val local = scope.child()
@@ -550,19 +553,23 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 Local(nextLocal++, parameter["id"] as String,
                     if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
             }
-            JoinTarget(region, index, definition.parameters, parameters, entryStrict).also { local.bindJoin(definition.id, it) }
+            JoinTarget(region, index, definition.parameters, parameters, entryStrict, definition.result).also { local.bindJoin(definition.id, it) }
         }
         localJoinCount += targets.size
         val bodies = definitions.mapIndexed { index, definition ->
             val bodyScope = (if (recursive) local else scope).child()
             targets[index].locals.forEach { bodyScope.bindLocal(it.name, it) }
-            compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
+            val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
+            ProvenExpression(body, body.proof.refine(definition.result.copy(evaluated = false)))
         }
         val entry = compile(expression, local, tail)
-        return ProvenExpression(Expression { e ->
+        val proof = entry.proof.refine(CoreRepresentations.expression(expression).copy(evaluated = false))
+        bodies.forEach { TupleShape.requireCompatible(proof, it.proof) }
+        return ProvenExpression(ResultExpression { e, destination ->
+            if (proof.isTuple != (destination != null)) throw RuntimeFault("Join result destination disagrees with its representation")
             val b = e.builder
             b.beginBlock()
-            val result = b.createLocal("join result", null)
+            val result = if (destination == null) b.createLocal("join result", null) else null
             val selector = if (recursive) b.createLocal("join selector", "primitive") else null
             val exit = b.createLabel()
             targets.flatMap { it.locals }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
@@ -584,12 +591,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.emitBranch(labels[index])
                 b.endIfThen()
             }
-            b.beginStoreLocal(result); entry.emit(e); b.endStoreLocal()
+            if (result != null) { b.beginStoreLocal(result); entry.emit(e); b.endStoreLocal() }
+            else entry.emitTuple(e, destination!!)
             b.emitBranch(exit)
             targets.forEachIndexed { index, _ ->
                 b.emitLabel(labels[index])
                 active.emittedIndex = index
-                b.beginStoreLocal(result); bodies[index].emit(e); b.endStoreLocal()
+                if (result != null) { b.beginStoreLocal(result); bodies[index].emit(e); b.endStoreLocal() }
+                else bodies[index].emitTuple(e, destination!!)
                 b.emitBranch(exit)
             }
             if (next != null) {
@@ -598,11 +607,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endWhile()
             }
             b.emitLabel(exit)
-            b.emitLoadLocal(result)
+            if (result != null) b.emitLoadLocal(result)
             b.endBlock()
             e.joins.remove(region)
             targets.flatMap { it.locals }.forEach { e.locals.remove(it.id) }
-        }, CoreRepresentations.expression(expression).copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
+        }, proof.copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
     }
 
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expression = when (expr[0]) {

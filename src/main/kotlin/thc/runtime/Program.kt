@@ -1193,11 +1193,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
                              definitions: List<CoreJoinDefinition>): Expr {
-        definitions.forEach { definition ->
-            CoreRepresentations.requireScalar(definition.result, "join result")
-            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
-        }
         val recursive = expr[1] == true
+        val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
+        definitions.forEach { definition ->
+            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            val formals = definition.parameters.map { it["id"] as String }.toSet()
+            (freeVariables(definition.body) - formals - shadowed).forEach { id ->
+                outer.locals[id]?.let { CoreRepresentations.requireScalar(it.proof, "join capture") }
+            }
+        }
         CoreJoins.validate(expr[2] as List<Map<String, Any?>>, expr[3] as List<Any?>, recursive)
         val identity = Any()
         val local = outer.child()
@@ -1217,7 +1221,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val targets = definitions.mapIndexed { index, definition ->
             val parameters = definition.parameters.map { bodyScopes[index].locals.getValue(it["id"] as String) }
             LocalJoinTarget(identity, index + 1, parameters.map { it.slot }.toIntArray(),
-                parameters.map { it.proof }.toTypedArray(), entryContracts[index])
+                parameters.map { it.proof }.toTypedArray(), entryContracts[index], definition.result)
         }
         definitions.forEachIndexed { index, definition -> local.bindJoin(definition.id, targets[index]) }
         if (recursive) bodyScopes.forEachIndexed { index, scope ->
@@ -1236,10 +1240,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         val result = CoreRepresentations.expression(expr).let { proof ->
             val inferred = entry.representation.refine(proof.copy(evaluated = false))
+            bodies.forEach { TupleShape.requireCompatible(inferred, it.representation) }
             inferred.copy(evaluated = entry.representation.evaluated && bodies.all { it.representation.evaluated })
         }
+        val tuple = if (result.isTuple) TupleShape(result, language as thc.Language) else null
+        val tupleSlots = IntArray(tuple?.width ?: 0) { local.layout.bind("<join tuple result $it>") }
         return LocalJoinRegion(identity, local.layout.bind("<join selector>"), local.layout.bind("<join result>"),
-            (listOf(entry) + bodies).toTypedArray(), result, recursive)
+            (listOf(entry) + bodies).toTypedArray(), result, recursive, tuple, tupleSlots)
     }
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")

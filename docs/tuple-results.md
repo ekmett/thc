@@ -41,8 +41,11 @@ proofs. Scalar reference kind/evaluatedness may refine at each use without forci
 a lazy field. Polymorphic constructor-table fields are not layout evidence;
 the instantiated constructor application and case metadata provide the layout.
 
-Aggregate formal arguments, captures, ordinary let bindings, join parameters and
-join results remain unsupported, including unused formals and zero-width tuples.
+Aggregate formal arguments, captures, ordinary let bindings and join parameters
+remain unsupported, including unused formals and zero-width tuples. Exact tuple
+join results use typed local slots inside the same guest root; no result carrier
+or pool loan is needed for that local control flow. Join captures of whole tuples
+remain unsupported; individual scalar/reference fields can be used normally.
 Sums, unknown/null aggregate layouts, unsupported physical leaves and scalar
 void components inside tuples are also rejected. Host entries must return a
 scalar/reference result; diagnostic mode defers an unsupported host result to a
