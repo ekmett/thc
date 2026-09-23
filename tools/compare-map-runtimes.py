@@ -71,6 +71,24 @@ def parse_power_status(raw):
     return status
 
 
+def thermal_status():
+    # Foundation supplies this on Apple Silicon where pmset -g therm does not.
+    # Unknown/unsupported thermal states may report nominal; this is not a
+    # thermometer or proof that frequency stayed constant during measurement.
+    script = ('ObjC.import("Foundation"); JSON.stringify({'
+              'thermalState: Number($.NSProcessInfo.processInfo.thermalState), '
+              'lowPowerMode: Boolean($.NSProcessInfo.processInfo.isLowPowerModeEnabled)})')
+    result = subprocess.run(['/usr/bin/osascript', '-l', 'JavaScript', '-e', script],
+                            text=True, capture_output=True, timeout=3, check=False)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or 'Foundation power-state read failed')
+    status = json.loads(result.stdout)
+    state = status.get('thermalState')
+    require(type(state) is int and state in range(4), 'Unknown Foundation thermal state')
+    require(type(status.get('lowPowerMode')) is bool, 'Unknown Foundation low-power state')
+    return {**status, 'thermalStateName': ('nominal', 'fair', 'serious', 'critical')[state]}
+
+
 def power_status():
     status = {'recordedAtUtc': datetime.now(timezone.utc).isoformat()}
     try:
@@ -83,6 +101,10 @@ def power_status():
             status['error'] = 'pmset failed; power state unavailable'
     except (OSError, subprocess.SubprocessError) as error:
         status['error'] = str(error)
+    try:
+        status.update(thermal_status())
+    except (OSError, subprocess.SubprocessError, ValueError, InvalidRun) as error:
+        status['thermalError'] = str(error)
     return status
 
 
@@ -96,6 +118,12 @@ def power_warnings(current, previous=None):
         warnings.append(f"Power source changed: {previous['source']} -> {current['source']}")
     if current.get('error'):
         warnings.append(f"Power status unavailable: {current['error']}")
+    if current.get('thermalState', -1) >= 2:
+        warnings.append(f"Thermal state: {current.get('thermalStateName', current['thermalState'])}")
+    if current.get('lowPowerMode') is True:
+        warnings.append('macOS low-power mode is enabled')
+    if current.get('thermalError'):
+        warnings.append(f"Thermal status unavailable: {current['thermalError']}")
     return warnings
 
 

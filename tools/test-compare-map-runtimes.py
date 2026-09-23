@@ -32,6 +32,13 @@ class PowerStatusTest(unittest.TestCase):
         self.assertEqual(parse_power_status('unknown future format'), {})
 
 
+    def test_thermal_observations_warn_without_changing_timing_validation(self):
+        self.assertEqual(power_warnings(dict(thermalState=1, thermalStateName='fair', lowPowerMode=False)), [])
+        warnings = power_warnings(dict(thermalState=2, thermalStateName='serious', lowPowerMode=True))
+        self.assertEqual(warnings, ['Thermal state: serious', 'macOS low-power mode is enabled'])
+        self.assertEqual(power_warnings(dict(thermalError='unavailable')), ['Thermal status unavailable: unavailable'])
+
+
 class WarmupGuardTest(unittest.TestCase):
     def log(self, directory, calls=12288, seconds=15):
         lines = ['PHASE WARM BEGIN',
