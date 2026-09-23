@@ -31,6 +31,7 @@ internal class Vector32Operation(private val operation: String, @field:Children 
         "broadcastInt32X4#" -> arguments[0].executeRequiredLong(frame).toInt().let { Int32X4(it, it, it, it) }
         "plusInt32X4#" -> Int32X4.add(vector(frame, 0), vector(frame, 1))
         "minusInt32X4#" -> Int32X4.subtract(vector(frame, 0), vector(frame, 1))
+        "timesInt32X4#" -> Int32X4.multiply(vector(frame, 0), vector(frame, 1))
         "negateInt32X4#" -> Int32X4.negate(vector(frame, 0))
         else -> fault("Invalid vector operation")
     }

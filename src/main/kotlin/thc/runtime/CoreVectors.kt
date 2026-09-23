@@ -66,7 +66,7 @@ internal object CoreVectors {
     private val laneDouble = CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))
     val unpackedDouble = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(2) { "DoubleRep" }, List(2) { laneDouble })
     val operationsDouble = setOf("packDoubleX2#", "unpackDoubleX2#", "broadcastDoubleX2#", "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#")
-    val operations32 = setOf("packInt32X4#", "unpackInt32X4#", "broadcastInt32X4#", "plusInt32X4#", "minusInt32X4#", "negateInt32X4#")
+    val operations32 = setOf("packInt32X4#", "unpackInt32X4#", "broadcastInt32X4#", "plusInt32X4#", "minusInt32X4#", "negateInt32X4#", "timesInt32X4#")
     val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsWord32 + operationsFloat + operationsDouble
     fun requireVariableProof(binding: CoreRepresentation?, occurrence: CoreRepresentation) {
         if (occurrence.isVector && binding?.vector != occurrence.vector)
@@ -92,7 +92,7 @@ internal object CoreVectors {
             "packInt32X4#" -> listOf(unpacked32)
             "unpackInt32X4#", "negateInt32X4#" -> listOf(proof32)
             "broadcastInt32X4#" -> listOf(lane32)
-            "plusInt32X4#", "minusInt32X4#" -> listOf(proof32, proof32)
+            "plusInt32X4#", "minusInt32X4#", "timesInt32X4#" -> listOf(proof32, proof32)
             "packInt16X8#" -> listOf(unpacked16)
             "unpackInt16X8#", "negateInt16X8#" -> listOf(proof16)
             "broadcastInt16X8#" -> listOf(lane16)

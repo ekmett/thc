@@ -1078,6 +1078,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class Vector32Negate {
         @Specialization public static Int32X4 negate(Int32X4 value) { return Int32X4.negate(value); }
     }
+    @Operation public static final class Vector32Multiply {
+        @Specialization public static Int32X4 multiply(Int32X4 first, Int32X4 second) { return Int32X4.multiply(first, second); }
+    }
     @Operation @ConstantOperand(type = boolean.class, name = "subtract")
     public static final class Vector32Binary {
         @Specialization public static Int32X4 binary(boolean subtract, Int32X4 first, Int32X4 second) {

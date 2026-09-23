@@ -13,6 +13,15 @@ as signed two's-complement values before widening to the required 64-bit host
 yields 0. No vector function arguments, results, captures, heap fields or
 vector-containing tuple ABIs are enabled.
 
+The runtime reuses the four final `int` fields of `Int32X4` and its fixed
+128-bit `IntVector` species. Multiplication uses `IntVector.mul`, extracting
+four signed low-word results. Both the AST loader and a dedicated bytecode
+operation enforce two exact, unlifted signed vector operands. The existing
+scalar-literal and aggregate policies are unchanged. Loader tests reject
+wrong signedness, width, arity, liftedness and malformed signed literals;
+direct arithmetic tests compare independent lane products with a masked
+arbitrary-precision oracle, including MIN * -1 and MAX * 2.
+
 ## Genuine arithmetic and independent observations
 
 `compiler/test-fixtures/SimdInt32X4Multiply.hs` is separate from existing signed

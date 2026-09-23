@@ -1304,6 +1304,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
                 "broadcastInt32X4#" -> { b.beginVector32Broadcast(); operands[0].emit(e); b.endVector32Broadcast() }
                 "negateInt32X4#" -> { b.beginVector32Negate(); operands[0].emit(e); b.endVector32Negate() }
+                "timesInt32X4#" -> {
+                    b.beginVector32Multiply(); operands.forEach { it.emit(e) }; b.endVector32Multiply()
+                }
                 else -> {
                     b.beginVector32Binary(name == "minusInt32X4#")
                     operands.forEach { it.emit(e) }; b.endVector32Binary()

@@ -62,6 +62,8 @@ distinct; unpack widens all eight lanes to 0..65535 without changing vector ABIs
 The [Word32X4 foundation](word32x4.md) adds six unsigned 32-bit operations and
 4,882 native/model rows. Four Word32 lanes retain distinct proofs from Int32,
 wrap modulo 2^32 and unpack to 0..4294967295; vector ABI limits remain unchanged.
+The [Int32X4 multiplication slice](int32x4-multiply.md) adds the missing signed
+`timesInt32X4#`, with 1,722 native/model observations and signed low-32-bit products.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
