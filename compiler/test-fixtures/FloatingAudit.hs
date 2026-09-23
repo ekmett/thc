@@ -59,8 +59,7 @@ floatSignedZero n = gtFloat# (divideFloat# 1.0# (timesFloat# (int2Float# n) 0.0#
 doubleSignedZero n = (1.0## /## (int2Double# n *## 0.0##)) >## 0.0##
 
 data FloatingBox = FloatingBox Float# Double#
--- OPAQUE also prevents CPR from replacing the boxed return with a floating
--- unboxed tuple, which deliberately remains outside this scalar foundation.
+-- OPAQUE prevents CPR from replacing this boxed-field control with a tuple.
 {-# OPAQUE floatingBox #-}
 floatingBox :: Float# -> Double# -> FloatingBox
 floatingBox x y = FloatingBox x y
@@ -68,7 +67,7 @@ floatingFields :: Int# -> Int#
 floatingFields n = case floatingBox (int2Float# n) (int2Double# n +## 0.5##) of
   FloatingBox x y -> float2Int# x +# double2Int# (y *## 2.0##)
 
--- Preserve a genuine ordinary CPR boundary as a negative frontier fixture.
+-- Preserve the original frontier's genuine CPR boundary as a positive control.
 -- GHC turns this NOINLINE boxed producer into a floating tuple-return worker.
 {-# NOINLINE floatingCprBox #-}
 floatingCprBox :: Float# -> Double# -> FloatingBox

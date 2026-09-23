@@ -108,19 +108,21 @@ jobs:
           scripts/gradle.sh --no-daemon test --rerun-tasks
           cp -R build/test-results/test build/test-results/handoff
           cp -R build/reports/tests/test build/reports/tests/handoff
-      - name: Check real IntMap and the explicit Set frontier
+      - name: Check real libraries on both backends and handoff modes
         shell: bash
         run: |
+          set -euo pipefail
           python3 scripts/prepare-library-tests.py
-          for backend in ast bytecode; do
-            java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
-              -cp 'build/install/thc/lib/*' thc.LibraryCheckKt build/libraries/cases.json "$backend" \
-              2>&1 | tee "build/libraries/check-$backend.log"
+          matrix_status=0
+          for handoff in false true; do
+            for backend in ast bytecode; do
+              java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+                "-Dthc.handoffSlabs=$handoff" -cp 'build/install/thc/lib/*' \
+                thc.LibraryCheckKt build/libraries/cases.json "$backend" \
+                2>&1 | tee "build/libraries/check-$backend-handoff-$handoff.log" || matrix_status=1
+            done
           done
-          java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
-            -Dthc.handoffSlabs=true -cp 'build/install/thc/lib/*' \
-            thc.LibraryCheckKt build/libraries/cases.json ast \
-            2>&1 | tee build/libraries/check-handoff-ast.log
+          exit "$matrix_status"
       - name: Check exact dependency auditor and library frontier
         run: |
           python3 scripts/test-audit-core.py
@@ -130,17 +132,25 @@ jobs:
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
-      - name: Run ordinary Map workload with explicit unsupported-path traps
+      - name: Prepare fresh Map source and native oracle
         env:
           THC_DIAGNOSTIC_UNSUPPORTED: 'true'
-        run: scripts/try-map.sh
-      - name: Check Map through the AST backend
+        run: scripts/prepare-map.sh
+      - name: Check diagnostic Map on both backends and handoff modes
         shell: bash
         run: |
-          java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
-            -Dthc.backend=ast -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
-            -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
-            2>&1 | tee build/map/check-ast.log
+          set -euo pipefail
+          matrix_status=0
+          for handoff in false true; do
+            for backend in ast bytecode; do
+              java --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+                "-Dthc.backend=$backend" "-Dthc.handoffSlabs=$handoff" \
+                -Dthc.diagnosticUnsupported=true -Dthc.traceCompilation=true \
+                -cp 'build/install/thc/lib/*' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
+                2>&1 | tee "build/map/check-$backend-handoff-$handoff.log" || matrix_status=1
+            done
+          done
+          exit "$matrix_status"
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
@@ -150,6 +160,7 @@ jobs:
             build/floating/core/
             build/floating/checks.json
             build/floating/oracle.tsv
+            build/floating-tuple/
             build/test-results/
             build/aggregate-frontier.json
             build/primop-coverage.json
@@ -198,7 +209,9 @@ jobs:
             build/libraries/*/audit.json
             build/libraries/*/provenance.json
             build/map/audit.json
-            build/map/check.log
-            build/map/check-ast.log
+            build/map/check-*.log
+            build/map/modules.txt
+            build/map/oracle.tsv
+            build/map/oracle-validation.json
             build/map/provenance.json
             build/map/reproduction-provenance.json

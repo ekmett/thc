@@ -12,6 +12,7 @@ entries =
   , ("floatSignedZero", F.floatSignedZero), ("doubleSignedZero", F.doubleSignedZero)
   , ("floatingFields", F.floatingFields), ("floatingCaptures", F.floatingCaptures)
   , ("floatingLoop", F.floatingLoop), ("floatingJoinSwap", F.floatingJoinSwap)
+  , ("floatingTupleFrontier", F.floatingTupleFrontier)
   ]
 
 inputs :: [Int]

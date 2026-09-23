@@ -31,9 +31,11 @@ and bit-reversal operations with 11,923 native/model rows, pre/post-Tidy exports
 and exact compiled-entry checks for every row on both backends.
 
 The [floating suite](floating-primitives.md) adds 28 scalar `Float#`/`Double#`
-operations and 412 native/model rows, with primitive locals, fields and captures.
+operations and 441 native/model rows, with primitive locals, fields and captures.
 Its compiled loop retains both precisions without boxing in the continuing loop;
-generic call boundaries and floating tuple leaves remain separate work.
+generic scalar call boundaries still use the Object ABI. The floating tuple result
+slice adds genuine `Data.Complex` CPR workers, 44 native/model rows and eight IEEE
+bit rows, using concrete float/double result fields and local slots on both backends.
 
 The [SIMD slice](simd.md) supports six local operations each for `Int64X2#` and
 `Int32X4#`. Exact vector metadata keeps these values distinct from each other and
