@@ -104,3 +104,37 @@ in the external output directory. Instrumentation is disabled for these graphs,
 so validity is not presented as an independent compiled-entry counter. The
 feature's instrumented JVM tests separately enforce per-row compiled entry and
 host/original/active target checks.
+
+## Separate Sequence comparison
+
+`captured/sequence-evidence.json` records the exact runtime `48655de`, 11 genuine
+GHC module hashes, original 2,964-row native TSV hash, selected 152 rows and strict
+audits. These are equivalent remote exports, not a claim to reproduce an older
+CI artifact byte for byte. The four newly accepted entries are `sequenceBuild`,
+`sequenceEnds`, `sequenceAppend` and `sequenceLazyPayloads`. Each passes 38 rows
+interpreted and all compiled warm/replay checks on both backends with handoff off
+and on. The first compilation follows the existing library contract: 40 calls
+cycling 1, 8 and 64. Cold rows then run once before ordinary all-row training and
+one post-cold compilation. Host, original and active guest targets remain valid,
+active identities are unchanged, and compiled guest counters increase per
+measured row. This is separate from the uninstrumented graph matrix above.
+
+The probe parses and merges the 11 modules, computes the selected reachable Core,
+and creates the production program and `EntryValue` directly. It avoids the
+unrelated merged-request JSON serialization allocation issue. With the recorded
+modules available in an absolute-path list, reproduce a mode using:
+
+```sh
+javac -cp 'build/install/thc/lib/*' -d /private/tmp/empty-sequence-probe \
+  bench/experiments/empty-tuple-inputs/SequenceEmptyProbe.java
+java --add-modules=jdk.incubator.vector -Dthc.handoffSlabs=false \
+  -cp '/private/tmp/empty-sequence-probe:build/install/thc/lib/*' \
+  SequenceEmptyProbe ast /path/to/modules-local.txt \
+  bench/experiments/empty-tuple-inputs/captured/sequence-cases.json
+```
+
+Use `bytecode` and/or `-Dthc.handoffSlabs=true` for the other modes. Verify the
+listed module/native hashes before comparison. Split, index/update and aggregate
+roots remain rejected for the exact gaps recorded in the summary; no assertions
+were weakened. The separate first-call host-linkage issue in Sequence views was
+not exercised by these four entries and is not claimed fixed.

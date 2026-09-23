@@ -41,3 +41,23 @@ overapplication, effect/throw ordering, zero-storage proofs, mixed targets,
 tail recursion and primitive contract rejection on both backends. Sequence's
 actual fold specializations use empty first parameters; other Sequence gaps must
 remain separately reported rather than counted as supported by this feature.
+
+Production [graph evidence](../bench/experiments/empty-tuple-inputs/README.md)
+records the exact captured runtime and native inputs. All 24 pre/post,
+AST/bytecode, inline/residual controls pass. Inline calls retain no guest input
+layout reads, tuple carrier or packet allocation; residual packets contain only
+the header and scalar fields. This includes a scalar-only control and seven
+independently varied pairs checked by both graphs and instrumented JVM tests.
+
+The same evidence directory records a separate genuine Sequence comparison.
+`sequenceBuild`, `sequenceEnds`, `sequenceAppend` and `sequenceLazyPayloads`
+strictly load after the empty-formal change and match all 152 selected native rows
+on both backends in both handoff modes. It uses equivalent remote GHC exports,
+verified against their recorded module hashes and original native TSV, and loads
+the parsed Core directly without serializing a merged request. Compiled warm
+rows and post-cold replay retain host/original/active guest validity and compiled
+guest entry on every measured row. No settling calls or recovery loop were added.
+`sequenceSplit`, `sequenceIndexUpdate` and `sequenceAggregate` retain their
+separate missing-definition and constructor-proof frontiers. These four newly
+accepted entries do not establish that the unrelated Sequence views first-call
+host-linkage gap is fixed.
