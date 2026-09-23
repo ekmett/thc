@@ -4,6 +4,9 @@ Both execution backends support exact unboxed tuple results from functions whose
 inputs use the ordinary scalar/reference ABI. This includes empty and singleton
 tuples, nested tuples, lazy lifted references, boxed unlifted reference fields,
 non-tail calls, tail forwarding, scalar PAP prefixes and overapplication.
+Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
+typed local destinations without using the function-return carrier.
+
 Ordinary boxed tuples, boxed unit and unlifted boxed products continue to use
 `DataValue` references. An empty unboxed tuple remains logically distinct from
 `State#` and `Proxy#`.

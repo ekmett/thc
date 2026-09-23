@@ -178,7 +178,7 @@ does not authorize speculative evaluation of the expression.
 
 A corpus comparison must keep existing representation, WHNF, speculation, constructor strictness and join certificates, not merely compare expression tags. The strict [metadata-only comparison](../scripts/compare-cbv-export.py) retains all old fields; rebuilt plugins can change GHC uniques, in which case [lexical alpha comparison](../scripts/compare-executable-core.py) checks executable trees and their runtime certificates without relying on printed Core text. Entry contracts and constructor field types are included by default; comparing against an older export requires the explicit `--ignore-entry-contracts` or `--ignore-field-types` option for the newly added certificate. The frozen Map comparison using only `--ignore-entry-contracts` covers all 52 syntactically reachable globals and yields the same canonical SHA-256 before and after the new entry metadata: `c9530532240552bdde7203d16da97ccb6f240f67b30405aff0076a070c5dba38`. This establishes unchanged exported workload computation, not the speed or correctness of its new runtime lowering.
 
-These are bounded contracts for the supported Core subset. They do not add arbitrary unboxed aggregates, floating/vector carriers, representation-polymorphic operations, or small/big `Integer` and `Natural` layouts. They also do not make every demand signature a calling-convention guarantee. New uses of evidence must preserve the distinction between the GHC value, THC's storage of that value, and the point where evaluation has actually occurred.
+These are bounded contracts for the supported Core subset. They do not add arbitrary unboxed aggregates, unrestricted vector ABIs, floating carriers, representation-polymorphic operations, or small/big `Integer` and `Natural` layouts. They also do not make every demand signature a calling-convention guarantee. New uses of evidence must preserve the distinction between the GHC value, THC's storage of that value, and the point where evaluation has actually occurred.
 
 The [compiled graph check](source-note-graphs/README.md) also guards the intended
 result specialization. The AST uses direct comparisons for the constant result
@@ -186,3 +186,5 @@ kind: Kotlin's enum-switch mapping array survived partial evaluation and kept
 irrelevant typed body paths alive in the first implementation. The final direct
 comparisons collapse those paths; the separate [measurement](debug-locations.md#graph-check-and-typed-dispatch-repair)
 records the effect with source notes enabled throughout.
+
+Exact GHC `VecRep` evidence now carries a separate `vector` lane/element record. [Bounded Int64X2 lowering](simd.md) consumes it without conflating a vector with an unboxed tuple of equal spill width.

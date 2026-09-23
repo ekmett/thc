@@ -28,3 +28,27 @@ THC's intended durable vector storage is exact primitive lane fields or typed
 frame slots. The Vector API serves as the transient arithmetic intrinsic, not a
 persistent array-backed guest value. GHC `VecRep 2 Int64ElemRep` remains a distinct
 logical vector representation even where its physical spill slots are two longs.
+
+## Actual THC Core execution
+
+After `installDist` and `scripts/prepare-simd-audit.py` (or its explicit
+`--export-only` AArch64 mode), run:
+
+```sh
+JAVA_HOME=/path/to/pinned/graalvm \
+  bench/experiments/simd-foundation/run-runtime.sh build/simd-runtime-native
+```
+
+The runtime harness executes the genuine exported Core on both backends against
+49 native GHC rows for each supported entry, compiles the exact entry, runs it
+again twice, and checks that installed code remains valid. It audits the
+pre-lowering graph for vector carrier/array allocations, field traffic and
+invokes, then requires packed 128-bit ADD/SUB in physical registers. The vector
+join frontier remains a rejection control in JVM tests.
+
+AArch64 uses its own genuine pre-Tidy export and explicitly reuses the committed,
+source-matched x86 native oracle. x86 fresh preparation checks both pre/post-Tidy
+exports and a newly generated native oracle. The input provenance distinguishes
+these paths. `runtime-aarch64/` records four production controls, separate from
+the earlier mechanism probe. It proves SIMD arithmetic within scalar THC roots,
+not an ABI that passes vectors across residual guest calls in SIMD registers.

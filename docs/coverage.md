@@ -11,7 +11,16 @@ and 507 distinct entry/input pairs, alongside the original fixtures and Map.
 
 The [unsigned primop suite](integer-primops.md) adds 40 operations checked against
 56,791 native/model rows on both backends, including installed-code checks for
-each row.
+each row. The [signed narrow suite](signed-narrow-primops.md) adds 36 operations
+with 73,453 native/model rows and direct canonical-result checks. The
+[tuple arithmetic suite](tuple-arithmetic.md) adds six operations with 8,279
+native two-field rows, exact local destinations and pre/post-Tidy compiled-entry
+checks on both backends.
+
+The first [SIMD slice](simd.md) supports six local `Int64X2#` operations. Exact
+vector metadata keeps these values distinct from unboxed tuples. Both backends
+have actual Core graph evidence showing packed AArch64 arithmetic with temporary
+carriers eliminated. Vector calling conventions and other shapes remain work.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

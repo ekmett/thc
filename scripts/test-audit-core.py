@@ -97,6 +97,73 @@ def tuple_join_fixture(zero=False):
 
 
 class AuditTest(unittest.TestCase):
+    def test_scalar_lexical_occurrences_cannot_replace_exact_binder_registers(self):
+        for primitive, expected, declared in [('quotRemInt#', 'IntRep', 'WordRep'), ('plusInt8#', 'Int8Rep', 'Word8Rep')]:
+            scalar = dict(LONG, primReps=[expected])
+            if primitive == 'quotRemInt#':
+                module = tuple_fixture(tuple_rep(scalar, scalar))
+                root = module['bindings'][0]['expr']
+                root[1][0]['rep'] = dict(LONG, primReps=[declared])
+                root[2][1] = ['app', ['prim', primitive], [['var', 'x', dict(rep=scalar)]] * 2,
+                              [False, False], False, False, dict(rep=tuple_rep(scalar, scalar))]
+                report = run_tuple(module)
+            else:
+                binder = dict(id='x', lifted=False, rep=dict(LONG, primReps=[declared]))
+                body = ['app', ['prim', primitive], [['var', 'x', dict(rep=scalar)]] * 2,
+                        [False, False], False, False, dict(rep=scalar)]
+                report = run(['lam', [binder], body, dict(rep=CLOSURE, resultRep=scalar)])
+            self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, primitive)
+
+    def test_scalar_lexical_absent_unknown_and_matching_proofs_remain_compatible(self):
+        unknown = dict(kind='unknown', primReps=None, evaluated=False)
+        for stored, occurrence in [(None, LONG), (unknown, LONG), (LONG, None), (LONG, unknown), (LONG, LONG)]:
+            binder = dict(id='x', lifted=False)
+            if stored is not None:
+                binder['rep'] = stored
+            body = ['var', 'x'] + ([dict(rep=occurrence)] if occurrence is not None else [])
+            self.assertTrue(run(['lam', [binder], body])['accepted'], (stored, occurrence))
+        # Lexical shadowing replaces the name, not the representation of one value.
+        word = dict(LONG, primReps=['WordRep'])
+        inner = ['lam', [dict(id='x', lifted=False, rep=word)], ['var', 'x', dict(rep=word)]]
+        self.assertTrue(run(['lam', [dict(id='x', lifted=False, rep=LONG)], inner])['accepted'])
+
+    def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
+        for name, contract in CAP['tuplePrimitives'].items():
+            scalar = dict(LONG, primReps=[contract['arguments'][0]])
+            proof = tuple_rep(scalar, scalar)
+            module = tuple_fixture(proof)
+            call = module['bindings'][0]['expr'][2][1]
+            call[:] = ['app', ['prim', name],
+                       [['lit', 'word' if scalar['primReps'] == ['WordRep'] else 'int', '1', dict(rep=scalar)]] * 2,
+                       [False, False], False, False, dict(rep=proof)]
+            self.assertTrue(run_tuple(module)['accepted'], name)
+            for mutation in ('nested', 'scalar', 'unknown', 'wrong-register', 'unknown-argument', 'lifted', 'partial', 'overapplied'):
+                changed = copy.deepcopy(module)
+                bad = changed['bindings'][0]['expr'][2][1]
+                if mutation == 'nested':
+                    bad[6]['rep']['components'][0] = tuple_rep(copy.deepcopy(scalar))
+                elif mutation == 'scalar':
+                    bad[6]['rep'] = copy.deepcopy(scalar)
+                elif mutation == 'unknown':
+                    bad[6].pop('rep')
+                elif mutation == 'wrong-register':
+                    bad[2][0][3]['rep']['primReps'] = ['WordRep' if scalar['primReps'] == ['IntRep'] else 'IntRep']
+                elif mutation == 'unknown-argument':
+                    bad[2][0][3]['rep']['kind'] = 'unknown'
+                elif mutation == 'lifted':
+                    bad[3][0] = True
+                elif mutation == 'partial':
+                    bad[2].pop(); bad[3].pop()
+                else:
+                    bad[2].append(copy.deepcopy(bad[2][0])); bad[3].append(False)
+                report = run_tuple(changed)
+                self.assertFalse(report['accepted'], (name, mutation))
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
+
+    def test_tuple_arithmetic_first_class_values_remain_unsupported(self):
+        for name in CAP['tuplePrimitives']:
+            self.assertIn('primitive-arity', {i['code'] for i in run(['prim', name])['issues']})
+
     def test_exact_tuple_join_results_include_zero_arity_binders(self):
         for zero in (False, True):
             module, _ = tuple_join_fixture(zero)

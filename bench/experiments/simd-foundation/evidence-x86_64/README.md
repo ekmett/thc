@@ -1,5 +1,10 @@
 # Linux x86-64 mechanism evidence
 
+Fresh **production THC Core** validation is recorded separately in
+[runtime/](runtime/README.md): eight pre/post-Tidy × AST/bytecode × add/subtract
+controls at `acf6d950f4b0f97732def5c4fb436d57c771fc62`. The earlier mechanism
+evidence below is retained unchanged.
+
 Verified 2026-09-23 on **eak-quartus**, Intel Core i9-12900K (Alder Lake),
 Linux x86-64. This is not the Castlemeadow host. Full CPU flags and kernel are
 retained in `cpu.txt` and `kernel.txt`; SSE2 and AVX2 are present.
