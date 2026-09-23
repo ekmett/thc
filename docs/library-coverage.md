@@ -139,6 +139,18 @@ and negative sizes, every size from 0 through 17, digit/node carry boundaries,
 25/160 bulk-builder boundaries, 255/256/257, 512/1024 and machine-Int extremes.
 Sizes are clamped to 0–1024 before arithmetic. The six focused model sanity tests
 are available through `python3 scripts/test-sequence-model.py`.
+Native GHC agrees with the model on all 418 Sequence rows, bringing the complete
+library oracle to 2,964 rows. Of those, 152 new Sequence rows belong to the four
+strict-supported slices; the other 266 are native/model coverage of the retained
+frontiers, not THC execution claims.
+
+The host compilation API now follows active Truffle split targets beneath its
+stable host-entry dispatch tree. Compiling only the original target retained by
+a closure could leave the actually called clone interpreted. Dedicated tests
+force a real host-call split on both backends, verify the active clone is installed
+and require compiled entry for every 64-bit boundary input, while preserving the
+closure's original target identity. This changes neither the guest call ABI nor
+the compilation limits.
 
 ## Running the checks
 
@@ -148,7 +160,12 @@ audits, `oracle.tsv`, `oracle-validation.json`, `cases.json`, and explicit AST
 and bytecode check logs. Input and artifact fingerprints reject stale examples,
 exporter/auditor implementations, capabilities, vendored sources, Core and
 native-oracle artifacts. The declared entries and manifest rows must also match
-the fingerprinted native oracle. CI runs the checks on Linux and macOS.
+the fingerprinted native oracle. The checker additionally rejects a validation
+report with static support violations, a false independent-model result or a
+wrong native row count, even when invoked directly after failed preparation.
+`scripts/test-library-manifest.py` checks those failures on both backends before
+any guest loading; the ordinary library runner includes those tests and the
+Sequence model sanity tests. CI runs the checks on Linux and macOS.
 
 The checker keeps strict rejection separate from execution passes and disables
 compilation for its interpreted phase. A fresh context warms only the declared
@@ -160,6 +177,16 @@ blackholes must remain zero; no diagnostic unsupported mode is needed for
 IntMap, IntSet or the primitive entries. The existing Linux/macOS library CI step
 prepares all groups and runs both explicit backends; no separate opt-in is needed
 for the IntSet workload.
+
+After each explicit compilation request, one already-warm input is used for a
+bounded settling call, checked against the oracle and strict runtime policy.
+A compilation recheck follows. HotSpot's `interpreterCall` can
+observe valid guest code, attempt to repair a bypassed shared call-boundary stub,
+and still interpret that particular invocation. `LIBRARY_COMPILE_SETTLE` records
+this setup separately, including its actual compiled-entry delta. It is not
+counted as a measured compiled pass, does not use a cold input and never retries
+until success. Every subsequent measured warm and final replay call retains its
+mandatory positive compiled-entry delta, so persistent bypass still fails.
 
 To additionally exercise opt-in dense argument handoff transport, run
 `JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/try-libraries.sh --rerun-tasks`.

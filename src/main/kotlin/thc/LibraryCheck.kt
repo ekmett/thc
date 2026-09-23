@@ -153,7 +153,20 @@ fun main(args: Array<String>) {
                     check(function.execute(input).asLong() == expected)
                 }
                 checkPolicy(function)
-                check(function.invokeMember("compile").asBoolean()) { "Failed guest compilation: $backend $name" }
+                fun compileForReplay(phase: String) {
+                    check(function.invokeMember("compile").asBoolean()) { "Failed $phase compilation: $backend $name" }
+                    // HotSpot may repair a bypassed call-boundary stub while
+                    // executing that invocation interpreted despite valid guest
+                    // code. Settle once on a known warm input, never a cold one.
+                    // This is not a retry loop or a measured compiled-entry pass.
+                    val (input, expected) = warm.first()
+                    val before = count(function, "compiledEntries")
+                    check(function.execute(input).asLong() == expected) { "$backend $phase settling result: $name($input)" }
+                    checkPolicy(function)
+                    println("LIBRARY_COMPILE_SETTLE\t$backend\t$phase\t$name\t$input\t${count(function, "compiledEntries") - before}")
+                    check(function.invokeMember("compile").asBoolean()) { "Failed $phase compilation recheck: $backend $name" }
+                }
+                compileForReplay("warm")
                 checkRows(function, warm, "compiled-warm", compiled = true)
                 // A previously unseen branch can legitimately invalidate installed code.
                 // Check cold results after compilation, then train every input and require
@@ -163,7 +176,7 @@ fun main(args: Array<String>) {
                     val (input, expected) = all[index % all.size]
                     check(function.execute(input).asLong() == expected)
                 }
-                check(function.invokeMember("compile").asBoolean()) { "Failed post-cold compilation request: $backend $name" }
+                compileForReplay("post-cold")
                 checkRows(function, all.reversed(), "post-cold-compiled", compiled = true)
                 println("LIBRARY_DIAGNOSTICS\t$backend\t$name\t${function.getMember("diagnostics").asString()}")
             }
