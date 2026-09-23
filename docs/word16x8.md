@@ -93,9 +93,9 @@ exact closure membership, no hidden local lambda or alias, saturated
 unconditional helper calls using original scalar inputs, machine-Int formals
 and results, all eight unsigned tuple leaves and exact vector primitive counts.
 Counts exclude the public host bridge. Static proof is not compiled execution.
-The full pre/post × AST/bytecode × inlining-on/off corpus would require 40,928
-compiled invocations and 45,216 guest entries per handoff mode; runtime tests
-must establish those counts separately with unchanged targets and empty pools.
+The full pre/post × AST/bytecode × inlining-on/off runtime corpus checks 40,928
+compiled calls and 45,216 guest entries per handoff mode, with exact per-call
+deltas, unchanged targets and empty pools required separately from static proof.
 
 The genuine `vectorArgument` negative has a Word16X8 formal and must fail each
 stage's audit with exactly one vector-formal issue and no missing globals.
@@ -134,3 +134,22 @@ Fixture/model/native evidence alone establishes no JVM compilation, packed
 machine instructions, allocation elimination, throughput, vector calling
 conventions or cross-architecture execution. Those require separately retained
 runtime tests and graph/LIR evidence.
+
+## Retained compiled-code evidence
+
+The [x86-64 evidence](../bench/experiments/word16x8-foundation/evidence-x86_64/README.md)
+retains twelve actual pre/post × AST/bytecode × plus/minus/times captures at
+runtime `5bbdb040a26ef98c784c2772e5eae0466a534123`. All pass on their first check.
+Every one of the eight result lanes feeds an exact unsigned 16-to-64-bit
+extension. Each add/subtract/multiply uses one packed XMM word instruction.
+No local vector payload, carrier or lane box survives in these selected inlined
+graphs. The public Long result box and precisely checked virtual frame-tag
+deoptimization metadata are allowed; no globally allocation-free or throughput
+claim follows. The native oracle is checked 6,432 times across these captures,
+with installed-entry validity and active-target identity checked on every input.
+
+The complete JVM suite passes 474 tests in each of default and dense-handoff
+modes with zero failures, errors or skips. Both complete logs and all 196 suite
+reports are retained alongside the native and compiled-code evidence. Classes,
+seven focused tests, both full modes and all twelve captures pass first time;
+there was no reader correction or guest replay.

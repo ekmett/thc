@@ -90,6 +90,17 @@ python3 bench/experiments/word16x8-foundation/test-runtime-audit.py
 python3 -O bench/experiments/word16x8-foundation/test-runtime-audit.py
 ```
 
-This initial harness commit makes no actual Word16X8 capture claim. Native
-fixtures, exact source snapshots and successful production captures are separate
-required evidence.
+## Retained x86-64 capture
+
+[evidence-x86_64/README.md](evidence-x86_64/README.md) retains twelve actual captures
+at runtime `5bbdb040a26ef98c784c2772e5eae0466a534123` on eak-quartus with
+GHC 9.14.1 and Oracle Graal 25.3.4.1/JDK 25. Each root checks 268 native rows
+twice after compilation, totaling 6,432 checked comparisons. All twelve pass
+their first check, without reader correction or guest replay. The actual graphs
+contain all 96 result-connected unsigned lane extensions. Final allocated LIR
+contains four XMM VPADDW, four XMM VPSUBW and four XMM VPMULLW instructions.
+
+These selected inlined graphs eliminate local vector carriers, payloads and
+lane boxes; the public Long result box remains. This is bounded packed-code
+evidence, not throughput, no-spill, globally allocation-free, vector-ABI,
+cross-platform or machine-code-disassembly evidence.
