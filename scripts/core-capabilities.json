@@ -333,16 +333,47 @@
     "plusInt32X4#": 2,
     "minusInt32X4#": 2,
     "negateInt32X4#": 1,
+    "packFloatX4#": 1,
+    "unpackFloatX4#": 1,
+    "broadcastFloatX4#": 1,
+    "plusFloatX4#": 2,
+    "minusFloatX4#": 2,
+    "timesFloatX4#": 2,
     "newByteArray#": 2,
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
     "indexWord8Array#": 2,
-    "copyByteArray#": 6
+    "copyByteArray#": 6,
+    "sqrtFloat#": 1,
+    "sqrtDouble#": 1,
+    "newMutVar#": 2,
+    "readMutVar#": 2,
+    "writeMutVar#": 3,
+    "readIntArray#": 3,
+    "writeIntArray#": 4,
+    "indexIntArray#": 2,
+    "readDoubleArray#": 3,
+    "writeDoubleArray#": 4,
+    "indexDoubleArray#": 2,
+    "packDoubleX2#": 1,
+    "unpackDoubleX2#": 1,
+    "broadcastDoubleX2#": 1,
+    "plusDoubleX2#": 2,
+    "minusDoubleX2#": 2,
+    "timesDoubleX2#": 2,
+    "newArray#": 3,
+    "readArray#": 3,
+    "writeArray#": 4,
+    "unsafeFreezeArray#": 2,
+    "indexArray#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
-    "Unboxed tuple result leaves use concrete Long, Float, Double or reference fields with exact recursive layouts; aggregate arguments, captures, ordinary let bindings, join arguments/captures, sums, and first-class tuple constructors remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots."
+    "Unboxed tuple result leaves use concrete Long, Float, Double or reference fields with exact recursive layouts; nonempty or nested aggregate arguments, captures, ordinary let bindings, join arguments/captures, sums, and first-class tuple constructors remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots."
+  ],
+  "aggregateInputs": [
+    "empty-unboxed-tuple"
   ],
   "aggregateResults": [
     "unboxed-tuple"
@@ -359,6 +390,16 @@
     {
       "lanes": 4,
       "element": "Int32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 4,
+      "element": "FloatElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 2,
+      "element": "DoubleElemRep",
       "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
     }
   ],
@@ -425,6 +466,66 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "readDoubleArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["DoubleRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "double", "primReps": ["DoubleRep"] }
+        ]
+      }
+    },
+    "writeDoubleArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "double", "primReps": ["DoubleRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "indexDoubleArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] }
+      ],
+      "result": { "kind": "double", "primReps": ["DoubleRep"] }
+    },
+    "readIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "writeIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "indexIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] }
+      ],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
     "newByteArray#": {
       "arguments": [
         {
@@ -600,6 +701,88 @@
         "kind": "void",
         "primReps": []
       }
+    }
+  },
+  "managedMutVarPrimitives": {
+    "newMutVar#": {
+      "arguments": [
+        "boxed",
+        "state"
+      ],
+      "result": [
+        "state",
+        "mutvar"
+      ]
+    },
+    "readMutVar#": {
+      "arguments": [
+        "mutvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "writeMutVar#": {
+      "arguments": [
+        "mutvar",
+        "boxed",
+        "state"
+      ],
+      "result": "state"
+    }
+  },
+  "managedArrayPrimitives": {
+    "newArray#": {
+      "arguments": [
+        "int",
+        "element",
+        "state"
+      ],
+      "result": [
+        "state",
+        "array"
+      ]
+    },
+    "readArray#": {
+      "arguments": [
+        "array",
+        "int",
+        "state"
+      ],
+      "result": [
+        "state",
+        "element"
+      ]
+    },
+    "writeArray#": {
+      "arguments": [
+        "array",
+        "int",
+        "element",
+        "state"
+      ],
+      "result": "state"
+    },
+    "unsafeFreezeArray#": {
+      "arguments": [
+        "array",
+        "state"
+      ],
+      "result": [
+        "state",
+        "array"
+      ]
+    },
+    "indexArray#": {
+      "arguments": [
+        "array",
+        "int"
+      ],
+      "result": [
+        "element"
+      ]
     }
   }
 }

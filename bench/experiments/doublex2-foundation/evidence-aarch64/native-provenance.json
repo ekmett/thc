@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-09-23 18:13:14 UTC",
+  "sourceRevision": "69615799e0982377e99f19bc1be12b856684b030",
+  "sourceBranch": "codex/doublex2-foundation",
+  "evidenceWorktree": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb",
+  "evidenceBranch": "codex/doublex2-x86-oracle-01a0cdeb",
+  "host": "eak-quartus",
+  "platform": "x86_64-linux",
+  "ghc": "9.14.1",
+  "nativeBackend": "GHC x86_64 NCG (default; no -fllvm)",
+  "sourceFilesMatchGitRevision": true,
+  "inputHashes": {
+    "compiler/Thc/Cbv.hs": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c",
+    "compiler/Thc/Demands.hs": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a",
+    "compiler/Thc/Plugin.hs": "0b83fa173b7a7d95d3c317393e2a1aeec22969c26762d7b9c463466f6a844577",
+    "compiler/Thc/Sources.hs": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861",
+    "compiler/Thc/Wired.hs": "7f294ee018790266a571c9bf0f3b44e11d7732b3f07935d4f1ecf627157a81ea",
+    "compiler/build.sh": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb",
+    "compiler/export.sh": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489",
+    "compiler/test-fixtures/SimdDoubleX2.hs": "6cd97f9433756d1007dd115f804647f0c8f139b5be6de12afdc04a43e7e6cfa0",
+    "compiler/test-fixtures/SimdDoubleX2Native.hs": "8bd18af9815750902bc85e19e4ec77fc6812b8eb4e74c1cbdec2ddc765f59e55",
+    "compiler/toolchain.sh": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614"
+  },
+  "commands": [
+    {
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc",
+        "--make",
+        "-O2",
+        "-fforce-recomp",
+        "-dcore-lint",
+        "-dstg-lint",
+        "-icompiler/test-fixtures",
+        "-odir",
+        "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/native",
+        "-hidir",
+        "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/native",
+        "-o",
+        "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/native/oracle",
+        "compiler/test-fixtures/SimdDoubleX2Native.hs"
+      ],
+      "cwd": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb",
+      "stdout": "native-build.log",
+      "stderr": "native-build.log",
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/native/oracle"
+      ],
+      "cwd": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb",
+      "stdout": "oracle.tsv",
+      "stderr": "native-stderr.log",
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "compiler/export.sh",
+        "compiler/test-fixtures/SimdDoubleX2.hs"
+      ],
+      "cwd": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb",
+      "env": {
+        "GHC": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc",
+        "THC_CORE_OUT": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/pre/core",
+        "THC_GHC_OUT": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/pre/ghc"
+      },
+      "stdout": "export-pre.log",
+      "stderr": "export-pre.log",
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "compiler/export.sh",
+        "-fplugin-opt=Thc.Plugin:post-tidy",
+        "compiler/test-fixtures/SimdDoubleX2.hs"
+      ],
+      "cwd": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb",
+      "env": {
+        "GHC": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc",
+        "THC_CORE_OUT": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/post/core",
+        "THC_GHC_OUT": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/post/ghc"
+      },
+      "stdout": "export-post.log",
+      "stderr": "export-post.log",
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "python3",
+        "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb/build/doublex2-x86-native-6961579/validate.py"
+      ],
+      "cwd": "/home/ekmett/ai/thc-doublex2-x86-oracle-01a0cdeb",
+      "stdout": "checks.json",
+      "exitCode": 0
+    }
+  ],
+  "validation": {
+    "nativeRows": 3390,
+    "entries": 13,
+    "allSixDoubleX2PrimitivesPreservedAtBothStages": true,
+    "perEntryRequiredOperationsPreserved": true,
+    "vectorArgumentControlRetained": true,
+    "evenNonFmaInputsProducePositiveZero": true,
+    "nanPolicy": "Driver reports nan; no arithmetic NaN payload identity promise",
+    "limits": "Native oracle and Core shape/provenance only. Independent binary64 model comparison and THC runtime/compiled/packed-code gates belong to parent worker and were not run here."
+  }
+}

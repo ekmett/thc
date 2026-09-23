@@ -31,12 +31,14 @@ import com.oracle.truffle.api.profiles.InlinedConditionProfile
 internal val NO_PAP_ARGUMENTS: Array<Any?> = emptyArray()
 
 @CompilerDirectives.ValueType
-internal class Closure(
+internal class Closure @JvmOverloads constructor(
     @JvmField val environment: CapturedFrame?,
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1) val supplied: Array<Any?> = NO_PAP_ARGUMENTS,
     /** Remaining value arguments, including any explicit zero-width slots. */
     @JvmField val arity: Int,
-    @JvmField val target: RootCallTarget
+    @JvmField val target: RootCallTarget,
+    /** Logical prefix length can exceed the number of stored scalar values. */
+    @JvmField val suppliedCount: Int = supplied.size
 ) {
     init { require(arity >= 0) { "Negative closure arity" } }
 
@@ -44,12 +46,15 @@ internal class Closure(
 
     /** Escaping PAPs own their combined prefix; argument thunks stay unforced. */
     @CompilerDirectives.TruffleBoundary
-    fun pap(arguments: Array<out Any?>, offset: Int, count: Int): Closure {
-        require(offset >= 0 && count >= 0 && offset + count <= arguments.size && count < arity)
+    fun pap(arguments: Array<out Any?>, offset: Int, count: Int): Closure = papCompact(arguments, offset, count, count)
+
+    @CompilerDirectives.TruffleBoundary
+    fun papCompact(arguments: Array<out Any?>, offset: Int, count: Int, logicalCount: Int): Closure {
+        require(offset >= 0 && count >= 0 && offset + count <= arguments.size && logicalCount < arity)
         val combined = arrayOfNulls<Any>(supplied.size + count)
         System.arraycopy(supplied, 0, combined, 0, supplied.size)
         System.arraycopy(arguments, offset, combined, supplied.size, count)
-        return Closure(environment, combined, arity - count, target)
+        return Closure(environment, combined, arity - logicalCount, target, suppliedCount + logicalCount)
     }
 }
 
@@ -140,16 +145,20 @@ internal abstract class Dispatch(
 ) : Node() {
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1)
     var evaluatedArguments: BooleanArray = booleanArrayOf()
+    @JvmField @CompilerDirectives.CompilationFinal var argumentLayout: ArgumentLayout? = null
     abstract fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any?
 
     @Specialization(guards = ["function.arity == argsSize", "function.target == cachedTarget"], limit = "3")
     fun direct(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                @Cached("function.target") cachedTarget: RootCallTarget,
+               @Cached("targetInputLayout(cachedTarget)") formalLayout: ArgumentLayout?,
                @Cached("function.supplied.length") prefixSize: Int,
+               @Cached("function.suppliedCount") prefixCount: Int,
                @Cached("function.environment != null") hasEnvironment: Boolean,
-               @Cached("createCaller(cachedTarget, prefixSize)") caller: DirectCallerNode): Any? {
+               @Cached("createCaller(cachedTarget, prefixCount)") caller: DirectCallerNode): Any? {
+        ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, argsSize)
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
-            function.supplied, prefixSize, arguments, argsSize)
+            function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, argsSize))
         if (hasEnvironment) packet[1] = function.environment
         return caller.call(frame, packet, tailCall)
     }
@@ -158,32 +167,37 @@ internal abstract class Dispatch(
     fun directOverapplied(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                           @Cached("function.arity") arity: Int,
                           @Cached("function.target") cachedTarget: RootCallTarget,
+                          @Cached("targetInputLayout(cachedTarget)") formalLayout: ArgumentLayout?,
                           @Cached("function.supplied.length") prefixSize: Int,
+                          @Cached("function.suppliedCount") prefixCount: Int,
                           @Cached("function.environment != null") hasEnvironment: Boolean,
-                          @Cached("createCaller(cachedTarget, prefixSize)") caller: DirectCallerNode,
+                          @Cached("createCaller(cachedTarget, prefixCount)") caller: DirectCallerNode,
                           @Cached("createRemainder(arity)") rest: Dispatch,
                           @Cached("createForce()") force: Force): Any? {
+        ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, arity)
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
-            function.supplied, prefixSize, arguments, arity)
+            function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, arity))
         if (hasEnvironment) packet[1] = function.environment
         // There is pending application work, so this first call is not tail.
         val result = force.execute(frame, caller.call(frame, packet, false))
-        val remaining = arguments.copyOfRange(arity, argsSize)
+        val remaining = arguments.copyOfRange(ArgumentLayout.offset(argumentLayout, arity), arguments.size)
         return rest.execute(frame, requireClosure(result), remaining)
     }
 
     @Specialization(guards = ["function.arity > argsSize"])
     fun underapplied(function: Closure, arguments: Array<Any?>): Any? {
         if (metrics.enabled) metrics.papAllocations++
-        return function.pap(arguments)
+        ArgumentLayout.validate(function, argumentLayout, 0, argsSize)
+        return function.papCompact(arguments, 0, arguments.size, argsSize)
     }
 
     @Specialization(guards = ["function.arity == argsSize"], replaces = ["direct"])
     fun indirect(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                  @Cached(value = "createIndirectCaller()", neverDefault = true) caller: IndirectCallerNode): Any? {
         val hasEnvironment = function.environment != null
+        ArgumentLayout.validate(function, argumentLayout, 0, minOf(argsSize, function.arity))
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
-            function.supplied, function.supplied.size, arguments, argsSize)
+            function.supplied, function.supplied.size, arguments, ArgumentLayout.width(argumentLayout, argsSize))
         if (hasEnvironment) packet[1] = function.environment
         return caller.call(frame, function.target, packet, tailCall)
     }
@@ -192,18 +206,19 @@ internal abstract class Dispatch(
     fun indirectOverapplied(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                             @Bind node: Node,
                             @Cached(inline = true) generic: GenericDispatch): Any? =
-        generic.execute(frame, node, function, arguments, tailCall, metrics)
+        generic.execute(frame, node, function, arguments, argsSize, argumentLayout, tailCall, metrics)
 
+    fun targetInputLayout(target: RootCallTarget) = (target.rootNode as? GuestRoot)?.inputLayout
     fun createCaller(target: RootCallTarget, prefixSize: Int) = DirectCallerNode(target, metrics, evaluatedArguments, prefixSize)
     fun createIndirectCaller() = IndirectCallerNode.create(metrics)
     fun createRemainder(arity: Int): Dispatch = create(argsSize - arity, tailCall, metrics,
-        if (evaluatedArguments.isEmpty()) evaluatedArguments else evaluatedArguments.copyOfRange(arity, evaluatedArguments.size))
+        if (evaluatedArguments.isEmpty()) evaluatedArguments else evaluatedArguments.copyOfRange(arity, evaluatedArguments.size), argumentLayout?.suffix(arity))
     fun createForce(): Force = Force(metrics)
 
     companion object {
-        fun create(argsSize: Int, tailCall: Boolean, metrics: Metrics, evaluated: BooleanArray = booleanArrayOf()): Dispatch {
+        @JvmOverloads fun create(argsSize: Int, tailCall: Boolean, metrics: Metrics, evaluated: BooleanArray = booleanArrayOf(), layout: ArgumentLayout? = null): Dispatch {
             require(evaluated.isEmpty() || evaluated.size == argsSize)
-            return DispatchNodeGen.create(argsSize, tailCall, metrics).also { it.evaluatedArguments = evaluated.copyOf() }
+            return DispatchNodeGen.create(argsSize, tailCall, metrics).also { it.evaluatedArguments = evaluated.copyOf(); it.argumentLayout = layout }
         }
     }
 }
@@ -212,13 +227,13 @@ internal abstract class Dispatch(
 @GenerateInline
 internal abstract class GenericDispatch : Node() {
     abstract fun execute(frame: VirtualFrame, inliningTarget: Node, function: Closure,
-                         arguments: Array<Any?>, tailCall: Boolean, metrics: Metrics): Any?
+                         arguments: Array<Any?>, logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean, metrics: Metrics): Any?
 
     companion object {
         @JvmStatic
         @Specialization
         fun apply(frame: VirtualFrame, node: Node, initial: Closure, arguments: Array<Any?>,
-                  tailCall: Boolean, metrics: Metrics,
+                  logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean, metrics: Metrics,
                   @Cached(value = "createCaller(metrics)", neverDefault = true) caller: IndirectCallerNode,
                   @Cached(value = "createForce(metrics)", neverDefault = true) force: Force,
                   @Cached underapplied: InlinedConditionProfile,
@@ -226,18 +241,21 @@ internal abstract class GenericDispatch : Node() {
             var function = initial
             var offset = 0
             while (true) {
-                val remaining = arguments.size - offset
+                val remaining = logicalCount - offset
+                val physicalOffset = ArgumentLayout.offset(layout, offset)
+                ArgumentLayout.validate(function, layout, offset, minOf(function.arity, remaining))
                 if (underapplied.profile(node, function.arity > remaining)) {
                     if (metrics.enabled) metrics.papAllocations++
-                    return function.pap(arguments, offset, remaining)
+                    return function.papCompact(arguments, physicalOffset, arguments.size - physicalOffset, remaining)
                 }
                 val count = function.arity
+                val physicalCount = ArgumentLayout.offset(layout, offset + count) - physicalOffset
                 val hasEnvironment = function.environment != null
                 val skip = if (hasEnvironment) 2 else 1
-                val packet = arrayOfNulls<Any>(skip + function.supplied.size + count)
+                val packet = arrayOfNulls<Any>(skip + function.supplied.size + physicalCount)
                 if (hasEnvironment) packet[1] = function.environment
                 System.arraycopy(function.supplied, 0, packet, skip, function.supplied.size)
-                System.arraycopy(arguments, offset, packet, skip + function.supplied.size, count)
+                System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.size, physicalCount)
                 if (exact.profile(node, count == remaining)) {
                     return caller.call(frame, function.target, packet, tailCall)
                 }

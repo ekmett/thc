@@ -32,6 +32,7 @@ and exact compiled-entry checks for every row on both backends.
 
 The [floating suite](floating-primitives.md) adds 28 scalar `Float#`/`Double#`
 operations and 441 native/model rows, with primitive locals, fields and captures.
+Two additional square-root primitives have a separate 418-row native/model suite.
 Its compiled loop retains both precisions without boxing in the continuing loop;
 generic scalar call boundaries still use the Object ABI. The floating tuple result
 slice adds genuine `Data.Complex` CPR workers, 44 native/model rows and eight IEEE
@@ -42,6 +43,11 @@ The [SIMD slice](simd.md) supports six local operations each for `Int64X2#` and
 from unboxed tuples. The Int64 controls include actual Core graph evidence of
 packed arithmetic with temporary carriers eliminated on AArch64 and x86. Vector
 calling conventions and other shapes remain work.
+The [FloatX4 foundation](floatx4.md) adds another six local vector primops and
+2,196 native/model rows, including signed zeros, NaNs, exact subnormal ties and
+separate multiply/add rounding. The [DoubleX2 foundation](doublex2.md) adds the
+corresponding six binary64 operations, with an exact integer-significand model
+and bit-sensitive edge controls. Vector ABI boundaries remain unchanged.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

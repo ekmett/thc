@@ -43,20 +43,31 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
         listOf("IntRep"), listOf("IntRep"), emptyList())),
     FREEZE("unsafeFreezeByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
     SIZE("sizeofByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
-    INDEX("indexWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep")));
+    INDEX("indexWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_INT("readIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_INT("writeIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("IntRep"), emptyList())),
+    INDEX_INT("indexIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_DOUBLE("readDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_DOUBLE("writeDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("DoubleRep"), emptyList())),
+    INDEX_DOUBLE("indexDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep")));
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         if (actual.size != arguments.size) throw RuntimeFault("Primitive arity mismatch: $primitive")
         fun scalar(proof: CoreRepresentation, registers: List<String>): Boolean = !proof.isTuple &&
             proof.primReps == registers && proof.kind == when (registers.singleOrNull()) {
-                null -> CoreKind.VOID; BYTE_ARRAY_REP -> CoreKind.OBJECT; else -> CoreKind.LONG
+                null -> CoreKind.VOID; BYTE_ARRAY_REP -> CoreKind.OBJECT
+                "DoubleRep" -> CoreKind.DOUBLE; else -> CoreKind.LONG
             }
         if (flags != List(arguments.size) { false } || actual.indices.any { !scalar(actual[it], arguments[it]) })
             throw RuntimeFault("ByteArray primitive argument representation mismatch: $primitive")
-        val valid = if (tuple) result.isTuple && result.components!!.size == 2 &&
-            scalar(result.components[0], emptyList()) && scalar(result.components[1], listOf(BYTE_ARRAY_REP)) &&
-            result.primReps == listOf(BYTE_ARRAY_REP)
-        else scalar(result, when (this) { WRITE, COPY -> emptyList(); SIZE -> listOf("IntRep"); else -> listOf("Word8Rep") })
+        val payload = listOf(when (this) { READ_INT -> "IntRep"; READ_DOUBLE -> "DoubleRep"; else -> BYTE_ARRAY_REP })
+        val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
+            scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
+            result.primReps == payload
+        else scalar(result, when (this) {
+            WRITE, WRITE_INT, WRITE_DOUBLE, COPY -> emptyList(); SIZE, INDEX_INT -> listOf("IntRep")
+            INDEX_DOUBLE -> listOf("DoubleRep"); else -> listOf("Word8Rep")
+        })
         if (!valid) throw RuntimeFault("ByteArray primitive result representation mismatch: $primitive")
     }
     companion object {
@@ -72,6 +83,12 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.SIZE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.READ_INT -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_INT -> WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_INT -> IndexIntArrayExpression(operands[0], operands[1])
+        ByteArrayOp.READ_DOUBLE -> ReadDoubleArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_DOUBLE -> WriteDoubleArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_DOUBLE -> IndexDoubleArrayExpression(operands[0], operands[1])
     }.proven(proof.copy(evaluated = true))
 
 private class NewByteArrayExpression(@field:Child private var size: Expr,
@@ -118,6 +135,72 @@ private class IndexByteArrayExpression(@field:Child private var array: Expr,
         val bytes = ManagedByteArray.require(array.execute(frame))
         val offset = index.executeRequiredLong(frame)
         return ManagedByteArray.read(bytes, offset)
+    }
+}
+
+private class ReadIntArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        FrameAccess.writeLong(frame, slots[offset], ManagedIntArray.read(bytes, element))
+        return null
+    }
+}
+private class WriteIntArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var value: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        val integer = value.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedIntArray.write(bytes, element, integer)
+        return Unit
+    }
+}
+private class IndexIntArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        return ManagedIntArray.read(bytes, element)
+    }
+}
+
+private class ReadDoubleArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        FrameAccess.writeDouble(frame, slots[offset], ManagedDoubleArray.read(bytes, element))
+        return null
+    }
+}
+private class WriteDoubleArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var value: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        val number = value.executeRequiredDouble(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedDoubleArray.write(bytes, element, number)
+        return Unit
+    }
+}
+private class IndexDoubleArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeDouble(frame)
+    override fun executeDouble(frame: VirtualFrame): Double {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        return ManagedDoubleArray.read(bytes, element)
     }
 }
 

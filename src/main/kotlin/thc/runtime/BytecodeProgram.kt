@@ -49,6 +49,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val directDouble: Boolean get() = !cell && proof.isDouble && proof.evaluated
     }
     private class FunctionContext(val formalArity: Int, val entryStrict: BooleanArray = BooleanArray(formalArity)) {
+        var inputLayout: ArgumentLayout? = null
         var arguments: List<Local?> = emptyList()
         var captures: List<Local> = emptyList()
         var captureLayout: CaptureLayout? = null
@@ -147,7 +148,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
-        if (!diagnosticUnsupported) CoreRepresentations.validateAggregates(bindings)
+        if (!diagnosticUnsupported) {
+            CoreRepresentations.validateAggregates(bindings)
+            CoreInputCalls.validate(bindings)
+        }
         val scope = Scope(FunctionContext(0))
         val initializers = bindings.map { binding ->
             val expr = binding["expr"] as List<Any?>
@@ -231,7 +235,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val scope = Scope(context, source = outer.source)
         val free = freeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
-        args.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "formal argument") }
+        args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
+        context.inputLayout = ArgumentLayout.fromProofs(args.map(CoreRepresentations::binder))
         if ((free - argumentIds).any { it in outer.tuples }) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
         val freeLocals = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
         freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
@@ -246,11 +251,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         context.arguments = args.mapIndexed { index, arg ->
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
-            if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
+            if (proof.isEmptyTuple) {
+                if (lifted) throw RuntimeFault("Empty tuple formal cannot be lifted")
+                scope.bindTuple(arg["id"] as String, proof, emptyList()); null
+            } else if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
                 proof) else null
         }
         val compiled = compile(expression, scope, true)
-        if (compiled.loweredCase) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
+        if (compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
             ::dataLayout, sources, compiled.source)
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
@@ -279,7 +287,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             val offset = if (context.captureLayout == null) 1 else 2
             context.arguments.forEachIndexed { index, local -> if (local != null) {
-                restoreArgument(e, local) { b.emitLoadArgument(index + offset) }
+                restoreArgument(e, local) { b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset) }
             } }
             if (context.mayLoop) {
                 b.beginWhile()
@@ -311,6 +319,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }.getNode(0)
         root.setLabel(label)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
+        root.configureInput(context.inputLayout)
         root.configureLeadingCaseReturn(context.leadingCaseReturn)
         root.configureTupleResult(context.tuple)
         roots += root
@@ -383,10 +392,20 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             e.builder.endMakeClosure()
         })
     }
-    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expression {
-        CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
-        if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireNoVector(it.proof, "argument") }
-        if (expr[0] == "var" && expr[1] in scope.tuples) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (argument)")
+    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expression {
+        val proof = CoreRepresentations.expression(expr)
+        fun check(value: CoreRepresentation) {
+            if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
+        }
+        check(proof)
+        val lexical = if (expr[0] == "var") scope.tuples[expr[1]]?.first ?: scope.locals[expr[1]]?.proof else null
+        lexical?.let(::check)
+        if (proof.isEmptyTuple || lexical?.isEmptyTuple == true) {
+            if (declaredLifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
+            return compile(expr, scope, false).also {
+                if (!it.proof.isEmptyTuple) throw RuntimeFault("Missing exact empty tuple argument proof")
+            }
+        }
         if (!lifted) return force(compile(expr, scope, false).also {
             CoreRepresentations.requireNoVector(it.proof, "argument")
         })
@@ -444,10 +463,28 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return sourced(value, source)
     }
 
+    private fun compactArguments(e: Emission, function: Expression, arguments: List<Expression>,
+                                 layout: ArgumentLayout, emit: (BytecodeLocal, List<BytecodeLocal>) -> Unit) {
+        val b = e.builder
+        b.beginBlock()
+        val fn = b.createLocal("compact function", null)
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = arrayListOf<BytecodeLocal>()
+        arguments.forEachIndexed { index, argument ->
+            if (layout.isEmpty(index)) argument.emitTuple(e, emptyList())
+            else values += b.createLocal("compact operand $index", null).also { local ->
+                b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
+            }
+        }
+        emit(fn, values)
+        b.endBlock()
+    }
+
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
         val evaluatedArguments = arguments.map { it.proof.evaluated }.toBooleanArray()
-        val loop = tail && arguments.size <= context.formalArity && context.formalArity > 0
+        val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.proof })
+        val loop = tail && context.inputLayout == null && inputLayout == null && arguments.size <= context.formalArity && context.formalArity > 0
         // Even a root without a direct self-call can receive A -> B -> ... -> A.
         if (tail) context.mayLoop = true
         return evaluated(Expression { e ->
@@ -456,7 +493,13 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginBlock()
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
             } else null
-            if (!loop) {
+            if (inputLayout != null) {
+                compactArguments(e, function, arguments, inputLayout) { fn, values ->
+                    b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments)
+                    b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+                    b.endApplyCompact()
+                }
+            } else if (!loop) {
                 b.beginApply(arguments.size, tail, metrics, evaluatedArguments)
                 requireClosure(function).emit(e)
                 arguments.forEach { it.emit(e) }
@@ -533,7 +576,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
                     restoreArgument(e, local) {
-                        b.beginTailArgument(index + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
+                        b.beginTailArgument(ArgumentLayout.offset(context.inputLayout, index) + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
                     }
                 } }
                 b.emitBranch(e.continueLabel!!)
@@ -697,22 +740,71 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
+                val operation = MutVarOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    if (operation == MutVarOp.NEW) e.builder.beginNewMutVar(destination[0])
+                    else e.builder.beginReadMutVar(destination[0])
+                    operands.forEach { it.emit(e) }
+                    if (operation == MutVarOp.NEW) e.builder.endNewMutVar() else e.builder.endReadMutVar()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginWriteMutVar(); operands.forEach { it.emit(e) }; e.builder.endWriteMutVar()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && ArrayOp.named(fn[1] as String) != null) {
+                val operation = ArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        ArrayOp.NEW -> e.builder.beginNewArray(destination[0])
+                        ArrayOp.READ -> e.builder.beginReadArray(destination[0])
+                        ArrayOp.FREEZE -> e.builder.beginFreezeArray(destination[0])
+                        ArrayOp.INDEX -> e.builder.beginIndexArray(destination[0])
+                        else -> error("Not a tuple array operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        ArrayOp.NEW -> e.builder.endNewArray()
+                        ArrayOp.READ -> e.builder.endReadArray()
+                        ArrayOp.FREEZE -> e.builder.endFreezeArray()
+                        ArrayOp.INDEX -> e.builder.endIndexArray()
+                        else -> error("Not a tuple array operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginWriteArray(); operands.forEach { it.emit(e) }; e.builder.endWriteArray()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { compile(it, scope, false) }
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
-                    if (operation == ByteArrayOp.NEW) e.builder.beginNewByteArray(destination[0])
-                    else e.builder.beginFreezeByteArray(destination[0])
+                    when (operation) {
+                        ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
+                        ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
+                        ByteArrayOp.READ_INT -> e.builder.beginReadIntArray(destination[0])
+                        ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
+                        else -> error("Scalar ByteArray operation")
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == ByteArrayOp.NEW) e.builder.endNewByteArray()
-                    else e.builder.endFreezeByteArray()
+                    when (operation) {
+                        ByteArrayOp.NEW -> e.builder.endNewByteArray()
+                        ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
+                        ByteArrayOp.READ_INT -> e.builder.endReadIntArray()
+                        ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
+                        else -> error("Scalar ByteArray operation")
+                    }
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
                         ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
                         ByteArrayOp.WRITE -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.WRITE_INT -> e.builder.beginWriteIntArray()
+                        ByteArrayOp.INDEX_INT -> e.builder.beginIndexIntArray()
+                        ByteArrayOp.WRITE_DOUBLE -> e.builder.beginWriteDoubleArray()
+                        ByteArrayOp.INDEX_DOUBLE -> e.builder.beginIndexDoubleArray()
                         else -> error("Tuple ByteArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -721,6 +813,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.WRITE -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        ByteArrayOp.WRITE_INT -> e.builder.endWriteIntArray()
+                        ByteArrayOp.INDEX_INT -> e.builder.endIndexIntArray()
+                        ByteArrayOp.WRITE_DOUBLE -> e.builder.endWriteDoubleArray()
+                        ByteArrayOp.INDEX_DOUBLE -> e.builder.endIndexDoubleArray()
                         else -> error("Tuple ByteArray operation")
                     }
                 }, tupleProof.copy(evaluated = true))
@@ -768,7 +864,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }?.takeIf { args.size >= it.size }
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
-                argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true)
+                argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
+                    allowEmpty = fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted)
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
@@ -939,22 +1036,31 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun tupleApplication(shape: TupleShape, function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
+        val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.proof })
         val context = scope.function
         if (tail) context.mayLoop = true
         return tupleExpression(shape.proof) { e, destination ->
             val b = e.builder
             if (!tail) {
-                b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
-                requireClosure(function).emit(e)
-                arguments.forEach { it.emit(e) }
-                b.endApplyTuple()
+                if (inputLayout == null) {
+                    b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
+                    requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endApplyTuple()
+                } else compactArguments(e, function, arguments, inputLayout) { fn, values ->
+                    b.beginApplyCompactTuple(tupleSlots(shape, destination), inputLayout, metrics)
+                    b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal); b.endApplyCompactTuple()
+                }
             } else {
                 b.beginBlock()
                 val result = b.createLocal("tuple tail result", null)
                 b.beginStoreLocal(result)
-                b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
-                requireClosure(function).emit(e); arguments.forEach { it.emit(e) }
-                b.endTailApplyTuple(); b.endStoreLocal()
+                if (inputLayout == null) {
+                    b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
+                    requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endTailApplyTuple()
+                } else compactArguments(e, function, arguments, inputLayout) { fn, values ->
+                    b.beginTailApplyCompactTuple(tupleSlots(shape, destination), inputLayout, metrics)
+                    b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal); b.endTailApplyCompactTuple()
+                }
+                b.endStoreLocal()
                 b.beginIfThenElse()
                 b.beginIsTailReentry(); b.emitLoadLocal(result); b.endIsTailReentry()
                 b.beginBlock()
@@ -967,7 +1073,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    restoreArgument(e, local) { b.beginTailArgument(offset + index); b.emitLoadLocal(result); b.endTailArgument() }
+                    restoreArgument(e, local) { b.beginTailArgument(offset + ArgumentLayout.offset(context.inputLayout, index)); b.emitLoadLocal(result); b.endTailArgument() }
                 } }
                 b.emitBranch(e.continueLabel!!)
                 b.endBlock()
@@ -979,6 +1085,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operationsDouble -> vectorDoublePrimitive(name, operands)
+        in CoreVectors.operationsFloat -> vectorFloatPrimitive(name, operands)
         in CoreVectors.operations32 -> vector32Primitive(name, operands)
         "unpackInt64X2#" -> tupleExpression(CoreVectors.unpacked) { e, destination ->
             e.builder.beginVectorUnpack(destination[0], destination[1])
@@ -1031,6 +1139,58 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         }, CoreVectors.proof32)
     }
 
+    private fun vectorFloatPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackFloatX4#" -> tupleExpression(CoreVectors.unpackedFloat) { e, destination ->
+            e.builder.beginVectorFloatUnpack(destination[0], destination[1], destination[2], destination[3])
+            operands[0].emit(e)
+            e.builder.endVectorFloatUnpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packFloatX4#" -> {
+                    b.beginBlock()
+                    val lanes = List(4) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorFloatPack(); lanes.forEach(b::emitLoadLocal); b.endVectorFloatPack()
+                    b.endBlock()
+                }
+                "broadcastFloatX4#" -> { b.beginVectorFloatBroadcast(); operands[0].emit(e); b.endVectorFloatBroadcast() }
+                else -> {
+                    val operation = when (name) { "plusFloatX4#" -> 0; "minusFloatX4#" -> 1; "timesFloatX4#" -> 2; else -> error("Invalid FloatX4 operation") }
+                    b.beginVectorFloatBinary(operation)
+                    operands.forEach { it.emit(e) }; b.endVectorFloatBinary()
+                }
+            }
+        }, CoreVectors.proofFloat)
+    }
+
+    private fun vectorDoublePrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackDoubleX2#" -> tupleExpression(CoreVectors.unpackedDouble) { e, destination ->
+            e.builder.beginVectorDoubleUnpack(destination[0], destination[1])
+            operands[0].emit(e)
+            e.builder.endVectorDoubleUnpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packDoubleX2#" -> {
+                    b.beginBlock()
+                    val lanes = List(2) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorDoublePack(); lanes.forEach(b::emitLoadLocal); b.endVectorDoublePack()
+                    b.endBlock()
+                }
+                "broadcastDoubleX2#" -> { b.beginVectorDoubleBroadcast(); operands[0].emit(e); b.endVectorDoubleBroadcast() }
+                else -> {
+                    val operation = when (name) { "plusDoubleX2#" -> 0; "minusDoubleX2#" -> 1; "timesDoubleX2#" -> 2; else -> error("Invalid DoubleX2 operation") }
+                    b.beginVectorDoubleBinary(operation)
+                    operands.forEach { it.emit(e) }; b.endVectorDoubleBinary()
+                }
+            }
+        }, CoreVectors.proofDouble)
+    }
+
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
         val shape = TupleShape(proof, language)
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "tuple field $index", field.isLong, field) }
@@ -1076,6 +1236,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "timesFloat#" -> "FloatMultiply"
             "divideFloat#" -> "FloatDivide"
             "negateFloat#" -> "FloatNegate"
+            "sqrtFloat#" -> "FloatSqrt"
             "eqFloat#" -> "FloatEqual"
             "neFloat#" -> "FloatNotEqual"
             "ltFloat#" -> "FloatLess"
@@ -1087,6 +1248,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "*##" -> "DoubleMultiply"
             "/##" -> "DoubleDivide"
             "negateDouble#" -> "DoubleNegate"
+            "sqrtDouble#" -> "DoubleSqrt"
             "==##" -> "DoubleEqual"
             "/=##" -> "DoubleNotEqual"
             "<##" -> "DoubleLess"
@@ -1101,11 +1263,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("FloatNegate", "DoubleNegate", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
+        val unary = operation in setOf("FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "IntToFloat", "DoubleToFloat" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "IntToDouble", "FloatToDouble" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -1116,6 +1278,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "FloatMultiply" -> b.beginFloatMultiply()
                 "FloatDivide" -> b.beginFloatDivide()
                 "FloatNegate" -> b.beginFloatNegate()
+                "FloatSqrt" -> b.beginFloatSqrt()
                 "FloatEqual" -> b.beginFloatEqual()
                 "FloatNotEqual" -> b.beginFloatNotEqual()
                 "FloatLess" -> b.beginFloatLess()
@@ -1127,6 +1290,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleMultiply" -> b.beginDoubleMultiply()
                 "DoubleDivide" -> b.beginDoubleDivide()
                 "DoubleNegate" -> b.beginDoubleNegate()
+                "DoubleSqrt" -> b.beginDoubleSqrt()
                 "DoubleEqual" -> b.beginDoubleEqual()
                 "DoubleNotEqual" -> b.beginDoubleNotEqual()
                 "DoubleLess" -> b.beginDoubleLess()
@@ -1147,6 +1311,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "FloatMultiply" -> b.endFloatMultiply()
                 "FloatDivide" -> b.endFloatDivide()
                 "FloatNegate" -> b.endFloatNegate()
+                "FloatSqrt" -> b.endFloatSqrt()
                 "FloatEqual" -> b.endFloatEqual()
                 "FloatNotEqual" -> b.endFloatNotEqual()
                 "FloatLess" -> b.endFloatLess()
@@ -1158,6 +1323,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleMultiply" -> b.endDoubleMultiply()
                 "DoubleDivide" -> b.endDoubleDivide()
                 "DoubleNegate" -> b.endDoubleNegate()
+                "DoubleSqrt" -> b.endDoubleSqrt()
                 "DoubleEqual" -> b.endDoubleEqual()
                 "DoubleNotEqual" -> b.endDoubleNotEqual()
                 "DoubleLess" -> b.endDoubleLess()

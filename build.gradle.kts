@@ -38,6 +38,8 @@ tasks.test {
         include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
+            "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
+            "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
             "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
@@ -47,11 +49,19 @@ tasks.test {
             "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv",
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
+            "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
             "bytearray/**/*.json", "bytearray/oracle.tsv", "bytearray/NativeByteArray.hs",
+            "boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "boxed-arrays/NativeBoxedArray.hs", "boxed-arrays/native/**",
+            "int-arrays/**/*.json", "int-arrays/oracle.tsv", "int-arrays/expected.tsv",
+            "int-arrays/NativeIntArray.hs", "int-arrays/native/int-array-oracle",
+            "double-arrays/**/*.json", "double-arrays/oracle.tsv", "double-arrays/expected.tsv",
+            "double-arrays/NativeDoubleArray.hs", "double-arrays/native/double-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
+            "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
+            "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
@@ -59,9 +69,10 @@ tasks.test {
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
-        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-tuple-arithmetic.py",
-            "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "core_vectors.py",
-            "prepare-state-tuple-audit.py", "core_*.py", "generate-scalar-signatures.py",
+        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-boxed-arrays.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
+            "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
+            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "core_*.py", "generate-scalar-signatures.py",
+            "prepare-double-arrays.py", "test-double-array-model.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
@@ -78,5 +89,5 @@ tasks.register<JavaExec>("probe") {
     workingDir(projectDir)
 }
 
-// Vector intrinsics are isolated in Java; guest values retain primitive lane fields.
+// Vector intrinsics are isolated in Java; floating vectors retain fixed species.
 tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }

@@ -1,0 +1,264 @@
+  name "After FinalCodeAnalysisStage"
+  begin_block
+    name "B0"
+    from_bci -1
+    to_bci -1
+    predecessors
+    successors "B1" "B4"
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr    0  <|@ instruction [r1|QWORD[.], r2|QWORD[.], r29|QWORD, r30|QWORD] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr    2  <|@ instruction r0|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 28 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr    4  <|@ instruction r0|QWORD[.] = UNCOMPRESSPOINTER (input: r0|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr    6  <|@ instruction r0|QWORD = LOAD addressValue: {base: r0|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr    8  <|@ instruction r1|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 16 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr   10  <|@ instruction r1|QWORD[.] = UNCOMPRESSPOINTER (input: r1|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr   12  <|@ instruction r1|QWORD = LOAD addressValue: {base: r1|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr   14  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r1|QWORD op: L2F <|@ <|@
+      nr   16  <|@ instruction r1|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 20 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr   18  <|@ instruction r1|QWORD[.] = UNCOMPRESSPOINTER (input: r1|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr   20  <|@ instruction r1|QWORD = LOAD addressValue: {base: r1|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr   22  <|@ instruction v1|SINGLE = FLOATCONVERT inputValue: r1|QWORD op: L2F <|@ <|@
+      nr   24  <|@ instruction v0|V128_SINGLE = VFILL input: v0|SINGLE <|@ <|@
+      nr   26  <|@ instruction v0|V128_SINGLE = VECTORINSERT (vector: v0|V128_SINGLE, ~val: v1|SINGLE) offset: 1 <|@ <|@
+      nr   28  <|@ instruction r1|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 24 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr   30  <|@ instruction r1|QWORD[.] = UNCOMPRESSPOINTER (input: r1|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr   32  <|@ instruction r1|QWORD = LOAD addressValue: {base: r1|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr   34  <|@ instruction v1|SINGLE = FLOATCONVERT inputValue: r1|QWORD op: L2F <|@ <|@
+      nr   36  <|@ instruction v0|V128_SINGLE = VECTORINSERT (vector: v0|V128_SINGLE, ~val: v1|SINGLE) offset: 2 <|@ <|@
+      nr   38  <|@ instruction v1|SINGLE = FLOATCONVERT inputValue: r0|QWORD op: L2F <|@ <|@
+      nr   40  <|@ instruction v0|V128_SINGLE = VECTORINSERT (vector: v0|V128_SINGLE, ~val: v1|SINGLE) offset: 3 <|@ <|@
+      nr   42  <|@ instruction v1|V128_SINGLE = LOADINLINECONSTANT simdConstant: SIMD<1.0,1.0,1.0,1.0> <|@ <|@
+      nr   44  <|@ instruction v0|V128_SINGLE = FADD (a: v0|V128_SINGLE, b: v1|V128_SINGLE) <|@ <|@
+      nr   46  <|@ instruction v1|SINGLE = LOADINLINECONSTANT constant: float[4.0|0x40800000] <|@ <|@
+      nr   48  <|@ instruction v2|SINGLE = FMUL (a: v0|SINGLE(V128_SINGLE), b: v1|SINGLE) <|@ <|@
+      nr   50  <|@ instruction r0|QWORD = FLOATCONVERT inputValue: v2|SINGLE op: F2L <|@ <|@
+      nr   52  <|@ instruction r1|QWORD = LSL a: r0|QWORD b: int[3|0x3] <|@ <|@
+      nr   54  <|@ instruction r0|QWORD = SUB (a: r1|QWORD, b: r0|QWORD) <|@ <|@
+      nr   56  <|@ instruction v2|SINGLE = VCUT input: v0|V128_SINGLE startIdx: 1 <|@ <|@
+      nr   58  <|@ instruction v2|SINGLE = FMUL (a: v2|SINGLE, b: v1|SINGLE) <|@ <|@
+      nr   60  <|@ instruction r1|QWORD = FLOATCONVERT inputValue: v2|SINGLE op: F2L <|@ <|@
+      nr   62  <|@ instruction r3|QWORD = LOADINLINECONSTANT constant: long[11|0xb] <|@ <|@
+      nr   64  <|@ instruction r1|QWORD = MUL (a: r1|QWORD, b: r3|QWORD) <|@ <|@
+      nr   66  <|@ instruction r0|QWORD = XOR (a: r0|QWORD, b: r1|QWORD) <|@ <|@
+      nr   68  <|@ instruction v2|SINGLE = VCUT input: v0|V128_SINGLE startIdx: 3 <|@ <|@
+      nr   70  <|@ instruction v2|SINGLE = FMUL (a: v2|SINGLE, b: v1|SINGLE) <|@ <|@
+      nr   72  <|@ instruction r1|QWORD = FLOATCONVERT inputValue: v2|SINGLE op: F2L <|@ <|@
+      nr   74  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 4 <|@ <|@
+      nr   76  <|@ instruction v0|SINGLE = VCUT input: v0|V128_SINGLE startIdx: 2 <|@ <|@
+      nr   78  <|@ instruction v0|SINGLE = FMUL (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+      nr   80  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+      nr   82  <|@ instruction r4|QWORD = LOADINLINECONSTANT constant: long[13|0xd] <|@ <|@
+      nr   84  <|@ instruction r3|QWORD = MUL (a: r3|QWORD, b: r4|QWORD) <|@ <|@
+      nr   86  <|@ instruction r0|QWORD = XOR (a: r0|QWORD, b: r3|QWORD) <|@ <|@
+      nr   88  <|@ instruction r3|QWORD = XOR (a: r0|QWORD, b: r1|QWORD) <|@ <|@
+      nr   90  <|@ instruction r0|QWORD = ADD a: r3|QWORD b: long[128|0x80] <|@ <|@
+      nr   92  <|@ instruction COMPARE (x: r0|QWORD, y: long[256|0x100]) <|@ <|@
+      nr   94  <|@ instruction BRANCH trueDestination: B0 -> B1 falseDestination: B0 -> B4 trueDestinationProbability: 0.9 condition: LO <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B1"
+    from_bci -1
+    to_bci -1
+    predecessors "B0"
+    successors "B2" "B3"
+    xhandlers
+    flags
+    probability 4606281698874543309
+    begin_IR
+      LIR
+      nr   96  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr   98  <|@ instruction r0|DWORD = ADD a: r3|DWORD(QWORD) b: int[128|0x80] <|@ <|@
+      nr  100  <|@ instruction COMPARE (x: r0|DWORD, y: int[256|0x100]) <|@ <|@
+      nr  102  <|@ instruction BRANCH trueDestination: B1 -> B2 falseDestination: B1 -> B3 trueDestinationProbability: 1.0 condition: LO <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B2"
+    from_bci -1
+    to_bci -1
+    predecessors "B1"
+    successors "B8"
+    xhandlers
+    flags
+    probability 4606281698874543309
+    begin_IR
+      LIR
+      nr  104  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  106  <|@ instruction r1|QWORD[.] = LOADHOTSPOTOBJECTCONSTANTINLINE constant: Object[Instance<java.lang.Long[]>] <|@ <|@
+      nr  108  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+      nr  110  <|@ instruction r0|DWORD[_] = LOAD addressValue: {base: r0|QWORD[.+], offset: -} bitMemoryTransferSize: 32 displacement: 12 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr  112  <|@ instruction r0|QWORD[.] = UNCOMPRESSPOINTER (input: r0|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr  114  <|@ instruction JUMP ~outgoingValues: [] destination: B2 -> B8 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B8"
+    from_bci -1
+    to_bci -1
+    predecessors "B7" "B2"
+    successors "B11" "B10"
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr  182  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@
+      nr  184  <|@ instruction r1|DWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 32 displacement: 1296 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr  186  <|@ instruction COMPAREBRANCHZERO value: r1|DWORD trueDestination: B8 -> B11 falseDestination: B8 -> B10 trueDestinationProbability: 0.999 <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B11"
+    from_bci -1
+    to_bci -1
+    predecessors "B10" "B8"
+    successors
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr  206  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  208  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@2f5fd871 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B4"
+    from_bci -1
+    to_bci -1
+    predecessors "B0"
+    successors "B5" "B6"
+    xhandlers
+    flags
+    probability 4591870180066957720
+    begin_IR
+      LIR
+      nr  128  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  130  <|@ instruction r0|QWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 456 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr  132  <|@ instruction r1|QWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 472 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@
+      nr  134  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+      nr  136  <|@ instruction COMPARE (x: r1|QWORD, y: r4|QWORD) <|@ <|@
+      nr  138  <|@ instruction BRANCH trueDestination: B4 -> B5 falseDestination: B4 -> B6 trueDestinationProbability: 0.010000000000000009 condition: LO <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B6"
+    from_bci -1
+    to_bci -1
+    predecessors "B4"
+    successors "B7"
+    xhandlers
+    flags
+    probability 4591798122472919792
+    begin_IR
+      LIR
+      nr  154  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  156  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 456 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r4|QWORD) accessKind: QWORD <|@ <|@
+      nr  158  <|@ instruction AARCH64PREFETCH ~address: {base: r0|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 400 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED mode: PSTL1KEEP <|@ <|@
+      nr  160  <|@ instruction r1|DWORD = LOADHOTSPOTOBJECTCONSTANTINLINE constant: meta{HotSpotType<Ljava/lang/Long;, resolved>;compressed} <|@ <|@
+      nr  162  <|@ instruction r1|QWORD = AND a: r1|DWORD b: long[4294967295|0xffffffff] <|@ <|@
+      nr  164  <|@ instruction r4|QWORD = LOADINLINECONSTANT constant: long[1|0x1] <|@ <|@
+      nr  166  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+      nr  168  <|@ instruction STORE (addressValue: {base: r0|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 0 scaleFactor: 1 addressingMode: BASE_REGISTER_ONLY, input: r1|QWORD) accessKind: QWORD <|@ <|@
+      nr  170  <|@ instruction r0|QWORD[.] = MOVE input: r0|QWORD moveKind: QWORD <|@ <|@
+      nr  172  <|@ instruction JUMP ~outgoingValues: [] destination: B6 -> B7 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B7"
+    from_bci -1
+    to_bci -1
+    predecessors "B5" "B6"
+    successors "B8"
+    xhandlers
+    flags
+    probability 4591870180066957720
+    begin_IR
+      LIR
+      nr  174  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@
+      nr  176  <|@ instruction STORE (addressValue: {base: r0|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r3|QWORD) accessKind: QWORD <|@ <|@
+      nr  178  <|@ instruction MEMBAR barriers: 8 <|@ <|@
+      nr  180  <|@ instruction JUMP ~outgoingValues: [] destination: B7 -> B8 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B10"
+    from_bci -1
+    to_bci -1
+    predecessors "B8"
+    successors "B11"
+    xhandlers
+    flags
+    probability 4562254508917369344
+    begin_IR
+      LIR
+      nr  192  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  194  <|@ instruction stack:40|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  196  <|@ instruction stack:32|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  198  <|@ instruction r1|QWORD[.] = LOADHOTSPOTOBJECTCONSTANTINLINE constant: Object[Instance<thc.runtime.FunctionRoot>] <|@ <|@
+      nr  200  <|@ st <@st|@reference-map: [stack:24, stack:32]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] stack:32|QWORD[.] - -
+>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@2f5fd871 state [bci:0] <|@ <|@
+      nr  202  <|@ instruction r0|QWORD[.] = MOVE input: stack:40|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  204  <|@ instruction JUMP ~outgoingValues: [] destination: B10 -> B11 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B5"
+    from_bci -1
+    to_bci -1
+    predecessors "B4"
+    successors "B7"
+    xhandlers
+    flags
+    probability 4562254508917369343
+    begin_IR
+      LIR
+      nr  140  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  142  <|@ instruction stack:32|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  144  <|@ instruction r1|QWORD = LOADHOTSPOTOBJECTCONSTANTINLINE constant: meta{HotSpotType<Ljava/lang/Long;, resolved>} <|@ <|@
+      nr  146  <|@ st <@st|@reference-map: [stack:32]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] stack:32|QWORD[.] - -
+>@ <|@ instruction (result: r0|QWORD[.], additionalReturns: []) = NEAR_FOREIGN_CALL parameters: [r1|QWORD] temps: [r0|ILLEGAL] callTarget: Stub<new_instance_or_null(KlassPointer)Object>@0x137609480:CallingConvention[r1|QWORD -> r0|QWORD[.]]:CallingConvention[r1|QWORD -> r0|QWORD[.]]; temps=r0|ILLEGAL label: null state [bci:0] <|@ <|@
+      nr  148  <|@ st <@st|@reference-map: [r0:0, stack:32]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] stack:32|QWORD[.] - -
+>@ <|@ instruction NULLCHECK address: {base: r0|QWORD[.], offset: -} bitMemoryTransferSize: -1 displacement: 0 scaleFactor: 1 addressingMode: BASE_REGISTER_ONLY state [bci:0] <|@ <|@
+      nr  150  <|@ instruction r2|QWORD[.] = MOVE input: stack:32|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  152  <|@ instruction JUMP ~outgoingValues: [] destination: B5 -> B7 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B3"
+    from_bci -1
+    to_bci -1
+    predecessors "B1"
+    successors
+    xhandlers
+    flags
+    probability 2355382605114769408
+    begin_IR
+      LIR
+      nr  116  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  118  <|@ instruction r0|DWORD = LOADINLINECONSTANT constant: int[-8219|0xffffffffffffdfe5] <|@ <|@
+      nr  120  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 32 displacement: 1256 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r0|DWORD) accessKind: DWORD <|@ <|@
+      nr  122  <|@ instruction r0|QWORD = LOADINLINECONSTANT constant: long[0|0x0] <|@ <|@
+      nr  124  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 1264 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r0|QWORD) accessKind: QWORD <|@ <|@
+      nr  126  <|@ st <@st|@reference-map: [r2:0]
+live-base-pointers: []
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:717) [bci: 0]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] r2|QWORD[.] - -
+>@ <|@ instruction DEOPT info [bci:0] <|@ <|@
+    end_IR
+  end_block
+end_cfg

@@ -1,0 +1,229 @@
+{
+  "schema": 1,
+  "compiler": "GraalVM 25.3.4.1+1.1 / Truffle 25.3.4.1",
+  "platform": "macOS aarch64",
+  "source": "compiler/test-fixtures/MutVarAudit.hs",
+  "sourceSha256": "085d62915e8a5fde87f44f9f555a5f0c8d96ef2df38bda509f45d7edfecbc0d1",
+  "countExpression": "abs (input rem 33)",
+  "initialFailure": {
+    "resultCorrect": true,
+    "compiledGuestEntriesIncreased": true,
+    "originalGuestValid": true,
+    "activeGuestValid": true,
+    "hostInvalidated": true,
+    "hotSpotReason": "loop_limit_check",
+    "hotSpotAction": "make_not_entrant"
+  },
+  "probes": [
+    {
+      "input": 99,
+      "loopCount": 0
+    },
+    {
+      "input": 1000000000000,
+      "loopCount": 1
+    }
+  ],
+  "records": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "triggerLoopCount": 0,
+      "steadyNativeRows": 265,
+      "explicitRecompilations": 1,
+      "initial": {
+        "raw": "TruffleHotSpotCompilation-3196[EntryRoot@71d3812].bgv",
+        "sha256": "2a0d37ec62bb730d0ed2799f010f94fda6064265fe4daf63324728834528bf34",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": [
+              {
+                "id": 1206,
+                "nodeClass": "FixedGuardNode",
+                "reason": "DeoptimizationReason.LoopLimitCheck",
+                "action": "DeoptimizationAction.InvalidateRecompile",
+                "speculation": "{0x0000000000000014[index: 0, len: 20, hash: 0xd0706634]: LoopInitLimitRelation@435595587[HotSpotMethod<OptimizedCallTarget.profiledPERoot(Object[])>, 206]}",
+                "negated": true
+              }
+            ]
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": [
+              {
+                "id": 1242,
+                "nodeClass": "DeoptimizeNode",
+                "action": "DeoptimizationAction.InvalidateRecompile",
+                "reason": "DeoptimizationReason.LoopLimitCheck",
+                "speculation": "{0x0000000000000014[index: 0, len: 20, hash: 0xd0706634]: LoopInitLimitRelation@435595587[HotSpotMethod<OptimizedCallTarget.profiledPERoot(Object[])>, 206]}"
+              }
+            ]
+          }
+        ]
+      },
+      "recompiled": {
+        "raw": "TruffleHotSpotCompilation-3251[EntryRoot@71d3812].bgv",
+        "sha256": "d19f53edf523acf4c302acc60a55db1e4f4fcad2ab025f03f3787adb55d2db4e",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": []
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": []
+          }
+        ]
+      }
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "triggerLoopCount": 1,
+      "steadyNativeRows": 265,
+      "explicitRecompilations": 1,
+      "initial": {
+        "raw": "TruffleHotSpotCompilation-3763[EntryRoot@428f3b2a].bgv",
+        "sha256": "454fa5c511ab14978cc54406a4c87251e6df06b9356d297dfa6d29eb37f5fa99",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": [
+              {
+                "id": 984,
+                "nodeClass": "GuardNode",
+                "reason": "DeoptimizationReason.LoopLimitCheck",
+                "action": "DeoptimizationAction.InvalidateRecompile",
+                "speculation": "{0x0000000000000014[index: 0, len: 20, hash: 0xd07066d5]: LoopInitLimitRelation@435595587[HotSpotMethod<OptimizedCallTarget.profiledPERoot(Object[])>, 111]}",
+                "negated": true
+              }
+            ]
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": []
+          }
+        ]
+      },
+      "recompiled": {
+        "raw": "TruffleHotSpotCompilation-3780[EntryRoot@428f3b2a].bgv",
+        "sha256": "bd07741b483b6660bc0eb8dbd2c7357a74060cabc967df94ba10f0a4c23ebc36",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": []
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": []
+          }
+        ]
+      }
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "triggerLoopCount": 0,
+      "steadyNativeRows": 265,
+      "explicitRecompilations": 1,
+      "initial": {
+        "raw": "TruffleHotSpotCompilation-3992[EntryRoot@c8c77b6].bgv",
+        "sha256": "23d8180bd68ab8840f0832aa8cf74db2f65dbbe3f03c95df30d2098e9b536849",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": [
+              {
+                "id": 1206,
+                "nodeClass": "FixedGuardNode",
+                "reason": "DeoptimizationReason.LoopLimitCheck",
+                "action": "DeoptimizationAction.InvalidateRecompile",
+                "speculation": "{0x0000000000000014[index: 0, len: 20, hash: 0xd0706634]: LoopInitLimitRelation@435595587[HotSpotMethod<OptimizedCallTarget.profiledPERoot(Object[])>, 206]}",
+                "negated": true
+              }
+            ]
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": [
+              {
+                "id": 1242,
+                "nodeClass": "DeoptimizeNode",
+                "action": "DeoptimizationAction.InvalidateRecompile",
+                "reason": "DeoptimizationReason.LoopLimitCheck",
+                "speculation": "{0x0000000000000014[index: 0, len: 20, hash: 0xd0706634]: LoopInitLimitRelation@435595587[HotSpotMethod<OptimizedCallTarget.profiledPERoot(Object[])>, 206]}"
+              }
+            ]
+          }
+        ]
+      },
+      "recompiled": {
+        "raw": "TruffleHotSpotCompilation-4014[EntryRoot@c8c77b6].bgv",
+        "sha256": "eb65a5582e855b5d98aa03cad909ac7ef6c3c71bf983eccea036fb23aac23d18",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": []
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": []
+          }
+        ]
+      }
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "triggerLoopCount": 1,
+      "steadyNativeRows": 265,
+      "explicitRecompilations": 1,
+      "initial": {
+        "raw": "TruffleHotSpotCompilation-4153[EntryRoot@47f934ea].bgv",
+        "sha256": "1ee74bcdb760d60f772670b4587ab5fda3a253d62f0f0eed0de4f44573ce9c97",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": [
+              {
+                "id": 980,
+                "nodeClass": "GuardNode",
+                "reason": "DeoptimizationReason.LoopLimitCheck",
+                "action": "DeoptimizationAction.InvalidateRecompile",
+                "speculation": "{0x0000000000000014[index: 0, len: 20, hash: 0xd07066d5]: LoopInitLimitRelation@435595587[HotSpotMethod<OptimizedCallTarget.profiledPERoot(Object[])>, 111]}",
+                "negated": true
+              }
+            ]
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": []
+          }
+        ]
+      },
+      "recompiled": {
+        "raw": "TruffleHotSpotCompilation-4163[EntryRoot@47f934ea].bgv",
+        "sha256": "02314802ae40cdccf9247f07c4886f2fbd5e96a35742b52ad3cc2533b7612b1b",
+        "checkedGraphs": [
+          {
+            "phase": "69: After phase TruffleLoopSafepointElimination",
+            "loopInitLimitRelationGuards": []
+          },
+          {
+            "phase": "111: After mid tier",
+            "loopInitLimitRelationGuards": []
+          }
+        ]
+      }
+    }
+  ],
+  "notes": [
+    "Initial interpreter warmup already covered every trip count0..32; the compiler relation speculation is learned only after installed code fails it.",
+    "All unsuccessful entry-preheader, one-iteration-peeling, and counter-placement runtime prototypes were reverted.",
+    "After both fixed probes there is at most one conditional explicit recompile, never a retry loop.",
+    "AST second probe may run with an interpreted host after the first host deopt; compiled guest entry and original/active guest validity are still required.",
+    "All265original loop rows then require correct native/model value, compiled guest entry, host validity and active guest validity individually.",
+    "Raw BGVs were captured in isolated diagnostic runs and are identified by digest, not committed."
+  ]
+}

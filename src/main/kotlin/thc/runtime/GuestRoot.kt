@@ -14,10 +14,21 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
     @field:CompilationFinal internal var entryArgumentOffset: Int = 1
         private set
 
+    @field:CompilationFinal internal var inputLayout: ArgumentLayout? = null
+        private set
+    @field:CompilationFinal(dimensions = 1) internal var strictArgumentPositions: IntArray = intArrayOf()
+        private set
+    internal fun configureInput(layout: ArgumentLayout?) { inputLayout = layout; configureStrictPositions() }
+    private fun configureStrictPositions() {
+        strictArgumentPositions = entryStrict.indices.filter { entryStrict[it] && inputLayout?.isEmpty(it) != true }
+            .map { ArgumentLayout.offset(inputLayout, it) + entryArgumentOffset }.toIntArray()
+    }
+
     /** Fixed before publishing the target; all saturated application paths enforce these marks. */
     internal fun configureEntry(strict: BooleanArray, hasEnvironment: Boolean) {
         entryStrict = strict.copyOf()
         entryArgumentOffset = if (hasEnvironment) 2 else 1
+        configureStrictPositions()
     }
     @field:CompilationFinal internal var leadingCaseReturn: LeadingCaseReturn? = null
         private set

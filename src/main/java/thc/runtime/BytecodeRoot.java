@@ -273,6 +273,43 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = ArgumentLayout.class, name = "layout")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyCompactTuple {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics,
+                Closure function, @Variadic Object[] arguments,
+                @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            dispatch.execute(frame, function, arguments);
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, layout.getLogicalArity(), false, layout);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = ArgumentLayout.class, name = "layout")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class TailApplyCompactTuple {
+        @Specialization public static Object apply(VirtualFrame frame, BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics,
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            try {
+                dispatch.execute(frame, function, arguments);
+                return null;
+            } catch (TailCall transfer) {
+                if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return transfer;
+            }
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, layout.getLogicalArity(), true, layout);
+        }
+    }
+
     @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "source")
     public static final class FinishTuple {
@@ -330,6 +367,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         public static Dispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
             return Dispatch.Companion.create(arity, tail, metrics, evaluatedArguments);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = ArgumentLayout.class, name = "layout")
+    @ConstantOperand(type = boolean.class, name = "tail")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean[].class, name = "evaluatedArguments")
+    public static final class ApplyCompact {
+        @Specialization public static Object apply(VirtualFrame frame, ArgumentLayout layout, boolean tail,
+                Metrics metrics, boolean[] evaluatedArguments, Closure function, @Variadic Object[] arguments,
+                @Bind("$node") Node node,
+                @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
+            try {
+                return dispatch.execute(frame, function, arguments);
+            } catch (TailCall call) {
+                // A -> B -> ... -> A unwinds to the owning activation. The compiler
+                // consumes this internal result and restores locals before a real
+                // bytecode backedge. Never intercept a call with pending non-tail work.
+                if (!tail || !((GuestRoot) node.getRootNode()).isSelf(call.getTarget())) throw call;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return call;
+            }
+        }
+        public static Dispatch createDispatch(ArgumentLayout layout, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
+            return Dispatch.Companion.create(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout);
         }
     }
 
@@ -479,6 +542,81 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewMutVar {
+        @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, new ManagedMutVar(value));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadMutVar {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            ManagedMutVar cell = ManagedMutVar.require(value);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, cell.getValue());
+        }
+    }
+    @Operation public static final class WriteMutVar {
+        @Specialization public static Object write(Object reference, Object value, Object state) {
+            ManagedMutVar cell = ManagedMutVar.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            cell.setValue(value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewArray {
+        @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
+                long size, Object initial, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.allocate(size, initial));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            Object[] array = ManagedArray.require(value);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.read(array, index));
+        }
+    }
+    @Operation public static final class WriteArray {
+        @Specialization public static Object write(Object reference, long index, Object value, Object state) {
+            Object[] array = ManagedArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedArray.write(array, index, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FreezeArray {
+        @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
+                Object reference, Object state, @Bind("$node") Node node) {
+            Object[] array = ManagedArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedArray.freeze(array));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class IndexArray {
+        @Specialization public static void index(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long index, @Bind("$node") Node node) {
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedArray.read(ManagedArray.require(reference), index));
+        }
+    }
+
     /** State operands are evaluated before each effect; only the array has a tuple slot. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
@@ -523,6 +661,54 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class IndexByteArray {
         @Specialization public static long index(Object value, long offset) { return ManagedByteArray.read(ManagedByteArray.require(value), offset); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadIntArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = ManagedIntArray.read(array, index);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteIntArray {
+        @Specialization public static Object write(Object value, long index, long integer, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedIntArray.write(array, index, integer);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class IndexIntArray {
+        @Specialization public static long index(Object value, long index) {
+            return ManagedIntArray.read(ManagedByteArray.require(value), index);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadDoubleArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            double result = ManagedDoubleArray.read(array, index);
+            destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteDoubleArray {
+        @Specialization public static Object write(Object value, long index, double number, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedDoubleArray.write(array, index, number);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class IndexDoubleArray {
+        @Specialization public static double index(Object value, long index) {
+            return ManagedDoubleArray.read(ManagedByteArray.require(value), index);
+        }
     }
 
     // GHC machine integers wrap. Comparisons return Int# 0/1, not boxed Bool.
@@ -583,6 +769,68 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
             third.setLong(bytecode, frame, value.third); fourth.setLong(bytecode, frame, value.fourth);
+        }
+    }
+
+    @Operation public static final class VectorFloatPack {
+        @Specialization public static FloatX4 pack(float first, float second, float third, float fourth) {
+            return FloatX4.pack(first, second, third, fourth);
+        }
+    }
+    @Operation public static final class VectorFloatBroadcast {
+        @Specialization public static FloatX4 broadcast(float value) { return FloatX4.broadcast(value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorFloatBinary {
+        @Specialization public static FloatX4 binary(int operation, FloatX4 first, FloatX4 second) {
+            return switch (operation) {
+                case 0 -> FloatX4.add(first, second);
+                case 1 -> FloatX4.subtract(first, second);
+                case 2 -> FloatX4.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid FloatX4 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    public static final class VectorFloatUnpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, FloatX4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setFloat(bytecode, frame, value.lane(0)); second.setFloat(bytecode, frame, value.lane(1));
+            third.setFloat(bytecode, frame, value.lane(2)); fourth.setFloat(bytecode, frame, value.lane(3));
+        }
+    }
+
+    @Operation public static final class VectorDoublePack {
+        @Specialization public static DoubleX2 pack(double first, double second) {
+            return DoubleX2.pack(first, second);
+        }
+    }
+    @Operation public static final class VectorDoubleBroadcast {
+        @Specialization public static DoubleX2 broadcast(double value) { return DoubleX2.broadcast(value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorDoubleBinary {
+        @Specialization public static DoubleX2 binary(int operation, DoubleX2 first, DoubleX2 second) {
+            return switch (operation) {
+                case 0 -> DoubleX2.add(first, second);
+                case 1 -> DoubleX2.subtract(first, second);
+                case 2 -> DoubleX2.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid DoubleX2 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    public static final class VectorDoubleUnpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second, DoubleX2 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setDouble(bytecode, frame, value.lane(0)); second.setDouble(bytecode, frame, value.lane(1));
         }
     }
 
@@ -705,6 +953,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class FloatMultiply { @Specialization public static float apply(float x, float y) { return x * y; } }
     @Operation public static final class FloatDivide { @Specialization public static float apply(float x, float y) { return x / y; } }
     @Operation public static final class FloatNegate { @Specialization public static float apply(float x) { return -x; } }
+    @Operation public static final class FloatSqrt { @Specialization public static float apply(float x) { return (float) Math.sqrt(x); } }
     @Operation public static final class FloatEqual { @Specialization public static long apply(float x, float y) { return x == y ? 1L : 0L; } }
     @Operation public static final class FloatNotEqual { @Specialization public static long apply(float x, float y) { return x != y ? 1L : 0L; } }
     @Operation public static final class FloatLess { @Specialization public static long apply(float x, float y) { return x < y ? 1L : 0L; } }
@@ -716,6 +965,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleMultiply { @Specialization public static double apply(double x, double y) { return x * y; } }
     @Operation public static final class DoubleDivide { @Specialization public static double apply(double x, double y) { return x / y; } }
     @Operation public static final class DoubleNegate { @Specialization public static double apply(double x) { return -x; } }
+    @Operation public static final class DoubleSqrt { @Specialization public static double apply(double x) { return Math.sqrt(x); } }
     @Operation public static final class DoubleEqual { @Specialization public static long apply(double x, double y) { return x == y ? 1L : 0L; } }
     @Operation public static final class DoubleNotEqual { @Specialization public static long apply(double x, double y) { return x != y ? 1L : 0L; } }
     @Operation public static final class DoubleLess { @Specialization public static long apply(double x, double y) { return x < y ? 1L : 0L; } }

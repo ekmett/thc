@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdFloatVectorTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-23T17:37:19.454Z" hostname="eak-mba" time="2.784">
+  <properties/>
+  <testcase name="primitiveLanesPreserveMovementBitsAndBinary32Arithmetic()" classname="thc.runtime.SimdFloatVectorTest" time="0.027"/>
+  <testcase name="exactShapeAndVectorBackedStorageRemainDistinctFromFloatTuple()" classname="thc.runtime.SimdFloatVectorTest" time="0.015"/>
+  <testcase name="bothLoadersRejectForgedVectorProofsAndVectorFormalArguments()" classname="thc.runtime.SimdFloatVectorTest" time="0.233"/>
+  <testcase name="unknownLaneKindCannotHideDoubleLiteralInVectorBroadcast()" classname="thc.runtime.SimdFloatVectorTest" time="0.003"/>
+  <testcase name="genuineCoreMatchesNativeAndEntersCompiledCodeForEveryInput()" classname="thc.runtime.SimdFloatVectorTest" time="2.499"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

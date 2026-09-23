@@ -96,18 +96,34 @@ machine-word division and narrow-word comparisons, bitwise operations and shifts
 Local [Int64X2 and Int32X4 SIMD operations](docs/simd.md) run on both backends with exact
 vector metadata and primitive lane storage. Vector calls, returns, captures,
 fields and joins remain explicit boundaries.
+The [FloatX4 foundation](docs/floatx4.md) adds six local floating vector primops
+with primitive Float lanes, a fixed-width FloatVector carrier and native IEEE-edge checks.
+The [DoubleX2 foundation](docs/doublex2.md) adds the corresponding six binary64
+operations with exact typed lanes and bit-sensitive correctness gates.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
-aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
+[Exact empty tuple inputs](docs/empty-tuple-inputs.md) retain logical arity with no payload fields.
+Other aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
+
+[Managed MutVar operations](docs/mutvars.md) execute ordinary ST/STRef code with
+lazy reference storage and exact State sequencing on both backends.
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
 pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
+[Int-array operations](docs/int-arrays.md) extend the same byte storage to
+public `UArray`/`STUArray` examples with native-endian, full-width values.
+[Double-array operations](docs/double-arrays.md) add typed floating storage,
+public Double arrays and native-checked bit movement through tuple-returning reads.
+
+Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
+while preserving lazy lifted elements and closures.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
-Double storage and 28 arithmetic/comparison/conversion primops, checked against
-native GHC. Floating tuple results also execute genuine `Data.Complex` workers;
-residual scalar floating inputs still use the existing Object call ABI.
+Double storage and 30 arithmetic/comparison/conversion primops, including square
+roots, checked against native GHC. Floating tuple results also execute genuine
+`Data.Complex` workers; residual scalar floating inputs still use the existing
+Object call ABI.
 
 The `Data.Set` example remains a separate frontier until its full exported call
 graph passes; native results alone are not counted as THC execution passes.

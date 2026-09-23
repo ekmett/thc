@@ -7,13 +7,19 @@ python3 scripts/generate-scalar-signatures.py
 compiler/build.sh
 python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
+python3 scripts/prepare-sqrt-audit.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/prepare-tuple-return-audit.py
 python3 scripts/prepare-state-tuple-audit.py
+python3 scripts/prepare-empty-tuple-input-audit.py
 python3 scripts/prepare-tuple-join-audit.py
 python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py
 python3 scripts/prepare-bytearray.py
+python3 scripts/prepare-boxed-arrays.py
+python3 scripts/prepare-mutvar.py
+python3 scripts/prepare-int-arrays.py
+python3 scripts/prepare-double-arrays.py
 # GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately
 # validates pre-Core/model execution; the x86 job also requires native + post-Tidy.
 for simd_vector in int64x2 int32x4; do
@@ -22,6 +28,14 @@ for simd_vector in int64x2 int32x4; do
     *) python3 scripts/prepare-simd-audit.py --vector "$simd_vector" ;;
   esac
 done
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-floatx4-audit.py --export-only ;;
+  *) python3 scripts/prepare-floatx4-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-doublex2-audit.py --export-only ;;
+  *) python3 scripts/prepare-doublex2-audit.py ;;
+esac
 python3 scripts/prepare-tuple-arithmetic.py
 python3 scripts/prepare-signed-narrow-primops.py
 python3 scripts/prepare-explicit64-primops.py
