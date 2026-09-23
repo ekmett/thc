@@ -66,7 +66,10 @@ the genuine pre/post-Tidy metadata and 21 native rows against independent
 wraparound formulas. `StateTupleTest` runs these rows with and without guest
 inlining on both backends, checks installed entry validity after every compiled
 call, and covers lazy payloads, nested empty fields, zero-storage captures and
-an ignored State# field whose evaluation throws before tuple completion.
+an ignored State# field whose evaluation throws before tuple completion. Preparation
+strict-audits all positive roots and the exception control; tests verify source,
+auditor and artifact hashes before execution. Erasing a field also verifies its
+canonical Unit carrier, so missing legacy metadata cannot hide an invalid value.
 
 `TupleResultTest` executes the genuine pre/post-Tidy `AggregateFrontier` tuple
 entries and all 94 `TupleReturnAudit` native oracle rows on AST and BytecodeDSL,

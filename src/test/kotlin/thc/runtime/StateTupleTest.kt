@@ -6,13 +6,36 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.BeforeEach
 import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
+import java.security.MessageDigest
 
 class StateTupleTest {
     private val root = File(System.getProperty("thc.projectRoot"))
+    @BeforeEach fun verifyEvidence() {
+        val evidence = Json.parse(File(root, "build/state-tuple/provenance.json").readText()) as Map<String, Any?>
+        val sources = evidence["sources"] as List<Map<String, String>>
+        val artifacts = evidence["artifacts"] as List<Map<String, String>>
+        for (item in sources + artifacts) {
+            val path = item.getValue("path")
+            val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
+                .joinToString("") { "%02x".format(it.toInt() and 255) }
+            assertEquals(item.getValue("sha256"), actual, "Stale State# evidence: $path")
+        }
+        val required = listOf("scripts/audit-core.py", "scripts/core-capabilities.json") +
+            File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }
+                .map { it.relativeTo(root).path } +
+            listOf("src/main/resources/thc/scalar-primop-signatures.json", "scripts/generate-scalar-signatures.py")
+                .filter { File(root, it).exists() }
+        assertTrue(sources.map { it.getValue("path") }.containsAll(required), "Missing current auditor input hashes")
+        for (stage in listOf("pre", "post")) {
+            val audit = Json.parse(File(root, "build/state-tuple/$stage-audit.json").readText()) as Map<String, Any?>
+            assertEquals(true, audit["accepted"], "State# strict audit: $stage")
+        }
+    }
     private fun module(stage: String) = Json.parse(File(root, "build/state-tuple/$stage-core/StateTupleAudit.json").readText()) as Map<String, Any?>
     private fun context(inlining: Boolean = true) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
@@ -118,6 +141,24 @@ class StateTupleTest {
                 fields[0] = mapOf("kind" to "unknown", "evaluated" to true, "primReps" to emptyList<String>(),
                     "aggregate" to "unboxed-tuple", "components" to emptyList<Any>())
                 assertThrows(RuntimeFault::class.java) { program(language, CoreModules.reachable(module, "pairCase"), backend) }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun legacyOperandWithoutProofMustStillProduceTheVoidCarrier() {
+        for (backend in listOf("ast", "bytecode")) context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val module = module("pre")
+                val producer = (module["bindings"] as List<Map<String, Any?>>).single { it["name"] == "effectPair" }["expr"] as List<*>
+                val constructor = producer[2] as List<*>
+                val operands = constructor[2] as MutableList<Any?>
+                operands[0] = listOf("lit", "int", "123")
+                val program = program(language, CoreModules.reachable(module, "effectCase"), backend)
+                val failure = assertThrows(RuntimeFault::class.java) { call(program, "effectCase", 9L) }
+                assertTrue(failure.message.orEmpty().contains("zero-width scalar carrier"), failure.message)
+                released(language)
             } finally { context.leave() }
         }
     }
