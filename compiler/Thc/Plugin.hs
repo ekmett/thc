@@ -5,7 +5,7 @@ import GHC.Plugins
 import qualified Thc.Sources as Sources
 import qualified Thc.Cbv as Cbv
 import qualified Thc.Demands as Demands
-import Thc.Wired (wiredApplication, wiredRhs, preservesWiredTypes, isWiredVoid)
+import Thc.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
@@ -347,6 +347,7 @@ constructor d con = O $
 
 expr :: Ctx -> CoreExpr -> J
 expr d original
+  | Just lowered <- wiredCase original = withRep (exprRep d original) (withUnsafeEqualityCase (expr d lowered))
   | Just lowered <- wiredApplication original = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
   | Var v <- original, isWiredVoid v = A [S "void",O (("rep",voidRep) : sourceFields d)]
   | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
@@ -359,6 +360,14 @@ withRep rep (A xs) = case reverse xs of
   O fields : rest -> A (reverse rest ++ [O (("rep",rep) : filter ((/= "rep") . fst) fields)])
   _ -> A (xs ++ [O [("rep",rep)]])
 withRep _ node = node
+
+-- Record this export-only late rule without obscuring the original Core dump,
+-- result representation, or source notes on the surviving expression.
+withUnsafeEqualityCase :: J -> J
+withUnsafeEqualityCase (A xs) = case reverse xs of
+  O fields : rest -> A (reverse rest ++ [O (("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg") : filter ((/= "unsafeEqualityCase") . fst) fields)])
+  _ -> A (xs ++ [O [("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg")]])
+withUnsafeEqualityCase node = node
 
 exprRaw :: Ctx -> CoreExpr -> J
 exprRaw d original = case original of
@@ -549,6 +558,7 @@ exportInterfaceClosure dir rootCtx roots = do
       refs = go emptyVarSet
         where
           go bound original
+            | Just lowered <- wiredCase original = go bound lowered
             | Just lowered <- wiredApplication original = go bound lowered
             | Var v <- original, isWiredVoid v = []
             | Var v <- original, Just lowered <- wiredRhs v = go bound lowered
