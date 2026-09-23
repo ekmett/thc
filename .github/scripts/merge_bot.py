@@ -88,10 +88,13 @@ def publish_result(api, sha, state, run):
     # GitHub's actual Build run/attempt, without executing any PR artifacts.
     target = (f"{run['html_url']}/attempts/{run['run_attempt']}" if run
               else f"https://github.com/{api.repo}/actions/workflows/build.yml")
-    existing = api.call("GET", f"commits/{sha}/status")["statuses"]
-    if any(status["context"] == REQUIRED_STATUS and status["state"] == state
-           and status.get("creator", {}).get("login") == "github-actions[bot]"
-           and status.get("target_url") == target for status in existing):
+    # The combined status response omits creator. The reverse-chronological
+    # status history retains it; only this context's latest entry counts.
+    existing = next((status for status in api.pages(f"commits/{sha}/statuses")
+                     if status["context"].casefold() == REQUIRED_STATUS.casefold()), None)
+    if (existing and existing["state"] == state
+            and (existing.get("creator") or {}).get("login") == "github-actions[bot]"
+            and existing.get("target_url") == target):
         return
     api.call("POST", f"statuses/{sha}", {
         "context": REQUIRED_STATUS, "state": state, "target_url": target,

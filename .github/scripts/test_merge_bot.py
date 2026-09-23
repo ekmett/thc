@@ -55,7 +55,7 @@ class FakeAPI:
         if method != "GET":
             self.mutations.append((method, path, body))
             if path.startswith("statuses/"):
-                self.statuses = [{**body, "creator": {"login": "github-actions[bot]"}}]
+                self.statuses.insert(0, {**body, "creator": {"login": "github-actions[bot]"}})
             if path.endswith("/update-branch") and not self.delayed_update:
                 self.pr["head"]["sha"] = "updated"
                 self.behind = 0
@@ -78,11 +78,11 @@ class FakeAPI:
         if path.startswith("actions/runs/"):
             self.before_run_read()
             return copy.deepcopy(next(r for r in self.runs if r["id"] == int(path.split("/")[2])))
-        if path.endswith("/status"):
-            return {"statuses": copy.deepcopy(self.statuses)}
         raise AssertionError(path)
 
     def pages(self, path, key=None):
+        if path.endswith("/statuses"):
+            return copy.deepcopy(self.statuses)
         if path.startswith("pulls?"):
             return copy.deepcopy(self.prs)
         if path.endswith("/events"):
@@ -306,6 +306,38 @@ class MergeBotTest(unittest.TestCase):
         api.statuses[0]["creator"]["login"] = "someone-else"
         publish_run(api, 1)
         self.assertEqual(len(api.mutations), 2)
+
+    def test_older_matching_status_does_not_hide_newer_state(self):
+        api = FakeAPI()
+        publish_run(api, 1)
+        api.statuses.insert(0, {**api.statuses[0], "state": "pending"})
+        publish_run(api, 1)
+        self.assertEqual(len(api.mutations), 2)
+        self.assertEqual(api.statuses[0]["state"], "success")
+
+    def test_unrelated_status_context_is_ignored(self):
+        api = FakeAPI()
+        publish_run(api, 1)
+        api.statuses.insert(0, {"context": "other-check", "state": "pending"})
+        publish_run(api, 1)
+        self.assertEqual(len(api.mutations), 1)
+
+    def test_context_case_does_not_hide_newer_state(self):
+        api = FakeAPI()
+        publish_run(api, 1)
+        api.statuses.insert(0, {**api.statuses[0], "context": REQUIRED_STATUS.upper(), "state": "pending"})
+        publish_run(api, 1)
+        self.assertEqual(len(api.mutations), 2)
+        self.assertEqual(api.statuses[0]["state"], "success")
+
+    def test_missing_creator_is_not_trusted(self):
+        for creator in (None, {}):
+            with self.subTest(creator=creator):
+                api = FakeAPI()
+                publish_run(api, 1)
+                api.statuses[0]["creator"] = creator
+                publish_run(api, 1)
+                self.assertEqual(len(api.mutations), 2)
 
     def test_reconcile_recovers_dropped_completion_for_unlabelled_fork(self):
         api = FakeAPI()
