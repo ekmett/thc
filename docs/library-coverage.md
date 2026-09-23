@@ -328,3 +328,8 @@ whether the stub was present before the failed call or repaired during it.
 The strict default compiled-replay failures remain a completion blocker; no `Value.execute`
 bypass, settling call, relaxed counter requirement, optimizer fence or increased
 compilation limit is used to turn them into passes.
+
+The subsequent [entry-boundary investigation](sequence-entry-boundary.md)
+records a failing candidate with stub installation preceding the miss and
+stale compiled-to-interpreter caller links being repaired during it. Stub
+availability and ready caller links are distinct runtime prerequisites.
