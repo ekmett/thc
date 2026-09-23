@@ -150,6 +150,7 @@ joins](docs/core-evidence.md), along with [source locations](docs/debug-location
 in both executable trees. The runtime keeps primitive and evaluated reference
 types through arguments, captures and constructor fields. PAPs stay lazy until
 saturation, and recursive captures retain their cells until publication.
+Managed string-literal addresses also use [precise final constructor fields](docs/core-evidence.md#precise-reference-storage), preserving lazy neighboring payloads.
 
 Each comparison uses three fresh processes per engine, five measured windows
 per process, and at least 12,000 warmup workloads. The [entry-contract and

@@ -54,6 +54,7 @@ tasks.test {
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
             "bytearray/**/*.json", "bytearray/oracle.tsv", "bytearray/NativeByteArray.hs",
             "boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "boxed-arrays/NativeBoxedArray.hs", "boxed-arrays/native/**",
+            "address-fields/**/*.json", "address-fields/*.tsv", "address-fields/NativeAddressFields.hs", "address-fields/native/**",
             "int-arrays/**/*.json", "int-arrays/oracle.tsv", "int-arrays/expected.tsv",
             "int-arrays/NativeIntArray.hs", "int-arrays/native/int-array-oracle",
             "double-arrays/**/*.json", "double-arrays/oracle.tsv", "double-arrays/expected.tsv",
@@ -85,6 +86,7 @@ tasks.test {
             "prepare-int32-arrays.py", "test-int32-array-model.py",
             "prepare-float-word-arrays.py", "test-float-word-array-model.py",
             "prepare-int16-arrays.py", "test-int16-array-model.py",
+            "prepare-address-fields.py", "test-address-fields.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
             "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
     })

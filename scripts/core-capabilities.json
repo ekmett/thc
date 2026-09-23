@@ -65,7 +65,7 @@
   "constructorKinds": [
     "boxed"
   ],
-  "fieldRepresentations": [
+  "aggregateFieldRepresentations": [
     "FloatRep",
     "DoubleRep",
     "IntRep",
@@ -80,6 +80,23 @@
     "Word64Rep",
     "BoxedRep (Just Lifted)",
     "BoxedRep (Just Unlifted)"
+  ],
+  "fieldRepresentations": [
+    "FloatRep",
+    "DoubleRep",
+    "IntRep",
+    "WordRep",
+    "Int8Rep",
+    "Word8Rep",
+    "Int16Rep",
+    "Word16Rep",
+    "Int32Rep",
+    "Word32Rep",
+    "Int64Rep",
+    "Word64Rep",
+    "BoxedRep (Just Lifted)",
+    "BoxedRep (Just Unlifted)",
+    "AddrRep"
   ],
   "strictLiftedFields": true,
   "primitives": {
