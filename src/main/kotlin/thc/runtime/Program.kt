@@ -171,44 +171,44 @@ internal class Force(private val metrics: Metrics) : Node() {
             CompilerDirectives.transferToInterpreterAndInvalidate()
             seenThunk = true
         }
-        var value = original
-        while (value is Thunk) {
-            when (value.state) {
-                2 -> { if (metrics.enabled) metrics.thunkHits++; value = value.value }
-                3 -> {
-                    // Failed thunks rethrow on the cold interpreter path. A Kotlin
-                    // non-null cast here otherwise pulls NPE stack-trace machinery
-                    // into every compiled forcing site, including successful ones.
-                    CompilerDirectives.transferToInterpreterAndInvalidate()
-                    throw (value.value as? Throwable ?: fault("Invalid failed thunk"))
-                }
-                1 -> { if (metrics.enabled) metrics.blackholes++; fault("Blackhole: cyclic thunk entered while evaluating") }
-                else -> {
-                    val thunk = value
-                    val target = thunk.target ?: fault("Unevaluated thunk has no body")
-                    thunk.state = 1
-                    try {
-                        if (metrics.enabled) { metrics.thunkEvaluations++; metrics.recordThunk(target.rootNode.name) }
-                        val environment = thunk.environment
-                        val result = try { calls.call(target, environment) }
-                        catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
-                        if (result is Thunk) fault("Thunk target violated WHNF convention")
-                        thunk.value = result
-                        thunk.target = null
-                        thunk.environment = null
-                        thunk.state = 2
-                        value = result
-                    } catch (e: GuestException) {
-                        thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
-                    } catch (e: RuntimeFault) {
-                        thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
-                    } catch (e: Throwable) {
-                        thunk.value = null; thunk.state = 0; throw e
-                    }
+        if (original !is Thunk) return original
+        // Every successful update below verifies WHNF before publishing state 2.
+        // Re-entering the result through a generic forcing loop loses that fact
+        // and merges the suspension with its answer in the compiled graph.
+        return when (original.state) {
+            2 -> { if (metrics.enabled) metrics.thunkHits++; original.value }
+            3 -> {
+                // Failed thunks rethrow on the cold interpreter path. A Kotlin
+                // non-null cast here otherwise pulls NPE stack-trace machinery
+                // into every compiled forcing site, including successful ones.
+                CompilerDirectives.transferToInterpreterAndInvalidate()
+                throw (original.value as? Throwable ?: fault("Invalid failed thunk"))
+            }
+            1 -> { if (metrics.enabled) metrics.blackholes++; fault("Blackhole: cyclic thunk entered while evaluating") }
+            else -> {
+                val thunk = original
+                val target = thunk.target ?: fault("Unevaluated thunk has no body")
+                thunk.state = 1
+                try {
+                    if (metrics.enabled) { metrics.thunkEvaluations++; metrics.recordThunk(target.rootNode.name) }
+                    val environment = thunk.environment
+                    val result = try { calls.call(target, environment) }
+                    catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+                    if (result is Thunk) fault("Thunk target violated WHNF convention")
+                    thunk.value = result
+                    thunk.target = null
+                    thunk.environment = null
+                    thunk.state = 2
+                    result
+                } catch (e: GuestException) {
+                    thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
+                } catch (e: RuntimeFault) {
+                    thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
+                } catch (e: Throwable) {
+                    thunk.value = null; thunk.state = 0; throw e
                 }
             }
         }
-        return value
     }
 }
 /** Typed execution widens per result kind; each fallback consumes the already evaluated value. */

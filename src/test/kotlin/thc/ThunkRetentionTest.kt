@@ -109,6 +109,67 @@ class ThunkRetentionTest {
         assertEquals(2, evaluations, "The unexpected failure retries once; the completed value remains shared")
     }
 
+    @Test fun aThunkReturningAnotherThunkFailsBeforeEitherCanPublishAnIndirection() = withRuntime { _, environment ->
+        var innerEvaluations = 0
+        val innerTarget = object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any {
+                innerEvaluations++
+                return 3_000_000_000L
+            }
+        }.callTarget
+        val inner = Thunk(innerTarget, environment)
+        var outerEvaluations = 0
+        val outer = Thunk(object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any {
+                outerEvaluations++
+                return inner
+            }
+        }.callTarget, environment)
+        val driver = ForceDriver(Metrics(true))
+        val failure = assertThrows(RuntimeFault::class.java) { driver.apply(outer) }
+        assertEquals("Thunk target violated WHNF convention", failure.message)
+        assertSame(failure, assertThrows(RuntimeFault::class.java) { driver.apply(outer) })
+        assertEquals(1, outerEvaluations)
+        assertEquals(0, innerEvaluations, "Rejecting an invalid thunk result must not force it")
+        assertEquals(3, outer.state)
+        assertReleased(outer)
+        assertEquals(0, inner.state)
+        assertSame(innerTarget, inner.target)
+        assertSame(environment, inner.environment)
+    }
+
+    @Test fun nestedForcingThroughTheSameForceNodePublishesSeparateSharedAnswers() = withRuntime { _, environment ->
+        var innerEvaluations = 0
+        var outerEvaluations = 0
+        val metrics = Metrics(true)
+        val driver = ForceDriver(metrics)
+        val inner = Thunk(object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any {
+                innerEvaluations++
+                return 3_000_000_000L
+            }
+        }.callTarget, environment)
+        val outer = Thunk(object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any {
+                outerEvaluations++
+                return (driver.apply(inner) as Long) + 17L
+            }
+        }.callTarget, environment)
+        repeat(3) {
+            assertEquals(3_000_000_017L, driver.apply(outer))
+            assertEquals(3_000_000_000L, driver.apply(inner))
+        }
+        assertEquals(1, innerEvaluations)
+        assertEquals(1, outerEvaluations)
+        assertEquals(2L, metrics.thunkEvaluations)
+        assertEquals(5L, metrics.thunkHits)
+        for (thunk in listOf(inner, outer)) {
+            assertEquals(2, thunk.state)
+            assertFalse(thunk.value is Thunk)
+            assertReleased(thunk)
+        }
+    }
+
     @Test fun cafEntryTargetsRemainCompilableAfterValuesFunctionsAndFailuresAreMemoized() = withRuntime { language, _ ->
         fun binding(id: String, expression: List<Any?>) = mapOf(
             "id" to id, "name" to id, "type" to "Synthetic", "lifted" to true, "arity" to 0, "expr" to expression)
