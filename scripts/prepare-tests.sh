@@ -9,6 +9,7 @@ python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-sqrt-audit.py
 python3 scripts/prepare-tag-to-enum-audit.py
+python3 scripts/prepare-unsafe-equality-audit.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/check-sum-layout.py --prepare
 python3 scripts/prepare-sum-result-audit.py
@@ -21,6 +22,7 @@ python3 scripts/prepare-bit-primops.py
 python3 scripts/prepare-bytearray.py
 python3 scripts/prepare-boxed-arrays.py
 python3 scripts/prepare-address-fields.py
+python3 scripts/prepare-data-to-tag.py
 python3 scripts/prepare-mutvar.py
 python3 scripts/prepare-int-arrays.py
 python3 scripts/prepare-double-arrays.py
@@ -49,6 +51,10 @@ case "$(uname -m)" in
   *) python3 scripts/prepare-int16x8-audit.py ;;
 esac
 python3 scripts/prepare-signed-narrow-primops.py
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-int8x16-audit.py --export-only ;;
+  *) python3 scripts/prepare-int8x16-audit.py ;;
+esac
 python3 scripts/prepare-explicit64-primops.py
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs
 python3 scripts/check-speculation-metadata.py

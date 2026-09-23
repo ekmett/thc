@@ -418,6 +418,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { CoreRepresentations.requireNoSum(it.proof, "argument") }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
         "int32" -> int32Literal(value)
         "int64" -> int64Literal(value)
@@ -733,7 +734,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
@@ -754,6 +755,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val family = EnumFamily(ids.map { dataLayout(it).allocate() }.toTypedArray())
                 ProvenExpression(Expression { e ->
                     e.builder.beginTagToEnum(family); operand.emit(e); e.builder.endTagToEnum()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] in CoreDataTags.operations) {
+                if (args.size != 1) throw RuntimeFault("dataToTag: Exactly one operand required")
+                val operand = argument(args[0], scope, false)
+                val ids = CoreDataTags.validate(expr, operand.proof, constructors)
+                val family = DataTagFamily(ids.map(::dataLayout).toTypedArray())
+                ProvenExpression(Expression { e ->
+                    e.builder.beginDataToTag(family); operand.emit(e); e.builder.endDataToTag()
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
@@ -1160,6 +1169,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operations8 -> vector8Primitive(name, operands)
         in CoreVectors.operations16 -> vector16Primitive(name, operands)
         in CoreVectors.operationsDouble -> vectorDoublePrimitive(name, operands)
         in CoreVectors.operationsFloat -> vectorFloatPrimitive(name, operands)
@@ -1187,6 +1197,36 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof)
+    }
+
+    private fun vector8Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackInt8X16#" -> tupleExpression(CoreVectors.unpacked8) { e, destination ->
+            e.builder.beginVector8Unpack(destination[0], destination[1], destination[2], destination[3],
+                destination[4], destination[5], destination[6], destination[7],
+                destination[8], destination[9], destination[10], destination[11],
+                destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endVector8Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packInt8X16#" -> {
+                    b.beginBlock()
+                    val lanes = List(16) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVector8Pack(); lanes.forEach(b::emitLoadLocal); b.endVector8Pack()
+                    b.endBlock()
+                }
+                "broadcastInt8X16#" -> { b.beginVector8Broadcast(); operands[0].emit(e); b.endVector8Broadcast() }
+                "negateInt8X16#" -> { b.beginVector8Negate(); operands[0].emit(e); b.endVector8Negate() }
+                else -> {
+                    val operation = when (name) { "plusInt8X16#" -> 0; "minusInt8X16#" -> 1; "timesInt8X16#" -> 2; else -> error("Invalid Int8X16 operation") }
+                    b.beginVector8Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVector8Binary()
+                }
+            }
+        }, CoreVectors.proof8)
     }
 
     private fun vector16Primitive(name: String, operands: List<Expression>): Expression = when (name) {

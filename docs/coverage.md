@@ -1,5 +1,23 @@
 # Core coverage
 
+Saturated GHC 9.14.1 `dataToTagSmall#` and `dataToTagLarge#` calls use retained
+concrete algebraic-family proofs. Both backends demand the outer data value and
+return its zero-based constructor tag through class-owned layout guards, leaving
+lazy fields untouched. The exporter records the complete ordered family and
+GHC's target pointer-tag limit; a wrong small/large variant, newtype, function,
+unknown family, or bare/partial primitive remains rejected. This is separate
+from `tagToEnum#` and from unboxed tuple/sum tags. `prepare-data-to-tag.py` checks
+293 fresh native/model rows, a forced-bottom exception, and pre/post-Tidy strict
+frontiers, including unlifted boxed data, ordinary boxed tuples, and a legal
+newtype unwrap before the operation on its underlying data value.
+Family constructors retain the existing heap-field representation limits; this
+operation adds no closure, foreign-pointer, aggregate-argument or newtype-tag ABI.
+Tag selection currently explodes a linear scan of the complete family through
+expected layout guards. The largest native control has nine constructors;
+larger families may grow compiled graphs substantially, and this slice makes
+no throughput claim. It adds no per-object tag or layout pointer and does not
+resolve a layout through the global class registry on the tag-reading path.
+
 Map got the runtime into a useful performance range. The next question is how
 much Haskell it can run. The compatibility corpus gives that question a
 repeatable answer against native GHC, across both executable backends.
@@ -48,6 +66,11 @@ The [FloatX4 foundation](floatx4.md) adds another six local vector primops and
 separate multiply/add rounding. The [DoubleX2 foundation](doublex2.md) adds the
 corresponding six binary64 operations, with an exact integer-significand model
 and bit-sensitive edge controls. Vector ABI boundaries remain unchanged.
+The [Int16X8](int16x8.md) and [Int8X16](int8x16.md) foundations each support
+pack, unpack, broadcast, add, subtract, negate and multiply with exact narrow
+lane proofs. Their native/model corpora contain 6,032 and 9,168 rows respectively,
+including independently observable lanes and residual scalar/tuple calls.
+Both use dense primitive carriers and retain the same local-only vector boundary.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

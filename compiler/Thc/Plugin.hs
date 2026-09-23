@@ -5,14 +5,17 @@ import GHC.Plugins
 import qualified Thc.Sources as Sources
 import qualified Thc.Cbv as Cbv
 import qualified Thc.Demands as Demands
-import Thc.Wired (wiredApplication, wiredRhs, preservesWiredTypes, isWiredVoid)
+import Thc.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
 import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
+import GHC.Core.TyCo.Compare (eqType)
 import GHC.Core.Utils (exprIsHNF, exprOkForSpecEval)
 import GHC.Builtin.PrimOps (PrimOp(TagToEnumOp), primOpOcc)
+import GHC.StgToCmm.Closure (isSmallFamily)
+import GHC.Cmm.Utils (mAX_PTR_TAG)
 import qualified Data.ByteString as BS
 import Data.Char (ord)
 import Data.List (intercalate, nubBy, stripPrefix)
@@ -336,6 +339,7 @@ constructor d con = O $
   , ("fieldTypes",A (zipWith fieldType workerTypes workerStrict))
   ] ++ [("sumArity",num (length (tyConDataCons (dataConTyCon con)))) | isUnboxedSumDataCon con]
     ++ [("enumFamily",enumFamily tc) | let tc = dataConTyCon con, supportedEnum tc]
+    ++ [("dataToTagFamily",dataToTagFamily d tc) | let tc = dataConTyCon con, supportedTagFamily tc]
   where
     workerTypes = map scaledThing (dataConRepArgTys con)
     marks = dataConRepStrictness con
@@ -347,6 +351,7 @@ constructor d con = O $
 
 expr :: Ctx -> CoreExpr -> J
 expr d original
+  | Just lowered <- wiredCase original = withRep (exprRep d original) (withUnsafeEqualityCase (expr d lowered))
   | Just lowered <- wiredApplication original = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
   | Var v <- original, isWiredVoid v = A [S "void",O (("rep",voidRep) : sourceFields d)]
   | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
@@ -359,6 +364,14 @@ withRep rep (A xs) = case reverse xs of
   O fields : rest -> A (reverse rest ++ [O (("rep",rep) : filter ((/= "rep") . fst) fields)])
   _ -> A (xs ++ [O [("rep",rep)]])
 withRep _ node = node
+
+-- Record this export-only late rule without obscuring the original Core dump,
+-- result representation, or source notes on the surviving expression.
+withUnsafeEqualityCase :: J -> J
+withUnsafeEqualityCase (A xs) = case reverse xs of
+  O fields : rest -> A (reverse rest ++ [O (("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg") : filter ((/= "unsafeEqualityCase") . fst) fields)])
+  _ -> A (xs ++ [O [("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg")]])
+withUnsafeEqualityCase node = node
 
 exprRaw :: Ctx -> CoreExpr -> J
 exprRaw d original = case original of
@@ -376,7 +389,8 @@ exprRaw d original = case original of
              in if null vals then withRep (exprRep d a) (expr d f) else node
                [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals)
                ,B (canCertify d && exprIsHNF a)
-               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]])
+               ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]]
+                 ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]])
   l@Lam{} -> let (bs,body) = collectBinders l
                  vals = filter (not . isTyVar) bs
              in if null vals then withRep (exprRep d l) (expr d body)
@@ -464,11 +478,36 @@ tagToEnumFamily e = case collectArgs e of
   _ -> Nothing
   where isCoArg Coercion{} = True
         isCoArg _ = False
+-- GHC.Tc.Instance.Class Note [DataToTag overview], DTT1-3. Do not unwrap
+-- newtypes or guess a family from a physical pointer. The original primop
+-- type application preserves the representation TyCon of a data instance.
+supportedTagFamily :: TyCon -> Bool
+supportedTagFamily tc = isBoxedDataTyCon tc && not (isNewTyCon tc || isTypeDataTyCon tc)
+  && case tyConDataCons_maybe tc of Just (_:_) -> True; _ -> False
+
+dataToTagFamily :: Ctx -> TyCon -> J
+dataToTagFamily d tc = O
+  [("typeConstructor",S (nameKey (tyConName tc)))
+  ,("constructors",A [S (nameKey (dataConName con)) | con <- tyConDataCons tc])
+  ,("smallFamilyLimit",num (mAX_PTR_TAG platform))
+  ,("smallFamily",B (isSmallFamily platform (tyConFamilySize tc)))]
+  where platform = targetPlatform (dynFlags d)
+
+dataToTagApplication :: CoreExpr -> Maybe TyCon
+dataToTagApplication e = case collectArgs e of
+  (Var v,[Type _,Type ty,arg])
+    | Just p <- isPrimOpId_maybe v
+    , occNameString (primOpOcc p) `elem` ["dataToTagSmall#","dataToTagLarge#"]
+    , Just _ <- typeLevity_maybe ty
+    , eqType ty (exprType arg)
+    , Just (tc,_) <- splitTyConApp_maybe ty
+    , supportedTagFamily tc -> Just tc
+  _ -> Nothing
 
 exprCons :: CoreExpr -> [DataCon]
 exprCons = \case
   Var v -> maybe [] (:[]) (isDataConWorkId_maybe v)
-  e@(App a b) -> maybe [] tyConDataCons (tagToEnumFamily e) ++ exprCons a ++ exprCons b
+  e@(App a b) -> maybe [] tyConDataCons (tagToEnumFamily e) ++ maybe [] tyConDataCons (dataToTagApplication e) ++ exprCons a ++ exprCons b
   Lam _ e -> exprCons e
   Let b e -> concatMap (exprCons . snd) (flattenBind b) ++ exprCons e
   Case s _ _ as -> exprCons s ++ concat [case ac of DataAlt c -> c : exprCons e; _ -> exprCons e | Alt ac _ e <- as]
@@ -549,6 +588,7 @@ exportInterfaceClosure dir rootCtx roots = do
       refs = go emptyVarSet
         where
           go bound original
+            | Just lowered <- wiredCase original = go bound lowered
             | Just lowered <- wiredApplication original = go bound lowered
             | Var v <- original, isWiredVoid v = []
             | Var v <- original, Just lowered <- wiredRhs v = go bound lowered
