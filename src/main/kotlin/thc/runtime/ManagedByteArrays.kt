@@ -49,7 +49,13 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     INDEX_INT("indexIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_DOUBLE("readDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_DOUBLE("writeDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("DoubleRep"), emptyList())),
-    INDEX_DOUBLE("indexDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep")));
+    INDEX_DOUBLE("indexDoubleArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_INT32("readInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_INT32("writeInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int32Rep"), emptyList())),
+    INDEX_INT32("indexInt32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    READ_WORD32("readWord32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    WRITE_WORD32("writeWord32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word32Rep"), emptyList())),
+    INDEX_WORD32("indexWord32Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep")));
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         if (actual.size != arguments.size) throw RuntimeFault("Primitive arity mismatch: $primitive")
@@ -60,12 +66,17 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             }
         if (flags != List(arguments.size) { false } || actual.indices.any { !scalar(actual[it], arguments[it]) })
             throw RuntimeFault("ByteArray primitive argument representation mismatch: $primitive")
-        val payload = listOf(when (this) { READ_INT -> "IntRep"; READ_DOUBLE -> "DoubleRep"; else -> BYTE_ARRAY_REP })
+        val payload = listOf(when (this) {
+            READ_INT -> "IntRep"; READ_DOUBLE -> "DoubleRep"
+            READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"; else -> BYTE_ARRAY_REP
+        })
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE, WRITE_INT, WRITE_DOUBLE, COPY -> emptyList(); SIZE, INDEX_INT -> listOf("IntRep")
+            WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, COPY -> emptyList()
+            SIZE, INDEX_INT -> listOf("IntRep")
+            INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
             INDEX_DOUBLE -> listOf("DoubleRep"); else -> listOf("Word8Rep")
         })
         if (!valid) throw RuntimeFault("ByteArray primitive result representation mismatch: $primitive")
@@ -89,6 +100,12 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.READ_DOUBLE -> ReadDoubleArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_DOUBLE -> WriteDoubleArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_DOUBLE -> IndexDoubleArrayExpression(operands[0], operands[1])
+        ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> ReadInt32ArrayExpression(
+            operation == ByteArrayOp.READ_WORD32, operands[0], operands[1], operands[2])
+        ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> WriteInt32ArrayExpression(
+            operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.INDEX_INT32, ByteArrayOp.INDEX_WORD32 -> IndexInt32ArrayExpression(
+            operation == ByteArrayOp.INDEX_WORD32, operands[0], operands[1])
     }.proven(proof.copy(evaluated = true))
 
 private class NewByteArrayExpression(@field:Child private var size: Expr,
@@ -201,6 +218,41 @@ private class IndexDoubleArrayExpression(@field:Child private var array: Expr,
         val bytes = ManagedByteArray.require(array.execute(frame))
         val element = index.executeRequiredLong(frame)
         return ManagedDoubleArray.read(bytes, element)
+    }
+}
+
+private class ReadInt32ArrayExpression(private val unsigned: Boolean,
+    @field:Child private var array: Expr, @field:Child private var index: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        val value = if (unsigned) ManagedInt32Array.readUnsigned(bytes, element) else ManagedInt32Array.readSigned(bytes, element)
+        FrameAccess.writeLong(frame, slots[offset], value)
+        return null
+    }
+}
+private class WriteInt32ArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr, @field:Child private var value: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        val integer = value.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedInt32Array.write(bytes, element, integer)
+        return Unit
+    }
+}
+private class IndexInt32ArrayExpression(private val unsigned: Boolean,
+    @field:Child private var array: Expr, @field:Child private var index: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val element = index.executeRequiredLong(frame)
+        return if (unsigned) ManagedInt32Array.readUnsigned(bytes, element) else ManagedInt32Array.readSigned(bytes, element)
     }
 }
 

@@ -52,6 +52,8 @@ tasks.test {
             "int-arrays/NativeIntArray.hs", "int-arrays/native/int-array-oracle",
             "double-arrays/**/*.json", "double-arrays/oracle.tsv", "double-arrays/expected.tsv",
             "double-arrays/NativeDoubleArray.hs", "double-arrays/native/double-array-oracle",
+            "int32-arrays/**/*.json", "int32-arrays/oracle.tsv", "int32-arrays/expected.tsv",
+            "int32-arrays/NativeInt32Array.hs", "int32-arrays/native/int32-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
@@ -67,6 +69,7 @@ tasks.test {
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-double-arrays.py", "test-double-array-model.py",
+            "prepare-int32-arrays.py", "test-int32-array-model.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)

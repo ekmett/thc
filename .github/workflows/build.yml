@@ -131,6 +131,7 @@ jobs:
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-int-array-model.py
           python3 scripts/test-double-array-model.py
+          python3 scripts/test-int32-array-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py

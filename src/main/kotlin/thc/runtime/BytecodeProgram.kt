@@ -394,6 +394,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int32" -> int32Literal(value)
         "int64" -> int64Literal(value)
         "word64" -> word64Literal(value)
         "int", "char" -> value.toLong()
@@ -680,7 +681,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     else Expression { it.builder.emitReadGlobal(binding) }, stored)
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
-        "lit" -> constant(literal(expr[1] as String, expr[2] as String))
+        "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
+            if (expr[1] in listOf("int32", "word32")) ProvenExpression(it, CoreRepresentations.narrow32LiteralProof(expr)) else it
+        }
         "void" -> constant(Unit)
         "lam" -> {
             val args = expr[1] as List<Map<String, Any?>>
@@ -707,6 +710,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
+                        ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 ->
+                            e.builder.beginReadInt32Array(operation == ByteArrayOp.READ_WORD32, destination[0])
                         else -> error("Scalar ByteArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -715,6 +720,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
+                        ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> e.builder.endReadInt32Array()
                         else -> error("Scalar ByteArray operation")
                     }
                 } else ProvenExpression(Expression { e ->
@@ -727,6 +733,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.INDEX_INT -> e.builder.beginIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.beginWriteDoubleArray()
                         ByteArrayOp.INDEX_DOUBLE -> e.builder.beginIndexDoubleArray()
+                        ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> e.builder.beginWriteInt32Array()
+                        ByteArrayOp.INDEX_INT32, ByteArrayOp.INDEX_WORD32 ->
+                            e.builder.beginIndexInt32Array(operation == ByteArrayOp.INDEX_WORD32)
                         else -> error("Tuple ByteArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -739,6 +748,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.INDEX_INT -> e.builder.endIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.endWriteDoubleArray()
                         ByteArrayOp.INDEX_DOUBLE -> e.builder.endIndexDoubleArray()
+                        ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> e.builder.endWriteInt32Array()
+                        ByteArrayOp.INDEX_INT32, ByteArrayOp.INDEX_WORD32 -> e.builder.endIndexInt32Array()
                         else -> error("Tuple ByteArray operation")
                     }
                 }, tupleProof.copy(evaluated = true))

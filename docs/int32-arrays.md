@@ -9,6 +9,14 @@ or same-width floating representations. Reads return a genuine unboxed
 the state token. Writes return the state token; indexing returns the narrow
 scalar. Int32 reads/widening sign-extend, while Word32 reads/widening zero-extend.
 
+The runtime uses a plain native-order `int` VarHandle view of the existing JVM
+`byte[]`. It creates no separate `int[]`, boxed-element array or storage wrapper.
+Both write operations keep the low 32 bits; only read/index widening differs.
+Full-width Long indices must be within `[0, byteCount / 4)` before narrowing and
+scaling, so incomplete final elements and overflowed indices cannot be accessed.
+State is evaluated and validated before memory access, and failed reads do not
+publish their primitive Long result. Accesses are not atomic/concurrent APIs.
+
 `examples/THC/Unboxed32Arrays.hs` uses installed, unmodified `array-0.5.8.0`
 public `accumArray`, `runSTUArray`, `newArray`, `readArray`, `writeArray`, and
 checked `(!)`. Bounds `(-3,4)` and observed indices `-3,0,4` are constants; GHC
@@ -19,6 +27,11 @@ arbitrary bounds, and array allocation failure are not claimed by these examples
 Ordinary Int32 arithmetic also retains actual `int32` literals with exact
 `Int32Rep`, so strict preparation must accept those rather than substituting
 machine-width literals.
+The new signed literal loader accepts only canonical decimal values in
+`[-2147483648, 2147483647]`, including case alternatives. Both signed and unsigned
+32-bit literal kinds preserve exact identity: present metadata cannot relabel one
+as the other or as another Long-carried representation. Missing legacy metadata
+does not change the literal's intrinsic signedness.
 
 Let `u` be the low 32 bits of the signed 64-bit input, and `D(x)` normalize modulo
 2^32 then interpret the bits as signed Int32 or unsigned Word32. The independently
@@ -44,6 +57,8 @@ Run preparation with the pinned GHC 9.14.1 environment:
 ```sh
 python3 scripts/test-int32-array-model.py
 python3 scripts/prepare-int32-arrays.py
+python3 scripts/test-core-bytearrays.py
+scripts/gradle.sh test --tests 'thc.runtime.Int32Array*' --tests 'thc.Int32LiteralTest'
 ```
 
 The preparer regenerates real pre/post-Tidy Core and the native
@@ -56,11 +71,17 @@ halves with the same narrow payload. Python controls independently test both byt
 orders with a mask/shift model; native execution claims only its recorded host
 byte order. Source and artifact fingerprints include the exact capability and
 exporter inputs, generated driver, oracle executable, rows, Core and audits.
+The frozen domain is 397 inputs per entry: 2,382 unique native/model rows.
 
 The guest-root proof counts the entry and its unconditional immediate local
 `State#` lambda. It does not count genuine complete local-join prefixes, and it
 still inspects their bodies and dictionary-held expressions for extra functions.
 Thus these frozen fixtures require two guest entries per uninlined public call,
-excluding the host bridge. Separate JVM validation must compile the actual
-selected/nested targets and enforce those per-call counters on both backends;
-native and static checks alone are not guest execution evidence.
+excluding the host bridge. Separate JVM tests compile the actual selected/nested
+targets and enforce exact per-call counters on both backends, both Core stages,
+and with guest inlining enabled and disabled. Every measured compiled call must
+retain the same active target identities and valid installed code, with no
+postcompile settling calls or retries. The suite is also run with dense handoff;
+result/argument slabs must be released without retained references. Native and
+static checks alone are not guest execution evidence. No throughput or
+allocation-elimination claim is made.
