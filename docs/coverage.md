@@ -56,6 +56,9 @@ Both use dense primitive carriers and retain the same local-only vector boundary
 The [Word8X16 foundation](word8x16.md) adds six unsigned byte-vector operations
 and 7,712 native/model rows, with exact Word8 proofs, zero-extension and explicit
 signed/unsigned mismatch controls. There is no GHC unsigned vector negate primop.
+The [Word16X8 foundation](word16x8.md) adds the corresponding six unsigned
+16-bit operations and 5,116 native/model rows. Word16 and Int16 proofs remain
+distinct; unpack widens all eight lanes to 0..65535 without changing vector ABIs.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

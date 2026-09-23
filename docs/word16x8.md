@@ -1,4 +1,4 @@
-# Local Word16X8 fixtures
+# Local Word16X8 vectors
 
 The bounded contract is exactly six pinned GHC 9.14.1 primitives:
 `packWord16X8#`, `unpackWord16X8#`, `broadcastWord16X8#`,
@@ -14,6 +14,21 @@ subtraction underflow and low-16-bit multiplication. Unpacked lanes widen to
 0..65,535; 65,535 must not become -1. Vectors remain local: vector formals,
 function results, captures, heap fields and vector-containing tuple ABIs remain
 unsupported. Machine `Int#` seeds and scalar results require a 64-bit host.
+
+The runtime uses a distinct `Word16X8` carrier with exactly eight final primitive
+`short` fields: sixteen bytes of lane payload, not total object size. Transient
+`ShortVector.SPECIES_128` values implement wrapping arithmetic; there is no stored
+vector object, payload array or lane box. Pack narrows eight Long slots; both AST
+and bytecode unpack every field with `& 0xffffL`. Operation selection happens
+during Core lowering, with no vector ABI expansion.
+
+Existing canonical Word16 literal and aggregate-aware representation guards are
+unchanged. JVM tests cover every 16-bit encoding in each lane and independent
+Cartesian boundary pairs, plus malformed literal, signedness and frontier
+controls. Full binary-pair exhaustiveness is not claimed. Native tests require
+exact +1/+2 compiled guest-entry deltas after every measured call, stable actual
+target identities, valid last-tier code and empty argument/result handoff pools
+under both inlining policies. No retries, settling or compiler-limit changes.
 
 ## Genuine Core and independent observations
 
