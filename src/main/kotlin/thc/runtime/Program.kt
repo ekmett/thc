@@ -903,14 +903,14 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 else {
                     val value = entry.packet.getObject(input, from)
                     val expected = argumentReferences.getOrNull(i)
-                    FrameAccess.write(frame, to, if (expected == null) value else requireReferenceCarrier(value, expected))
+                    writeInputReference(frame, to, if (expected == null) value else requireReferenceCarrier(value, expected))
                 }
             }
             if (captureLayout != null) {
                 val environment = entry.packet.getObject(input, 1) as? CapturedFrame ?: fault("Invalid captured frame")
                 for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
             }
-        } finally { entry.state().arguments.release(input) }
+        } finally { entry.release(input) }
     }
 
     @ExplodeLoop internal fun restoreHandoff(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {

@@ -5,6 +5,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.bytecode.BytecodeNode
 import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
 import thc.Language
@@ -28,12 +29,14 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
         val input = state.pending ?: fault("Missing typed input loan")
         state.pending = null
         if (input.layout !== packet || !input.live) {
-            if (input.live) state.arguments.release(input)
+            if (input.live) releaseUnexpected(input)
             fault("Conflicting typed input layout")
         }
         return input
     }
     fun release(input: HandoffStorage) = state().arguments.release(input, packet)
+    @CompilerDirectives.TruffleBoundary
+    private fun releaseUnexpected(input: HandoffStorage) = state().arguments.release(input)
 
     /** A scalar State#/unknown/address retains one reference field in the old ABI;
      * only fields recursively inside an exact tuple are erased or flattened. */
@@ -90,7 +93,7 @@ internal class AstInputSource(layout: ArgumentLayout,
     override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = frame.getDouble(slots[index])
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = FrameAccess.read(frame, slots[index])
     override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
-        FrameAccess.write(frame, slots[index], value)
+        writeInputReference(frame, slots[index], value)
     }
     @ExplodeLoop fun clear(frame: VirtualFrame) { for (slot in slots) frame.clear(slot) }
 }
@@ -105,6 +108,16 @@ internal class BytecodeInputSource(layout: ArgumentLayout,
     override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
         slots[index].setObject(bytecode(node), frame, value)
     }
+}
+
+/** These slots are selected by an exact reference field in the call layout.
+ * Keep this write independent of the generic scalar widening dispatch. */
+internal fun writeInputReference(frame: VirtualFrame, slot: Int, value: Any?) {
+    if (frame.frameDescriptor.getSlotKind(slot) != FrameSlotKind.Object) {
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        frame.frameDescriptor.setSlotKind(slot, FrameSlotKind.Object)
+    }
+    frame.setObject(slot, value)
 }
 
 /** Copies between separately owned typed storage; logical compatibility is checked before this operation. */
@@ -143,6 +156,10 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
  * deoptimization still have one generation-checked owner in the caller. */
 internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarget, input: HandoffStorage, action: () -> Any?): Any? {
     val layout = (target.rootNode as GuestRoot).typedInput ?: fault("Target has no typed input entry")
+    return invokeTypedInput(layout, input, action)
+}
+
+internal inline fun invokeTypedInput(layout: TypedInputLayout, input: HandoffStorage, action: () -> Any?): Any? {
     val state = layout.state()
     val generation = input.generation
     check(state.pending == null)
@@ -150,26 +167,23 @@ internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarg
     try { return action() }
     finally {
         state.pending = null
-        if (input.live && input.generation == generation) state.arguments.release(input)
+        if (input.live && input.generation == generation) layout.release(input)
     }
 }
 
 /** All operand evaluation and strict scalar-prefix forcing happens before the
  * loan. Aggregate strictness never forces a lifted field inside the tuple. */
+@ExplodeLoop
 private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, input: TypedInputLayout,
-    source: InputSource, values: Array<Any?>?, logicalOffset: Int, count: Int, force: Force): HandoffStorage {
-    val root = function.target.rootNode as GuestRoot
-    val prefixCount = function.suppliedCount
+    source: InputSource, values: Array<Any?>?, logicalOffset: Int, count: Int, force: Force,
+    prefixCount: Int, strictPositions: IntArray): HandoffStorage {
     val prefixWidth = input.logical.offset(prefixCount)
-    val strictPrefix = root.entryStrict.indices.any { i -> i < prefixCount && root.entryStrict[i] &&
-        !input.logical.isTuple(i) && input.packet.isObject(input.header + input.logical.offset(i)) }
+    val strictPrefix = strictPositions.any { it < prefixCount }
     // Only strict scalar reference values appear here. No tuple field is boxed
     // or put in this temporary override array, and it never escapes the call.
     val overrides = if (strictPrefix) arrayOfNulls<Any>(prefixWidth) else null
-    for (i in root.entryStrict.indices) {
-        if (!root.entryStrict[i] || input.logical.isTuple(i)) continue
+    for (i in strictPositions) {
         val physical = input.logical.offset(i)
-        if (!input.packet.isObject(input.header + physical)) continue
         if (i < prefixCount) {
             val raw = function.typedSupplied?.let { it.layout.getObject(it, physical) } ?: function.supplied[physical]
             overrides!![physical] = force.execute(frame, raw)
@@ -189,10 +203,11 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
         val from = ArgumentLayout.offset(source.layout, logicalOffset)
         val width = ArgumentLayout.offset(source.layout, logicalOffset + count) - from
         source.copy(frame, node, values, from, loan, input.header + prefixWidth, width)
-        if (overrides != null) for (i in 0 until prefixCount) {
-            val physical = input.logical.offset(i)
-            if (root.entryStrict[i] && !input.logical.isTuple(i) && input.packet.isObject(input.header + physical))
+        if (overrides != null) for (i in strictPositions) {
+            if (i < prefixCount) {
+                val physical = input.logical.offset(i)
                 input.packet.setObject(loan, input.header + physical, overrides[physical])
+            }
         }
         return loan
     } catch (failure: Throwable) { input.release(loan); throw failure }
@@ -200,15 +215,16 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
 
 private inline fun callTypedInput(frame: VirtualFrame, node: Node, function: Closure,
     input: TypedInputLayout, source: InputSource, values: Array<Any?>?, start: Int, count: Int,
-    force: Force, tail: Boolean, metrics: Metrics, action: () -> Any?): Any? {
-    val loan = prepareInput(frame, node, function, input, source, values, start, count, force)
+    force: Force, tail: Boolean, metrics: Metrics, prefixCount: Int, strictPositions: IntArray,
+    action: () -> Any?): Any? {
+    val loan = prepareInput(frame, node, function, input, source, values, start, count, force, prefixCount, strictPositions)
     val generation = loan.generation
     var transferred = false
     try {
         if (tail) try { checkTypedTail(frame, node, function.target, loan, metrics) }
         catch (transfer: TailCall) { transferred = transfer.input === loan; throw transfer }
         if (metrics.enabled) input.state().calls++
-        return invokeTypedInput(function.target, loan, action)
+        return invokeTypedInput(input, loan, action)
     } finally {
         if (!transferred && loan.live && loan.generation == generation) input.release(loan)
     }
@@ -244,6 +260,8 @@ private class InputCallArm(private val source: InputSource, private val count: I
     private val hasEnvironment = function.environment != null
     private val root = target.rootNode as GuestRoot
     private val input = root.typedInput
+    @field:CompilationFinal(dimensions = 1)
+    private val strictPositions = input?.let { strictInputPositions(root, it) } ?: IntArray(0)
     @Child private var direct = com.oracle.truffle.api.nodes.DirectCallNode.create(target)
     @Child private var legacy = DirectCallerNode(target, metrics, prefixSize = prefixCount)
     @Child private var force = Force(metrics)
@@ -268,7 +286,7 @@ private class InputCallArm(private val source: InputSource, private val count: I
         val result = if (input == null) {
             legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity), isTail)
         } else {
-            try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics) {
+            try { callTypedInput(frame, this, function, input, source, values, start, arity, force, isTail, metrics, prefixCount, strictPositions) {
                 Calls.direct(direct, NO_PAP_ARGUMENTS)
             } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
         }
@@ -307,7 +325,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                 legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity), isTail)
             } else {
                 if (metrics.enabled) metrics.indirectCalls++
-                try { callTypedInput(frame, this, function, input, source, values, offset, function.arity, force, isTail, metrics) {
+                try { callTypedInput(frame, this, function, input, source, values, offset, function.arity, force, isTail, metrics, function.suppliedCount, strictInputPositions(root, input)) {
                     Calls.indirect(indirect, target, NO_PAP_ARGUMENTS)
                 } } catch (transfer: TailCall) { if (isTail) throw transfer else loop.execute(transfer) }
             }
@@ -320,6 +338,11 @@ internal class GenericInputCall(private val source: InputSource, private val cou
         }
     }
 }
+
+@CompilerDirectives.TruffleBoundary
+private fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray =
+    root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) &&
+        input.packet.isObject(input.header + input.logical.offset(it)) }.toIntArray()
 
 private fun checkResult(root: GuestRoot, destination: TupleDestination?, exact: Boolean) {
     if (exact && destination == null && root.tupleResult != null)
