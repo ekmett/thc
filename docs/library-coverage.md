@@ -13,20 +13,28 @@ Empty and negative workloads are defined. Native GHC 9.14.1 agreed with an
 independent Python set model for all 1,041 inputs from -16 through 1024.
 
 This is **not currently an executable THC coverage claim**. Its strict reachable
-audit exposes these gaps:
+audit has 71 reachable bindings, 17 capability issues and three missing
+boot-library definitions. The remaining gaps are in cold exception/state paths:
 
-- Deletion reaches unboxed pairs through `glue` and min/max extraction workers.
-  Union/difference use pairs in split workers; intersection uses triples in
-  `splitMember`. These must retain their unboxed representation when supported.
-- Existing cold exception paths additionally reach `readMutVar#` and missing
-  exception-construction, backtrace and call-stack bindings.
+- `ghc-internal` exception/backtrace workers retain unsupported state-token
+  tuple components and unresolved constructor/field representation metadata.
+- These paths also reach `readMutVar#` and three missing exception-construction,
+  backtrace-mechanism and frozen-call-stack definitions.
+
+The ordinary unboxed pair/triple results in deletion, union, difference and
+intersection are no longer the capability blocker: result tuples and tuple-result
+joins are supported. The current audit has no `aggregate-boundary` issues and
+no missing `main:` source-library body. The preparation helper checks the exact
+remaining issue owners, details and multiplicities, the three missing identities,
+and retained pointer identity; an unrelated rejection cannot substitute for this
+frontier.
 
 Insertion, deletion, union and intersection retain the real
 `reallyUnsafePtrEquality#` primitive. It is now supported on both backends as
 non-strict reference identity, without following thunk indirections. Separate
 native-oracle fixtures test identity shortcuts with valid value-based fallbacks;
 they do not require GHC and THC to make identical allocation choices. This does
-not make the Set workload executable while its aggregate and cold-path gaps remain.
+not make the Set workload executable while its exception/state gaps remain.
 
 The initial post-Tidy source export had 71 reachable bindings, three missing
 boot-library definitions and 210 capability issues, including 101 explicit
@@ -37,10 +45,9 @@ more precise diagnostics; rejection does not count as execution support.
 The [focused source-binding audit](set-source-binding-audit.md) reproduces the
 before/after identity difference and confirms that the unsupported issues remain.
 
-The full source and its strict diagnostic are retained so aggregate lowering,
-pointer identity and source/interface identity work can be tested against an
-ordinary library program. No synthetic boxed tuples or ad hoc name substitutions
-are used to make this frontier appear supported.
+The full source and its strict diagnostic retain the genuine tuple and pointer
+operations alongside the remaining exception/state frontier. No synthetic boxed
+tuples or ad hoc name substitutions are used to make this frontier appear supported.
 
 ## IntMap and word primitives
 
@@ -109,7 +116,7 @@ raising limits or adding Haskell optimizer fences. Regression tests exercise
 deep acyclic nesting, actual cloned compiled targets, shadowed ancestor jumps,
 full-width values and recursive/nonrecursive reference-result laziness.
 
-## Data.Sequence: executable slices and aggregate frontiers
+## Data.Sequence: strict-loadable slices and aggregate frontiers
 
 `THC.SequenceWorkload` exercises ordinary public `Data.Sequence` APIs from the
 same pinned, unmodified containers sources. Eleven entries share one post-Tidy
@@ -129,7 +136,9 @@ insertion and observes both drain directions; `sequenceAppendViews` concatenates
 unequal sequences in both orders; `sequenceLazyLength` observes length/null with
 self-referential, unused lifted payloads at both ends. They retain respectively
 19, 18, 23 and 9 reachable definitions. These separate API slices do not replace
-the full workload or stand in for fold/split/index support.
+the full workload or stand in for fold/split/index support. Static acceptance
+does not establish a passing compiled replay on every backend; the current
+public-entry blocker is recorded below.
 
 The remaining seven entries deliberately retain their strict unsupported
 frontiers. Specialized `foldl'`/`foldr` workers pass genuine zero-width unboxed
@@ -137,9 +146,13 @@ frontiers. Specialized `foldl'`/`foldr` workers pass genuine zero-width unboxed
 them. Scalar/reference tuple results and tuple-result joins are already supported;
 they do not remove those argument boundaries. Split, lookup, index and update
 also reach residual exception/state paths, including unsupported `State#` tuple
-components, `readMutVar#`, `quotRemInt#` and missing
-exception/backtrace/call-stack/Show definitions. No `main:` source-library binding is missing. Boxed pairs, triples,
-unit, views and finger-tree nodes are not themselves aggregate-ABI failures;
+components, `readMutVar#` and missing exception/backtrace/call-stack/Show
+definitions. `quotRemInt#` is now supported and is no longer an audit issue.
+The combined strict audit has 160 reachable bindings, 26 issues and four
+missing boot-library definitions; all seven rejected entries still retain a
+genuine tuple argument or formal-argument boundary. No `main:` source-library
+binding is missing. Boxed pairs, triples, unit, views and finger-tree nodes are
+not themselves aggregate-ABI failures;
 lifted element payloads must stay lazy. Nothing is boxed or substituted to make
 a rejected operation appear supported.
 
@@ -221,3 +234,47 @@ frontier and are excluded from execution counts. A deliberately modified IntSet
 expected value in the manifest was rejected against the fingerprinted native
 oracle before guest loading. The 30-second compilation timeout and 100,000 graph
 size limit remain unchanged.
+
+## Sequence integration validation and current compiled-entry blocker
+
+The integration at `bbc8ee434c31133fd34ec399970f9289faa998af`, based on main
+`60c39ffcbec425fa15585a0d7613f27fc75a2b2c`, passed all 310 JVM tests after fresh
+source preparation. Native GHC and independent models agreed on all 2,964
+library rows. Fresh and reuse audits retained 17 strict-accepted entries and
+eight explicit frontiers (Set plus seven Sequence entries); all fingerprints
+matched and preparation recorded no static support violations.
+
+Compiled execution remains blocked in the default configurations. These are
+separate, unmodified production-checker runs on Linux x86-64 / GHC 9.14.1 /
+GraalVM 25.3.4.1, with no post-compilation settling or retries:
+
+| Tested source head | Default AST | Bytecode | AST handoff |
+| --- | --- | --- | --- |
+| `613dc1f` (main `000dfa3` integration) | Pass | Fail | Pass |
+| `bbc8ee4` (main `60c39ff` integration) | Fail | Fail | Pass |
+
+Every complete pass includes 8,028 comparisons: 2,676 interpreted, 84
+compiled-warm, 2,592 after-compilation cold and 2,676 final compiled. All 2,760
+compiled-warm/final calls require positive compiled-entry deltas; all 17
+supported-entry diagnostics have zero unsupported traps and blackholes.
+Each failure occurs at the first measured `sequenceBuildViews(1)` compiled-warm
+call: its result matches the oracle, but its `compiledEntries` counter does not
+increase. The preceding 7,572 existing-library comparisons and 38 interpreted
+BuildViews comparisons pass. Later Sequence calls are not counted as executed.
+
+A build-only, failure-branch diagnostic at `613dc1f` reproduced the bytecode
+miss. Both host and guest targets had valid last-tier code, and the active guest
+was the original target, not a stale clone. Calling the same `Value` and input
+from a separate cold host site, in the same context and without recompilation,
+returned the expected value and increased `compiledEntries` from zero to six.
+Target identities, validity and code addresses stayed unchanged. No pre-miss
+target/call-count instrumentation was added; call count alone is not proof of
+compiled execution. The diagnostic still terminates with the original failure
+and is not a replacement coverage pass.
+
+This evidence is consistent with a site-dependent public-call-boundary bypass;
+its underlying VM mechanism remains unresolved. Neither compiling the bridge
+nor a successful mode/revision establishes a general fix. The strict default
+compiled-replay failures remain a completion blocker; no `Value.execute`
+bypass, relaxed counter requirement, optimizer fence or increased compilation
+limit is used to turn them into passes.
