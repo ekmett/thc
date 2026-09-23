@@ -1,0 +1,1654 @@
+{
+  "javaVersion": [
+    "java version \"25.0.4.1\" 2026-08-18 LTS",
+    "Java(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)",
+    "Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)"
+  ],
+  "jdkReleaseSha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05",
+  "scope": "Production THC AST/bytecode, genuine opaque GHC Core, fixed native inputs; no timing",
+  "runtimeSourceCommit": "7427ab0c48fada18431d4c892430a338292a1661",
+  "runtimeSourceSha256": {
+    "src/main/kotlin/thc/runtime/TupleResults.kt": "f4ce8e947c453e852ad0965bf0c119f795adea128d0dfe158aefd79443550413",
+    "src/main/kotlin/thc/runtime/Program.kt": "03cccce151f71e6087cfd23017af96109e93cd9906d1aa232d66d34b39073bbe",
+    "src/main/kotlin/thc/runtime/BytecodeProgram.kt": "aabaa8de6238636df1178abbbc870858eb21449b6a80bee9ec2806fd2f1a20d5",
+    "src/main/kotlin/thc/runtime/Handoff.kt": "8e8c44ae8831b358b332dc4bfb456a4a9867844093e3ba3b91b8a9e6303aa747",
+    "src/main/kotlin/thc/runtime/GuestRoot.kt": "6ac733dffb2fc9da28133eece7d9e856bb39f9d7fd5998af0091f9daf664a0be",
+    "src/main/kotlin/thc/runtime/CoreRepresentations.kt": "d6b05046f8f936242edf89241cc4b6cc2af0a5ac472a9f5d54626e788a5191cb",
+    "src/main/java/thc/runtime/BytecodeRoot.java": "0c7775a8712e4af77fe0520ba058de99d2f662c8f6f68e2003cd9cf17863f396",
+    "src/main/kotlin/thc/Language.kt": "0d3be62cd69a58edd4e749473dbfcaf82255107e1baf3e8fc9d9317b828dcbed"
+  },
+  "runtimeJarSha256": {
+    "thc-0.1-experiment.jar": "c59142b63fa4f5cc435c45dadf07bfe9b5b55fe0caec77c9f711461a2333ecc6"
+  },
+  "probeSourceSha256": {
+    "TupleRuntimeGraph.hs": "6ae07a816723cc0dd4c5051c590eacf4d1ea6a9e97c2bf66573d4e3f338da247",
+    "TupleRuntimeGraphNative.hs": "0406f99c53fadaef6adefb25c9d822daa587c674920fc673a3207bd218f320cb",
+    "TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+    "check-fixture.py": "34bab56c7c8dab9389989a94e2bd3d150c658a378ab1adf1608b6e066e54e058",
+    "collect.py": "5c4b44ac48f65753c2e7ce4b6d3e0ef9bd282589c10de0a476f7ba8cdf30f9db",
+    "inputs.py": "6397c412f7132bcd433515d1bd7dabf7c01f78b15246f86dec91049ae023e3a2",
+    "prepare.sh": "26d5f65688af7f2bcac44dbd36396e80964ddf7483dd1ac9c1f1ca6d48a90355",
+    "run-one.sh": "039c59252a06c30d474ba5b1e53529b2022424991a4c1b14e9221ca1afcb1055",
+    "summarize.py": "1c094214fd3b162b6db7f5c4c521666e85141a20d56bd7faa9e04e2832a6ecb0"
+  },
+  "fixture": {
+    "ghc": "9.14.1",
+    "runtimeProof": false,
+    "nativeRows": 55,
+    "sha256": {
+      "/private/tmp/thc-list-library/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraph.hs": "6ae07a816723cc0dd4c5051c590eacf4d1ea6a9e97c2bf66573d4e3f338da247",
+      "/private/tmp/thc-list-library/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphNative.hs": "0406f99c53fadaef6adefb25c9d822daa587c674920fc673a3207bd218f320cb",
+      "/private/tmp/thc-tuple-probe/runtime-fixture/core/TupleRuntimeGraph.json": "fbc948401ed72b4d49779c8fc926c43d7df103c15fe2532b21ebbb1df9cc9a92",
+      "/private/tmp/thc-tuple-probe/runtime-fixture/oracle.tsv": "42e9dd4c9f38c3d300273d6c2c6f6a4540e149b23671418dd0699daa23797dde",
+      "/private/tmp/thc-tuple-results/compiler/Thc/Plugin.hs": "3f46144b2ab966dae39099c9e1d89e8f03b3616639b06b0d85a6c0ab8f53434e"
+    },
+    "exporterPluginLibrarySha256": {
+      "libHSthc-core-plugin-0.1-ghc9.14.1.dylib": "099ded265df23ef547df7fabbd57e962de7bc9c6223a0ea88980ebd83e6d7aec"
+    },
+    "exporterCheckoutHeadAtInspection": "a1cb7f57156dbb1255356524625eb431d95d9c2a"
+  },
+  "results": [
+    {
+      "backend": "ast",
+      "entry": "pairCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=pairCase backend=ast mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "373f62422d727ae51e79c659b09a4dc8a548908b7db5edcbe3c90d848d229a3c",
+      "cfgSha256": "b0290a693b381bb8dda35a310279f9e4cbbdca757dc71d64bf868e57621ec13c",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 28,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 106,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 3,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "forwardedCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=forwardedCase backend=ast mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "18668edd0b6972983a73a6c446553cd78cfa294f60ce251e44df535ffa196492",
+      "cfgSha256": "f1f439a1612b8a1f3c9e31e8836f2a351d470a403194ca8ebde445775bab6fd6",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 28,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 106,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 3,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "outstandingCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=outstandingCase backend=ast mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "a1ce0eeafc14a87a53e15f4cd1f792320d1f54d27c19bb7aa97493742e358a43",
+      "cfgSha256": "00f4c4157f29b37271ad977c34230021b21cbe4d47c2ab738d471f85a91d3b71",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 42,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 117,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 3,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "mixedCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=mixedCase backend=ast mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "93044cb03ab7886e5fee27461c6eee61ba3c005e33b3af4000bb973a41cd7df9",
+      "cfgSha256": "ed170409949bd0b0e92d9f40ea6c8bd5cb7e2868810fd9c04deb48963bbccbbe",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 36,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 113,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 3,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "lazyMixedCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=lazyMixedCase backend=ast mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "2dc7ea889cac4fb52178f821224632716ca652589eb33c42286b8480413b9c24",
+      "cfgSha256": "f4b050f4201c8d59b69ee28822a2b74786b7f0accb6ddbbe066bdbd23f250c68",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 28,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 106,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 3,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "pairCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=pairCase backend=bytecode mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "f4656e77a4ecc040755284261cda765e176a2c3565740c20f8be51dbdc7abf43",
+      "cfgSha256": "6c68bf2149abc165860d7168588226b97ca435f5f2f64dee04351745aa2a4fab",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 55,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 130,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 4,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "forwardedCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=forwardedCase backend=bytecode mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "8ce486008bfe233ab966cbed8f32320051afdbb16ea9bac6e83d1194ef768a27",
+      "cfgSha256": "3260b1dd3248e5852bc6d4eb737990432c3b4be08d285912c12706e15eb9cbb3",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 55,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 130,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 4,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "outstandingCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=outstandingCase backend=bytecode mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "4e193588c26c062eaf822d94101b74149f483588d53813a1cdc5a13a9957a92c",
+      "cfgSha256": "e040f8d90cf53b1e05cc1f12f1aeca48e4af81c2b56620eda0df998b56e07137",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 67,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 140,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 4,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "mixedCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=mixedCase backend=bytecode mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "562ce3c643aa97c0a006ceaca4d91b8184e6ca2192438e04b65c0656ad07bb82",
+      "cfgSha256": "e01e1a5fa294a91839f38c49ace75b6ae25812971f54276ebc63e1a7cbbd9c18",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 63,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 136,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 4,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "lazyMixedCase",
+      "mode": "inline",
+      "checks": [
+        "PASS entry=lazyMixedCase backend=bytecode mode=inline nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "5393de9bf346468db32b40fb29cce750fe10f598356593576e8af720418fc514",
+      "cfgSha256": "5c273a8c5dee419271edede76ae3b97ba88811cf68253f3f4a68a4c2d7d884dc",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 55,
+          "invokes": [],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {}
+        },
+        "After low tier": {
+          "nodes": 129,
+          "invokes": [
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 4,
+            "INIT_LOCATION": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 1,
+            "TlabEnd": 1,
+            "TlabTop": 2,
+            "java.lang.Long.value": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "pairCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=pairCase backend=ast mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "9055ffdf443a81cd701d20956093b42c781b48b47fbb25dcae61b2c5bfa80abf",
+      "cfgSha256": "8c3be65501d712bb439b8773329639a6eaba5849a63234a2cf22e43395cfc693",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 134,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 301,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 3,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "java.lang.Long.value": 3,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "forwardedCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=forwardedCase backend=ast mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "8674ed134b4c717f44c60bce8cbdabfa21f520d90b90acf421707e37f895a53d",
+      "cfgSha256": "2159e293df8fc1b9ce6a0e56fef4e70bed3653c304b9a095101c7c6fb4b53588",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 134,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 301,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 3,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "java.lang.Long.value": 3,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "outstandingCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=outstandingCase backend=ast mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "6d1170be7aca081acf33a8aff79aca21dd2f2ae0639771c83196499753df2a59",
+      "cfgSha256": "5bf8924eb29521e23fd8021791e0ac4a2ff8e346acee51d9715ebc276afb36a5",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 223,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary",
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 2,
+            "thc.runtime.HandoffPool.active": 4,
+            "thc.runtime.HandoffState.results": 2,
+            "thc.runtime.HandoffStorage.completedGeneration": 2,
+            "thc.runtime.HandoffStorage.generation": 2,
+            "thc.runtime.HandoffStorage.layout": 2,
+            "thc.runtime.HandoffStorage.live": 4,
+            "thc.runtime.TupleResultPool.current": 4,
+            "thc.runtime.TupleResultPool.pool": 2
+          }
+        },
+        "After low tier": {
+          "nodes": 579,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 10,
+            "ExceptionOop": 4,
+            "ExceptionPc": 2,
+            "INIT_LOCATION": 11,
+            "JavaThread::<JVMCIReservedOop0>": 2,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 7,
+            "TlabEnd": 5,
+            "TlabTop": 10,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 2,
+            "java.lang.Long.value": 3,
+            "thc.runtime.HandoffPool.active": 4,
+            "thc.runtime.HandoffState.results": 2,
+            "thc.runtime.HandoffStorage.completedGeneration": 2,
+            "thc.runtime.HandoffStorage.generation": 2,
+            "thc.runtime.HandoffStorage.layout": 2,
+            "thc.runtime.HandoffStorage.live": 4,
+            "thc.runtime.TupleResultPool.current": 4,
+            "thc.runtime.TupleResultPool.pool": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "mixedCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=mixedCase backend=ast mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "cf8f0d6027ce14b0dafc7295c34faac7b4bce7cfbb30a23fd43c772e2f1a182a",
+      "cfgSha256": "a90bfeea2b5e5312ad81bedcdd2214f58747faee5c9f75a50fa090db918f5d53",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 148,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0": 1,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 325,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 4,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0": 1,
+            "java.lang.Long.value": 3,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "lazyMixedCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=lazyMixedCase backend=ast mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "0dd812826e68d887a222351e06fb8eaf19590ee27a76b7708625e8a07b29f410",
+      "cfgSha256": "814e8d05eaaaa45a9c1f544135d05c38bb10c589f477bf87b029affcc8be3668",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 141,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 307,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 3,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "java.lang.Long.value": 3,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "pairCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=pairCase backend=bytecode mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "9c0f1f806bb2e687bfebf6ba4e062982a8ed5d4b8be688492c316c155170c046",
+      "cfgSha256": "c99a18f812037b0ac54e9d22d9a8adcc4868171fa889a02e6371057ba06218a3",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 137,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 300,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 3,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "java.lang.Long.value": 2,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "forwardedCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=forwardedCase backend=bytecode mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "54962270be268a3d81d071121669fe079f8c9d8f324ca4b19cd5a6d74cfbed10",
+      "cfgSha256": "4d0327b116e56bc7d74c51b41d317f1069534c4b77ce92b14fc34aa6d2899f1a",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 137,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 300,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 3,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "java.lang.Long.value": 2,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "outstandingCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=outstandingCase backend=bytecode mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "936a294aa80b47fc67b523b637141c99a1c9697a7befa7a2b7007e73b7910896",
+      "cfgSha256": "80a53fb9a5b93f7e3f9e9a6b9e55142747da98f21703372402999854ff1039bc",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 225,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary",
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 2,
+            "thc.runtime.HandoffPool.active": 4,
+            "thc.runtime.HandoffState.results": 2,
+            "thc.runtime.HandoffStorage.completedGeneration": 2,
+            "thc.runtime.HandoffStorage.generation": 2,
+            "thc.runtime.HandoffStorage.layout": 2,
+            "thc.runtime.HandoffStorage.live": 4,
+            "thc.runtime.TupleResultPool.current": 4,
+            "thc.runtime.TupleResultPool.pool": 2
+          }
+        },
+        "After low tier": {
+          "nodes": 577,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 10,
+            "ExceptionOop": 4,
+            "ExceptionPc": 2,
+            "INIT_LOCATION": 11,
+            "JavaThread::<JVMCIReservedOop0>": 2,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 7,
+            "TlabEnd": 5,
+            "TlabTop": 10,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 2,
+            "java.lang.Long.value": 2,
+            "thc.runtime.HandoffPool.active": 4,
+            "thc.runtime.HandoffState.results": 2,
+            "thc.runtime.HandoffStorage.completedGeneration": 2,
+            "thc.runtime.HandoffStorage.generation": 2,
+            "thc.runtime.HandoffStorage.layout": 2,
+            "thc.runtime.HandoffStorage.live": 4,
+            "thc.runtime.TupleResultPool.current": 4,
+            "thc.runtime.TupleResultPool.pool": 2
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "mixedCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=mixedCase backend=bytecode mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "a3cdb0a16cc46ce79618382ab7230a82c23691ae8a04f669648c5b853ec3602a",
+      "cfgSha256": "ebbcf581a1460f7b60891fc8ece9135e9e4d91ff6982cd6505fdc7766a6155c9",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 151,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0": 1,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 324,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 4,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.field__0": 1,
+            "java.lang.Long.value": 2,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "lazyMixedCase",
+      "mode": "residual",
+      "checks": [
+        "PASS entry=lazyMixedCase backend=bytecode mode=residual nativeRows=11 arity=2 validAfterExecution=true"
+      ],
+      "bgvSha256": "84f4a518ca48de422c7da1bda936e933762fcfb0e3079f11f8e5aa1d65f08d50",
+      "cfgSha256": "0a69f9df1ec2cff6d96af76257984e82fd8119b0c962246ac3fde91679368205",
+      "phases": {
+        "Before phase HighTierLowering": {
+          "nodes": 144,
+          "invokes": [
+            "OptimizedCallTarget.callBoundary"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            },
+            {
+              "kind": "CommitAllocationNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "AllocatedObjectNode",
+              "type": null,
+              "stamp": "a!# java.lang.Object[]"
+            },
+            {
+              "kind": "BoxNode$AllocatingBoxNode",
+              "type": null,
+              "stamp": "a!# java.lang.Long"
+            }
+          ],
+          "memoryLocations": {
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        },
+        "After low tier": {
+          "nodes": 306,
+          "invokes": [
+            "Direct#OptimizedCallTarget.callBoundary",
+            "Direct#HotSpotThreadLocalHandshake.doHandshake"
+          ],
+          "allocationRelatedNodes": [
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            },
+            {
+              "kind": "PrefetchAllocateNode",
+              "type": null,
+              "stamp": "void"
+            }
+          ],
+          "memoryLocations": {
+            "Array: Object": 6,
+            "ExceptionOop": 2,
+            "ExceptionPc": 1,
+            "INIT_LOCATION": 5,
+            "JavaThread::<JVMCIReservedOop0>": 1,
+            "JavaThread::_jvmci_reserved0": 1,
+            "MarkWord": 3,
+            "TlabEnd": 2,
+            "TlabTop": 4,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__0": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__1": 1,
+            "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1.handoff__2": 2,
+            "java.lang.Long.value": 2,
+            "thc.runtime.HandoffPool.active": 2,
+            "thc.runtime.HandoffState.results": 1,
+            "thc.runtime.HandoffStorage.completedGeneration": 1,
+            "thc.runtime.HandoffStorage.generation": 1,
+            "thc.runtime.HandoffStorage.layout": 1,
+            "thc.runtime.HandoffStorage.live": 2,
+            "thc.runtime.TupleResultPool.current": 2,
+            "thc.runtime.TupleResultPool.pool": 1
+          }
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Final scalar Long host-result box remains",
+    "No multiregister machine-call ABI",
+    "No inference about application-wide inlining frequency",
+    "Protocol ownership stress tests are separate"
+  ]
+}

@@ -1,0 +1,62 @@
+=== ast / pairCase: actual After FinalCodeAnalysisStage ===
+nr   14  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[17|0x11] <|@ <|@
+nr   16  <|@ instruction r3|QWORD = LSL a: r1|QWORD b: int[3|0x3] <|@ <|@
+nr   18  <|@ instruction r1|QWORD = SUB (a: r3|QWORD, b: r1|QWORD) <|@ <|@
+nr   20  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[-23|0xffffffffffffffe9] <|@ <|@
+nr   24  <|@ instruction r3|QWORD = MADD (src1: r0|QWORD, src2: r3|QWORD, src3: r1|QWORD) <|@ <|@
+nr   26  <|@ instruction r0|QWORD = ADD a: r3|QWORD b: long[128|0x80] <|@ <|@
+nr   34  <|@ instruction r0|DWORD = ADD a: r3|DWORD(QWORD) b: int[128|0x80] <|@ <|@
+nr   44  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  144  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@70535bc1 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   70  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr  102  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@70535bc1 state [bci:0] <|@ <|@
+=== ast / mixedCase: actual After FinalCodeAnalysisStage ===
+nr   14  <|@ instruction r3|QWORD = SUB (a: r1|QWORD, b: r0|QWORD) <|@ <|@
+nr   16  <|@ instruction r3|QWORD = ADD a: r3|QWORD b: long[-42|0xffffffffffffffd6] <|@ <|@
+nr   18  <|@ instruction r4|QWORD = LSL a: r3|QWORD b: int[3|0x3] <|@ <|@
+nr   20  <|@ instruction r3|QWORD = SUB (a: r4|QWORD, b: r3|QWORD) <|@ <|@
+nr   22  <|@ instruction r0|QWORD = ADD a: r0|QWORD b: long[10|0xa] <|@ <|@
+nr   24  <|@ instruction r0|QWORD = ADD (src1: r0|QWORD, src2: r0|QWORD) shiftType: LSL shiftAmt: 2 <|@ <|@
+nr   26  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[18|0x12] <|@ <|@
+nr   28  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   30  <|@ instruction r0|QWORD = ADD (a: r1|QWORD, b: r0|QWORD) <|@ <|@
+nr   32  <|@ instruction r3|QWORD = ADD (a: r0|QWORD, b: r3|QWORD) <|@ <|@
+nr   34  <|@ instruction r0|QWORD = ADD a: r3|QWORD b: long[128|0x80] <|@ <|@
+nr   42  <|@ instruction r0|DWORD = ADD a: r3|DWORD(QWORD) b: int[128|0x80] <|@ <|@
+nr   52  <|@ instruction r0|QWORD[.+] = ADD (src1: r1|QWORD[.], src2: r0|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  152  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@1d5c3d52 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   78  <|@ instruction r4|QWORD = ADD a: r0|QWORD b: long[16|0x10] <|@ <|@
+nr  110  <|@ instruction r1|QWORD = ADD (src1: r4|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@1d5c3d52 state [bci:0] <|@ <|@
+=== bytecode / pairCase: actual After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[17|0x11] <|@ <|@
+nr   10  <|@ instruction r3|QWORD = LSL a: r1|QWORD b: int[3|0x3] <|@ <|@
+nr   12  <|@ instruction r1|QWORD = SUB (a: r3|QWORD, b: r1|QWORD) <|@ <|@
+nr   20  <|@ instruction r4|QWORD = ADD a: r4|QWORD b: long[-23|0xffffffffffffffe9] <|@ <|@
+nr   24  <|@ instruction r4|QWORD = MADD (src1: r4|QWORD, src2: r5|QWORD, src3: r1|QWORD) <|@ <|@
+nr   26  <|@ instruction r1|QWORD = ADD a: r4|QWORD b: long[128|0x80] <|@ <|@
+nr   36  <|@ instruction r1|DWORD = ADD a: r4|DWORD(QWORD) b: int[128|0x80] <|@ <|@
+nr   46  <|@ instruction r1|QWORD[.+] = ADD (src1: r4|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  164  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@b7c5233 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   72  <|@ instruction r6|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr  114  <|@ instruction r5|QWORD = ADD (src1: r6|QWORD, src2: r5|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@b7c5233 state [bci:19, 28, 15, 5, 40] <|@ <|@
+=== bytecode / mixedCase: actual After FinalCodeAnalysisStage ===
+nr   14  <|@ instruction r5|QWORD = SUB (a: r4|QWORD, b: r1|QWORD) <|@ <|@
+nr   16  <|@ instruction r5|QWORD = ADD a: r5|QWORD b: long[-42|0xffffffffffffffd6] <|@ <|@
+nr   18  <|@ instruction r6|QWORD = LSL a: r5|QWORD b: int[3|0x3] <|@ <|@
+nr   20  <|@ instruction r5|QWORD = SUB (a: r6|QWORD, b: r5|QWORD) <|@ <|@
+nr   22  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[10|0xa] <|@ <|@
+nr   24  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 2 <|@ <|@
+nr   26  <|@ instruction r4|QWORD = ADD a: r4|QWORD b: long[18|0x12] <|@ <|@
+nr   28  <|@ instruction r4|QWORD = ADD (src1: r4|QWORD, src2: r4|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@
+nr   30  <|@ instruction r1|QWORD = ADD (a: r4|QWORD, b: r1|QWORD) <|@ <|@
+nr   32  <|@ instruction r4|QWORD = ADD (a: r1|QWORD, b: r5|QWORD) <|@ <|@
+nr   34  <|@ instruction r1|QWORD = ADD a: r4|QWORD b: long[128|0x80] <|@ <|@
+nr   44  <|@ instruction r1|DWORD = ADD a: r4|DWORD(QWORD) b: int[128|0x80] <|@ <|@
+nr   54  <|@ instruction r1|QWORD[.+] = ADD (src1: r4|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@
+nr  172  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@e195d63 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+nr   80  <|@ instruction r6|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@
+nr  122  <|@ instruction r5|QWORD = ADD (src1: r6|QWORD, src2: r5|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@
+>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@e195d63 state [bci:19, 28, 15, 5, 40] <|@ <|@
