@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdDoubleVectorTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-23T18:24:56.064Z" hostname="eak-quartus" time="2.222">
+  <properties/>
+  <testcase name="exactShapeAndVectorBackedStorageRemainDistinctFromDoubleTuple()" classname="thc.runtime.SimdDoubleVectorTest" time="0.003"/>
+  <testcase name="primitiveLanesPreserveMovementBitsAndBinary64Arithmetic()" classname="thc.runtime.SimdDoubleVectorTest" time="0.014"/>
+  <testcase name="genuineCoreMatchesAvailableOracleAndEntersCompiledCodeForEveryInput()" classname="thc.runtime.SimdDoubleVectorTest" time="2.187"/>
+  <testcase name="bothLoadersRejectForgedVectorProofsAndVectorFormalArguments()" classname="thc.runtime.SimdDoubleVectorTest" time="0.017"/>
+  <testcase name="unknownLaneKindCannotHideFloatLiteralInVectorBroadcast()" classname="thc.runtime.SimdDoubleVectorTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
