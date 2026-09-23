@@ -65,3 +65,9 @@ valid host/active entry targets. Bounds, byte aliasing, state ordering, exact
 metadata and malformed applications have separate controls. CI also executes
 the dense-handoff configuration. These are correctness checks, not throughput
 measurements or a claim that all allocation disappears after compilation.
+
+[Production graph evidence](../bench/experiments/int-array-access/README.md)
+checks both primitive fixtures on AST and bytecode with normal inlining. It
+shows primitive Long loads and stores into the shared byte arrays, whose
+allocations remain, plus one scalar host-result box. The graph captures use
+default handoff and do not claim residual-call or throughput coverage.
