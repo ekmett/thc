@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdVectorTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-23T14:02:41.738Z" hostname="eak-quartus" time="0.791">
+  <properties/>
+  <testcase name="vectorCallAndResultBoundariesStayExplicitlyUnsupported()" classname="thc.runtime.SimdVectorTest" time="0.299"/>
+  <testcase name="realCoreVectorArithmeticRemainsInstalledAfterCompiledExecution()" classname="thc.runtime.SimdVectorTest" time="0.477"/>
+  <testcase name="exactVectorMetadataAndDurableStorageAreDistinctFromTuples()" classname="thc.runtime.SimdVectorTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
