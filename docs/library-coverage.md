@@ -223,3 +223,5 @@ captures, saved read values and a recursive local join. Six pre/post-Tidy entry
 points strictly audit with no missing definitions or capability issues; 1,590
 native rows agree with an independent arithmetic model. Lifted values remain
 lazy through storage and reads, including bottom and closure payloads.
+
+The [unsafe-equality case lowering](unsafe-equality-cases.md) follows GHC's exact late compiler rule. It removes matching proof-case dependencies without supplying a general proof value; full Typeable/ErrorCall fingerprint and FFI paths remain unsupported.

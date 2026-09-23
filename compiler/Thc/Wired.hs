@@ -2,7 +2,7 @@
 -- These templates are never inserted into the optimized ModGuts or passed back
 -- through Core simplification: unary-class erasure changes the apparent Core
 -- type, exactly as GHC.CoreToStg.myCollectArgs does at the representation boundary.
-module Thc.Wired (wiredApplication, wiredRhs, preservesWiredTypes, isWiredVoid, wiredOrigin) where
+module Thc.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid, wiredOrigin) where
 
 import GHC.Plugins
 import GHC.Builtin.Names
@@ -10,7 +10,7 @@ import GHC.Builtin.Names
   , runRWKey, realWorldPrimIdKey )
 import GHC.Core.Class (classAllSelIds)
 import GHC.Core.TyCo.Compare (eqType)
-import GHC.Core.Utils (isUnaryClassId)
+import GHC.Core.Utils (isUnaryClassId, isUnsafeEqualityCase)
 import GHC.Types.Id.Make (mkDictSelRhs, realWorldPrimId)
 import Data.List (findIndex)
 
@@ -37,6 +37,15 @@ wiredApplication expression = case collectArgs expression of
   where
     isTypeArg Type{} = True
     isTypeArg _ = False
+
+-- | The exact late CoreToStg case rule, before erasing type/coercion arguments
+-- and occurrence information. GHC checks its wired Id/DataCon keys, one
+-- UnsafeRefl alternative, and a dead case binder. In particular this supplies
+-- neither a first-class proof value nor a rewrite for an arbitrary bottom.
+-- The returned Core is used only by export, never by the simplifier.
+wiredCase :: CoreExpr -> Maybe CoreExpr
+wiredCase (Case scrut bndr _ alts) = isUnsafeEqualityCase scrut bndr alts
+wiredCase _ = Nothing
 
 -- runRW# f becomes f realWorld# without changing any retained Core type.
 -- Unary-class erasure does change apparent types, so it must remain uncertified.

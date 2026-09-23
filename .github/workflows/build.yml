@@ -176,6 +176,7 @@ jobs:
             build/empty-tuple-input/
             build/sqrt/
             build/tag-to-enum/
+            build/unsafe-equality/
             build/test-results/
             build/aggregate-frontier.json
             build/primop-coverage.json
