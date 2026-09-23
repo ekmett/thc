@@ -18,6 +18,7 @@ import tarfile
 
 CASES = "build/libraries/cases.json"
 LIB = "build/install/thc/lib"
+RECEIPT = "build/library-transfer-verified.json"
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 
 
@@ -123,6 +124,7 @@ def inventory(root, cases, jars, cases_hash):
     hashes.update(jars)
     require(CASES not in hashes and HEX.fullmatch(cases_hash), "Invalid original cases fingerprint")
     hashes[CASES] = cases_hash
+    require(RECEIPT not in hashes, "Library payload collides with verification receipt")
     sources = {name: value for name, value in hashes.items() if name in tracked}
     payload = {name: value for name, value in hashes.items() if name not in tracked}
     require(all(PurePosixPath(name).parts[0] in ("build", "vendor") for name in payload),
@@ -167,6 +169,10 @@ def pack(root, output):
 
 def restore(root, source):
     current = identity(root)
+    receipt_path = file_path(root, RECEIPT)
+    require(RECEIPT not in git(root, "ls-files", "-z").split("\0"),
+            "Verification receipt would overwrite a tracked source")
+    require(not receipt_path.exists(), "Verification receipt already exists; use a fresh consumer checkout")
     with tarfile.open(source, "r:gz") as archive:
         members = archive.getmembers()
         names = [member.name for member in members]
@@ -208,7 +214,8 @@ def restore(root, source):
     receipt = {"schema": 1, "identity": current, "bundleSha256": digest(source),
                "casesSha256": payload[CASES], "sourceFilesVerified": len(sources),
                "payloadFilesVerified": len(payload), "runtimeJars": manifest["runtimeJars"]}
-    (root / "build/library-transfer-verified.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    with receipt_path.open("x") as stream:
+        stream.write(json.dumps(receipt, indent=2) + "\n")
     print(f"Verified original library inputs and runtime for {current['sourceSha']} / {current['runnerOS']}")
     return receipt
 

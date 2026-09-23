@@ -195,6 +195,36 @@ class LibraryBundleTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "pinned GraalVM"):
             bundle.restore(self.root, self.archive)
 
+    def test_receipt_link_or_nonregular_destination_cannot_modify_verified_source(self):
+        self.pack()
+        self.clear_payload()
+        receipt = self.root / bundle.RECEIPT
+        receipt.parent.mkdir()
+        receipt.symlink_to(self.source)
+        with self.assertRaisesRegex(RuntimeError, "traverses a link"):
+            bundle.restore(self.root, self.archive)
+        self.assertEqual(self.source.read_text(), "verified source\n")
+        self.assertFalse((self.root / "vendor").exists())
+        receipt.unlink()
+        os.link(self.source, receipt)
+        with self.assertRaisesRegex(RuntimeError, "receipt already exists"):
+            bundle.restore(self.root, self.archive)
+        self.assertEqual(self.source.read_text(), "verified source\n")
+        self.assertFalse((self.root / "vendor").exists())
+        receipt.unlink()
+        receipt.mkdir()
+        with self.assertRaisesRegex(RuntimeError, "receipt already exists"):
+            bundle.restore(self.root, self.archive)
+        self.assertFalse((self.root / "vendor").exists())
+
+    def test_verification_receipt_cannot_overlap_hashed_payload(self):
+        receipt = self.root / bundle.RECEIPT
+        receipt.write_text("payload claimed as receipt")
+        self.cases["artifactHashes"][str(receipt)] = bundle.digest(receipt)
+        self.write_cases()
+        with self.assertRaisesRegex(RuntimeError, "collides with verification receipt"):
+            self.pack()
+
 
 if __name__ == "__main__":
     unittest.main()
