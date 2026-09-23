@@ -54,6 +54,14 @@ fun main(args: Array<String>) {
     val oracle = File(File(args[0]).absoluteFile.parentFile, "oracle.tsv")
     require((cases["artifactHashes"] as Map<String, String>).containsKey(oracle.path))
     check(manifestRows == oracle.readLines()) { "Library manifest rows disagree with the fingerprinted native oracle" }
+    val validationFile = File(oracle.parentFile, "oracle-validation.json")
+    require((cases["artifactHashes"] as Map<String, String>).containsKey(validationFile.path))
+    val validation = Json.parse(validationFile.readText()) as Map<String, Any?>
+    require(validation["compiler"] == "9.14.1" && validation["allNativeResultsMatchIndependentModels"] == true)
+    require((validation["nativeRows"] as Number).toInt() == manifestRows.size)
+    check((validation["staticSupportViolations"] as List<*>).isEmpty()) {
+        "Library preparation recorded static support violations; regenerate and review the declared frontier"
+    }
     fun diagnostics(function: Value) = Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>
     fun count(function: Value, name: String) = (diagnostics(function)[name] as Number).toLong()
     for (group in groups) {
