@@ -1,0 +1,92 @@
+{
+  "scope": "Independent contract probe; not production THC runtime graph evidence",
+  "javaVersion": [
+    "java version \"25.0.4.1\" 2026-08-18 LTS",
+    "Java(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)",
+    "Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)"
+  ],
+  "sourceSha256": {
+    "MixedTupleProbe.java": "5dd0dec282711e5ed97eac45402ac2c58117974d4ea86192fa1f0131db189402",
+    "TupleDirectiveProbe.java": "f44a7c2bc9a49f2936199574e448f82afd9f39a14981e8d71048b8cb27658e96",
+    "VirtualEscapeProbe.java": "3fcfc1eb5cfab02d92c6dbbca2312be16edb15dcd92ec2965636e087209705e1"
+  },
+  "checks": {
+    "directive-inline": [
+      "PASS inline=true interpreter=0 standalone-helper=3 callee-helper=2 normalizedForward=true coldDeoptContinuation=true consumerValidAfterDeopt=false",
+      "PASS unnormalized-root-invalidated=true replay-completion=true"
+    ],
+    "directive-residual": [
+      "PASS inline=false interpreter=0 standalone-helper=3 callee-helper=3 normalizedForward=true coldDeoptContinuation=true consumerValidAfterDeopt=false"
+    ],
+    "mixed-inline": [
+      "PASS barrier inline=true actualMaterializedConsumes=1 observations=42",
+      "PASS mixed inline=true independentLongs=true lazyReferenceIdentity=true warmCompiledValid=true deoptMaterialization=true validAfterDeopt=false"
+    ],
+    "mixed-residual": [
+      "PASS barrier inline=false actualMaterializedConsumes=0 observations=42",
+      "PASS mixed inline=false independentLongs=true lazyReferenceIdentity=true warmCompiledValid=true deoptMaterialization=true validAfterDeopt=false"
+    ],
+    "virtual-escape": [
+      "PASS virtual escape hard failure"
+    ]
+  },
+  "phases": {
+    "Before phase HighTierLowering": {
+      "nodes": 50,
+      "counts": {
+        "ConstantNode": 11,
+        "FixedGuardNode": 1,
+        "FrameState": 1,
+        "ParameterNode": 1,
+        "PiArrayNode": 1,
+        "PiNode": 7,
+        "ReturnNode": 1,
+        "ShortCircuitOrNode": 1,
+        "StartNode": 1,
+        "AddNode": 1,
+        "ConditionalNode": 1,
+        "IntegerEqualsNode": 2,
+        "LeftShiftNode": 1,
+        "MulNode": 1,
+        "ObjectEqualsNode": 1,
+        "SubNode": 1,
+        "XorNode": 2,
+        "BoxNode$PureBoxNode": 1,
+        "BoxNode$TrustedBoxedValue": 4,
+        "UnboxNode": 4,
+        "LoadIndexedNode": 6
+      }
+    },
+    "After low tier": {
+      "nodes": 66,
+      "counts": {
+        "AArch64AddressNode": 11,
+        "CurrentJavaThreadNode": 1,
+        "HotSpotCompressionNode": 4,
+        "HotSpotDirectCallTargetNode": 1,
+        "BeginNode": 4,
+        "ConstantNode": 9,
+        "DeoptimizeNode": 1,
+        "EndNode": 2,
+        "FrameState": 2,
+        "IfNode": 2,
+        "InvokeNode": 1,
+        "MergeNode": 1,
+        "ParameterNode": 1,
+        "ReturnNode": 1,
+        "StartNode": 1,
+        "AddNode": 1,
+        "ConditionalNode": 2,
+        "IntegerEqualsNode": 3,
+        "LeftShiftNode": 1,
+        "MulNode": 1,
+        "PointerEqualsNode": 1,
+        "SubNode": 1,
+        "XorNode": 2,
+        "MemoryAnchorNode": 1,
+        "ReadNode": 11
+      }
+    }
+  },
+  "machineReturn": "One Object result, additionalReturns=[]; scalarized caller values may spill"
+}
