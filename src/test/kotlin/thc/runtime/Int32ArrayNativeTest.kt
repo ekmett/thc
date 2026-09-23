@@ -93,6 +93,53 @@ class Int32ArrayNativeTest {
     }
     @Test fun nativePublicArraysAndByteAliasesWithInlining() = native(true)
     @Test fun nativePublicArraysAndByteAliasesAcrossResidualCalls() = native(false)
+    @Test fun genuineNoinlineNarrowLiteralsRefineUnknownProofsInCompiledCode() {
+        val manifest = manifest()
+        val entries = listOf("noinlineInt32Literal", "noinlineWord32Literal")
+        assertEquals(entries, manifest["literalEntries"])
+        for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
+            val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
+                .joinToString("") { "%02x".format(it.toInt() and 255) }
+            assertEquals(expected, actual, "Stale literal fixture: $path")
+        }
+        val rows = File(root, "build/int32-arrays/literal-oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        assertEquals(entries.toSet(), rows.keys)
+        assertEquals(14, rows.values.sumOf { it.size })
+        assertEquals(14, (manifest["literalNativeRows"] as Number).toInt())
+        for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) for (name in entries) {
+            val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+            assertEquals((manifest["literalInputs"] as List<Number>).map { it.toLong() }, cases.map { it.first })
+            for ((input, answer) in cases) assertEquals(input + if (name == entries[0]) -2147483648L else 4294967295L, answer)
+            for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining).use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val linked = CoreModules.reachable(merged(paths), name)
+                    val bindings = linked["bindings"] as List<Map<String, Any?>>
+                    val program = program(language, linked + ("instrument" to true), backend)
+                    val entry = program.entryTarget(bindings.single { it["name"] == name }["id"] as String)
+                    fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    for ((input, answer) in cases) assertEquals(answer, Calls.target(entry, arrayOf(0L, input)))
+                    val targets = activeTargets(entry)
+                    assertEquals(2, targets.size, "$stage/$backend/$name entry and opaque worker")
+                    targets.forEach(::compile)
+                    for ((input, answer) in cases) {
+                        val label = "$stage/$backend/$name/$input/inlining=$inlining"
+                        val before = count()
+                        assertEquals(answer, Calls.target(entry, arrayOf(0L, input)), label)
+                        assertEquals(2L, count()-before, "$label exact compiled entries")
+                        val active = activeTargets(entry)
+                        assertEquals(targets.size, active.size, "$label active target count")
+                        assertTrue(active.all { current -> targets.any { it === current } }, "$label active identities")
+                        targets.forEach { valid(it, label) }
+                        released(language)
+                    }
+                    for (counter in listOf("unsupportedTraps", "blackholes"))
+                        assertEquals(0L, (program.diagnostics().getValue(counter) as Number).toLong(), counter)
+                } finally { context.leave() }
+            }
+        }
+    }
     private fun native(inlining: Boolean) {
         val manifest = manifest()
         assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())

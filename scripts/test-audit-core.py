@@ -174,6 +174,26 @@ class AuditTest(unittest.TestCase):
                     if not report['accepted']:
                         self.assertIn('scalar-representation', {i['code'] for i in report['issues']})
 
+    def test_narrow_32bit_literals_refine_unconstrained_but_not_malformed_metadata(self):
+        for kind in ('int32', 'word32'):
+            for evaluated in (False, True):
+                for registers in ({}, {'primReps': None}):
+                    proof = dict(kind='unknown', evaluated=evaluated, **registers)
+                    self.assertTrue(run(['lit', kind, '1', dict(rep=proof)])['accepted'])
+                    for operation, expected, result in (('int32ToInt#', 'int32', 'IntRep'),
+                                                        ('word32ToWord#', 'word32', 'WordRep')):
+                        expression = ['app', ['prim', operation], [['lit', kind, '1', dict(rep=proof)]],
+                                      [False], False, False, dict(rep=dict(kind='long', primReps=[result], evaluated=True))]
+                        report = run(expression)
+                        self.assertEqual(kind == expected, report['accepted'])
+                        if kind != expected:
+                            self.assertIn('primitive-representation', {issue['code'] for issue in report['issues']})
+            for proof in ([], 'unknown', dict(kind='unknown', primReps=None),
+                          dict(kind='unknown', primReps=None, evaluated='false'),
+                          dict(kind='unknown', primReps=[], evaluated=False),
+                          dict(kind='unknown', primReps=[], evaluated=False, aggregate='unboxed-tuple', components=[])):
+                self.assertFalse(run(['lit', kind, '1', dict(rep=proof)])['accepted'], proof)
+
     def test_floating_literal_carriers_cannot_be_overridden_by_metadata(self):
         carriers = [(['lit', 'float', '1.0'], dict(kind='float', primReps=['FloatRep'], evaluated=True)),
                     (['lit', 'double', '1.0'], dict(kind='double', primReps=['DoubleRep'], evaluated=True)),
