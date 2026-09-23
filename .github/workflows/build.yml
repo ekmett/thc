@@ -131,6 +131,7 @@ jobs:
         run: |
           python3 scripts/test-audit-core.py
           python3 scripts/test-library-frontier.py
+          python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
           python3 scripts/test-floatx4-model.py
           python3 scripts/test-doublex2-model.py
@@ -250,6 +251,7 @@ jobs:
             build/libraries/oracle-validation.json
             build/libraries/check-*.log
             build/libraries/*/audit.json
+            build/libraries/sequence/*.audit.json
             build/libraries/*/provenance.json
             build/map/audit.json
             build/map/check-*.log

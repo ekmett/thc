@@ -1,0 +1,334 @@
+{
+  "schema": 1,
+  "baseRevision": "09662cdaee0ac84d2a6236adeed8990885d5ea61",
+  "guestRuntimeChanged": false,
+  "scope": "Four regular Sequence workloads; three strict frontiers; no host-linkage remedy claimed",
+  "freshNative": {
+    "compiler": "9.14.1",
+    "nativeRows": 2812,
+    "supportedRows": 2676,
+    "frontierRows": 136,
+    "allNativeResultsMatchIndependentModels": true,
+    "staticSupportViolations": []
+  },
+  "sequenceNativeRows": 266,
+  "sequenceSupportedNativeRows": 152,
+  "sequenceFrontierOnlyNativeRows": 114,
+  "inputsVerified": 71,
+  "artifactsVerified": 63,
+  "runs": [
+    {
+      "backend": "ast",
+      "handoff": false,
+      "exitStatus": 0,
+      "log": "build/libraries/check-ast-handoff-false.log",
+      "logSha256": "e40d5eeead5e287df0ecff18882a6ce48bf089ee007d8e91d8f48df763bcd4ca",
+      "comparisons": 8028,
+      "phases": {
+        "interpreted": 2676,
+        "compiled-warm": 84,
+        "after-compilation-cold": 2592,
+        "post-cold-compiled": 2676
+      },
+      "requiredCompiledChecks": 2760,
+      "sequenceComparisons": 456,
+      "sequenceRequiredCompiledChecks": 164,
+      "supportedEntries": 17,
+      "rejectedEntries": [
+        "setAggregate",
+        "sequenceSplit",
+        "sequenceIndexUpdate",
+        "sequenceAggregate"
+      ],
+      "unsupportedTraps": 0,
+      "blackholes": 0
+    },
+    {
+      "backend": "bytecode",
+      "handoff": false,
+      "exitStatus": 0,
+      "log": "build/libraries/check-bytecode-handoff-false.log",
+      "logSha256": "3ac0df1c2424f0d8dbe0272eb1d092132843c07750bd559ac04af87a2de3352e",
+      "comparisons": 8028,
+      "phases": {
+        "interpreted": 2676,
+        "compiled-warm": 84,
+        "after-compilation-cold": 2592,
+        "post-cold-compiled": 2676
+      },
+      "requiredCompiledChecks": 2760,
+      "sequenceComparisons": 456,
+      "sequenceRequiredCompiledChecks": 164,
+      "supportedEntries": 17,
+      "rejectedEntries": [
+        "setAggregate",
+        "sequenceSplit",
+        "sequenceIndexUpdate",
+        "sequenceAggregate"
+      ],
+      "unsupportedTraps": 0,
+      "blackholes": 0
+    },
+    {
+      "backend": "ast",
+      "handoff": true,
+      "exitStatus": 0,
+      "log": "build/libraries/check-ast-handoff-true.log",
+      "logSha256": "216b5905adc1d794f9564b697052b23a55a73c091dc6c40a40586c79a5f8a5cf",
+      "comparisons": 8028,
+      "phases": {
+        "interpreted": 2676,
+        "compiled-warm": 84,
+        "after-compilation-cold": 2592,
+        "post-cold-compiled": 2676
+      },
+      "requiredCompiledChecks": 2760,
+      "sequenceComparisons": 456,
+      "sequenceRequiredCompiledChecks": 164,
+      "supportedEntries": 17,
+      "rejectedEntries": [
+        "setAggregate",
+        "sequenceSplit",
+        "sequenceIndexUpdate",
+        "sequenceAggregate"
+      ],
+      "unsupportedTraps": 0,
+      "blackholes": 0
+    },
+    {
+      "backend": "bytecode",
+      "handoff": true,
+      "exitStatus": 0,
+      "log": "build/libraries/check-bytecode-handoff-true.log",
+      "logSha256": "3ac0df1c2424f0d8dbe0272eb1d092132843c07750bd559ac04af87a2de3352e",
+      "comparisons": 8028,
+      "phases": {
+        "interpreted": 2676,
+        "compiled-warm": 84,
+        "after-compilation-cold": 2592,
+        "post-cold-compiled": 2676
+      },
+      "requiredCompiledChecks": 2760,
+      "sequenceComparisons": 456,
+      "sequenceRequiredCompiledChecks": 164,
+      "supportedEntries": 17,
+      "rejectedEntries": [
+        "setAggregate",
+        "sequenceSplit",
+        "sequenceIndexUpdate",
+        "sequenceAggregate"
+      ],
+      "unsupportedTraps": 0,
+      "blackholes": 0
+    }
+  ],
+  "sequenceSourceProvenance": {
+    "source": "https://hackage.haskell.org/package/containers-0.8/containers-0.8.tar.gz",
+    "sha256": "b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8",
+    "sourcePatches": [],
+    "containersUnitPolicy": "Unmodified sources compiled with workload in the same main home unit",
+    "postTidy": true,
+    "compiler": "9.14.1",
+    "workload": "examples/THC/SequenceWorkload.hs",
+    "workloadSha256": "555e90f273e433b252016d70d30e46959f15dfd6c7ef6d83f206cdf7174e383b",
+    "sourceNotes": true,
+    "modules": [
+      {
+        "path": "build/libraries/sequence/core/Utils.Containers.Internal.Prelude.json",
+        "sha256": "e76184f1f71eef2063491c754dd6aa012abcb7f5a167098c656ab8dc37555e3d"
+      },
+      {
+        "path": "build/libraries/sequence/core/Utils.Containers.Internal.State.json",
+        "sha256": "ea895979d717a999e3238fb9fe4259c216f6ab27c0cf87beb477f1a90eab7d3e"
+      },
+      {
+        "path": "build/libraries/sequence/core/Utils.Containers.Internal.StrictPair.json",
+        "sha256": "941be19fe84413fbf6a8848aa47771ee778759b5ced5b8dfcaa035dca98f7497"
+      },
+      {
+        "path": "build/libraries/sequence/core/Data.Sequence.Internal.json",
+        "sha256": "62ab0494bc27d2facfadb5a07d54c4e08b3d5bc5a39395fb55622b1996780254"
+      },
+      {
+        "path": "build/libraries/sequence/core/Data.Sequence.Internal.Sorting.json",
+        "sha256": "00a1fc12e541319c7adc4bcea51b19d765e20ce953c38912cf79275d75bfd6ba"
+      },
+      {
+        "path": "build/libraries/sequence/core/Data.Sequence.json",
+        "sha256": "e0c24ecaa7a68f375bf091a5c10e47c492e472ad8b3ef5a3c5de5aaab1267e53"
+      },
+      {
+        "path": "build/libraries/sequence/core/THC.SequenceWorkload.json",
+        "sha256": "07ef8db3ab54e7a1c62af24a551673eb884ef411519d12069c0bbe170581d32f"
+      },
+      {
+        "path": "build/libraries/sequence/core/THC.InterfaceClosure.json",
+        "sha256": "950e6309ad578dc8f9f8789bf42b24bd92e5a93c00d0611ae18960fbd981a2c4"
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.Internal.CString.json",
+        "sha256": "ae9b6497bcd90a15930154e40b8c456c8f2cba2e795220f0110d3b09e1323f66"
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.Internal.Err.json",
+        "sha256": "1d42b526ed9de5bc49de3c02111931b6ad67f52ffc9a015d0a91a6b2973ad445"
+      },
+      {
+        "path": "build/libraries/boot/core/GHC.InterfaceClosure.json",
+        "sha256": "fb081d6f309c4cfbdcd986eba7ab4760af470eff43b1ae9e98037d4398a914a5"
+      }
+    ],
+    "initialMissingDefinitions": [
+      {
+        "id": "ghc-internal:GHC.Internal.Err.error",
+        "type": "forall a. HasCallStack => [Char] -> a",
+        "reason": "No executable interface unfolding; source export required"
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.CString.unpackCString#",
+        "type": "Addr# -> [Char]",
+        "reason": "No executable interface unfolding; source export required"
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.CString.unpackAppendCString#",
+        "type": "Addr# -> [Char] -> [Char]",
+        "reason": "No executable interface unfolding; source export required"
+      },
+      {
+        "id": "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'",
+        "type": "Int# -> String -> String",
+        "reason": "No executable interface unfolding; source export required"
+      }
+    ],
+    "bootExports": {
+      "ghcTag": "ghc-9.14.1-release",
+      "sourcePatches": [],
+      "frontier": "exceptions",
+      "sourceNotes": true,
+      "sources": [
+        {
+          "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/CString.hs",
+          "path": "vendor/ghc-9.14.1/GHC/Internal/CString.hs",
+          "sha256": "3b2e7a0fb2880d8f98cb002adfbaa36a8469667b7494f8f695fe1a6f181de573"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Err.hs",
+          "path": "vendor/ghc-9.14.1/GHC/Internal/Err.hs",
+          "sha256": "f109ac925928a0e7fed063bcfd03c93e3d8629d8054d984e600aab26c0122478"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Exception.hs-boot",
+          "path": "vendor/ghc-9.14.1/GHC/Internal/Exception.hs-boot",
+          "sha256": "7422fa92308439db3c0ca034b02522c96e7961cff00754d0bdca964a4f98bc15"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
+          "path": "vendor/ghc-9.14.1/GHC/Internal/Exception/Type.hs-boot",
+          "sha256": "f2a0440d35e33a8688d692cf50e4d33e74e92f08e84b04ab8aec20fd4861d2e0"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/LICENSE",
+          "path": "vendor/ghc-9.14.1/LICENSE",
+          "sha256": "768c070bd0b7d820d169ee8153d5487acfc262cbbc10dfce18d05c0bb2d2800d"
+        }
+      ],
+      "sourceModules": [
+        "GHC.Internal.CString",
+        "GHC.Internal.Err"
+      ],
+      "boundary": "Original source after Tidy, before CorePrep; explicit dependency boundary",
+      "unitPolicy": "Original wired ghc-internal unit, private dynamic-interface overlay, installed packages unmodified",
+      "pluginLoading": "package-interface",
+      "interfaceRoot": "compiler/package-roots/InterfaceRoots.hs",
+      "interfacePolicy": "Actual installed non-boot Core/DFun unfoldings; unsupported and missing paths remain explicit"
+    },
+    "strictAccepted": false,
+    "execution": "frontier",
+    "entryAudits": {
+      "sequenceBuild": {
+        "audit": "/private/tmp/thc-sequence-library-coverage/build/libraries/sequence/sequenceBuild.audit.json",
+        "execution": "supported"
+      },
+      "sequenceEnds": {
+        "audit": "/private/tmp/thc-sequence-library-coverage/build/libraries/sequence/sequenceEnds.audit.json",
+        "execution": "supported"
+      },
+      "sequenceAppend": {
+        "audit": "/private/tmp/thc-sequence-library-coverage/build/libraries/sequence/sequenceAppend.audit.json",
+        "execution": "supported"
+      },
+      "sequenceSplit": {
+        "audit": "/private/tmp/thc-sequence-library-coverage/build/libraries/sequence/sequenceSplit.audit.json",
+        "execution": "frontier"
+      },
+      "sequenceIndexUpdate": {
+        "audit": "/private/tmp/thc-sequence-library-coverage/build/libraries/sequence/sequenceIndexUpdate.audit.json",
+        "execution": "frontier"
+      },
+      "sequenceAggregate": {
+        "audit": "/private/tmp/thc-sequence-library-coverage/build/libraries/sequence/sequenceAggregate.audit.json",
+        "execution": "frontier"
+      },
+      "sequenceLazyPayloads": {
+        "audit": "/private/tmp/thc-sequence-library-coverage/build/libraries/sequence/sequenceLazyPayloads.audit.json",
+        "execution": "supported"
+      }
+    }
+  },
+  "lazyCoreProof": {
+    "coreSha256": "07ef8db3ab54e7a1c62af24a551673eb884ef411519d12069c0bbe170581d32f",
+    "auditSha256": "bc5286cb1ce92e8718d96e9cf7a787cc323eed3ffc2d2d5518402c0abd2be873",
+    "reachableLiftedSelfRecursiveBindings": [
+      "main:THC.SequenceWorkload.sequenceLazyLength_hidden"
+    ]
+  },
+  "sourceHashes": {
+    "src/main/kotlin/thc/LibraryCheck.kt": "06400fc8b3d9bafc2cc3ff1a7fd19bd63e1348c2168be02feb6a30e060bea68d",
+    "scripts/prepare-library-tests.py": "e6a18bafd5c3b24b1c624341c67e28e45e67f48a6d76d2bcb4e639a3f1261ac8",
+    "scripts/sequence_model.py": "03807b81c0c1855666baad1c2e124d464a2751e3187eff44f382e9b28afa12ae",
+    "scripts/test-sequence-model.py": "0f648afb11ee9be31dd7db39c2af68a41e98f15e1e7aa51a8f0459411e88f6be",
+    "scripts/test-library-frontier.py": "c0f3c5c70acd3ea3350d20b42dc1205acde1eef52a259d0fdadb04c254a7616c",
+    "scripts/testdata/sequence-entry-frontiers.json": "a47b1a3952b63e092d85ea4e6d9f1f591be79c66fff2f877d8c0a2ada7f3c9c3",
+    "examples/LibraryOracle.hs": "6777e63b588bdd831c0365dbf466ef7b225b4965877de78f04f2d9f4105df705",
+    "examples/THC/SequenceWorkload.hs": "555e90f273e433b252016d70d30e46959f15dfd6c7ef6d83f206cdf7174e383b",
+    "compiler/Thc/Plugin.hs": "0b83fa173b7a7d95d3c317393e2a1aeec22969c26762d7b9c463466f6a844577"
+  },
+  "artifactHashes": {
+    "build/libraries/cases.json": "b60a650b8ed84a744f6b0783318c38a1886fca3c4da50417b54802792f9d55c5",
+    "build/libraries/oracle.tsv": "fcfa3e012224762823f862450dcc617d1146277952a921184411ca3790e134da",
+    "build/libraries/native/library-oracle": "e277da4ac9f42e8c7b8870d17cd7e386d48364f0eaa97b4b4b9328540b374678",
+    "build/sequence-scope/prepare-fresh.log": "ea269d1b76b0b189338873dfa52c3d019d648476775aa5959b955c15121b959a",
+    "build/install/thc/lib/thc-0.1-experiment.jar": "64124f594ea6726247622fee65b637b0ddcef6614849f57188b9f4ee4824d495"
+  },
+  "testResults": {
+    "sequenceModel": 6,
+    "libraryFrontier": 15,
+    "auditorExecuted": 53,
+    "auditorFixtureDependentSkipped": 2,
+    "automation": 41,
+    "actionlint": [
+      "build.yml",
+      "merge.yml"
+    ],
+    "installDist": "pass"
+  },
+  "command": [
+    "java",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xss2m",
+    "-XX:+UseCompactObjectHeaders",
+    "-Dthc.handoffSlabs=<false|true>",
+    "-cp",
+    "build/install/thc/lib/*",
+    "thc.LibraryCheckKt",
+    "build/libraries/cases.json",
+    "<ast|bytecode>"
+  ],
+  "limits": {
+    "CompilationTimeoutSeconds": 30,
+    "MaximumGraalGraphSize": 100000,
+    "SingleTierCompilationThreshold": 10000,
+    "extraSettlingOrRecovery": false
+  },
+  "javaVersion": "java version \"25.0.4.1\" 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)\n"
+}

@@ -73,5 +73,56 @@ class LibraryFrontierTest(unittest.TestCase):
         self.assertTrue(self.violations())
 
 
+class SequenceFrontierTest(unittest.TestCase):
+    def setUp(self):
+        self.audits = json.loads((ROOT / 'testdata/sequence-entry-frontiers.json').read_text())
+
+    def violations(self, name, audit=None, execution=None):
+        if execution is None:
+            execution = 'supported' if name in prepare.SEQUENCE_SUPPORTED else 'frontier'
+        return prepare.sequence_entry_violations(
+            dict(name=name, execution=execution), audit if audit is not None else self.audits[name])
+
+    def test_genuine_entry_audits_keep_four_positives_and_three_missing_definition_frontiers(self):
+        self.assertEqual(set(prepare.SEQUENCE_ENTRIES), set(self.audits))
+        self.assertEqual(4, sum(audit['accepted'] for audit in self.audits.values()))
+        for name in self.audits:
+            with self.subTest(name=name):
+                self.assertEqual([], self.violations(name))
+
+    def test_frontier_native_agreement_does_not_promote_or_hide_an_entry(self):
+        for name in self.audits:
+            with self.subTest(name=name):
+                wrong = 'frontier' if name in prepare.SEQUENCE_SUPPORTED else 'supported'
+                self.assertTrue(self.violations(name, execution=wrong))
+        self.assertTrue(self.violations('sequenceBuildViews', self.audits['sequenceBuild']))
+
+    def test_missing_resolution_new_missing_and_duplicate_missing_require_review(self):
+        for mutation in ('removed', 'new', 'duplicate'):
+            with self.subTest(mutation=mutation):
+                audit = copy.deepcopy(self.audits['sequenceSplit'])
+                if mutation == 'removed':
+                    audit['missingGlobals'].pop()
+                elif mutation == 'new':
+                    audit['missingGlobals'].append(dict(id='main:Data.Sequence.Internal.unresolved'))
+                else:
+                    audit['missingGlobals'].append(copy.deepcopy(audit['missingGlobals'][0]))
+                self.assertTrue(self.violations('sequenceSplit', audit))
+
+    def test_regressed_empty_input_or_state_tuple_proofs_fail_even_on_an_existing_frontier(self):
+        for name in ('sequenceBuild', 'sequenceSplit'):
+            with self.subTest(name=name):
+                audit = copy.deepcopy(self.audits[name])
+                audit['issues'].append(dict(code='aggregate-boundary', owner=audit['roots'][0],
+                                          detail='unboxed-tuple formal argument'))
+                self.assertTrue(self.violations(name, audit))
+
+    def test_swapped_entry_audit_and_silent_acceptance_are_rejected(self):
+        self.assertTrue(self.violations('sequenceEnds', self.audits['sequenceBuild']))
+        audit = copy.deepcopy(self.audits['sequenceSplit'])
+        audit.update(accepted=True, missingGlobals=[], issues=[])
+        self.assertTrue(self.violations('sequenceSplit', audit))
+
+
 if __name__ == '__main__':
     unittest.main()

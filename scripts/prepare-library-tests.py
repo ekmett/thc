@@ -11,12 +11,16 @@ import subprocess
 import sys
 import tarfile
 import urllib.request
+from sequence_model import sequence_model
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/libraries'
 CONTAINERS_URL = 'https://hackage.haskell.org/package/containers-0.8/containers-0.8.tar.gz'
 CONTAINERS_SHA = 'b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8'
 WORD_MASK = (1 << 64) - 1
+SEQUENCE_ENTRIES = ('sequenceBuild', 'sequenceEnds', 'sequenceAppend', 'sequenceSplit',
+                    'sequenceIndexUpdate', 'sequenceAggregate', 'sequenceLazyPayloads')
+SEQUENCE_SUPPORTED = {'sequenceBuild', 'sequenceEnds', 'sequenceAppend', 'sequenceLazyPayloads'}
 
 # State# tuples, collection tuple results and managed MutVar reads are supported.
 # The remaining cold exception/interface definitions are still missing. Require
@@ -30,6 +34,37 @@ SET_FRONTIER_MISSING = {
     'ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef',
     'ghc-internal:GHC.Internal.Stack.withFrozenCallStack1',
 }
+SEQUENCE_SHOW_MISSING = "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'"
+
+
+def sequence_entry_violations(entry, audit):
+    """Native agreement cannot silently change strict support for another API slice."""
+    name = entry['name']
+    if name not in SEQUENCE_ENTRIES:
+        return [name + ': unexpected Sequence entry']
+    supported = name in SEQUENCE_SUPPORTED
+    violations = []
+    if entry.get('execution') != ('supported' if supported else 'frontier'):
+        violations.append(name + ': unexpected support declaration')
+    if audit['accepted'] != supported:
+        violations.append(name + ': declared support disagrees with strict entry audit')
+    if audit['roots'] != ['main:THC.SequenceWorkload.' + name]:
+        violations.append(name + ': expected workload root changed')
+    if audit['issues']:
+        violations.append(name + ': unexpected capability issue; review coverage')
+    expected = set() if supported else SET_FRONTIER_MISSING | (
+        {SEQUENCE_SHOW_MISSING} if name != 'sequenceSplit' else set())
+    actual = [item['id'] for item in audit['missingGlobals']]
+    if set(actual) != expected or len(actual) != len(expected):
+        violations.append(name + ': missing-definition frontier changed; review coverage')
+    return violations
+
+
+def load_auditor():
+    spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'scripts/audit-core.py')
+    auditor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(auditor)
+    return auditor, json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
 
 
 def audit_structure_violations(group, audit):
@@ -64,10 +99,7 @@ def audit_structure_violations(group, audit):
 def check_existing(manifest):
     """Reaudit recorded, fingerprinted exports without rebuilding or running guest code."""
     cases = json.loads(manifest.read_text())
-    spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'scripts/audit-core.py')
-    auditor = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(auditor)
-    capabilities = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
+    auditor, capabilities = load_auditor()
     violations = []
     for group in cases['groups']:
         modules = []
@@ -79,6 +111,15 @@ def check_existing(manifest):
         audit = auditor.Audit(modules, capabilities).run([entry['name'] for entry in group['entries']])
         violations.extend(audit_structure_violations(group, audit))
         print(json.dumps(dict(group=group['id'], execution=group['execution'], accepted=audit['accepted'], **audit['summary'])))
+        if group['id'] == 'sequence':
+            names = [entry['name'] for entry in group['entries']]
+            if len(names) != len(set(names)) or set(names) != set(SEQUENCE_ENTRIES):
+                violations.append('sequence: expected every declared entry exactly once')
+            for entry in group['entries']:
+                entry_audit = auditor.Audit(modules, capabilities).run([entry['name']])
+                violations.extend(sequence_entry_violations(entry, entry_audit))
+                print(json.dumps(dict(entry=entry['name'], execution=entry.get('execution'),
+                                      accepted=entry_audit['accepted'], **entry_audit['summary'])))
     if violations:
         raise RuntimeError('\n'.join(violations))
 
@@ -238,6 +279,8 @@ def main():
     intset_primitive_cold = sorted((set(primitive_cold) |
                                    {signed(WORD_MASK ^ (1 << bit)) for bit in range(64)} |
                                    {signed(0xaaaaaaaaaaaaaaaa), 0x5555555555555555}) - set(primitive_warm))
+    sequence_cold = sorted((set(range(18)) | {-3, -(1 << 63), (1 << 63) - 1,
+        20, 21, 22, 24, 25, 26, 33, 34, 159, 160, 161, 255, 256, 257, 512, 1024}) - set(warm))
     groups = [
         dict(id='set', module='THC.SetWorkload', source='examples/THC/SetWorkload.hs',
              execution='frontier', postTidy=True, names=['setAggregate'], warm=warm, cold=cold),
@@ -254,6 +297,8 @@ def main():
                  'unsignedLessEqualZero', 'unsignedLessEqualMaxSigned',
                  'unsignedLessEqualSignBit', 'unsignedLessEqualAllOnes'],
              warm=primitive_warm, cold=intset_primitive_cold),
+        dict(id='sequence', module='THC.SequenceWorkload', source='examples/THC/SequenceWorkload.hs',
+             execution='frontier', postTidy=True, names=list(SEQUENCE_ENTRIES), warm=warm, cold=sequence_cold),
     ]
     violations = []
     for group in groups:
@@ -271,13 +316,30 @@ def main():
         manifest = output / 'modules.txt'
         manifest.write_text(''.join(str(path) + '\n' for path in modules))
         audit_path = output / 'audit.json'
-        command = [sys.executable, 'scripts/audit-core.py', '--module-list', str(manifest), '--output', str(audit_path)]
-        for name in group['names']:
-            command += ['--entry', name]
-        result = subprocess.run(command, cwd=ROOT)
-        if result.returncode not in [0, 1]:
-            raise RuntimeError('Capability auditor failed: ' + str(result.returncode))
-        audit = json.loads(audit_path.read_text())
+        if group['id'] == 'sequence':
+            # One unmodified library export, parsed once, with distinct per-entry
+            # strict frontiers. No Core rewrite or source-library substitution.
+            auditor, capabilities = load_auditor()
+            parsed = [(str(path), json.loads(path.read_text())) for path in modules]
+            audit = auditor.Audit(parsed, capabilities).run(group['names'])
+            write_json(audit_path, audit)
+            group['entryAudits'] = {}
+            for name in group['names']:
+                entry_path = output / (name + '.audit.json')
+                entry_audit = auditor.Audit(parsed, capabilities).run([name])
+                write_json(entry_path, entry_audit)
+                execution = 'supported' if name in SEQUENCE_SUPPORTED else 'frontier'
+                violations.extend(sequence_entry_violations(dict(name=name, execution=execution), entry_audit))
+                group['entryAudits'][name] = dict(audit=str(entry_path), execution=execution)
+            del parsed
+        else:
+            command = [sys.executable, 'scripts/audit-core.py', '--module-list', str(manifest), '--output', str(audit_path)]
+            for name in group['names']:
+                command += ['--entry', name]
+            result = subprocess.run(command, cwd=ROOT)
+            if result.returncode not in [0, 1]:
+                raise RuntimeError('Capability auditor failed: ' + str(result.returncode))
+            audit = json.loads(audit_path.read_text())
         violations.extend(audit_structure_violations(group, audit))
         group['audit'] = str(audit_path)
         write_json(output / 'provenance.json', {
@@ -290,6 +352,7 @@ def main():
             'initialMissingDefinitions': closure['missingDefinitions'],
             'bootExports': json.loads((BUILD / 'boot/boot-provenance.json').read_text()),
             'strictAccepted': audit['accepted'], 'execution': group['execution'],
+            'entryAudits': group.get('entryAudits', {}),
         })
     native = BUILD / 'native'
     native.mkdir(exist_ok=True)
@@ -301,6 +364,7 @@ def main():
         group['entries'] = []
         for name in group.pop('names'):
             entry = dict(name=name)
+            entry.update(group.get('entryAudits', {}).get(name, {}))
             for phase in ['warm', 'cold']:
                 entry[phase] = []
                 for value in group[phase]:
@@ -311,15 +375,23 @@ def main():
                     actual = int(fields[2])
                     model = {'setAggregate': set_model, 'intMapAggregate': intmap_model,
                              'intSetAggregate': intset_model}.get(name)
-                    expected = model(value) if model else primitive_model(name, value)
+                    expected = (sequence_model(name, value) if group['id'] == 'sequence' else
+                                model(value) if model else primitive_model(name, value))
                     if actual != expected:
                         raise RuntimeError(f'{name}({value}): native {actual} != independent model {expected}')
                     entry[phase].append([value, actual])
                     rows.append(row)
             group['entries'].append(entry)
         del group['warm'], group['cold']
+        group.pop('entryAudits', None)
     (BUILD / 'oracle.tsv').write_text('\n'.join(rows) + '\n')
     write_json(BUILD / 'oracle-validation.json', dict(compiler='9.14.1', nativeRows=len(rows),
+               supportedRows=sum(len(entry['warm']) + len(entry['cold']) for group in groups
+                                 for entry in group['entries']
+                                 if entry.get('execution', group['execution']) == 'supported'),
+               frontierRows=sum(len(entry['warm']) + len(entry['cold']) for group in groups
+                                for entry in group['entries']
+                                if entry.get('execution', group['execution']) == 'frontier'),
                allNativeResultsMatchIndependentModels=True, staticSupportViolations=violations))
     inputs = {ROOT / group['source'] for group in groups} | {
         ROOT / 'examples/LibraryOracle.hs', ROOT / 'scripts/prepare-library-tests.py',
@@ -328,6 +400,7 @@ def main():
         ROOT / 'src/main/kotlin/thc/LibraryCheck.kt', ROOT / 'compiler/build.sh',
         ROOT / 'compiler/export.sh', ROOT / 'compiler/export-boot.py', ROOT / 'compiler/toolchain.sh',
         ROOT / 'compiler/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
+        ROOT / 'scripts/sequence_model.py', ROOT / 'scripts/test-sequence-model.py',
     }
     inputs.update((ROOT / 'compiler/Thc').glob('*.hs'))
     inputs.update(path for path in containers.rglob('*') if path.is_file())
@@ -337,6 +410,7 @@ def main():
     for group in groups:
         artifacts.update(map(Path, group['modules']))
         artifacts.update([Path(group['audit']), BUILD / group['id'] / 'provenance.json'])
+        artifacts.update(Path(entry['audit']) for entry in group['entries'] if 'audit' in entry)
     write_json(BUILD / 'cases.json', dict(schema=1, groups=groups,
                inputHashes={str(path): digest(path) for path in sorted(inputs)},
                artifactHashes={str(path): digest(path) for path in sorted(artifacts)}))
