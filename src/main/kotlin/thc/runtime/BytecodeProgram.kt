@@ -153,7 +153,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     init {
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings)
-            CoreInputCalls.validate(bindings)
+            CoreInputCalls.validate(bindings, constructors)
         }
         val scope = Scope(FunctionContext(0))
         val initializers = bindings.map { binding ->
