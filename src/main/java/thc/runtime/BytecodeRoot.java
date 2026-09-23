@@ -686,6 +686,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class SizeByteArray {
         @Specialization public static long size(Object value) { return ManagedByteArray.size(ManagedByteArray.require(value)); }
     }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "unsigned")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadByteArray {
+        @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = unsigned ? ManagedByteArray.read(array, index) : ManagedByteArray.readSigned(array, index);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class IndexSignedByteArray {
+        @Specialization public static long index(Object value, long offset) {
+            return ManagedByteArray.readSigned(ManagedByteArray.require(value), offset);
+        }
+    }
     @Operation public static final class IndexByteArray {
         @Specialization public static long index(Object value, long offset) { return ManagedByteArray.read(ManagedByteArray.require(value), offset); }
     }

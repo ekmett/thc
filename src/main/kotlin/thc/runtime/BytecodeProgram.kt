@@ -815,6 +815,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
                         ByteArrayOp.READ_FLOAT -> e.builder.beginReadFloatArray(destination[0])
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 ->
+                            e.builder.beginReadByteArray(operation == ByteArrayOp.READ_WORD8, destination[0])
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 ->
                             e.builder.beginReadInt16Array(operation == ByteArrayOp.READ_WORD16, destination[0])
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 ->
@@ -828,6 +830,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT -> e.builder.endReadFloatArray()
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> e.builder.endReadByteArray()
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> e.builder.endReadInt16Array()
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> e.builder.endReadInt32Array()
                         else -> error("Scalar ByteArray operation")
@@ -836,9 +839,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.beginCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
-                        ByteArrayOp.WRITE -> e.builder.beginWriteByteArray()
+                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.beginWriteIntArray()
                         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.beginIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.beginWriteDoubleArray()
@@ -857,9 +861,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.endCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.endCopyByteArray()
-                        ByteArrayOp.WRITE -> e.builder.endWriteByteArray()
+                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.endWriteIntArray()
                         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.endIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.endWriteDoubleArray()
