@@ -75,6 +75,7 @@ jobs:
           python3 scripts/test-audit-core.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-core-vectors.py
+          python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
       - name: Run ordinary Map workload with explicit unsupported-path traps
@@ -96,6 +97,7 @@ jobs:
             build/reports/tests/
             build/test-results/
             build/aggregate-frontier.json
+            build/primop-coverage.json
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
             build/tuple-return/

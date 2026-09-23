@@ -2,6 +2,7 @@
 # Generate the real GHC inputs required by all JVM tests, from a fresh checkout.
 set -eu
 cd "$(dirname "$0")/.."
+python3 scripts/primop-coverage.py
 compiler/build.sh
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/prepare-tuple-return-audit.py

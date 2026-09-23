@@ -9,6 +9,13 @@ native oracles and runs the JVM tests. The additional corpus is described in
 [`examples/coverage.json`](../examples/coverage.json); it currently has 28 entries
 and 507 distinct entry/input pairs, alongside the original fixtures and Map.
 
+`GHC=ghc python3 scripts/primop-coverage.py` writes `build/primop-coverage.json`
+from the pinned compiler's actual `allThePrimOps` table, including its generated
+vector families. Preparation rejects advertised names or value arities that do
+not match GHC. The report retains every signature and marks whether THC advertises
+it; this inventory is not a claim that every operation or input is tested. The
+native and compiled-execution suites below provide that separate evidence.
+
 The [unsigned primop suite](integer-primops.md) adds 40 operations checked against
 56,791 native/model rows on both backends, including installed-code checks for
 each row. The [signed narrow suite](signed-narrow-primops.md) adds 36 operations
