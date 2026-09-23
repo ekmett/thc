@@ -133,6 +133,7 @@ jobs:
           python3 scripts/test-floatx4-model.py
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-mutvars.py
+          python3 scripts/test-core-arrays.py
           python3 scripts/test-int-array-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
@@ -180,6 +181,7 @@ jobs:
             build/state-tuple/oracle.tsv
             build/state-tuple/*-audit.json
             build/state-tuple/*-core/*.json
+            build/boxed-arrays/
             build/mutvar/manifest.json
             build/mutvar/oracle.tsv
             build/mutvar/NativeMutVar.hs
