@@ -134,8 +134,12 @@ class Language : TruffleLanguage<Language.State>() {
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>
         val hostResultFault = try {
-            if (selectedExpression.firstOrNull() == "lam") thc.runtime.CoreRepresentations.requireScalar(
-                thc.runtime.CoreRepresentations.lambdaResult(selectedExpression), "host result")
+            if (selectedExpression.firstOrNull() == "lam") {
+                for (parameter in selectedExpression[1] as List<Map<String, Any?>>)
+                    thc.runtime.CoreRepresentations.requireScalar(thc.runtime.CoreRepresentations.binder(parameter), "host argument")
+                thc.runtime.CoreRepresentations.requireScalar(
+                    thc.runtime.CoreRepresentations.lambdaResult(selectedExpression), "host result")
+            }
             null
         } catch (gap: thc.runtime.UnsupportedCore) {
             if (input["diagnosticUnsupported"] != true) throw gap
