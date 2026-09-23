@@ -142,10 +142,19 @@ voidRep = O [("primReps",A []),("kind",S "void"),("evaluated",B True)]
 -- unknown, even when some logical components have known representations.
 typePrimReps :: Type -> Maybe [PrimRep]
 typePrimReps ty
-  | Just (tc,_) <- splitTyConApp_maybe (getRuntimeRep ty)
-  , tc == tupleRepDataConTyCon || tc == sumRepDataConTyCon
+  | Just _ <- aggregateRuntimeKind ty
   , not (typeHasFixedRuntimeRep ty) = Nothing
   | otherwise = typePrimRep_maybe ty
+
+-- A type variable or opaque family can expose an aggregate RuntimeRep without
+-- exposing logical payload types. This is aggregate evidence, even for zero
+-- or one physical registers, but it is not evidence for a component layout.
+aggregateRuntimeKind :: Type -> Maybe (String,String)
+aggregateRuntimeKind ty = case splitTyConApp_maybe (getRuntimeRep ty) of
+  Just (tc,_)
+    | tc == tupleRepDataConTyCon -> Just ("unboxed-tuple","components")
+    | tc == sumRepDataConTyCon -> Just ("unboxed-sum","alternatives")
+  _ -> Nothing
 
 typeRep :: Type -> Bool -> J
 typeRep ty evaluated = O $
@@ -166,7 +175,13 @@ typeRep ty evaluated = O $
       Just (tc,args)
         | isUnboxedTupleTyCon tc -> aggregate "unboxed-tuple" "components" args
         | isUnboxedSumTyCon tc -> aggregate "unboxed-sum" "alternatives" args
-      _ -> []
+        -- State# is a known primitive with TupleRep '[] too. Its zero-width
+        -- token representation is not a logical empty tuple. This also keeps
+        -- newtype aliases of known primitives scalar after unwrapType.
+        | isPrimTyCon tc -> []
+      _ -> case aggregateRuntimeKind ty of
+        Just (tag,field) -> [("aggregate",S tag),(field,Z)]
+        Nothing -> []
     -- GHC's kind-aware helper removes the RuntimeRep arguments, including
     -- representation variables. The remaining types are the ordered logical
     -- components/alternatives, not the flattened physical register layout.

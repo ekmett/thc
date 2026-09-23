@@ -3,7 +3,7 @@
 -- Metadata-only coverage: these declarations are checked by native GHC, but
 -- their unboxed boundaries are deliberately rejected by the THC runtime.
 module AggregateLayoutAudit where
-import GHC.Exts (Int#, Word#, Float#, Double#, State#, RealWorld, RuntimeRep(..), Levity, TYPE, raise#)
+import GHC.Exts (Int#, Word#, Float#, Double#, State#, Proxy#, RealWorld, RuntimeRep(..), Levity(..), TYPE, raise#)
 
 data Box = Box Int#
 newtype Wrapped = Wrapped Box
@@ -62,10 +62,35 @@ polymorphicNested :: forall (r :: RuntimeRep) (a :: TYPE r). Box -> (# (# a, Sta
 polymorphicNested x = raise# x
 
 -- Knowing that an abstract type has a TupleRep kind is not a logical tuple
--- decomposition. It may itself be a newtype/type variable; do not invent one.
+-- decomposition. Retain the known aggregate boundary with a null layout.
 {-# OPAQUE abstractTupleRep #-}
 abstractTupleRep :: forall (r :: RuntimeRep) (a :: TYPE ('TupleRep '[r, 'IntRep])). Box -> a
 abstractTupleRep x = raise# x
+
+{-# OPAQUE abstractSumRep #-}
+abstractSumRep :: forall (r :: RuntimeRep) (a :: TYPE ('SumRep '[r, 'IntRep])). Box -> a
+abstractSumRep x = raise# x
+
+{-# OPAQUE abstractFixedTupleIdentity #-}
+abstractFixedTupleIdentity :: forall (a :: TYPE ('TupleRep '[ 'IntRep])). a -> a
+abstractFixedTupleIdentity x = x
+
+{-# OPAQUE abstractEmptyIdentity #-}
+abstractEmptyIdentity :: forall (a :: TYPE ('TupleRep '[])). a -> a
+abstractEmptyIdentity x = x
+
+{-# OPAQUE abstractSumIdentity #-}
+abstractSumIdentity :: forall (a :: TYPE ('SumRep '[ 'IntRep, 'BoxedRep 'Lifted])). a -> a
+abstractSumIdentity x = x
+
+type family AbstractTuple :: TYPE ('TupleRep '[ 'IntRep])
+{-# OPAQUE familyTupleIdentity #-}
+familyTupleIdentity :: AbstractTuple -> AbstractTuple
+familyTupleIdentity x = x
+
+{-# OPAQUE abstractComponentIdentity #-}
+abstractComponentIdentity :: forall (a :: TYPE ('TupleRep '[ 'IntRep])). (# a, Int# #) -> (# a, Int# #)
+abstractComponentIdentity x = x
 
 {-# OPAQUE levityPolymorphic #-}
 levityPolymorphic :: forall (l :: Levity) (a :: TYPE ('BoxedRep l)). Box -> (# a, Int# #)
@@ -75,3 +100,12 @@ newtype Recursive = Recursive Recursive
 {-# OPAQUE recursiveNewtypeIdentity #-}
 recursiveNewtypeIdentity :: Recursive -> Recursive
 recursiveNewtypeIdentity x = x
+
+newtype StateAlias = StateAlias (State# RealWorld)
+{-# OPAQUE stateAliasIdentity #-}
+stateAliasIdentity :: StateAlias -> StateAlias
+stateAliasIdentity x = x
+
+{-# OPAQUE proxyIdentity #-}
+proxyIdentity :: Proxy# a -> Proxy# a
+proxyIdentity x = x
