@@ -108,6 +108,17 @@ jobs:
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
             build/tuple-return/
+            build/state-tuple/checks.json
+            build/state-tuple/provenance.json
+            build/state-tuple/oracle.tsv
+            build/state-tuple/*-audit.json
+            build/state-tuple/*-core/*.json
+            build/bytearray/manifest.json
+            build/bytearray/oracle.tsv
+            build/bytearray/NativeByteArray.hs
+            build/bytearray/*/*.audit.json
+            build/bytearray/*/boot-provenance.json
+            build/bytearray/*/core/*.json
             build/tuple-join/
             build/tuple-arithmetic/
             build/integer-primops/manifest.json
