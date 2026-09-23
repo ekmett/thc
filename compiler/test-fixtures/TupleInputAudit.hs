@@ -36,6 +36,9 @@ prefix before (# a, b #) after = before +# a +# 3# *# b +# after
 {-# OPAQUE prefixedPair #-}
 prefixedPair :: (# Int#, Int# #) -> Int# -> Int#
 prefixedPair pair after = consumePair pair +# after
+{-# OPAQUE beforePair #-}
+beforePair :: Int# -> (# Int#, Int# #) -> Int#
+beforePair before pair = before +# consumePair pair
 {-# OPAQUE opaqueFunction #-}
 opaqueFunction :: ((# Int#, Int# #) -> Int#) -> ((# Int#, Int# #) -> Int#)
 opaqueFunction f = f
@@ -79,7 +82,7 @@ papCase :: Int# -> Int#
 papCase x = apply (prefixedPair (# x, 7# #)) 13#
 {-# OPAQUE overCase #-}
 overCase :: Int# -> Int#
-overCase x = opaqueFunction consumePair (# x, 19# #)
+overCase x = opaqueFunction (beforePair x) (# x, 19# #)
 {-# OPAQUE lazyCase #-}
 lazyCase :: Int# -> Int#
 lazyCase x = consumeLazy (# bottomBox, x #)
