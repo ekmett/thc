@@ -173,6 +173,7 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
     private val arity = function.arity
     private val prefixSize = function.supplied.size
     private val prefixCount = function.suppliedCount
+    private val formalLayout = (target.rootNode as? GuestRoot)?.inputLayout
     private val hasEnvironment = function.environment != null
     @Child private var entry = EntryArguments(target, metrics, prefixSize = prefixCount)
     @Child private var call = DirectCallNode.create(target)
@@ -191,7 +192,7 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
     fun matches(function: Closure): Boolean = function.target === target && function.arity == arity &&
         function.supplied.size == prefixSize && function.suppliedCount == prefixCount && (function.environment != null) == hasEnvironment
     fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
-        ArgumentLayout.validate(function, inputLayout, 0, arity)
+        ArgumentLayout.validate(formalLayout, prefixCount, inputLayout, 0, arity)
         val physicalCount = ArgumentLayout.width(inputLayout, arity)
         val skip = if (hasEnvironment) 2 else 1
         val packet = arrayOfNulls<Any>(skip + prefixSize + physicalCount)

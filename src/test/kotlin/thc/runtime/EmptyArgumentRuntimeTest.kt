@@ -177,6 +177,28 @@ class EmptyArgumentRuntimeTest {
         }
     }
 
+    @Test fun rawLiftedEmptyFlagCannotBeHiddenByStrictDemandAndRecursiveAliasesKeepInputProofs() = withLanguage { language ->
+        val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
+        for (backend in listOf("ast", "bytecode")) {
+            val worker = bind("worker", lam(listOf(arg("e", empty)), n(3), strict = listOf(true)))
+            val forged = module(worker, bind("entry", lam(listOf(arg("x")), call("worker", listOf(zero()), flags = listOf(true)))))
+            assertThrows(RuntimeFault::class.java) { program(language, backend, forged) }
+            val correct = module(worker, bind("entry", lam(listOf(arg("x")), call("worker", listOf(zero())))))
+            assertEquals(3L, run(program(language, backend, correct), "entry", 0L))
+            val missingProof = module(worker, bind("entry", lam(listOf(arg("x")), call("worker", listOf(listOf("lit", "int", "1"))))))
+            assertThrows(RuntimeFault::class.java) { program(language, backend, missingProof) }
+            val lexicalProof = module(worker, bind("forward", lam(listOf(arg("e", empty)), call("worker", listOf(listOf("var", "e"))))),
+                bind("entry", lam(listOf(arg("x")), call("forward", listOf(zero())))))
+            assertEquals(3L, run(program(language, backend, lexicalProof), "entry", 0L))
+            fun aliases(rep: Map<String, Any?>) = module(bind("entry", lam(listOf(arg("x")),
+                listOf("let", true, listOf(bind("alias", v("f", closure)),
+                    bind("f", lam(listOf(arg("a", rep)), n(9)))),
+                    call("alias", listOf(zero())), mapOf("rep" to integer)))))
+            assertThrows(RuntimeFault::class.java) { program(language, backend, aliases(state)) }
+            assertEquals(9L, run(program(language, backend, aliases(empty)), "entry", 0L))
+        }
+    }
+
     @Test fun exactEmptyInputsRemainDistinctFromStatePrimitiveContractsAndAllOtherZeroWidthShapes() = withLanguage { language ->
         val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
         val nested = empty + ("components" to listOf(empty))

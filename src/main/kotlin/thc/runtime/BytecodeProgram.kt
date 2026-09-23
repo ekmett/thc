@@ -392,7 +392,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             e.builder.endMakeClosure()
         })
     }
-    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false): Expression {
+    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expression {
         val proof = CoreRepresentations.expression(expr)
         fun check(value: CoreRepresentation) {
             if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
@@ -401,7 +401,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         val lexical = if (expr[0] == "var") scope.tuples[expr[1]]?.first ?: scope.locals[expr[1]]?.proof else null
         lexical?.let(::check)
         if (proof.isEmptyTuple || lexical?.isEmptyTuple == true) {
-            if (lifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
+            if (declaredLifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
             return compile(expr, scope, false).also {
                 if (!it.proof.isEmptyTuple) throw RuntimeFault("Missing exact empty tuple argument proof")
             }
@@ -810,7 +810,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
                 argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
-                    allowEmpty = fn[0] != "prim" && fn[0] != "con")
+                    allowEmpty = fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted)
             }
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)

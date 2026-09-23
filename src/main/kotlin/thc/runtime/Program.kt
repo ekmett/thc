@@ -1136,7 +1136,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return Delay(fn.target, fn.captureLayout, fn.captures).proven(CoreRepresentations.expression(expr).copy(evaluated = false))
             .located(sources.expression(expr, currentSource))
     }
-    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false): Expr {
+    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expr {
         val proof = CoreRepresentations.expression(expr)
         fun check(value: CoreRepresentation) {
             if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
@@ -1145,7 +1145,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val lexical = if (expr[0] == "var") scope.locals[expr[1]]?.proof else null
         lexical?.let(::check)
         if (proof.isEmptyTuple || lexical?.isEmptyTuple == true) {
-            if (lifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
+            if (declaredLifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
             return compile(expr, scope, false).also {
                 if (!it.representation.isEmptyTuple) throw RuntimeFault("Missing exact empty tuple argument proof")
             }
@@ -1269,7 +1269,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 // context. Compile it directly, without an allocate/force thunk.
                 // Partial constructors deliberately take the ordinary lazy path.
                 argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true,
-                    allowEmpty = fn[0] != "prim" && fn[0] != "con")
+                    allowEmpty = fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted)
             }.toTypedArray()
             when {
                 fn[0] == "prim" -> {

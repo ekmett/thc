@@ -34,7 +34,10 @@ internal object CoreInputCalls {
                         for (i in 0 until minOf(signature.size, args.size)) {
                             val actual = proof(args[i], scope)
                             val expected = signature[i]
-                            if (expected.isTuple || actual.isTuple) TupleShape.requireCompatible(expected, actual, component = true)
+                            if (expected.isEmptyTuple || actual.isEmptyTuple) {
+                                if (!expected.isEmptyTuple || !actual.isEmptyTuple)
+                                    throw UnsupportedCore("Missing or conflicting exact empty tuple argument proof")
+                            } else if (expected.isTuple || actual.isTuple) TupleShape.requireCompatible(expected, actual, component = true)
                         }
                     }
                     visit(fn, scope); args.forEach { visit(it, scope) }
@@ -49,8 +52,13 @@ internal object CoreInputCalls {
                     val group = expr[2] as List<Map<String, Any?>>
                     val recursive = expr[1] == true
                     val shadowed = scope + group.associate { it["id"] as String to Binding(CoreRepresentations.binder(it), null) }
-                    val rhsScope = if (recursive) shadowed else scope
-                    val declarations = group.associate { it["id"] as String to Binding(CoreRepresentations.binder(it), inputs(it["expr"] as List<Any?>, rhsScope)) }
+                    var declarations = group.associate { it["id"] as String to Binding(CoreRepresentations.binder(it), null) }
+                    // An alias/PAP may precede its lambda in a recursive group. Resolve
+                    // only definition-site proofs, with all outer names shadowed first.
+                    repeat(if (recursive) group.size else 1) {
+                        val rhsScope = if (recursive) shadowed + declarations else scope
+                        declarations = group.associate { it["id"] as String to Binding(CoreRepresentations.binder(it), inputs(it["expr"] as List<Any?>, rhsScope)) }
+                    }
                     val local = scope + declarations
                     group.forEach { visit(it["expr"] as List<Any?>, if (recursive) local else scope) }
                     visit(expr[3] as List<Any?>, local)
