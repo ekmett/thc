@@ -76,7 +76,8 @@ support for the paths exercised; they don't make the gaps disappear.
 
 The next step is breadth. A [native-GHC corpus](docs/coverage.md) exercises lazy
 lists and streams, sharing, captured functions, partial and overapplication,
-recursive trees, and numeric representation boundaries. Both backends check
+recursive trees, non-strict pointer identity, and numeric representation
+boundaries. Both backends check
 warm inputs, cold paths and recompiled code. The corpus also checks that the
 intended structures survive GHC optimization and that shared producers are
 evaluated once.
@@ -87,8 +88,8 @@ the suite; missing dependencies and unsupported constructs remain explicit.
 [Library coverage](docs/library-coverage.md) adds ordinary `Data.IntMap.Strict`
 operations and unsigned word boundaries, checked against native GHC and an
 independent model. `scripts/try-libraries.sh` runs those checks on both backends.
-The `Data.Set` example currently stops at the unboxed-tuple and pointer-identity
-frontier; its native results are not counted as THC execution passes.
+The `Data.Set` example still stops at unboxed tuples and remaining cold-path
+dependencies; its native results are not counted as THC execution passes.
 
 ## Where things stand
 

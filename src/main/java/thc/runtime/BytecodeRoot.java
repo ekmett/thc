@@ -405,6 +405,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class Negate { @Specialization public static long apply(long x) { return -x; } }
     @Operation public static final class Quotient { @Specialization public static long apply(long x, long y) { return x / y; } }
     @Operation public static final class Remainder { @Specialization public static long apply(long x, long y) { return x % y; } }
+    /** No forcing or thunk-indirection traversal: compare the current operand references. */
+    @Operation public static final class PointerEqual {
+        @Specialization public static long apply(Object left, Object right) { return left == right ? 1L : 0L; }
+    }
     @Operation public static final class Equal { @Specialization public static long apply(long x, long y) { return x == y ? 1L : 0L; } }
     @Operation public static final class NotEqual { @Specialization public static long apply(long x, long y) { return x != y ? 1L : 0L; } }
     @Operation public static final class LessThan { @Specialization public static long apply(long x, long y) { return x < y ? 1L : 0L; } }

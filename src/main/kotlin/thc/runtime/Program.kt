@@ -506,6 +506,12 @@ private class Construct(private val layout: DataLayout,
     }
     override fun executeDataValue(frame: VirtualFrame): DataValue = execute(frame)
 }
+/** Compare the operand references themselves, including untouched or updated thunks. */
+private class PointerEquality(@field:Child private var left: Expr, @field:Child private var right: Expr) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.LONG, evaluated = true) }
+    override fun execute(frame: VirtualFrame): Long = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = if (left.execute(frame) === right.execute(frame)) 1L else 0L
+}
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
@@ -1118,6 +1124,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         DataLayout(language ?: throw RuntimeFault("Constructor layout requires a guest language"), id, info["name"] as String, fields.storage, fields.referenceTypes)
     }
     private fun primitive(name: String, args: Array<Expr>): Expr = when (name) {
+        "reallyUnsafePtrEquality#" -> {
+            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            PointerEquality(args[0], args[1])
+        }
         "raise#" -> {
             if (args.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
             RaiseException(args[0])

@@ -562,6 +562,61 @@
           ]
         }
       ]
+    },
+    {
+      "id": "pointers",
+      "source": "examples/THC/PointerCoverage.hs",
+      "module": "THC.PointerCoverage",
+      "entries": [
+        {
+          "name": "pointerShortcut",
+          "focus": "Non-strict object identity shortcut with allocation-independent key equality fallback",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "reallyUnsafePtrEquality#"
+          ]
+        },
+        {
+          "name": "pointerLazyPayload",
+          "focus": "Pointer equality and key comparison leave irrelevant bottom-valued payloads untouched",
+          "warmInputs": [
+            2,
+            7,
+            10,
+            20
+          ],
+          "coldInputs": [
+            -3,
+            0,
+            1,
+            31,
+            32,
+            -3000000000,
+            3000000000,
+            -9223372036854775808,
+            9223372036854775807
+          ],
+          "requiredPrimitives": [
+            "reallyUnsafePtrEquality#"
+          ]
+        }
+      ]
     }
   ]
 }

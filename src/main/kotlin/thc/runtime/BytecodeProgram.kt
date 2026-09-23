@@ -748,6 +748,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "quotInt#" -> "Quotient"
             "remInt#" -> "Remainder"
             "==#", "eqWord#", "eqChar#" -> "Equal"
+            "reallyUnsafePtrEquality#" -> "PointerEqual"
             "/=#", "neWord#", "neChar#" -> "NotEqual"
             "<#", "ltChar#" -> "LessThan"
             "ltWord#" -> "LessThanUnsigned"
@@ -781,6 +782,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
                 "Negate" -> b.beginNegate(); "Quotient" -> b.beginQuotient(); "Remainder" -> b.beginRemainder()
                 "Equal" -> b.beginEqual(); "NotEqual" -> b.beginNotEqual(); "LessThan" -> b.beginLessThan()
+                "PointerEqual" -> b.beginPointerEqual()
                 "LessThanUnsigned" -> b.beginLessThanUnsigned()
                 "LessEqual" -> b.beginLessEqual(); "GreaterThan" -> b.beginGreaterThan(); "GreaterEqual" -> b.beginGreaterEqual()
                 "BitAnd" -> b.beginBitAnd(); "BitOr" -> b.beginBitOr(); "BitXor" -> b.beginBitXor(); "BitNot" -> b.beginBitNot()
@@ -794,6 +796,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "Add" -> b.endAdd(); "Subtract" -> b.endSubtract(); "Multiply" -> b.endMultiply()
                 "Negate" -> b.endNegate(); "Quotient" -> b.endQuotient(); "Remainder" -> b.endRemainder()
                 "Equal" -> b.endEqual(); "NotEqual" -> b.endNotEqual(); "LessThan" -> b.endLessThan()
+                "PointerEqual" -> b.endPointerEqual()
                 "LessThanUnsigned" -> b.endLessThanUnsigned()
                 "LessEqual" -> b.endLessEqual(); "GreaterThan" -> b.endGreaterThan(); "GreaterEqual" -> b.endGreaterEqual()
                 "BitAnd" -> b.endBitAnd(); "BitOr" -> b.endBitOr(); "BitXor" -> b.endBitXor(); "BitNot" -> b.endBitNot()
