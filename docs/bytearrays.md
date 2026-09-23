@@ -10,6 +10,9 @@ all five primitives to remain reachable; it does not substitute library bodies.
 The [Int-array extension](int-arrays.md) adds `readIntArray#`, `writeIntArray#`,
 and `indexIntArray#` over the same backing storage, with element rather than
 byte offsets.
+The [Double-array extension](double-arrays.md) uses the same backing storage and
+typed Double result destinations for `readDoubleArray#`, `writeDoubleArray#`,
+and `indexDoubleArray#`.
 
 `ByteArray#` and `MutableByteArray# s` are each one unlifted boxed reference,
 represented directly by a mutable JVM primitive `byte[]`, with no wrapper

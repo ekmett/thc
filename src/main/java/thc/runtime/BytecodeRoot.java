@@ -538,6 +538,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return ManagedIntArray.read(ManagedByteArray.require(value), index);
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadDoubleArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            double result = ManagedDoubleArray.read(array, index);
+            destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteDoubleArray {
+        @Specialization public static Object write(Object value, long index, double number, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedDoubleArray.write(array, index, number);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class IndexDoubleArray {
+        @Specialization public static double index(Object value, long index) {
+            return ManagedDoubleArray.read(ManagedByteArray.require(value), index);
+        }
+    }
 
     // GHC machine integers wrap. Comparisons return Int# 0/1, not boxed Bool.
     @Operation public static final class VectorPack {
