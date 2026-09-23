@@ -80,6 +80,11 @@ Every measured row checks its exact compiled-entry increment and installed targe
 validity on AST and BytecodeDSL, with guest inlining enabled and disabled. The CI
 handoff run repeats these checks with the optional scalar handoff enabled. Source,
 auditor, native executable, oracle and export hashes are checked before execution.
+The [floating result graph experiment](../bench/experiments/floating-tuple-graphs/README.md)
+checks six normally inlined production graphs and two residual controls against
+the native oracle. Inlined Float/Double tuple fields become scalar floating
+register values with no tuple carrier allocation or field traffic. Residual calls
+retain the typed result slab and existing Object argument ABI.
 
 The exporter preserves native proofs through `runRW# f` to `f realWorld#` only
 when GHC's exact type equality confirms the rewrite. Representation-changing

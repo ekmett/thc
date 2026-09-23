@@ -1,0 +1,2926 @@
+{
+  "scope": "Actual production Core execution; fixed native oracle, no timing",
+  "runtimeSourceCommit": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+  "runtimeSourceSha256": {
+    "src/main/kotlin/thc/runtime/Handoff.kt": "f729683e0b92a6e1a3ee60daba04d656620f561f618715d96c73b8bc1348779c",
+    "src/main/kotlin/thc/runtime/TupleResults.kt": "901ab58b959ce48cb08bcb6fe9518460084dbd656103dad94e38db0b766542e7",
+    "src/main/kotlin/thc/runtime/LocalJoins.kt": "19e8a73bf271a6b0ace61edf2b75524105bec87ff2c20b0e2a19a68c4bb8c224",
+    "src/main/kotlin/thc/runtime/Program.kt": "f174b45b7acf383057afb06b652bc945c0f82df790a2484f4e8ac9a75526f71e",
+    "src/main/kotlin/thc/runtime/BytecodeProgram.kt": "02f4a6bcb0c805fefac5f4c3db7a835a26d5c8718d25ffde7b9d52f8b908d1d6",
+    "src/main/kotlin/thc/runtime/CoreRepresentations.kt": "7e973eafdf70ee1c4d442a8ada151b1c3dfcfa7d0689ac38d25e52a98f4ab688",
+    "src/main/java/thc/runtime/BytecodeRoot.java": "cd95a1bfc84b20749defef5570aab3ed8a303ae3ccbf34b974ad3d6a9c577b54",
+    "compiler/test-fixtures/FloatingTupleAudit.hs": "01036f23a70f04e542135b439cc5ee650cc8fa33d9e782e91213b3f84f8ebe1a",
+    "compiler/test-fixtures/FloatingTupleAuditNative.hs": "f65f10a40930ac45a02d66f3fca2ffa97ada4b01d58453533ce4ef50d4d2c222"
+  },
+  "javaVersion": [
+    "java version \"25.0.4.1\" 2026-08-18 LTS",
+    "Java(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)",
+    "Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)"
+  ],
+  "jdkReleaseSha256": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05",
+  "toolingSha256": {
+    "bench/experiments/floating-tuple-graphs/run.py": "701dab1fffceb9d8030ea8e791feb34a8c46571bcaf2cadb063ce421dbc0375d",
+    "bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+    "bench/experiments/tuple-runtime-graphs/inputs.py": "6397c412f7132bcd433515d1bd7dabf7c01f78b15246f86dec91049ae023e3a2",
+    "bench/experiments/tuple-runtime-graphs/summarize.py": "1c094214fd3b162b6db7f5c4c521666e85141a20d56bd7faa9e04e2832a6ecb0",
+    "tools/GraphInspect.java": "b2715478c253debc1b58332a8f5f5207a46efc2a35ac1e801c26d11717839db4"
+  },
+  "nativeProvenance": {
+    "schema": 1,
+    "recordedAtUtc": "2026-09-23T15:37:54.667815+00:00",
+    "commands": [
+      {
+        "argv": [
+          "ghc",
+          "--make",
+          "-O2",
+          "-fforce-recomp",
+          "-dcore-lint",
+          "-dstg-lint",
+          "-icompiler/test-fixtures",
+          "-odir",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/native",
+          "-hidir",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/native",
+          "-o",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/native/oracle",
+          "/private/tmp/thc-floating-tuples/compiler/test-fixtures/FloatingTupleAuditNative.hs"
+        ],
+        "environment": {}
+      },
+      {
+        "argv": [
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/native/oracle"
+        ],
+        "stdout": "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv"
+      },
+      {
+        "argv": [
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/native/oracle",
+          "bits"
+        ],
+        "stdout": "/private/tmp/thc-floating-tuples/build/floating-tuple/bits.tsv"
+      },
+      {
+        "argv": [
+          "compiler/export.sh",
+          "/private/tmp/thc-floating-tuples/compiler/test-fixtures/FloatingTupleAudit.hs"
+        ],
+        "environment": {
+          "THC_CORE_OUT": "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core",
+          "THC_GHC_OUT": "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-ghc",
+          "THC_SOURCE_NOTES": "true"
+        }
+      },
+      {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "scripts/audit-core.py",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json",
+          "--entry",
+          "complexFloatCase",
+          "--entry",
+          "complexDoubleCase",
+          "--entry",
+          "mixedCase",
+          "--entry",
+          "joinedCase",
+          "--entry",
+          "ieeeCase",
+          "--output",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-audit.json"
+        ],
+        "environment": {}
+      },
+      {
+        "argv": [
+          "compiler/export.sh",
+          "-fplugin-opt=Thc.Plugin:post-tidy",
+          "/private/tmp/thc-floating-tuples/compiler/test-fixtures/FloatingTupleAudit.hs"
+        ],
+        "environment": {
+          "THC_CORE_OUT": "/private/tmp/thc-floating-tuples/build/floating-tuple/post-core",
+          "THC_GHC_OUT": "/private/tmp/thc-floating-tuples/build/floating-tuple/post-ghc",
+          "THC_SOURCE_NOTES": "true"
+        }
+      },
+      {
+        "argv": [
+          "/opt/homebrew/opt/python@3.14/bin/python3.14",
+          "scripts/audit-core.py",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/post-core/FloatingTupleAudit.json",
+          "--entry",
+          "complexFloatCase",
+          "--entry",
+          "complexDoubleCase",
+          "--entry",
+          "mixedCase",
+          "--entry",
+          "joinedCase",
+          "--entry",
+          "ieeeCase",
+          "--output",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/post-audit.json"
+        ],
+        "environment": {}
+      }
+    ],
+    "ghcInfo": " [(\"Project name\",\"The Glorious Glasgow Haskell Compilation System\")\n ,(\"C compiler command\",\"gcc\")\n ,(\"C compiler flags\",\"--target=arm64-apple-darwin  -Qunused-arguments\")\n ,(\"C++ compiler command\",\"g++\")\n ,(\"C++ compiler flags\",\"--target=arm64-apple-darwin \")\n ,(\"C compiler link flags\",\"--target=arm64-apple-darwin   -Wl,-no_fixup_chains -Wl,-no_warn_duplicate_libraries\")\n ,(\"C compiler supports -no-pie\",\"NO\")\n ,(\"CPP command\",\"gcc\")\n ,(\"CPP flags\",\"-E\")\n ,(\"Haskell CPP command\",\"gcc\")\n ,(\"Haskell CPP flags\",\"-E -undef -traditional -Wno-invalid-pp-token -Wno-unicode -Wno-trigraphs\")\n ,(\"JavaScript CPP command\",\"gcc\")\n ,(\"JavaScript CPP flags\",\"-E -CC -Wno-unicode -nostdinc\")\n ,(\"C-- CPP command\",\"gcc\")\n ,(\"C-- CPP flags\",\"-E\")\n ,(\"C-- CPP supports -g0\",\"YES\")\n ,(\"ld supports compact unwind\",\"YES\")\n ,(\"ld supports filelist\",\"YES\")\n ,(\"ld supports single module\",\"NO\")\n ,(\"ld is GNU ld\",\"NO\")\n ,(\"Merge objects command\",\"ld\")\n ,(\"Merge objects flags\",\"-r\")\n ,(\"Merge objects supports response files\",\"YES\")\n ,(\"ar command\",\"ar\")\n ,(\"ar flags\",\"qcls\")\n ,(\"ar supports at file\",\"NO\")\n ,(\"ar supports -L\",\"NO\")\n ,(\"ranlib command\",\"ranlib\")\n ,(\"otool command\",\"otool\")\n ,(\"install_name_tool command\",\"install_name_tool\")\n ,(\"windres command\",\"/bin/false\")\n ,(\"unlit command\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/../bin/unlit\")\n ,(\"cross compiling\",\"NO\")\n ,(\"target platform string\",\"aarch64-apple-darwin\")\n ,(\"target os\",\"OSDarwin\")\n ,(\"target arch\",\"ArchAArch64\")\n ,(\"target word size\",\"8\")\n ,(\"target word big endian\",\"NO\")\n ,(\"target has GNU nonexec stack\",\"NO\")\n ,(\"target has .ident directive\",\"YES\")\n ,(\"target has subsections via symbols\",\"NO\")\n ,(\"target has libm\",\"YES\")\n ,(\"Unregisterised\",\"NO\")\n ,(\"LLVM target\",\"arm64-apple-darwin\")\n ,(\"LLVM llc command\",\"llc\")\n ,(\"LLVM opt command\",\"opt\")\n ,(\"LLVM llvm-as command\",\"clang\")\n ,(\"LLVM llvm-as flags\",\"\")\n ,(\"Use inplace MinGW toolchain\",\"NO\")\n ,(\"target RTS linker only supports shared libraries\",\"NO\")\n ,(\"Use interpreter\",\"YES\")\n ,(\"Support SMP\",\"YES\")\n ,(\"RTS ways\",\"v thr thr_debug thr_debug_p thr_debug_p_dyn thr_debug_dyn thr_p thr_p_dyn thr_dyn debug debug_p debug_p_dyn debug_dyn p p_dyn dyn\")\n ,(\"Tables next to code\",\"YES\")\n ,(\"Leading underscore\",\"YES\")\n ,(\"Use LibFFI\",\"YES\")\n ,(\"RTS expects libdw\",\"NO\")\n ,(\"Relative Global Package DB\",\"package.conf.d\")\n ,(\"base unit-id\",\"base-4.22.0.0-1f90\")\n ,(\"Project version\",\"9.14.1\")\n ,(\"Project Git commit id\",\"902339d332fb4ce2b3c87dcac1ee6495d41ad886\")\n ,(\"Project Version Int\",\"914\")\n ,(\"Project Patch Level\",\"1\")\n ,(\"Project Patch Level1\",\"1\")\n ,(\"Project Patch Level2\",\"0\")\n ,(\"Project Unit Id\",\"ghc-9.14.1-bcbf\")\n ,(\"ghc-internal Unit Id\",\"ghc-internal-9.1401.0-0c3b\")\n ,(\"Booter version\",\"9.10.1\")\n ,(\"Stage\",\"2\")\n ,(\"Build platform\",\"aarch64-apple-darwin\")\n ,(\"Host platform\",\"aarch64-apple-darwin\")\n ,(\"Target platform\",\"aarch64-apple-darwin\")\n ,(\"target os string\",\"darwin\")\n ,(\"target arch string\",\"aarch64\")\n ,(\"target word size in bits\",\"64\")\n ,(\"Have interpreter\",\"YES\")\n ,(\"Object splitting supported\",\"NO\")\n ,(\"Have native code generator\",\"YES\")\n ,(\"target has RTS linker\",\"YES\")\n ,(\"Target default backend\",\"native code generator\")\n ,(\"Support dynamic-too\",\"YES\")\n ,(\"Support parallel --make\",\"YES\")\n ,(\"Support reexported-modules\",\"YES\")\n ,(\"Support thinning and renaming package flags\",\"YES\")\n ,(\"Support Backpack\",\"YES\")\n ,(\"Requires unified installed package IDs\",\"YES\")\n ,(\"Uses package keys\",\"YES\")\n ,(\"Uses unit IDs\",\"YES\")\n ,(\"GHC Dynamic\",\"YES\")\n ,(\"GHC Profiled\",\"NO\")\n ,(\"Debug on\",\"NO\")\n ,(\"LibDir\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\")\n ,(\"Global Package DB\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/package.conf.d\")\n ]\n",
+    "sources": [
+      {
+        "path": "compiler/test-fixtures/FloatingTupleAudit.hs",
+        "sha256": "01036f23a70f04e542135b439cc5ee650cc8fa33d9e782e91213b3f84f8ebe1a"
+      },
+      {
+        "path": "compiler/test-fixtures/FloatingTupleAuditNative.hs",
+        "sha256": "f65f10a40930ac45a02d66f3fca2ffa97ada4b01d58453533ce4ef50d4d2c222"
+      },
+      {
+        "path": "scripts/prepare-floating-tuples.py",
+        "sha256": "cf2d3cbbd0bd20802b752821a821f3ac361785621dc4920a7910b8987fe0b9a6"
+      },
+      {
+        "path": "compiler/build.sh",
+        "sha256": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb"
+      },
+      {
+        "path": "compiler/export.sh",
+        "sha256": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489"
+      },
+      {
+        "path": "compiler/toolchain.sh",
+        "sha256": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614"
+      },
+      {
+        "path": "compiler/Thc/Cbv.hs",
+        "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c"
+      },
+      {
+        "path": "compiler/Thc/Demands.hs",
+        "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a"
+      },
+      {
+        "path": "compiler/Thc/Plugin.hs",
+        "sha256": "0b83fa173b7a7d95d3c317393e2a1aeec22969c26762d7b9c463466f6a844577"
+      },
+      {
+        "path": "compiler/Thc/Sources.hs",
+        "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+      },
+      {
+        "path": "compiler/Thc/Wired.hs",
+        "sha256": "7f294ee018790266a571c9bf0f3b44e11d7732b3f07935d4f1ecf627157a81ea"
+      },
+      {
+        "path": "scripts/audit-core.py",
+        "sha256": "5e47da53a58cb215be3718ec8031c9a8481627235c4476af4ed54c290c431e6b"
+      },
+      {
+        "path": "scripts/core-capabilities.json",
+        "sha256": "8d7cc5eccb7af4d7eb5d927ebd53010a93f4dcb9efd98dc4ec1ebcc8fe4c4815"
+      },
+      {
+        "path": "scripts/core_vectors.py",
+        "sha256": "4b8bee160047b5d7e605c6e1a0065345848a555d2e738adfb9c12d5d5747fefe"
+      },
+      {
+        "path": "src/main/resources/thc/scalar-primop-signatures.json",
+        "sha256": "fce538c75aa62638b86eb9aadb54ddb61598c1cb8264d22ec71c793502ae6e7c"
+      },
+      {
+        "path": "scripts/generate-scalar-signatures.py",
+        "sha256": "c9258bffe1810d6afc7ce7b0427bfbc341ff2449dbeb1e8aa83dfac1fb936e89"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "build/floating-tuple/native/FloatingTupleAudit.hi",
+        "sha256": "7e6d81c10cfa2cdd2ed4f79cb281acde3279f1f869c95d07c03b730bf6031c09"
+      },
+      {
+        "path": "build/floating-tuple/native/FloatingTupleAudit.o",
+        "sha256": "b98d71834f173267b027f539393db1c4e51604ec7cf2713e06db9b3df045cb6c"
+      },
+      {
+        "path": "build/floating-tuple/native/Main.hi",
+        "sha256": "3c84762988a763b461bae63460192c1e40aa07c116bc3f436039500069b4df95"
+      },
+      {
+        "path": "build/floating-tuple/native/Main.o",
+        "sha256": "a0edfde7c957a7054dc8f1f781216d6c47f54f5f138549d96d0771ae4dde995e"
+      },
+      {
+        "path": "build/floating-tuple/native/oracle",
+        "sha256": "abf9da8c89a727c2acda2945eba1802ca2fd9020baf1b320fad19eb29a0ac1f0"
+      },
+      {
+        "path": "build/floating-tuple/pre-core/FloatingTupleAudit.json",
+        "sha256": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011"
+      },
+      {
+        "path": "build/floating-tuple/post-core/FloatingTupleAudit.json",
+        "sha256": "937193f6444927981af50a13658f5ca8b3cff804bb6e1b5fa654eaae31b5d6ce"
+      },
+      {
+        "path": "build/floating-tuple/oracle.tsv",
+        "sha256": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333"
+      },
+      {
+        "path": "build/floating-tuple/bits.tsv",
+        "sha256": "53290e181f9dc125ab985638fe3c5aea1317a8c3615de1f11eb6d2fa840b1a57"
+      },
+      {
+        "path": "build/floating-tuple/pre-audit.json",
+        "sha256": "8b814c2e9e7de4d29e8f63e4bdd5cc142aea6777dbe845bd0608c84a2ecf3432"
+      },
+      {
+        "path": "build/floating-tuple/post-audit.json",
+        "sha256": "d66920a95d07694d4e25a08a4a9fe8438a8fbc07cff5730a7bbc2a776519f96b"
+      }
+    ],
+    "claim": "Native semantic oracle and pre/post-Tidy proofs; installed guest execution is verified separately."
+  },
+  "results": [
+    {
+      "backend": "ast",
+      "entry": "complexFloatCase",
+      "mode": "inline",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=complexFloatCase backend=ast mode=inline nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-1899[lambda_n].bgv",
+        "bgvSha256": "cc87fd16d0d4fa2ef7149c361e0b89780f07990dce59063e1a8b9385def0beb6",
+        "cfgSha256": "fb678491d1c5fa188fc17142cd17dbf02254c72ca49cc0233dc33e9021e1629e",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 32,
+            "counts": {
+              "ConstantNode": 7,
+              "FrameState": 1,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 2,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 3,
+              "FloatConvertNode": 2,
+              "MulNode": 5,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 1,
+              "UnboxNode": 1,
+              "LoadIndexedNode": 2
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 107,
+            "counts": {
+              "AArch64AddressNode": 9,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 2,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 8,
+              "ConstantNode": 17,
+              "DeoptimizeNode": 1,
+              "EndNode": 6,
+              "FrameState": 2,
+              "IfNode": 4,
+              "InvokeNode": 1,
+              "MergeNode": 3,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 2,
+              "AddNode": 7,
+              "FloatConvertNode": 2,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 1,
+              "LeftShiftNode": 2,
+              "MulNode": 5,
+              "NarrowNode": 1,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 6,
+              "WriteNode": 3,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "complexDoubleCase",
+      "mode": "inline",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=complexDoubleCase backend=ast mode=inline nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-1941[lambda_n].bgv",
+        "bgvSha256": "990995ef0fcbd99fb08cd6c9aef52fd6c6ae40d60bde6cef309498e1854c14bb",
+        "cfgSha256": "43897118a887f2d2de3329ad1ddc32304ad49d487b514ca9cfeb9947c1fdf226",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 32,
+            "counts": {
+              "ConstantNode": 7,
+              "FrameState": 1,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 2,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 3,
+              "FloatConvertNode": 2,
+              "MulNode": 5,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 1,
+              "UnboxNode": 1,
+              "LoadIndexedNode": 2
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 107,
+            "counts": {
+              "AArch64AddressNode": 9,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 2,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 8,
+              "ConstantNode": 17,
+              "DeoptimizeNode": 1,
+              "EndNode": 6,
+              "FrameState": 2,
+              "IfNode": 4,
+              "InvokeNode": 1,
+              "MergeNode": 3,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 2,
+              "AddNode": 7,
+              "FloatConvertNode": 2,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 1,
+              "LeftShiftNode": 2,
+              "MulNode": 5,
+              "NarrowNode": 1,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 6,
+              "WriteNode": 3,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "mixedCase",
+      "mode": "inline",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=mixedCase backend=ast mode=inline nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-2031[lambda_n].bgv",
+        "bgvSha256": "54b009a2985625a09ef006d898ea291d89652fb350fe29f636faca1e08cff91b",
+        "cfgSha256": "986cff4140ca1d51e67c9c66e338ac3451185fbc91e2a4e2da8d05a4c660900d",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 46,
+            "counts": {
+              "ConstantNode": 12,
+              "FrameState": 1,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 2,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 9,
+              "FloatConvertNode": 8,
+              "MulNode": 3,
+              "SubNode": 2,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 1,
+              "UnboxNode": 1,
+              "LoadIndexedNode": 2
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 121,
+            "counts": {
+              "AArch64AddressNode": 9,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 2,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 8,
+              "ConstantNode": 22,
+              "DeoptimizeNode": 1,
+              "EndNode": 6,
+              "FrameState": 2,
+              "IfNode": 4,
+              "InvokeNode": 1,
+              "MergeNode": 3,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 2,
+              "AddNode": 13,
+              "FloatConvertNode": 8,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 1,
+              "LeftShiftNode": 2,
+              "MulNode": 3,
+              "NarrowNode": 1,
+              "SubNode": 2,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 6,
+              "WriteNode": 3,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    },
+    {
+      "backend": "ast",
+      "entry": "mixedCase",
+      "mode": "residual",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=mixedCase backend=ast mode=residual nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "residual",
+        "entryGraph": "TruffleHotSpotCompilation-2271[lambda_n].bgv",
+        "bgvSha256": "fb368b44995820c74f9b40f2403739b8cc7c0c8af771811d5e0b58957e1954f2",
+        "cfgSha256": "d4d64815d8a48c20caa1c1faff3e7be94f12d672adae632d8035811dbb5e1afb",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 247,
+            "counts": {
+              "HotSpotLoadReservedReferenceNode": 2,
+              "BeginNode": 2,
+              "ConstantNode": 31,
+              "DeoptimizeNode": 2,
+              "FixedGuardNode": 18,
+              "FrameState": 57,
+              "InvokeWithExceptionNode": 2,
+              "ParameterNode": 1,
+              "PiArrayNode": 5,
+              "PiNode": 15,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 6,
+              "FloatConvertNode": 8,
+              "IntegerEqualsNode": 4,
+              "IsNullNode": 6,
+              "MulNode": 3,
+              "ObjectEqualsNode": 6,
+              "OrNode": 1,
+              "BoxNode$AllocatingBoxNode": 6,
+              "BoxNode$TrustedBoxedValue": 2,
+              "UnboxNode": 2,
+              "ExceptionObjectNode": 2,
+              "InstanceOfNode": 2,
+              "LoadFieldNode": 22,
+              "LoadIndexedNode": 6,
+              "MethodCallTargetNode": 2,
+              "StoreFieldNode": 8,
+              "AllocatedObjectNode": 2,
+              "CommitAllocationNode": 2,
+              "VirtualArrayNode": 6,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 13
+            },
+            "memoryOperations": [
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              }
+            ],
+            "invokes": [
+              "OptimizedCallTarget.callBoundary",
+              "OptimizedCallTarget.callBoundary"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Float"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Double"
+              },
+              {
+                "kind": "CommitAllocationNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "AllocatedObjectNode",
+                "type": null,
+                "stamp": "a!# java.lang.Object[]"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Float"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Double"
+              },
+              {
+                "kind": "CommitAllocationNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "AllocatedObjectNode",
+                "type": null,
+                "stamp": "a!# java.lang.Object[]"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 612,
+            "counts": {
+              "AArch64AddressNode": 92,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 17,
+              "HotSpotDirectCallTargetNode": 3,
+              "PointerCastNode": 6,
+              "BeginNode": 48,
+              "ConstantNode": 65,
+              "DeoptimizeNode": 3,
+              "DynamicDeoptimizeNode": 2,
+              "EndNode": 30,
+              "FrameState": 44,
+              "IfNode": 22,
+              "InvokeNode": 1,
+              "InvokeWithExceptionNode": 2,
+              "MergeNode": 11,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 11,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 10,
+              "AddNode": 19,
+              "FloatConvertNode": 8,
+              "IntegerBelowNode": 9,
+              "IntegerEqualsNode": 5,
+              "LeftShiftNode": 5,
+              "MulNode": 3,
+              "NarrowNode": 3,
+              "ObjectEqualsNode": 2,
+              "OrNode": 1,
+              "PointerEqualsNode": 6,
+              "UnsignedRightShiftNode": 2,
+              "ZeroExtendNode": 5,
+              "ForeignCallNode": 7,
+              "MembarNode": 7,
+              "NullCheckNode": 7,
+              "PublishWritesNode": 7,
+              "G1PreWriteBarrierNode": 6,
+              "MemoryAnchorNode": 11,
+              "ReadNode": 52,
+              "WriteNode": 41,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 13,
+              "ReadRegisterNode": 9,
+              "WordCastNode": 7
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionPc",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionPc",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::<JVMCIReservedOop0>",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::<JVMCIReservedOop0>",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              }
+            ],
+            "invokes": [
+              "Direct#OptimizedCallTarget.callBoundary",
+              "Direct#OptimizedCallTarget.callBoundary",
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "complexFloatCase",
+      "mode": "inline",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=complexFloatCase backend=bytecode mode=inline nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-1999[lambda_n].bgv",
+        "bgvSha256": "6f72dac5ffe1be0b81fd6819fbf8ab9e804bec3242e5b3e86e0a6aa6b1e0a556",
+        "cfgSha256": "dea499d7cedec01a9101a04d63182646a20e935ef7b1c06ded7001c55cd8def3",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 57,
+            "counts": {
+              "ConstantNode": 14,
+              "FrameState": 6,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 3,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 3,
+              "FloatConvertNode": 2,
+              "MulNode": 5,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 2,
+              "UnboxNode": 1,
+              "LoadIndexedNode": 2,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "TrufflePreserveFrameStateNode": 1
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 131,
+            "counts": {
+              "AArch64AddressNode": 10,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 2,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 8,
+              "ConstantNode": 25,
+              "DeoptimizeNode": 1,
+              "EndNode": 6,
+              "FrameState": 6,
+              "IfNode": 4,
+              "InvokeNode": 1,
+              "MergeNode": 3,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 2,
+              "AddNode": 7,
+              "FloatConvertNode": 2,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 1,
+              "LeftShiftNode": 2,
+              "MulNode": 5,
+              "NarrowNode": 1,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 7,
+              "WriteNode": 3,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "complexDoubleCase",
+      "mode": "inline",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=complexDoubleCase backend=bytecode mode=inline nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-2018[lambda_n].bgv",
+        "bgvSha256": "ec1571145d449829f123136810abc173c16d7d9bd6a739158affc20b48f914b6",
+        "cfgSha256": "cfd1084d7246503fa839a564035270285f7a62af94ad95f573e13aa0cbc9bf22",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 57,
+            "counts": {
+              "ConstantNode": 14,
+              "FrameState": 6,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 3,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 3,
+              "FloatConvertNode": 2,
+              "MulNode": 5,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 2,
+              "UnboxNode": 1,
+              "LoadIndexedNode": 2,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "TrufflePreserveFrameStateNode": 1
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 131,
+            "counts": {
+              "AArch64AddressNode": 10,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 2,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 8,
+              "ConstantNode": 25,
+              "DeoptimizeNode": 1,
+              "EndNode": 6,
+              "FrameState": 6,
+              "IfNode": 4,
+              "InvokeNode": 1,
+              "MergeNode": 3,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 2,
+              "AddNode": 7,
+              "FloatConvertNode": 2,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 1,
+              "LeftShiftNode": 2,
+              "MulNode": 5,
+              "NarrowNode": 1,
+              "NegateNode": 1,
+              "SubNode": 2,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 7,
+              "WriteNode": 3,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "mixedCase",
+      "mode": "inline",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=mixedCase backend=bytecode mode=inline nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-2184[lambda_n].bgv",
+        "bgvSha256": "ac033836feccacf7e568f1cf8f3c88e10fa00382f3f9d795fddb47c9d663dbc9",
+        "cfgSha256": "c49a2d9bbce4af61767418daf359a717c40caf8bff6a833f057d0423b721fe66",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 71,
+            "counts": {
+              "ConstantNode": 19,
+              "FrameState": 6,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 3,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 9,
+              "FloatConvertNode": 8,
+              "MulNode": 3,
+              "SubNode": 2,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 2,
+              "UnboxNode": 1,
+              "LoadIndexedNode": 2,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "TrufflePreserveFrameStateNode": 1
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 145,
+            "counts": {
+              "AArch64AddressNode": 10,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 2,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 8,
+              "ConstantNode": 30,
+              "DeoptimizeNode": 1,
+              "EndNode": 6,
+              "FrameState": 6,
+              "IfNode": 4,
+              "InvokeNode": 1,
+              "MergeNode": 3,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 2,
+              "AddNode": 13,
+              "FloatConvertNode": 8,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 1,
+              "LeftShiftNode": 2,
+              "MulNode": 3,
+              "NarrowNode": 1,
+              "SubNode": 2,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 7,
+              "WriteNode": 3,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    },
+    {
+      "backend": "bytecode",
+      "entry": "mixedCase",
+      "mode": "residual",
+      "inputs": {
+        "runtimeCheckoutHeadAtLaunch": "9af05bc14e072843f4485169b285913c2e1a1ef3",
+        "inputsSha256": {
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/pre-core/FloatingTupleAudit.json": "b1eed16cece294cf9b46c39a57e5e70cc0931d0185ffcc3ba8e31391b4a51011",
+          "/private/tmp/thc-floating-tuples/build/floating-tuple/oracle.tsv": "2e20f64f36d9014f4ae67af4e18cf997c5b5d6865a9261baeeca08d6cc4fd333",
+          "/private/tmp/thc-floating-tuples/bench/experiments/tuple-runtime-graphs/TupleRuntimeGraphProbe.java": "4640e7696646b9329599e934c6b28242d9ed6f52dc22858cd6c8a2039383f472",
+          "/private/tmp/thc-floating-tuples/build/install/thc/lib/thc-0.1-experiment.jar": "e49c1f2556689683d08013982e981542c81b19ce7d37f159f7c7dbe04a1b13bd"
+        }
+      },
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=mixedCase backend=bytecode mode=residual nativeRows=9 arity=1 validAfterExecution=true"
+        ],
+        "mode": "residual",
+        "entryGraph": "TruffleHotSpotCompilation-2373[lambda_n].bgv",
+        "bgvSha256": "b5c2c1ec3fb11c8c13e14f99e175d5392f0beb4a780ab465cd5cc12604219c86",
+        "cfgSha256": "95a6f250ae09fd37952bcfb2806d803aa7d3c00ef33e24e8cc50c357a0a7ef09",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 248,
+            "counts": {
+              "HotSpotLoadReservedReferenceNode": 2,
+              "BeginNode": 2,
+              "ConstantNode": 36,
+              "DeoptimizeNode": 2,
+              "FixedGuardNode": 18,
+              "FrameState": 52,
+              "InvokeWithExceptionNode": 2,
+              "ParameterNode": 1,
+              "PiArrayNode": 5,
+              "PiNode": 15,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 6,
+              "FloatConvertNode": 8,
+              "IntegerEqualsNode": 4,
+              "IsNullNode": 6,
+              "MulNode": 3,
+              "ObjectEqualsNode": 6,
+              "BoxNode$AllocatingBoxNode": 6,
+              "BoxNode$TrustedBoxedValue": 2,
+              "UnboxNode": 1,
+              "ExceptionObjectNode": 2,
+              "InstanceOfNode": 2,
+              "LoadFieldNode": 22,
+              "LoadIndexedNode": 6,
+              "MethodCallTargetNode": 2,
+              "StoreFieldNode": 8,
+              "AllocatedObjectNode": 2,
+              "CommitAllocationNode": 2,
+              "VirtualArrayNode": 6,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 15,
+              "TrufflePreserveFrameStateNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "LoadFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "StoreFieldNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              }
+            ],
+            "invokes": [
+              "OptimizedCallTarget.callBoundary",
+              "OptimizedCallTarget.callBoundary"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Float"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Double"
+              },
+              {
+                "kind": "CommitAllocationNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "AllocatedObjectNode",
+                "type": null,
+                "stamp": "a!# java.lang.Object[]"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Float"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Double"
+              },
+              {
+                "kind": "CommitAllocationNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "AllocatedObjectNode",
+                "type": null,
+                "stamp": "a!# java.lang.Object[]"
+              },
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ]
+          },
+          "After low tier": {
+            "nodes": 609,
+            "counts": {
+              "AArch64AddressNode": 91,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 16,
+              "HotSpotDirectCallTargetNode": 3,
+              "PointerCastNode": 6,
+              "BeginNode": 48,
+              "ConstantNode": 70,
+              "DeoptimizeNode": 3,
+              "DynamicDeoptimizeNode": 2,
+              "EndNode": 30,
+              "FrameState": 38,
+              "IfNode": 22,
+              "InvokeNode": 1,
+              "InvokeWithExceptionNode": 2,
+              "MergeNode": 11,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 11,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 10,
+              "AddNode": 19,
+              "FloatConvertNode": 8,
+              "IntegerBelowNode": 9,
+              "IntegerEqualsNode": 5,
+              "LeftShiftNode": 5,
+              "MulNode": 3,
+              "NarrowNode": 3,
+              "ObjectEqualsNode": 2,
+              "PointerEqualsNode": 6,
+              "UnsignedRightShiftNode": 2,
+              "ZeroExtendNode": 5,
+              "ForeignCallNode": 7,
+              "MembarNode": 7,
+              "NullCheckNode": 7,
+              "PublishWritesNode": 7,
+              "G1PreWriteBarrierNode": 6,
+              "MemoryAnchorNode": 11,
+              "ReadNode": 51,
+              "WriteNode": 41,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 15,
+              "ReadRegisterNode": 9,
+              "WordCastNode": 7
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionPc",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionOop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "ExceptionPc",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::<JVMCIReservedOop0>",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::<JVMCIReservedOop0>",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffState.results",
+                "field": "thc.runtime.HandoffState.results"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.current",
+                "field": "thc.runtime.TupleResultPool.current"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.TupleResultPool.pool",
+                "field": "thc.runtime.TupleResultPool.pool"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.completedGeneration",
+                "field": "thc.runtime.HandoffStorage.completedGeneration"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.generation",
+                "field": "thc.runtime.HandoffStorage.generation"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.layout",
+                "field": "thc.runtime.HandoffStorage.layout"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffPool.active",
+                "field": "thc.runtime.HandoffPool.active"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__2"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__0"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1",
+                "field": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2.handoff__1"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "thc.runtime.HandoffStorage.live",
+                "field": "thc.runtime.HandoffStorage.live"
+              }
+            ],
+            "invokes": [
+              "Direct#OptimizedCallTarget.callBoundary",
+              "Direct#OptimizedCallTarget.callBoundary",
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              },
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ]
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      }
+    }
+  ],
+  "limitations": [
+    "Graph instrumentation is disabled: exact target validity, not per-row compiled-entry counters",
+    "Instrumented JVM tests separately require exact per-row compiled-entry increments",
+    "Final scalar Long host-result box remains",
+    "Residual scalar floating inputs still use Object packets",
+    "No multiple-register residual return ABI; register allocation may spill"
+  ]
+}
