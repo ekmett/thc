@@ -67,3 +67,11 @@ check inactive reference clearing, release on a shape mismatch, lazy pointer
 identity and actual deopt materialization between completion and consumption.
 These correctness controls are distinct from generated-code evidence; typed
 storage alone does not establish register passing or eliminated allocations.
+
+The [production graph controls](../bench/experiments/sum-results/README.md) capture
+actual exported pair-payload and lazy-reference consumers on both backends, with
+normal inlining and residual calls. All four inline graphs eliminate sum carrier
+allocations and field traffic; branch-local scalar Long Object-return boxes
+remain. The residual controls show real calls and typed result-slab fields. Their
+source/JAR/native/raw-graph hashes and physical LIR are retained separately from
+the instrumented correctness tests.
