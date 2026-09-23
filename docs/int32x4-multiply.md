@@ -71,9 +71,9 @@ two for each helper entry, before and after Tidy. The proof requires exact
 closure membership, no hidden lambda or alias, unconditional saturated helper
 calls with original scalar inputs, machine-Int formals/results, exact signed
 tuple leaves and two packs/one multiply/one unpack per reachable entry.
-The full pre/post × AST/bytecode × inlining-on/off corpus would require 13,776
-compiled invocations and 21,232 guest entries per handoff mode, excluding the
-host bridge. Actual JVM tests must separately prove these counts, stable active
+The full pre/post × AST/bytecode × inlining-on/off corpus checks 13,776 compiled
+invocations and 21,232 guest entries per handoff mode, excluding the host bridge.
+Actual JVM tests separately require the exact per-call increments, stable active
 target identities, valid installed code and released handoff pools.
 
 The genuine `vectorArgument` negative must yield exactly one vector-formal issue
@@ -108,3 +108,25 @@ preparation restores native evidence after testing this mode.
 These fixtures alone establish no JVM compilation, packed instructions,
 allocation elimination, performance, vector ABI support or execution on other
 architectures. Those require independently retained runtime and graph/LIR checks.
+
+## Compiled-code evidence
+
+The [x86-64 evidence](../bench/experiments/int32x4-multiply/evidence-x86_64/README.md)
+retains four actual pre/post × AST/bytecode multiplication captures at runtime
+`597ed24ee8835606437a7cdeb313e28b726d4762`. Each observes all four signed result
+lanes and checks 466 native rows twice after compilation. Every selected graph
+has one live i32x4 multiply and four result-connected SignExtend32-to-64 chains;
+final allocated LIR has one physical XMM `VPMULLD`. All four captures pass the
+original checker, without correction or guest replay.
+
+No local carrier, vector payload allocation, field traffic, fallback call or
+intermediate lane box survives in these selected inlined graphs. The public
+Long result box remains; both bytecode graphs also retain precisely checked
+virtual frame-tag metadata. These are bounded code-generation observations,
+not throughput, no-spill, globally allocation-free or cross-platform claims.
+Instrumented tests separately retain the exact compiled-entry checks above.
+
+Four original committed unsigned Word32 multiplication graphs have the same
+host arity. Each passes its unsigned checker but fails the full signed checker
+specifically because the result lanes zero-extend rather than sign-extend.
+They are independent negative controls, not signed native execution evidence.

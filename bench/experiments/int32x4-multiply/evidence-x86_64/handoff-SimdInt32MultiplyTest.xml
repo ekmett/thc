@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdInt32MultiplyTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-23T23:44:02.516Z" hostname="eak-quartus" time="0.999">
+  <properties/>
+  <testcase name="bothLoadersRequireUnliftedOperandsAndCanonicalSignedLiterals()" classname="thc.runtime.SimdInt32MultiplyTest" time="0.014"/>
+  <testcase name="multiplicationKeepsExactSignedFourLaneContract()" classname="thc.runtime.SimdInt32MultiplyTest" time="0.001"/>
+  <testcase name="bothLoadersRetainSignednessAndCallingFrontier()" classname="thc.runtime.SimdInt32MultiplyTest" time="0.026"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithoutInlining()" classname="thc.runtime.SimdInt32MultiplyTest" time="0.47"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithInlining()" classname="thc.runtime.SimdInt32MultiplyTest" time="0.381"/>
+  <testcase name="productsKeepLowBitsThenSignExtendWithoutSaturationOrHighProduct()" classname="thc.runtime.SimdInt32MultiplyTest" time="0.105"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

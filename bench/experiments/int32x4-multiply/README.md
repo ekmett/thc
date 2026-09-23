@@ -77,8 +77,9 @@ two-input host shape and can serve as exact opposite-signedness controls. They
 must fail specifically because their live lanes use `ZeroExtend32to64`, not
 because of a different host arity. Such controls are not signed native results.
 
-This initial harness makes no actual signed-multiply capture claim. Its bounded
-future evidence is x86-64 packed-code evidence, not throughput, no-spill,
+The [retained x86-64 evidence](evidence-x86_64/README.md) contains four actual
+captures at frozen runtime `597ed24ee8835606437a7cdeb313e28b726d4762`, all passing
+the original checker. Its bounded claim is packed-code evidence, not throughput, no-spill,
 cross-platform or globally allocation-free proof. Interpreted JDK `IntVector`
 fallbacks can allocate private `int[]` payloads; the public result box remains.
 Vector formals/results/captures/heap fields remain unsupported. Graph captures
