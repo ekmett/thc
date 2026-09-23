@@ -58,6 +58,8 @@ class HostEntryCompilationTest {
             val optimizingTarget = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
             assertEquals(true, optimizingTarget.getMethod("isValidLastTier").invoke(active),
                 "Host compilation must install the active split guest target")
+            assertEquals(true, optimizingTarget.getMethod("isValidLastTier").invoke(host),
+                "Host compilation must also install the stable bridge used by the public executable value")
             assertSame(active, call.currentCallTarget)
             assertSame(original, program.entryTarget("entry"))
 
