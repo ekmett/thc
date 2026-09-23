@@ -517,9 +517,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
                 CompilerDirectives.transferToInterpreterAndInvalidate()
                 destinationSlots = slots; destinationOffset = offset
                 dispatch = insert(InputDispatch(operands.source, operands.layout.logicalArity, tail, metrics,
-                    object : TupleDestination(tuple) {
-                        override fun consume(frame: VirtualFrame, node: Node, result: Any?) = tuple.consume(frame, result, slots, offset)
-                    }))
+                    AstTupleDestination(tuple, slots, offset)))
             }
             check(destinationSlots === slots && destinationOffset == offset)
             dispatch!!.execute(frame, closure)

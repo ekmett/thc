@@ -139,7 +139,7 @@ internal class TupleResultPool {
 internal abstract class TupleDestination(val shape: TupleShape) {
     abstract fun consume(frame: VirtualFrame, node: Node, result: Any?)
 }
-private class AstTupleDestination(shape: TupleShape,
+internal class AstTupleDestination(shape: TupleShape,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray, private val offset: Int) : TupleDestination(shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) = shape.consume(frame, result, slots, offset)
 }
