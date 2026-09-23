@@ -1,0 +1,346 @@
+[
+  {
+    "handoff": false,
+    "inlining": false,
+    "workload": "reference-shared",
+    "warmSeconds": 1,
+    "warmCalls": 104910848,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160882082,
+    "measurementEndMillis": 1790160882182,
+    "samples": [
+      {
+        "calls": 10817536,
+        "elapsedNs": 100002583,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 32452608183898112,
+        "expectedChecksum": 32452608183898112,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      112.0
+    ],
+    "nsPerCall": [
+      9.244488116332592
+    ],
+    "argumentCarriers": 0,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 3000000017,
+    "configuration": "reference-shared-inline0-handoff0",
+    "smoke": true,
+    "medianBytesPerCall": 112.0,
+    "medianNsPerCall": 9.244488116332592,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  },
+  {
+    "handoff": true,
+    "inlining": false,
+    "workload": "reference-shared",
+    "warmSeconds": 1,
+    "warmCalls": 58654720,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160883765,
+    "measurementEndMillis": 1790160883865,
+    "samples": [
+      {
+        "calls": 6098944,
+        "elapsedNs": 100046750,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 18296832103682048,
+        "expectedChecksum": 18296832103682048,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      80.0
+    ],
+    "nsPerCall": [
+      16.40394632251091
+    ],
+    "argumentCarriers": 1,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 3000000017,
+    "configuration": "reference-shared-inline0-handoff1",
+    "smoke": true,
+    "medianBytesPerCall": 80.0,
+    "medianNsPerCall": 16.40394632251091,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  },
+  {
+    "handoff": false,
+    "inlining": true,
+    "workload": "reference-shared",
+    "warmSeconds": 1,
+    "warmCalls": 195084288,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160885630,
+    "measurementEndMillis": 1790160885731,
+    "samples": [
+      {
+        "calls": 19746816,
+        "elapsedNs": 100011000,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 59240448335695872,
+        "expectedChecksum": 59240448335695872,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      0.0
+    ],
+    "nsPerCall": [
+      5.064664602131301
+    ],
+    "argumentCarriers": 0,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 3000000017,
+    "configuration": "reference-shared-inline1-handoff0",
+    "smoke": true,
+    "medianBytesPerCall": 0.0,
+    "medianNsPerCall": 5.064664602131301,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  },
+  {
+    "handoff": true,
+    "inlining": true,
+    "workload": "reference-shared",
+    "warmSeconds": 1,
+    "warmCalls": 61440000,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160887321,
+    "measurementEndMillis": 1790160887422,
+    "samples": [
+      {
+        "calls": 6373376,
+        "elapsedNs": 100050625,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 19120128108347392,
+        "expectedChecksum": 19120128108347392,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      80.0
+    ],
+    "nsPerCall": [
+      15.698214729524823
+    ],
+    "argumentCarriers": 1,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 3000000017,
+    "configuration": "reference-shared-inline1-handoff1",
+    "smoke": true,
+    "medianBytesPerCall": 80.0,
+    "medianNsPerCall": 15.698214729524823,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  },
+  {
+    "handoff": false,
+    "inlining": false,
+    "workload": "reference-fresh",
+    "warmSeconds": 1,
+    "warmCalls": 99241984,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160888994,
+    "measurementEndMillis": 1790160889094,
+    "samples": [
+      {
+        "calls": 10223616,
+        "elapsedNs": 100037375,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 122683392756547584,
+        "expectedChecksum": 122683392756547584,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      128.0
+    ],
+    "nsPerCall": [
+      9.784930791610327
+    ],
+    "argumentCarriers": 0,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 12000000074,
+    "configuration": "reference-fresh-inline0-handoff0",
+    "smoke": true,
+    "medianBytesPerCall": 128.0,
+    "medianNsPerCall": 9.784930791610327,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  },
+  {
+    "handoff": true,
+    "inlining": false,
+    "workload": "reference-fresh",
+    "warmSeconds": 1,
+    "warmCalls": 56385536,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160890667,
+    "measurementEndMillis": 1790160890768,
+    "samples": [
+      {
+        "calls": 5922816,
+        "elapsedNs": 100067917,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 71073792438288384,
+        "expectedChecksum": 71073792438288384,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      96.0
+    ],
+    "nsPerCall": [
+      16.895327661706865
+    ],
+    "argumentCarriers": 1,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 12000000074,
+    "configuration": "reference-fresh-inline0-handoff1",
+    "smoke": true,
+    "medianBytesPerCall": 96.0,
+    "medianNsPerCall": 16.895327661706865,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  },
+  {
+    "handoff": false,
+    "inlining": true,
+    "workload": "reference-fresh",
+    "warmSeconds": 1,
+    "warmCalls": 168980480,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160892338,
+    "measurementEndMillis": 1790160892438,
+    "samples": [
+      {
+        "calls": 17723392,
+        "elapsedNs": 100006083,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 212680705311531008,
+        "expectedChecksum": 212680705311531008,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      16.0
+    ],
+    "nsPerCall": [
+      5.642604022977092
+    ],
+    "argumentCarriers": 0,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 12000000074,
+    "configuration": "reference-fresh-inline1-handoff0",
+    "smoke": true,
+    "medianBytesPerCall": 16.0,
+    "medianNsPerCall": 5.642604022977092,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  },
+  {
+    "handoff": true,
+    "inlining": true,
+    "workload": "reference-fresh",
+    "warmSeconds": 1,
+    "warmCalls": 63610880,
+    "sampleMillis": 100,
+    "measurementStartMillis": 1790160894027,
+    "measurementEndMillis": 1790160894127,
+    "samples": [
+      {
+        "calls": 6643712,
+        "elapsedNs": 100060250,
+        "hostCompilationMillisDelta": 0,
+        "entryCompiled": true,
+        "workerCompiled": true,
+        "checksum": 79724544491634688,
+        "expectedChecksum": 79724544491634688,
+        "checksumValid": true
+      }
+    ],
+    "bytesPerCall": [
+      80.0
+    ],
+    "nsPerCall": [
+      15.060895174264026
+    ],
+    "argumentCarriers": 1,
+    "resultCarriers": 0,
+    "resultProtocol": "natural-object",
+    "agingCollections": 1,
+    "entryCompiled": true,
+    "workerCompiled": true,
+    "expected": 12000000074,
+    "configuration": "reference-fresh-inline1-handoff1",
+    "smoke": true,
+    "medianBytesPerCall": 80.0,
+    "medianNsPerCall": 15.060895174264026,
+    "eventsOverlappingMeasurement": [],
+    "validSteadyState": false,
+    "validationStatus": "smoke-only",
+    "rejectionReasons": []
+  }
+]

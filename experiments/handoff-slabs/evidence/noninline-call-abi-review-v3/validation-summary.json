@@ -1,0 +1,15 @@
+{
+  "enabled": {
+    "tests": 186,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "default": {
+    "tests": 186,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "mainIntegration": false
+}

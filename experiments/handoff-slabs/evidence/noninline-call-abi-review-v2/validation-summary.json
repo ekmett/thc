@@ -1,0 +1,15 @@
+{
+  "enabled": {
+    "tests": 183,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "default": {
+    "tests": 183,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "coldDeoptimization": "loop_limit_check; recovery coverage strengthened, original 182/183 preserved"
+}

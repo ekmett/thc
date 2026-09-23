@@ -1,0 +1,753 @@
+--- a/src/main/kotlin/thc/Language.kt
++++ b/src/main/kotlin/thc/Language.kt
+@@ -115,6 +115,8 @@
+     characterMimeTypes = ["application/x-thc-core"], defaultMimeType = "application/x-thc-core",
+     contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
+ class Language : TruffleLanguage<Language.State>() {
++    internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
++    internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
+     class State
+     override fun createContext(env: Env): State = State()
+     @Suppress("UNCHECKED_CAST")
+--- a/src/main/kotlin/thc/runtime/Application.kt
++++ b/src/main/kotlin/thc/runtime/Application.kt
+@@ -300,6 +300,7 @@
+     @Child private var leadingCaseReturn: LeadingCaseReturnNode? = (target.rootNode as? GuestRoot)
+         ?.leadingCaseReturn?.let { LeadingCaseReturnNode(it, metrics) }
+     @Child private var callNode = DirectCallNode.create(target)
++    @Child private var handoff: HandoffCaller? = (target.rootNode as? FunctionRoot)?.handoff?.let { HandoffCaller(target, it, metrics) }
+     @Child private var loop = TailCallLoop(metrics)
+     @Child private var tailCheck = TailCheck(metrics)
+     private val normalProfile = BranchProfile.create()
+@@ -312,12 +313,14 @@
+         // All CBV marks (including unused formals and PAP prefixes) run before the shortcut.
+         leadingCaseReturn?.execute(arguments)?.let { return it }
+         if (tailCall) {
++            if (handoff != null && (rootNode as? FunctionRoot)?.handoffDestination(frame)?.let { it >= 0 } == true)
++                return handoff!!.call(frame, arguments, callNode, true)
+             tailCheck.check(frame, target, arguments)
+             return Calls.direct(callNode, arguments)
+         }
+         return try {
+             arguments[0] = 0L
+-            val result = Calls.direct(callNode, arguments)
++            val result = if (handoff != null) handoff!!.call(frame, arguments, callNode, false) else Calls.direct(callNode, arguments)
+             normalProfile.enter()
+             result
+         } catch (tail: TailCall) {
+--- a/src/main/kotlin/thc/runtime/Program.kt
++++ b/src/main/kotlin/thc/runtime/Program.kt
+@@ -574,13 +574,25 @@
+             return unexpected.result
+         }
+     }
++    fun executeLong(frame: VirtualFrame): Long = value.executeRequiredLong(frame)
+ }
+ private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
+-    fun once(frame: VirtualFrame): Any? = body.execute(frame)
++    fun once(frame: VirtualFrame): Any? {
++        val entry = (rootNode as FunctionRoot).handoff
++        return if (entry != null && entry.destination(frame) >= 0) entry.finishLong(frame, body.executeLong(frame))
++        else body.execute(frame)
++    }
+     override fun executeRepeating(frame: VirtualFrame): Boolean = error("value loop")
+     override fun executeRepeatingWithValue(frame: VirtualFrame): Any? = try { once(frame) }
+     catch (_: AstSelfCall) {
+         if (metrics.enabled) metrics.selfTailReentries++
++        RepeatingNode.CONTINUE_LOOP_STATUS
++    }
++    catch (tail: HandoffTailCall) {
++        val root = rootNode as FunctionRoot
++        if (!root.isSelf(tail.target)) throw tail
++        if (metrics.enabled) metrics.selfTailReentries++
++        root.restoreHandoff(frame, tail.arguments, false)
+         RepeatingNode.CONTINUE_LOOP_STATUS
+     }
+     catch (tail: TailCall) {
+@@ -600,7 +612,8 @@
+                             @field:CompilationFinal(dimensions = 1) private val argumentProofs: Array<CoreRepresentation> = emptyArray(),
+                             resultProof: CoreRepresentation = body.representation,
+                             private val coreSourceLocation: CoreSourceLocation? = body.coreSourceLocation,
+-                            entryStrict: BooleanArray = booleanArrayOf()) : GuestRoot(language, descriptor) {
++                            entryStrict: BooleanArray = booleanArrayOf(),
++                            internal val handoff: HandoffEntry? = null) : GuestRoot(language, descriptor) {
+     init { configureEntry(entryStrict, captureLayout != null) }
+     @field:CompilationFinal(dimensions = 1)
+     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
+@@ -624,10 +637,52 @@
+             for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
+         }
+     }
++    fun handoffDestination(frame: VirtualFrame): Int = handoff?.destination(frame) ?: -1
++
++    @ExplodeLoop internal fun restoreHandoff(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
++        val entry = handoff ?: fault("Target does not support the handoff ABI")
++        check(input.layout === entry.arguments && input.live)
++        if (!initial) check(entry.destination(frame) >= 0)
++        try {
++            if (initial) {
++                entry.snapshot(frame, input)
++                frame.setLong(entry.destinationSlot, 0L)
++                frame.setLong(FrameLayout.BLOOM_FILTER, entry.arguments.getLong(input, 0) or mask)
++            }
++            val offset = if (captureLayout == null) 1 else 2
++            for (i in argumentSlots.indices) {
++                val position = argumentIndices[i] + offset
++                if (entry.arguments.isLong(position)) FrameAccess.writeLong(frame, argumentSlots[i], entry.arguments.getLong(input, position))
++                else {
++                    val value = entry.arguments.getObject(input, position)
++                    val reference = argumentReferences.getOrNull(i)
++                    FrameAccess.write(frame, argumentSlots[i], if (reference != null) requireReferenceCarrier(value, reference) else value)
++                }
++            }
++            if (captureLayout != null) {
++                val environment = entry.arguments.getObject(input, 1) as? CapturedFrame ?: fault("Invalid captured frame")
++                for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
++            }
++        } finally { entry.state().arguments.release(input, entry.arguments) }
++    }
++
+     override fun execute(frame: VirtualFrame): Any? {
+         if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.compiledEntries++
+-        frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
+-        buildFrame(frame.arguments, frame)
++        val entry = handoff
++        if (entry != null && frame.arguments.isEmpty()) {
++            val state = entry.state()
++            val input = state.pending ?: fault("Missing typed argument loan")
++            state.pending = null
++            restoreHandoff(frame, input, true)
++        } else {
++            entry?.initializeOrdinary(frame)
++            frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
++            buildFrame(frame.arguments, frame)
++        }
++        return executeBody(frame)
++    }
++
++    private fun executeBody(frame: VirtualFrame): Any? {
+         // Non-looping roots retain entry argument facts. Once self recursion
+         // is observed, PE selects only the loop body instead of duplicating it.
+         if (hasSelfTail) return loop.execute(frame)
+@@ -637,6 +692,15 @@
+             if (metrics.enabled) metrics.selfTailReentries++
+             CompilerDirectives.transferToInterpreterAndInvalidate()
+             hasSelfTail = true
++            loop.execute(frame)
++        }
++        catch (tail: HandoffTailCall) {
++            tailCallProfile.enter()
++            if (!isSelf(tail.target)) throw tail
++            if (metrics.enabled) metrics.selfTailReentries++
++            CompilerDirectives.transferToInterpreterAndInvalidate()
++            hasSelfTail = true
++            restoreHandoff(frame, tail.arguments, false)
+             loop.execute(frame)
+         }
+         catch (tail: TailCall) {
+@@ -803,9 +867,10 @@
+         }
+         scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf())
+         val body = compile(expression, scope, true)
++        val handoff = HandoffEntry.create(language, scope.layout, args.map(CoreRepresentations::binder), resultProof, captures != null)
+         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
+             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
+-            rootSource(body), entryStrict)
++            rootSource(body), entryStrict, handoff)
+         if (body is Case) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
+             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
+             ::dataLayout, sources, body.coreSourceLocation))
+--- /dev/null
++++ b/src/main/kotlin/thc/runtime/Handoff.kt
+@@ -0,0 +1,217 @@
++package thc.runtime
++
++import com.oracle.truffle.api.CompilerDirectives
++import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
++import com.oracle.truffle.api.RootCallTarget
++import com.oracle.truffle.api.TruffleLanguage
++import com.oracle.truffle.api.frame.VirtualFrame
++import com.oracle.truffle.api.nodes.ControlFlowException
++import com.oracle.truffle.api.nodes.DirectCallNode
++import com.oracle.truffle.api.nodes.ExplodeLoop
++import com.oracle.truffle.api.nodes.Node
++import com.oracle.truffle.api.staticobject.DefaultStaticProperty
++import com.oracle.truffle.api.staticobject.StaticShape
++import thc.Language
++
++internal const val HANDOFF_PROPERTY = "thc.handoffSlabs"
++private val EMPTY_HANDOFF_ARGUMENTS: Array<Any?> = emptyArray()
++private object HandoffComplete
++
++/** Mutable generated fields; neither payload arrays nor root references live in a loan. */
++open class HandoffStorage(val layout: HandoffLayout) {
++    internal var generation = 0L
++    internal var live = false
++}
++interface HandoffFactory { fun create(layout: HandoffLayout): HandoffStorage }
++
++/** The key describes physical fields; signedness and liftedness stay in Core proofs. */
++class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
++    @field:CompilationFinal(dimensions = 1)
++    private val primitive = reps.map { it == "long" }.toBooleanArray()
++    @field:CompilationFinal(dimensions = 1)
++    private val fields = Array(reps.size) { DefaultStaticProperty("handoff_$it") }
++    private val shape = StaticShape.newBuilder(language).also { builder ->
++        fields.indices.forEach { i -> builder.property(fields[i], if (primitive[i]) Long::class.javaPrimitiveType!! else Any::class.java, false) }
++    }.build(HandoffStorage::class.java, HandoffFactory::class.java)
++    fun create(): HandoffStorage = shape.factory.create(this)
++    fun isLong(index: Int): Boolean = primitive[index]
++    fun getLong(storage: HandoffStorage, index: Int): Long = fields[index].getLong(storage)
++    fun getObject(storage: HandoffStorage, index: Int): Any? = fields[index].getObject(storage)
++    fun setLong(storage: HandoffStorage, index: Int, value: Long) = fields[index].setLong(storage, value)
++    @ExplodeLoop fun copyIn(storage: HandoffStorage, values: Array<Any?>) {
++        check(values.size == fields.size)
++        for (i in fields.indices) {
++            if (primitive[i]) fields[i].setLong(storage, values[i] as? Long ?: fault("Invalid primitive handoff field"))
++            else fields[i].setObject(storage, values[i])
++        }
++    }
++    @ExplodeLoop fun clearReferences(storage: HandoffStorage) {
++        for (i in fields.indices) if (!primitive[i]) fields[i].setObject(storage, null)
++    }
++    companion object {
++        private val LONG_REPS = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
++        internal fun supports(rep: String): Boolean = rep in LONG_REPS || rep.startsWith("BoxedRep ")
++        internal fun fieldKind(rep: String): String = when {
++            rep in LONG_REPS -> "long"
++            rep.startsWith("BoxedRep ") -> "reference"
++            else -> fault("Unsupported handoff representation: $rep")
++        }
++    }
++}
++
++/** Owned by the language instance (EXCLUSIVE contexts), never a global loader cache. */
++internal class HandoffLayouts(private val language: Language) {
++    val enabled = java.lang.Boolean.getBoolean(HANDOFF_PROPERTY)
++    private val layouts = HashMap<List<String>, HandoffLayout>()
++    @Synchronized fun intern(reps: List<String>): HandoffLayout {
++        val fields = reps.map(HandoffLayout::fieldKind)
++        return layouts.getOrPut(fields) { HandoffLayout(language, layouts.size, fields) }
++    }
++}
++
++/** One incoming loan at a time: operands are evaluated before acquisition and entry
++ * copies the loan into durable locals before any guest code can run. */
++internal class HandoffPool {
++    // Indexed metadata holds carrier identities; generated fields hold all payloads.
++    private var slots: Array<HandoffStorage?> = arrayOfNulls(4)
++    private var active: HandoffStorage? = null
++    val depth: Int get() = if (active == null) 0 else 1
++    var allocations = 0L
++        private set
++    fun acquire(layout: HandoffLayout): HandoffStorage {
++        check(active == null)
++        val alternatives = if (layout.id < slots.size) slots else grow(layout.id)
++        val storage = alternatives[layout.id] ?: allocate(layout, alternatives)
++        check(!storage.live)
++        storage.live = true
++        storage.generation++
++        active = storage
++        return storage
++    }
++    @CompilerDirectives.TruffleBoundary private fun grow(layoutId: Int): Array<HandoffStorage?> =
++        slots.copyOf(maxOf(slots.size * 2, layoutId + 1)).also { slots = it }
++    @CompilerDirectives.TruffleBoundary private fun allocate(layout: HandoffLayout, alternatives: Array<HandoffStorage?>): HandoffStorage =
++        layout.create().also { alternatives[layout.id] = it; allocations++ }
++    fun release(storage: HandoffStorage, layout: HandoffLayout = storage.layout) {
++        check(active === storage && storage.live)
++        layout.clearReferences(storage)
++        storage.live = false
++        active = null
++    }
++    internal fun retainedReferences(): Int = slots.sumOf { storage ->
++        if (storage == null) 0 else storage.layout.reps.indices.count { !storage.layout.isLong(it) && storage.layout.getObject(storage, it) != null }
++    }
++}
++
++internal class HandoffState {
++    val arguments = HandoffPool()
++    var pending: HandoffStorage? = null
++    // Synchronous Long-only return register. Consume immediately after the completion token.
++    var returnLong = 0L
++    var calls = 0L
++    var tailTransfers = 0L
++}
++
++/** The transfer owns its argument loan; it carries no escaping or outstanding scalar result. */
++internal class HandoffTailCall(val target: RootCallTarget, val arguments: HandoffStorage) : ControlFlowException()
++
++internal class HandoffEntry(
++    private val language: Language,
++    val arguments: HandoffLayout,
++    @field:CompilationFinal(dimensions = 1) val snapshotSlots: IntArray,
++    val destinationSlot: Int
++) {
++    fun state(): HandoffState = language.handoffState.get()
++    fun destination(frame: VirtualFrame): Int = frame.getLong(destinationSlot).toInt()
++    fun initializeOrdinary(frame: VirtualFrame) { frame.setLong(destinationSlot, -1L) }
++    @ExplodeLoop fun snapshot(frame: VirtualFrame, input: HandoffStorage) {
++        check(input.layout === arguments && input.live)
++        for (i in snapshotSlots.indices) {
++            if (arguments.isLong(i)) FrameAccess.writeLong(frame, snapshotSlots[i], arguments.getLong(input, i))
++            else FrameAccess.write(frame, snapshotSlots[i], arguments.getObject(input, i))
++        }
++    }
++    fun finishLong(frame: VirtualFrame, value: Long): Any {
++        check(destination(frame) >= 0)
++        state().returnLong = value
++        return HandoffComplete
++    }
++    companion object {
++        fun create(language: TruffleLanguage<*>?, layout: FrameLayout, argumentReps: List<CoreRepresentation>,
++                   resultRep: CoreRepresentation, hasEnvironment: Boolean): HandoffEntry? {
++            val thc = language as? Language ?: return null
++            if (!thc.handoffLayouts.enabled || !resultRep.isLong) return null
++            val reps = argumentReps.map { it.primReps?.singleOrNull() ?: return null }
++            if (!reps.all(HandoffLayout::supports)) return null
++            val packetReps = listOf("WordRep") + (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps
++            return HandoffEntry(thc, thc.handoffLayouts.intern(packetReps),
++                IntArray(packetReps.size) { layout.bind("<handoff entry $it>") }, layout.bind("<handoff result destination>"))
++        }
++    }
++}
++
++/** Opt-in scalar transport. The actual Truffle boundary still receives an empty Object[]. */
++internal class HandoffCaller(private val target: RootCallTarget, private val entry: HandoffEntry, private val metrics: Metrics) : Node() {
++    @Child private var trampolineDispatch = TargetCache(metrics)
++
++    fun call(frame: VirtualFrame, packet: Array<Any?>, callNode: DirectCallNode, tail: Boolean): Any? {
++        val state = entry.state()
++        val inherited = if (tail) (rootNode as? FunctionRoot)?.handoffDestination(frame) ?: -1 else -1
++        // A tail chain entered through the old ABI has no typed receiving continuation yet.
++        check(!tail || inherited >= 0)
++        val input = state.arguments.acquire(entry.arguments)
++        val generation = input.generation
++        var transferred = false
++        try {
++            if (tail) packet[0] = 0L
++            entry.arguments.copyIn(input, packet)
++            if (tail) {
++                val source = rootNode as GuestRoot
++                val mask = source.bloom(frame)
++                val destination = target.rootNode as GuestRoot
++                if (mask and destination.mask == destination.mask) {
++                    transferred = true
++                    if (metrics.enabled) { state.tailTransfers++; metrics.tailBounces++ }
++                    throw HandoffTailCall(target, input)
++                }
++                entry.arguments.setLong(input, 0, mask)
++            }
++            return invoke(state, input) { Calls.direct(callNode, EMPTY_HANDOFF_ARGUMENTS) }
++        } catch (transfer: HandoffTailCall) {
++            if (tail) throw transfer
++            return trampoline(state, transfer)
++        } finally {
++            // Entry consumed/released this loan; a later tail may reuse its storage.
++            if (!transferred && input.live && input.generation == generation) state.arguments.release(input, entry.arguments)
++        }
++    }
++
++    private inline fun invoke(state: HandoffState, input: HandoffStorage, action: () -> Any?): Long {
++        val oldPending = state.pending
++        check(oldPending == null)
++        state.pending = input
++        if (metrics.enabled) state.calls++
++        try {
++            check(action() === HandoffComplete)
++            return state.returnLong
++        } finally { state.pending = oldPending }
++    }
++
++    @CompilerDirectives.TruffleBoundary private fun releaseUnknown(state: HandoffState, input: HandoffStorage) { state.arguments.release(input) }
++
++    private fun trampoline(state: HandoffState, initial: HandoffTailCall): Long {
++        var transfer = initial
++        while (true) {
++            if (metrics.enabled) metrics.trampolineIterations++
++            val next = transfer
++            val generation = next.arguments.generation
++            try {
++                return invoke(state, next.arguments) { trampolineDispatch.call(next.target, EMPTY_HANDOFF_ARGUMENTS) }
++            } catch (tail: HandoffTailCall) { transfer = tail }
++            finally {
++                // A failed entry still owns its loan. Successfully consumed entries release it.
++                if (next.arguments.live && next.arguments.generation == generation) releaseUnknown(state, next.arguments)
++            }
++        }
++    }
++}
+--- /dev/null
++++ b/src/test/kotlin/thc/runtime/HandoffTest.kt
+@@ -0,0 +1,240 @@
++package thc.runtime
++
++import com.oracle.truffle.api.RootCallTarget
++import com.oracle.truffle.api.CompilerDirectives
++import com.oracle.truffle.api.TruffleLanguage
++import com.oracle.truffle.api.frame.MaterializedFrame
++import com.oracle.truffle.api.frame.VirtualFrame
++import com.oracle.truffle.api.nodes.RootNode
++import org.graalvm.polyglot.Context
++import org.junit.jupiter.api.Assertions.*
++import org.junit.jupiter.api.Test
++import thc.Language
++import thc.executionContext
++
++/** The object boundary remains real; every transport assertion also runs interpreted. */
++class HandoffTest {
++    private val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
++    private val closureRep = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
++    private val proof = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
++    private fun v(id: String): List<Any?> = listOf("var", id)
++    private fun n(value: Long): List<Any?> = listOf("lit", "int", value.toString())
++    private fun call(fn: String, vararg values: List<Any?>): List<Any?> = listOf("app", v(fn), values.toList(), List(values.size) { false })
++    private fun prim(fn: String, vararg values: List<Any?>): List<Any?> = listOf("app", listOf("prim", fn), values.toList(), List(values.size) { false })
++    private fun choose(test: List<Any?>, yes: List<Any?>, no: List<Any?>): List<Any?> = listOf("case", test, "test", listOf(
++        listOf("lit", listOf("int", "1"), emptyList<String>(), yes), listOf("default", null, emptyList<String>(), no)))
++    private fun binding(id: String, body: List<Any?>): Map<String, Any?> = mapOf("id" to id, "name" to id, "lifted" to true,
++        "expr" to listOf("lam", listOf(mapOf("id" to "n", "name" to "n", "lifted" to false, "coercion" to false, "rep" to longRep)), body,
++            mapOf("rep" to closureRep, "resultRep" to longRep, "entryStrict" to listOf(false))))
++    private fun module(bindings: List<Map<String, Any?>>): Map<String, Any?> = mapOf("bindings" to bindings, "constructors" to emptyList<Any>(), "instrument" to true)
++    private fun invoke(program: ExecutableProgram, value: Long): Any? = Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("entry"), arrayOf(value)))
++    private fun compile(target: RootCallTarget) {
++        val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
++        type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
++        assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
++    }
++    private fun withLanguage(inlining: Boolean = true, action: (Language) -> Unit) {
++        val previous = System.getProperty(HANDOFF_PROPERTY)
++        System.setProperty(HANDOFF_PROPERTY, "true")
++        try {
++            (if (inlining) executionContext() else Context.newBuilder("thc").allowExperimentalOptions(true)
++                .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
++                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
++                .option("compiler.CompilationTimeout", "30").build()).use { context ->
++                context.initialize("thc"); context.enter()
++                try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
++                finally { context.leave() }
++            }
++        } finally {
++            if (previous == null) System.clearProperty(HANDOFF_PROPERTY) else System.setProperty(HANDOFF_PROPERTY, previous)
++        }
++    }
++    private fun assertReleased(state: HandoffState) {
++        assertEquals(0, state.arguments.depth)
++        assertNull(state.pending)
++        assertEquals(0, state.arguments.retainedReferences())
++    }
++
++    @Test fun internedRepVectorsGenerateMutableDenseFieldsAndSeparateLifetimes() = withLanguage { language ->
++        val reps = listOf("IntRep", "BoxedRep (Just Lifted)", "WordRep")
++        val layout = language.handoffLayouts.intern(reps)
++        assertSame(layout, language.handoffLayouts.intern(reps.toList()))
++        assertSame(layout, language.handoffLayouts.intern(listOf("WordRep", "BoxedRep (Just Unlifted)", "Int8Rep")))
++        val state = language.handoffState.get()
++        val input = state.arguments.acquire(layout)
++        val independentPool = HandoffPool()
++        val output = independentPool.acquire(layout)
++        assertNotSame(input, output)
++        assertSame(input.javaClass, output.javaClass)
++        val fields = input.javaClass.declaredFields.filter { it.name.startsWith("handoff_") }
++        assertEquals(3, fields.size)
++        assertEquals(2, fields.count { it.type == Long::class.javaPrimitiveType })
++        assertEquals(1, fields.count { it.type == Any::class.java })
++        assertTrue(input.javaClass.declaredFields.none { it.type.isArray })
++        val objectValue = Any()
++        layout.copyIn(input, arrayOf(4_000_000_000L, objectValue, Long.MIN_VALUE))
++        state.arguments.release(input)
++        assertEquals(0, state.arguments.depth)
++        assertEquals(1, independentPool.depth)
++        assertTrue(output.live)
++        val again = state.arguments.acquire(layout)
++        assertSame(input, again)
++        assertNull(layout.getObject(again, 1))
++        layout.copyIn(again, arrayOf(7L, Any(), 9L))
++        assertEquals(7L, layout.getLong(again, 0))
++        state.arguments.release(again)
++        independentPool.release(output)
++        assertReleased(state)
++    }
++
++    @Test fun nestedNonTailCallsKeepDistinctResultsAcrossCompilationAndReuse() = withLanguage { language ->
++        val body = choose(prim("<=#", v("n"), n(0)), n(3_000_000_017L),
++            prim("+#", call("worker", prim("-#", v("n"), n(1))), v("n")))
++        val data = module(listOf(binding("worker", body), binding("entry", prim("+#", call("worker", v("n")), n(7)))))
++        for (backend in listOf("ast", "bytecode")) {
++            val program: ExecutableProgram = if (backend == "ast") Program(language, data) else BytecodeProgram(language, data)
++            for (input in listOf(0L, 1L, 19L, 80L)) assertEquals(3_000_000_024L + input * (input + 1) / 2, invoke(program, input), backend)
++            assertReleased(language.handoffState.get())
++            compile(program.entryTarget("entry"))
++            assertEquals(3_000_003_264L, invoke(program, 80L), backend)
++            assertReleased(language.handoffState.get())
++        }
++        assertTrue(language.handoffState.get().calls > 0)
++    }
++
++    @Test fun interiorTailCyclesForwardDestinationAndReuseIncomingLoan() = withLanguage { language ->
++        val condition = prim("<=#", v("n"), n(0))
++        fun worker(id: String, next: String) = binding(id, choose(condition, n(3_000_000_017L), call(next, prim("-#", v("n"), n(1)))))
++        val data = module(listOf(worker("a", "b"), worker("b", "c"), worker("c", "a"),
++            binding("entry", prim("+#", call("a", v("n")), n(7)))))
++        val program = Program(language, data)
++        assertEquals(3_000_000_024L, invoke(program, 12_000L))
++        val state = language.handoffState.get()
++        assertTrue(state.tailTransfers > 0)
++        assertReleased(state)
++        val incomingAllocations = state.arguments.allocations
++        compile(program.entryTarget("entry"))
++        assertEquals(3_000_000_024L, invoke(program, 15_000L))
++        assertReleased(state)
++        assertEquals(incomingAllocations, state.arguments.allocations)
++    }
++
++    @Test fun forcedResidualCallsSupportMultipleAncestorCyclesAndPhysicalRepAliases() = withLanguage(false) { language ->
++        fun terminal(next: List<Any?>) = choose(prim("<=#", v("n"), n(0)), n(3_000_000_017L), next)
++        fun next(name: String) = call(name, prim("-#", v("n"), n(1)))
++        val b = binding("b", terminal(next("c"))).toMutableMap()
++        val bLambda = (b.getValue("expr") as List<*>).toMutableList()
++        bLambda[3] = mapOf("rep" to closureRep, "resultRep" to (longRep + ("primReps" to listOf("WordRep"))), "entryStrict" to listOf(false))
++        b["expr"] = bLambda
++        val data = module(listOf(binding("a", terminal(next("b"))), b,
++            binding("c", terminal(choose(prim("==#", prim("andI#", v("n"), n(1)), n(0)), next("b"), next("d")))),
++            binding("d", terminal(choose(prim("==#", prim("andI#", v("n"), n(2)), n(0)), next("c"), next("a")))),
++            binding("entry", prim("+#", call("a", v("n")), n(7)))))
++        val program = Program(language, data)
++        assertEquals(3_000_000_024L, invoke(program, 4_001L))
++        for (id in listOf("a", "b", "c", "d", "entry")) compile(program.entryTarget(id))
++        assertEquals(3_000_000_024L, invoke(program, 40_001L))
++        assertTrue(language.handoffState.get().tailTransfers > 0)
++        assertReleased(language.handoffState.get())
++    }
++
++    @Test fun interiorCReentryThenOutwardBReentryRemainInActiveRoots() = withLanguage { language ->
++        fun next(name: String) = call(name, prim("-#", v("n"), n(1)))
++        fun worker(id: String, body: List<Any?>) = binding(id, choose(prim("<=#", v("n"), n(0)), n(3_000_000_017L), body))
++        val data = module(listOf(binding("a", call("b", v("n"))), binding("b", call("c", v("n"))),
++            worker("c", next("d")), worker("d", next("e")),
++            worker("e", choose(prim("<=#", v("n"), n(5)), next("b"), next("c"))),
++            binding("entry", prim("+#", call("a", v("n")), n(7)))))
++        val program = generateSequence { Program(language, data) }.take(64).first { candidate ->
++            var ancestry = 0L
++            listOf("a", "b", "c", "d", "e").all { id ->
++                val mask = (candidate.entryTarget(id).rootNode as GuestRoot).mask
++                val fresh = ancestry and mask != mask
++                ancestry = ancestry or mask
++                fresh
++            }
++        }
++        fun check(input: Long) {
++            val before = (program.diagnostics().getValue("selfTailReentries") as Number).toLong()
++            val loops = (program.diagnostics().getValue("trampolineIterations") as Number).toLong()
++            assertEquals(3_000_000_024L, invoke(program, input))
++            val after = (program.diagnostics().getValue("selfTailReentries") as Number).toLong()
++            assertTrue(after - before >= input / 3)
++            assertEquals(loops, (program.diagnostics().getValue("trampolineIterations") as Number).toLong())
++            assertReleased(language.handoffState.get())
++        }
++        check(12_000L)
++        compile(program.entryTarget("entry"))
++        check(15_000L)
++    }
++
++    @Test fun lazyReferencePrefixesAndCapturedEnvironmentsRemainOwnedAcrossResidualCalls() = withLanguage(false) { language ->
++        fun parameter(id: String, rep: Map<String, Any?>) = mapOf("id" to id, "name" to id,
++            "lifted" to (id == "ignored"), "coercion" to false, "rep" to rep)
++        val inner = listOf("lam", listOf(parameter("ignored", closureRep + ("evaluated" to false)), parameter("n", longRep)),
++            prim("+#", v("seed"), v("n")), mapOf("rep" to closureRep, "resultRep" to longRep, "entryStrict" to listOf(false, false)))
++        val outer = listOf("lam", listOf(parameter("seed", longRep)), inner,
++            mapOf("rep" to closureRep, "resultRep" to closureRep, "entryStrict" to listOf(false)))
++        val program = Program(language, module(listOf(mapOf("id" to "factory", "name" to "factory", "lifted" to true, "expr" to outer))))
++        val worker = Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("factory"), arrayOf(3_000_000_017L))) as Closure
++        val bottom = Thunk(object : RootNode(null) {
++            override fun execute(frame: VirtualFrame): Any? = throw RuntimeFault("unforced PAP prefix")
++        }.callTarget, null)
++        val pap = worker.pap(arrayOf(bottom))
++        fun invoke(input: Long): Any? = Calls.target(program.hostEntryTarget(1), arrayOf(pap, arrayOf(input)))
++        assertEquals(3_000_000_020L, invoke(3L))
++        compile(worker.target)
++        assertEquals(3_000_000_012L, invoke(-5L))
++        assertSame(bottom, pap.supplied.single())
++        assertEquals(0, bottom.state)
++        assertTrue(language.handoffState.get().calls > 0)
++        assertReleased(language.handoffState.get())
++    }
++
++    private class RememberFrame(private val argumentSlot: Int, private val saved: MutableList<MaterializedFrame>) : Expr() {
++        var compiledBeforeDeopt = false
++        init { representation = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep")) }
++        override fun execute(frame: VirtualFrame): Any? = executeLong(frame)
++        override fun executeLong(frame: VirtualFrame): Long {
++            compiledBeforeDeopt = CompilerDirectives.inCompiledCode()
++            saved.add(frame.materialize())
++            val input = frame.getLong(argumentSlot)
++            if (input == 777L) {
++                CompilerDirectives.transferToInterpreterAndInvalidate()
++            }
++            if (input == 999L) throw RuntimeFault("intentional handoff exit")
++            return input + 1
++        }
++    }
++    private class InvokeWorker(target: RootCallTarget) : GuestRoot(null, FrameLayout().build()) {
++        @Child private var caller = DirectCallerNode(target, Metrics(false))
++        override fun bloom(frame: VirtualFrame): Long = 0
++        override fun execute(frame: VirtualFrame): Any? = caller.call(frame, frame.arguments, false)
++    }
++
++    @Test fun retainedMaterializedFramesAndExceptionalCleanupSurviveReuse() = withLanguage(false) { language ->
++        val layout = FrameLayout()
++        val argument = layout.bind("n")
++        val entry = HandoffEntry.create(language, layout, listOf(proof), proof, false)!!
++        val saved = ArrayList<MaterializedFrame>()
++        val body = RememberFrame(argument, saved)
++        val root = FunctionRoot(language, layout.build(), "retained slab frame", null, intArrayOf(), intArrayOf(argument), intArrayOf(0),
++            body, Metrics(false), arrayOf(proof), proof, null, booleanArrayOf(false), entry)
++        val caller = InvokeWorker(root.callTarget)
++        assertEquals(3_000_000_018L, Calls.target(caller.callTarget, arrayOf(0L, 3_000_000_017L)))
++        assertThrows(RuntimeFault::class.java) { Calls.target(caller.callTarget, arrayOf(0L, 999L)) }
++        assertReleased(language.handoffState.get())
++        assertEquals(11L, Calls.target(caller.callTarget, arrayOf(0L, 10L)))
++        assertTrue(saved.all { it.arguments.isEmpty() })
++        assertEquals(3_000_000_017L, saved[0].getLong(argument))
++        assertEquals(3_000_000_017L, saved[0].getLong(entry.snapshotSlots[1]))
++        assertEquals(999L, saved[1].getLong(entry.snapshotSlots[1]))
++        compile(root.callTarget)
++        assertEquals(778L, Calls.target(caller.callTarget, arrayOf(0L, 777L)))
++        assertTrue(body.compiledBeforeDeopt, "The frame must be reconstructed from installed guest code")
++        assertEquals(16L, Calls.target(caller.callTarget, arrayOf(0L, 15L)))
++        assertEquals(777L, saved[3].getLong(entry.snapshotSlots[1]))
++        assertEquals(3_000_000_017L, saved[0].getLong(entry.snapshotSlots[1]))
++        assertReleased(language.handoffState.get())
++    }
++}
+--- /dev/null
++++ b/src/test/kotlin/thc/runtime/HandoffProbe.kt
+@@ -0,0 +1,100 @@
++package thc.runtime
++
++import com.oracle.truffle.api.RootCallTarget
++import com.oracle.truffle.api.TruffleLanguage
++import com.sun.management.ThreadMXBean
++import org.graalvm.polyglot.Context
++import thc.Json
++import thc.Language
++import java.lang.management.ManagementFactory
++
++private fun probeCalls(target: RootCallTarget, packet: Array<Any?>, count: Int): Long {
++    var sink = 0L
++    repeat(count) { sink = sink xor (Calls.target(target, packet) as Long) }
++    return sink
++}
++
++/** Bounded standalone diagnostic, not a timing assertion in the semantic suite. */
++fun main(arguments: Array<String>) {
++    val enabled = arguments[0].toBooleanStrict()
++    val inlining = arguments[1].toBooleanStrict()
++    val workload = arguments[2]
++    System.setProperty(HANDOFF_PROPERTY, enabled.toString())
++    val builder = Context.newBuilder("thc").allowExperimentalOptions(true)
++        .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
++        .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
++        .option("engine.SingleTierCompilationThreshold", "10000000")
++        .option("compiler.CompilationTimeout", "30").option("compiler.MaximumGraalGraphSize", "200000")
++    if (arguments.size > 3) builder.option("compiler.Dump", "Truffle:2").option("compiler.DumpPath", arguments[3])
++    builder.build().use { context ->
++        context.initialize("thc"); context.enter()
++        try {
++            val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
++            val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
++            val closureRep = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
++            fun v(id: String): List<Any?> = listOf("var", id)
++            fun n(value: Long): List<Any?> = listOf("lit", "int", value.toString())
++            fun app(fn: List<Any?>, vararg values: List<Any?>): List<Any?> = listOf("app", fn, values.toList(), List(values.size) { false })
++            fun call(fn: String, vararg values: List<Any?>) = app(v(fn), *values)
++            fun prim(fn: String, vararg values: List<Any?>) = app(listOf("prim", fn), *values)
++            fun binding(id: String, args: List<String>, body: List<Any?>): Map<String, Any?> = mapOf("id" to id, "name" to id,
++                "lifted" to true, "expr" to listOf("lam", args.map { mapOf("id" to it, "name" to it, "lifted" to false, "coercion" to false, "rep" to longRep) },
++                    body, mapOf("rep" to closureRep, "resultRep" to longRep, "entryStrict" to List(args.size) { false })))
++            val updatePayloads = workload.startsWith("update")
++            val wideArity = if (workload.startsWith("wide") || updatePayloads) workload.dropWhile { !it.isDigit() }.toInt() else 0
++            val payloadNames = (1 until wideArity).map { "x$it" }
++            val workerBody = if (wideArity > 0) listOf("case", prim("<=#", v("d"), n(4_000_000_000L)), "test", listOf(
++                listOf("lit", listOf("int", "1"), emptyList<String>(), payloadNames.map(::v).reduce { a, b -> prim("+#", a, b) }),
++                listOf("default", null, emptyList<String>(), prim("+#", call("worker", *(listOf(prim("-#", v("d"), n(1))) +
++                    payloadNames.map { if (updatePayloads) prim("+#", v(it), n(1)) else v(it) }).toTypedArray()), n(1)))))
++            else if (workload == "recursive") listOf("case", prim("<=#", v("d"), n(0)), "test", listOf(
++                listOf("lit", listOf("int", "1"), emptyList<String>(), v("n")),
++                listOf("default", null, emptyList<String>(), prim("+#", call("worker", prim("-#", v("d"), n(1)), v("n")), v("d")))))
++            else prim("+#", prim("*#", v("n"), n(3)), n(1))
++            val application = if (wideArity > 0) call("worker", *(listOf(n(4_000_000_012L)) + payloadNames.indices.map { prim("+#", v("n"), n(it.toLong())) }).toTypedArray())
++                else if (workload == "recursive") call("worker", n(12), v("n")) else call("worker", v("n"))
++            val program = Program(language, mapOf("instrument" to false, "bindings" to listOf(
++                binding("worker", if (wideArity > 0) listOf("d") + payloadNames else if (workload == "recursive") listOf("d", "n") else listOf("n"), workerBody),
++                binding("entry", listOf("n"), prim("+#", application, n(7))))))
++            val entry = program.entryTarget("entry")
++            val worker = program.entryTarget("worker")
++            val packet = arrayOf<Any?>(0L, 3_000_000_017L) // Immutable across calls: no pooled/exposed argument alias mutation.
++            val expected = if (wideArity > 0) payloadNames.indices.sumOf { 3_000_000_017L + it + if (updatePayloads) 12L else 0L } + 19L
++                else if (workload == "recursive") 3_000_000_102L else 9_000_000_059L
++            fun invoke(): Long = Calls.target(entry, packet) as Long
++            repeat(2_000) { check(invoke() == expected) }
++            val targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
++            fun compile(target: RootCallTarget) {
++                targetClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
++                check(targetClass.getMethod("isValidLastTier").invoke(target) == true)
++            }
++            compile(worker); compile(entry)
++            var sink = probeCalls(entry, packet, 1_000_000)
++            val allocation = ManagementFactory.getThreadMXBean() as ThreadMXBean
++            check(allocation.isThreadAllocatedMemorySupported)
++            allocation.isThreadAllocatedMemoryEnabled = true
++            val thread = Thread.currentThread().threadId()
++            val bytes = ArrayList<Double>(); val nanos = ArrayList<Double>()
++            val count = 50_000
++            repeat(9) {
++                val beforeBytes = allocation.getThreadAllocatedBytes(thread)
++                val beforeTime = System.nanoTime()
++                sink = sink xor probeCalls(entry, packet, count)
++                val elapsed = System.nanoTime() - beforeTime
++                val allocated = allocation.getThreadAllocatedBytes(thread) - beforeBytes
++                bytes.add(allocated.toDouble() / count)
++                nanos.add(elapsed.toDouble() / count)
++            }
++            val state = language.handoffState.get()
++            check(state.arguments.depth == 0 && state.pending == null)
++            check(state.arguments.retainedReferences() == 0)
++            check(invoke() == expected && sink == 0L)
++            println(Json.stringify(mapOf("handoff" to enabled, "inlining" to inlining, "workload" to workload,
++                "callsPerSample" to count, "bytesPerCall" to bytes, "nsPerCall" to nanos,
++                "argumentCarriers" to state.arguments.allocations, "resultCarriers" to 0, "resultProtocol" to "scalar-register",
++                "entryCompiled" to targetClass.getMethod("isValidLastTier").invoke(entry),
++                "workerCompiled" to targetClass.getMethod("isValidLastTier").invoke(worker),
++                "expected" to expected)))
++        } finally { context.leave() }
++    }
++}
+--- a/src/test/kotlin/thc/runtime/AstSelfCallTest.kt
++++ b/src/test/kotlin/thc/runtime/AstSelfCallTest.kt
+@@ -95,11 +95,24 @@
+             }
+             repeat(30) { check(a, 3_000_000_017, 8, 3_000_000_019, -7_000_000_005) }
+             compile(a.target)
++            // A counted-loop compilation warmed only at depth eight may speculate
++            // remaining >= 1. Check its cold deoptimization before recompiling;
++            // all captures and exact self-reentry counts must survive that path.
++            for (depth in listOf(0L, 1L)) {
++                check(b, -7_000_000_003, depth, Long.MIN_VALUE, Long.MAX_VALUE)
++                check(a, 3_000_000_017, depth, Long.MAX_VALUE, Long.MIN_VALUE)
++            }
++            compile(a.target)
+             val compiled = count(p, "compiledEntries")
+             for (depth in listOf(0L, 1L, 2L, 1_000L, 1_001L)) {
++                val beforeB = count(p, "compiledEntries")
+                 check(b, -7_000_000_003, depth, Long.MIN_VALUE, Long.MAX_VALUE)
++                assertTrue(count(p, "compiledEntries") > beforeB, "compiled B at depth $depth")
++                val beforeA = count(p, "compiledEntries")
+                 check(a, 3_000_000_017, depth, Long.MAX_VALUE, Long.MIN_VALUE)
+-            }
++                assertTrue(count(p, "compiledEntries") > beforeA, "compiled A at depth $depth")
++            }
++            assertEquals(true, a.target.javaClass.getMethod("isValidLastTier").invoke(a.target))
+             assertTrue(count(p, "compiledEntries") > compiled)
+             assertEquals(0L, count(p, "blackholes"))
+             assertEquals(0L, count(p, "trampolineIterations"))

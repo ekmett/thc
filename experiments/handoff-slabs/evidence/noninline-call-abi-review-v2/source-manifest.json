@@ -1,0 +1,43 @@
+{
+  "baseCommit": "a53aee40c84c039cb12d1d17f018d00453e713ca",
+  "frozenOverlay": "/Users/ekmett/thc/work/call-demand-v1",
+  "prototype": "/private/tmp/thc-handoff-slabs",
+  "stage": "scalar-register-and-single-input-mailbox",
+  "files": [
+    {
+      "path": "src/main/kotlin/thc/Language.kt",
+      "baselineSha256": "0bcf93c9d7b3757b982d459823658094a2d6d0f8f95fd656f1bb9b6876991bf5",
+      "candidateSha256": "cef356d655628d5ce4fd496455dcef99939b6c4413839db378b618b7974e4c33"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Application.kt",
+      "baselineSha256": "ace8f255f0a369828d5dfd1fbf55df90ccd0bf3afad8ac900e7f880650aa2118",
+      "candidateSha256": "f289576829af2fc0f9f6e203d15561879c4af02931ab307c6990aea308e212a0"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Program.kt",
+      "baselineSha256": "afe97d54ad5d5ec5f9f63c5182e7ff6feba8ea0110e87e567e78cfb75adfd32f",
+      "candidateSha256": "b25bd8f05a5ce30ffc31bc219e6ebb1cb6716305ace5ffdd329a82f64586dff5"
+    },
+    {
+      "path": "src/main/kotlin/thc/runtime/Handoff.kt",
+      "baselineSha256": null,
+      "candidateSha256": "d76a5a8420f808592a83fbd02b10fbc021a35ad10b98b257d2c38e049dbcd666"
+    },
+    {
+      "path": "src/test/kotlin/thc/runtime/HandoffTest.kt",
+      "baselineSha256": null,
+      "candidateSha256": "bb8ac7b03edc88955c476c7a55ee450dcb69a10756603a7434b79ff22efbc158"
+    },
+    {
+      "path": "src/test/kotlin/thc/runtime/HandoffProbe.kt",
+      "baselineSha256": null,
+      "candidateSha256": "0614ca92327d57dd8425c7460d32cfba1b5579465d4e19754dc81067802a31e4"
+    },
+    {
+      "path": "src/test/kotlin/thc/runtime/AstSelfCallTest.kt",
+      "baselineSha256": "c072c02fde8c38067b629c9e4766f1922a5030c0a3635b051644b5f606be5f0b",
+      "candidateSha256": "62be1d16916ebe12597eb974f67b9c2088317443f890a8ca50516f229de6235c"
+    }
+  ]
+}

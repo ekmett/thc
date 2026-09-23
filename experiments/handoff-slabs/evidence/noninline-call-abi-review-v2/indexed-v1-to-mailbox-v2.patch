@@ -1,0 +1,365 @@
+--- a/src/main/kotlin/thc/runtime/Program.kt
++++ b/src/main/kotlin/thc/runtime/Program.kt
+@@ -592,7 +592,7 @@
+         val root = rootNode as FunctionRoot
+         if (!root.isSelf(tail.target)) throw tail
+         if (metrics.enabled) metrics.selfTailReentries++
+-        root.restoreHandoff(frame, tail.arguments, tail.resultIndex, false)
++        root.restoreHandoff(frame, tail.arguments, false)
+         RepeatingNode.CONTINUE_LOOP_STATUS
+     }
+     catch (tail: TailCall) {
+@@ -639,14 +639,14 @@
+     }
+     fun handoffDestination(frame: VirtualFrame): Int = handoff?.destination(frame) ?: -1
+ 
+-    @ExplodeLoop internal fun restoreHandoff(frame: VirtualFrame, input: HandoffStorage, resultIndex: Int, initial: Boolean) {
++    @ExplodeLoop internal fun restoreHandoff(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
+         val entry = handoff ?: fault("Target does not support the handoff ABI")
+         check(input.layout === entry.arguments && input.live)
+-        if (!initial) check(entry.destination(frame) == resultIndex)
++        if (!initial) check(entry.destination(frame) >= 0)
+         try {
+             if (initial) {
+                 entry.snapshot(frame, input)
+-                frame.setLong(entry.destinationSlot, resultIndex.toLong())
++                frame.setLong(entry.destinationSlot, 0L)
+                 frame.setLong(FrameLayout.BLOOM_FILTER, entry.arguments.getLong(input, 0) or mask)
+             }
+             val offset = if (captureLayout == null) 1 else 2
+@@ -672,10 +672,8 @@
+         if (entry != null && frame.arguments.isEmpty()) {
+             val state = entry.state()
+             val input = state.pending ?: fault("Missing typed argument loan")
+-            val destination = state.pendingResult
+             state.pending = null
+-            state.pendingResult = -1
+-            restoreHandoff(frame, input, destination, true)
++            restoreHandoff(frame, input, true)
+         } else {
+             entry?.initializeOrdinary(frame)
+             frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
+@@ -702,7 +700,7 @@
+             if (metrics.enabled) metrics.selfTailReentries++
+             CompilerDirectives.transferToInterpreterAndInvalidate()
+             hasSelfTail = true
+-            restoreHandoff(frame, tail.arguments, tail.resultIndex, false)
++            restoreHandoff(frame, tail.arguments, false)
+             loop.execute(frame)
+         }
+         catch (tail: TailCall) {
+--- a/src/main/kotlin/thc/runtime/Handoff.kt
++++ b/src/main/kotlin/thc/runtime/Handoff.kt
+@@ -21,8 +21,6 @@
+ open class HandoffStorage(val layout: HandoffLayout) {
+     internal var generation = 0L
+     internal var live = false
+-    internal var complete = false
+-    internal var depth = -1
+ }
+ interface HandoffFactory { fun create(layout: HandoffLayout): HandoffStorage }
+ 
+@@ -71,65 +69,55 @@
+     }
+ }
+ 
+-/** Independent stacks: incoming arguments may be free while a return destination stays live. */
++/** One incoming loan at a time: operands are evaluated before acquisition and entry
++ * copies the loan into durable locals before any guest code can run. */
+ internal class HandoffPool {
+-    // These indexed metadata tables contain carrier identities, never argument/result payloads.
+-    private val slots = ArrayList<Array<HandoffStorage?>>()
+-    var depth = 0
+-        private set
++    // Indexed metadata holds carrier identities; generated fields hold all payloads.
++    private var slots: Array<HandoffStorage?> = arrayOfNulls(4)
++    private var active: HandoffStorage? = null
++    val depth: Int get() = if (active == null) 0 else 1
+     var allocations = 0L
+         private set
+     fun acquire(layout: HandoffLayout): HandoffStorage {
+-        if (depth == slots.size) grow(layout.id)
+-        val current = slots[depth]
+-        val alternatives = if (layout.id < current.size) current else growLayouts(depth, layout.id)
++        check(active == null)
++        val alternatives = if (layout.id < slots.size) slots else grow(layout.id)
+         val storage = alternatives[layout.id] ?: allocate(layout, alternatives)
+         check(!storage.live)
+         storage.live = true
+-        storage.complete = false
+         storage.generation++
+-        storage.depth = depth++
++        active = storage
+         return storage
+     }
+-    @CompilerDirectives.TruffleBoundary private fun grow(layoutId: Int) { slots.add(arrayOfNulls(maxOf(4, layoutId + 1))) }
+-    @CompilerDirectives.TruffleBoundary private fun growLayouts(index: Int, layoutId: Int): Array<HandoffStorage?> =
+-        slots[index].copyOf(maxOf(slots[index].size * 2, layoutId + 1)).also { slots[index] = it }
++    @CompilerDirectives.TruffleBoundary private fun grow(layoutId: Int): Array<HandoffStorage?> =
++        slots.copyOf(maxOf(slots.size * 2, layoutId + 1)).also { slots = it }
+     @CompilerDirectives.TruffleBoundary private fun allocate(layout: HandoffLayout, alternatives: Array<HandoffStorage?>): HandoffStorage =
+         layout.create().also { alternatives[layout.id] = it; allocations++ }
+     fun release(storage: HandoffStorage, layout: HandoffLayout = storage.layout) {
+-        check(storage.live && storage.depth == depth - 1)
++        check(active === storage && storage.live)
+         layout.clearReferences(storage)
+-        storage.complete = false
+         storage.live = false
+-        depth--
+-    }
+-    fun result(index: Int, layout: HandoffLayout): HandoffStorage {
+-        check(index in 0 until depth)
+-        val alternatives = slots[index]
+-        return (if (layout.id < alternatives.size) alternatives[layout.id] else null)?.also { check(it.live) }
+-            ?: fault("Mismatched handoff result layout")
+-    }
+-    internal fun retainedReferences(): Int = slots.sumOf { alternatives -> alternatives.sumOf { storage ->
++        active = null
++    }
++    internal fun retainedReferences(): Int = slots.sumOf { storage ->
+         if (storage == null) 0 else storage.layout.reps.indices.count { !storage.layout.isLong(it) && storage.layout.getObject(storage, it) != null }
+-    } }
++    }
+ }
+ 
+ internal class HandoffState {
+     val arguments = HandoffPool()
+-    val results = HandoffPool()
+     var pending: HandoffStorage? = null
+-    var pendingResult = -1
++    // Synchronous Long-only return register. Consume immediately after the completion token.
++    var returnLong = 0L
+     var calls = 0L
+     var tailTransfers = 0L
+ }
+ 
+-/** The transfer owns its argument loan; the receiving continuation owns resultIndex. */
+-internal class HandoffTailCall(val target: RootCallTarget, val arguments: HandoffStorage, val resultIndex: Int) : ControlFlowException()
++/** The transfer owns its argument loan; it carries no escaping or outstanding scalar result. */
++internal class HandoffTailCall(val target: RootCallTarget, val arguments: HandoffStorage) : ControlFlowException()
+ 
+ internal class HandoffEntry(
+     private val language: Language,
+     val arguments: HandoffLayout,
+-    val result: HandoffLayout,
+     @field:CompilationFinal(dimensions = 1) val snapshotSlots: IntArray,
+     val destinationSlot: Int
+ ) {
+@@ -144,11 +132,8 @@
+         }
+     }
+     fun finishLong(frame: VirtualFrame, value: Long): Any {
+-        val index = destination(frame)
+-        check(index >= 0)
+-        val storage = state().results.result(index, result)
+-        result.setLong(storage, 0, value)
+-        storage.complete = true
++        check(destination(frame) >= 0)
++        state().returnLong = value
+         return HandoffComplete
+     }
+     companion object {
+@@ -160,7 +145,6 @@
+             if (!reps.all(HandoffLayout::supports)) return null
+             val packetReps = listOf("WordRep") + (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps
+             return HandoffEntry(thc, thc.handoffLayouts.intern(packetReps),
+-                thc.handoffLayouts.intern(resultRep.primReps ?: return null),
+                 IntArray(packetReps.size) { layout.bind("<handoff entry $it>") }, layout.bind("<handoff result destination>"))
+         }
+     }
+@@ -175,64 +159,54 @@
+         val inherited = if (tail) (rootNode as? FunctionRoot)?.handoffDestination(frame) ?: -1 else -1
+         // A tail chain entered through the old ABI has no typed receiving continuation yet.
+         check(!tail || inherited >= 0)
+-        val output = if (inherited >= 0) state.results.result(inherited, entry.result) else state.results.acquire(entry.result)
+-        val ownsResult = inherited < 0
++        val input = state.arguments.acquire(entry.arguments)
++        val generation = input.generation
++        var transferred = false
+         try {
+-            val input = state.arguments.acquire(entry.arguments)
+-            val generation = input.generation
+-            var transferred = false
+-            try {
+-                if (tail) packet[0] = 0L
+-                entry.arguments.copyIn(input, packet)
+-                if (tail) {
+-                    val source = rootNode as GuestRoot
+-                    val mask = source.bloom(frame)
+-                    val destination = target.rootNode as GuestRoot
+-                    if (mask and destination.mask == destination.mask) {
+-                        transferred = true
+-                        if (metrics.enabled) { state.tailTransfers++; metrics.tailBounces++ }
+-                        throw HandoffTailCall(target, input, output.depth)
+-                    }
+-                    entry.arguments.setLong(input, 0, mask)
++            if (tail) packet[0] = 0L
++            entry.arguments.copyIn(input, packet)
++            if (tail) {
++                val source = rootNode as GuestRoot
++                val mask = source.bloom(frame)
++                val destination = target.rootNode as GuestRoot
++                if (mask and destination.mask == destination.mask) {
++                    transferred = true
++                    if (metrics.enabled) { state.tailTransfers++; metrics.tailBounces++ }
++                    throw HandoffTailCall(target, input)
+                 }
+-                invoke(state, input, output.depth) { Calls.direct(callNode, EMPTY_HANDOFF_ARGUMENTS) }
+-            } catch (transfer: HandoffTailCall) {
+-                if (tail) throw transfer
+-                trampoline(state, transfer, output.depth)
+-            } finally {
+-                // Entry consumed/released this loan; a later tail may reuse its storage.
+-                if (!transferred && input.live && input.generation == generation) state.arguments.release(input, entry.arguments)
++                entry.arguments.setLong(input, 0, mask)
+             }
+-            check(output.complete)
+-            return entry.result.getLong(output, 0)
++            return invoke(state, input) { Calls.direct(callNode, EMPTY_HANDOFF_ARGUMENTS) }
++        } catch (transfer: HandoffTailCall) {
++            if (tail) throw transfer
++            return trampoline(state, transfer)
+         } finally {
+-            if (ownsResult) state.results.release(output, entry.result)
+-        }
+-    }
+-
+-    private inline fun invoke(state: HandoffState, input: HandoffStorage, resultIndex: Int, action: () -> Any?) {
++            // Entry consumed/released this loan; a later tail may reuse its storage.
++            if (!transferred && input.live && input.generation == generation) state.arguments.release(input, entry.arguments)
++        }
++    }
++
++    private inline fun invoke(state: HandoffState, input: HandoffStorage, action: () -> Any?): Long {
+         val oldPending = state.pending
+-        val oldResult = state.pendingResult
+         check(oldPending == null)
+         state.pending = input
+-        state.pendingResult = resultIndex
+         if (metrics.enabled) state.calls++
+-        try { check(action() === HandoffComplete) }
+-        finally { state.pending = oldPending; state.pendingResult = oldResult }
++        try {
++            check(action() === HandoffComplete)
++            return state.returnLong
++        } finally { state.pending = oldPending }
+     }
+ 
+     @CompilerDirectives.TruffleBoundary private fun releaseUnknown(state: HandoffState, input: HandoffStorage) { state.arguments.release(input) }
+ 
+-    private fun trampoline(state: HandoffState, initial: HandoffTailCall, resultIndex: Int) {
++    private fun trampoline(state: HandoffState, initial: HandoffTailCall): Long {
+         var transfer = initial
+         while (true) {
+-            check(transfer.resultIndex == resultIndex)
+             if (metrics.enabled) metrics.trampolineIterations++
+             val next = transfer
+             val generation = next.arguments.generation
+             try {
+-                invoke(state, next.arguments, resultIndex) { trampolineDispatch.call(next.target, EMPTY_HANDOFF_ARGUMENTS) }
+-                return
++                return invoke(state, next.arguments) { trampolineDispatch.call(next.target, EMPTY_HANDOFF_ARGUMENTS) }
+             } catch (tail: HandoffTailCall) { transfer = tail }
+             finally {
+                 // A failed entry still owns its loan. Successfully consumed entries release it.
+--- a/src/test/kotlin/thc/runtime/HandoffTest.kt
++++ b/src/test/kotlin/thc/runtime/HandoffTest.kt
+@@ -51,11 +51,8 @@
+     }
+     private fun assertReleased(state: HandoffState) {
+         assertEquals(0, state.arguments.depth)
+-        assertEquals(0, state.results.depth)
+         assertNull(state.pending)
+-        assertEquals(-1, state.pendingResult)
+         assertEquals(0, state.arguments.retainedReferences())
+-        assertEquals(0, state.results.retainedReferences())
+     }
+ 
+     @Test fun internedRepVectorsGenerateMutableDenseFieldsAndSeparateLifetimes() = withLanguage { language ->
+@@ -65,7 +62,8 @@
+         assertSame(layout, language.handoffLayouts.intern(listOf("WordRep", "BoxedRep (Just Unlifted)", "Int8Rep")))
+         val state = language.handoffState.get()
+         val input = state.arguments.acquire(layout)
+-        val output = state.results.acquire(layout)
++        val independentPool = HandoffPool()
++        val output = independentPool.acquire(layout)
+         assertNotSame(input, output)
+         assertSame(input.javaClass, output.javaClass)
+         val fields = input.javaClass.declaredFields.filter { it.name.startsWith("handoff_") }
+@@ -77,7 +75,7 @@
+         layout.copyIn(input, arrayOf(4_000_000_000L, objectValue, Long.MIN_VALUE))
+         state.arguments.release(input)
+         assertEquals(0, state.arguments.depth)
+-        assertEquals(1, state.results.depth)
++        assertEquals(1, independentPool.depth)
+         assertTrue(output.live)
+         val again = state.arguments.acquire(layout)
+         assertSame(input, again)
+@@ -85,7 +83,7 @@
+         layout.copyIn(again, arrayOf(7L, Any(), 9L))
+         assertEquals(7L, layout.getLong(again, 0))
+         state.arguments.release(again)
+-        state.results.release(output)
++        independentPool.release(output)
+         assertReleased(state)
+     }
+ 
+@@ -115,12 +113,10 @@
+         assertTrue(state.tailTransfers > 0)
+         assertReleased(state)
+         val incomingAllocations = state.arguments.allocations
+-        val resultAllocations = state.results.allocations
+         compile(program.entryTarget("entry"))
+         assertEquals(3_000_000_024L, invoke(program, 15_000L))
+         assertReleased(state)
+         assertEquals(incomingAllocations, state.arguments.allocations)
+-        assertEquals(resultAllocations, state.results.allocations)
+     }
+ 
+     @Test fun forcedResidualCallsSupportMultipleAncestorCyclesAndPhysicalRepAliases() = withLanguage(false) { language ->
+--- a/src/test/kotlin/thc/runtime/HandoffProbe.kt
++++ b/src/test/kotlin/thc/runtime/HandoffProbe.kt
+@@ -86,12 +86,12 @@
+                 nanos.add(elapsed.toDouble() / count)
+             }
+             val state = language.handoffState.get()
+-            check(state.arguments.depth == 0 && state.results.depth == 0 && state.pending == null)
+-            check(state.arguments.retainedReferences() == 0 && state.results.retainedReferences() == 0)
++            check(state.arguments.depth == 0 && state.pending == null)
++            check(state.arguments.retainedReferences() == 0)
+             check(invoke() == expected && sink == 0L)
+             println(Json.stringify(mapOf("handoff" to enabled, "inlining" to inlining, "workload" to workload,
+                 "callsPerSample" to count, "bytesPerCall" to bytes, "nsPerCall" to nanos,
+-                "argumentCarriers" to state.arguments.allocations, "resultCarriers" to state.results.allocations,
++                "argumentCarriers" to state.arguments.allocations, "resultCarriers" to 0, "resultProtocol" to "scalar-register",
+                 "entryCompiled" to targetClass.getMethod("isValidLastTier").invoke(entry),
+                 "workerCompiled" to targetClass.getMethod("isValidLastTier").invoke(worker),
+                 "expected" to expected)))
+--- a/src/test/kotlin/thc/runtime/AstSelfCallTest.kt
++++ b/src/test/kotlin/thc/runtime/AstSelfCallTest.kt
+@@ -95,11 +95,24 @@
+             }
+             repeat(30) { check(a, 3_000_000_017, 8, 3_000_000_019, -7_000_000_005) }
+             compile(a.target)
++            // A counted-loop compilation warmed only at depth eight may speculate
++            // remaining >= 1. Check its cold deoptimization before recompiling;
++            // all captures and exact self-reentry counts must survive that path.
++            for (depth in listOf(0L, 1L)) {
++                check(b, -7_000_000_003, depth, Long.MIN_VALUE, Long.MAX_VALUE)
++                check(a, 3_000_000_017, depth, Long.MAX_VALUE, Long.MIN_VALUE)
++            }
++            compile(a.target)
+             val compiled = count(p, "compiledEntries")
+             for (depth in listOf(0L, 1L, 2L, 1_000L, 1_001L)) {
++                val beforeB = count(p, "compiledEntries")
+                 check(b, -7_000_000_003, depth, Long.MIN_VALUE, Long.MAX_VALUE)
++                assertTrue(count(p, "compiledEntries") > beforeB, "compiled B at depth $depth")
++                val beforeA = count(p, "compiledEntries")
+                 check(a, 3_000_000_017, depth, Long.MAX_VALUE, Long.MIN_VALUE)
+-            }
++                assertTrue(count(p, "compiledEntries") > beforeA, "compiled A at depth $depth")
++            }
++            assertEquals(true, a.target.javaClass.getMethod("isValidLastTier").invoke(a.target))
+             assertTrue(count(p, "compiledEntries") > compiled)
+             assertEquals(0L, count(p, "blackholes"))
+             assertEquals(0L, count(p, "trampolineIterations"))

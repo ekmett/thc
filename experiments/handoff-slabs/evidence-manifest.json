@@ -1,0 +1,80 @@
+{
+  "files": {
+    "noninline-call-abi-review-v2/README.md": {
+      "sha256": "d3c3f78d4f40edd41591a5051078d361f24c4a1622ac6fde27b4fce33d02a8a2",
+      "bytes": 7736
+    },
+    "noninline-call-abi-review-v2/complete-overlay-manifest.json": {
+      "sha256": "d7c80332c849e6c19ac38605fa158b46e1fa3e17dc5560a259d1731c8729bf7f",
+      "bytes": 14906
+    },
+    "noninline-call-abi-review-v2/complete-source-overlay.tar.gz": {
+      "sha256": "49a86a06f7446a65f5d1440d6ced3749839bf472eb00f73a9c7168ae273bfb71",
+      "bytes": 231685
+    },
+    "noninline-call-abi-review-v2/graph-audits.json": {
+      "sha256": "8681f417599572d7eb2c8bf2ea1bdc4c8fb159f66a9c028fa1f306b15e485e15",
+      "bytes": 96884
+    },
+    "noninline-call-abi-review-v2/handoff-prototype.patch": {
+      "sha256": "d53d060c43e1f1a858a8704b0d7e22f631910fcc3d84b56288149b0c9b1c184d",
+      "bytes": 44688
+    },
+    "noninline-call-abi-review-v2/indexed-v1-to-mailbox-v2.patch": {
+      "sha256": "b9ccf04110709772b6b434837f9a67ed07a4f8c42abb21bdcb742df3c5ac2ebc",
+      "bytes": 18655
+    },
+    "noninline-call-abi-review-v2/measurements.json": {
+      "sha256": "8d3fdddea7293c84f7cbed560e1674f78e78802aef74c2e77e0e58a41456821b",
+      "bytes": 19693
+    },
+    "noninline-call-abi-review-v2/source-manifest.json": {
+      "sha256": "57153da6306b4d015e8e2b23a045a4da2d4f68f200d9a6a1d262e83af7c39472",
+      "bytes": 1843
+    },
+    "noninline-call-abi-review-v2/validation-summary.json": {
+      "sha256": "38cf701a38cad67b2e22fc3cccd9a841d0540e2e1a80b99205feb66530888a82",
+      "bytes": 289
+    },
+    "noninline-call-abi-review-v3/README.md": {
+      "sha256": "66f1b804e1ed7baa4742e74bc9f6c98db0dc1d11a34001fbd4137311e778ea93",
+      "bytes": 4802
+    },
+    "noninline-call-abi-review-v3/aggregate-coverage-audit.md": {
+      "sha256": "d6c0ba9f9d04af7516269f5649b8d1283072277a378edaf28e5904bb97c05c5a",
+      "bytes": 8406
+    },
+    "noninline-call-abi-review-v3/complete-overlay-manifest.json": {
+      "sha256": "afa85069439e4ebd4efb0a8efc0a9c86ff88709774c79b246fe307592a869ec7",
+      "bytes": 15161
+    },
+    "noninline-call-abi-review-v3/complete-source-overlay.tar.gz": {
+      "sha256": "b8a533bbd11e0e0d1c000eb6a3b23177684f8b2e1f1be2cdd0fe12badd2bb19c",
+      "bytes": 234985
+    },
+    "noninline-call-abi-review-v3/handoff-prototype.patch": {
+      "sha256": "a188ce5ff49ce87b33f70188e07fc6489442634f40b3cf6b00f7b5cd97eadca0",
+      "bytes": 67543
+    },
+    "noninline-call-abi-review-v3/mailbox-v2-to-reference-v3.patch": {
+      "sha256": "a049e73e992695fb5a10d3e9253c2af57597fa2ed247a89ccc92001faaae5f2f",
+      "bytes": 26388
+    },
+    "noninline-call-abi-review-v3/reference-smoke.json": {
+      "sha256": "7418c452e34cb6b8472c6dd6276efe38545b1a8c3f2833c1415d985851383af3",
+      "bytes": 9202
+    },
+    "noninline-call-abi-review-v3/source-manifest.json": {
+      "sha256": "3657b64f4591026010baa6add32a0d1462eeea9de0c3f7ce4ae66a9d77f76df1",
+      "bytes": 2238
+    },
+    "noninline-call-abi-review-v3/test-results.tar.gz": {
+      "sha256": "944152b66debc8f52367198a3c6746ea3203ef3b9a02633d0a1f5eec89ec1aaf",
+      "bytes": 39140
+    },
+    "noninline-call-abi-review-v3/validation-summary.json": {
+      "sha256": "46cf8a879a000108b3eb9b4e7a359c8fc626fe0feb452b4e656fffb546b8e2f6",
+      "bytes": 213
+    }
+  }
+}
