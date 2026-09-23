@@ -2,13 +2,14 @@
 -- These templates are never inserted into the optimized ModGuts or passed back
 -- through Core simplification: unary-class erasure changes the apparent Core
 -- type, exactly as GHC.CoreToStg.myCollectArgs does at the representation boundary.
-module Thc.Wired (wiredApplication, wiredRhs, isWiredVoid, wiredOrigin) where
+module Thc.Wired (wiredApplication, wiredRhs, preservesWiredTypes, isWiredVoid, wiredOrigin) where
 
 import GHC.Plugins
 import GHC.Builtin.Names
   ( hasKey, lazyIdKey, noinlineIdKey, noinlineConstraintIdKey, nospecIdKey
   , runRWKey, realWorldPrimIdKey )
 import GHC.Core.Class (classAllSelIds)
+import GHC.Core.TyCo.Compare (eqType)
 import GHC.Core.Utils (isUnaryClassId)
 import GHC.Types.Id.Make (mkDictSelRhs, realWorldPrimId)
 import Data.List (findIndex)
@@ -36,6 +37,14 @@ wiredApplication expression = case collectArgs expression of
   where
     isTypeArg Type{} = True
     isTypeArg _ = False
+
+-- runRW# f becomes f realWorld# without changing any retained Core type.
+-- Unary-class erasure does change apparent types, so it must remain uncertified.
+-- Keep the exact GHC type check here rather than trusting a printed type/name.
+preservesWiredTypes :: CoreExpr -> CoreExpr -> Bool
+preservesWiredTypes original lowered = case collectArgs original of
+  (Var v, _) | v `hasKey` runRWKey -> eqType (exprType original) (exprType lowered)
+  _ -> False
 
 -- | First-class fallback and compiler-generated selectors absent from interface
 -- unfoldings. The identity template deliberately has the payload representation;

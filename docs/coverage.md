@@ -172,7 +172,7 @@ Exact unboxed tuple results now execute on both backends with scalar/reference
 inputs, including empty/singleton/nested results, lazy references, forwarding,
 PAPs and overapplication. The [result protocol](tuple-results.md) is independent
 of the optional input handoff experiment. Aggregate formal arguments, captures,
-ordinary let bindings, join parameters/captures, sums, scalar void tuple components
+ordinary let bindings, join parameters/captures, sums
 and unresolved layouts remain rejected, including unused and constructor-free
 boundaries. Physical register counts alone never establish an aggregate layout.
 
@@ -208,3 +208,7 @@ and after each alias is forced, selective forcing only in a chosen fallback,
 installed compiled execution, and strict arity rejection. These are identity
 controls, not cross-runtime allocation-identity claims. Set remains outside the
 supported execution corpus until its tuple and remaining cold paths are supported.
+
+Exact scalar primop applications also use a [shared pinned signature contract](scalar-primitive-signatures.md)
+to reject contradictory present argument/result proofs during lowering and audit.
+Absent/unknown legacy metadata and representation-preserving newtype casts remain compatible.

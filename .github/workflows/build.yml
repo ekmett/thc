@@ -128,6 +128,7 @@ jobs:
           python3 scripts/test-audit-core.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-core-vectors.py
+          python3 scripts/test-core-bytearrays.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -162,9 +163,21 @@ jobs:
             build/test-results/
             build/aggregate-frontier.json
             build/primop-coverage.json
+            build/scalar-signatures/provenance.json
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
             build/tuple-return/
+            build/state-tuple/checks.json
+            build/state-tuple/provenance.json
+            build/state-tuple/oracle.tsv
+            build/state-tuple/*-audit.json
+            build/state-tuple/*-core/*.json
+            build/bytearray/manifest.json
+            build/bytearray/oracle.tsv
+            build/bytearray/NativeByteArray.hs
+            build/bytearray/*/*.audit.json
+            build/bytearray/*/boot-provenance.json
+            build/bytearray/*/core/*.json
             build/tuple-join/
             build/tuple-arithmetic/
             build/integer-primops/manifest.json

@@ -7,93 +7,13 @@
     "suppliedBindings": 634,
     "reachableBindings": 71,
     "missingGlobals": 3,
-    "issues": 17
+    "issues": 1
   },
   "issues": [
-    {
-      "code": "constructor-kind",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
-      "detail": "ghc-internal:GHC.Internal.Types.(#,#): unboxed-tuple"
-    },
-    {
-      "code": "constructor-field-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
-      "detail": "ghc-internal:GHC.Internal.Types.(#,#)[0]: None"
-    },
-    {
-      "code": "constructor-field-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
-      "detail": "ghc-internal:GHC.Internal.Types.(#,#)[1]: None"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "unboxed-tuple: unsupported component"
-    },
     {
       "code": "unsupported-primitive",
       "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
       "detail": "readMutVar#"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "unboxed-tuple: unsupported component"
-    },
-    {
-      "code": "aggregate-representation",
-      "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
-      "detail": "unboxed-tuple: unsupported component"
     }
   ],
   "primitives": [

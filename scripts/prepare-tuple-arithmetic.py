@@ -114,7 +114,7 @@ def main():
     (OUT / 'oracle.tsv').write_text(completed.stdout)
     verify()
     inputs_paths = [ROOT / p for p in [SOURCE, 'scripts/prepare-tuple-arithmetic.py', 'scripts/audit-core.py',
-                    'scripts/core-capabilities.json', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']]
+                    'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']]
     inputs_paths += sorted((ROOT / 'compiler/Thc').glob('*.hs'))
     artifacts = [OUT / f'{stage}-core/TupleArithmeticAudit.json' for stage in ('pre', 'post')]
     artifacts += [OUT / 'oracle.tsv', source]

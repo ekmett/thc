@@ -32,6 +32,10 @@ internal data class CoreRepresentation(
         if (present && other.present && kind == CoreKind.LONG && other.kind == CoreKind.LONG &&
             primReps?.size == 1 && other.primReps?.size == 1 && primReps != other.primReps)
             throw RuntimeFault("Conflicting Core scalar representation proofs: $primReps and ${other.primReps}")
+        val boxed = exactBoxedRep()
+        val otherBoxed = other.exactBoxedRep()
+        if (boxed != null && otherBoxed != null && boxed != otherBoxed)
+            throw RuntimeFault("Conflicting Core boxed levity proofs: $boxed and $otherBoxed")
         if ((isVector || other.isVector) && present && other.present && vector != other.vector)
             throw RuntimeFault("Conflicting Core vector representation proofs")
         if (isTuple && other.isTuple && !TupleShape.compatible(this, other))
@@ -47,9 +51,18 @@ internal data class CoreRepresentation(
                 if (other.kind == CoreKind.OBJECT) kind else other.kind
             else -> throw RuntimeFault("Conflicting Core representation proofs: $kind and ${other.kind}")
         }
+        // Unknown boxed levity refines either way; it cannot erase an existing
+        // exact proof and thereby hide a later contradiction. Object class and
+        // evaluatedness continue to refine independently of liftedness.
+        val mergedReps = if (boxed != null && other.primReps == listOf("BoxedRep Nothing")) primReps
+            else other.primReps ?: primReps
         return CoreRepresentation(merged, evaluated || other.evaluated,
-            present || other.present, other.primReps ?: primReps, other.components ?: components, other.vector ?: vector)
+            present || other.present, mergedReps, other.components ?: components, other.vector ?: vector)
     }
+    private fun exactBoxedRep(): String? = if (present &&
+        kind in setOf(CoreKind.OBJECT, CoreKind.DATA, CoreKind.CLOSURE))
+        primReps?.singleOrNull()?.takeIf { it == "BoxedRep (Just Lifted)" || it == "BoxedRep (Just Unlifted)" }
+        else null
     companion object { val UNKNOWN = CoreRepresentation(CoreKind.UNKNOWN) }
 }
 
