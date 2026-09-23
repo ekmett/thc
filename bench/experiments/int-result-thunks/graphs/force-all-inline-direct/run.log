@@ -1,0 +1,15 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+{"event":"configuration","action":"bench","javaVersion":"25.0.4.1","classOwnedLayouts":"true","boxedValueCache":false,"candidateFields":{"entryOrFailure":"java.lang.Object","environment":"thc.runtime.CapturedFrame","state":"int","payload":"long"}}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-graphs/force-all-inline-direct
+[engine] opt done   engine=1  id=2     IntProducerRoot@7a4de456                           |Tier 2|Time    54(  49+5   )ms|AST    1|Inlined   0Y   0N|IR     62/   101|CodeSize     748|Addr 0x00011b79bc80|CompId 1757   |UTC 2026-09-23T11:54:30.789|Src n/a
+Dumping IGV graphs in /Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-graphs/force-all-inline-direct
+[engine] opt done   engine=1  id=3     IntBatchRoot@1c30adc5                              |Tier 2|Time   154(  34+120 )ms|AST   16|Inlined   1Y   0N|IR   1107/  8509|CodeSize   37536|Addr 0x00011b7abb80|CompId 1845   |UTC 2026-09-23T11:54:31.012|Src n/a
+{"event":"warmup","mode":"inline-direct","case":"force-all","size":65536,"windows":1,"windowMillis":100,"guestLastTierInstalled":true,"compiledEntries":193,"producerLastTierInstalled":true}
+{"event":"sample","mode":"inline-direct","case":"force-all","size":65536,"sample":0,"elapsedNs":100340708,"checksum":204579292551741440,"calls":241,"allocatedBytes":884487352,"allocatedCells":15794176,"forcedReads":15794176,"operations":15794176,"guestLastTierInstalled":true,"compiledEntries":241}

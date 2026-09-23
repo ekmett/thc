@@ -1,0 +1,439 @@
+@file:Suppress("UNCHECKED_CAST")
+package thc.runtime
+
+import com.oracle.truffle.api.CompilerDirectives
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.FrameSlotKind
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.Node
+import com.oracle.truffle.api.nodes.RootNode
+import thc.Json
+import thc.Language
+import thc.executionContext
+import java.lang.management.ManagementFactory
+
+private enum class IntScenario(val cli: String) {
+    FORCE_ALL("force-all"), NEVER("never"), PARTIAL("partial"), PARTIAL_HALF("partial-half"),
+    REREAD("reread"), PUBLISHED_READ("published-read"),
+    SHARED("shared"), CACHED("cached");
+    companion object {
+        fun parse(value: String): IntScenario = entries.singleOrNull { it.cli == value }
+            ?: error("Unknown case: $value")
+    }
+}
+
+private const val FRESH_BASE = 0x1_0000_0000L
+private fun arithmetic(seed: Long): Long = seed * 3L + 17L
+private fun seedFor(scenario: IntScenario, index: Int, generation: Long): Long = when (scenario) {
+    IntScenario.SHARED -> FRESH_BASE
+    IntScenario.CACHED -> 11L
+    else -> FRESH_BASE + index + generation * 65537L
+}
+
+private fun captureDescriptor(): FrameDescriptor = FrameDescriptor.newBuilder().also {
+    it.addSlot(FrameSlotKind.Long, "seed", null)
+    it.addSlot(FrameSlotKind.Object, "shared", null)
+}.build()
+
+/** Ordinary and inline-copy share this exact producer, arithmetic and immutable capture shape.
+ * Direct changes only result publication, with explicit shared/cached-box preservation.
+ */
+private class IntProducerRoot(language: Language, private val captures: CaptureLayout,
+                              private val boxed: DataLayout, private val direct: Boolean) : RootNode(language) {
+    override fun getName(): String = "IntThunk producer ${if (direct) "direct" else "boxed"}"
+    override fun execute(frame: VirtualFrame): Any {
+        val environment = frame.arguments[1] as CapturedFrame
+        val value = arithmetic(captures.readLong(environment, 0))
+        val shared = captures.readObject(environment, 1) as DataValue?
+        if (!direct) return shared ?: boxed.createLong(value)
+        val destination = frame.arguments[2] as ExperimentalIntThunk
+        when {
+            shared != null -> destination.writeReferenceWhileEvaluating(shared)
+            boxed.hasBoxedValueCache && value in -16L..255L -> destination.writeReferenceWhileEvaluating(boxed.createLong(value))
+            else -> destination.writeLongWhileEvaluating(value)
+        }
+        return Unit
+    }
+}
+
+/** Both creation and consumption happen in actual Truffle guest code. The externally rooted
+ * input array receives every cell before a separate force pass, preventing whole-cell EA.
+ */
+private class IntBatchRoot(language: Language, private val mode: IntThunkMode, private val scenario: IntScenario,
+                           private val captures: CaptureLayout, boxed: DataLayout,
+                           private val producer: RootCallTarget, private val shared: DataValue?,
+                           private val readRepeats: Int, private val publishResults: Boolean = false) : RootNode(language, captureDescriptor()) {
+    @Child private var force = ExperimentalForceInt(boxed, mode)
+    @field:CompilerDirectives.CompilationFinal(dimensions = 1)
+    private val captureSlots = intArrayOf(0, 1)
+    var compiledEntries: Long = 0L
+        private set
+
+    override fun getName(): String = "IntThunk ${mode.cli} ${scenario.cli}"
+    override fun execute(frame: VirtualFrame): Any {
+        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+        val roots = frame.arguments[0] as Array<Any?>
+        val generation = frame.arguments[1] as Long
+        if (scenario != IntScenario.REREAD && scenario != IntScenario.PUBLISHED_READ) {
+            var index = 0
+            while (index < roots.size) {
+                frame.setLong(0, seedFor(scenario, index, generation))
+                frame.setObject(1, shared)
+                val environment = captures.capture(frame, captureSlots)
+                roots[index] = if (mode == IntThunkMode.ORDINARY) Thunk(producer, environment)
+                else ExperimentalIntThunk(producer, environment)
+                index++
+            }
+        }
+        if (scenario == IntScenario.NEVER) return roots.size.toLong() + generation
+        val stride = when (scenario) { IntScenario.PARTIAL -> 4; IntScenario.PARTIAL_HALF -> 2; else -> 1 }
+        val repeats = if (scenario == IntScenario.REREAD || scenario == IntScenario.PUBLISHED_READ) readRepeats else 1
+        var checksum = 0L
+        var pass = 0
+        while (pass < repeats) {
+            var index = 0
+            while (index < roots.size) {
+                checksum += force.executeLong(frame, roots[index])
+                if (publishResults) roots[index] = force.forceValue(frame, roots[index])
+                index += stride
+            }
+            pass++
+        }
+        return checksum
+    }
+}
+
+private class IntDriver(language: Language, boxed: DataLayout, mode: IntThunkMode,
+                        private val generic: Boolean = false) : RootNode(language) {
+    @Child private var force = ExperimentalForceInt(boxed, mode)
+    override fun execute(frame: VirtualFrame): Any? =
+        if (generic) force.forceValue(frame, frame.arguments[0]) else force.executeLong(frame, frame.arguments[0])
+    fun apply(value: Any?): Any? = Calls.target(callTarget, arrayOf(value))
+}
+
+/** Run with the optimizing Graal runtime used by THC. This is an isolated microexperiment,
+ * not compiler integration, and INLINE_COPY intentionally does not preserve fresh box identity.
+ */
+object IntThunkExperiment {
+    // Public roots are for heap-size/allocation instrumentation and prevent intended cells being eliminated by EA.
+    @JvmField @Volatile var heapRoots: Array<Any?> = emptyArray()
+    @JvmField @Volatile var sampleBox: Any? = null
+    @JvmField @Volatile var sampleCapture: Any? = null
+    @JvmField @Volatile var sampleCell: Any? = null
+    @JvmField @Volatile var consumedChecksum: Long = 0L
+
+    @JvmStatic fun main(args: Array<String>) {
+        require(args.isNotEmpty()) { usage() }
+        executionContext().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val boxed = DataLayout(language, BOXED_INT_CONSTRUCTOR_ID, "I#", arrayOf("IntRep"))
+                val captures = CaptureLayout(language, booleanArrayOf(true, false), booleanArrayOf(true, false),
+                    arrayOf(null, DataValue::class.java))
+                emit(mapOf("event" to "configuration", "action" to args[0], "javaVersion" to System.getProperty("java.version"),
+                    "classOwnedLayouts" to System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY, "true"),
+                    "boxedValueCache" to boxed.hasBoxedValueCache,
+                    "candidateFields" to ExperimentalIntThunk::class.java.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }
+                        .associate { it.name to it.type.name }))
+                when (args[0]) {
+                    "check" -> { require(args.size == 1) { usage() }; semanticChecks(language, boxed, captures) }
+                    "bench", "heap" -> runBatch(language, boxed, captures, args)
+                    else -> error(usage())
+                }
+            } finally { context.leave() }
+        }
+    }
+
+    private fun usage(): String = "IntThunkExperiment check | heap MODE CASE SIZE | bench MODE CASE SIZE WARMUP_WINDOWS MEASURE_WINDOWS READ_REPEATS [WINDOW_MILLIS=1000]"
+    private fun emit(value: Map<String, Any?>) = println(Json.stringify(value))
+    private fun compile(target: RootCallTarget) {
+        val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+        check(type.isInstance(target)) { "Graal optimizing Truffle runtime required" }
+        type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        check(lastTier(target)) { "Guest last-tier compilation was not installed: ${target.rootNode.name}" }
+    }
+    private fun lastTier(target: RootCallTarget): Boolean =
+        Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target) == true
+
+    private fun runBatch(language: Language, boxed: DataLayout, captures: CaptureLayout, args: Array<String>) {
+        val timing = args[0] == "bench"
+        require(if (timing) args.size in 7..8 else args.size == 4) { usage() }
+        val mode = IntThunkMode.parse(args[1])
+        val scenario = IntScenario.parse(args[2])
+        val size = args[3].toInt()
+        val warmup = if (timing) args[4].toInt() else 0
+        val measures = if (timing) args[5].toInt() else 0
+        val readRepeats = if (timing) args[6].toInt() else 1
+        val windowMillis = if (timing && args.size == 8) args[7].toLong() else 1000L
+        require(size > 0 && warmup >= 0 && measures >= 0 && readRepeats > 0)
+        if (timing) require(warmup > 0 && measures > 0 && windowMillis > 0)
+        require(mode != IntThunkMode.INLINE_COPY || scenario !in setOf(IntScenario.SHARED, IntScenario.CACHED)) {
+            "inline-copy is a fresh-result diagnostic; shared/cached identity controls use ordinary or inline-direct"
+        }
+        require(scenario != IntScenario.CACHED || boxed.hasBoxedValueCache) { "cached requires -Dthc.boxedValueCache=true" }
+        val shared = if (scenario == IntScenario.SHARED) boxed.createLong(arithmetic(FRESH_BASE)) else null
+        val producer = IntProducerRoot(language, captures, boxed, mode == IntThunkMode.INLINE_DIRECT).callTarget
+        val root = IntBatchRoot(language, mode, scenario, captures, boxed, producer, shared, readRepeats)
+        val roots = arrayOfNulls<Any>(size)
+        heapRoots = roots
+        sampleBox = shared ?: boxed.createLong(arithmetic(FRESH_BASE))
+        sampleCapture = captures.captureValues(arrayOf(FRESH_BASE, null))
+        sampleCell = if (mode == IntThunkMode.ORDINARY) Thunk(producer, sampleCapture as CapturedFrame)
+            else ExperimentalIntThunk(producer, sampleCapture as CapturedFrame)
+        val readsOnly = scenario == IntScenario.REREAD || scenario == IntScenario.PUBLISHED_READ
+        if (readsOnly) {
+            val prepare = IntBatchRoot(language, mode, IntScenario.FORCE_ALL, captures, boxed, producer, null, 1,
+                publishResults = scenario == IntScenario.PUBLISHED_READ)
+            consumedChecksum = Calls.target(prepare.callTarget, arrayOf(roots, 0L)) as Long
+        }
+        fun call(generation: Long): Long = Calls.target(root.callTarget, arrayOf(roots, generation)) as Long
+        fun expected(generation: Long): Long {
+            if (scenario == IntScenario.NEVER) return size.toLong() + generation
+            val count = when (scenario) {
+                IntScenario.PARTIAL -> (size.toLong() + 3L) / 4L
+                IntScenario.PARTIAL_HALF -> (size.toLong() + 1L) / 2L
+                else -> size.toLong()
+            }
+            val first = arithmetic(seedFor(scenario, 0, if (readsOnly) 0L else generation))
+            val increment = when (scenario) {
+                IntScenario.SHARED, IntScenario.CACHED -> 0L
+                IntScenario.PARTIAL -> 12L
+                IntScenario.PARTIAL_HALF -> 6L
+                else -> 3L
+            }
+            val checksum = first * count + increment * (count * (count - 1L) / 2L)
+            return checksum * if (readsOnly) readRepeats else 1
+        }
+        if (!timing) {
+            val checksum = call(0L)
+            check(checksum == expected(0L))
+            consumedChecksum = checksum
+            emit(mapOf("event" to "heap-ready", "mode" to mode.cli, "case" to scenario.cli, "size" to size,
+                "checksum" to checksum, "rootCellClass" to roots[0]!!.javaClass.name,
+                "boxClass" to sampleBox!!.javaClass.name, "captureClass" to sampleCapture!!.javaClass.name))
+            return
+        }
+        val allocations = ManagementFactory.getThreadMXBean() as? com.sun.management.ThreadMXBean
+            ?: error("Thread allocation measurement requires HotSpot ThreadMXBean")
+        check(allocations.isThreadAllocatedMemorySupported)
+        if (!allocations.isThreadAllocatedMemoryEnabled) allocations.isThreadAllocatedMemoryEnabled = true
+        val threadId = Thread.currentThread().threadId()
+        repeat(4) { allocations.getThreadAllocatedBytes(threadId) } // Initialize before any measured sample.
+        var nextGeneration = 0L
+        data class Window(val calls: Long, val checksum: Long, val elapsedNs: Long, val allocatedBytes: Long,
+                          val compiledEntries: Long)
+        fun window(): Window {
+            val firstGeneration = nextGeneration
+            val compiledBefore = root.compiledEntries
+            val allocatedBefore = allocations.getThreadAllocatedBytes(threadId)
+            val start = System.nanoTime()
+            var calls = 0L
+            var checksum = 0L
+            do {
+                checksum += call(firstGeneration + calls)
+                calls++
+            } while (System.nanoTime() - start < windowMillis * 1_000_000L)
+            val elapsed = System.nanoTime() - start
+            val allocatedBytes = allocations.getThreadAllocatedBytes(threadId) - allocatedBefore
+            val firstExpected = expected(firstGeneration)
+            val increment = expected(firstGeneration + 1L) - firstExpected
+            check(checksum == firstExpected * calls + increment * (calls * (calls - 1L) / 2L)) { "Checksum mismatch" }
+            nextGeneration += calls
+            consumedChecksum = consumedChecksum xor checksum
+            return Window(calls, checksum, elapsed, allocatedBytes, root.compiledEntries - compiledBefore)
+        }
+        // Populate target/type profiles, then warm installed guest code rather than spending
+        // the entire warmup below the automatic call-count compilation threshold.
+        repeat(32) {
+            val checksum = call(nextGeneration)
+            check(checksum == expected(nextGeneration))
+            consumedChecksum = consumedChecksum xor checksum
+            nextGeneration++
+        }
+        compile(root.callTarget)
+        var actualWarmupWindows = 0
+        repeat(warmup) {
+            if (!lastTier(root.callTarget)) compile(root.callTarget)
+            window()
+            actualWarmupWindows++
+        }
+        if (!lastTier(root.callTarget)) {
+            compile(root.callTarget)
+            window()
+            actualWarmupWindows++
+        }
+        check(lastTier(root.callTarget)) { "Warmup left guest code invalidated" }
+        emit(mapOf("event" to "warmup", "mode" to mode.cli, "case" to scenario.cli, "size" to size,
+            "windows" to actualWarmupWindows, "windowMillis" to windowMillis, "guestLastTierInstalled" to lastTier(root.callTarget),
+            "compiledEntries" to root.compiledEntries, "producerLastTierInstalled" to lastTier(producer)))
+        repeat(measures) { sample ->
+            val result = window()
+            val installed = lastTier(root.callTarget)
+            check(installed && result.compiledEntries == result.calls) { "Not every measured root entry executed valid compiled guest code" }
+            val forcedPerCall = when (scenario) {
+                IntScenario.NEVER -> 0L
+                IntScenario.PARTIAL -> (size.toLong() + 3L) / 4L
+                IntScenario.PARTIAL_HALF -> (size.toLong() + 1L) / 2L
+                IntScenario.REREAD, IntScenario.PUBLISHED_READ -> size.toLong() * readRepeats
+                else -> size.toLong()
+            }
+            emit(mapOf("event" to "sample", "mode" to mode.cli, "case" to scenario.cli, "size" to size,
+                "sample" to sample, "elapsedNs" to result.elapsedNs, "checksum" to result.checksum,
+                "calls" to result.calls, "allocatedBytes" to result.allocatedBytes,
+                "allocatedCells" to if (readsOnly) 0L else size.toLong() * result.calls,
+                "forcedReads" to forcedPerCall * result.calls,
+                "operations" to (if (scenario == IntScenario.NEVER) size.toLong() else forcedPerCall) * result.calls,
+                "guestLastTierInstalled" to installed, "compiledEntries" to result.compiledEntries))
+        }
+    }
+
+    private fun semanticChecks(language: Language, boxed: DataLayout, captures: CaptureLayout) {
+        var passed = 0
+        fun test(name: String, action: () -> Unit) {
+            action(); passed++; emit(mapOf("event" to "check", "name" to name, "passed" to true))
+        }
+        fun environment(): CapturedFrame = captures.captureValues(arrayOf(FRESH_BASE, null))
+        fun thrown(action: () -> Any?): Throwable {
+            try { action() } catch (failure: Throwable) { return failure }
+            error("Expected failure")
+        }
+        fun assertReleased(cell: Any) = when (cell) {
+            is Thunk -> check(cell.target == null && cell.environment == null)
+            is ExperimentalIntThunk -> check(cell.environment == null && cell.entryOrFailure !is RootCallTarget)
+            else -> error("Not a thunk")
+        }
+        fun cell(mode: IntThunkMode, target: RootCallTarget, environment: CapturedFrame): Any =
+            if (mode == IntThunkMode.ORDINARY) Thunk(target, environment) else ExperimentalIntThunk(target, environment)
+        fun produce(mode: IntThunkMode, frame: VirtualFrame, value: Long): Any {
+            if (mode != IntThunkMode.INLINE_DIRECT) return boxed.createLong(value)
+            (frame.arguments[2] as ExperimentalIntThunk).writeLongWhileEvaluating(value)
+            return Unit
+        }
+
+        for (mode in IntThunkMode.entries) {
+            test("${mode.cli}: full-width lazy values, sharing, release, generic and mixed consumers") {
+                var evaluations = 0
+                val values = longArrayOf(Long.MIN_VALUE, Long.MAX_VALUE, 0L, -1L, 3_000_000_017L, -3_000_000_017L)
+                val driver = IntDriver(language, boxed, mode)
+                val generic = IntDriver(language, boxed, mode, true)
+                for (value in values) {
+                    val target = object : RootNode(language) {
+                        override fun execute(frame: VirtualFrame): Any { evaluations++; return produce(mode, frame, value) }
+                    }.callTarget
+                    val before = evaluations
+                    val thunk = cell(mode, target, environment())
+                    check(evaluations == before)
+                    check(driver.apply(thunk) == value && driver.apply(thunk) == value)
+                    val whnf = generic.apply(thunk)
+                    check(generic.apply(thunk) === whnf && evaluations == before + 1)
+                    check(driver.apply(boxed.createLong(value)) == value && driver.apply(whnf) == value)
+                    if (mode != IntThunkMode.ORDINARY) check(whnf === thunk)
+                    assertReleased(thunk)
+                }
+                heapRoots = arrayOf(cell(mode, object : RootNode(language) {
+                    override fun execute(frame: VirtualFrame): Any = produce(mode, frame, 999L)
+                }.callTarget, environment()))
+                sampleCell = heapRoots[0]
+                sampleCapture = environment()
+                sampleBox = boxed.createLong(999L)
+            }
+            test("${mode.cli}: memoized guest/runtime failure identity and capture release") {
+                for (expected in listOf(RuntimeFault("deliberate fault"), GuestException("lazy payload", object : Node() {}))) {
+                    var evaluations = 0
+                    val target = object : RootNode(language) {
+                        override fun execute(frame: VirtualFrame): Any { evaluations++; throw expected }
+                    }.callTarget
+                    val thunk = cell(mode, target, environment())
+                    val driver = IntDriver(language, boxed, mode)
+                    val generic = IntDriver(language, boxed, mode, true)
+                    check(thrown { driver.apply(thunk) } === expected)
+                    check(thrown { generic.apply(thunk) } === expected && evaluations == 1)
+                    assertReleased(thunk)
+                }
+            }
+            test("${mode.cli}: interruption restores entry/environment even after staged direct result") {
+                var evaluations = 0
+                val interrupted = IllegalStateException("retryable interruption")
+                val environment = environment()
+                val target = object : RootNode(language) {
+                    override fun execute(frame: VirtualFrame): Any {
+                        evaluations++
+                        check(frame.arguments[1] === environment)
+                        if (mode == IntThunkMode.INLINE_DIRECT)
+                            (frame.arguments[2] as ExperimentalIntThunk).writeLongWhileEvaluating(Long.MIN_VALUE)
+                        if (evaluations == 1) throw interrupted
+                        return produce(mode, frame, Long.MAX_VALUE)
+                    }
+                }.callTarget
+                val thunk = cell(mode, target, environment)
+                val driver = IntDriver(language, boxed, mode)
+                check(thrown { driver.apply(thunk) } === interrupted)
+                when (thunk) {
+                    is Thunk -> check(thunk.state == 0 && thunk.target === target && thunk.environment === environment)
+                    is ExperimentalIntThunk -> check(thunk.state == ExperimentalIntThunk.NEW && thunk.entryOrFailure === target && thunk.environment === environment && thunk.payload == 0L)
+                }
+                check(driver.apply(thunk) == Long.MAX_VALUE && driver.apply(thunk) == Long.MAX_VALUE && evaluations == 2)
+                assertReleased(thunk)
+            }
+            test("${mode.cli}: recursive entry blackhole remains memoized") {
+                lateinit var thunk: Any
+                var evaluations = 0
+                val driver = IntDriver(language, boxed, mode)
+                val target = object : RootNode(language) {
+                    override fun execute(frame: VirtualFrame): Any { evaluations++; return driver.apply(thunk)!! }
+                }.callTarget
+                thunk = cell(mode, target, environment())
+                val failure = thrown { driver.apply(thunk) }
+                check(failure is RuntimeFault && failure.message!!.contains("Blackhole"))
+                check(thrown { driver.apply(thunk) } === failure && evaluations == 1)
+                assertReleased(thunk)
+            }
+        }
+        test("inline-direct: existing shared I# identity survives REF_RESULT and aliases") {
+            val shared = boxed.createLong(7_000_000_003L)
+            val target = object : RootNode(language) {
+                override fun execute(frame: VirtualFrame): Any {
+                    (frame.arguments[2] as ExperimentalIntThunk).writeReferenceWhileEvaluating(shared)
+                    return Unit
+                }
+            }.callTarget
+            val a = ExperimentalIntThunk(target, environment())
+            val b = ExperimentalIntThunk(target, environment())
+            val generic = IntDriver(language, boxed, IntThunkMode.INLINE_DIRECT, true)
+            val mixed = IntDriver(language, boxed, IntThunkMode.INLINE_DIRECT)
+            check(generic.apply(a) === shared && generic.apply(b) === shared && generic.apply(a) === shared)
+            check(a.state == ExperimentalIntThunk.REF_RESULT && b.state == ExperimentalIntThunk.REF_RESULT)
+            check(mixed.apply(a) == 7_000_000_003L && mixed.apply(shared) == 7_000_000_003L)
+            assertReleased(a); assertReleased(b)
+        }
+        test("inline-direct: real producer arithmetic agrees with boxed producer") {
+            val boxedTarget = IntProducerRoot(language, captures, boxed, false).callTarget
+            val directTarget = IntProducerRoot(language, captures, boxed, true).callTarget
+            val mixed = IntDriver(language, boxed, IntThunkMode.INLINE_DIRECT)
+            val generic = IntDriver(language, boxed, IntThunkMode.INLINE_DIRECT, true)
+            for (seed in longArrayOf(Long.MIN_VALUE, Long.MAX_VALUE, FRESH_BASE, -1L, 11L)) {
+                val env = captures.captureValues(arrayOf(seed, null))
+                val ordinary = Thunk(boxedTarget, env)
+                val direct = ExperimentalIntThunk(directTarget, env)
+                check(mixed.apply(ordinary) == arithmetic(seed) && mixed.apply(direct) == arithmetic(seed))
+                if (boxed.hasBoxedValueCache && arithmetic(seed) in -16L..255L) {
+                    val canonical = boxed.createLong(arithmetic(seed))
+                    check(ordinary.value === canonical && generic.apply(direct) === canonical)
+                    check(direct.state == ExperimentalIntThunk.REF_RESULT)
+                }
+            }
+            val shared = boxed.createLong(arithmetic(FRESH_BASE))
+            val sharedEnvironment = captures.captureValues(arrayOf(FRESH_BASE, shared))
+            val ordinaryShared = Thunk(boxedTarget, sharedEnvironment)
+            val directShared = ExperimentalIntThunk(directTarget, sharedEnvironment)
+            check(generic.apply(ordinaryShared) === shared && generic.apply(directShared) === shared)
+            check(directShared.state == ExperimentalIntThunk.REF_RESULT)
+        }
+        emit(mapOf("event" to "checks-complete", "passed" to passed, "cacheIdentityChecked" to boxed.hasBoxedValueCache,
+            "timingsRun" to false, "ordinaryRuntimeModified" to false))
+    }
+}

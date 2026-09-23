@@ -1,0 +1,96 @@
+{
+  "rawGraphsKeptLocal": true,
+  "artifact": "graph-evidence.zip in original task outputs",
+  "graphs": [
+    {
+      "file": "force-all-inline-copy/TruffleHotSpotCompilation-1784[IntProducerRoot@43519aa2].bgv",
+      "bytes": 395175,
+      "sha256": "2c3b6663fb46eecaafe4f3709973c1fe669ff622134108515001271afff8841a"
+    },
+    {
+      "file": "force-all-inline-copy/TruffleHotSpotCompilation-1876[IntBatchRoot@7aefa27].bgv",
+      "bytes": 2754709,
+      "sha256": "ccacfd65ea92c70d3dfa0ce193cc5b64c960ce97751821515584c4521475d27b"
+    },
+    {
+      "file": "force-all-inline-direct/TruffleHotSpotCompilation-1757[IntProducerRoot@7a4de456].bgv",
+      "bytes": 363564,
+      "sha256": "f92772a6b06ba6c7d80273527312601be04d66dc7ad63aeb24bc85e02e7d444e"
+    },
+    {
+      "file": "force-all-inline-direct/TruffleHotSpotCompilation-1845[IntBatchRoot@1c30adc5].bgv",
+      "bytes": 2819548,
+      "sha256": "56a4b827c0b8eae91a9083022ce4a9c9bba84857a7960a519fb34b1a9647cd74"
+    },
+    {
+      "file": "force-all-ordinary/TruffleHotSpotCompilation-1791[IntProducerRoot@399625be].bgv",
+      "bytes": 395183,
+      "sha256": "a1d6af67f672e68547cf083ca3c53fc9fd7f911de55314c00a5a8aa305ecc3c3"
+    },
+    {
+      "file": "force-all-ordinary/TruffleHotSpotCompilation-1878[IntBatchRoot@62deb540].bgv",
+      "bytes": 2786104,
+      "sha256": "3f33877df39c121b25c9aa963b08288754cc50abe95c35da07a04ab26ff10736"
+    },
+    {
+      "file": "partial-half-inline-copy/TruffleHotSpotCompilation-1776[IntProducerRoot@245f1a32].bgv",
+      "bytes": 395182,
+      "sha256": "71ce14e76717f22791c0824fba546ba4e70763bb7b3461af8aebafaeeec2e45d"
+    },
+    {
+      "file": "partial-half-inline-copy/TruffleHotSpotCompilation-1866[IntBatchRoot@a9b8ad9].bgv",
+      "bytes": 2755093,
+      "sha256": "ed83f86f78ee3bf313f7c0519d90c9898ac4d24a1fee513c5d0931ea51de703c"
+    },
+    {
+      "file": "published-read-inline-direct/TruffleHotSpotCompilation-1763[IntProducerRoot@72b526f5].bgv",
+      "bytes": 363576,
+      "sha256": "d3d601d79743efad15c9a2f733685cb48e563a3839ceff98a7677a19a28f7236"
+    },
+    {
+      "file": "published-read-inline-direct/TruffleHotSpotCompilation-1854[IntBatchRoot@740f290b].bgv",
+      "bytes": 1275819,
+      "sha256": "c50f63b64aa0245c312da22c9fad8fa5e1525adc0b45e40dc641db0da204b5ea"
+    },
+    {
+      "file": "published-read-ordinary/TruffleHotSpotCompilation-1771[IntProducerRoot@5d6d55fc].bgv",
+      "bytes": 395182,
+      "sha256": "ba31cc6637034e85407da28607fdd89627d8a6d4d14c6dbe3f4ae243e83d24c5"
+    },
+    {
+      "file": "published-read-ordinary/TruffleHotSpotCompilation-1868[IntBatchRoot@67ddfa61].bgv",
+      "bytes": 1275807,
+      "sha256": "bf649c87ce1ff16eaae9295259742a8478a601083faa851b909d0b7410d8466b"
+    },
+    {
+      "file": "reread-inline-direct/TruffleHotSpotCompilation-1738[IntProducerRoot@72b526f5].bgv",
+      "bytes": 363562,
+      "sha256": "c8a6ebea5f8bca3c9945d5cb5e76e1612920bcab89b1054ea269e93d8bab023d"
+    },
+    {
+      "file": "reread-inline-direct/TruffleHotSpotCompilation-1838[IntBatchRoot@57bea848].bgv",
+      "bytes": 1275420,
+      "sha256": "43f6d669f0d5fa184a79c272f676cc602e5fe13ea178cc0aabbb2a1adb5223d1"
+    },
+    {
+      "file": "reread-ordinary/TruffleHotSpotCompilation-1774[IntProducerRoot@5d6d55fc].bgv",
+      "bytes": 395166,
+      "sha256": "bd8b74ae72d4838f8627b39d808571622e9c862f4449903a95b15bfc5fcbe52b"
+    },
+    {
+      "file": "reread-ordinary/TruffleHotSpotCompilation-1870[IntBatchRoot@67ddfa61].bgv",
+      "bytes": 1307368,
+      "sha256": "306f239e685312b80ca9463fe6af267883d9a91690d253e7ad255cb21b0c0a30"
+    },
+    {
+      "file": "screen-source-force-all-inline-copy/TruffleHotSpotCompilation-1782[IntProducerRoot@4646a213].bgv",
+      "bytes": 395177,
+      "sha256": "977389c226f61bf72f8c5de187b753310e12d30f3e53dc3614cb7bc3bbdc22c5"
+    },
+    {
+      "file": "screen-source-force-all-inline-copy/TruffleHotSpotCompilation-1883[IntBatchRoot@4d436a09].bgv",
+      "bytes": 2886565,
+      "sha256": "e60d40632dfd776cbd21ac27295e9b1f3f492e12df39613ab843f8a81cd00c44"
+    }
+  ]
+}

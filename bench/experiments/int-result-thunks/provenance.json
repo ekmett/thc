@@ -1,0 +1,50 @@
+{
+  "baseline": "87e6c6d79d74c22ea95c371c4942d04e62e03e2a",
+  "jdk": "Oracle GraalVM25.3.4.1+1.1 / Java25.0.4.1",
+  "os": "macOS-15.5-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "sourceFiles": {
+    "src/main/kotlin/thc/runtime/ExperimentalIntThunk.kt": "7c7701132e6c25b2eea6ca57f89b8c89e8dec063c35b53b7db7f9e627f41e945",
+    "src/main/kotlin/thc/runtime/IntThunkExperiment.kt": "4056f5f1bb51b66d6e101edd1b735a40543eb28cc793946960545dd85d7f4b02",
+    "build.gradle.kts": "e7c2ab06ca3496650a9d8ac94d7abad5ff24c51d0902a5c6dac25d42fcaf9922",
+    "bench/experiments/int-result-thunks/run.py": "3114025de5b37c04fc9a3693f5b34d610e9b7c3d55a906ad24accf307bf78e4e",
+    "bench/experiments/int-result-thunks/screen-version/ExperimentalIntThunk.kt": "7c7701132e6c25b2eea6ca57f89b8c89e8dec063c35b53b7db7f9e627f41e945",
+    "bench/experiments/int-result-thunks/screen-version/IntThunkExperiment.kt": "a8c74c68989e4fa36d8821aeec49c4019076c8fee1977fc5ade7baa14e356aad",
+    "bench/experiments/int-result-thunks/tools/GraphInspect.java": "b2715478c253debc1b58332a8f5f5207a46efc2a35ac1e801c26d11717839db4",
+    "bench/experiments/int-result-thunks/tools/IntThunkSizes.java": "f0104ec5123077c361cb97c6f66ec8adb6fe6226581f06fdfd40948d63297e32",
+    "bench/experiments/int-result-thunks/tools/MANIFEST.MF": "35bcf68e8dcbd2b3804309f939326b9f610cd2b48775ec7bfb32bb0bde549daf",
+    "bench/experiments/int-result-thunks/tools/audit-call-packets.py": "6d90573aafda15c9d575e916b74a40fbb6e82fecec9c3d7b4fdd7e18d9ee4e1e",
+    "bench/experiments/int-result-thunks/tools/intthunk-audit.py": "470ed90a3999c7084197cbc51ea22ab874e6d938c0ca7a4f132cacf28a0c6bcf",
+    "bench/experiments/int-result-thunks/tools/intthunk-graph-summary.py": "8cdd28ddf8aefba289dd67cf8ba2cea730123902d8863247887e833737f0a8e1"
+  },
+  "screenVersion": "source/screen-version; differs only by addition of partial-half scenario in final version",
+  "timingProtocol": "3 fresh JVM forks per combination; 5x2-second compiled warmup windows and 5x2-second measurement windows; sequential, rotated variant/case order; no instrumentation agent during timing; readRepeats=1",
+  "quietSlot": "explicitly coordinated with main thc task; no competing root build/benchmark",
+  "mainThread": "01a0c8fc-b458-7c30-98cf-ab4c183c127f",
+  "mainCheckoutModified": false,
+  "sourceMapping": {
+    "semantic/cache-*": "screen-version",
+    "semantic/final-cache-*": "final",
+    "layout except partial-half": "screen-version",
+    "layout/partial-half-*": "final",
+    "screen": "screen-version",
+    "threshold": "final",
+    "confirm": "final",
+    "diagnostic graph screen-source-*": "screen-version",
+    "other diagnostic graphs": "final"
+  },
+  "confirmationComplete": {
+    "jvms": 27,
+    "measuredWindows": 135,
+    "auditedValid": 27,
+    "windowsRejected": 0
+  },
+  "graphScope": "Separate diagnostic executions reproduce observed64/72/56B and screening56B; graphs are not captured from the135timing windows themselves.",
+  "packagingVerification": [
+    "git apply --check accepted the experiment patch on the pinned baseline",
+    "published Kotlin bytes match tested snapshot; Gradle task differs only in its descriptive comment",
+    "portable runner help/dry-run checked for every phase",
+    "portable dry-run phase labels, ordered arguments and flags match original runner via AST dispatch comparison",
+    "no further JVM measurements during packaging"
+  ]
+}

@@ -1,0 +1,626 @@
+[
+  {
+    "log": "layout/cached-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "cached",
+    "size": 1024,
+    "checksum": 51200,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "data-value": {
+        "count": 1,
+        "bytes": 16
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 36896,
+    "bytesPerCellExcludingRootArray": 32.015625
+  },
+  {
+    "log": "layout/cached-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "cached",
+    "size": 1024,
+    "checksum": 51200,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "data-value": {
+        "count": 1,
+        "bytes": 16
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 28704,
+    "bytesPerCellExcludingRootArray": 24.015625
+  },
+  {
+    "log": "layout/force-all-inline-copy.log",
+    "event": "heap-ready",
+    "mode": "inline-copy",
+    "case": "force-all",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 36880,
+    "bytesPerCellExcludingRootArray": 32.0
+  },
+  {
+    "log": "layout/force-all-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "force-all",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 36880,
+    "bytesPerCellExcludingRootArray": 32.0
+  },
+  {
+    "log": "layout/force-all-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "force-all",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "data-value": {
+        "count": 1024,
+        "bytes": 16384
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 45072,
+    "bytesPerCellExcludingRootArray": 40.0
+  },
+  {
+    "log": "layout/headers-off-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "force-all",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 24,
+      "sampleCapture": 32,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 36880,
+    "bytesPerCellExcludingRootArray": 32.0
+  },
+  {
+    "log": "layout/headers-off-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "force-all",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 24,
+      "sampleCapture": 32,
+      "sampleCell": 32
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "data-value": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 61456,
+    "bytesPerCellExcludingRootArray": 56.0
+  },
+  {
+    "log": "layout/never-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "never",
+    "size": 1024,
+    "checksum": 1024,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "capture": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 61456,
+    "bytesPerCellExcludingRootArray": 56.0
+  },
+  {
+    "log": "layout/never-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "never",
+    "size": 1024,
+    "checksum": 1024,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "capture": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 53264,
+    "bytesPerCellExcludingRootArray": 48.0
+  },
+  {
+    "log": "layout/partial-half-inline-copy.log",
+    "event": "heap-ready",
+    "mode": "inline-copy",
+    "case": "partial-half",
+    "size": 1024,
+    "checksum": 6597070560256,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "capture": {
+        "count": 512,
+        "bytes": 12288
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 49168,
+    "bytesPerCellExcludingRootArray": 44.0
+  },
+  {
+    "log": "layout/partial-half-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "partial-half",
+    "size": 1024,
+    "checksum": 6597070560256,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "capture": {
+        "count": 512,
+        "bytes": 12288
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 49168,
+    "bytesPerCellExcludingRootArray": 44.0
+  },
+  {
+    "log": "layout/partial-half-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "partial-half",
+    "size": 1024,
+    "checksum": 6597070560256,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "capture": {
+        "count": 512,
+        "bytes": 12288
+      },
+      "data-value": {
+        "count": 512,
+        "bytes": 8192
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 49168,
+    "bytesPerCellExcludingRootArray": 44.0
+  },
+  {
+    "log": "layout/partial-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "partial",
+    "size": 1024,
+    "checksum": 3298535279360,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "capture": {
+        "count": 768,
+        "bytes": 18432
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 55312,
+    "bytesPerCellExcludingRootArray": 50.0
+  },
+  {
+    "log": "layout/partial-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "partial",
+    "size": 1024,
+    "checksum": 3298535279360,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "capture": {
+        "count": 768,
+        "bytes": 18432
+      },
+      "data-value": {
+        "count": 256,
+        "bytes": 4096
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 51216,
+    "bytesPerCellExcludingRootArray": 46.0
+  },
+  {
+    "log": "layout/published-read-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "published-read",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 36880,
+    "bytesPerCellExcludingRootArray": 32.0
+  },
+  {
+    "log": "layout/published-read-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "published-read",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "data-value": {
+        "count": 1024,
+        "bytes": 16384
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 20496,
+    "bytesPerCellExcludingRootArray": 16.0
+  },
+  {
+    "log": "layout/reread-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "reread",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 36880,
+    "bytesPerCellExcludingRootArray": 32.0
+  },
+  {
+    "log": "layout/reread-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "reread",
+    "size": 1024,
+    "checksum": 13194141122048,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "data-value": {
+        "count": 1024,
+        "bytes": 16384
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 45072,
+    "bytesPerCellExcludingRootArray": 40.0
+  },
+  {
+    "log": "layout/shared-inline-direct.log",
+    "event": "heap-ready",
+    "mode": "inline-direct",
+    "case": "shared",
+    "size": 1024,
+    "checksum": 13194139550720,
+    "rootCellClass": "thc.runtime.ExperimentalIntThunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 32
+    },
+    "categories": {
+      "ExperimentalIntThunk": {
+        "count": 1024,
+        "bytes": 32768
+      },
+      "data-value": {
+        "count": 1,
+        "bytes": 16
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 36896,
+    "bytesPerCellExcludingRootArray": 32.015625
+  },
+  {
+    "log": "layout/shared-ordinary.log",
+    "event": "heap-ready",
+    "mode": "ordinary",
+    "case": "shared",
+    "size": 1024,
+    "checksum": 13194139550720,
+    "rootCellClass": "thc.runtime.Thunk",
+    "boxClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1",
+    "captureClass": "com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2",
+    "shallowSizes": {
+      "sampleBox": 16,
+      "sampleCapture": 24,
+      "sampleCell": 24
+    },
+    "categories": {
+      "Thunk": {
+        "count": 1024,
+        "bytes": 24576
+      },
+      "data-value": {
+        "count": 1,
+        "bytes": 16
+      },
+      "reference-array": {
+        "count": 1,
+        "bytes": 4112
+      }
+    },
+    "totalBytes": 28704,
+    "bytesPerCellExcludingRootArray": 24.015625
+  }
+]

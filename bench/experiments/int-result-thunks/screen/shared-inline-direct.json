@@ -1,0 +1,28 @@
+{
+  "label": "screen/shared-inline-direct",
+  "command": [
+    "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/bin/java",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xss2m",
+    "-Xms512m",
+    "-Xmx512m",
+    "-XX:+UseCompactObjectHeaders",
+    "-Dthc.traceCompilation=true",
+    "-Dpolyglot.engine.StaticObjectStorageStrategy=field-based",
+    "-cp",
+    "/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-thc/build/classes/java/main:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-thc/build/classes/kotlin/main:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-thc/build/tmp/kapt3/classes/main:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-thc/build/resources/main:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.20/94c1451890d164aed65d43b3db0b7ecef7c183e7/kotlin-stdlib-2.4.20.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-api/25.3.4.1/d0ad4561c54b72dae2918cf8ba0d899844912df8/truffle-api-25.3.4.1.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.polyglot/polyglot/25.3.4.1/708778860913af594457422f5048ff5c05c7c1d0/polyglot-25.3.4.1.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.sdk/jniutils/25.3.4.1/bccb3644f0750807fd94726c13f9afc5f24ce92d/jniutils-25.3.4.1.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.sdk/collections/25.3.4.1/76c7a0adc6d80c4bc6b52d3799707c2c39240930/collections-25.3.4.1.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.sdk/nativeimage/25.3.4.1/f532f70767714bafd65e13a22ba7b3cf3809e85/nativeimage-25.3.4.1.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-compiler/25.3.4.1/978fceb932a0b8ad538592bf2204b2e6f5240304/truffle-compiler-25.3.4.1.jar:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.sdk/word/25.3.4.1/36aa272882c63927768f3aa9541a5b372a726af3/word-25.3.4.1.jar",
+    "thc.runtime.IntThunkExperiment",
+    "bench",
+    "inline-direct",
+    "shared",
+    "65536",
+    "2",
+    "3",
+    "4",
+    "1000"
+  ],
+  "startedUnix": 1790163765.971358,
+  "elapsedSeconds": 5.588990926742554,
+  "exitCode": 0,
+  "logSha256": "396175802beca3d1d0f4a7dcd4fafaa6efdd4432340c0d57eb135e25683b9b2d"
+}

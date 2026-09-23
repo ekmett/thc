@@ -1,0 +1,20 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+{"event":"configuration","action":"check","javaVersion":"25.0.4.1","classOwnedLayouts":"true","boxedValueCache":false,"candidateFields":{"entryOrFailure":"java.lang.Object","environment":"thc.runtime.CapturedFrame","state":"int","payload":"long"}}
+{"event":"check","name":"ordinary: full-width lazy values, sharing, release, generic and mixed consumers","passed":true}
+{"event":"check","name":"ordinary: memoized guest/runtime failure identity and capture release","passed":true}
+{"event":"check","name":"ordinary: interruption restores entry/environment even after staged direct result","passed":true}
+{"event":"check","name":"ordinary: recursive entry blackhole remains memoized","passed":true}
+{"event":"check","name":"inline-copy: full-width lazy values, sharing, release, generic and mixed consumers","passed":true}
+{"event":"check","name":"inline-copy: memoized guest/runtime failure identity and capture release","passed":true}
+{"event":"check","name":"inline-copy: interruption restores entry/environment even after staged direct result","passed":true}
+{"event":"check","name":"inline-copy: recursive entry blackhole remains memoized","passed":true}
+{"event":"check","name":"inline-direct: full-width lazy values, sharing, release, generic and mixed consumers","passed":true}
+{"event":"check","name":"inline-direct: memoized guest/runtime failure identity and capture release","passed":true}
+{"event":"check","name":"inline-direct: interruption restores entry/environment even after staged direct result","passed":true}
+{"event":"check","name":"inline-direct: recursive entry blackhole remains memoized","passed":true}
+{"event":"check","name":"inline-direct: existing shared I# identity survives REF_RESULT and aliases","passed":true}
+{"event":"check","name":"inline-direct: real producer arithmetic agrees with boxed producer","passed":true}
+{"event":"checks-complete","passed":14,"cacheIdentityChecked":false,"timingsRun":false,"ordinaryRuntimeModified":false}

@@ -57,3 +57,13 @@ tasks.register<JavaExec>("probe") {
     jvmArgs(application.applicationDefaultJvmArgs)
     workingDir(projectDir)
 }
+
+// Runtime classpath for the standalone Int-result-thunk experiment.
+tasks.register("intThunkClasspath") {
+    dependsOn("classes")
+    doLast {
+        layout.buildDirectory.file("intthunk-classpath.txt").get().asFile.writeText(
+            sourceSets.main.get().runtimeClasspath.asPath
+        )
+    }
+}

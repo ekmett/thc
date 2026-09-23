@@ -1,0 +1,24 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+{"event":"configuration","action":"heap","javaVersion":"25.0.4.1","classOwnedLayouts":"true","boxedValueCache":false,"candidateFields":{"entryOrFailure":"java.lang.Object","environment":"thc.runtime.CapturedFrame","state":"int","payload":"long"}}
+{"event":"heap-ready","mode":"inline-direct","case":"reread","size":1024,"checksum":13194141122048,"rootCellClass":"thc.runtime.ExperimentalIntThunk","boxClass":"com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1","captureClass":"com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2"}
+{"kind":"vm-flag","name":"UseCompactObjectHeaders","value":"true"}
+{"kind":"vm-flag","name":"UseCompressedOops","value":"true"}
+{"kind":"vm-flag","name":"UseCompressedClassPointers","value":"true"}
+{"kind":"vm-flag","name":"ObjectAlignmentInBytes","value":"8"}
+{"kind":"shallow-size","sample":"sampleBox","class":"com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1","bytes":16}
+{"kind":"field","sample":"sampleBox","owner":"com.oracle.truffle.api.staticobject.GeneratedStaticObject$$1","name":"field__0","type":"long"}
+{"kind":"shallow-size","sample":"sampleCapture","class":"com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2","bytes":24}
+{"kind":"field","sample":"sampleCapture","owner":"com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2","name":"capture__0__primitive","type":"long"}
+{"kind":"field","sample":"sampleCapture","owner":"com.oracle.truffle.api.staticobject.GeneratedStaticObject$$2","name":"capture__1__object","type":"thc.runtime.DataValue"}
+{"kind":"field","sample":"sampleCapture","owner":"thc.runtime.CapturedFrame","name":"layout","type":"thc.runtime.CaptureLayout"}
+{"kind":"shallow-size","sample":"sampleCell","class":"thc.runtime.ExperimentalIntThunk","bytes":32}
+{"kind":"field","sample":"sampleCell","owner":"thc.runtime.ExperimentalIntThunk","name":"entryOrFailure","type":"java.lang.Object"}
+{"kind":"field","sample":"sampleCell","owner":"thc.runtime.ExperimentalIntThunk","name":"environment","type":"thc.runtime.CapturedFrame"}
+{"kind":"field","sample":"sampleCell","owner":"thc.runtime.ExperimentalIntThunk","name":"state","type":"int"}
+{"kind":"field","sample":"sampleCell","owner":"thc.runtime.ExperimentalIntThunk","name":"payload","type":"long"}
+{"kind":"reachable-guest-category","category":"ExperimentalIntThunk","count":1024,"bytes":32768}
+{"kind":"reachable-guest-category","category":"reference-array","count":1,"bytes":4112}
+{"kind":"reachable-guest-total","count":1025,"bytes":36880,"boundary":"heapRoots; guest cells, captures, data values and reference arrays only; metadata excluded; identity deduplicated; not dominator retained size"}

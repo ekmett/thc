@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "claimScope": "Static sites in selected compiler phases; no dynamic allocation counts or execution-frequency claims.",
+  "graphs": [
+    {
+      "root": "TruffleIR.Tier2.IntProducerRoot@5d6d55fc()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 34,
+      "afterMidNodes": 60,
+      "committedPacketCount": 0,
+      "lateObjectArrayCount": 0,
+      "packetsBySource": {},
+      "packetsByClassification": {},
+      "lateArraysBySource": {},
+      "methodTargets": {},
+      "packets": [],
+      "lateArrays": [],
+      "lateLongBoxCount": 0,
+      "lateLongBoxesByOrigin": {},
+      "lateLongBoxes": [],
+      "compilationId": 1771,
+      "rootInstanceId": 2,
+      "rootKey": "TruffleIR.Tier2.IntProducerRoot@5d6d55fc() [rootId=2]",
+      "bgv": "TruffleHotSpotCompilation-1771[IntProducerRoot@5d6d55fc].bgv"
+    },
+    {
+      "root": "TruffleIR.Tier2.IntBatchRoot@67ddfa61()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 555,
+      "afterMidNodes": 1669,
+      "committedPacketCount": 0,
+      "lateObjectArrayCount": 0,
+      "packetsBySource": {},
+      "packetsByClassification": {},
+      "lateArraysBySource": {},
+      "methodTargets": {
+        "java.lang.Throwable.fillInStackTrace(I)": 2,
+        "java.lang.Class.initClassName()": 1,
+        "java.lang.StackTraceElement.initStackTraceElements([Ljava/lang/StackTraceElement;, Ljava/lang/Object;, I)": 1,
+        "java.util.Set.contains(Ljava/lang/Object;)": 1
+      },
+      "packets": [],
+      "lateArrays": [],
+      "lateLongBoxCount": 1,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.IntBatchRoot.execute": 1
+      },
+      "lateLongBoxes": [
+        {
+          "id": 8607,
+          "block": "247",
+          "origin": "thc.runtime.IntBatchRoot.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.IntBatchRoot.execute(IntThunkExperiment.kt:104) [bci:354]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "compilationId": 1868,
+      "rootInstanceId": 4,
+      "rootKey": "TruffleIR.Tier2.IntBatchRoot@67ddfa61() [rootId=4]",
+      "bgv": "TruffleHotSpotCompilation-1868[IntBatchRoot@67ddfa61].bgv"
+    }
+  ],
+  "latestCompilationByRoot": {
+    "TruffleIR.Tier2.IntProducerRoot@5d6d55fc() [rootId=2]": 1771,
+    "TruffleIR.Tier2.IntBatchRoot@67ddfa61() [rootId=4]": 1868
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "claimScope": "Static sites in selected compiler phases; no dynamic allocation counts or execution-frequency claims.",
+  "graphs": [
+    {
+      "root": "TruffleIR.Tier2.IntProducerRoot@399625be()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 34,
+      "afterMidNodes": 60,
+      "committedPacketCount": 0,
+      "lateObjectArrayCount": 0,
+      "packetsBySource": {},
+      "packetsByClassification": {},
+      "lateArraysBySource": {},
+      "methodTargets": {},
+      "packets": [],
+      "lateArrays": [],
+      "lateLongBoxCount": 0,
+      "lateLongBoxesByOrigin": {},
+      "lateLongBoxes": [],
+      "compilationId": 1791,
+      "rootInstanceId": 2,
+      "rootKey": "TruffleIR.Tier2.IntProducerRoot@399625be() [rootId=2]",
+      "bgv": "TruffleHotSpotCompilation-1791[IntProducerRoot@399625be].bgv"
+    },
+    {
+      "root": "TruffleIR.Tier2.IntBatchRoot@62deb540()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 1177,
+      "afterMidNodes": 4605,
+      "committedPacketCount": 0,
+      "lateObjectArrayCount": 0,
+      "packetsBySource": {},
+      "packetsByClassification": {},
+      "lateArraysBySource": {},
+      "methodTargets": {
+        "java.lang.Throwable.fillInStackTrace(I)": 4,
+        "java.lang.Class.initClassName()": 2,
+        "java.lang.StackTraceElement.initStackTraceElements([Ljava/lang/StackTraceElement;, Ljava/lang/Object;, I)": 2,
+        "java.util.Set.contains(Ljava/lang/Object;)": 2
+      },
+      "packets": [],
+      "lateArrays": [],
+      "lateLongBoxCount": 1,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.IntBatchRoot.execute": 1
+      },
+      "lateLongBoxes": [
+        {
+          "id": 19042,
+          "block": "593",
+          "origin": "thc.runtime.IntBatchRoot.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.IntBatchRoot.execute(IntThunkExperiment.kt:104) [bci:354]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "compilationId": 1878,
+      "rootInstanceId": 3,
+      "rootKey": "TruffleIR.Tier2.IntBatchRoot@62deb540() [rootId=3]",
+      "bgv": "TruffleHotSpotCompilation-1878[IntBatchRoot@62deb540].bgv"
+    }
+  ],
+  "latestCompilationByRoot": {
+    "TruffleIR.Tier2.IntProducerRoot@399625be() [rootId=2]": 1791,
+    "TruffleIR.Tier2.IntBatchRoot@62deb540() [rootId=3]": 1878
+  }
+}

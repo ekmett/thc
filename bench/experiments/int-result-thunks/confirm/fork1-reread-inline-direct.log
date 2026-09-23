@@ -1,0 +1,17 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/Documents/Codex/2026-09-23/thc-selector-space-leaks/work/intthunk-gradle-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+{"event":"configuration","action":"bench","javaVersion":"25.0.4.1","classOwnedLayouts":"true","boxedValueCache":false,"candidateFields":{"entryOrFailure":"java.lang.Object","environment":"thc.runtime.CapturedFrame","state":"int","payload":"long"}}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=2     IntProducerRoot@85a9e4                             |Tier 2|Time    50(  48+2   )ms|AST    1|Inlined   0Y   0N|IR     61/    97|CodeSize     740|Addr 0x00013fb60840|CompId 1764   |UTC 2026-09-23T11:45:58.576|Src n/a
+[engine] opt done   engine=1  id=4     IntBatchRoot@2dd358ae                              |Tier 2|Time    44(  11+33  )ms|AST   14|Inlined   0Y   0N|IR    556/  3022|CodeSize   12932|Addr 0x00013fb73bc0|CompId 1864   |UTC 2026-09-23T11:45:58.676|Src n/a
+{"event":"warmup","mode":"inline-direct","case":"reread","size":262144,"windows":5,"windowMillis":2000,"guestLastTierInstalled":true,"compiledEntries":28194,"producerLastTierInstalled":true}
+{"event":"sample","mode":"inline-direct","case":"reread","size":262144,"sample":0,"elapsedNs":2000163333,"checksum":-24207581750493184,"calls":5454,"allocatedBytes":305424,"allocatedCells":0,"forcedReads":1429733376,"operations":1429733376,"guestLastTierInstalled":true,"compiledEntries":5454}
+{"event":"sample","mode":"inline-direct","case":"reread","size":262144,"sample":1,"elapsedNs":2000088334,"checksum":-118786060257067008,"calls":5426,"allocatedBytes":303856,"allocatedCells":0,"forcedReads":1422393344,"operations":1422393344,"guestLastTierInstalled":true,"compiledEntries":5426}
+{"event":"sample","mode":"inline-direct","case":"reread","size":262144,"sample":2,"elapsedNs":2000238833,"checksum":313572698630127616,"calls":5554,"allocatedBytes":311024,"allocatedCells":0,"forcedReads":1455947776,"operations":1455947776,"guestLastTierInstalled":true,"compiledEntries":5554}
+{"event":"sample","mode":"inline-direct","case":"reread","size":262144,"sample":3,"elapsedNs":2000143417,"checksum":-1132126901398929408,"calls":5126,"allocatedBytes":287056,"allocatedCells":0,"forcedReads":1343750144,"operations":1343750144,"guestLastTierInstalled":true,"compiledEntries":5126}
+{"event":"sample","mode":"inline-direct","case":"reread","size":262144,"sample":4,"elapsedNs":2000202917,"checksum":343972923864383488,"calls":5563,"allocatedBytes":311528,"allocatedCells":0,"forcedReads":1458307072,"operations":1458307072,"guestLastTierInstalled":true,"compiledEntries":5563}

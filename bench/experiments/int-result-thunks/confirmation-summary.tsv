@@ -1,0 +1,39 @@
+log	status	ns/op median	B/op median	last/first ns	window max/min
+fork1-force-all-inline-copy.log	valid	5.84779	72.0009	1.0054	1.0208
+fork1-force-all-inline-direct.log	valid	6.19627	56.0009	1.0209	1.1589
+fork1-force-all-ordinary.log	valid	5.57649	64.0009	1.0155	1.0245
+fork1-published-read-inline-direct.log	valid	1.4055	0.000213623	0.9852	1.0575
+fork1-published-read-ordinary.log	valid	0.775144	0.000213623	0.7981	1.8857
+fork1-reread-inline-direct.log	valid	1.39898	0.000213623	0.9804	1.0852
+fork1-reread-ordinary.log	valid	1.41712	0.000213623	1.0919	1.1653
+fork1-shared-inline-direct.log	valid	5.6763	56.0009	0.9649	1.1039
+fork1-shared-ordinary.log	valid	5.00737	48.0009	1.0342	1.0656
+fork2-force-all-inline-copy.log	valid	5.73375	72.0009	1.0322	1.0322
+fork2-force-all-inline-direct.log	valid	6.07304	56.0009	0.9745	1.0261
+fork2-force-all-ordinary.log	valid	5.82981	64.0009	0.9464	1.0584
+fork2-published-read-inline-direct.log	valid	1.38353	0.000213623	1.0482	1.0482
+fork2-published-read-ordinary.log	valid	0.717541	0.000213623	0.9673	1.0338
+fork2-reread-inline-direct.log	valid	1.36257	0.000213623	0.9857	1.0584
+fork2-reread-ordinary.log	valid	1.3015	0.000213623	1.0913	1.0913
+fork2-shared-inline-direct.log	valid	5.40561	56.0009	1.0233	1.0285
+fork2-shared-ordinary.log	valid	4.96842	48.0009	0.9801	1.0226
+fork3-force-all-inline-copy.log	valid	5.7021	72.0009	1.1177	1.1177
+fork3-force-all-inline-direct.log	valid	6.02236	56.0009	1.0000	1.0307
+fork3-force-all-ordinary.log	valid	5.57227	64.0009	1.0026	1.0191
+fork3-published-read-inline-direct.log	valid	1.33543	0.000213623	1.0400	1.0419
+fork3-published-read-ordinary.log	valid	0.693619	0.000213623	0.9936	1.0149
+fork3-reread-inline-direct.log	valid	1.41149	0.000213623	0.9853	1.1262
+fork3-reread-ordinary.log	valid	1.32332	0.000213623	0.9759	1.0321
+fork3-shared-inline-direct.log	valid	5.39184	56.0009	1.0058	1.0155
+fork3-shared-ordinary.log	valid	4.98603	48.0009	1.0100	1.0307
+
+case	mode	size	repeats	forks	fork median ns/op	fork min..max	ratio to ordinary
+force-all	inline-copy	65536	1	3	5.73375	5.7021..5.84779	1.0282
+force-all	inline-direct	65536	1	3	6.07304	6.02236..6.19627	1.0890
+force-all	ordinary	65536	1	3	5.57649	5.57227..5.82981	1.0000
+published-read	inline-direct	262144	1	3	1.38353	1.33543..1.4055	1.9282
+published-read	ordinary	262144	1	3	0.717541	0.693619..0.775144	1.0000
+reread	inline-direct	262144	1	3	1.39898	1.36257..1.41149	1.0572
+reread	ordinary	262144	1	3	1.32332	1.3015..1.41712	1.0000
+shared	inline-direct	65536	1	3	5.40561	5.39184..5.6763	1.0842
+shared	ordinary	65536	1	3	4.98603	4.96842..5.00737	1.0000
