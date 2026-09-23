@@ -1,0 +1,197 @@
+{
+  "schema": 1,
+  "sourceRuntimeRevision": "b048144c75a775f6f1538bf7e1b04119f39a1163",
+  "sourceEvidence": "bench/experiments/word32x4-foundation/evidence-x86_64/evidence.json",
+  "sourceEvidenceSha256": "7c5db7afdf0d062e2cd7f1c8c6ef55977d869cba002d4060b8e8b3f85440faf0",
+  "signedReader": "bench/experiments/int32x4-multiply/runtime-audit.py",
+  "signedReaderSha256": "ef4c2603dd04315517faa6351f3e2fdc81736258569ecac7214b784df28e9690",
+  "graphCount": 4,
+  "unsignedLaneChains": 16,
+  "scope": "Four real same-arity Word32 multiplication captures pass their original unsigned reader and fail the full signed Int32 multiply reader specifically at required SignExtend32to64. Inputs were not mutated. No signed native/capture execution is claimed.",
+  "records": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "timesCase",
+      "sourceCompressedGraph": "bench/experiments/word32x4-foundation/evidence-x86_64/pre-ast-timesCase/graph.json.gz",
+      "compressedSha256": "4a5ca07d782c63075c7c8a0dd4743e5c9462542bc14b669439513020f210aaea",
+      "decodedSha256": "2e1c9ef8f26d76acfa08459812a9d7a71131b740e83ae701e936f35c72e17737",
+      "hostArity": 2,
+      "originalUnsignedReaderAccepted": true,
+      "signedReaderAccepted": false,
+      "signedReaderRejection": "Int32 output must sign-extend exactly 32 to 64 bits",
+      "unsignedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 4263,
+          "zeroExtend": 2972,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 1,
+          "cut": 4265,
+          "zeroExtend": 2995,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 2,
+          "cut": 4267,
+          "zeroExtend": 3018,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 3,
+          "cut": 4269,
+          "zeroExtend": 3041,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        }
+      ]
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "timesCase",
+      "sourceCompressedGraph": "bench/experiments/word32x4-foundation/evidence-x86_64/pre-bytecode-timesCase/graph.json.gz",
+      "compressedSha256": "9b962902a28d53f98f9ca88f7ada44f5e2371e629c59b201e5b77429eb203738",
+      "decodedSha256": "1884c9ad3a5a8aa4711fe75964771c467a56e3994ca426205795a4f18ce25c8e",
+      "hostArity": 2,
+      "originalUnsignedReaderAccepted": true,
+      "signedReaderAccepted": false,
+      "signedReaderRejection": "Int32 output must sign-extend exactly 32 to 64 bits",
+      "unsignedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 3912,
+          "zeroExtend": 2839,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 1,
+          "cut": 3914,
+          "zeroExtend": 2861,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 2,
+          "cut": 3916,
+          "zeroExtend": 2883,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 3,
+          "cut": 3918,
+          "zeroExtend": 2905,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "timesCase",
+      "sourceCompressedGraph": "bench/experiments/word32x4-foundation/evidence-x86_64/post-ast-timesCase/graph.json.gz",
+      "compressedSha256": "ff51dca917a2cb1738f873d09a28dafb2a2bef0e7e5bdd027ebb092063ab959e",
+      "decodedSha256": "0e3a92ef40d47936376942abfc991ccee5fe950f4e67347882b4ea1e63eaf023",
+      "hostArity": 2,
+      "originalUnsignedReaderAccepted": true,
+      "signedReaderAccepted": false,
+      "signedReaderRejection": "Int32 output must sign-extend exactly 32 to 64 bits",
+      "unsignedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 4263,
+          "zeroExtend": 2972,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 1,
+          "cut": 4265,
+          "zeroExtend": 2995,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 2,
+          "cut": 4267,
+          "zeroExtend": 3018,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 3,
+          "cut": 4269,
+          "zeroExtend": 3041,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        }
+      ]
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "timesCase",
+      "sourceCompressedGraph": "bench/experiments/word32x4-foundation/evidence-x86_64/post-bytecode-timesCase/graph.json.gz",
+      "compressedSha256": "6b556d3909b39bfc42839d4a73d20b876652e2fc9193fd25576c0c52a478336c",
+      "decodedSha256": "13434592962f53f404a6fcc31c873e01a3cdf0b909d31b2912b6d4088130db39",
+      "hostArity": 2,
+      "originalUnsignedReaderAccepted": true,
+      "signedReaderAccepted": false,
+      "signedReaderRejection": "Int32 output must sign-extend exactly 32 to 64 bits",
+      "unsignedLaneChains": [
+        {
+          "lane": 0,
+          "cut": 3912,
+          "zeroExtend": 2839,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 1,
+          "cut": 3914,
+          "zeroExtend": 2861,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 2,
+          "cut": 3916,
+          "zeroExtend": 2883,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        },
+        {
+          "lane": 3,
+          "cut": 3918,
+          "zeroExtend": 2905,
+          "inputBits": 32,
+          "resultBits": 64,
+          "publicReturnConnected": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "captures": 4,
+  "verifiedCaptureHashes": 28,
+  "nativeCompiledComparisons": 3728,
+  "signedLaneChains": 16,
+  "virtualFrameMetadata": [
+    {
+      "capture": "pre-bytecode-timesCase",
+      "node": 109,
+      "properties": {
+        "id": "109",
+        "idx": "109",
+        "stamp": "a!# byte[]",
+        "hasIdentity": true,
+        "objectId": -1,
+        "componentType": "byte",
+        "length": 16,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]",
+        "relativeFrequency": 1.0,
+        "nodeToBlock": "B0",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "VirtualArray(-1) byte[16]",
+        "class": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+        "block": "0"
+      }
+    },
+    {
+      "capture": "post-bytecode-timesCase",
+      "node": 109,
+      "properties": {
+        "id": "109",
+        "idx": "109",
+        "stamp": "a!# byte[]",
+        "hasIdentity": true,
+        "objectId": -1,
+        "componentType": "byte",
+        "length": 16,
+        "nodeSourcePosition": "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:34]",
+        "relativeFrequency": 1.0,
+        "nodeToBlock": "B0",
+        "nodeCostSize": "NodeSize.SIZE_0",
+        "nodeCostCycles": "NodeCycles.CYCLES_0",
+        "category": "floating",
+        "name": "VirtualArray(-1) byte[16]",
+        "class": "jdk.graal.compiler.nodes.virtual.VirtualArrayNode",
+        "block": "0"
+      }
+    }
+  ],
+  "oppositeUnsignedCaptures": 4,
+  "unsignedControlScope": "Original committed Word32 multiplication graphs; full signed reader rejects exact widening.",
+  "guestExecutionRepeated": false
+}

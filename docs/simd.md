@@ -11,6 +11,11 @@ distinct from each other and from unboxed tuples. Pack consumes the ordinary
 tuple writer into typed local slots, and unpack writes typed local slots. Neither operation allocates a
 tuple or a payload array.
 
+Int32X4 also supports [signed wrapping multiplication](int32x4-multiply.md):
+the low 32 product bits are retained and unpack sign-extends them. The newer
+slice has its own native/model corpus and strict compiled-code checks, separate
+from the original add/subtract evidence below.
+
 An interpreter/deoptimized Int64X2 value has two immutable primitive `long`
 fields. Int32X4 has four immutable primitive `int` fields, also a 16-byte payload.
 Int32 tuple lanes use the existing primitive `long` local slots: pack narrows to
@@ -27,7 +32,7 @@ that execute vectors must add `--add-modules=jdk.incubator.vector` too.
 This first slice rejects vector function arguments/results, PAP prefixes,
 closure captures, ordinary let bindings, join arguments/results, constructor
 fields, vector leaves inside unboxed tuples, and other lane types/widths. Arrays,
-loads/stores, shuffle, insertion, integer multiplication, quotient and remainder primops
+loads/stores, shuffle, insertion, Int64X2 multiplication, quotient and remainder primops
 remain unsupported. A vector-valued case/local expression is supported when GHC
 retains it within one scalar root. GHC can turn a source-local expression into a
 join with vector formals; the native `branchCase` fixture records that explicit

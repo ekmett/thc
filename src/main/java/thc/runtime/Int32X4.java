@@ -19,5 +19,6 @@ public final class Int32X4 {
     }
     public static Int32X4 add(Int32X4 a, Int32X4 b) { return lanes(a.vector().add(b.vector())); }
     public static Int32X4 subtract(Int32X4 a, Int32X4 b) { return lanes(a.vector().sub(b.vector())); }
+    public static Int32X4 multiply(Int32X4 a, Int32X4 b) { return lanes(a.vector().mul(b.vector())); }
     public static Int32X4 negate(Int32X4 a) { return lanes(a.vector().neg()); }
 }

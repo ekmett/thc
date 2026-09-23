@@ -24,6 +24,7 @@ OPERATIONS.update({
     'plusInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
     'minusInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
     'negateInt32X4#': ([VECTOR32_REP], VECTOR32_REP),
+    'timesInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
 })
 VECTOR16_REP = {'kind': 'vector', 'primReps': ['VecRep 8 Int16ElemRep'], 'evaluated': True,
                 'vector': {'lanes': 8, 'element': 'Int16ElemRep'}}
