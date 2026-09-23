@@ -19,6 +19,7 @@ import java.security.MessageDigest
 class MutVarTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val names = listOf("stRef", "lazyRef", "closureRef", "orderedRef", "unliftedRef", "stLoop")
+    private val equalityNames = listOf("stRefEquality", "lazyRefEquality")
     private fun manifest() = Json.parse(File(root, "build/mutvar/manifest.json").readText()) as Map<String, Any?>
     private fun merged(paths: List<String>) = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
@@ -26,6 +27,15 @@ class MutVarTest {
     private fun mathematical(name: String, seed: Long): Long {
         val x = BigInteger.valueOf(seed)
         return when (name) {
+            "stRefEquality", "lazyRefEquality" -> {
+                val score = BigInteger.valueOf(if (seed < 0) 5 else 1)
+                if (name == "lazyRefEquality") x + score * BigInteger.valueOf(17)
+                else {
+                    val left = if (seed < 0) x + BigInteger.valueOf(17) else x
+                    val right = if (seed < 0) x else x + BigInteger.valueOf(17)
+                    left * BigInteger.valueOf(257) + right * BigInteger.valueOf(65537) + score * BigInteger.valueOf(17)
+                }
+            }
             "lazyRef" -> x + BigInteger.valueOf(5)
             "closureRef" -> x * BigInteger.valueOf(4) + BigInteger.valueOf(11)
             "unliftedRef" -> x * BigInteger.valueOf(258) + BigInteger.ONE
@@ -53,7 +63,9 @@ class MutVarTest {
     @Test fun nativeSTRefWithInliningAndBoundedGraalSpeculationWarmup() = native(true,
         recoverLoop = System.getenv("THC_MUTVAR_REQUIRE_INITIAL_STABILITY") != "true")
     @Test fun nativeSTRefAcrossResidualCalls() = native(false)
-    private fun native(inlining: Boolean, recoverLoop: Boolean = false) {
+    @Test fun publicSTRefEqualityWithInlining() = native(true, entryNames = equalityNames)
+    @Test fun publicSTRefEqualityAcrossResidualCalls() = native(false, entryNames = equalityNames)
+    private fun native(inlining: Boolean, recoverLoop: Boolean = false, entryNames: List<String> = names) {
         val manifest = manifest()
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
@@ -61,11 +73,11 @@ class MutVarTest {
             assertEquals(expected, actual, "Stale MutVar fixture: $path; rerun prepare-mutvar.py")
         }
         val rows = File(root, "build/mutvar/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(names.toSet(), rows.keys)
+        assertEquals((names + equalityNames).toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val module = merged(paths)
-            for (name in names) {
+            for (name in entryNames) {
                 val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
                 cases.forEach { (input, native) -> assertEquals(mathematical(name, input), native, "Native $name($input)") }
                 for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->

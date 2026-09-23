@@ -90,3 +90,57 @@ stLoop raw = case runST (do
     let go 0 = readSTRef r
         go n = modifySTRef' r (\x -> x * 3 + n) >> go (n - 1)
     go (abs (I# raw `rem` 33))) of I# value -> value
+
+-- Use the public Eq instance, which compares the underlying MutVar# identity.
+-- Opaque calls keep both the public wrapper and its pointer comparison reachable.
+{-# OPAQUE sameRef #-}
+sameRef :: STRef s a -> STRef s a -> Int
+sameRef left right = if left == right then 1 else 0
+
+{-# OPAQUE aliasRef #-}
+aliasRef :: STRef s a -> STRef s a
+aliasRef reference = reference
+
+{-# OPAQUE selectRef #-}
+selectRef :: Int# -> STRef s a -> STRef s a -> STRef s a
+selectRef raw left right = if isTrue# (raw <# 0#) then left else right
+
+-- Keep the post-write comparison inside an opaque ST action so GHC cannot
+-- replace it with the caller's pre-write score by common-subexpression sharing.
+{-# OPAQUE writeAndScore #-}
+writeAndScore :: STRef s a -> a -> STRef s a -> STRef s a -> ST s Int
+writeAndScore selected value left right = do
+    writeSTRef selected value
+    pure (sameRef left (aliasRef left) + 2 * sameRef left right + 4 * sameRef left selected)
+
+-- Distinct cells start with the same payload. Writes through the selected alias
+-- change only that cell's contents, while all identity answers remain unchanged.
+{-# OPAQUE stRefEquality #-}
+stRefEquality :: Int# -> Int#
+stRefEquality raw = case runST (do
+    let payload = I# raw
+    a <- newSTRef payload
+    b <- newSTRef payload
+    let alias = aliasRef a
+        selected = selectRef raw a b
+    case sameRef a alias + 2 * sameRef a b + 4 * sameRef a selected of
+      I# before -> do
+        after <- writeAndScore selected (payload + 17) a b
+        left <- readSTRef a
+        right <- readSTRef b
+        pure (left * 257 + right * 65537 + I# before + 16 * after)) of I# value -> value
+
+-- Equality must not read/force a cell's payload. Box has no Eq instance, and
+-- both cells contain the same bottom before and after the ordered writes.
+{-# OPAQUE lazyRefEquality #-}
+lazyRefEquality :: Int# -> Int#
+lazyRefEquality raw = case runST (do
+    a <- newSTRef bottom
+    b <- newSTRef bottom
+    let alias = aliasRef a
+        selected = selectRef raw a b
+    case sameRef a alias + 2 * sameRef a b + 4 * sameRef a selected of
+      I# before -> do
+        writeSTRef a bottom
+        after <- writeAndScore selected bottom a b
+        pure (I# raw + I# before + 16 * after)) of I# value -> value
