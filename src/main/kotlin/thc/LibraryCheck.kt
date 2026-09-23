@@ -2,6 +2,7 @@ package thc
 
 import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.Source
 import org.graalvm.polyglot.Value
 import java.io.File
 import java.security.MessageDigest
@@ -83,12 +84,15 @@ fun main(args: Array<String>) {
             require(warm.map { it.first }.toSet().intersect(cold.map { it.first }.toSet()).isEmpty())
             val all = warm + cold
             require(all.map { it.first }.toSet().size == all.size)
-            fun request(mode: Boolean) = CoreModules.request(modules, name,
-                instrument = true, diagnosticUnsupported = mode, backend = backend)
+            // Each entry is loaded once per fresh context. A cached Source can keep
+            // its complete Core transport alive even after that context closes.
+            fun request(mode: Boolean) = Source.newBuilder("thc", CoreModules.request(modules, name,
+                instrument = true, diagnosticUnsupported = mode, backend = backend), "library:$name")
+                .cached(false).buildLiteral()
             if (execution == "frontier") {
                 executionContext().use { context ->
                     val failure = try {
-                        context.eval("thc", request(false))
+                        context.eval(request(false))
                         error("Strict loading unexpectedly accepted unsupported entry $name")
                     } catch (exception: PolyglotException) { exception }
                     check(failure.message.orEmpty().contains("Unsupported") ||
@@ -130,18 +134,18 @@ fun main(args: Array<String>) {
                 .option("engine.Compilation", "false").build().use { context ->
                 if (diagnostic) {
                     val failure = try {
-                        context.eval("thc", request(false))
+                        context.eval(request(false))
                         error("Strict loading unexpectedly accepted diagnostic entry $name")
                     } catch (exception: PolyglotException) { exception }
                     println("LIBRARY_STRICT_REJECTION\t$backend\t$name\t${failure.message}")
                 }
-                val function = context.eval("thc", request(diagnostic))
+                val function = context.eval(request(diagnostic))
                 checkRows(function, all, "interpreted", compiled = false)
                 check(count(function, "compiledEntries") == 0L)
             }
             // Fresh state makes the cold inputs genuinely unseen by this compilation.
             executionContext().use { context ->
-                val function = context.eval("thc", request(diagnostic))
+                val function = context.eval(request(diagnostic))
                 repeat(40) { index ->
                     val (input, expected) = warm[index % warm.size]
                     check(function.execute(input).asLong() == expected)

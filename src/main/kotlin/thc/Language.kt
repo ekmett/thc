@@ -107,11 +107,23 @@ object CoreModules {
         return module + ("bindings" to bindings.filter { it["id"] in reachable })
     }
 
-    @Suppress("UNCHECKED_CAST")
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
-                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true): String = Json.stringify(mapOf(
-        "modules" to paths.map { Json.parse(File(it).readText()) as Map<String, Any?> },
-        "entry" to entry, "instrument" to instrument, "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend, "sourceNotesEnabled" to sourceNotesEnabled))
+                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true): String {
+        val options = StringBuilder().also { Json.appendObjectDocument(it,
+            Json.stringify(mapOf("entry" to entry, "instrument" to instrument,
+                "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend, "sourceNotesEnabled" to sourceNotesEnabled))) }
+        return buildString {
+            append(options, 0, options.length - 1)
+            append(",\"modules\":[")
+            paths.forEachIndexed { index, path ->
+                if (index != 0) append(',')
+                // Validate each complete document before embedding it. Language.parse
+                // materializes the modules once; all bindings and metadata travel intact.
+                Json.appendObjectDocument(this, File(path).readText())
+            }
+            append("]}")
+        }
+    }
 }
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",

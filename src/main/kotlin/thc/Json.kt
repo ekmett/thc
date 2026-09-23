@@ -5,6 +5,29 @@ object Json {
     fun parse(text: String): Any? = Reader(text).readDocument()
     fun stringify(value: Any?): String = buildString { appendJson(value) }
 
+    /** Preserve a complete module document without materializing its transport tree twice. */
+    internal fun appendObjectDocument(destination: StringBuilder, text: String) {
+        Reader(text, materializeValues = false).readDocument(objectOnly = true)
+        // A small Unicode string near the end must not widen a huge ASCII Core
+        // bundle to UTF-16. Escape only string contents, preserving numeric syntax.
+        var quoted = false
+        var escaped = false
+        var start = 0
+        for (index in text.indices) {
+            val c = text[index]
+            if (quoted && c.code > 127) {
+                destination.append(text, start, index)
+                destination.append("\\u")
+                for (shift in 12 downTo 0 step 4) destination.append("0123456789abcdef"[(c.code ushr shift) and 15])
+                start = index + 1
+            }
+            if (escaped) escaped = false
+            else if (quoted && c == '\\') escaped = true
+            else if (c == '"') quoted = !quoted
+        }
+        destination.append(text, start, text.length)
+    }
+
     // Write each value into the document buffer. Returning strings recursively
     // copies complete Core subtrees once for every enclosing object and array.
     private fun StringBuilder.appendJson(value: Any?) {
@@ -57,9 +80,11 @@ object Json {
         append(']')
     }
 
-    private class Reader(val text: String) {
+    private class Reader(val text: String, private val materializeValues: Boolean = true) {
         var at = 0
-        fun readDocument(): Any? {
+        fun readDocument(objectOnly: Boolean = false): Any? {
+            whitespace()
+            require(!objectOnly || text.getOrNull(at) == '{') { "Expected JSON object document" }
             val value = value()
             whitespace()
             require(at == text.length) { "Trailing JSON at $at" }
@@ -91,49 +116,54 @@ object Json {
             return false
         }
         fun need(c: Char) { require(take(c)) { "Expected $c at $at" } }
-        fun objectValue(): Map<String, Any?> {
+        fun objectValue(): Map<String, Any?>? {
             need('{')
-            val result = linkedMapOf<String, Any?>()
+            val result = if (materializeValues) linkedMapOf<String, Any?>() else null
+            val keys = if (materializeValues) null else hashSetOf<String>()
             if (take('}')) return result
             do {
                 whitespace()
-                val key = string()
-                require(!result.containsKey(key)) { "Duplicate JSON key: $key" }
+                // Validation must decode keys too: "x" and "\u0078" are duplicates.
+                val key = string(materialize = true)!!
+                require(if (result != null) !result.containsKey(key) else keys!!.add(key)) { "Duplicate JSON key: $key" }
                 need(':')
-                result[key] = value()
+                val field = value()
+                if (result != null) result[key] = field
                 if (take('}')) return result
                 need(',')
             } while (true)
         }
-        fun arrayValue(): List<Any?> {
+        fun arrayValue(): List<Any?>? {
             need('[')
-            val result = mutableListOf<Any?>()
+            val result = if (materializeValues) mutableListOf<Any?>() else null
             if (take(']')) return result
             do {
-                result.add(value())
+                val element = value()
+                result?.add(element)
                 if (take(']')) return result
                 need(',')
             } while (true)
         }
-        fun string(): String {
+        fun string(materialize: Boolean = materializeValues): String? {
             need('"')
-            val result = StringBuilder()
+            val result = if (materialize) StringBuilder() else null
             while (at < text.length) {
                 val c = text[at++]
-                if (c == '"') return result.toString()
+                if (c == '"') return result?.toString()
                 require(c.code >= 32) { "Control character in JSON string" }
-                if (c != '\\') { result.append(c); continue }
+                if (c != '\\') { result?.append(c); continue }
                 require(at < text.length) { "Incomplete JSON escape" }
                 when (val e = text[at++]) {
-                    '"', '\\', '/' -> result.append(e)
-                    'b' -> result.append('\b')
-                    'f' -> result.append('\u000c')
-                    'n' -> result.append('\n')
-                    'r' -> result.append('\r')
-                    't' -> result.append('\t')
+                    '"', '\\', '/' -> result?.append(e)
+                    'b' -> result?.append('\b')
+                    'f' -> result?.append('\u000c')
+                    'n' -> result?.append('\n')
+                    'r' -> result?.append('\r')
+                    't' -> result?.append('\t')
                     'u' -> {
                         require(at + 4 <= text.length) { "Incomplete unicode escape" }
-                        result.append(text.substring(at, at + 4).toInt(16).toChar())
+                        val decoded = text.substring(at, at + 4).toInt(16).toChar()
+                        result?.append(decoded)
                         at += 4
                     }
                     else -> error("Unknown JSON escape: $e")
