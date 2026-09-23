@@ -130,6 +130,7 @@ jobs:
       - name: Check exact dependency auditor and library frontier
         run: |
           python3 scripts/test-audit-core.py
+          python3 scripts/test-sum-layout.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
@@ -181,6 +182,7 @@ jobs:
             build/scalar-signatures/provenance.json
             build/aggregate-native/oracle.tsv
             build/aggregate-layout/
+            build/sum-layout/
             build/tuple-return/
             build/state-tuple/checks.json
             build/state-tuple/provenance.json
