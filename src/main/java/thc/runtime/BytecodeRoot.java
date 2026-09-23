@@ -26,6 +26,8 @@ import thc.Language;
         defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
+    @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
+    public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
 
     protected BytecodeRoot(Language language, FrameDescriptor descriptor) {
         super(language, descriptor);
@@ -36,7 +38,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Override public final String toString() { return label; }
     @Override public final long bloom(VirtualFrame frame) {
         // Self backedges restore DSL locals, leaving the incoming ancestry intact.
-        return (long) frame.getArguments()[0] | mask;
+        if (typedBloom == null) return (long) frame.getArguments()[0] | mask;
+        try { return typedBloom.getLong(getBytecodeNode(), frame); }
+        catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) { throw fail("Invalid typed input bloom"); }
     }
 
     /** Constant metadata must stay out of the guest operand stack during PE. */
@@ -252,6 +256,73 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setLong(bytecode, frame, a);
             second.setLong(bytecode, frame, b);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
+    public static final class RestoreTypedInput {
+        @Specialization public static void restore(VirtualFrame frame, BytecodeTypedInputSlots slots,
+                @Bind("$node") Node node) {
+            slots.enter(frame, (BytecodeRoot) node.getRootNode());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
+    public static final class RestoreTypedTail {
+        @Specialization public static void restore(VirtualFrame frame, BytecodeTypedInputSlots slots,
+                TailCall transfer, @Bind("$node") Node node) {
+            slots.tail(frame, (BytecodeRoot) node.getRootNode(), transfer);
+        }
+    }
+
+    /** Only the function is a stack operand; aggregate fields stay in typed locals. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeInputSource.class, name = "source")
+    @ConstantOperand(type = boolean.class, name = "tail")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyTypedInput {
+        @Specialization public static Object apply(VirtualFrame frame, BytecodeInputSource source, boolean tail,
+                Metrics metrics, Closure function, @Bind("$node") Node node,
+                @Cached(value = "create(source, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
+            try {
+                return dispatch.execute(frame, function, null);
+            } catch (TailCall transfer) {
+                if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return transfer;
+            } finally {
+                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+            }
+        }
+        public static InputDispatch create(BytecodeInputSource source, boolean tail, Metrics metrics) {
+            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics, null, 0);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeInputSource.class, name = "source")
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "tail")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyTypedInputTuple {
+        @Specialization public static Object apply(VirtualFrame frame, BytecodeInputSource source,
+                BytecodeTupleSlots destination, boolean tail, Metrics metrics, Closure function, @Bind("$node") Node node,
+                @Cached(value = "create(source, destination, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
+            try {
+                return dispatch.execute(frame, function, null);
+            } catch (TailCall transfer) {
+                if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return transfer;
+            } finally {
+                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+            }
+        }
+        public static InputDispatch create(BytecodeInputSource source, BytecodeTupleSlots destination,
+                boolean tail, Metrics metrics) {
+            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics, destination, 0);
         }
     }
 

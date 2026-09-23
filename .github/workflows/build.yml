@@ -140,6 +140,7 @@ jobs:
           python3 scripts/test-core-enums.py
           python3 scripts/test-sum-layout.py
           python3 scripts/test-core-sums.py
+          python3 scripts/test-tuple-inputs.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
@@ -196,6 +197,7 @@ jobs:
             build/floating/oracle.tsv
             build/floating-tuple/
             build/empty-tuple-input/
+            build/tuple-input/
             build/sqrt/
             build/tag-to-enum/
             build/show-int/manifest.json

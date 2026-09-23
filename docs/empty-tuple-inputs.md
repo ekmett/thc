@@ -4,9 +4,10 @@ Both backends accept ordinary function arguments whose exact GHC proof is
 `aggregate: unboxed-tuple`, `kind: unknown`, `components: []`, `primReps: []`.
 These are `(# #)` values. Boxed `()` remains one lifted reference, while `State#`
 remains a scalar void value with its existing convention and primitive contracts.
-Nested empty tuples, singleton tuples containing State, nonempty aggregates,
-sums, unresolved shapes, aggregate captures, ordinary aggregate let bindings and
-aggregate join arguments remain outside this slice.
+The later [typed tuple input slice](tuple-inputs.md) adds nested and nonempty
+tuples, including singleton State components. Sums, unresolved shapes, aggregate
+captures, ordinary aggregate let bindings and aggregate join arguments remain
+unsupported.
 
 An immutable argument layout separates logical arity from scalar payload offsets.
 An empty argument consumes one logical parameter but contributes no array element,

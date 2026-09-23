@@ -1,14 +1,20 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
-/** Lowering-only proof checks for known function inputs. Runtime masks cover unknown
+/** Lowering-only proof checks for known function inputs. Runtime layouts cover unknown
  * higher-order targets. No scalar signature is inferred from a physical carrier. */
 internal object CoreInputCalls {
     private data class Binding(val proof: CoreRepresentation, val inputs: List<CoreRepresentation>?)
-    fun validate(bindings: List<Map<String, Any?>>) {
+    fun validate(bindings: List<Map<String, Any?>>, constructors: Map<String, Map<String, Any?>> = emptyMap()) {
         val globals = bindings.associateBy { it["id"] as String }
         fun inputs(expr: List<Any?>, scope: Map<String, Binding>, seen: Set<String> = emptySet()): List<CoreRepresentation>? = when (expr[0]) {
             "lam" -> (expr[1] as List<Map<String, Any?>>).map(CoreRepresentations::binder)
+            "con" -> constructors[expr[1]]?.takeIf { (it["kind"] ?: "boxed") == "boxed" }?.let { constructor ->
+                val arity = (constructor["arity"] as? Number)?.toInt() ?: throw RuntimeFault("Missing constructor arity")
+                val fields = constructor["fieldTypes"] as? List<*>
+                if (fields != null && fields.size != arity) throw RuntimeFault("Constructor field type count mismatch")
+                fields?.map(CoreRepresentations::parse) ?: List(arity) { CoreRepresentation.UNKNOWN }
+            }
             "var" -> {
                 val id = expr[1] as String
                 if (id in scope) scope.getValue(id).inputs
@@ -34,9 +40,9 @@ internal object CoreInputCalls {
                         for (i in 0 until minOf(signature.size, args.size)) {
                             val actual = proof(args[i], scope)
                             val expected = signature[i]
-                            if (expected.isEmptyTuple || actual.isEmptyTuple) {
-                                if (!expected.isEmptyTuple || !actual.isEmptyTuple)
-                                    throw UnsupportedCore("Missing or conflicting exact empty tuple argument proof")
+                            if (expected.isTuple || actual.isTuple) {
+                                if (!expected.isTuple || !actual.isTuple || !TupleShape.compatible(expected, actual))
+                                    throw UnsupportedCore("Missing or conflicting exact tuple argument proof")
                             } else if (expected.isAggregate || actual.isAggregate) TupleShape.requireCompatible(expected, actual, component = true)
                         }
                     }

@@ -1,0 +1,765 @@
+{
+  "scope": "Two final-source bytecode inline controls after legacy scalar-read correction; pre-Tidy native inputs, no timing",
+  "launch": {
+    "runtimeCommit": "7bddb65ab2e0385e147c3b76971f77fe32caec20",
+    "runtimeSourceSha256": {
+      "build.gradle.kts": "dffdea84f3d67a80a6bb8d66dfd854a60f731337fc70cdcd70d332dd2e1fb372",
+      "gradle.properties": "f38a9939f2ef20b9a128d5389c2600ffda875e4a86ccd1e9838b4716e021c4ea",
+      "gradle/wrapper/gradle-wrapper.jar": "7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d",
+      "gradle/wrapper/gradle-wrapper.properties": "d0bebe8133babb74ab29a31ee6616c56ef8985fc801e1fd16c61b5ed2189e907",
+      "gradlew": "a5a5c199ba02189ae8c46a334223371a20599d9c298ef65e7540ede4a3f72d59",
+      "gradlew.bat": "d539676c48b596afda64c963ec8f7ee56c7b3fe7e3b81d1dbe2d1a1e3dd9e9f8",
+      "settings.gradle.kts": "e380485e3d8c6b1fa35b73cd468f583be0cb864a4f0b2c0e5afc54348d0811a9",
+      "src/main/java/thc/runtime/BytecodeRoot.java": "901d469d642093629ba693be153de5e985bc04f6ad728aca7ad0c06f9241168e",
+      "src/main/java/thc/runtime/Calls.java": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+      "src/main/java/thc/runtime/DoubleX2.java": "1aab60107bd33d299ab12a90a81fc91511b6f3c9b93456eff987643cc3e89af0",
+      "src/main/java/thc/runtime/FloatX4.java": "0f898040f85dee1f8f0702eb73fb7b4fb168f4f16e52803435dc12841481b355",
+      "src/main/java/thc/runtime/Int16X8.java": "70c06e1d00de20fcbba47709a551ea032626e7737cc0ccd958e5eb3e8212df87",
+      "src/main/java/thc/runtime/Int32X4.java": "5cac5b334384165f47965d3d1b55d571e5310db2572335d10242cc046764ee3a",
+      "src/main/java/thc/runtime/Int64X2.java": "ba9a429eb8a9eb03c66d1c8c19cbed2694b90385c7638aa33ee121c3c7d2c469",
+      "src/main/java/thc/runtime/ManagedDoubleArray.java": "0980ec94078f9a359039d9dd5ea75fa6b80f69b80507564bd64695534e78ff70",
+      "src/main/java/thc/runtime/ManagedFloatArray.java": "18e4100e40a6420182c87c997d2aa1031cc93a9c0eac2f219b1e87a2a2e01cd6",
+      "src/main/java/thc/runtime/ManagedInt16Array.java": "dbb46bf063af02a961084e2388a4e65979f9185632c4870ed2c1daf7f69dc94e",
+      "src/main/java/thc/runtime/ManagedInt32Array.java": "0ba53ca4ce936ac69798b884107b72f169cb7a5cd769b262751a05f422f2eba1",
+      "src/main/java/thc/runtime/ManagedIntArray.java": "2f9d54e8092a43992ec5ccbef38c3e89f91fe8cff725cd5b210ab3c651823116",
+      "src/main/java/thc/runtime/RuntimeTypes.java": "7a743b5ffe597094d490605a56b0370044f10740f8b9818f1857ee1c413d9974",
+      "src/main/kotlin/thc/Json.kt": "e6749bb709a8c93ba42bea2c185dd7956c55e3adc733da8e5e34191575c9ab93",
+      "src/main/kotlin/thc/Language.kt": "52fad0fa562416f73d9de7446945801e2c2593a794dadeb61f7a39409f89038f",
+      "src/main/kotlin/thc/LibraryCheck.kt": "c058b9a5de5cb772a5c4e6e042bd89ea2d0f9702b5f018eaca264354b343b275",
+      "src/main/kotlin/thc/Main.kt": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6",
+      "src/main/kotlin/thc/MapCheck.kt": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11",
+      "src/main/kotlin/thc/Probe.kt": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7",
+      "src/main/kotlin/thc/runtime/Application.kt": "fd58eebcdd3684be2c646b7f756f7f323d7061870f630c835e759e6e7fe5ab74",
+      "src/main/kotlin/thc/runtime/ArgumentLayout.kt": "4db757d06d874e5995c6073e700c2e71dfc56f76b3b1497373b7ac50706fa649",
+      "src/main/kotlin/thc/runtime/AstSelfCalls.kt": "a3c6e3af547c367ed6190c069458e1ad9a125343bbe4f24198b79d21c6926a57",
+      "src/main/kotlin/thc/runtime/BitPrimitives.kt": "59a2222779fea7a5ff55222f5ea09c8445c1c640e97cc1d6bad67b480c908f5e",
+      "src/main/kotlin/thc/runtime/BloomValue.kt": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879",
+      "src/main/kotlin/thc/runtime/BytecodeProgram.kt": "c7f585306ac28f856cc65f59a7f1404132ca6b4bfdd4e998de873bbfd0519aea",
+      "src/main/kotlin/thc/runtime/BytecodeTypedInputSlots.kt": "d2e3e1fc0b3399e77aee444fa9714e9ce9dc6b226696d23b5b89b9f924af7f45",
+      "src/main/kotlin/thc/runtime/CaseCategories.kt": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea",
+      "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094",
+      "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d",
+      "src/main/kotlin/thc/runtime/CoreCallDemands.kt": "e109bdefd49f9db539d418227794eb8763d40c0ad635c78a5a2328e64d0d9196",
+      "src/main/kotlin/thc/runtime/CoreEntries.kt": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268",
+      "src/main/kotlin/thc/runtime/CoreFields.kt": "8a201d2cbb7a4ca8fc82f8607c5a4e48bec3be553b93314f07524a9726af616c",
+      "src/main/kotlin/thc/runtime/CoreInputCalls.kt": "523472fef8f5b89bbc19ec5335dfa6b46bae4b4fbcbefdf280aae64e7514ca67",
+      "src/main/kotlin/thc/runtime/CoreRepresentations.kt": "29142176213a2bbf74ac066237ec161cc480333187c2f0b93396d39c49d8cdc3",
+      "src/main/kotlin/thc/runtime/CoreSources.kt": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948",
+      "src/main/kotlin/thc/runtime/CoreVectors.kt": "27c3f69d49e2ce789e5899e56163a36e3f4c6dc3b570b29ba33aea4b2bb7402d",
+      "src/main/kotlin/thc/runtime/DataValues.kt": "df09bc47169cc74adca509a20fe2eaf8b99bb6822d90e52e465306bed41a5b6f",
+      "src/main/kotlin/thc/runtime/EntryArguments.kt": "80ec485f6c7c3d667d74f7f8b5d33804b0aa21bfd6eb97a8fdde5043dd99c7cf",
+      "src/main/kotlin/thc/runtime/EnumFamilies.kt": "67cb9a984c611f40afcb70ba3b17d90824002fc2500606bff00fc16019d773fb",
+      "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": "797bfd6afe21ca28b454007d9cc0bb1203baa3c397b504fcd9129e594910c293",
+      "src/main/kotlin/thc/runtime/Frames.kt": "1730379255ff11560a7746a05a3de4c7b6a90b468aa3e8b46397fa749365bd4d",
+      "src/main/kotlin/thc/runtime/GenericTypedInputs.kt": "d241cddbf7cd80d77ac7a4dd73e284f5a6cd2d6eb57be68ed13b15f4d3fce088",
+      "src/main/kotlin/thc/runtime/GuestExceptions.kt": "0bcd1d1e4dd6e694e4fa71d68f51617fcde73172bfe2bd5a5617fa369f01361b",
+      "src/main/kotlin/thc/runtime/GuestRoot.kt": "70755dd9613afc4ed723242fd9f73c1854334fbe9909c0bc47db5d0f14d08c1b",
+      "src/main/kotlin/thc/runtime/Handoff.kt": "3a15c560f6444874dfc67406349bd122bc5a6d140b72bcbd4b67d6c18453bbcb",
+      "src/main/kotlin/thc/runtime/LeadingCaseReturn.kt": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d",
+      "src/main/kotlin/thc/runtime/LiteralAddresses.kt": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69",
+      "src/main/kotlin/thc/runtime/LocalJoins.kt": "19e8a73bf271a6b0ace61edf2b75524105bec87ff2c20b0e2a19a68c4bb8c224",
+      "src/main/kotlin/thc/runtime/ManagedArrays.kt": "282a527b642c072a3f972992589240bca20529e4b3f4123cb172376d0d764c12",
+      "src/main/kotlin/thc/runtime/ManagedByteArrays.kt": "bb979b8bb3cfe98a6a16ae3ecf71329933b1a7bd653158505d693ee574ca69a4",
+      "src/main/kotlin/thc/runtime/ManagedMutVars.kt": "bf4f766cbc5b7af11cecae6c76d0101e162a0396918b838b1bc238c0cf3e6f4c",
+      "src/main/kotlin/thc/runtime/Program.kt": "b2bc55c793a911c499e11979aaf467441ec85648110ba8f942ccc7d1051c3ace",
+      "src/main/kotlin/thc/runtime/Scalar64Primitives.kt": "e39a7ba6a2409447fe5a519988badb8ffa9270fc08f58368bc421250d56a59f1",
+      "src/main/kotlin/thc/runtime/ScalarPrimitiveSignatures.kt": "ad8997270aca328adbc1b20207111c25152ef1a656183b2cb6aba7a3248ea6c2",
+      "src/main/kotlin/thc/runtime/SumResults.kt": "fe0956b8a8e754322a6099f550968d960afcfb74363b73472b1c6efcbb4e7f54",
+      "src/main/kotlin/thc/runtime/TupleArithmetic.kt": "af4fcfad9658e8908ecedae60f8ed34448f4f6c37b7bd03001d91098658459e6",
+      "src/main/kotlin/thc/runtime/TupleResults.kt": "8a301d42831cb2ddd04314e31691b0404ac4e197f8cff23049a46da40c4e8eab",
+      "src/main/kotlin/thc/runtime/TypedInputs.kt": "9f150a61df89cb312d0f477d290b170f4f1bc84b6d0d8e8f61fcd68d3f010bb6",
+      "src/main/kotlin/thc/runtime/Vector16Expressions.kt": "f7cf57f478f080bf3f84c0d171b50294e9662d25a160eb6a31753fe1b9cda54a",
+      "src/main/kotlin/thc/runtime/Vector32Expressions.kt": "859a021a585e60f9ca31e44519d0c911f1c83ce4acf30fbe9155305cc747316e",
+      "src/main/kotlin/thc/runtime/VectorDoubleExpressions.kt": "fe5dc7d571d409b41a23828ffec37711406687c39f2a88ed7f8f1c0999c1e23f",
+      "src/main/kotlin/thc/runtime/VectorExpressions.kt": "302658f2bd688ae05ff68f6de830884e9e58ae169c10f837930a31ae33fdb161",
+      "src/main/kotlin/thc/runtime/VectorFloatExpressions.kt": "c82683eb9996a1c2b4539472338346c4ae1c1663248a319f8fbcb5054ad68087",
+      "src/main/resources/thc/scalar-primop-signatures.json": "7c9c05e2e789d73ed3cd542a60a4fe87fde04e1eb0b1aa29744ea7b081c7756d"
+    },
+    "inputSha256": {
+      "/private/tmp/thc-tuple-inputs/bench/experiments/tuple-inputs/run_postfix.py": "e1ba912f99b1cc9e38aea251ced7fcecd7ab82b540f1b655933f3b5266b1baa4",
+      "/private/tmp/thc-tuple-inputs/bench/experiments/tuple-inputs/run.py": "700d2ae3c6487d7232bcd83b368da2be743811dab98625249156f4e0379332a4",
+      "/private/tmp/thc-tuple-inputs/bench/experiments/tuple-inputs/summarize.py": "3f3114d9d45c5bf280a97b898a4b846da9b6fc294f3cea56afb3173febb6de1d",
+      "/private/tmp/thc-tuple-inputs/bench/experiments/tuple-inputs/TupleInputGraphProbe.java": "f4283d1ac048468ebf7f75fee78098a52e801af06e2dd96d34f8a701d08756b9",
+      "/private/tmp/thc-tuple-inputs/tools/GraphInspect.java": "b2715478c253debc1b58332a8f5f5207a46efc2a35ac1e801c26d11717839db4",
+      "/private/tmp/thc-tuple-inputs/scripts/gradle.sh": "15dbcdadf5400baea636d22b8b89fecd76bebcfd120a7c1129e7de7ca8b695ef",
+      "/private/tmp/thc-tuple-inputs/build/tuple-input/pre-core/TupleInputAudit.json": "3975bbee67b08bc8923c7d230749d0a7046e281a60e3d057b1367293e85c5598",
+      "/private/tmp/thc-tuple-inputs/build/tuple-input/provenance.json": "be0550001e64ad5c13df02ff665e4e0acb76b7535997e557d1b0bc63603b366d",
+      "/private/tmp/thc-tuple-inputs/build/tuple-input/oracle.tsv": "669cefcc44578e1725c8252a14eb83799a186f9d75320418954348168576e9c6",
+      "/private/tmp/thc-tuple-inputs/build/tuple-input/oracle-pairs.tsv": "5eb0b40ba4000f0b0b6efa65565e35f4c93c7312dac16d8f5e2e5520a88c7546",
+      "/Users/ekmett/cadenza/.toolchains/graalvm-25.3.4.1+1.1/Contents/Home/release": "9e7b316e6b6c7c06aef25cabcd479de2a04f6d77b77826673938233f2f246f05",
+      "/private/tmp/thc-tuple-inputs/build/libs/thc-0.1-experiment.jar": "6019b6b3969fd5e47a584e0f06829b1e38d7c00fae6ecf360d20a9da1de99bbf",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+      "/private/tmp/thc-tuple-inputs/build/install/thc/lib/word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    },
+    "classpath": "/private/tmp/thc-typed-input-postfix-graphs/classes:/private/tmp/thc-tuple-inputs/build/libs/thc-0.1-experiment.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/annotations-13.0.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/collections-25.3.4.1.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/jniutils-25.3.4.1.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/kotlin-stdlib-2.4.20.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/nativeimage-25.3.4.1.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/polyglot-25.3.4.1.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/truffle-api-25.3.4.1.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/truffle-compiler-25.3.4.1.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/truffle-runtime-25.3.4.1.jar:/private/tmp/thc-tuple-inputs/build/install/thc/lib/word-25.3.4.1.jar",
+    "javaVersion": [
+      "java version \"25.0.4.1\" 2026-08-18 LTS",
+      "Java(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)",
+      "Java HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)"
+    ],
+    "nativeProvenance": {
+      "schema": 1,
+      "recordedAtUtc": "2026-09-23T23:14:30.417788+00:00",
+      "commands": [
+        {
+          "argv": [
+            "compiler/build.sh"
+          ],
+          "cwd": "/private/tmp/thc-tuple-inputs",
+          "environment": {}
+        },
+        {
+          "argv": [
+            "/Users/ekmett/.ghcup/bin/ghc",
+            "--make",
+            "-O2",
+            "-fforce-recomp",
+            "-dcore-lint",
+            "-icompiler/test-fixtures",
+            "-odir",
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/native",
+            "-hidir",
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/native",
+            "-o",
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/native/tuple-input",
+            "/private/tmp/thc-tuple-inputs/compiler/test-fixtures/TupleInputAuditNative.hs"
+          ],
+          "cwd": "/private/tmp/thc-tuple-inputs",
+          "environment": {}
+        },
+        {
+          "argv": [
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/native/tuple-input"
+          ],
+          "stdout": "/private/tmp/thc-tuple-inputs/build/tuple-input/oracle.tsv"
+        },
+        {
+          "argv": [
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/native/tuple-input",
+            "--pairs"
+          ],
+          "stdout": "/private/tmp/thc-tuple-inputs/build/tuple-input/oracle-pairs.tsv"
+        },
+        {
+          "argv": [
+            "compiler/export.sh",
+            "/private/tmp/thc-tuple-inputs/compiler/test-fixtures/TupleInputAudit.hs"
+          ],
+          "cwd": "/private/tmp/thc-tuple-inputs",
+          "environment": {
+            "THC_CORE_OUT": "/private/tmp/thc-tuple-inputs/build/tuple-input/pre-core",
+            "THC_GHC_OUT": "/private/tmp/thc-tuple-inputs/build/tuple-input/pre-ghc",
+            "THC_SOURCE_NOTES": "true"
+          }
+        },
+        {
+          "argv": [
+            "python3",
+            "scripts/audit-core.py",
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/pre-core/TupleInputAudit.json",
+            "--entry",
+            "pairCase",
+            "--entry",
+            "mixedCase",
+            "--entry",
+            "indirectCase",
+            "--entry",
+            "prefixCase",
+            "--entry",
+            "papCase",
+            "--entry",
+            "overCase",
+            "--entry",
+            "lazyCase",
+            "--entry",
+            "roundTripCase",
+            "--entry",
+            "selfCase",
+            "--entry",
+            "stateCase",
+            "--entry",
+            "nestedCase",
+            "--entry",
+            "deadCase",
+            "--entry",
+            "selfDepth",
+            "--entry",
+            "effectCase",
+            "--entry",
+            "pairInputs",
+            "--output",
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/pre-audit.json"
+          ],
+          "cwd": "/private/tmp/thc-tuple-inputs",
+          "environment": {}
+        },
+        {
+          "argv": [
+            "compiler/export.sh",
+            "-fplugin-opt=Thc.Plugin:post-tidy",
+            "/private/tmp/thc-tuple-inputs/compiler/test-fixtures/TupleInputAudit.hs"
+          ],
+          "cwd": "/private/tmp/thc-tuple-inputs",
+          "environment": {
+            "THC_CORE_OUT": "/private/tmp/thc-tuple-inputs/build/tuple-input/post-core",
+            "THC_GHC_OUT": "/private/tmp/thc-tuple-inputs/build/tuple-input/post-ghc",
+            "THC_SOURCE_NOTES": "true"
+          }
+        },
+        {
+          "argv": [
+            "python3",
+            "scripts/audit-core.py",
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/post-core/TupleInputAudit.json",
+            "--entry",
+            "pairCase",
+            "--entry",
+            "mixedCase",
+            "--entry",
+            "indirectCase",
+            "--entry",
+            "prefixCase",
+            "--entry",
+            "papCase",
+            "--entry",
+            "overCase",
+            "--entry",
+            "lazyCase",
+            "--entry",
+            "roundTripCase",
+            "--entry",
+            "selfCase",
+            "--entry",
+            "stateCase",
+            "--entry",
+            "nestedCase",
+            "--entry",
+            "deadCase",
+            "--entry",
+            "selfDepth",
+            "--entry",
+            "effectCase",
+            "--entry",
+            "pairInputs",
+            "--output",
+            "/private/tmp/thc-tuple-inputs/build/tuple-input/post-audit.json"
+          ],
+          "cwd": "/private/tmp/thc-tuple-inputs",
+          "environment": {}
+        }
+      ],
+      "sources": [
+        {
+          "path": "compiler/test-fixtures/TupleInputAudit.hs",
+          "sha256": "16f5195a56a9aab51756493cef6c112e67bfea30347fec17998c62198d2149dc"
+        },
+        {
+          "path": "compiler/test-fixtures/TupleInputAuditNative.hs",
+          "sha256": "2a5b1ae4e21973a27c7db638bd60ae719c9fcfc181574c353dff6a42207d1b37"
+        },
+        {
+          "path": "scripts/prepare-tuple-input-audit.py",
+          "sha256": "e5b2eab22181b6ffd3dcd1911ab8e54e9a026c3f7cb60e034b8f917b203d876e"
+        },
+        {
+          "path": "compiler/build.sh",
+          "sha256": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb"
+        },
+        {
+          "path": "compiler/export.sh",
+          "sha256": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489"
+        },
+        {
+          "path": "compiler/toolchain.sh",
+          "sha256": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614"
+        },
+        {
+          "path": "compiler/Thc/Cbv.hs",
+          "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c"
+        },
+        {
+          "path": "compiler/Thc/Demands.hs",
+          "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a"
+        },
+        {
+          "path": "compiler/Thc/Plugin.hs",
+          "sha256": "0473788fcbe35e91003d5d8794815eba596e449add1a0e6adc84b7b9c1a0dae7"
+        },
+        {
+          "path": "compiler/Thc/Sources.hs",
+          "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+        },
+        {
+          "path": "compiler/Thc/Wired.hs",
+          "sha256": "7f294ee018790266a571c9bf0f3b44e11d7732b3f07935d4f1ecf627157a81ea"
+        },
+        {
+          "path": "scripts/audit-core.py",
+          "sha256": "004acf2812a0cfb7dad83396a826a86cd6328412d1676e60f18b9d4ae61bba96"
+        },
+        {
+          "path": "scripts/core-capabilities.json",
+          "sha256": "77b808ede98020b19dfb3fb40e2b03455fe8fbd63600fce2262ce188bc24502a"
+        },
+        {
+          "path": "scripts/core_sums.py",
+          "sha256": "ee39311b069a5120ea2cd9c58616b04b6a86bd8ce58230cbf0e2d660ad6417d3"
+        },
+        {
+          "path": "scripts/core_tuple_inputs.py",
+          "sha256": "88de70e6184515c916d81e616ce278b3d30b4cb73e90c76f077ef2c678516a75"
+        },
+        {
+          "path": "scripts/core_vectors.py",
+          "sha256": "1924c8b09cc6e815e637b54d7e1f42c8c800c1720183d9246b9fdceb841a243e"
+        },
+        {
+          "path": "src/main/resources/thc/scalar-primop-signatures.json",
+          "sha256": "7c9c05e2e789d73ed3cd542a60a4fe87fde04e1eb0b1aa29744ea7b081c7756d"
+        }
+      ],
+      "artifacts": [
+        {
+          "path": "build/tuple-input/native/Main.hi",
+          "sha256": "d68b9669dd2a165a7e575e9566d06c03acc2dd14bb4452d84990bebe3d216db3"
+        },
+        {
+          "path": "build/tuple-input/native/Main.o",
+          "sha256": "9e87550e5a2619ee6cc2a23280026f918431c082e7ab14c9e55b867f0b456e5f"
+        },
+        {
+          "path": "build/tuple-input/native/TupleInputAudit.hi",
+          "sha256": "d149305dd0c7d988b4204ef297522b970e7ec5df3b75c0d9f422d73ed45f8f26"
+        },
+        {
+          "path": "build/tuple-input/native/TupleInputAudit.o",
+          "sha256": "83d142488687e3f78f4b987f407d22eec7690e730fef853b92d21dba868e4457"
+        },
+        {
+          "path": "build/tuple-input/native/tuple-input",
+          "sha256": "d129457a9f42c82531e6315c0d9624c85160dde01915cf7b410716870a69ad17"
+        },
+        {
+          "path": "build/tuple-input/pre-core/TupleInputAudit.json",
+          "sha256": "3975bbee67b08bc8923c7d230749d0a7046e281a60e3d057b1367293e85c5598"
+        },
+        {
+          "path": "build/tuple-input/post-core/TupleInputAudit.json",
+          "sha256": "c51b6d9770f53753ec5e8e929b165fb468bdc04aa48d2d65042364f88e261ade"
+        },
+        {
+          "path": "build/tuple-input/oracle.tsv",
+          "sha256": "669cefcc44578e1725c8252a14eb83799a186f9d75320418954348168576e9c6"
+        },
+        {
+          "path": "build/tuple-input/oracle-pairs.tsv",
+          "sha256": "5eb0b40ba4000f0b0b6efa65565e35f4c93c7312dac16d8f5e2e5520a88c7546"
+        },
+        {
+          "path": "build/tuple-input/pre-audit.json",
+          "sha256": "ef5e36be3ab6ba15e0399669500f00d3a9392a0938ae8733c695b056fa9f17af"
+        },
+        {
+          "path": "build/tuple-input/post-audit.json",
+          "sha256": "85a6d7d02473acd5b61e343f3a9eb3699ef184e1826bd5b5f4a46b8029d7e07a"
+        }
+      ],
+      "toolchain": {
+        "ghc": {
+          "path": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-9.14.1",
+          "sha256": "41dee8bdd6fdfce5fe8cf198671e04ee9ca1a1898c39997f33a9748fae841f19"
+        },
+        "ghcPkg": {
+          "path": "/Users/ekmett/.ghcup/ghc/9.14.1/bin/ghc-pkg-9.14.1",
+          "sha256": "92166d2d9174733a38f8d874d32ae7bcbf936b5f3136bcca808152e5fe14c766"
+        },
+        "info": "[(\"Project name\",\"The Glorious Glasgow Haskell Compilation System\")\n ,(\"C compiler command\",\"gcc\")\n ,(\"C compiler flags\",\"--target=arm64-apple-darwin  -Qunused-arguments\")\n ,(\"C++ compiler command\",\"g++\")\n ,(\"C++ compiler flags\",\"--target=arm64-apple-darwin \")\n ,(\"C compiler link flags\",\"--target=arm64-apple-darwin   -Wl,-no_fixup_chains -Wl,-no_warn_duplicate_libraries\")\n ,(\"C compiler supports -no-pie\",\"NO\")\n ,(\"CPP command\",\"gcc\")\n ,(\"CPP flags\",\"-E\")\n ,(\"Haskell CPP command\",\"gcc\")\n ,(\"Haskell CPP flags\",\"-E -undef -traditional -Wno-invalid-pp-token -Wno-unicode -Wno-trigraphs\")\n ,(\"JavaScript CPP command\",\"gcc\")\n ,(\"JavaScript CPP flags\",\"-E -CC -Wno-unicode -nostdinc\")\n ,(\"C-- CPP command\",\"gcc\")\n ,(\"C-- CPP flags\",\"-E\")\n ,(\"C-- CPP supports -g0\",\"YES\")\n ,(\"ld supports compact unwind\",\"YES\")\n ,(\"ld supports filelist\",\"YES\")\n ,(\"ld supports single module\",\"NO\")\n ,(\"ld is GNU ld\",\"NO\")\n ,(\"Merge objects command\",\"ld\")\n ,(\"Merge objects flags\",\"-r\")\n ,(\"Merge objects supports response files\",\"YES\")\n ,(\"ar command\",\"ar\")\n ,(\"ar flags\",\"qcls\")\n ,(\"ar supports at file\",\"NO\")\n ,(\"ar supports -L\",\"NO\")\n ,(\"ranlib command\",\"ranlib\")\n ,(\"otool command\",\"otool\")\n ,(\"install_name_tool command\",\"install_name_tool\")\n ,(\"windres command\",\"/bin/false\")\n ,(\"unlit command\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/../bin/unlit\")\n ,(\"cross compiling\",\"NO\")\n ,(\"target platform string\",\"aarch64-apple-darwin\")\n ,(\"target os\",\"OSDarwin\")\n ,(\"target arch\",\"ArchAArch64\")\n ,(\"target word size\",\"8\")\n ,(\"target word big endian\",\"NO\")\n ,(\"target has GNU nonexec stack\",\"NO\")\n ,(\"target has .ident directive\",\"YES\")\n ,(\"target has subsections via symbols\",\"NO\")\n ,(\"target has libm\",\"YES\")\n ,(\"Unregisterised\",\"NO\")\n ,(\"LLVM target\",\"arm64-apple-darwin\")\n ,(\"LLVM llc command\",\"llc\")\n ,(\"LLVM opt command\",\"opt\")\n ,(\"LLVM llvm-as command\",\"clang\")\n ,(\"LLVM llvm-as flags\",\"\")\n ,(\"Use inplace MinGW toolchain\",\"NO\")\n ,(\"target RTS linker only supports shared libraries\",\"NO\")\n ,(\"Use interpreter\",\"YES\")\n ,(\"Support SMP\",\"YES\")\n ,(\"RTS ways\",\"v thr thr_debug thr_debug_p thr_debug_p_dyn thr_debug_dyn thr_p thr_p_dyn thr_dyn debug debug_p debug_p_dyn debug_dyn p p_dyn dyn\")\n ,(\"Tables next to code\",\"YES\")\n ,(\"Leading underscore\",\"YES\")\n ,(\"Use LibFFI\",\"YES\")\n ,(\"RTS expects libdw\",\"NO\")\n ,(\"Relative Global Package DB\",\"package.conf.d\")\n ,(\"base unit-id\",\"base-4.22.0.0-1f90\")\n ,(\"Project version\",\"9.14.1\")\n ,(\"Project Git commit id\",\"902339d332fb4ce2b3c87dcac1ee6495d41ad886\")\n ,(\"Project Version Int\",\"914\")\n ,(\"Project Patch Level\",\"1\")\n ,(\"Project Patch Level1\",\"1\")\n ,(\"Project Patch Level2\",\"0\")\n ,(\"Project Unit Id\",\"ghc-9.14.1-bcbf\")\n ,(\"ghc-internal Unit Id\",\"ghc-internal-9.1401.0-0c3b\")\n ,(\"Booter version\",\"9.10.1\")\n ,(\"Stage\",\"2\")\n ,(\"Build platform\",\"aarch64-apple-darwin\")\n ,(\"Host platform\",\"aarch64-apple-darwin\")\n ,(\"Target platform\",\"aarch64-apple-darwin\")\n ,(\"target os string\",\"darwin\")\n ,(\"target arch string\",\"aarch64\")\n ,(\"target word size in bits\",\"64\")\n ,(\"Have interpreter\",\"YES\")\n ,(\"Object splitting supported\",\"NO\")\n ,(\"Have native code generator\",\"YES\")\n ,(\"target has RTS linker\",\"YES\")\n ,(\"Target default backend\",\"native code generator\")\n ,(\"Support dynamic-too\",\"YES\")\n ,(\"Support parallel --make\",\"YES\")\n ,(\"Support reexported-modules\",\"YES\")\n ,(\"Support thinning and renaming package flags\",\"YES\")\n ,(\"Support Backpack\",\"YES\")\n ,(\"Requires unified installed package IDs\",\"YES\")\n ,(\"Uses package keys\",\"YES\")\n ,(\"Uses unit IDs\",\"YES\")\n ,(\"GHC Dynamic\",\"YES\")\n ,(\"GHC Profiled\",\"NO\")\n ,(\"Debug on\",\"NO\")\n ,(\"LibDir\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\")\n ,(\"Global Package DB\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/package.conf.d\")\n ]",
+        "packages": "Cabal-3.16.0.0 Cabal-syntax-3.16.0.0 array-0.5.8.0 base-4.22.0.0 binary-0.8.9.3 bytestring-0.12.2.0 containers-0.8 deepseq-1.5.1.0 directory-1.3.10.0 exceptions-0.10.11 file-io-0.1.5 filepath-1.5.4.0 ghc-9.14.1 ghc-bignum-1.4 ghc-boot-9.14.1 ghc-boot-th-9.14.1 ghc-compact-0.1.0.0 ghc-experimental-9.1401.0 ghc-heap-9.14.1 ghc-internal-9.1401.0 ghc-platform-0.1.0.0 ghc-prim-0.13.1 ghc-toolchain-0.1.0.0 ghci-9.14.1 haddock-api-2.33.0 haddock-library-1.11.0 haskeline-0.8.3.0 hpc-0.7.0.2 integer-gmp-1.1 mtl-2.3.1 os-string-2.0.8 parsec-3.1.18.0 pretty-1.1.3.6 process-1.6.26.1 rts-1.0.3 semaphore-compat-1.0.0 stm-2.5.3.1 system-cxx-std-lib-1.0 template-haskell-2.24.0.0 template-haskell-lift-0.1.0.0 template-haskell-quasiquoter-0.1.0.0 terminfo-0.4.1.7 text-2.1.3 time-1.15 transformers-0.6.1.2 unix-2.8.8.0 xhtml-3000.2.2.1"
+      },
+      "claim": "Fresh native semantics and exact pre/post Core shape; compiled runtime execution is tested separately."
+    }
+  },
+  "native": [
+    {
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "pairInputs",
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=pairInputs backend=bytecode mode=inline nativeRows=7 arity=2 validAfterEveryRow=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-1830[lambda_x,_y].bgv",
+        "bgvSha256": "6073e1d7465fd91142b6be3aac6a1b9a23bd51886496867169f066abd4559c50",
+        "cfgSha256": "aa5550399e82c7946105b094b4d23541f81efda4cafdefc45e24185d81afae28",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 56,
+            "counts": {
+              "ConstantNode": 14,
+              "FixedGuardNode": 1,
+              "FrameState": 6,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 4,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 2,
+              "AndNode": 1,
+              "IntegerEqualsNode": 1,
+              "LeftShiftNode": 1,
+              "OrNode": 1,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 3,
+              "UnboxNode": 3,
+              "LoadIndexedNode": 3,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "TrufflePreserveFrameStateNode": 1
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ],
+            "committedObjects": []
+          },
+          "After low tier": {
+            "nodes": 141,
+            "counts": {
+              "AArch64AddressNode": 13,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 4,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 10,
+              "ConstantNode": 27,
+              "DynamicDeoptimizeNode": 1,
+              "EndNode": 8,
+              "FrameState": 6,
+              "IfNode": 5,
+              "InvokeNode": 1,
+              "MergeNode": 4,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 3,
+              "AddNode": 6,
+              "AndNode": 1,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 2,
+              "LeftShiftNode": 3,
+              "NarrowNode": 1,
+              "OrNode": 1,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 10,
+              "WriteNode": 3,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ],
+            "committedObjects": []
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      },
+      "finalLir": "nr    0  <|@ instruction [r1|QWORD[.], r2|QWORD[.], r29|QWORD, r30|QWORD] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr    2  <|@ instruction r0|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 12 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr    4  <|@ instruction r1|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 16 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr    6  <|@ instruction r2|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 20 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr    8  <|@ instruction r2|QWORD[.] = UNCOMPRESSPOINTER (input: r2|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@\nnr   10  <|@ instruction r3|QWORD[.] = UNCOMPRESSPOINTER (input: r1|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@\nnr   12  <|@ instruction r0|QWORD[.] = UNCOMPRESSPOINTER (input: r0|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@\nnr   14  <|@ instruction r1|QWORD = LOAD addressValue: {base: r0|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   16  <|@ instruction r4|QWORD = LOADINLINECONSTANT constant: long[36169538802286610|0x80800100000012] <|@ <|@\nnr   18  <|@ instruction r1|QWORD = OR (a: r1|QWORD, b: r4|QWORD) <|@ <|@\nnr   20  <|@ instruction r4|QWORD = LOADINLINECONSTANT constant: long[-9223372023961484288|0x8000000300800400] <|@ <|@\nnr   22  <|@ instruction r1|QWORD = AND (a: r1|QWORD, b: r4|QWORD) <|@ <|@\nnr   24  <|@ instruction COMPARE (x: r1|QWORD, y: r4|QWORD) <|@ <|@\nnr   26  <|@ instruction BRANCH trueDestination: B0 -> B1 falseDestination: B0 -> B2 trueDestinationProbability: 0.0 condition: EQ <|@ <|@\nnr   46  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   48  <|@ instruction r1|QWORD = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   50  <|@ instruction r1|QWORD = ADD (src1: r1|QWORD, src2: r1|QWORD) shiftType: LSL shiftAmt: 1 <|@ <|@\nnr   52  <|@ instruction r4|QWORD = LOAD addressValue: {base: r3|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   54  <|@ instruction r4|QWORD = ADD (a: r1|QWORD, b: r4|QWORD) <|@ <|@\nnr   56  <|@ instruction r1|QWORD = ADD a: r4|QWORD b: long[128|0x80] <|@ <|@\nnr   58  <|@ instruction COMPARE (x: r1|QWORD, y: long[256|0x100]) <|@ <|@\nnr   60  <|@ instruction BRANCH trueDestination: B2 -> B3 falseDestination: B2 -> B7 trueDestinationProbability: 0.9 condition: LO <|@ <|@\nnr   62  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   64  <|@ instruction r1|DWORD = ADD a: r4|DWORD(QWORD) b: int[128|0x80] <|@ <|@\nnr   66  <|@ instruction COMPARE (x: r1|DWORD, y: int[256|0x100]) <|@ <|@\nnr   68  <|@ instruction BRANCH trueDestination: B3 -> B4 falseDestination: B3 -> B5 trueDestinationProbability: 1.0 condition: LO <|@ <|@\nnr   70  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   72  <|@ instruction r4|QWORD[.] = LOADHOTSPOTOBJECTCONSTANTINLINE constant: Object[Instance<java.lang.Long[]>] <|@ <|@\nnr   74  <|@ instruction r1|QWORD[.+] = ADD (src1: r4|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@\nnr   76  <|@ instruction r1|DWORD[_] = LOAD addressValue: {base: r1|QWORD[.+], offset: -} bitMemoryTransferSize: 32 displacement: 12 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   78  <|@ instruction r1|QWORD[.] = UNCOMPRESSPOINTER (input: r1|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@\nnr   80  <|@ instruction JUMP ~outgoingValues: [] destination: B4 -> B11 isThreadedJump: false <|@ <|@\nnr  164  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@\nnr  166  <|@ instruction r4|DWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 32 displacement: 1296 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr  168  <|@ instruction COMPAREBRANCHZERO value: r4|DWORD trueDestination: B11 -> B14 falseDestination: B11 -> B13 trueDestinationProbability: 0.999 <|@ <|@\nnr  194  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  196  <|@ instruction r0|QWORD[.] = MOVE input: r1|QWORD[.] moveKind: QWORD <|@ <|@\nnr  198  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@338793de thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@\nnr  100  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  102  <|@ instruction r1|QWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 456 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr  104  <|@ instruction r5|QWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 472 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr  106  <|@ instruction r6|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@\nnr  108  <|@ instruction COMPARE (x: r5|QWORD, y: r6|QWORD) <|@ <|@\nnr  110  <|@ instruction BRANCH trueDestination: B7 -> B8 falseDestination: B7 -> B9 trueDestinationProbability: 0.010000000000000009 condition: LO <|@ <|@\nnr  136  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  138  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 456 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r6|QWORD) accessKind: QWORD <|@ <|@\nnr  140  <|@ instruction AARCH64PREFETCH ~address: {base: r1|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 400 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED mode: PSTL1KEEP <|@ <|@\nnr  142  <|@ instruction r5|DWORD = LOADHOTSPOTOBJECTCONSTANTINLINE constant: meta{HotSpotType<Ljava/lang/Long;, resolved>;compressed} <|@ <|@\nnr  144  <|@ instruction r5|QWORD = AND a: r5|DWORD b: long[4294967295|0xffffffff] <|@ <|@\nnr  146  <|@ instruction r6|QWORD = LOADINLINECONSTANT constant: long[1|0x1] <|@ <|@\nnr  148  <|@ instruction r5|QWORD = ADD (src1: r6|QWORD, src2: r5|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@\nnr  150  <|@ instruction STORE (addressValue: {base: r1|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 0 scaleFactor: 1 addressingMode: BASE_REGISTER_ONLY, input: r5|QWORD) accessKind: QWORD <|@ <|@\nnr  152  <|@ instruction r1|QWORD[.] = MOVE input: r1|QWORD moveKind: QWORD <|@ <|@\nnr  154  <|@ instruction JUMP ~outgoingValues: [] destination: B9 -> B10 isThreadedJump: false <|@ <|@\nnr  156  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@\nnr  158  <|@ instruction STORE (addressValue: {base: r1|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r4|QWORD) accessKind: QWORD <|@ <|@\nnr  160  <|@ instruction MEMBAR barriers: 8 <|@ <|@\nnr  162  <|@ instruction JUMP ~outgoingValues: [] destination: B10 -> B11 isThreadedJump: false <|@ <|@\nnr  174  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  176  <|@ instruction stack:56|QWORD[.] = MOVE input: r1|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  178  <|@ instruction stack:32|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  180  <|@ instruction stack:40|QWORD[.] = MOVE input: r3|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  182  <|@ instruction stack:48|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  184  <|@ instruction r4|QWORD[.] = LOADHOTSPOTOBJECTCONSTANTINLINE constant: Object[Instance<thc.runtime.BytecodeRootGen>] <|@ <|@\nnr  186  <|@ instruction r1|QWORD[.] = MOVE input: r4|QWORD[.] moveKind: QWORD <|@ <|@\n>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@338793de state [bci:19, 28, 15, 5, 40] <|@ <|@\nnr  190  <|@ instruction r1|QWORD[.] = MOVE input: stack:56|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  192  <|@ instruction JUMP ~outgoingValues: [] destination: B13 -> B14 isThreadedJump: false <|@ <|@\nnr  112  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  114  <|@ instruction stack:32|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  116  <|@ instruction stack:40|QWORD[.] = MOVE input: r3|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  118  <|@ instruction stack:48|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  120  <|@ instruction r1|QWORD = LOADHOTSPOTOBJECTCONSTANTINLINE constant: meta{HotSpotType<Ljava/lang/Long;, resolved>} <|@ <|@\n>@ <|@ instruction (result: r0|QWORD[.], additionalReturns: []) = NEAR_FOREIGN_CALL parameters: [r1|QWORD] temps: [r0|ILLEGAL] callTarget: Stub<new_instance_or_null(KlassPointer)Object>@0x13f60e240:CallingConvention[r1|QWORD -> r0|QWORD[.]]:CallingConvention[r1|QWORD -> r0|QWORD[.]]; temps=r0|ILLEGAL label: null state [bci:19, 28, 15, 5, 40] <|@ <|@\n>@ <|@ instruction NULLCHECK address: {base: r0|QWORD[.], offset: -} bitMemoryTransferSize: -1 displacement: 0 scaleFactor: 1 addressingMode: BASE_REGISTER_ONLY state [bci:19, 28, 15, 5, 40] <|@ <|@\nnr  126  <|@ instruction r1|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  128  <|@ instruction r0|QWORD[.] = MOVE input: stack:32|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  130  <|@ instruction r3|QWORD[.] = MOVE input: stack:40|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  132  <|@ instruction r2|QWORD[.] = MOVE input: stack:48|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  134  <|@ instruction JUMP ~outgoingValues: [] destination: B8 -> B10 isThreadedJump: false <|@ <|@\nnr   28  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   30  <|@ instruction stack:32|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   32  <|@ instruction stack:40|QWORD[.] = MOVE input: r3|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   34  <|@ instruction stack:48|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   36  <|@ instruction r0|DWORD = LOADINLINECONSTANT constant: int[-1030363|0xfffffffffff04725] <|@ <|@\nnr   38  <|@ instruction r1|QWORD[.] = MOVE input: stack:32|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   44  <|@ instruction JUMP ~outgoingValues: [] destination: B1 -> B6 isThreadedJump: false <|@ <|@\nnr   90  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@\nnr   92  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 32 displacement: 1256 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r0|DWORD) accessKind: DWORD <|@ <|@\nnr   94  <|@ instruction r0|QWORD = LOADINLINECONSTANT constant: long[0|0x0] <|@ <|@\nnr   96  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 1264 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r0|QWORD) accessKind: QWORD <|@ <|@\n>@ <|@ instruction DEOPT info [bci:19, 28, 15, 5, 40] <|@ <|@\nnr   82  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   84  <|@ instruction r1|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   86  <|@ instruction r0|DWORD = LOADINLINECONSTANT constant: int[-8219|0xffffffffffffdfe5] // MoveResolver resolve mapping <|@ <|@\nnr   88  <|@ instruction JUMP ~outgoingValues: [] destination: B5 -> B6 isThreadedJump: false <|@ <|@\n"
+    },
+    {
+      "backend": "bytecode",
+      "mode": "inline",
+      "entry": "mixedCase",
+      "graph": {
+        "scope": "Actual exported Haskell through production THC runtime; fixed inputs, no timing",
+        "checks": [
+          "PASS entry=mixedCase backend=bytecode mode=inline nativeRows=11 arity=1 validAfterEveryRow=true"
+        ],
+        "mode": "inline",
+        "entryGraph": "TruffleHotSpotCompilation-1912[lambda_x].bgv",
+        "bgvSha256": "e62fda903f1f7b345e349fa212c16096bbdc30867099d130ca087ee39c499353",
+        "cfgSha256": "75c62e93f53916250c48d954a9a90fbbbd5192baa83c2b08ae298d65a572e202",
+        "phases": {
+          "Before phase HighTierLowering": {
+            "nodes": 49,
+            "counts": {
+              "ConstantNode": 13,
+              "FixedGuardNode": 1,
+              "FrameState": 6,
+              "ParameterNode": 1,
+              "PiArrayNode": 1,
+              "PiNode": 3,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "AddNode": 2,
+              "AndNode": 1,
+              "IntegerEqualsNode": 1,
+              "BoxNode$AllocatingBoxNode": 1,
+              "BoxNode$TrustedBoxedValue": 2,
+              "UnboxNode": 2,
+              "LoadIndexedNode": 2,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "TrufflePreserveFrameStateNode": 1
+            },
+            "memoryOperations": [],
+            "invokes": [],
+            "allocationRelatedNodes": [
+              {
+                "kind": "BoxNode$AllocatingBoxNode",
+                "type": null,
+                "stamp": "a!# java.lang.Long"
+              }
+            ],
+            "committedObjects": []
+          },
+          "After low tier": {
+            "nodes": 134,
+            "counts": {
+              "AArch64AddressNode": 11,
+              "AArch64PointerAddNode": 1,
+              "CurrentJavaThreadNode": 1,
+              "HotSpotCompressionNode": 3,
+              "HotSpotDirectCallTargetNode": 1,
+              "PointerCastNode": 1,
+              "BeginNode": 10,
+              "ConstantNode": 27,
+              "DynamicDeoptimizeNode": 1,
+              "EndNode": 8,
+              "FrameState": 6,
+              "IfNode": 5,
+              "InvokeNode": 1,
+              "MergeNode": 4,
+              "ParameterNode": 1,
+              "PrefetchAllocateNode": 1,
+              "ReturnNode": 1,
+              "StartNode": 1,
+              "ValuePhiNode": 3,
+              "AddNode": 6,
+              "AndNode": 1,
+              "IntegerBelowNode": 3,
+              "IntegerEqualsNode": 2,
+              "LeftShiftNode": 2,
+              "NarrowNode": 1,
+              "ZeroExtendNode": 2,
+              "ForeignCallNode": 1,
+              "MembarNode": 1,
+              "NullCheckNode": 1,
+              "PublishWritesNode": 1,
+              "MemoryAnchorNode": 3,
+              "ReadNode": 8,
+              "WriteNode": 3,
+              "VirtualArrayNode": 4,
+              "VirtualInstanceNode": 1,
+              "VirtualObjectState": 5,
+              "ReadRegisterNode": 1,
+              "WordCastNode": 1
+            },
+            "memoryOperations": [
+              {
+                "kind": "WriteNode",
+                "location": "INIT_LOCATION",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "TlabEnd",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "TlabTop",
+                "field": null
+              },
+              {
+                "kind": "WriteNode",
+                "location": "MarkWord",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "JavaThread::_jvmci_reserved0",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "java.lang.Long.value",
+                "field": "java.lang.Long.value"
+              },
+              {
+                "kind": "ReadNode",
+                "location": "Array: Object",
+                "field": null
+              }
+            ],
+            "invokes": [
+              "Direct#HotSpotThreadLocalHandshake.doHandshake"
+            ],
+            "allocationRelatedNodes": [
+              {
+                "kind": "PrefetchAllocateNode",
+                "type": null,
+                "stamp": "void"
+              }
+            ],
+            "committedObjects": []
+          }
+        },
+        "limitation": "Final scalar Long host-result box remains; Object call ABI has no additional returns"
+      },
+      "finalLir": "nr    0  <|@ instruction [r1|QWORD[.], r2|QWORD[.], r29|QWORD, r30|QWORD] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr    2  <|@ instruction r0|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 12 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr    4  <|@ instruction r1|DWORD[_] = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 32 displacement: 16 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr    6  <|@ instruction r2|QWORD[.] = UNCOMPRESSPOINTER (input: r1|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@\nnr    8  <|@ instruction r0|QWORD[.] = UNCOMPRESSPOINTER (input: r0|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@\nnr   10  <|@ instruction r1|QWORD = LOAD addressValue: {base: r0|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   12  <|@ instruction r3|QWORD = LOADINLINECONSTANT constant: long[585503170294185984|0x820200800400000] <|@ <|@\nnr   14  <|@ instruction r1|QWORD = AND (a: r1|QWORD, b: r3|QWORD) <|@ <|@\nnr   16  <|@ instruction COMPARE (x: r1|QWORD, y: r3|QWORD) <|@ <|@\nnr   18  <|@ instruction BRANCH trueDestination: B0 -> B1 falseDestination: B0 -> B2 trueDestinationProbability: 0.0 condition: EQ <|@ <|@\nnr   34  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   36  <|@ instruction r1|QWORD = LOAD addressValue: {base: r2|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   38  <|@ instruction r1|QWORD = ADD a: r1|QWORD b: long[3|0x3] <|@ <|@\nnr   40  <|@ instruction r3|QWORD = ADD (a: r1|QWORD, b: r1|QWORD) <|@ <|@\nnr   42  <|@ instruction r1|QWORD = ADD a: r3|QWORD b: long[128|0x80] <|@ <|@\nnr   44  <|@ instruction COMPARE (x: r1|QWORD, y: long[256|0x100]) <|@ <|@\nnr   46  <|@ instruction BRANCH trueDestination: B2 -> B3 falseDestination: B2 -> B7 trueDestinationProbability: 0.9 condition: LO <|@ <|@\nnr   48  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   50  <|@ instruction r1|DWORD = ADD a: r3|DWORD(QWORD) b: int[128|0x80] <|@ <|@\nnr   52  <|@ instruction COMPARE (x: r1|DWORD, y: int[256|0x100]) <|@ <|@\nnr   54  <|@ instruction BRANCH trueDestination: B3 -> B4 falseDestination: B3 -> B5 trueDestinationProbability: 1.0 condition: LO <|@ <|@\nnr   56  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   58  <|@ instruction r3|QWORD[.] = LOADHOTSPOTOBJECTCONSTANTINLINE constant: Object[Instance<java.lang.Long[]>] <|@ <|@\nnr   60  <|@ instruction r1|QWORD[.+] = ADD (src1: r3|QWORD[.], src2: r1|DWORD) extendType: UXTW shiftAmt: 2 <|@ <|@\nnr   62  <|@ instruction r1|DWORD[_] = LOAD addressValue: {base: r1|QWORD[.+], offset: -} bitMemoryTransferSize: 32 displacement: 12 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   64  <|@ instruction r1|QWORD[.] = UNCOMPRESSPOINTER (input: r1|DWORD[_], ~baseRegister: r27|ILLEGAL) encoding: base: 0 shift: 3 nonNull: false <|@ <|@\nnr   66  <|@ instruction JUMP ~outgoingValues: [] destination: B4 -> B11 isThreadedJump: false <|@ <|@\nnr  146  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@\nnr  148  <|@ instruction r3|DWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 32 displacement: 1296 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: DWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr  150  <|@ instruction COMPAREBRANCHZERO value: r3|DWORD trueDestination: B11 -> B14 falseDestination: B11 -> B13 trueDestinationProbability: 0.999 <|@ <|@\nnr  174  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  176  <|@ instruction r0|QWORD[.] = MOVE input: r1|QWORD[.] moveKind: QWORD <|@ <|@\nnr  178  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@34d1ef86 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@\nnr   86  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   88  <|@ instruction r1|QWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 456 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   90  <|@ instruction r4|QWORD = LOAD addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 472 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED accessKind: QWORD extend: DEFAULT zero? false sign? false extendSize 0 <|@ <|@\nnr   92  <|@ instruction r5|QWORD = ADD a: r1|QWORD b: long[16|0x10] <|@ <|@\nnr   94  <|@ instruction COMPARE (x: r4|QWORD, y: r5|QWORD) <|@ <|@\nnr   96  <|@ instruction BRANCH trueDestination: B7 -> B8 falseDestination: B7 -> B9 trueDestinationProbability: 0.010000000000000009 condition: LO <|@ <|@\nnr  118  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  120  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 456 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r5|QWORD) accessKind: QWORD <|@ <|@\nnr  122  <|@ instruction AARCH64PREFETCH ~address: {base: r1|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 400 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED mode: PSTL1KEEP <|@ <|@\nnr  124  <|@ instruction r4|DWORD = LOADHOTSPOTOBJECTCONSTANTINLINE constant: meta{HotSpotType<Ljava/lang/Long;, resolved>;compressed} <|@ <|@\nnr  126  <|@ instruction r4|QWORD = AND a: r4|DWORD b: long[4294967295|0xffffffff] <|@ <|@\nnr  128  <|@ instruction r5|QWORD = LOADINLINECONSTANT constant: long[1|0x1] <|@ <|@\nnr  130  <|@ instruction r4|QWORD = ADD (src1: r5|QWORD, src2: r4|QWORD) shiftType: LSL shiftAmt: 42 <|@ <|@\nnr  132  <|@ instruction STORE (addressValue: {base: r1|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 0 scaleFactor: 1 addressingMode: BASE_REGISTER_ONLY, input: r4|QWORD) accessKind: QWORD <|@ <|@\nnr  134  <|@ instruction r1|QWORD[.] = MOVE input: r1|QWORD moveKind: QWORD <|@ <|@\nnr  136  <|@ instruction JUMP ~outgoingValues: [] destination: B9 -> B10 isThreadedJump: false <|@ <|@\nnr  138  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@\nnr  140  <|@ instruction STORE (addressValue: {base: r1|QWORD[.], offset: -} bitMemoryTransferSize: 64 displacement: 8 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r3|QWORD) accessKind: QWORD <|@ <|@\nnr  142  <|@ instruction MEMBAR barriers: 8 <|@ <|@\nnr  144  <|@ instruction JUMP ~outgoingValues: [] destination: B10 -> B11 isThreadedJump: false <|@ <|@\nnr  156  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  158  <|@ instruction stack:48|QWORD[.] = MOVE input: r1|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  160  <|@ instruction stack:32|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  162  <|@ instruction stack:40|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  164  <|@ instruction r3|QWORD[.] = LOADHOTSPOTOBJECTCONSTANTINLINE constant: Object[Instance<thc.runtime.BytecodeRootGen>] <|@ <|@\nnr  166  <|@ instruction r1|QWORD[.] = MOVE input: r3|QWORD[.] moveKind: QWORD <|@ <|@\n>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [r1|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@34d1ef86 state [bci:19, 28, 15, 5, 40] <|@ <|@\nnr  170  <|@ instruction r1|QWORD[.] = MOVE input: stack:48|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  172  <|@ instruction JUMP ~outgoingValues: [] destination: B13 -> B14 isThreadedJump: false <|@ <|@\nnr   98  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr  100  <|@ instruction stack:32|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  102  <|@ instruction stack:40|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  104  <|@ instruction r1|QWORD = LOADHOTSPOTOBJECTCONSTANTINLINE constant: meta{HotSpotType<Ljava/lang/Long;, resolved>} <|@ <|@\n>@ <|@ instruction (result: r0|QWORD[.], additionalReturns: []) = NEAR_FOREIGN_CALL parameters: [r1|QWORD] temps: [r0|ILLEGAL] callTarget: Stub<new_instance_or_null(KlassPointer)Object>@0x13f609800:CallingConvention[r1|QWORD -> r0|QWORD[.]]:CallingConvention[r1|QWORD -> r0|QWORD[.]]; temps=r0|ILLEGAL label: null state [bci:19, 28, 15, 5, 40] <|@ <|@\n>@ <|@ instruction NULLCHECK address: {base: r0|QWORD[.], offset: -} bitMemoryTransferSize: -1 displacement: 0 scaleFactor: 1 addressingMode: BASE_REGISTER_ONLY state [bci:19, 28, 15, 5, 40] <|@ <|@\nnr  110  <|@ instruction r1|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  112  <|@ instruction r0|QWORD[.] = MOVE input: stack:32|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  114  <|@ instruction r2|QWORD[.] = MOVE input: stack:40|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr  116  <|@ instruction JUMP ~outgoingValues: [] destination: B8 -> B10 isThreadedJump: false <|@ <|@\nnr   20  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   22  <|@ instruction stack:32|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   24  <|@ instruction stack:40|QWORD[.] = MOVE input: r2|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   26  <|@ instruction r0|DWORD = LOADINLINECONSTANT constant: int[-1300187|0xffffffffffec2925] <|@ <|@\nnr   28  <|@ instruction r1|QWORD[.] = MOVE input: stack:32|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   32  <|@ instruction JUMP ~outgoingValues: [] destination: B1 -> B6 isThreadedJump: false <|@ <|@\nnr   76  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@\nnr   78  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 32 displacement: 1256 scaleFactor: 4 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r0|DWORD) accessKind: DWORD <|@ <|@\nnr   80  <|@ instruction r0|QWORD = LOADINLINECONSTANT constant: long[0|0x0] <|@ <|@\nnr   82  <|@ instruction STORE (addressValue: {base: r28|QWORD, offset: -} bitMemoryTransferSize: 64 displacement: 1264 scaleFactor: 8 addressingMode: IMMEDIATE_UNSIGNED_SCALED, input: r0|QWORD) accessKind: QWORD <|@ <|@\n>@ <|@ instruction DEOPT info [bci:19, 28, 15, 5, 40] <|@ <|@\nnr   68  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@\nnr   70  <|@ instruction r1|QWORD[.] = MOVE input: r0|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@\nnr   72  <|@ instruction r0|DWORD = LOADINLINECONSTANT constant: int[-8219|0xffffffffffffdfe5] // MoveResolver resolve mapping <|@ <|@\nnr   74  <|@ instruction JUMP ~outgoingValues: [] destination: B5 -> B6 isThreadedJump: false <|@ <|@\n"
+    }
+  ],
+  "artifactSha256": {
+    "launch.json": "0e9612e5aa2da12dc82c976c89f971fb69bb0f41530c72e537abf8669398fb47",
+    "jar.log": "075be633713ce75648fe1b6ceadfa6665e89957295063b7a5676efb56c093417",
+    "classes/TupleInputGraphProbe.class": "525432712dff25e8bcf6793073554898fa3971363b7252372087a137de947ad4",
+    "classes/GraphInspect.class": "9e5309a235b6abbedd5a2f2d39afd03b2bf6368416c01afcaecba4a1799f1ea2",
+    "bytecode-inline-pairInputs/parse-TruffleHotSpotCompilation-1830[lambda_x,_y].log": "768ac40e0fae4648a8fc5f40962f523f473422adb4ca037646ac0ddc1190cee6",
+    "bytecode-inline-pairInputs/run.log": "a8fb292bddea8e5c3d697f4c4a9ea4df9931ae2dc435c2e427c603ff6ab4f85b",
+    "bytecode-inline-pairInputs/graph-evidence.json": "4fdf1f3b8607ed097b46be3142078001933182cd14ab0838b549b57bd0586b0d",
+    "bytecode-inline-pairInputs/final-lir.txt": "8e8f8ab37b206a0be0c40f5ee2ce9df30539580a347e90f72b6ddaef994d403a",
+    "bytecode-inline-pairInputs/raw-sha256.json": "bbba6b7c8340c6589a9686e0cd055bca8c206c3002d15cc057ad12231162b383",
+    "bytecode-inline-mixedCase/run.log": "972568822ba2c787a461bde0c24cccc003579ac8aacb9e5dc0fde4bf070228ed",
+    "bytecode-inline-mixedCase/graph-evidence.json": "24cc7f7bd7ca1a460f6d935b305dcf406a8584a5f534a275427fcb7ba3472883",
+    "bytecode-inline-mixedCase/parse-TruffleHotSpotCompilation-1912[lambda_x].log": "73dca6eab9d0b1baff193b354282ccf68d09b8a6add9a58391748560c608c70f",
+    "bytecode-inline-mixedCase/final-lir.txt": "e5474b7f2492155c149f13d21454a4e13df0e6c836fd2bc0c1711200f63fa097",
+    "bytecode-inline-mixedCase/raw-sha256.json": "3366b18223ed34013f54f2d97933c7c380276eccbb54ba0d44411b611651c7ed",
+    "bytecode-inline-mixedCase/parsed-TruffleHotSpotCompilation-1912[lambda_x]/graph-00121.json": "da0272d4ade83f51da3c05a2f7c5f68f6243ec2e7fa5cce413e6a36b57716e24",
+    "bytecode-inline-mixedCase/parsed-TruffleHotSpotCompilation-1912[lambda_x]/graph-00049.json": "22e4705394dd961bfd9ccb50e7cfc25647fbe876c22391c314447228835409e4",
+    "bytecode-inline-mixedCase/parsed-TruffleHotSpotCompilation-1912[lambda_x]/index.json": "21f66283ffcdc2d6c96fa6e932751bb5ca6f58d81a53a8590267b68753265ce4",
+    "bytecode-inline-mixedCase/graphs/TruffleHotSpotCompilation-1912[lambda_x].bgv": "e62fda903f1f7b345e349fa212c16096bbdc30867099d130ca087ee39c499353",
+    "bytecode-inline-mixedCase/graphs/TruffleHotSpotCompilation-1912[lambda_x].cfg": "75c62e93f53916250c48d954a9a90fbbbd5192baa83c2b08ae298d65a572e202",
+    "bytecode-inline-pairInputs/parsed-TruffleHotSpotCompilation-1830[lambda_x,_y]/graph-00121.json": "ddf9a2edf2b991ed72a7e1edf1c492d024dbc63386e76524fc2d83b61faa8961",
+    "bytecode-inline-pairInputs/parsed-TruffleHotSpotCompilation-1830[lambda_x,_y]/graph-00049.json": "301255ff00b64c2cc23e68b8d071b9c48966fed2c6d93a1d22ccaaae71460db1",
+    "bytecode-inline-pairInputs/parsed-TruffleHotSpotCompilation-1830[lambda_x,_y]/index.json": "e958d7dce19cbd9dbcac129134f15a2dfd9de79ea072e4c34251fa425b4efbff",
+    "bytecode-inline-pairInputs/graphs/TruffleHotSpotCompilation-1830[lambda_x,_y].cfg": "aa5550399e82c7946105b094b4d23541f81efda4cafdefc45e24185d81afae28",
+    "bytecode-inline-pairInputs/graphs/TruffleHotSpotCompilation-1830[lambda_x,_y].bgv": "6073e1d7465fd91142b6be3aac6a1b9a23bd51886496867169f066abd4559c50"
+  },
+  "limitations": [
+    "18 native rows per replay pass, two passes; separate from historical 18-control capture",
+    "Graph instrumentation disabled; exact compiled-entry counters are independently tested",
+    "Scalar Long Object-return box remains",
+    "No new residual or cycle capture is claimed"
+  ]
+}

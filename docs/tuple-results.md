@@ -1,7 +1,7 @@
 # Unboxed tuple results
 
-Both execution backends support exact unboxed tuple results from functions whose
-inputs use the ordinary scalar/reference ABI. This includes empty and singleton
+Both execution backends support exact unboxed tuple results from functions with
+scalar/reference inputs or [typed tuple inputs](tuple-inputs.md). This includes empty and singleton
 tuples, nested tuples, concrete Long/Float/Double fields, lazy lifted references, boxed unlifted reference fields,
 non-tail calls, tail forwarding, scalar PAP prefixes and overapplication.
 Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
@@ -30,7 +30,7 @@ mandatory private protocol, independent of `thc.handoffSlabs`:
    slab only after guest evaluation is complete, writes the fields, and returns
    a private completion token. The caller copies and releases it before running
    any guest continuation. The pool has one active result at most, independently
-   of the optional input slab's lifetime. References are cleared on release,
+   of input storage's lifetime. References are cleared on release,
    including when a result layout check fails.
 4. Tail forwarding follows the same copy-to-locals path. Each enclosing root
    finishes once, so a fresh inlined carrier cannot cross the actual Object
@@ -56,9 +56,10 @@ proofs. Scalar reference kind/evaluatedness may refine at each use without forci
 a lazy field. Polymorphic constructor-table fields are not layout evidence;
 the instantiated constructor application and case metadata provide the layout.
 
-[Exact empty tuple inputs](empty-tuple-inputs.md) are supported without payload fields.
-Other aggregate formal arguments, captures, ordinary let bindings and join parameters
-remain unsupported, including unused formals and nested zero-width tuples. Exact tuple
+[Typed tuple inputs](tuple-inputs.md) preserve recursive logical shape and use
+concrete primitive/reference fields, while [exact empty tuple inputs](empty-tuple-inputs.md)
+need no payload fields. Aggregate captures, ordinary let bindings and join parameters
+remain unsupported. Exact tuple
 join results use typed local slots inside the same guest root; no result carrier
 or pool loan is needed for that local control flow. Join captures of whole tuples
 remain unsupported; individual scalar/reference fields can be used normally.

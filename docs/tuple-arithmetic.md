@@ -54,5 +54,5 @@ Normal clean-checkout preparation runs this fixture. Its manifest fingerprints
 the source, exporter, preparation script, capability audit, exported Core and
 native oracle, and records full `ghc --info` provenance. Gradle tracks these test
 inputs and CI retains the generated artifacts. This adds six operations;
-aggregate arguments, captures, unboxed sums and other arithmetic families retain
-their existing coverage boundaries.
+the separate [typed tuple input protocol](tuple-inputs.md), aggregate capture
+restrictions, and other arithmetic families retain their own coverage boundaries.

@@ -139,7 +139,7 @@ internal class TupleResultPool {
 internal abstract class TupleDestination(val shape: TupleShape) {
     abstract fun consume(frame: VirtualFrame, node: Node, result: Any?)
 }
-private class AstTupleDestination(shape: TupleShape,
+internal class AstTupleDestination(shape: TupleShape,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray, private val offset: Int) : TupleDestination(shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) = shape.consume(frame, result, slots, offset)
 }
@@ -151,8 +151,17 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
     @Children private var direct = emptyArray<DirectTupleCaller>()
     @Child private var generic = GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout)
     @CompilationFinal private var megamorphic = false
+    @Child private var typed: InputDispatch? = null
 
     @ExplodeLoop fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
+        if ((function.target.rootNode as? GuestRoot)?.typedInput != null) {
+            if (typed == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate()
+                typed = insert(InputDispatch(ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination))
+            }
+            typed!!.execute(frame, function, arguments)
+            return
+        }
         for (caller in direct) if (caller.matches(function)) {
             caller.execute(frame, function, arguments)
             return
@@ -222,17 +231,27 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
 
 /** Residual calls return only the pooled completion token. The loop consumes it
  * directly in the caller frame, without storing a frame or carrier in a node. */
-private class TupleBounce(private val destination: TupleDestination, private val metrics: Metrics) : Node() {
+internal class TupleBounce(private val destination: TupleDestination, private val metrics: Metrics) : Node() {
     @Child private var call = IndirectCallNode.create()
     fun execute(frame: VirtualFrame, initial: TailCall) {
         var next = initial
         while (true) {
-            val root = next.target.rootNode as? GuestRoot ?: fault("Invalid tuple tail target")
-            if (root.tupleResult?.matches(destination.shape) != true) fault("Tuple tail target result shape mismatch")
-            next.args[0] = 0L
+            val root = next.target.rootNode as? GuestRoot
+            if (root == null || root.tupleResult?.matches(destination.shape) != true) {
+                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                fault("Tuple tail target result shape mismatch")
+            }
             try {
                 if (metrics.enabled) metrics.trampolineIterations++
-                destination.consume(frame, this, Calls.indirect(call, next.target, next.args))
+                val input = next.input
+                val result = if (input != null) {
+                    input.layout.setLong(input, 0, 0L)
+                    invokeTypedInput(next.target, input) { packet -> Calls.indirect(call, next.target, packet) }
+                } else {
+                    next.args[0] = 0L
+                    Calls.indirect(call, next.target, next.args)
+                }
+                destination.consume(frame, this, result)
                 return
             } catch (transfer: TailCall) { next = transfer }
         }
@@ -246,6 +265,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
     @Child private var force = Force(metrics)
     @Child private var tailCheck = TailCheck(metrics)
     @Child private var bounce = TupleBounce(destination, metrics)
+    @Child private var typed = GenericInputCall(ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination, 0)
     fun execute(frame: VirtualFrame, initial: Closure, arguments: Array<Any?>) {
         var function = initial
         var offset = 0
@@ -258,6 +278,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
             val physicalCount = ArgumentLayout.offset(inputLayout, offset + count) - physicalOffset
             val exact = count == remaining
             val root = function.target.rootNode as? GuestRoot ?: fault("Invalid tuple call target")
+            if (root.typedInput != null) { typed.execute(frame, function, arguments, offset); return }
             if (exact && root.tupleResult?.matches(destination.shape) != true) fault("Tuple call target result shape mismatch")
             if (!exact && root.tupleResult != null) fault("Cannot overapply an unboxed tuple")
             val skip = if (function.environment == null) 1 else 2

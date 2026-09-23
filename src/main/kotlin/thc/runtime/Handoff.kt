@@ -22,6 +22,10 @@ open class HandoffStorage(val layout: HandoffLayout) {
     internal var generation = 0L
     internal var live = false
     internal var completedGeneration = -1L
+    // Input ownership only: 0 = not an incoming carrier (including durable PAP
+    // prefixes), 1 = reusable argument-pool loan, 2 = fresh direct ingress,
+    // 3 = fresh carrier materialized by a tail/generic path (also never pool-owned).
+    internal var inputMode = 0
 }
 interface HandoffFactory { fun create(layout: HandoffLayout): HandoffStorage }
 
@@ -167,6 +171,7 @@ internal class HandoffEntry(
         fun create(language: TruffleLanguage<*>?, layout: FrameLayout, argumentReps: List<CoreRepresentation>,
                    resultRep: CoreRepresentation, hasEnvironment: Boolean): HandoffEntry? {
             val thc = language as? Language ?: return null
+            if (argumentReps.any { it.isTuple && !it.isEmptyTuple }) return null
             if (!thc.handoffLayouts.enabled || resultRep.isAggregate) return null
             val resultReference = resultRep.primReps?.singleOrNull()?.startsWith("BoxedRep ") == true
             if (!resultRep.isLong && !resultReference) return null
