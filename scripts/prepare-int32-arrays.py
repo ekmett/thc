@@ -18,6 +18,9 @@ GROUPS = [dict(source='examples/THC/Unboxed32Arrays.hs', module='THC.Unboxed32Ar
           dict(source='compiler/test-fixtures/Int32ArrayAudit.hs', module='Int32ArrayAudit',
                entries=['aliasInt32Bytes', 'aliasWord32Bytes'])]
 ENTRIES = [name for group in GROUPS for name in group['entries']]
+LITERAL_ENTRIES = {'noinlineInt32Literal': ('int32', -2147483648),
+                   'noinlineWord32Literal': ('word32', 4294967295)}
+LITERAL_INPUTS = [-(1 << 63), -2147483648, -1, 0, 1, 2147483647, (1 << 63)-1]
 REQUIRED = {}
 EXACT_ALIAS = {}
 for kind in ('Int32', 'Word32'):
@@ -212,6 +215,21 @@ def main():
             primitive_counts[stage+'/'+name] = check_report(name, report)
             closures[stage+'/'+name] = report['reachableBindings']
             guest_calls[stage+'/'+name] = check_structure(name, report, modules)
+        for name, (kind, value) in LITERAL_ENTRIES.items():
+            report = audit.Audit(modules, capabilities).run([name])
+            check(report['accepted'], name+': strict literal audit failed')
+            reachable = {b['id'] for b in report['reachableBindings']}
+            roots = [b for _, module in modules for b in module['bindings'] if b['id'] in reachable]
+            check(len(roots) == 2 and all(b['expr'][0] == 'lam' for b in roots),
+                  name+': expected the dynamic entry and opaque worker')
+            literal = [node for binding in roots for node in nodes(binding['expr'])
+                       if node[:3] == ['lit', kind, str(value)]]
+            check(len(literal) == 1 and literal[0][-1].get('rep') ==
+                  dict(kind='unknown', primReps=None, evaluated=False),
+                  name+': expected genuine unconstrained noinline literal proof')
+            path = BUILD / stage / (name+'.audit.json')
+            path.write_text(json.dumps(report, indent=2)+'\n')
+            artifacts.append(path)
     check(all(guest_calls['pre/'+n] == guest_calls['post/'+n] for n in ENTRIES), 'Guest root count changed across Tidy')
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where', 'import GHC.Exts (Int(I#), Int#)',
               'import Data.Bits (finiteBitSize)', 'import qualified THC.Unboxed32Arrays as U',
@@ -223,6 +241,8 @@ def main():
         for name in group['entries']:
             prefix = 'U.' if group['module'] == 'THC.Unboxed32Arrays' else 'P.'
             driver.append(f'  "{name}" -> emit name {prefix}{name} (read x)')
+    for name in LITERAL_ENTRIES:
+        driver.append(f'  "{name}" -> emit name P.{name} (read x)')
     driver += ['  _ -> error "unknown entry"', 'dispatch _ = error "invalid input"',
                'main :: IO ()', 'main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"',
                '       else getContents >>= mapM_ (dispatch . words) . lines']
@@ -243,14 +263,21 @@ def main():
         ((k, actual[k], v) for k, v in wanted.items() if actual[k] != v), None)))
     (BUILD/'oracle.tsv').write_text(result.stdout)
     (BUILD/'expected.tsv').write_text(''.join(f'{name}\t{x}\t{answer}\n' for (name,x),answer in wanted.items()))
+    literal_result = run([binary], input=''.join(f'{n}\t{x}\n' for n in LITERAL_ENTRIES for x in LITERAL_INPUTS),
+                         text=True, capture_output=True, timeout=60).stdout
+    expected_literals = ''.join(f'{n}\t{x}\t{signed(x+value)}\n'
+                                for n, (_, value) in LITERAL_ENTRIES.items() for x in LITERAL_INPUTS)
+    check(literal_result == expected_literals, 'Noinline narrow literal native/model mismatch')
+    (BUILD/'literal-oracle.tsv').write_text(literal_result)
     inputs_to_hash = [ROOT/g['source'] for g in GROUPS] + [Path(__file__).resolve(),
         ROOT/'scripts/test-int32-array-model.py', ROOT/'scripts/core-capabilities.json', ROOT/'scripts/audit-core.py',
         ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
         *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/Thc').glob('*.hs')),
         *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
-    artifacts += [BUILD/'oracle.tsv', BUILD/'expected.tsv', source, binary]
+    artifacts += [BUILD/'oracle.tsv', BUILD/'expected.tsv', BUILD/'literal-oracle.tsv', source, binary]
     manifest.write_text(json.dumps(dict(schema=1, ghc='9.14.1', array=version, wordBits=64, elementBits=32,
         byteOrder=sys.byteorder, entries=ENTRIES, inputs=values, stages=stages, nativeRows=len(actual),
+        literalEntries=list(LITERAL_ENTRIES), literalInputs=LITERAL_INPUTS, literalNativeRows=len(LITERAL_ENTRIES)*len(LITERAL_INPUTS),
         allNativeResultsMatchIndependentModels=True,
         expectedGuestCallsByEntry={n:guest_calls['pre/'+n] for n in ENTRIES}, checkedGuestCallsByStage=guest_calls,
         requiredPrimitivesByEntry={n:sorted(v) for n,v in REQUIRED.items()},
@@ -263,7 +290,8 @@ def main():
                     'Native execution validates recorded host endianness; model tests separately cover both byte orders.',
                     'Machine Int is 64 bits; stored Int32/Word32 elements are exactly four native-endian bytes.',
                     'Guest counts include the immediate local State# lambda but exclude local joins and the host bridge.']),indent=2)+'\n')
-    print(f'Prepared {len(ENTRIES)} Int32/Word32 array entries / {len(actual)} native-model rows / strict pre+post Core')
+    print(f'Prepared {len(ENTRIES)} Int32/Word32 array entries / {len(actual)} native-model rows / '
+          f'{len(LITERAL_ENTRIES)*len(LITERAL_INPUTS)} noinline literal rows / strict pre+post Core')
 
 
 if __name__ == '__main__':

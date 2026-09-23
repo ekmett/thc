@@ -53,6 +53,7 @@ tasks.test {
             "double-arrays/**/*.json", "double-arrays/oracle.tsv", "double-arrays/expected.tsv",
             "double-arrays/NativeDoubleArray.hs", "double-arrays/native/double-array-oracle",
             "int32-arrays/**/*.json", "int32-arrays/oracle.tsv", "int32-arrays/expected.tsv",
+            "int32-arrays/literal-oracle.tsv",
             "int32-arrays/NativeInt32Array.hs", "int32-arrays/native/int32-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",

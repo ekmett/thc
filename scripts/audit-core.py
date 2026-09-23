@@ -277,7 +277,15 @@ class Audit:
             return None
         index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4, 'case': 4, 'con': 3, 'prim': 2, 'void': 1}.get(expr[0])
         proof = expr[index].get('rep') if index is not None and len(expr) > index and isinstance(expr[index], dict) else None
-        return proof if proof is not None else cls.literal_rep(expr)
+        intrinsic = cls.literal_rep(expr)
+        # Noinline/unary-class erasure can clear the certificate, but literal
+        # syntax still constrains primitive operands and lexical comparisons.
+        # expression_metadata independently rejects malformed raw records.
+        if (intrinsic is not None and intrinsic.get('primReps') is not None and
+                isinstance(proof, dict) and proof.get('kind') == 'unknown' and proof.get('primReps') is None and
+                not cls.is_tuple(proof) and not is_vector(proof)):
+            return intrinsic
+        return proof if proof is not None else intrinsic
 
     def scalar_primitive(self, name, arguments, result, bound, owner, path):
         signature = SCALAR_SIGNATURES.get(name)
@@ -382,8 +390,8 @@ class Audit:
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
                 if expr[1] in ('int32', 'word32'):
                     proof, intrinsic = self.expression_rep(expr), self.literal_rep(expr)
-                    if (proof.get('kind') != 'long' or proof.get('primReps') != intrinsic['primReps'] or
-                            self.is_tuple(proof) or is_vector(proof)):
+                    if (not isinstance(proof, dict) or proof.get('kind') != 'long' or
+                            proof.get('primReps') != intrinsic['primReps'] or self.is_tuple(proof) or is_vector(proof)):
                         self.issue('scalar-representation', owner, path + '/rep', '32-bit literal requires exact narrow identity')
             elif tag == 'void':
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')

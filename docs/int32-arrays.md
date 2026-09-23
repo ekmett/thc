@@ -31,7 +31,12 @@ The new signed literal loader accepts only canonical decimal values in
 `[-2147483648, 2147483647]`, including case alternatives. Both signed and unsigned
 32-bit literal kinds preserve exact identity: present metadata cannot relabel one
 as the other or as another Long-carried representation. Missing legacy metadata
-does not change the literal's intrinsic signedness.
+and explicit unknown records with no register constraints refine to the literal's
+intrinsic signedness. This includes genuine `noinline` erasure, where the exporter
+conservatively clears operand certificates. Malformed metadata still fails. Two
+opaque-worker controls retain these literals before and after Tidy; their separate
+14-row native oracle exercises both backends with inlining enabled and disabled,
+including per-row compiled entry and installed-target checks.
 
 Let `u` be the low 32 bits of the signed 64-bit input, and `D(x)` normalize modulo
 2^32 then interpret the bits as signed Int32 or unsigned Word32. The independently
