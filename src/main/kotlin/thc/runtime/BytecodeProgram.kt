@@ -64,7 +64,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private class JoinRegion
     private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
                              val locals: List<Local>, val entryStrict: BooleanArray)
-    private class JoinEmission(val selector: BytecodeLocal, val next: BytecodeLabel, val labels: List<BytecodeLabel>) {
+    private class JoinEmission(val selector: BytecodeLocal?, val next: BytecodeLabel?, val labels: List<BytecodeLabel>) {
         var emittedIndex = -1
     }
     private class Emission(val builder: BytecodeRootGen.Builder) {
@@ -516,8 +516,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             if (target.index > region.emittedIndex) {
                 b.emitBranch(region.labels[target.index])
             } else {
-                b.beginStoreLocal(region.selector); b.emitLoadConstant(target.index.toLong()); b.endStoreLocal()
-                b.emitBranch(region.next)
+                val selector = region.selector ?: throw RuntimeFault("Backward transfer into a nonrecursive join group")
+                val next = region.next ?: throw RuntimeFault("Missing recursive join continuation")
+                b.beginStoreLocal(selector); b.emitLoadConstant(target.index.toLong()); b.endStoreLocal()
+                b.emitBranch(next)
             }
             // Unreachable value preserves the surrounding expression's builder signature.
             b.emitLoadConstant(Unit)
@@ -556,20 +558,22 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val b = e.builder
             b.beginBlock()
             val result = b.createLocal("join result", null)
-            val selector = b.createLocal("join selector", "primitive")
+            val selector = if (recursive) b.createLocal("join selector", "primitive") else null
             val exit = b.createLabel()
             targets.flatMap { it.locals }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
-            b.beginStoreLocal(selector); b.emitLoadConstant(-1L); b.endStoreLocal()
-            b.beginWhile()
-            b.emitLoadConstant(true)
-            b.beginBlock()
-            val next = b.createLabel()
+            if (selector != null) {
+                b.beginStoreLocal(selector); b.emitLoadConstant(-1L); b.endStoreLocal()
+                b.beginWhile()
+                b.emitLoadConstant(true)
+                b.beginBlock()
+            }
+            val next = if (recursive) b.createLabel() else null
             val labels = targets.map { b.createLabel() }
             val active = JoinEmission(selector, next, labels)
             e.joins[region] = active
-            // The DSL supports only forward Branch. Only backward join edges
-            // visit this primitive selector; forward edges jump to a body directly.
-            targets.forEachIndexed { index, _ ->
+            // Nonrecursive RHSs cannot jump into their own group. They need only
+            // forward branches; only recursive groups need a selector/backedge.
+            if (selector != null) targets.forEachIndexed { index, _ ->
                 b.beginIfThen()
                 b.beginMatchLiteral(index.toLong()); b.emitLoadLocal(selector); b.endMatchLiteral()
                 b.emitBranch(labels[index])
@@ -583,9 +587,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginStoreLocal(result); bodies[index].emit(e); b.endStoreLocal()
                 b.emitBranch(exit)
             }
-            b.emitLabel(next)
-            b.endBlock()
-            b.endWhile()
+            if (next != null) {
+                b.emitLabel(next)
+                b.endBlock()
+                b.endWhile()
+            }
             b.emitLabel(exit)
             b.emitLoadLocal(result)
             b.endBlock()
