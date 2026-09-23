@@ -72,6 +72,8 @@ parts of GHC's runtime. Diagnostic mode leaves explicit traps at those gaps.
 Normal mode rejects them when loading the program. Successful runs establish
 support for the paths exercised; they don't make the gaps disappear.
 
+Development uses [pull requests and a tested merge queue](docs/contributing.md).
+
 ## Coverage
 
 The next step is breadth. A [native-GHC corpus](docs/coverage.md) exercises lazy
