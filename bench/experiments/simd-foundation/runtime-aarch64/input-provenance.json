@@ -1,0 +1,172 @@
+{
+  "core": {
+    "schema": 1,
+    "commands": [
+      {
+        "argv": [
+          "compiler/build.sh"
+        ],
+        "env": {}
+      },
+      {
+        "argv": [
+          "compiler/export.sh",
+          "-fno-code",
+          "-fwrite-if-simplified-core",
+          "/private/tmp/thc-simd-foundation/compiler/test-fixtures/SimdInt64X2.hs"
+        ],
+        "env": {
+          "THC_CORE_OUT": "/private/tmp/thc-simd-foundation/build/simd/pre-core",
+          "THC_GHC_OUT": "/private/tmp/thc-simd-foundation/build/simd/pre-ghc"
+        }
+      }
+    ],
+    "nativeRows": null,
+    "stages": [
+      "pre"
+    ],
+    "toolchain": {
+      "ghcVersion": "9.14.1",
+      "host": "eak-mba",
+      "machine": "arm64",
+      "system": "macOS-15.5-arm64-arm-64bit-Mach-O",
+      "ghcInfo": " [(\"Project name\",\"The Glorious Glasgow Haskell Compilation System\")\n ,(\"C compiler command\",\"gcc\")\n ,(\"C compiler flags\",\"--target=arm64-apple-darwin  -Qunused-arguments\")\n ,(\"C++ compiler command\",\"g++\")\n ,(\"C++ compiler flags\",\"--target=arm64-apple-darwin \")\n ,(\"C compiler link flags\",\"--target=arm64-apple-darwin   -Wl,-no_fixup_chains -Wl,-no_warn_duplicate_libraries\")\n ,(\"C compiler supports -no-pie\",\"NO\")\n ,(\"CPP command\",\"gcc\")\n ,(\"CPP flags\",\"-E\")\n ,(\"Haskell CPP command\",\"gcc\")\n ,(\"Haskell CPP flags\",\"-E -undef -traditional -Wno-invalid-pp-token -Wno-unicode -Wno-trigraphs\")\n ,(\"JavaScript CPP command\",\"gcc\")\n ,(\"JavaScript CPP flags\",\"-E -CC -Wno-unicode -nostdinc\")\n ,(\"C-- CPP command\",\"gcc\")\n ,(\"C-- CPP flags\",\"-E\")\n ,(\"C-- CPP supports -g0\",\"YES\")\n ,(\"ld supports compact unwind\",\"YES\")\n ,(\"ld supports filelist\",\"YES\")\n ,(\"ld supports single module\",\"NO\")\n ,(\"ld is GNU ld\",\"NO\")\n ,(\"Merge objects command\",\"ld\")\n ,(\"Merge objects flags\",\"-r\")\n ,(\"Merge objects supports response files\",\"YES\")\n ,(\"ar command\",\"ar\")\n ,(\"ar flags\",\"qcls\")\n ,(\"ar supports at file\",\"NO\")\n ,(\"ar supports -L\",\"NO\")\n ,(\"ranlib command\",\"ranlib\")\n ,(\"otool command\",\"otool\")\n ,(\"install_name_tool command\",\"install_name_tool\")\n ,(\"windres command\",\"/bin/false\")\n ,(\"unlit command\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/../bin/unlit\")\n ,(\"cross compiling\",\"NO\")\n ,(\"target platform string\",\"aarch64-apple-darwin\")\n ,(\"target os\",\"OSDarwin\")\n ,(\"target arch\",\"ArchAArch64\")\n ,(\"target word size\",\"8\")\n ,(\"target word big endian\",\"NO\")\n ,(\"target has GNU nonexec stack\",\"NO\")\n ,(\"target has .ident directive\",\"YES\")\n ,(\"target has subsections via symbols\",\"NO\")\n ,(\"target has libm\",\"YES\")\n ,(\"Unregisterised\",\"NO\")\n ,(\"LLVM target\",\"arm64-apple-darwin\")\n ,(\"LLVM llc command\",\"llc\")\n ,(\"LLVM opt command\",\"opt\")\n ,(\"LLVM llvm-as command\",\"clang\")\n ,(\"LLVM llvm-as flags\",\"\")\n ,(\"Use inplace MinGW toolchain\",\"NO\")\n ,(\"target RTS linker only supports shared libraries\",\"NO\")\n ,(\"Use interpreter\",\"YES\")\n ,(\"Support SMP\",\"YES\")\n ,(\"RTS ways\",\"v thr thr_debug thr_debug_p thr_debug_p_dyn thr_debug_dyn thr_p thr_p_dyn thr_dyn debug debug_p debug_p_dyn debug_dyn p p_dyn dyn\")\n ,(\"Tables next to code\",\"YES\")\n ,(\"Leading underscore\",\"YES\")\n ,(\"Use LibFFI\",\"YES\")\n ,(\"RTS expects libdw\",\"NO\")\n ,(\"Relative Global Package DB\",\"package.conf.d\")\n ,(\"base unit-id\",\"base-4.22.0.0-1f90\")\n ,(\"Project version\",\"9.14.1\")\n ,(\"Project Git commit id\",\"902339d332fb4ce2b3c87dcac1ee6495d41ad886\")\n ,(\"Project Version Int\",\"914\")\n ,(\"Project Patch Level\",\"1\")\n ,(\"Project Patch Level1\",\"1\")\n ,(\"Project Patch Level2\",\"0\")\n ,(\"Project Unit Id\",\"ghc-9.14.1-bcbf\")\n ,(\"ghc-internal Unit Id\",\"ghc-internal-9.1401.0-0c3b\")\n ,(\"Booter version\",\"9.10.1\")\n ,(\"Stage\",\"2\")\n ,(\"Build platform\",\"aarch64-apple-darwin\")\n ,(\"Host platform\",\"aarch64-apple-darwin\")\n ,(\"Target platform\",\"aarch64-apple-darwin\")\n ,(\"target os string\",\"darwin\")\n ,(\"target arch string\",\"aarch64\")\n ,(\"target word size in bits\",\"64\")\n ,(\"Have interpreter\",\"YES\")\n ,(\"Object splitting supported\",\"NO\")\n ,(\"Have native code generator\",\"YES\")\n ,(\"target has RTS linker\",\"YES\")\n ,(\"Target default backend\",\"native code generator\")\n ,(\"Support dynamic-too\",\"YES\")\n ,(\"Support parallel --make\",\"YES\")\n ,(\"Support reexported-modules\",\"YES\")\n ,(\"Support thinning and renaming package flags\",\"YES\")\n ,(\"Support Backpack\",\"YES\")\n ,(\"Requires unified installed package IDs\",\"YES\")\n ,(\"Uses package keys\",\"YES\")\n ,(\"Uses unit IDs\",\"YES\")\n ,(\"GHC Dynamic\",\"YES\")\n ,(\"GHC Profiled\",\"NO\")\n ,(\"Debug on\",\"NO\")\n ,(\"LibDir\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib\")\n ,(\"Global Package DB\",\"/Users/ekmett/.ghcup/ghc/9.14.1/lib/ghc-9.14.1/lib/package.conf.d\")\n ]\n",
+      "ghcBinarySha256": "41dee8bdd6fdfce5fe8cf198671e04ee9ca1a1898c39997f33a9748fae841f19"
+    },
+    "sources": [
+      {
+        "path": "compiler/test-fixtures/SimdInt64X2.hs",
+        "sha256": "f128b3a86a159f64b6eee201d82388d8930aa86d42d581975e58955775bb2d84"
+      },
+      {
+        "path": "compiler/test-fixtures/SimdInt64X2Native.hs",
+        "sha256": "2486b128fb0817b9c3e0390228e8873cca89b54d050549052e9a6eb55075bc97"
+      },
+      {
+        "path": "scripts/prepare-simd-audit.py",
+        "sha256": "278bf209e8213f6baebf13bbf3637c2df97f9c9a66eae33d43ae135cdf17dcca"
+      },
+      {
+        "path": "compiler/Thc/Cbv.hs",
+        "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c"
+      },
+      {
+        "path": "compiler/Thc/Demands.hs",
+        "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a"
+      },
+      {
+        "path": "compiler/Thc/Plugin.hs",
+        "sha256": "5126b716ff67abcc33e9d15d64709d1c9971bdb39832e36f31cf7285bb1d776b"
+      },
+      {
+        "path": "compiler/Thc/Sources.hs",
+        "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861"
+      },
+      {
+        "path": "compiler/Thc/Wired.hs",
+        "sha256": "0fa673b5e3cd94e1398b69843644f8170d153819f45135a4d3913a10bdbfc48b"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "build/simd/pre-core/SimdInt64X2.json",
+        "sha256": "6f8478f0dbd6a15ebcf37f2754b6a4e6699e53b7c1381bfc96c38c39ca0699bc"
+      }
+    ]
+  },
+  "native": {
+    "schema": 1,
+    "commands": [
+      {
+        "argv": [
+          "compiler/build.sh"
+        ],
+        "env": {}
+      },
+      {
+        "argv": [
+          "compiler/export.sh",
+          "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/compiler/test-fixtures/SimdInt64X2.hs"
+        ],
+        "env": {
+          "THC_CORE_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/pre-core",
+          "THC_GHC_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/pre-ghc"
+        }
+      },
+      {
+        "argv": [
+          "compiler/export.sh",
+          "-fplugin-opt=Thc.Plugin:post-tidy",
+          "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/compiler/test-fixtures/SimdInt64X2.hs"
+        ],
+        "env": {
+          "THC_CORE_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/post-core",
+          "THC_GHC_OUT": "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/post-ghc"
+        }
+      },
+      {
+        "argv": [
+          "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc",
+          "--make",
+          "-O2",
+          "-fforce-recomp",
+          "-dcore-lint",
+          "-icompiler/test-fixtures",
+          "-odir",
+          "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/native",
+          "-hidir",
+          "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/native",
+          "-o",
+          "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/build/simd/native/simd",
+          "/home/ekmett/ai/thc-simd-x86-evidence-01a0cdeb/compiler/test-fixtures/SimdInt64X2Native.hs"
+        ],
+        "env": {}
+      }
+    ],
+    "nativeRows": 147,
+    "stages": [
+      "pre",
+      "post"
+    ],
+    "sources": [
+      {
+        "path": "compiler/test-fixtures/SimdInt64X2.hs",
+        "sha256": "f128b3a86a159f64b6eee201d82388d8930aa86d42d581975e58955775bb2d84"
+      },
+      {
+        "path": "compiler/test-fixtures/SimdInt64X2Native.hs",
+        "sha256": "2486b128fb0817b9c3e0390228e8873cca89b54d050549052e9a6eb55075bc97"
+      },
+      {
+        "path": "scripts/prepare-simd-audit.py",
+        "sha256": "872fc36557e96764272a2eddedc5f4168236f6c43e499fca57508bc9d84247b0"
+      },
+      {
+        "path": "compiler/Thc/Plugin.hs",
+        "sha256": "5126b716ff67abcc33e9d15d64709d1c9971bdb39832e36f31cf7285bb1d776b"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "build/simd/pre-core/SimdInt64X2.json",
+        "sha256": "c5a6334823e5b6ed86ada94330964914fd0c4d69abd01ea2e11f4d62521abefd"
+      },
+      {
+        "path": "build/simd/post-core/SimdInt64X2.json",
+        "sha256": "a1b605e7bfdd56b89941b690fbcad8bffed471784842fde2e9c932913bff4d2b"
+      },
+      {
+        "path": "build/simd/oracle.tsv",
+        "sha256": "fe17d56f0b61a6c20f45aa693c5fbc3c654c4db0061cb8fbc4d219da5f2f6c43"
+      }
+    ]
+  },
+  "nativeProvenance": {
+    "path": "/private/tmp/thc-simd-foundation/bench/experiments/simd-foundation/evidence-x86_64/native/provenance.json",
+    "sha256": "bd4678b664753bc89cfbdd3247653ce99c8ded84bf4e91bb3492fcae15423529"
+  },
+  "oracle": {
+    "path": "/private/tmp/thc-simd-foundation/bench/experiments/simd-foundation/evidence-x86_64/native/oracle.tsv",
+    "sha256": "fe17d56f0b61a6c20f45aa693c5fbc3c654c4db0061cb8fbc4d219da5f2f6c43"
+  }
+}
