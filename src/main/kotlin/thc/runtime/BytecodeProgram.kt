@@ -50,6 +50,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private class FunctionContext(val formalArity: Int, val entryStrict: BooleanArray = BooleanArray(formalArity)) {
         var inputLayout: ArgumentLayout? = null
+        var typedInput: TypedInputLayout? = null
+        var typedArguments: List<Pair<Int, Local>> = emptyList()
         var arguments: List<Local?> = emptyList()
         var captures: List<Local> = emptyList()
         var captureLayout: CaptureLayout? = null
@@ -79,6 +81,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private class Emission(val builder: BytecodeRootGen.Builder) {
         val locals = mutableMapOf<Int, BytecodeLocal>()
         var continueLabel: BytecodeLabel? = null
+        var typedInputSlots: BytecodeTypedInputSlots? = null
         val joins = mutableMapOf<JoinRegion, JoinEmission>()
     }
     private fun interface Expression {
@@ -250,15 +253,26 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
             captureSources.map { it.directFloat }.toBooleanArray(),
             captureSources.map { it.directDouble }.toBooleanArray())
+        context.typedInput = TypedInputLayout.create(language, context.inputLayout, context.captureLayout != null)
+        val physicalArguments = arrayListOf<Pair<Int, Local>>()
         context.arguments = args.mapIndexed { index, arg ->
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
-            if (proof.isEmptyTuple) {
-                if (lifted) throw RuntimeFault("Empty tuple formal cannot be lifted")
-                scope.bindTuple(arg["id"] as String, proof, emptyList()); null
-            } else if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true,
-                proof) else null
+            val offset = ArgumentLayout.offset(context.inputLayout, index)
+            if (proof.isTuple) {
+                if (lifted) throw RuntimeFault("Tuple formal cannot be lifted")
+                val fields = if (arg["id"] in free) ArgumentLayout.leaves(proof).mapIndexed { leaf, field ->
+                    Local(nextLocal++, "${arg["id"]} field $leaf", field.isLong, field).also {
+                        physicalArguments += (offset + leaf) to it
+                    }
+                } else emptyList()
+                scope.bindTuple(arg["id"] as String, proof, fields)
+                null
+            } else if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true, proof).also {
+                physicalArguments += offset to it
+            } else null
         }
+        context.typedArguments = physicalArguments
         val compiled = compile(expression, scope, true)
         if (compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
@@ -274,25 +288,41 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun build(label: String, context: FunctionContext, body: Expression, forceResult: Boolean = true): RootCallTarget {
         val source = body.source
         val config = if (sources.enabled && sources.spanCount > 0) BytecodeConfig.WITH_SOURCE else BytecodeConfig.DEFAULT
+        var typedBloom: LocalAccessor? = null
         val root = BytecodeRootGen.create(language, config) { b ->
             source?.let { BytecodeSources.begin(b, it.section) }
             b.beginRoot()
             val e = Emission(b)
             b.emitEnterRoot(metrics)
-            for (local in context.captures + context.arguments.filterNotNull()) {
+            for (local in context.captures + context.typedArguments.map { it.second }.ifEmpty { context.arguments.filterNotNull() }) {
                 e.locals[local.id] = b.createLocal(local.name, if (local.primitive) "primitive" else "object")
             }
-            context.captures.forEachIndexed { index, local ->
-                b.beginStoreLocal(e.locals.getValue(local.id))
-                if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
-                b.emitLoadArgument(1)
-                if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
-                b.endStoreLocal()
+            val typed = context.typedInput
+            if (typed != null) {
+                val bloom = LocalAccessor.constantOf(b.createLocal("typed input bloom", "primitive"))
+                typedBloom = bloom
+                val physical = context.typedArguments
+                val slots = BytecodeTypedInputSlots(typed, bloom,
+                    physical.map { LocalAccessor.constantOf(e.locals.getValue(it.second.id)) }.toTypedArray(),
+                    physical.map { it.first }.toIntArray(), physical.map { it.second.proof }.toTypedArray(),
+                    context.captureLayout,
+                    context.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(),
+                    context.captures.map { if (it.cell) CoreRepresentation.UNKNOWN else it.proof }.toTypedArray())
+                e.typedInputSlots = slots
+                b.emitRestoreTypedInput(slots)
+            } else {
+                context.captures.forEachIndexed { index, local ->
+                    b.beginStoreLocal(e.locals.getValue(local.id))
+                    if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
+                    b.emitLoadArgument(1)
+                    if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
+                    b.endStoreLocal()
+                }
+                val offset = if (context.captureLayout == null) 1 else 2
+                context.arguments.forEachIndexed { index, local -> if (local != null) {
+                    restoreArgument(e, local) { b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset) }
+                } }
             }
-            val offset = if (context.captureLayout == null) 1 else 2
-            context.arguments.forEachIndexed { index, local -> if (local != null) {
-                restoreArgument(e, local) { b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset) }
-            } }
             if (context.mayLoop) {
                 b.beginWhile()
                 b.emitLoadConstant(true)
@@ -324,6 +354,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         root.setLabel(label)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
         root.configureInput(context.inputLayout)
+        root.configureTypedInput(context.typedInput)
+        root.configureTypedBloom(typedBloom)
         root.configureLeadingCaseReturn(context.leadingCaseReturn)
         root.configureTupleResult(context.tuple)
         roots += root
@@ -381,6 +413,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expression {
         val fn = function(label, emptyList(), expr, scope)
+        (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
         val template = BytecodeRoot.ClosureTemplate(fn.target, 0, fn.captureLayout)
         return sourced(Expression { e ->
             e.builder.beginMakeThunk(template)
@@ -397,25 +430,23 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         })
     }
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false, declaredLifted: Boolean = lifted): Expression {
-        val proof = CoreRepresentations.expression(expr)
         fun check(value: CoreRepresentation) {
             if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
+            if (value.isTuple && declaredLifted) throw RuntimeFault("Tuple argument cannot be lifted")
         }
+        val proof = CoreRepresentations.expression(expr)
         check(proof)
         val lexical = if (expr[0] == "var") scope.tuples[expr[1]]?.first ?: scope.locals[expr[1]]?.proof else null
         lexical?.let(::check)
-        if (proof.isEmptyTuple || lexical?.isEmptyTuple == true) {
-            if (declaredLifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
-            return compile(expr, scope, false).also {
-                if (!it.proof.isEmptyTuple) throw RuntimeFault("Missing exact empty tuple argument proof")
-            }
+        fun lowered(): Expression = compile(expr, scope, false).also { check(it.proof) }
+        if (proof.isTuple || lexical?.isTuple == true) return lowered().also {
+            if (!it.proof.isTuple) throw RuntimeFault("Missing exact tuple argument proof")
         }
-        if (!lifted) return force(compile(expr, scope, false).also {
-            CoreRepresentations.requireNoVector(it.proof, "argument")
-            CoreRepresentations.requireNoSum(it.proof, "argument")
-        })
-        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false).also { CoreRepresentations.requireNoSum(it.proof, "argument") }
-        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { CoreRepresentations.requireNoSum(it.proof, "argument") }
+        // Lowering can expose a tuple behind omitted outer case metadata. It
+        // must remain a destination writer and may never be forced or delayed.
+        if (!lifted) return force(lowered())
+        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return lowered()
+        return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> lowered(); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int16" -> int16Literal(value)
@@ -487,6 +518,56 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         b.endBlock()
     }
 
+    /** Aggregate operands are written directly into replay-local typed slots. */
+    private fun typedArguments(e: Emission, function: Expression, arguments: List<Expression>,
+                               layout: ArgumentLayout, tail: Boolean, destination: BytecodeTupleSlots? = null) {
+        val b = e.builder
+        b.beginBlock()
+        val fn = b.createLocal("typed function", null)
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = List(layout.physicalArity) { b.createLocal("typed input $it", null) }
+        arguments.forEachIndexed { index, argument ->
+            val offset = layout.offset(index)
+            if (layout.isTuple(index)) argument.emitTuple(e, values.subList(offset, layout.offset(index + 1)))
+            else {
+                b.beginStoreLocal(values[offset]); argument.emit(e); b.endStoreLocal()
+            }
+        }
+        val source = BytecodeInputSource(layout, values.map(LocalAccessor::constantOf).toTypedArray())
+        if (destination == null) {
+            b.beginApplyTypedInput(source, tail, metrics)
+            b.emitLoadLocal(fn); b.endApplyTypedInput()
+        } else {
+            b.beginApplyTypedInputTuple(source, destination, tail, metrics)
+            b.emitLoadLocal(fn); b.endApplyTypedInputTuple()
+        }
+        b.endBlock()
+    }
+
+    private fun restoreTailArguments(e: Emission, context: FunctionContext, transfer: BytecodeLocal) {
+        val b = e.builder
+        val typed = e.typedInputSlots
+        if (typed != null) {
+            b.beginRestoreTypedTail(typed); b.emitLoadLocal(transfer); b.endRestoreTypedTail()
+            return
+        }
+        // Preserve this activation's ancestry when replacing captures/formals.
+        context.captures.forEachIndexed { index, local ->
+            b.beginStoreLocal(e.locals.getValue(local.id))
+            if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
+            b.beginTailArgument(1); b.emitLoadLocal(transfer); b.endTailArgument()
+            if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
+            b.endStoreLocal()
+        }
+        val offset = if (context.captureLayout == null) 1 else 2
+        context.arguments.forEachIndexed { index, local -> if (local != null) {
+            restoreArgument(e, local) {
+                b.beginTailArgument(ArgumentLayout.offset(context.inputLayout, index) + offset)
+                b.emitLoadLocal(transfer); b.endTailArgument()
+            }
+        } }
+    }
+
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
         val evaluatedArguments = arguments.map { it.proof.evaluated }.toBooleanArray()
@@ -500,7 +581,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginBlock()
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
             } else null
-            if (inputLayout != null) {
+            if (inputLayout?.requiresTyped == true) {
+                typedArguments(e, function, arguments, inputLayout, tail)
+            } else if (inputLayout != null) {
                 compactArguments(e, function, arguments, inputLayout) { fn, values ->
                     b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments)
                     b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
@@ -571,21 +654,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginConditional()
                 b.beginIsTailReentry(); b.emitLoadLocal(reentryResult); b.endIsTailReentry()
                 b.beginBlock()
-                // The original activation retains its bloom ancestry. Only the new
-                // packet's environment and value arguments replace lexical locals.
-                context.captures.forEachIndexed { index, local ->
-                    b.beginStoreLocal(e.locals.getValue(local.id))
-                    if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
-                    b.beginTailArgument(1); b.emitLoadLocal(reentryResult); b.endTailArgument()
-                    if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
-                    b.endStoreLocal()
-                }
-                val offset = if (context.captureLayout == null) 1 else 2
-                context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    restoreArgument(e, local) {
-                        b.beginTailArgument(ArgumentLayout.offset(context.inputLayout, index) + offset); b.emitLoadLocal(reentryResult); b.endTailArgument()
-                    }
-                } }
+                restoreTailArguments(e, context, reentryResult)
                 b.emitBranch(e.continueLabel!!)
                 b.emitLoadConstant(Unit)
                 b.endBlock()
@@ -1036,8 +1105,15 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val resultProof = CoreRepresentations.expression(expr)
             CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateFloatingCaseResult(resultProof, alternatives.map { it.body.proof })
-            val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(resultProof)
-                ?: resultProof.copy(evaluated = alternatives.all { it.body.proof.evaluated })
+            // A missing outer case record must not erase an exact aggregate
+            // writer. Infer only when every arm supplies its own checked shape.
+            val effectiveResult = if (!resultProof.isAggregate && alternatives.any { it.body.proof.isAggregate }) {
+                if (!alternatives.all { it.body.proof.isAggregate })
+                    throw UnsupportedCore("Missing exact aggregate case result proof")
+                alternatives.first().body.proof.refine(resultProof)
+            } else resultProof
+            val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(effectiveResult)
+                ?: effectiveResult.copy(evaluated = alternatives.all { it.body.proof.evaluated })
             LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
                 val b = e.builder
                 b.beginBlock()
@@ -1117,7 +1193,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         return tupleExpression(shape.proof) { e, destination ->
             val b = e.builder
             if (!tail) {
-                if (inputLayout == null) {
+                if (inputLayout?.requiresTyped == true) {
+                    b.beginStoreLocal(b.createLocal("typed tuple call", null))
+                    typedArguments(e, function, arguments, inputLayout, false, tupleSlots(shape, destination))
+                    b.endStoreLocal()
+                } else if (inputLayout == null) {
                     b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
                     requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endApplyTuple()
                 } else compactArguments(e, function, arguments, inputLayout) { fn, values ->
@@ -1128,7 +1208,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginBlock()
                 val result = b.createLocal("tuple tail result", null)
                 b.beginStoreLocal(result)
-                if (inputLayout == null) {
+                if (inputLayout?.requiresTyped == true) {
+                    typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination))
+                } else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
                     requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endTailApplyTuple()
                 } else compactArguments(e, function, arguments, inputLayout) { fn, values ->
@@ -1139,17 +1221,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.beginIfThenElse()
                 b.beginIsTailReentry(); b.emitLoadLocal(result); b.endIsTailReentry()
                 b.beginBlock()
-                context.captures.forEachIndexed { index, local ->
-                    b.beginStoreLocal(e.locals.getValue(local.id))
-                    if (local.directLong) b.beginCaptureReadLong(context.captureLayout!!, index) else b.beginCaptureRead(context.captureLayout!!, index)
-                    b.beginTailArgument(1); b.emitLoadLocal(result); b.endTailArgument()
-                    if (local.directLong) b.endCaptureReadLong() else b.endCaptureRead()
-                    b.endStoreLocal()
-                }
-                val offset = if (context.captureLayout == null) 1 else 2
-                context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    restoreArgument(e, local) { b.beginTailArgument(offset + ArgumentLayout.offset(context.inputLayout, index)); b.emitLoadLocal(result); b.endTailArgument() }
-                } }
+                restoreTailArguments(e, context, result)
                 b.emitBranch(e.continueLabel!!)
                 b.endBlock()
                 b.beginBlock(); b.endBlock()
