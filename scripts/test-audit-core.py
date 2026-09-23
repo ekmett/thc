@@ -50,6 +50,8 @@ def tuple_fixture(proof=None):
         if not audit_core.Audit.is_tuple(rep):
             if rep['kind'] == 'long':
                 return [*var('x'), dict(rep=copy.deepcopy(rep))]
+            if rep['kind'] == 'void':
+                return ['void', dict(rep=copy.deepcopy(rep))]
             constructors['Box'] = dict(id='Box', kind='boxed', arity=0, fieldReps=[], strictFields=[], fieldLifted=[])
             return ['con', 'Box', 0, dict(rep=copy.deepcopy(rep))]
         children = rep['components']
@@ -97,6 +99,17 @@ def tuple_join_fixture(zero=False):
 
 
 class AuditTest(unittest.TestCase):
+    def test_zero_width_state_components_preserve_logical_shape(self):
+        void = dict(kind='void', primReps=[], evaluated=True)
+        proof = tuple_rep(void, tuple_rep(), LONG)
+        module = tuple_fixture(proof)
+        self.assertTrue(run_tuple(module)['accepted'])
+        forged = copy.deepcopy(module)
+        forged['bindings'][1]['expr'][3]['resultRep']['components'][0] = tuple_rep()
+        self.assertFalse(run_tuple(forged)['accepted'], 'State# is not the empty unboxed tuple')
+        byte_array = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        self.assertTrue(run_tuple(tuple_fixture(tuple_rep(void, byte_array)))['accepted'])
+
     def test_word64_literals_are_canonical_unsigned_values(self):
         for value in ('0', '1', '9223372036854775808', '18446744073709551615'):
             self.assertTrue(run(['lit', 'word64', value])['accepted'], value)

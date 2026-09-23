@@ -80,7 +80,7 @@ class Audit:
                         self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
                     else:
                         physical.extend(registers)
-                        if 'aggregate' not in component and (component.get('kind') in ('unknown', 'void', 'float', 'double') or
+                        if 'aggregate' not in component and (component.get('kind') in ('unknown', 'float', 'double') or
                                 any(r not in self.cap['fieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
                 if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:

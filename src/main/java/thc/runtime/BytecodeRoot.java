@@ -540,6 +540,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Evaluates a zero-width field for effects while producing no destination value. */
+    @Operation public static final class DiscardVoid {
+        @Specialization public static void discard(Object value) { }
+    }
+
     @Operation public static final class Add { @Specialization public static long apply(long x, long y) { return x + y; } }
     @Operation public static final class Subtract { @Specialization public static long apply(long x, long y) { return x - y; } }
     @Operation public static final class Multiply { @Specialization public static long apply(long x, long y) { return x * y; } }

@@ -9,7 +9,12 @@ typed local destinations without using the function-return carrier.
 
 Ordinary boxed tuples, boxed unit and unlifted boxed products continue to use
 `DataValue` references. An empty unboxed tuple remains logically distinct from
-`State#` and `Proxy#`.
+`State#` and `Proxy#`. These zero-width scalar fields retain logical tuple positions
+without payload fields or result slots. Their expressions still execute in source
+order, even if the corresponding pattern binder is unused. A bound zero-width
+field is a canonical Unit alias; nested closures need no capture field for that
+alias. Existing scalar State# formals and call packets retain their ordinary ABI.
+`ByteArray#` is one unlifted boxed reference, independent of State# erasure.
 
 The public Truffle boundary remains `Object[] -> Object`. Tuple results use a
 mandatory private protocol, independent of `thc.handoffSlabs`:
@@ -49,10 +54,19 @@ remain unsupported, including unused formals and zero-width tuples. Exact tuple
 join results use typed local slots inside the same guest root; no result carrier
 or pool loan is needed for that local control flow. Join captures of whole tuples
 remain unsupported; individual scalar/reference fields can be used normally.
-Sums, unknown/null aggregate layouts, unsupported physical leaves and scalar
-void components inside tuples are also rejected. Host entries must return a
+Sums, unknown/null aggregate layouts and unsupported physical leaves are also
+rejected. Host entries must return a
 scalar/reference result; diagnostic mode defers an unsupported host result to a
 trap without executing a tuple producer.
+
+The exporter preserves native proofs through `runRW# f` to `f realWorld#` only
+when GHC's exact type equality confirms the rewrite. Representation-changing
+wired rewrites remain uncertified. `scripts/prepare-state-tuple-audit.py` checks
+the genuine pre/post-Tidy metadata and 21 native rows against independent
+wraparound formulas. `StateTupleTest` runs these rows with and without guest
+inlining on both backends, checks installed entry validity after every compiled
+call, and covers lazy payloads, nested empty fields, zero-storage captures and
+an ignored State# field whose evaluation throws before tuple completion.
 
 `TupleResultTest` executes the genuine pre/post-Tidy `AggregateFrontier` tuple
 entries and all 94 `TupleReturnAudit` native oracle rows on AST and BytecodeDSL,
