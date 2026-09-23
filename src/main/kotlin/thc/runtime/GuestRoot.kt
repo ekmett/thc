@@ -14,6 +14,10 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
     @field:CompilationFinal internal var entryArgumentOffset: Int = 1
         private set
 
+    @field:CompilationFinal internal var inputLayout: ArgumentLayout? = null
+        private set
+    internal fun configureInput(layout: ArgumentLayout?) { inputLayout = layout }
+
     /** Fixed before publishing the target; all saturated application paths enforce these marks. */
     internal fun configureEntry(strict: BooleanArray, hasEnvironment: Boolean) {
         entryStrict = strict.copyOf()

@@ -339,12 +339,16 @@ private class Application(function: Expr,
                           @field:Children private var arguments: Array<Expr>, tail: Boolean, metrics: Metrics) : Expr() {
     init { representation = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     @Child private var function = Evaluate(function, metrics)
+    private val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.representation })
     @Child private var dispatch = Dispatch.create(arguments.size, tail, metrics,
-        arguments.map { it.representation.evaluated }.toBooleanArray())
+        arguments.map { it.representation.evaluated }.toBooleanArray(), inputLayout)
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
         val fn = function.executeRequiredClosure(frame)
-        val values = arrayOfNulls<Any>(arguments.size)
-        for (i in arguments.indices) values[i] = arguments[i].execute(frame)
+        val values = arrayOfNulls<Any>(ArgumentLayout.width(inputLayout, arguments.size))
+        for (i in arguments.indices) {
+            if (inputLayout?.isEmpty(i) == true) arguments[i].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
+            else values[ArgumentLayout.offset(inputLayout, i)] = arguments[i].execute(frame)
+        }
         return dispatch.execute(frame, fn, values)
     }
 }
@@ -832,8 +836,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             entryStrict: BooleanArray = booleanArrayOf(),
                             internal val handoff: HandoffEntry? = null,
                             tuple: TupleShape? = null,
-                            tupleSlots: IntArray = intArrayOf()) : GuestRoot(language, descriptor) {
-    init { configureEntry(entryStrict, captureLayout != null); configureTupleResult(tuple) }
+                            tupleSlots: IntArray = intArrayOf(),
+                            inputLayout: ArgumentLayout? = null) : GuestRoot(language, descriptor) {
+    init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
     @field:CompilationFinal private var hasSelfTail = false
@@ -1010,7 +1015,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
-        if (!diagnosticUnsupported) CoreRepresentations.validateAggregates(bindings)
+        if (!diagnosticUnsupported) {
+            CoreRepresentations.validateAggregates(bindings)
+            CoreInputCalls.validate(bindings)
+        }
         val scope = Scope(FrameLayout())
         val initializers = bindings.map { binding ->
             withSource(sources.binding(binding)) {
@@ -1069,7 +1077,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val scope = Scope(FrameLayout())
         val free = freeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
-        args.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "formal argument") }
+        args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
+        val inputLayout = ArgumentLayout.fromProofs(args.map(CoreRepresentations::binder))
         val freeLocals = (free - argumentIds).filter { it in outer.locals }
         freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot < 0 && local.proof.kind == CoreKind.VOID } }
             .forEach { scope.bindVoid(it, outer.locals.getValue(it).proof) }
@@ -1086,8 +1095,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         for ((index, arg) in args.withIndex()) {
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-            if (arg["id"] in free) {
-                argumentIndices += index; argumentProofs += proof
+            if (proof.isEmptyTuple) {
+                if (lifted) throw RuntimeFault("Empty tuple formal cannot be lifted")
+                scope.bindTuple(arg["id"] as String, proof, EMPTY_TUPLE_SLOTS)
+            } else if (arg["id"] in free) {
+                argumentIndices += ArgumentLayout.offset(inputLayout, index); argumentProofs += proof
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }
         }
@@ -1098,11 +1110,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isDouble && local.proof.evaluated } }.toBooleanArray())
         val allArgumentSlots = IntArray(args.size) { -1 }
         val allArgumentProofs = Array(args.size) { CoreRepresentation.UNKNOWN }
-        argumentIndices.forEachIndexed { index, argument ->
-            allArgumentSlots[argument] = argumentSlots[index]
-            allArgumentProofs[argument] = argumentProofs[index]
+        args.forEachIndexed { index, arg ->
+            scope.locals[arg["id"]]?.takeIf { !it.proof.isTuple }?.let { local ->
+                allArgumentSlots[index] = local.slot
+                allArgumentProofs[index] = local.proof
+            }
         }
-        scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf())
+        scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf(), inputLayout)
         val body = compile(expression, scope, true)
         val handoff = HandoffEntry.create(language, scope.layout, args.map(CoreRepresentations::binder), resultProof, captures != null)
         val effectiveResult = body.representation.refine(resultProof)
@@ -1111,8 +1125,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<tuple return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
-            rootSource(body), entryStrict, handoff, tuple, tupleSlots)
-        if (body is Case) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
+            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout)
+        if (body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
             ::dataLayout, sources, body.coreSourceLocation))
         return FunctionSpec(root.callTarget, captures, captureSources)
@@ -1122,9 +1136,20 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return Delay(fn.target, fn.captureLayout, fn.captures).proven(CoreRepresentations.expression(expr).copy(evaluated = false))
             .located(sources.expression(expr, currentSource))
     }
-    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expr {
-        CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
-        if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireScalar(it.proof, "argument") }
+    private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk", allowEmpty: Boolean = false): Expr {
+        val proof = CoreRepresentations.expression(expr)
+        fun check(value: CoreRepresentation) {
+            if (allowEmpty) CoreRepresentations.requireInput(value) else CoreRepresentations.requireScalar(value, "argument")
+        }
+        check(proof)
+        val lexical = if (expr[0] == "var") scope.locals[expr[1]]?.proof else null
+        lexical?.let(::check)
+        if (proof.isEmptyTuple || lexical?.isEmptyTuple == true) {
+            if (lifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
+            return compile(expr, scope, false).also {
+                if (!it.representation.isEmptyTuple) throw RuntimeFault("Missing exact empty tuple argument proof")
+            }
+        }
         if (!lifted) return Evaluate(compile(expr, scope, false).also {
             CoreRepresentations.requireNoVector(it.representation, "argument")
         }, metrics)
@@ -1248,7 +1273,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 // A saturated constructor's strict operand is already a CBV
                 // context. Compile it directly, without an allocate/force thunk.
                 // Partial constructors deliberately take the ordinary lazy path.
-                argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true)
+                argument(arg, scope, lifted && !callStrict[i] && constructorStrictFields?.get(i) != true && entryStrict?.getOrNull(i) != true,
+                    allowEmpty = fn[0] != "prim" && fn[0] != "con")
             }.toTypedArray()
             when {
                 fn[0] == "prim" -> {
@@ -1261,7 +1287,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     if (tupleProof.isTuple) TupleApplication(language as thc.Language, TupleShape(tupleProof, language), function, nodes, tail, metrics)
                     else {
                     val self = scope.self
-                    if (tail && self != null && self.arity > 0 && nodes.size <= self.arity) {
+                    if (tail && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
                         val temporaries = IntArray(self.arity) { scope.layout.bind("<self argument $it>") }
                         AstTailApplication(function, nodes, self, temporaries, metrics)
                     } else Application(function, nodes, tail, metrics)
