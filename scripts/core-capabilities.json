@@ -6,6 +6,8 @@
   ],
   "externalBindings": [],
   "literalKinds": [
+    "float",
+    "double",
     "int",
     "int64",
     "word",
@@ -49,6 +51,8 @@
     "boxed"
   ],
   "fieldRepresentations": [
+    "FloatRep",
+    "DoubleRep",
     "IntRep",
     "WordRep",
     "Int8Rep",
@@ -104,6 +108,34 @@
     "uncheckedShiftRLWord8#": 2,
     "uncheckedShiftRLWord16#": 2,
     "uncheckedShiftRLWord32#": 2,
+    "plusFloat#": 2,
+    "minusFloat#": 2,
+    "timesFloat#": 2,
+    "divideFloat#": 2,
+    "negateFloat#": 1,
+    "eqFloat#": 2,
+    "neFloat#": 2,
+    "ltFloat#": 2,
+    "leFloat#": 2,
+    "gtFloat#": 2,
+    "geFloat#": 2,
+    "+##": 2,
+    "-##": 2,
+    "*##": 2,
+    "/##": 2,
+    "negateDouble#": 1,
+    "==##": 2,
+    "/=##": 2,
+    "<##": 2,
+    "<=##": 2,
+    ">##": 2,
+    ">=##": 2,
+    "int2Float#": 1,
+    "int2Double#": 1,
+    "float2Int#": 1,
+    "double2Int#": 1,
+    "float2Double#": 1,
+    "double2Float#": 1,
     "negateInt#": 1,
     "not#": 1,
     "notI#": 1,
@@ -236,7 +268,7 @@
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
-    "Unboxed tuples require exact recursive result layouts; aggregate arguments, captures, let bindings, join boundaries, sums, scalar void tuple components, and first-class tuple constructors remain unsupported."
+    "Unboxed tuples require exact recursive result layouts; aggregate arguments, captures, ordinary let bindings, join arguments/captures, sums, scalar void tuple components, and first-class tuple constructors remain unsupported."
   ],
   "aggregateResults": [
     "unboxed-tuple"

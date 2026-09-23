@@ -115,6 +115,15 @@ internal abstract class Expr : Node() {
     }
 
     @Throws(UnexpectedResultException::class)
+    open fun executeFloat(frame: VirtualFrame): Float = RuntimeTypesGen.expectFloat(execute(frame))
+    @Throws(UnexpectedResultException::class)
+    open fun executeDouble(frame: VirtualFrame): Double = RuntimeTypesGen.expectDouble(execute(frame))
+    fun executeRequiredFloat(frame: VirtualFrame): Float = try { executeFloat(frame) }
+    catch (_: UnexpectedResultException) { fault("Expected primitive Float") }
+    fun executeRequiredDouble(frame: VirtualFrame): Double = try { executeDouble(frame) }
+    catch (_: UnexpectedResultException) { fault("Expected primitive Double") }
+
+    @Throws(UnexpectedResultException::class)
     open fun executeClosure(frame: VirtualFrame): Closure = RuntimeTypesGen.expectClosure(execute(frame))
 
     @Throws(UnexpectedResultException::class)
@@ -138,12 +147,19 @@ internal abstract class Expr : Node() {
 }
 private class Literal(private val value: Any?) : Expr() {
     init { representation = CoreRepresentation(when (value) {
-        is Long -> CoreKind.LONG; is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+        is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
+        is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
     }, evaluated = true) }
     override fun execute(frame: VirtualFrame) = value
     override fun executeLong(frame: VirtualFrame) = RuntimeTypesGen.expectLong(value)
+    override fun executeFloat(frame: VirtualFrame) = RuntimeTypesGen.expectFloat(value)
+    override fun executeDouble(frame: VirtualFrame) = RuntimeTypesGen.expectDouble(value)
 }
 internal class LocalRead(private val slot: Int, private val cell: Boolean = true) : Expr() {
+    override fun executeFloat(frame: VirtualFrame): Float =
+        if ((!cell && representation.isFloat) || frame.isFloat(slot)) frame.getFloat(slot) else super.executeFloat(frame)
+    override fun executeDouble(frame: VirtualFrame): Double =
+        if ((!cell && representation.isDouble) || frame.isDouble(slot)) frame.getDouble(slot) else super.executeDouble(frame)
     override fun executeLong(frame: VirtualFrame): Long =
         if ((!cell && representation.isLong) || frame.isLong(slot)) frame.getLong(slot) else super.executeLong(frame)
 
@@ -259,10 +275,18 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     override fun execute(frame: VirtualFrame): Any? = when {
         value.representation.isLong -> value.executeRequiredLong(frame)
+        value.representation.isFloat -> value.executeRequiredFloat(frame)
+        value.representation.isDouble -> value.executeRequiredDouble(frame)
         value.representation.evaluated -> value.execute(frame)
         else -> forceResult(frame, value.execute(frame))
     }
     @CompilationFinal private var genericLong = false
+    override fun executeFloat(frame: VirtualFrame): Float =
+        if (value.representation.evaluated || value.representation.isFloat) value.executeFloat(frame)
+        else RuntimeTypesGen.expectFloat(forceResult(frame, value.execute(frame)))
+    override fun executeDouble(frame: VirtualFrame): Double =
+        if (value.representation.evaluated || value.representation.isDouble) value.executeDouble(frame)
+        else RuntimeTypesGen.expectDouble(forceResult(frame, value.execute(frame)))
     override fun executeLong(frame: VirtualFrame): Long {
         if (value.representation.evaluated || value.representation.isLong) return value.executeLong(frame)
         if (genericLong) return RuntimeTypesGen.expectLong(forceResult(frame, value.execute(frame)))
@@ -339,6 +363,8 @@ internal class LocalBinding(private val slot: Int, @field:Child private var valu
     }
     fun write(frame: VirtualFrame) {
         if (exactLong) { FrameAccess.writeLong(frame, slot, value.executeRequiredLong(frame)); return }
+        if (value.representation.isFloat) { FrameAccess.writeFloat(frame, slot, value.executeRequiredFloat(frame)); return }
+        if (value.representation.isDouble) { FrameAccess.writeDouble(frame, slot, value.executeRequiredDouble(frame)); return }
         if (referenceKind == CoreKind.DATA) { FrameAccess.write(frame, slot, value.executeRequiredDataValue(frame)); return }
         if (referenceKind == CoreKind.CLOSURE) { FrameAccess.write(frame, slot, value.executeRequiredClosure(frame)); return }
         if (referenceKind == CoreKind.ADDRESS) { FrameAccess.write(frame, slot, value.executeRequiredAddress(frame)); return }
@@ -365,6 +391,8 @@ private class Let(@field:CompilationFinal(dimensions = 1) private val slots: Int
         initialize(frame)
         return body.executeLong(frame)
     }
+    override fun executeFloat(frame: VirtualFrame): Float { initialize(frame); return body.executeFloat(frame) }
+    override fun executeDouble(frame: VirtualFrame): Double { initialize(frame); return body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure {
         initialize(frame)
         return body.executeClosure(frame)
@@ -466,6 +494,33 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         return (fallback ?: fault("Non-exhaustive Core case")).body.executeLong(frame)
     }
 
+
+    @ExplodeLoop override fun executeFloat(frame: VirtualFrame): Float {
+        prepare(frame)
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt)
+                return alt.body.executeFloat(frame)
+            }
+        }
+        return (fallback ?: fault("Non-exhaustive Core case")).body.executeFloat(frame)
+    }
+
+    @ExplodeLoop override fun executeDouble(frame: VirtualFrame): Double {
+        prepare(frame)
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt)
+                return alt.body.executeDouble(frame)
+            }
+        }
+        return (fallback ?: fault("Non-exhaustive Core case")).body.executeDouble(frame)
+    }
+
     @ExplodeLoop override fun executeClosure(frame: VirtualFrame): Closure {
         prepare(frame)
         var fallback: Alternative? = null
@@ -540,6 +595,8 @@ private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alte
                           proof: CoreRepresentation) : Case(scrutinee, binder, alternatives, metrics, proof) {
     override fun execute(frame: VirtualFrame): Any? { prepare(frame); return alternatives.last().body.execute(frame) }
     override fun executeLong(frame: VirtualFrame): Long { prepare(frame); return alternatives.last().body.executeLong(frame) }
+    override fun executeFloat(frame: VirtualFrame): Float { prepare(frame); return alternatives.last().body.executeFloat(frame) }
+    override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return alternatives.last().body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return alternatives.last().body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return alternatives.last().body.executeDataValue(frame) }
     override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
@@ -552,6 +609,8 @@ private class Construct(private val layout: DataLayout,
         val value = layout.allocate()
         for (i in fields.indices) {
             if (layout.isLong(i)) layout.initializeLong(value, i, fields[i].executeRequiredLong(frame))
+            else if (layout.isFloat(i)) layout.initializeFloat(value, i, fields[i].executeRequiredFloat(frame))
+            else if (layout.isDouble(i)) layout.initializeDouble(value, i, fields[i].executeRequiredDouble(frame))
             else layout.initialize(value, i, fields[i].execute(frame))
         }
         return value
@@ -706,6 +765,8 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
         // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
         // cannot fold that lookup, even when this node's resultKind is constant.
         if (resultKind == CoreKind.LONG) return value.executeRequiredLong(frame)
+        if (resultKind == CoreKind.FLOAT) return value.executeRequiredFloat(frame)
+        if (resultKind == CoreKind.DOUBLE) return value.executeRequiredDouble(frame)
         if (resultKind == CoreKind.DATA) return value.executeRequiredDataValue(frame)
         if (resultKind == CoreKind.CLOSURE) return value.executeRequiredClosure(frame)
         if (resultKind == CoreKind.ADDRESS) return value.executeRequiredAddress(frame)
@@ -774,6 +835,10 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 FrameAccess.write(frame, argumentSlots[i], requireReferenceCarrier(value, reference))
             else if (i < argumentProofs.size && argumentProofs[i].isLong)
                 FrameAccess.writeLong(frame, argumentSlots[i], value as? Long ?: fault("Expected primitive Long argument"))
+            else if (i < argumentProofs.size && argumentProofs[i].isFloat)
+                FrameAccess.writeFloat(frame, argumentSlots[i], value as? Float ?: fault("Expected primitive Float argument"))
+            else if (i < argumentProofs.size && argumentProofs[i].isDouble)
+                FrameAccess.writeDouble(frame, argumentSlots[i], value as? Double ?: fault("Expected primitive Double argument"))
             else FrameAccess.write(frame, argumentSlots[i], value)
         }
         if (captureLayout != null) {
@@ -1009,7 +1074,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         val captures = if (captured.isEmpty()) null else CaptureLayout(requireNotNull(language), captureKinds,
             captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isLong && local.proof.evaluated } }.toBooleanArray(),
-            captured.map { outer.locals.getValue(it).let { local -> if (local.cell) null else local.proof.referenceCarrier() } }.toTypedArray())
+            captured.map { outer.locals.getValue(it).let { local -> if (local.cell) null else local.proof.referenceCarrier() } }.toTypedArray(),
+            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isFloat && local.proof.evaluated } }.toBooleanArray(),
+            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isDouble && local.proof.evaluated } }.toBooleanArray())
         val allArgumentSlots = IntArray(args.size) { -1 }
         val allArgumentProofs = Array(args.size) { CoreRepresentation.UNKNOWN }
         argumentIndices.forEachIndexed { index, argument ->
@@ -1055,6 +1122,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "int64" -> int64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
+        "float" -> value.toFloat()
+        "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> LiteralAddress.fromHex(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
@@ -1202,7 +1271,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
-                    "lit" -> (alt[1] as List<String>).let { literal(it[0], it[1]) }
+                    "lit" -> (alt[1] as List<String>).let {
+                        if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
+                        literal(it[0], it[1])
+                    }
                     "data" -> dataLayout(alt[1] as String)
                     else -> alt[1]
                 }
@@ -1353,7 +1425,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val fields = CoreFields(info)
         DataLayout(language ?: throw RuntimeFault("Constructor layout requires a guest language"), id, info["name"] as String, fields.storage, fields.referenceTypes)
     }
-    private fun primitive(name: String, args: Array<Expr>): Expr = when (name) {
+    private fun primitive(name: String, args: Array<Expr>): Expr = floatingPrimitive(name, args) ?: when (name) {
         "reallyUnsafePtrEquality#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             PointerEquality(args[0], args[1])

@@ -344,11 +344,23 @@ class AuditTest(unittest.TestCase):
         self.assertEqual(len(report['missingGlobals'][0]['references']), 2)
 
     def test_reports_all_reachable_capabilities_and_rejects_partial_primitive(self):
-        expr = ['let', False, [bind('partial', ['prim', '+#']), bind('bad', ['lit', 'double', '2.5'])],
+        expr = ['let', False, [bind('partial', ['prim', '+#']), bind('bad', ['lit', 'unsupported-literal', '2.5'])],
                 ['app', ['prim', 'unsupported#'], [lit(1)], [False]]]
         report = run(expr)
         self.assertEqual({i['code'] for i in report['issues']}, {'primitive-arity', 'unsupported-literal', 'unsupported-primitive'})
         self.assertEqual([p['name'] for p in report['primitives']], ['+#', 'unsupported#'])
+
+    def test_floating_scalars_do_not_expand_aggregate_or_literal_alternative_support(self):
+        for kind, register in [('float', 'FloatRep'), ('double', 'DoubleRep')]:
+            scalar = dict(kind=kind, primReps=[register], evaluated=True)
+            audit = audit_core.Audit([], CAP)
+            audit.representation(scalar, None, '/scalar')
+            self.assertEqual([], audit.issues)
+            audit.representation(tuple_rep(scalar), None, '/tuple')
+            self.assertIn('aggregate-representation', [i['code'] for i in audit.issues])
+            report = run(['case', ['lit', kind, '0.0'], 'x',
+                          [['lit', [kind, '-0.0'], [], lit(1)], ['default', None, [], lit(0)]]])
+            self.assertIn('alternative-kind', [i['code'] for i in report['issues']])
 
     def test_strictness_checked_for_construction_not_pattern_match(self):
         con = dict(id='Strict', name='Strict', arity=1, kind='boxed', fieldReps=[['BoxedRep (Just Lifted)']],

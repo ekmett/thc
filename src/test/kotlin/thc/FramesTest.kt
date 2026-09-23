@@ -115,13 +115,18 @@ class FramesTest {
 
     @Test fun unrelatedTruffleNumericTagsAreRejectedInsteadOfSilentlyBoxed() {
         val writers: List<(VirtualFrame) -> Unit> = listOf(
-            { it.setInt(0, 7) }, { it.setByte(0, 7) },
-            { it.setFloat(0, 7.0f) }, { it.setDouble(0, 7.0) })
+            { it.setInt(0, 7) }, { it.setByte(0, 7) })
         for (write in writers) {
             val local = frame(newDescriptor())
             write(local)
             val error = assertThrows(RuntimeFault::class.java) { FrameAccess.read(local, 0) }
             assertEquals("Unsupported runtime frame slot tag", error.message)
         }
+        // Float/Double are now supported exact carriers, not widened integers.
+        val floating = frame(newDescriptor())
+        floating.setFloat(0, 7.0f)
+        assertEquals(7.0f, FrameAccess.read(floating, 0))
+        floating.setDouble(0, 7.0)
+        assertEquals(7.0, FrameAccess.read(floating, 0))
     }
 }

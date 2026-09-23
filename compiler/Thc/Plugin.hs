@@ -201,6 +201,8 @@ typeRep ty evaluated = O $
       Just [] -> "void"
       Just [r] | longRep r -> "long"
       Just [VecRep _ _] -> "vector"
+      Just [FloatRep] -> "float"
+      Just [DoubleRep] -> "double"
       Just [AddrRep] -> "address"
       Just [BoxedRep _]
         | isFunTy rho -> "closure"

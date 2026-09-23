@@ -99,6 +99,10 @@ Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends wi
 scalar/reference inputs and local join results; aggregate arguments, join captures, ordinary captures, sums and scalar
 void tuple components remain explicit boundaries.
 
+[Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
+Double storage and 28 arithmetic/comparison/conversion primops, checked against
+native GHC. Floating tuple results and an unboxed floating call ABI remain out of scope.
+
 The `Data.Set` example remains a separate frontier until its full exported call
 graph passes; native results alone are not counted as THC execution passes.
 

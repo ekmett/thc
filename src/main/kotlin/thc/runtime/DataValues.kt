@@ -165,6 +165,18 @@ class DataLayout(
         fields[index].initializeLong(value, field)
     }
 
+    internal fun initializeFloat(value: DataValue, index: Int, field: Float) {
+        if (!owns(value)) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        fields[index].initializeFloat(value, field)
+    }
+
+    internal fun initializeDouble(value: DataValue, index: Int, field: Double) {
+        if (!owns(value)) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        fields[index].initializeDouble(value, field)
+    }
+
     fun read(value: DataValue, index: Int): Any? {
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
@@ -180,6 +192,25 @@ class DataLayout(
         if (!owns(value)) fault("Constructor value does not match layout")
         if (index < 0 || index >= arity) fault("Invalid constructor field index")
         return fields[index].readLong(value)
+    }
+
+    fun isFloat(index: Int): Boolean {
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        return fields[index].isFloat()
+    }
+    fun isDouble(index: Int): Boolean {
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        return fields[index].isDouble()
+    }
+    fun readFloat(value: DataValue, index: Int): Float {
+        if (!owns(value)) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        return fields[index].readFloat(value)
+    }
+    fun readDouble(value: DataValue, index: Int): Double {
+        if (!owns(value)) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        return fields[index].readDouble(value)
     }
 
     /** Keep primitive property reads next to indexed frame writes, as Cadenza does. */
@@ -204,6 +235,8 @@ class DataLayout(
         private val kind = when (representation) {
             "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
             "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" -> LONG
+            "FloatRep" -> FLOAT
+            "DoubleRep" -> DOUBLE
             "LiftedRep", "UnliftedRep" -> OBJECT
             "VoidRep" -> VOID
             else -> throw UnsupportedCore("Unsupported constructor field representation: $representation")
@@ -215,6 +248,8 @@ class DataLayout(
         fun register(builder: StaticShape.Builder) {
             when (kind) {
                 LONG -> builder.property(property, Long::class.javaPrimitiveType, true)
+                FLOAT -> builder.property(property, Float::class.javaPrimitiveType, true)
+                DOUBLE -> builder.property(property, Double::class.javaPrimitiveType, true)
                 OBJECT -> builder.property(property, referenceType, true)
                 // A zero-width Core slot exists logically, but takes no payload storage.
                 VOID -> Unit
@@ -224,6 +259,8 @@ class DataLayout(
         fun initialize(value: DataValue, field: Any?) {
             when (kind) {
                 LONG -> property.setLong(value, field as? Long ?: fault("Expected primitive Long constructor field"))
+                FLOAT -> property.setFloat(value, field as? Float ?: fault("Expected primitive Float constructor field"))
+                DOUBLE -> property.setDouble(value, field as? Double ?: fault("Expected primitive Double constructor field"))
                 OBJECT -> property.setObject(value, field)
                 VOID -> if (field !== Unit) fault("Expected zero-width constructor field")
             }
@@ -234,22 +271,46 @@ class DataLayout(
             property.setLong(value, field)
         }
 
+        fun initializeFloat(value: DataValue, field: Float) {
+            if (kind != FLOAT) fault("Constructor field is not primitive Float")
+            property.setFloat(value, field)
+        }
+        fun initializeDouble(value: DataValue, field: Double) {
+            if (kind != DOUBLE) fault("Constructor field is not primitive Double")
+            property.setDouble(value, field)
+        }
+
         fun read(value: DataValue): Any? = when (kind) {
             LONG -> property.getLong(value)
+            FLOAT -> property.getFloat(value)
+            DOUBLE -> property.getDouble(value)
             OBJECT -> property.getObject(value)
             else -> Unit
         }
 
         fun isLong(): Boolean = kind == LONG
+        fun isFloat(): Boolean = kind == FLOAT
+        fun isDouble(): Boolean = kind == DOUBLE
 
         fun readLong(value: DataValue): Long {
             if (kind != LONG) fault("Constructor field is not primitive Long")
             return property.getLong(value)
         }
 
+        fun readFloat(value: DataValue): Float {
+            if (kind != FLOAT) fault("Constructor field is not primitive Float")
+            return property.getFloat(value)
+        }
+        fun readDouble(value: DataValue): Double {
+            if (kind != DOUBLE) fault("Constructor field is not primitive Double")
+            return property.getDouble(value)
+        }
+
         fun restore(value: DataValue, frame: Frame, slot: Int) {
             when (kind) {
                 LONG -> FrameAccess.writeLong(frame, slot, property.getLong(value))
+                FLOAT -> FrameAccess.writeFloat(frame, slot, property.getFloat(value))
+                DOUBLE -> FrameAccess.writeDouble(frame, slot, property.getDouble(value))
                 OBJECT -> FrameAccess.write(frame, slot, property.getObject(value))
                 VOID -> FrameAccess.write(frame, slot, Unit)
             }
@@ -259,6 +320,8 @@ class DataLayout(
             private const val LONG = 0
             private const val OBJECT = 1
             private const val VOID = 2
+            private const val FLOAT = 3
+            private const val DOUBLE = 4
         }
     }
 }

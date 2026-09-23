@@ -23,7 +23,7 @@ import thc.Language;
 // An explicit compile request must work after the first ordinary invocation, even
 // when Core proofs eliminate every operation that otherwise forces the cached tier.
 @GenerateBytecode(languageClass = Language.class, enableUncachedInterpreter = true,
-        defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, boolean.class})
+        defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
 
@@ -140,6 +140,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = CaptureLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")
     public static final class CaptureRead {
+        @Specialization(guards = "layout.isFloat(environment, index)")
+        public static float floating(CaptureLayout layout, int index, CapturedFrame environment) {
+            return layout.readFloat(environment, index);
+        }
+        @Specialization(guards = "layout.isDouble(environment, index)")
+        public static double doubleValue(CaptureLayout layout, int index, CapturedFrame environment) {
+            return layout.readDouble(environment, index);
+        }
         @Specialization(guards = "layout.isLong(environment, index)")
         public static long number(CaptureLayout layout, int index, CapturedFrame environment) {
             return layout.readLong(environment, index);
@@ -162,9 +170,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class ForceValue {
+        @Specialization public static float floating(Metrics metrics, float value) { return value; }
+        @Specialization public static double doubleValue(Metrics metrics, double value) { return value; }
         @Specialization public static long number(Metrics metrics, long value) { return value; }
         @Specialization public static boolean bool(Metrics metrics, boolean value) { return value; }
-        @Specialization(replaces = {"number", "bool"})
+        @Specialization(replaces = {"number", "bool", "floating", "doubleValue"})
         public static Object force(VirtualFrame frame, Metrics metrics, Object value,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
             return force.execute(frame, value);
@@ -178,9 +188,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "local")
     @ConstantOperand(type = boolean.class, name = "cell")
     public static final class ForceLocal {
+        @Specialization public static float floating(Metrics metrics, LocalAccessor local, boolean cell, float value) { return value; }
+        @Specialization public static double doubleValue(Metrics metrics, LocalAccessor local, boolean cell, double value) { return value; }
         @Specialization public static long number(Metrics metrics, LocalAccessor local, boolean cell, long value) { return value; }
         @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean cell, boolean value) { return value; }
-        @Specialization(replaces = {"number", "bool"})
+        @Specialization(replaces = {"number", "bool", "floating", "doubleValue"})
         public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, boolean cell, Object binding,
                 @Bind("$node") Node node,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
@@ -195,6 +207,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
                     if (local.getObject(bytecode, frame) == thunk) {
                         if (result instanceof Long number) local.setLong(bytecode, frame, number);
+                        else if (result instanceof Float floating) local.setFloat(bytecode, frame, floating);
+                        else if (result instanceof Double doubleValue) local.setDouble(bytecode, frame, doubleValue);
                         else if (result instanceof Boolean bool) local.setBoolean(bytecode, frame, bool);
                         else local.setObject(bytecode, frame, result);
                     }
@@ -415,9 +429,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = DataLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")
     public static final class ReadDataField {
+        @Specialization(guards = "layout.isFloat(index)")
+        public static float floating(DataLayout layout, int index, DataValue value) { return layout.readFloat(value, index); }
+        @Specialization(guards = "layout.isDouble(index)")
+        public static double doubleValue(DataLayout layout, int index, DataValue value) { return layout.readDouble(value, index); }
         @Specialization(guards = "layout.isLong(index)")
         public static long number(DataLayout layout, int index, DataValue value) { return layout.readLong(value, index); }
-        @Specialization(guards = "!layout.isLong(index)")
+        @Specialization(guards = {"!layout.isLong(index)", "!layout.isFloat(index)", "!layout.isDouble(index)"})
         public static Object object(DataLayout layout, int index, DataValue value) { return layout.read(value, index); }
     }
 
@@ -586,6 +604,36 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GreaterThanNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) > signedNarrow(y, shift) ? 1L : 0L; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class GreaterEqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) >= signedNarrow(y, shift) ? 1L : 0L; } }
+    @Operation public static final class FloatAdd { @Specialization public static float apply(float x, float y) { return x + y; } }
+    @Operation public static final class FloatSubtract { @Specialization public static float apply(float x, float y) { return x - y; } }
+    @Operation public static final class FloatMultiply { @Specialization public static float apply(float x, float y) { return x * y; } }
+    @Operation public static final class FloatDivide { @Specialization public static float apply(float x, float y) { return x / y; } }
+    @Operation public static final class FloatNegate { @Specialization public static float apply(float x) { return -x; } }
+    @Operation public static final class FloatEqual { @Specialization public static long apply(float x, float y) { return x == y ? 1L : 0L; } }
+    @Operation public static final class FloatNotEqual { @Specialization public static long apply(float x, float y) { return x != y ? 1L : 0L; } }
+    @Operation public static final class FloatLess { @Specialization public static long apply(float x, float y) { return x < y ? 1L : 0L; } }
+    @Operation public static final class FloatLessEqual { @Specialization public static long apply(float x, float y) { return x <= y ? 1L : 0L; } }
+    @Operation public static final class FloatGreater { @Specialization public static long apply(float x, float y) { return x > y ? 1L : 0L; } }
+    @Operation public static final class FloatGreaterEqual { @Specialization public static long apply(float x, float y) { return x >= y ? 1L : 0L; } }
+    @Operation public static final class DoubleAdd { @Specialization public static double apply(double x, double y) { return x + y; } }
+    @Operation public static final class DoubleSubtract { @Specialization public static double apply(double x, double y) { return x - y; } }
+    @Operation public static final class DoubleMultiply { @Specialization public static double apply(double x, double y) { return x * y; } }
+    @Operation public static final class DoubleDivide { @Specialization public static double apply(double x, double y) { return x / y; } }
+    @Operation public static final class DoubleNegate { @Specialization public static double apply(double x) { return -x; } }
+    @Operation public static final class DoubleEqual { @Specialization public static long apply(double x, double y) { return x == y ? 1L : 0L; } }
+    @Operation public static final class DoubleNotEqual { @Specialization public static long apply(double x, double y) { return x != y ? 1L : 0L; } }
+    @Operation public static final class DoubleLess { @Specialization public static long apply(double x, double y) { return x < y ? 1L : 0L; } }
+    @Operation public static final class DoubleLessEqual { @Specialization public static long apply(double x, double y) { return x <= y ? 1L : 0L; } }
+    @Operation public static final class DoubleGreater { @Specialization public static long apply(double x, double y) { return x > y ? 1L : 0L; } }
+    @Operation public static final class DoubleGreaterEqual { @Specialization public static long apply(double x, double y) { return x >= y ? 1L : 0L; } }
+    @Operation public static final class IntToFloat { @Specialization public static float apply(long x) { return (float) x; } }
+    @Operation public static final class IntToDouble { @Specialization public static double apply(long x) { return (double) x; } }
+    @Operation public static final class FloatToInt { @Specialization public static long apply(float x) { return (long) x; } }
+    @Operation public static final class DoubleToInt { @Specialization public static long apply(double x) { return (long) x; } }
+    @Operation public static final class FloatToDouble { @Specialization public static double apply(float x) { return (double) x; } }
+    @Operation public static final class DoubleToFloat { @Specialization public static float apply(double x) { return (float) x; } }
+    @Operation public static final class ToFloat { @Specialization public static float apply(float x) { return x; } }
+    @Operation public static final class ToDouble { @Specialization public static double apply(double x) { return x; } }
     @Operation public static final class ToLong { @Specialization public static long apply(long x) { return x; } }
 
     private static RuntimeFault fail(String message) {

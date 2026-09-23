@@ -12,6 +12,8 @@ import kotlin.Unit;
  */
 @TypeSystem({
         long.class,
+        float.class,
+        double.class,
         boolean.class,
         Closure.class,
         DataValue.class,

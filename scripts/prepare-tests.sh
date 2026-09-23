@@ -4,6 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 python3 scripts/primop-coverage.py
 compiler/build.sh
+python3 scripts/prepare-floating-audit.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/prepare-tuple-return-audit.py
 python3 scripts/prepare-tuple-join-audit.py

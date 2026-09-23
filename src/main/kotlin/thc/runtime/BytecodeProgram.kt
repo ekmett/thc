@@ -45,6 +45,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         // The denoted value can be primitive while a pre-publication capture
         // still holds its recursive cell. Raw captures must retain that cell.
         val directLong: Boolean get() = !cell && proof.isLong && proof.evaluated
+        val directFloat: Boolean get() = !cell && proof.isFloat && proof.evaluated
+        val directDouble: Boolean get() = !cell && proof.isDouble && proof.evaluated
     }
     private class FunctionContext(val formalArity: Int, val entryStrict: BooleanArray = BooleanArray(formalArity)) {
         var arguments: List<Local?> = emptyList()
@@ -128,11 +130,17 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         override fun emit(emission: Emission) {
             val b = emission.builder
             val integer = local.directLong || resolve && local.proof.isLong && local.proof.evaluated
+            val floating = local.directFloat || resolve && local.proof.isFloat && local.proof.evaluated
+            val double = local.directDouble || resolve && local.proof.isDouble && local.proof.evaluated
             if (integer) b.beginToLong()
+            else if (floating) b.beginToFloat()
+            else if (double) b.beginToDouble()
             if (resolve && local.cell) b.beginReadCellIfNeeded()
             b.emitLoadLocal(emission.locals.getValue(local.id))
             if (resolve && local.cell) b.endReadCellIfNeeded()
             if (integer) b.endToLong()
+            else if (floating) b.endToFloat()
+            else if (double) b.endToDouble()
         }
     }
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
@@ -229,7 +237,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry) }
         context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
             captureSources.map { it.directLong }.toBooleanArray(),
-            captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray())
+            captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
+            captureSources.map { it.directFloat }.toBooleanArray(),
+            captureSources.map { it.directDouble }.toBooleanArray())
         context.arguments = args.mapIndexed { index, arg ->
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).copy(evaluated = !lifted || context.entryStrict[index])
@@ -311,6 +321,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         b.beginStoreLocal(e.locals.getValue(local.id))
         when {
             local.directLong -> { b.beginToLong(); value(); b.endToLong() }
+            local.directFloat -> { b.beginToFloat(); value(); b.endToFloat() }
+            local.directDouble -> { b.beginToDouble(); value(); b.endToDouble() }
             reference == DataValue::class.java -> { b.beginRequireData(); value(); b.endRequireData() }
             reference == Closure::class.java -> { b.beginRequireClosure(); value(); b.endRequireClosure() }
             reference == LiteralAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
@@ -378,11 +390,15 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "int64" -> int64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
+        "float" -> value.toFloat()
+        "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> LiteralAddress.fromHex(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
-    private fun constant(value: Any) = evaluated(Expression { it.builder.emitLoadConstant(value) })
+    private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
+        CoreRepresentation(if (value is Float) CoreKind.FLOAT else if (value is Double) CoreKind.DOUBLE else CoreKind.UNKNOWN,
+            evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
         val source = sources.expression(expr, scope.source)
         val value = try {
@@ -769,7 +785,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
-                    "lit" -> (alt[1] as List<String>).let { literal(it[0], it[1]) }
+                    "lit" -> (alt[1] as List<String>).let {
+                        if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
+                        literal(it[0], it[1])
+                    }
                     "data" -> dataLayout(alt[1] as String)
                     "default" -> alt[1]
                     else -> throw RuntimeFault("Invalid Core alternative kind $kind")
@@ -787,7 +806,12 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
-            val resultProof = CoreRepresentations.expression(expr)
+            var resultProof = CoreRepresentations.expression(expr)
+            for (alternative in alternatives) {
+                val actual = alternative.body.proof
+                if (actual.isFloat || actual.isDouble || resultProof.isFloat || resultProof.isDouble)
+                    resultProof = resultProof.refine(actual)
+            }
             val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(resultProof)
                 ?: resultProof.copy(evaluated = alternatives.all { it.body.proof.evaluated })
             LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
@@ -966,7 +990,114 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun construct(layout: DataLayout, args: List<Expression>) = evaluated(Expression { e ->
         e.builder.beginConstruct(layout); args.forEach { it.emit(e) }; e.builder.endConstruct()
     })
+    private fun floatingPrimitive(name: String, args: List<Expression>): Expression? {
+        val operation = when (name) {
+            "plusFloat#" -> "FloatAdd"
+            "minusFloat#" -> "FloatSubtract"
+            "timesFloat#" -> "FloatMultiply"
+            "divideFloat#" -> "FloatDivide"
+            "negateFloat#" -> "FloatNegate"
+            "eqFloat#" -> "FloatEqual"
+            "neFloat#" -> "FloatNotEqual"
+            "ltFloat#" -> "FloatLess"
+            "leFloat#" -> "FloatLessEqual"
+            "gtFloat#" -> "FloatGreater"
+            "geFloat#" -> "FloatGreaterEqual"
+            "+##" -> "DoubleAdd"
+            "-##" -> "DoubleSubtract"
+            "*##" -> "DoubleMultiply"
+            "/##" -> "DoubleDivide"
+            "negateDouble#" -> "DoubleNegate"
+            "==##" -> "DoubleEqual"
+            "/=##" -> "DoubleNotEqual"
+            "<##" -> "DoubleLess"
+            "<=##" -> "DoubleLessEqual"
+            ">##" -> "DoubleGreater"
+            ">=##" -> "DoubleGreaterEqual"
+            "int2Float#" -> "IntToFloat"
+            "int2Double#" -> "IntToDouble"
+            "float2Int#" -> "FloatToInt"
+            "double2Int#" -> "DoubleToInt"
+            "float2Double#" -> "FloatToDouble"
+            "double2Float#" -> "DoubleToFloat"
+            else -> return null
+        }
+        val unary = operation in setOf("FloatNegate", "DoubleNegate", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
+        if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
+        val kind = when (operation) {
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "IntToFloat", "DoubleToFloat" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "IntToDouble", "FloatToDouble" -> CoreKind.DOUBLE
+            else -> CoreKind.LONG
+        }
+        return ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (operation) {
+                "FloatAdd" -> b.beginFloatAdd()
+                "FloatSubtract" -> b.beginFloatSubtract()
+                "FloatMultiply" -> b.beginFloatMultiply()
+                "FloatDivide" -> b.beginFloatDivide()
+                "FloatNegate" -> b.beginFloatNegate()
+                "FloatEqual" -> b.beginFloatEqual()
+                "FloatNotEqual" -> b.beginFloatNotEqual()
+                "FloatLess" -> b.beginFloatLess()
+                "FloatLessEqual" -> b.beginFloatLessEqual()
+                "FloatGreater" -> b.beginFloatGreater()
+                "FloatGreaterEqual" -> b.beginFloatGreaterEqual()
+                "DoubleAdd" -> b.beginDoubleAdd()
+                "DoubleSubtract" -> b.beginDoubleSubtract()
+                "DoubleMultiply" -> b.beginDoubleMultiply()
+                "DoubleDivide" -> b.beginDoubleDivide()
+                "DoubleNegate" -> b.beginDoubleNegate()
+                "DoubleEqual" -> b.beginDoubleEqual()
+                "DoubleNotEqual" -> b.beginDoubleNotEqual()
+                "DoubleLess" -> b.beginDoubleLess()
+                "DoubleLessEqual" -> b.beginDoubleLessEqual()
+                "DoubleGreater" -> b.beginDoubleGreater()
+                "DoubleGreaterEqual" -> b.beginDoubleGreaterEqual()
+                "IntToFloat" -> b.beginIntToFloat()
+                "IntToDouble" -> b.beginIntToDouble()
+                "FloatToInt" -> b.beginFloatToInt()
+                "DoubleToInt" -> b.beginDoubleToInt()
+                "FloatToDouble" -> b.beginFloatToDouble()
+                "DoubleToFloat" -> b.beginDoubleToFloat()
+            }
+            args.forEach { it.emit(e) }
+            when (operation) {
+                "FloatAdd" -> b.endFloatAdd()
+                "FloatSubtract" -> b.endFloatSubtract()
+                "FloatMultiply" -> b.endFloatMultiply()
+                "FloatDivide" -> b.endFloatDivide()
+                "FloatNegate" -> b.endFloatNegate()
+                "FloatEqual" -> b.endFloatEqual()
+                "FloatNotEqual" -> b.endFloatNotEqual()
+                "FloatLess" -> b.endFloatLess()
+                "FloatLessEqual" -> b.endFloatLessEqual()
+                "FloatGreater" -> b.endFloatGreater()
+                "FloatGreaterEqual" -> b.endFloatGreaterEqual()
+                "DoubleAdd" -> b.endDoubleAdd()
+                "DoubleSubtract" -> b.endDoubleSubtract()
+                "DoubleMultiply" -> b.endDoubleMultiply()
+                "DoubleDivide" -> b.endDoubleDivide()
+                "DoubleNegate" -> b.endDoubleNegate()
+                "DoubleEqual" -> b.endDoubleEqual()
+                "DoubleNotEqual" -> b.endDoubleNotEqual()
+                "DoubleLess" -> b.endDoubleLess()
+                "DoubleLessEqual" -> b.endDoubleLessEqual()
+                "DoubleGreater" -> b.endDoubleGreater()
+                "DoubleGreaterEqual" -> b.endDoubleGreaterEqual()
+                "IntToFloat" -> b.endIntToFloat()
+                "IntToDouble" -> b.endIntToDouble()
+                "FloatToInt" -> b.endFloatToInt()
+                "DoubleToInt" -> b.endDoubleToInt()
+                "FloatToDouble" -> b.endFloatToDouble()
+                "DoubleToFloat" -> b.endDoubleToFloat()
+            }
+        }, CoreRepresentation(kind, evaluated = true))
+    }
+
+
     private fun primitive(name: String, args: List<Expression>): Expression {
+        floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
         val intShift = narrowIntPrimitiveShift(name)
         val operation = when (name) {

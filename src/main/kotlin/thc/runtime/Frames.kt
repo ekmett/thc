@@ -58,6 +58,8 @@ internal object FrameAccess {
         // activation may have widened the descriptor while this frame retains
         // its primitive value. These are the only tags FrameAccess.write emits.
         frame.isLong(slot) -> frame.getLong(slot)
+        frame.isFloat(slot) -> frame.getFloat(slot)
+        frame.isDouble(slot) -> frame.getDouble(slot)
         frame.isBoolean(slot) -> frame.getBoolean(slot)
         frame.isObject(slot) -> frame.getObject(slot)
         else -> fault("Unsupported runtime frame slot tag")
@@ -80,10 +82,36 @@ internal object FrameAccess {
         }
     }
 
+    fun writeFloat(frame: Frame, slot: Int, value: Float) {
+        val descriptor = frame.frameDescriptor
+        val kind = descriptor.getSlotKind(slot)
+        if (kind == FrameSlotKind.Float || kind == FrameSlotKind.Illegal) {
+            if (kind == FrameSlotKind.Illegal) {
+                CompilerDirectives.transferToInterpreterAndInvalidate()
+                descriptor.setSlotKind(slot, FrameSlotKind.Float)
+            }
+            frame.setFloat(slot, value)
+        } else write(frame, slot, value)
+    }
+
+    fun writeDouble(frame: Frame, slot: Int, value: Double) {
+        val descriptor = frame.frameDescriptor
+        val kind = descriptor.getSlotKind(slot)
+        if (kind == FrameSlotKind.Double || kind == FrameSlotKind.Illegal) {
+            if (kind == FrameSlotKind.Illegal) {
+                CompilerDirectives.transferToInterpreterAndInvalidate()
+                descriptor.setSlotKind(slot, FrameSlotKind.Double)
+            }
+            frame.setDouble(slot, value)
+        } else write(frame, slot, value)
+    }
+
     fun write(frame: Frame, slot: Int, value: Any?) {
         val descriptor = frame.frameDescriptor
         val kind = descriptor.getSlotKind(slot)
         when {
+            value is Float && (kind == FrameSlotKind.Float || kind == FrameSlotKind.Illegal) -> writeFloat(frame, slot, value)
+            value is Double && (kind == FrameSlotKind.Double || kind == FrameSlotKind.Illegal) -> writeDouble(frame, slot, value)
             value is Long && (kind == FrameSlotKind.Long || kind == FrameSlotKind.Illegal) -> {
                 if (kind == FrameSlotKind.Illegal) {
                     CompilerDirectives.transferToInterpreterAndInvalidate()
@@ -119,17 +147,24 @@ abstract class ValidatedStorage protected constructor(@Suppress("UNUSED_PARAMETE
 /** A closure/thunk's selective capture representation, fixed during root compilation. */
 class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, primitiveEligible: BooleanArray,
                                               exactLong: BooleanArray = BooleanArray(primitiveEligible.size),
-                                              exactReference: Array<Class<*>?> = arrayOfNulls(primitiveEligible.size)) {
+                                              exactReference: Array<Class<*>?> = arrayOfNulls(primitiveEligible.size),
+                                              exactFloat: BooleanArray = BooleanArray(primitiveEligible.size),
+                                              exactDouble: BooleanArray = BooleanArray(primitiveEligible.size)) {
     init {
         require(exactLong.size == primitiveEligible.size && exactReference.size == primitiveEligible.size)
         require(exactLong.indices.all { !exactLong[it] || primitiveEligible[it] && exactReference[it] == null })
         require(exactReference.all { it == null || !it.isPrimitive })
+        require(exactFloat.size == primitiveEligible.size && exactDouble.size == primitiveEligible.size)
+        require(exactLong.indices.all {
+            listOf(exactLong[it], exactFloat[it], exactDouble[it], exactReference[it] != null).count { flag -> flag } <= 1
+        })
     }
     @CompilationFinal(dimensions = 1)
     private val fields = Array(primitiveEligible.size) {
         // Internally inferred WHNF kinds can refine a legacy adaptive capture.
         // A proven reference needs neither the primitive arm nor its tag.
-        CaptureField(it, primitiveEligible[it] && exactReference[it] == null, exactLong[it], exactReference[it])
+        CaptureField(it, primitiveEligible[it] && exactReference[it] == null && !exactFloat[it] && !exactDouble[it],
+            exactLong[it], exactReference[it], exactFloat[it], exactDouble[it])
     }
     private val allocationKey = Any()
     private val shape = StaticShape.newBuilder(language).also { builder ->
@@ -147,6 +182,8 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
         val environment = shape.factory.create(this, allocationKey)
         for (index in fields.indices) {
             if (fields[index].exactLong) fields[index].initializeLong(environment, frame.getLong(sourceSlots[index]))
+            else if (fields[index].exactFloat) fields[index].initializeFloat(environment, frame.getFloat(sourceSlots[index]))
+            else if (fields[index].exactDouble) fields[index].initializeDouble(environment, frame.getDouble(sourceSlots[index]))
             else fields[index].initialize(environment, FrameAccess.read(frame, sourceSlots[index]))
         }
         return environment
@@ -178,16 +215,22 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
     fun isLong(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).isLong(environment)
     fun isObject(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).isObject(environment)
     fun readLong(environment: CapturedFrame, index: Int): Long = checkedField(environment, index).readLong(environment)
+    fun isFloat(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).exactFloat
+    fun isDouble(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).exactDouble
+    fun readFloat(environment: CapturedFrame, index: Int): Float = checkedField(environment, index).readFloat(environment)
+    fun readDouble(environment: CapturedFrame, index: Int): Double = checkedField(environment, index).readDouble(environment)
     fun readObject(environment: CapturedFrame, index: Int): Any? = checkedField(environment, index).readObject(environment)
 
     private class CaptureField(private val index: Int, private val primitiveEligible: Boolean, val exactLong: Boolean,
-                               private val exactReference: Class<*>?) {
+                               private val exactReference: Class<*>?, val exactFloat: Boolean, val exactDouble: Boolean) {
         private val objectValue = DefaultStaticProperty("capture_${index}_object")
         private val primitiveValue = DefaultStaticProperty("capture_${index}_primitive")
         private val hasPrimitive = DefaultStaticProperty("capture_${index}_tag")
 
         fun register(builder: StaticShape.Builder) {
-            if (!exactLong) builder.property(objectValue, exactReference ?: Any::class.java, true)
+            if (exactFloat) builder.property(primitiveValue, Float::class.javaPrimitiveType, true)
+            else if (exactDouble) builder.property(primitiveValue, Double::class.javaPrimitiveType, true)
+            else if (!exactLong) builder.property(objectValue, exactReference ?: Any::class.java, true)
             if (primitiveEligible) {
                 builder.property(primitiveValue, Long::class.javaPrimitiveType, true)
                 if (!exactLong) builder.property(hasPrimitive, Boolean::class.javaPrimitiveType, true)
@@ -197,9 +240,13 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
         // Final properties are initialized once before escape. Retaining the object
         // arm also supports recursive indirections and values outside the Long subset.
         fun initializeLong(storage: CapturedFrame, value: Long) { primitiveValue.setLong(storage, value) }
+        fun initializeFloat(storage: CapturedFrame, value: Float) { primitiveValue.setFloat(storage, value) }
+        fun initializeDouble(storage: CapturedFrame, value: Double) { primitiveValue.setDouble(storage, value) }
 
         fun initialize(storage: CapturedFrame, value: Any?) {
-            if (exactLong) {
+            if (exactFloat) initializeFloat(storage, value as? Float ?: fault("Expected primitive Float capture"))
+            else if (exactDouble) initializeDouble(storage, value as? Double ?: fault("Expected primitive Double capture"))
+            else if (exactLong) {
                 initializeLong(storage, value as? Long ?: fault("Expected primitive Long capture"))
             } else if (primitiveEligible && value is Long) {
                 primitiveValue.setLong(storage, value)
@@ -211,15 +258,19 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
         }
 
         fun isLong(storage: CapturedFrame): Boolean = exactLong || primitiveEligible && hasPrimitive.getBoolean(storage)
-        fun isObject(storage: CapturedFrame): Boolean = !exactLong && (!primitiveEligible || !hasPrimitive.getBoolean(storage))
+        fun isObject(storage: CapturedFrame): Boolean = !exactLong && !exactFloat && !exactDouble && (!primitiveEligible || !hasPrimitive.getBoolean(storage))
         fun kind(storage: CapturedFrame): FrameSlotKind =
-            if (isObject(storage)) FrameSlotKind.Object else FrameSlotKind.Long
+            if (exactFloat) FrameSlotKind.Float else if (exactDouble) FrameSlotKind.Double
+            else if (isObject(storage)) FrameSlotKind.Object else FrameSlotKind.Long
 
         fun read(storage: CapturedFrame): Any? =
-            if (isObject(storage)) objectValue.getObject(storage) else primitiveValue.getLong(storage)
+            if (exactFloat) primitiveValue.getFloat(storage) else if (exactDouble) primitiveValue.getDouble(storage)
+            else if (isObject(storage)) objectValue.getObject(storage) else primitiveValue.getLong(storage)
 
         fun restore(storage: CapturedFrame, frame: Frame, slot: Int) {
-            if (isObject(storage)) {
+            if (exactFloat) FrameAccess.writeFloat(frame, slot, primitiveValue.getFloat(storage))
+            else if (exactDouble) FrameAccess.writeDouble(frame, slot, primitiveValue.getDouble(storage))
+            else if (isObject(storage)) {
                 FrameAccess.write(frame, slot, objectValue.getObject(storage))
             } else {
                 FrameAccess.writeLong(frame, slot, primitiveValue.getLong(storage))
@@ -229,6 +280,16 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
         fun readLong(storage: CapturedFrame): Long {
             if (!isLong(storage)) throw FrameSlotTypeException.create(index, FrameSlotKind.Long, kind(storage))
             return primitiveValue.getLong(storage)
+        }
+
+        fun readFloat(storage: CapturedFrame): Float {
+            if (!exactFloat) throw FrameSlotTypeException.create(index, FrameSlotKind.Float, kind(storage))
+            return primitiveValue.getFloat(storage)
+        }
+
+        fun readDouble(storage: CapturedFrame): Double {
+            if (!exactDouble) throw FrameSlotTypeException.create(index, FrameSlotKind.Double, kind(storage))
+            return primitiveValue.getDouble(storage)
         }
 
         fun readObject(storage: CapturedFrame): Any? {

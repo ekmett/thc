@@ -28,6 +28,8 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         // All operands are read before any formal is overwritten, including recursive swaps.
         for (i in arguments.indices) {
             if (target.proofs[i].isLong) FrameAccess.writeLong(frame, temporaries[i], arguments[i].executeRequiredLong(frame))
+            else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, temporaries[i], arguments[i].executeRequiredFloat(frame))
+            else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, temporaries[i], arguments[i].executeRequiredDouble(frame))
             else if (referenceKinds[i] == CoreKind.DATA) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredDataValue(frame))
             else if (referenceKinds[i] == CoreKind.CLOSURE) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredClosure(frame))
             else if (referenceKinds[i] == CoreKind.ADDRESS) FrameAccess.write(frame, temporaries[i], arguments[i].executeRequiredAddress(frame))
@@ -35,6 +37,8 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         }
         for (i in arguments.indices) {
             if (target.proofs[i].isLong) FrameAccess.writeLong(frame, target.slots[i], frame.getLong(temporaries[i]))
+            else if (target.proofs[i].isFloat) FrameAccess.writeFloat(frame, target.slots[i], frame.getFloat(temporaries[i]))
+            else if (target.proofs[i].isDouble) FrameAccess.writeDouble(frame, target.slots[i], frame.getDouble(temporaries[i]))
             else if (referenceKinds[i] == CoreKind.DATA) FrameAccess.write(frame, target.slots[i],
                 frame.getObject(temporaries[i]) as? DataValue ?: fault("Expected constructor join argument"))
             else if (referenceKinds[i] == CoreKind.CLOSURE) FrameAccess.write(frame, target.slots[i],
@@ -50,6 +54,8 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
         throw target.jump
     }
     override fun executeLong(frame: VirtualFrame): Long = execute(frame)
+    override fun executeFloat(frame: VirtualFrame): Float = execute(frame)
+    override fun executeDouble(frame: VirtualFrame): Double = execute(frame)
     override fun executeClosure(frame: VirtualFrame): Closure = execute(frame)
     override fun executeDataValue(frame: VirtualFrame): DataValue = execute(frame)
     override fun executeAddress(frame: VirtualFrame): LiteralAddress = execute(frame)
@@ -61,10 +67,14 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
     @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray) : Node(), RepeatingNode {
     private val tuple = proof.isTuple
     private val exactLong = proof.isLong
+    private val exactFloat = proof.isFloat
+    private val exactDouble = proof.isDouble
     private val referenceKind = if (proof.evaluated) proof.kind else CoreKind.UNKNOWN
     private fun executeBody(frame: VirtualFrame, body: Expr) {
         if (tuple) body.executeTuple(frame, tupleSlots, 0)
         else if (exactLong) FrameAccess.writeLong(frame, result, body.executeRequiredLong(frame))
+        else if (exactFloat) FrameAccess.writeFloat(frame, result, body.executeRequiredFloat(frame))
+        else if (exactDouble) FrameAccess.writeDouble(frame, result, body.executeRequiredDouble(frame))
         else if (referenceKind == CoreKind.DATA) FrameAccess.write(frame, result, body.executeRequiredDataValue(frame))
         else if (referenceKind == CoreKind.CLOSURE) FrameAccess.write(frame, result, body.executeRequiredClosure(frame))
         else if (referenceKind == CoreKind.ADDRESS) FrameAccess.write(frame, result, body.executeRequiredAddress(frame))
@@ -128,6 +138,14 @@ internal class LocalJoinRegion(group: Any, private val selector: Int, private va
         return if (representation.isLong) frame.getLong(result) else RuntimeTypesGen.expectLong(FrameAccess.read(frame, result))
     }
     override fun executeClosure(frame: VirtualFrame): Closure { run(frame); return RuntimeTypesGen.expectClosure(resultValue(frame)) }
+    override fun executeFloat(frame: VirtualFrame): Float {
+        run(frame)
+        return if (representation.isFloat) frame.getFloat(result) else RuntimeTypesGen.expectFloat(FrameAccess.read(frame, result))
+    }
+    override fun executeDouble(frame: VirtualFrame): Double {
+        run(frame)
+        return if (representation.isDouble) frame.getDouble(result) else RuntimeTypesGen.expectDouble(FrameAccess.read(frame, result))
+    }
     override fun executeDataValue(frame: VirtualFrame): DataValue { run(frame); return RuntimeTypesGen.expectDataValue(resultValue(frame)) }
     override fun executeAddress(frame: VirtualFrame): LiteralAddress { run(frame); return RuntimeTypesGen.expectLiteralAddress(resultValue(frame)) }
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
