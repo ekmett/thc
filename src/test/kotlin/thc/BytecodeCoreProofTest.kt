@@ -113,6 +113,32 @@ class BytecodeCoreProofTest {
         }
     }
 
+    @Test fun nestedNonrecursiveJoinsBranchToAncestorsWithoutLoopScaffolding() {
+        val outer = join("finish", listOf(binder("answer")), primitive("+#", variable("answer"), integer(17)))
+        var inner = apply(variable("finish", closureRep), listOf(variable("input")))
+        repeat(25) { index ->
+            val name = "step$index"
+            inner = local(listOf(join(name, listOf(binder("unused$index")), inner)),
+                apply(variable(name, closureRep), listOf(variable("input"))))
+        }
+        val body = local(listOf(outer), inner)
+        executionContext().use { context ->
+            val fn = context.eval("thc", request(body))
+            compile(fn, 3_000_000_000L, 3_000_000_017L)
+            for (input in listOf(Long.MIN_VALUE, -4097L, 0L, Long.MAX_VALUE)) {
+                val before = count(fn, "compiledEntries")
+                assertEquals(input + 17, fn.execute(input).asLong())
+                assertTrue(count(fn, "compiledEntries") > before)
+            }
+            val dump = fn.getMember("bytecode").asString()
+            assertFalse(dump.contains("join selector"), dump)
+            assertFalse(dump.contains("c.Apply"), dump)
+            assertEquals(26L, count(fn, "localJoinCount"))
+            assertEquals(2L, count(fn, "bytecodeRootCount"))
+            assertEquals(0L, count(fn, "trampolineIterations"))
+        }
+    }
+
     @Test fun recursiveJoinUsesParallelMovesAndPreservesNonTailContinuation() {
         val body = chooseZero(variable("n"), primitive("+#", primitive("*#", variable("x"), integer(100)), variable("y")),
             apply(variable("loop", closureRep), listOf(primitive("-#", variable("n"), integer(1)), variable("y"), variable("x"))))
