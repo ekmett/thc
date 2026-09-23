@@ -5,6 +5,16 @@ compiled-warm `sequenceBuildViews(1)` call. Its result is correct, but the
 mandatory guest compiled-entry counter does not increase. Do not treat the
 boundary-stub repair as a completed Sequence feature or relax that assertion.
 
+The [pinned source/linkage inspection](../bench/experiments/sequence-boundary-linkage/README.md)
+now identifies the concrete API boundary: valid-on-entry bypass on non-AOT
+HotSpot deliberately continues the current invocation through `profiledPERoot`,
+even after successful stub repair. The native adapter cleans an eligible caller
+for later calls, then still enters the interpreter for the current invocation.
+Neither installed-target validity nor a present shared stub establishes the
+caller's actual entry route. This is a conditional source-level proof, not a
+complete native trace of the preserved failure; no further timing controls or
+production policy changes are used to claim a fix.
+
 ## Tested checkpoint
 
 Runtime `3e5ee6d3506b6ebbb19322eb91df6eed5c250952` restores the pinned HotSpot
