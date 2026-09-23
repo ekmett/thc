@@ -40,8 +40,8 @@ existing signed division and overflow behavior unchanged.
 The separate [signed narrow slice](signed-narrow-primops.md) adds 36 arithmetic,
 division and comparison operations with native/model checks. Remaining scalar
 candidates include signed narrow shifts, cross-signedness narrow conversions,
-width-specific counts, byte swaps and bit reversal. Explicit Int64/Word64
-arithmetic remains separate from the small
+width-specific counts, byte swaps and bit reversal. The [explicit64 slice](explicit64-primops.md) adds 36 Int64/Word64 scalar
+operations and canonical Word64 literals, extending the
 [Int64 conversion/literal foundation](int64-conversions.md). The separate
 [tuple arithmetic slice](tuple-arithmetic.md) now lowers quotient/remainder,
 carry, overflow and full-width multiplication directly into exact result slots.

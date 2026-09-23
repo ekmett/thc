@@ -15,6 +15,7 @@ cold boundary inputs and compiled entries on both backends. `Int64ConversionTest
 also checks exact exported argument/result representations, direct compiled
 conversion entries, literal validation and malformed primitive arities.
 
-This foundation does not implement the remaining explicit Int64 arithmetic,
-Word64 conversions/literals, SIMD values or 32-bit target semantics. Aggregate
-argument, PAP, capture and sum support is unchanged.
+The [explicit64 scalar slice](explicit64-primops.md) extends this foundation with
+Int64/Word64 arithmetic, ordering, shifts, bitwise operations, remaining scalar
+conversions and Word64 literals. SIMD and 32-bit target semantics are separate.
+Aggregate argument, PAP, capture and sum support is unchanged.

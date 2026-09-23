@@ -624,11 +624,12 @@ private class PointerEquality(@field:Child private var left: Expr, @field:Child 
     override fun executeLong(frame: VirtualFrame): Long = if (left.execute(frame) === right.execute(frame)) 1L else 0L
 }
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
+    private val operation = scalar64PrimitiveOperation(name)
     private val wordMask = narrowWordPrimitiveMask(name)
     private val intShift = narrowIntPrimitiveShift(name)
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
-        val arity = when (name) {
+        val arity = when (operation) {
             "negateInt8#", "negateInt16#", "negateInt32#" -> 1
             "plusInt8#", "plusInt16#", "plusInt32#" -> 2
             "subInt8#", "subInt16#", "subInt32#" -> 2
@@ -678,7 +679,7 @@ private class Primitive(private val name: String, @field:Children private var ar
         val x = arguments[0].executeRequiredLong(frame)
         val y = if (arguments.size == 2) arguments[1].executeRequiredLong(frame) else 0L
         fun b(value: Boolean) = if (value) 1L else 0L
-        return when (name) {
+        return when (operation) {
             "negateInt8#", "negateInt16#", "negateInt32#" -> signedNarrow(-x, intShift)
             "plusInt8#", "plusInt16#", "plusInt32#" -> signedNarrow(x + y, intShift)
             "subInt8#", "subInt16#", "subInt32#" -> signedNarrow(x - y, intShift)
@@ -1120,6 +1121,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int64" -> int64Literal(value)
+        "word64" -> word64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
         "float" -> value.toFloat()

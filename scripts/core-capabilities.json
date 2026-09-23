@@ -10,6 +10,7 @@
     "double",
     "int",
     "int64",
+    "word64",
     "word",
     "word8",
     "word16",
@@ -45,6 +46,10 @@
     "char": [
       0,
       1114111
+    ],
+    "word64": [
+      0,
+      18446744073709551615
     ]
   },
   "constructorKinds": [
@@ -264,7 +269,43 @@
     "ltInt32#": 2,
     "leInt32#": 2,
     "gtInt32#": 2,
-    "geInt32#": 2
+    "geInt32#": 2,
+    "int64ToWord64#": 1,
+    "word64ToInt64#": 1,
+    "wordToWord64#": 1,
+    "word64ToWord#": 1,
+    "plusInt64#": 2,
+    "subInt64#": 2,
+    "timesInt64#": 2,
+    "quotInt64#": 2,
+    "remInt64#": 2,
+    "eqInt64#": 2,
+    "neInt64#": 2,
+    "ltInt64#": 2,
+    "leInt64#": 2,
+    "gtInt64#": 2,
+    "geInt64#": 2,
+    "plusWord64#": 2,
+    "subWord64#": 2,
+    "timesWord64#": 2,
+    "quotWord64#": 2,
+    "remWord64#": 2,
+    "eqWord64#": 2,
+    "neWord64#": 2,
+    "ltWord64#": 2,
+    "leWord64#": 2,
+    "gtWord64#": 2,
+    "geWord64#": 2,
+    "negateInt64#": 1,
+    "and64#": 2,
+    "or64#": 2,
+    "xor64#": 2,
+    "not64#": 1,
+    "uncheckedIShiftL64#": 2,
+    "uncheckedIShiftRA64#": 2,
+    "uncheckedIShiftRL64#": 2,
+    "uncheckedShiftL64#": 2,
+    "uncheckedShiftRL64#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",

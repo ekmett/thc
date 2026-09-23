@@ -97,6 +97,12 @@ def tuple_join_fixture(zero=False):
 
 
 class AuditTest(unittest.TestCase):
+    def test_word64_literals_are_canonical_unsigned_values(self):
+        for value in ('0', '1', '9223372036854775808', '18446744073709551615'):
+            self.assertTrue(run(['lit', 'word64', value])['accepted'], value)
+        for value in ('-1', '18446744073709551616', '', '+1', '01', '-0', ' 1', '1.0'):
+            self.assertIn('invalid-literal-value', {i['code'] for i in run(['lit', 'word64', value])['issues']}, value)
+
     def test_scalar_lexical_occurrences_cannot_replace_exact_binder_registers(self):
         for primitive, expected, declared in [('quotRemInt#', 'IntRep', 'WordRep'), ('plusInt8#', 'Int8Rep', 'Word8Rep')]:
             scalar = dict(LONG, primReps=[expected])

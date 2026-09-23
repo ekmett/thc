@@ -110,6 +110,9 @@ jobs:
             build/integer-primops/oracle.tsv
             build/integer-primops/*.audit.json
             build/simd/
+            build/explicit64-primops/manifest.json
+            build/explicit64-primops/oracle.tsv
+            build/explicit64-primops/*.audit.json
             build/signed-narrow-primops/manifest.json
             build/signed-narrow-primops/oracle.tsv
             build/signed-narrow-primops/*.audit.json

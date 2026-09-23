@@ -20,6 +20,8 @@ The [unsigned primop suite](integer-primops.md) adds 40 operations checked again
 56,791 native/model rows on both backends, including installed-code checks for
 each row. The [signed narrow suite](signed-narrow-primops.md) adds 36 operations
 with 73,453 native/model rows and direct canonical-result checks. The
+[explicit64 suite](explicit64-primops.md) adds 36 scalar operations, Word64
+literals and 66,117 native/model rows with exact representation checks. The
 [tuple arithmetic suite](tuple-arithmetic.md) adds six operations with 8,279
 native two-field rows, exact local destinations and pre/post-Tidy compiled-entry
 checks on both backends.

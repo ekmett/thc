@@ -388,6 +388,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
         "int64" -> int64Literal(value)
+        "word64" -> word64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
         "float" -> value.toFloat()
@@ -1100,7 +1101,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
         val intShift = narrowIntPrimitiveShift(name)
-        val operation = when (name) {
+        val operation = when (scalar64PrimitiveOperation(name)) {
             "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
             "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
             "subInt8#", "subInt16#", "subInt32#" -> "SubtractNarrowInt"
