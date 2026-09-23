@@ -77,11 +77,17 @@ class TupleArithmeticTest {
                     for (field in 0L..1L) assertEquals(if (field == 0L) row.first else row.second,
                         Calls.target(host, arrayOf(entries.getValue(row.name), arrayOf(row.x, row.y, field))), "$stage/$backend/$row/$field")
                 }
+                // Establish the final host dispatch before warming individual roots. Six
+                // targets replace its three-entry direct cache with indirect calls; with
+                // handoff enabled this changes empty arguments to the ordinary packet.
+                // Each root must see that packet during warmup, before we compile it.
+                names.forEach { name -> check(rows.first { it.name == name }) }
                 rows.forEach(::check)
                 bindings.forEach { compile(program.entryTarget(it["id"] as String)) }
                 val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                 rows.asReversed().forEach(::check)
-                assertEquals(2L * rows.size, (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before)
+                assertEquals(2L * rows.size, (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
+                    "$stage/$backend: every checked field must enter installed guest code")
                 bindings.forEach { valid(program.entryTarget(it["id"] as String)) }
                 assertEquals(0L, language.handoffState.get().results.allocations, "Saturated primitive expressions need no tuple carrier")
                 assertEquals(0, language.handoffState.get().results.depth)
