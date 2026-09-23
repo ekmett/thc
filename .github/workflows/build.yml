@@ -85,6 +85,7 @@ jobs:
             build/corpus/oracle.tsv
             build/corpus/structure.json
             build/corpus/groups/**/*.audit.json
+            build/corpus/groups/**/boot-provenance.json
             build/libraries/cases.json
             build/libraries/oracle.tsv
             build/libraries/oracle-validation.json

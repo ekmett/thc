@@ -28,6 +28,7 @@ def prepare():
         assert re.fullmatch(r'[a-z][a-z0-9-]*', group['id']) and group['id'] not in seen
         seen.add(group['id'])
         assert re.fullmatch(r'[A-Z][A-Za-z0-9]*(\.[A-Z][A-Za-z0-9]*)*', group['module'])
+        assert group.get('sourceLibraryFrontier') in (None, 'lists')
         source = (ROOT / group['source']).resolve()
         assert source.is_relative_to(ROOT / 'examples') and source.is_file()
         names = set()
@@ -49,9 +50,10 @@ def prepare():
     spec.loader.exec_module(audit)
     capabilities = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
     prepared = []
+    extra_artifacts = set()
     inputs = set((ROOT / 'examples').rglob('*.hs')) | set((ROOT / 'compiler').rglob('*.hs'))
     inputs.update(ROOT / p for p in ['examples/coverage.json', 'compiler/build.sh', 'compiler/export.sh',
-        'compiler/toolchain.sh', 'scripts/prepare-corpus.py', 'scripts/audit-core.py',
+        'compiler/toolchain.sh', 'compiler/export-boot.py', 'scripts/prepare-corpus.py', 'scripts/audit-core.py',
         'scripts/core-capabilities.json', 'scripts/check-corpus-structure.py'])
     input_hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs)}
     for group in groups:
@@ -63,6 +65,15 @@ def prepare():
         # Each group gets its own interface closure: the plugin writes one frontier per module.
         run([ROOT / 'compiler/export.sh', *['-fplugin-opt=Thc.Plugin:closure=' + e['name']
             for e in group['entries']], group['source']], env=env)
+        if frontier := group.get('sourceLibraryFrontier'):
+            run([sys.executable, ROOT / 'compiler/export-boot.py', '--frontier', frontier,
+                 '--build-dir', directory], env=env)
+            provenance_path = directory / 'boot-provenance.json'
+            extra_artifacts.add(str(provenance_path.relative_to(ROOT)))
+            for source in json.loads(provenance_path.read_text())['sources']:
+                digest = hashlib.sha256((ROOT / source['path']).read_bytes()).hexdigest()
+                assert digest == source['sha256'], 'Source provenance mismatch: ' + source['path']
+                input_hashes[source['path']] = digest
         paths = sorted(core.glob('*.json'))
         assert paths, 'No exported modules: ' + group['id']
         modules = [(str(path.relative_to(ROOT)), json.loads(path.read_text())) for path in paths]
@@ -118,7 +129,7 @@ def prepare():
     result_path.write_text(json.dumps(dict(schema=1, entries=prepared,
         inputHashes=input_hashes,
         artifactHashes={path: hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
-                        for path in sorted({p for entry in prepared for p in entry['modules']} |
+                        for path in sorted({p for entry in prepared for p in entry['modules']} | extra_artifacts |
                                            {'build/corpus/oracle.tsv', 'build/corpus/structure.json'})},
         sourceManifestSha256=hashlib.sha256((ROOT / 'examples/coverage.json').read_bytes()).hexdigest()), indent=2) + '\n')
     print(f'Prepared {len(prepared)} strict Core entries / {len(expected)} native oracle rows')

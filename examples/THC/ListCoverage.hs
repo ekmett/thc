@@ -21,16 +21,6 @@ checksum values acc = case values of
   [] -> acc
   value : rest -> checksum rest (acc * 33 + value)
 
--- Ordinary source append and fold reversal keep these algorithms executable:
--- this GHC installation exposes neither (++) nor reverse1 interface bodies.
-appendValues :: [a] -> [a] -> [a]
-appendValues left right = case left of
-  [] -> right
-  value : rest -> value : appendValues rest right
-
-reverseValues :: [a] -> [a]
-reverseValues = foldl (flip (:)) []
-
 -- Observing the spine must never force its bottom-valued heads.
 {-# OPAQUE spineLength #-}
 spineLength :: [Int] -> Int -> Int
@@ -74,8 +64,8 @@ listPipeline raw = case checksum
 
 listAppendReverse :: Int# -> Int#
 listAppendReverse raw = case checksum
-  (reverseValues (appendValues (buildValues (n .&. 15) n)
-    (buildValues ((n + 3) .&. 7) (n - 11)))) 13 of
+  (reverse (buildValues (n .&. 15) n ++
+    buildValues ((n + 3) .&. 7) (n - 11))) 13 of
     I# answer -> answer
   where n = I# raw
 
@@ -85,7 +75,7 @@ listSpineLazy raw = case spineLength (bottomHeads (n .&. 31)) n of I# answer -> 
 
 listTailLazy :: Int# -> Int#
 listTailLazy raw = case prefixChecksum (n .&. 31)
-  (appendValues (buildValues (n .&. 31) n) neverList) 5 of I# answer -> answer
+  (buildValues (n .&. 31) n ++ neverList) 5 of I# answer -> answer
   where n = I# raw
 
 streamPrefix :: Int# -> Int#

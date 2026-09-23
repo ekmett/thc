@@ -40,7 +40,8 @@ tasks.test {
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
-    inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh") })
+    inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
+    inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
         include("prepare-corpus.py", "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
