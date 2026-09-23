@@ -7,6 +7,8 @@ cd "$ROOT"
 scripts/prepare-tests.sh
 python3 scripts/prepare-library-tests.py
 scripts/gradle.sh --no-daemon test installDist "$@"
+python3 scripts/test-sequence-model.py
+python3 scripts/test-library-manifest.py
 for backend in ast bytecode; do
   "$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
     -cp 'build/install/thc/lib/*' thc.LibraryCheckKt build/libraries/cases.json "$backend" \
