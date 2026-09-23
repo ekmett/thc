@@ -40,13 +40,14 @@ tasks.test {
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
             "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
+            "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
-        include("prepare-corpus.py", "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
+        include("prepare-corpus.py", "prepare-integer-primops.py", "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)

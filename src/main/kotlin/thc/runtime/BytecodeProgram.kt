@@ -917,6 +917,22 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun primitive(name: String, args: List<Expression>): Expression {
         val wordMask = narrowWordPrimitiveMask(name)
         val operation = when (name) {
+            "quotWord#" -> "QuotientUnsigned"
+            "remWord#" -> "RemainderUnsigned"
+            "gtWord#" -> "GreaterThanUnsigned"
+            "geWord#" -> "GreaterEqualUnsigned"
+            "quotWord8#", "quotWord16#", "quotWord32#" -> "QuotientNarrowWord"
+            "remWord8#", "remWord16#", "remWord32#" -> "RemainderNarrowWord"
+            "eqWord8#", "eqWord16#", "eqWord32#" -> "EqualNarrowWord"
+            "neWord8#", "neWord16#", "neWord32#" -> "NotEqualNarrowWord"
+            "gtWord8#", "gtWord16#", "gtWord32#" -> "GreaterThanNarrowWord"
+            "geWord8#", "geWord16#", "geWord32#" -> "GreaterEqualNarrowWord"
+            "andWord8#", "andWord16#", "andWord32#" -> "BitAndNarrowWord"
+            "orWord8#", "orWord16#", "orWord32#" -> "BitOrNarrowWord"
+            "xorWord8#", "xorWord16#", "xorWord32#" -> "BitXorNarrowWord"
+            "notWord8#", "notWord16#", "notWord32#" -> "BitNotNarrowWord"
+            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> "ShiftLeftNarrowWord"
+            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> "ShiftRightNarrowWord"
             "+#", "plusWord#" -> "Add"
             "-#", "minusWord#" -> "Subtract"
             "*#", "timesWord#" -> "Multiply"
@@ -958,13 +974,29 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
-        val unary = operation in setOf("Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
+        val unary = operation in setOf("BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
             "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
+                "QuotientUnsigned" -> b.beginQuotientUnsigned()
+                "RemainderUnsigned" -> b.beginRemainderUnsigned()
+                "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
+                "GreaterEqualUnsigned" -> b.beginGreaterEqualUnsigned()
+                "QuotientNarrowWord" -> b.beginQuotientNarrowWord(wordMask)
+                "RemainderNarrowWord" -> b.beginRemainderNarrowWord(wordMask)
+                "EqualNarrowWord" -> b.beginEqualNarrowWord(wordMask)
+                "NotEqualNarrowWord" -> b.beginNotEqualNarrowWord(wordMask)
+                "GreaterThanNarrowWord" -> b.beginGreaterThanNarrowWord(wordMask)
+                "GreaterEqualNarrowWord" -> b.beginGreaterEqualNarrowWord(wordMask)
+                "BitAndNarrowWord" -> b.beginBitAndNarrowWord(wordMask)
+                "BitOrNarrowWord" -> b.beginBitOrNarrowWord(wordMask)
+                "BitXorNarrowWord" -> b.beginBitXorNarrowWord(wordMask)
+                "BitNotNarrowWord" -> b.beginBitNotNarrowWord(wordMask)
+                "ShiftLeftNarrowWord" -> b.beginShiftLeftNarrowWord(wordMask)
+                "ShiftRightNarrowWord" -> b.beginShiftRightNarrowWord(wordMask)
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
                 "AddNarrowWord" -> b.beginAddNarrowWord(wordMask); "SubtractNarrowWord" -> b.beginSubtractNarrowWord(wordMask)
                 "MultiplyNarrowWord" -> b.beginMultiplyNarrowWord(wordMask)
@@ -985,6 +1017,22 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             args.forEach { it.emit(e) }
             when (operation) {
+                "QuotientUnsigned" -> b.endQuotientUnsigned()
+                "RemainderUnsigned" -> b.endRemainderUnsigned()
+                "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()
+                "GreaterEqualUnsigned" -> b.endGreaterEqualUnsigned()
+                "QuotientNarrowWord" -> b.endQuotientNarrowWord()
+                "RemainderNarrowWord" -> b.endRemainderNarrowWord()
+                "EqualNarrowWord" -> b.endEqualNarrowWord()
+                "NotEqualNarrowWord" -> b.endNotEqualNarrowWord()
+                "GreaterThanNarrowWord" -> b.endGreaterThanNarrowWord()
+                "GreaterEqualNarrowWord" -> b.endGreaterEqualNarrowWord()
+                "BitAndNarrowWord" -> b.endBitAndNarrowWord()
+                "BitOrNarrowWord" -> b.endBitOrNarrowWord()
+                "BitXorNarrowWord" -> b.endBitXorNarrowWord()
+                "BitNotNarrowWord" -> b.endBitNotNarrowWord()
+                "ShiftLeftNarrowWord" -> b.endShiftLeftNarrowWord()
+                "ShiftRightNarrowWord" -> b.endShiftRightNarrowWord()
                 "Add" -> b.endAdd(); "Subtract" -> b.endSubtract(); "Multiply" -> b.endMultiply()
                 "AddNarrowWord" -> b.endAddNarrowWord(); "SubtractNarrowWord" -> b.endSubtractNarrowWord()
                 "MultiplyNarrowWord" -> b.endMultiplyNarrowWord()
