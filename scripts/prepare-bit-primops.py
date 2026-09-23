@@ -127,7 +127,7 @@ def main():
     rows = [line.split('\t') for line in result.stdout.splitlines()]
     assert {(name, int(x)) for name, x, _ in rows} == wanted and len(rows) == len(wanted)
     (BUILD / 'oracle.tsv').write_text(result.stdout)
-    inputs = [SOURCE, 'scripts/prepare-bit-primops.py', 'scripts/core-capabilities.json', 'scripts/audit-core.py',
+    inputs = [SOURCE, 'scripts/prepare-bit-primops.py', 'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json', 'scripts/audit-core.py',
               'scripts/core_vectors.py', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']
     inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/Thc').glob('*.hs'))
     artifacts += ['build/bit-primops/oracle.tsv', 'build/bit-primops/NativeBitPrimops.hs']

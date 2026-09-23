@@ -208,3 +208,7 @@ and after each alias is forced, selective forcing only in a chosen fallback,
 installed compiled execution, and strict arity rejection. These are identity
 controls, not cross-runtime allocation-identity claims. Set remains outside the
 supported execution corpus until its tuple and remaining cold paths are supported.
+
+Exact scalar primop applications also use a [shared pinned signature contract](scalar-primitive-signatures.md)
+to reject contradictory present argument/result proofs during lowering and audit.
+Absent/unknown legacy metadata and representation-preserving newtype casts remain compatible.

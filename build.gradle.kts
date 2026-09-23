@@ -57,7 +57,7 @@ tasks.test {
     inputs.files(fileTree("scripts") {
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "core_vectors.py",
-            "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
+            "audit-core.py", "core-capabilities.json", "generate-scalar-signatures.py", "check-corpus-structure.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)

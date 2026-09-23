@@ -97,6 +97,42 @@ def tuple_join_fixture(zero=False):
 
 
 class AuditTest(unittest.TestCase):
+    def test_scalar_primitive_signatures_reject_consistent_forgery_and_hidden_binder_proofs(self):
+        for primitive, expected, result in [('plusInt64#', 'Int64Rep', 'Int64Rep'),
+                ('ltWord64#', 'Word64Rep', 'IntRep'), ('int64ToWord64#', 'Int64Rep', 'Word64Rep')]:
+            arity = CAP['primitives'][primitive]
+            for mode in ('argument', 'result', 'omitted', 'unknown'):
+                wrong = 'Word64Rep' if expected != 'Word64Rep' else 'Int64Rep'
+                argument_rep = dict(LONG, primReps=[wrong if mode != 'result' else expected])
+                result_rep = dict(LONG, primReps=['WordRep' if mode == 'result' else result])
+                argument = ['var', 'x']
+                if mode != 'omitted':
+                    argument += [dict(rep=dict(kind='unknown', primReps=None, evaluated=False) if mode == 'unknown' else argument_rep)]
+                body = ['app', ['prim', primitive], [argument] * arity, [False] * arity, False, False, dict(rep=result_rep)]
+                expression = ['lam', [dict(id='x', lifted=False, rep=argument_rep)], body, dict(resultRep=result_rep)]
+                report = run(expression)
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (primitive, mode))
+                self.assertNotIn('scalar-representation', {i['code'] for i in report['issues']})
+
+    def test_scalar_signature_checks_keep_unknown_absent_and_intrinsic_literal_carriers(self):
+        for proof in (None, dict(kind='unknown', primReps=None, evaluated=False), dict(LONG, primReps=['Int64Rep'])):
+            binder = dict(id='x', lifted=False)
+            argument = ['var', 'x']
+            if proof is not None:
+                binder['rep'] = proof
+                argument += [dict(rep=proof)]
+            body = ['app', ['prim', 'plusInt64#'], [argument, argument], [False, False]]
+            if proof is not None:
+                body += [False, False, dict(rep=proof)]
+            self.assertTrue(run(['lam', [binder], body])['accepted'])
+            self.assertTrue(run(['lam', [binder], ['app', ['prim', 'plusInt64#'], [body, argument], [False, False]]])['accepted'])
+        # Literal kind supplies a carrier, not a fabricated exact GHC register proof.
+        self.assertTrue(run(['app', ['prim', 'plusInt64#'], [lit(1), lit(2)], [False, False]])['accepted'])
+        word = dict(LONG, primReps=['Word64Rep'])
+        binding = dict(bind('x', ['lit', 'word64', '1', dict(rep=word)], False), rep=word)
+        report = run(['app', ['prim', 'plusInt64#'], [var('x'), var('x')], [False, False]], [binding])
+        self.assertIn('primitive-representation', {i['code'] for i in report['issues']})
+
     def test_word64_literals_are_canonical_unsigned_values(self):
         for value in ('0', '1', '9223372036854775808', '18446744073709551615'):
             self.assertTrue(run(['lit', 'word64', value])['accepted'], value)

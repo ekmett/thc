@@ -1,0 +1,1620 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "targetWordSize": 64,
+  "signatureSource": "GHC.Builtin.PrimOps.primOpSig / GHC.Types.RepType.typePrimRep_maybe",
+  "primitives": {
+    "*#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "*##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "+#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "+##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "-#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "-##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "/##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "/=#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "/=##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "IntRep"
+    },
+    "<#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "<##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "IntRep"
+    },
+    "<=#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "<=##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "IntRep"
+    },
+    "==#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "==##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "IntRep"
+    },
+    ">#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    ">##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "IntRep"
+    },
+    ">=#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    ">=##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "IntRep"
+    },
+    "and#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "and64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "andI#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "andWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "andWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "andWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "bitReverse#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "bitReverse16#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "bitReverse32#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "bitReverse64#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "bitReverse8#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "byteSwap#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "byteSwap16#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "byteSwap32#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "byteSwap64#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "chr#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "clz#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "clz16#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "clz32#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "clz64#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "WordRep"
+    },
+    "clz8#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "ctz#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "ctz16#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "ctz32#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "ctz64#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "WordRep"
+    },
+    "ctz8#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "divideFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "double2Float#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "FloatRep"
+    },
+    "double2Int#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "IntRep"
+    },
+    "eqChar#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "eqFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "IntRep"
+    },
+    "eqInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "eqInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "eqInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "eqInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "eqWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "eqWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "eqWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "eqWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "eqWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "float2Double#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "float2Int#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "IntRep"
+    },
+    "geChar#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "geFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "IntRep"
+    },
+    "geInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "geInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "geInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "geInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "geWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "geWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "geWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "geWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "geWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtChar#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "gtFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "IntRep"
+    },
+    "gtInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "gtWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "indexCharOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "int16ToInt#": {
+      "arguments": [
+        "Int16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "int2Double#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "int2Float#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "FloatRep"
+    },
+    "int2Word#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "int32ToInt#": {
+      "arguments": [
+        "Int32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "int64ToInt#": {
+      "arguments": [
+        "Int64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "int64ToWord64#": {
+      "arguments": [
+        "Int64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "int8ToInt#": {
+      "arguments": [
+        "Int8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "intToInt16#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "Int16Rep"
+    },
+    "intToInt32#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "Int32Rep"
+    },
+    "intToInt64#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "Int64Rep"
+    },
+    "intToInt8#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "Int8Rep"
+    },
+    "leChar#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "leFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "IntRep"
+    },
+    "leInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "leInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "leInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "leInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "leWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "leWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "leWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "leWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "leWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltChar#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "ltFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "IntRep"
+    },
+    "ltInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "ltWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "ltWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "minusFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "minusWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "narrow16Int#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "narrow32Int#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "narrow8Int#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "neChar#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "neFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "IntRep"
+    },
+    "neInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "neInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "neInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "neInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "neWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "neWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "IntRep"
+    },
+    "neWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "IntRep"
+    },
+    "neWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "IntRep"
+    },
+    "neWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "negateDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "negateFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "negateInt#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "negateInt16#": {
+      "arguments": [
+        "Int16Rep"
+      ],
+      "result": "Int16Rep"
+    },
+    "negateInt32#": {
+      "arguments": [
+        "Int32Rep"
+      ],
+      "result": "Int32Rep"
+    },
+    "negateInt64#": {
+      "arguments": [
+        "Int64Rep"
+      ],
+      "result": "Int64Rep"
+    },
+    "negateInt8#": {
+      "arguments": [
+        "Int8Rep"
+      ],
+      "result": "Int8Rep"
+    },
+    "not#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "not64#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "notI#": {
+      "arguments": [
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "notWord16#": {
+      "arguments": [
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "notWord32#": {
+      "arguments": [
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "notWord8#": {
+      "arguments": [
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "or#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "or64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "orI#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "orWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "orWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "orWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "ord#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "plusAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "AddrRep"
+    },
+    "plusFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "plusInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "Int16Rep"
+    },
+    "plusInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "Int32Rep"
+    },
+    "plusInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "Int64Rep"
+    },
+    "plusInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "Int8Rep"
+    },
+    "plusWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "plusWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "plusWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "plusWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "plusWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "popCnt#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "popCnt16#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "popCnt32#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "popCnt64#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "WordRep"
+    },
+    "popCnt8#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "quotInt#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "quotInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "Int16Rep"
+    },
+    "quotInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "Int32Rep"
+    },
+    "quotInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "Int64Rep"
+    },
+    "quotInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "Int8Rep"
+    },
+    "quotWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "quotWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "quotWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "quotWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "quotWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "remInt#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "remInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "Int16Rep"
+    },
+    "remInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "Int32Rep"
+    },
+    "remInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "Int64Rep"
+    },
+    "remInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "Int8Rep"
+    },
+    "remWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "remWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "remWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "remWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "remWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "subInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "Int16Rep"
+    },
+    "subInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "Int32Rep"
+    },
+    "subInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "Int64Rep"
+    },
+    "subInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "Int8Rep"
+    },
+    "subWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "subWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "subWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "subWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "timesFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "timesInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "Int16Rep"
+      ],
+      "result": "Int16Rep"
+    },
+    "timesInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "Int32Rep"
+      ],
+      "result": "Int32Rep"
+    },
+    "timesInt64#": {
+      "arguments": [
+        "Int64Rep",
+        "Int64Rep"
+      ],
+      "result": "Int64Rep"
+    },
+    "timesInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "Int8Rep"
+      ],
+      "result": "Int8Rep"
+    },
+    "timesWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "timesWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "timesWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "timesWord64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "timesWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    },
+    "uncheckedIShiftL#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "uncheckedIShiftL64#": {
+      "arguments": [
+        "Int64Rep",
+        "IntRep"
+      ],
+      "result": "Int64Rep"
+    },
+    "uncheckedIShiftRA#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "uncheckedIShiftRA64#": {
+      "arguments": [
+        "Int64Rep",
+        "IntRep"
+      ],
+      "result": "Int64Rep"
+    },
+    "uncheckedIShiftRL#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "uncheckedIShiftRL64#": {
+      "arguments": [
+        "Int64Rep",
+        "IntRep"
+      ],
+      "result": "Int64Rep"
+    },
+    "uncheckedShiftL#": {
+      "arguments": [
+        "WordRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "uncheckedShiftL64#": {
+      "arguments": [
+        "Word64Rep",
+        "IntRep"
+      ],
+      "result": "Word64Rep"
+    },
+    "uncheckedShiftLWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "IntRep"
+      ],
+      "result": "Word16Rep"
+    },
+    "uncheckedShiftLWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "IntRep"
+      ],
+      "result": "Word32Rep"
+    },
+    "uncheckedShiftLWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "IntRep"
+      ],
+      "result": "Word8Rep"
+    },
+    "uncheckedShiftRL#": {
+      "arguments": [
+        "WordRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "uncheckedShiftRL64#": {
+      "arguments": [
+        "Word64Rep",
+        "IntRep"
+      ],
+      "result": "Word64Rep"
+    },
+    "uncheckedShiftRLWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "IntRep"
+      ],
+      "result": "Word16Rep"
+    },
+    "uncheckedShiftRLWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "IntRep"
+      ],
+      "result": "Word32Rep"
+    },
+    "uncheckedShiftRLWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "IntRep"
+      ],
+      "result": "Word8Rep"
+    },
+    "word16ToWord#": {
+      "arguments": [
+        "Word16Rep"
+      ],
+      "result": "WordRep"
+    },
+    "word2Int#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "IntRep"
+    },
+    "word32ToWord#": {
+      "arguments": [
+        "Word32Rep"
+      ],
+      "result": "WordRep"
+    },
+    "word64ToInt64#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "Int64Rep"
+    },
+    "word64ToWord#": {
+      "arguments": [
+        "Word64Rep"
+      ],
+      "result": "WordRep"
+    },
+    "word8ToWord#": {
+      "arguments": [
+        "Word8Rep"
+      ],
+      "result": "WordRep"
+    },
+    "wordToWord16#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "Word16Rep"
+    },
+    "wordToWord32#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "Word32Rep"
+    },
+    "wordToWord64#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "Word64Rep"
+    },
+    "wordToWord8#": {
+      "arguments": [
+        "WordRep"
+      ],
+      "result": "Word8Rep"
+    },
+    "xor#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "xor64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "xorI#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "xorWord16#": {
+      "arguments": [
+        "Word16Rep",
+        "Word16Rep"
+      ],
+      "result": "Word16Rep"
+    },
+    "xorWord32#": {
+      "arguments": [
+        "Word32Rep",
+        "Word32Rep"
+      ],
+      "result": "Word32Rep"
+    },
+    "xorWord8#": {
+      "arguments": [
+        "Word8Rep",
+        "Word8Rep"
+      ],
+      "result": "Word8Rep"
+    }
+  }
+}
