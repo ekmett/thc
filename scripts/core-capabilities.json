@@ -190,7 +190,13 @@
     "broadcastInt64X2#": 1,
     "plusInt64X2#": 2,
     "minusInt64X2#": 2,
-    "negateInt64X2#": 1
+    "negateInt64X2#": 1,
+    "quotRemInt#": 2,
+    "quotRemWord#": 2,
+    "addIntC#": 2,
+    "subIntC#": 2,
+    "plusWord2#": 2,
+    "timesWord2#": 2
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -208,5 +214,67 @@
       "element": "Int64ElemRep",
       "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
     }
-  ]
+  ],
+  "tuplePrimitives": {
+    "quotRemInt#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": [
+        "IntRep",
+        "IntRep"
+      ]
+    },
+    "quotRemWord#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": [
+        "WordRep",
+        "WordRep"
+      ]
+    },
+    "addIntC#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": [
+        "IntRep",
+        "IntRep"
+      ]
+    },
+    "subIntC#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": [
+        "IntRep",
+        "IntRep"
+      ]
+    },
+    "plusWord2#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": [
+        "WordRep",
+        "WordRep"
+      ]
+    },
+    "timesWord2#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": [
+        "WordRep",
+        "WordRep"
+      ]
+    }
+  }
 }

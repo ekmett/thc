@@ -11,7 +11,9 @@ and 507 distinct entry/input pairs, alongside the original fixtures and Map.
 
 The [unsigned primop suite](integer-primops.md) adds 40 operations checked against
 56,791 native/model rows on both backends, including installed-code checks for
-each row.
+each row. The [tuple arithmetic suite](tuple-arithmetic.md) adds six operations
+with 8,279 native two-field rows, exact local destinations and pre/post-Tidy
+compiled-entry checks on both backends.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

@@ -97,6 +97,43 @@ def tuple_join_fixture(zero=False):
 
 
 class AuditTest(unittest.TestCase):
+    def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
+        for name, contract in CAP['tuplePrimitives'].items():
+            scalar = dict(LONG, primReps=[contract['arguments'][0]])
+            proof = tuple_rep(scalar, scalar)
+            module = tuple_fixture(proof)
+            call = module['bindings'][0]['expr'][2][1]
+            call[:] = ['app', ['prim', name],
+                       [['lit', 'word' if scalar['primReps'] == ['WordRep'] else 'int', '1', dict(rep=scalar)]] * 2,
+                       [False, False], False, False, dict(rep=proof)]
+            self.assertTrue(run_tuple(module)['accepted'], name)
+            for mutation in ('nested', 'scalar', 'unknown', 'wrong-register', 'unknown-argument', 'lifted', 'partial', 'overapplied'):
+                changed = copy.deepcopy(module)
+                bad = changed['bindings'][0]['expr'][2][1]
+                if mutation == 'nested':
+                    bad[6]['rep']['components'][0] = tuple_rep(copy.deepcopy(scalar))
+                elif mutation == 'scalar':
+                    bad[6]['rep'] = copy.deepcopy(scalar)
+                elif mutation == 'unknown':
+                    bad[6].pop('rep')
+                elif mutation == 'wrong-register':
+                    bad[2][0][3]['rep']['primReps'] = ['WordRep' if scalar['primReps'] == ['IntRep'] else 'IntRep']
+                elif mutation == 'unknown-argument':
+                    bad[2][0][3]['rep']['kind'] = 'unknown'
+                elif mutation == 'lifted':
+                    bad[3][0] = True
+                elif mutation == 'partial':
+                    bad[2].pop(); bad[3].pop()
+                else:
+                    bad[2].append(copy.deepcopy(bad[2][0])); bad[3].append(False)
+                report = run_tuple(changed)
+                self.assertFalse(report['accepted'], (name, mutation))
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
+
+    def test_tuple_arithmetic_first_class_values_remain_unsupported(self):
+        for name in CAP['tuplePrimitives']:
+            self.assertIn('primitive-arity', {i['code'] for i in run(['prim', name])['issues']})
+
     def test_exact_tuple_join_results_include_zero_arity_binders(self):
         for zero in (False, True):
             module, _ = tuple_join_fixture(zero)

@@ -648,10 +648,19 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
+            val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (tupleOperation != null) {
+                tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1])
+                    operands.forEach { it.emit(e) }
+                    e.builder.endTupleArithmetic()
+                }
             } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||

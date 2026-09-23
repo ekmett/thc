@@ -100,6 +100,7 @@ jobs:
             build/aggregate-layout/
             build/tuple-return/
             build/tuple-join/
+            build/tuple-arithmetic/
             build/integer-primops/manifest.json
             build/integer-primops/oracle.tsv
             build/integer-primops/*.audit.json

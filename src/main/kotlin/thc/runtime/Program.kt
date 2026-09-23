@@ -1068,6 +1068,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
+            val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
@@ -1077,6 +1078,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "unpackInt64X2#" -> VectorUnpack(operands[0])
                     else -> VectorOperation(name, operands)
                 }
+            } else if (tupleOperation != null) {
+                tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                TupleArithmeticExpression(tupleOperation, tupleProof,
+                    argument(args[0], scope, false), argument(args[1], scope, false))
             } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language as thc.Language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||

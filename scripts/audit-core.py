@@ -348,6 +348,17 @@ class Audit:
                 function = expr[1]
                 tuple_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-tuple'
                 proof = self.expression_rep(expr)
+                tuple_primitive = self.cap.get('tuplePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if tuple_primitive is not None:
+                    expected_args = [('scalar', (rep,)) for rep in tuple_primitive['arguments']]
+                    expected_result = ('tuple', tuple(('scalar', (rep,)) for rep in tuple_primitive['result']))
+                    argument_reps = [self.expression_rep(argument) for argument in arguments]
+                    actual_args = [self.shape(rep) for rep in argument_reps]
+                    if (actual_args != expected_args or flags != [False] * len(expected_args) or
+                            any(not isinstance(rep, dict) or rep.get('kind') != 'long' or 'aggregate' in rep for rep in argument_reps)):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact scalar arguments required')
+                    if self.shape(proof) != expected_result:
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact logical tuple result required')
                 target = bound.get(function[1]) if function[0] == 'var' else None
                 if isinstance(target, dict) and '_join_result' in target:
                     self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')
