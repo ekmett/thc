@@ -109,6 +109,8 @@ public `UArray`/`STUArray` examples with native-endian, full-width values.
 public Double arrays and native-checked bit movement through tuple-returning reads.
 [Int32/Word32-array operations](docs/int32-arrays.md) add four-byte signed and
 unsigned elements, public accumulation/ST examples and cross-element byte aliases.
+[Float/Word-array operations](docs/float-word-arrays.md) add typed four-byte Float
+and eight-byte machine Word storage, public examples and native bit-movement checks.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 28 arithmetic/comparison/conversion primops, checked against

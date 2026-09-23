@@ -11,6 +11,30 @@ Reads return genuine `(# State# s, Float# #)` or `(# State# s, Word# #)`
 tuples. Writes return `State# s`; immutable indexing returns the scalar.
 Their value arities are respectively three, four, and two.
 
+## Runtime storage and validation
+
+Both AST and bytecode use the existing shared `byte[]` allocation and unsafe
+freeze identity. Float accesses use a native-order four-byte `VarHandle` view
+and primitive Float expressions, frame slots and bytecode locals. Word accesses
+reuse the eight-byte raw-Long storage operations, preserving every bit, while
+the loader separately requires the exact `WordRep` contract. This reuse does
+not reinterpret machine Word as `Word64Rep` or permit `IntRep` arguments.
+
+Each full-width element index is checked against the complete-element count
+before narrowing or multiplication; partial trailing bytes are inaccessible.
+Reads and writes evaluate and validate their State token before memory access,
+and a failed read cannot publish a result. Unit tests cover independent
+allocations, native byte order, cross-view aliases, partial tails, extreme
+indices, raw quiet-NaN Float movement and failed State effects.
+
+The native suite mutates each of the six actual primitive applications to
+exercise saturation, representation flags, signedness/width, scalar-versus-tuple
+State and unknown payload kinds on both backends. Contradictory supported
+contracts fail at load in both policies. Unknown tuple leaves are the existing
+aggregate frontier: strict loading rejects them; diagnostic loading records
+the unsupported shape and must trap when demanded, with no handoff loans or
+retained references. No diagnostic policy was changed for these operations.
+
 ## Real public workloads and independent models
 
 The public modules use checked constant bounds `(-3,4)` and indices `-3`,
@@ -83,6 +107,16 @@ The preparation rejects extra lambdas, conditional/malformed State calls,
 changed helper results, or a changed global closure. Native/static preparation
 does not itself establish interpreted or compiled JVM execution; those are
 separate runtime test gates, including the exact per-call counts above.
+
+The JVM native tests execute every row interpreted and then compiled, at both
+Core stages, on both backends, with inlining enabled and disabled. They discover
+the active split targets through AST children and bytecode instruction caches,
+compile callees before callers, and require exact compiled-entry increments,
+unchanged target identities and last-tier validity after every measured call.
+There are no settling calls or retries. The complete matrix contains 25,320
+compiled invocations and 60,080 guest-root entries per handoff configuration.
+Result and argument loans must be released, warmed result pools reused, and
+supported workloads must report zero unsupported traps and blackholes.
 
 General dynamic checked bounds, library error paths, copying/freezing via FFI,
 floating host arguments, arbitrary floating arithmetic, signaling-NaN identity,
