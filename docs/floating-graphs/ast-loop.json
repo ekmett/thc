@@ -1,0 +1,71 @@
+{
+  "passed": true,
+  "graph": "ast-high-tier.json.gz",
+  "group": "TruffleIR.Tier2.lambda_n()",
+  "snapshot": "2: Before phase HighTierLowering",
+  "loops": [
+    {
+      "loopBegin": 1036,
+      "loopEnds": [
+        1056
+      ],
+      "continuingBlocks": [
+        "3",
+        "4"
+      ],
+      "scheduledNodeIds": [
+        1036,
+        1037,
+        1042,
+        1043,
+        1044,
+        1045,
+        1046,
+        1047,
+        1048,
+        1050,
+        1052,
+        1054,
+        1056,
+        1079,
+        1216,
+        1217,
+        1218,
+        1219
+      ],
+      "floatingRecurrences": [
+        {
+          "phi": 1217,
+          "update": 1052,
+          "stamp": "f32",
+          "operands": [
+            1217,
+            1051
+          ]
+        },
+        {
+          "phi": 1218,
+          "update": 1054,
+          "stamp": "f64",
+          "operands": [
+            1218,
+            1053
+          ]
+        }
+      ],
+      "integerRecurrences": {
+        "1216": [
+          {
+            "node": 1050,
+            "operands": [
+              1216,
+              1049
+            ]
+          }
+        ]
+      },
+      "violations": []
+    }
+  ],
+  "scope": "Scheduled continuing natural-loop blocks; require f32 and f64 add recurrences, reject boxing/allocation/heap loads/calls. Entry and exit ABI excluded."
+}
