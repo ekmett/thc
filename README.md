@@ -102,7 +102,7 @@ scalar/reference inputs, concrete Float/Double leaves, local join results and ze
 aggregate arguments, join captures, ordinary captures and sums remain explicit boundaries.
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
-pack/length/unpack with ordered writes and native/model checks on both backends.
+pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 28 arithmetic/comparison/conversion primops, checked against
