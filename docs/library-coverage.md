@@ -28,6 +28,8 @@ aggregate-representation diagnostics. The original pre-Tidy export also missed
 the actual identity of `main:Data.Set.Internal.merge_$smerge1`; the post-Tidy
 boundary resolves it without aliases. Counts can change as the exporter learns
 more precise diagnostics; rejection does not count as execution support.
+The [focused source-binding audit](set-source-binding-audit.md) reproduces the
+before/after identity difference and confirms that the unsupported issues remain.
 
 The full source and its strict diagnostic are retained so aggregate lowering,
 pointer identity and source/interface identity work can be tested against an
