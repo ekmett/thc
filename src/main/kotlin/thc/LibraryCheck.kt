@@ -120,7 +120,8 @@ fun main(args: Array<String>) {
                 check(count(function, "unsupportedTraps") == 0L) { "Unsupported trap reached by $name" }
                 check(count(function, "blackholes") == 0L) { "Unexpected blackhole in $name" }
             }
-            fun checkRows(function: Value, rows: List<Pair<Long, Long>>, phase: String, compiled: Boolean) {
+            fun checkRows(function: Value, rows: List<Pair<Long, Long>>, phase: String, compiled: Boolean,
+                          settling: Boolean = false) {
                 for ((input, expected) in rows) {
                     val before = count(function, "compiledEntries")
                     val actual = function.execute(input).asLong()
@@ -129,7 +130,8 @@ fun main(args: Array<String>) {
                         "$backend $phase $name($input) did not enter installed guest code"
                     }
                     checkPolicy(function)
-                    println("VERIFIED_LIBRARY\t$backend\t$phase\t$name\t$input\t$actual")
+                    if (settling) println("LIBRARY_COMPILE_SETTLE\t$backend\t$phase\t$name\t$input\t${count(function, "compiledEntries") - before}")
+                    else println("VERIFIED_LIBRARY\t$backend\t$phase\t$name\t$input\t$actual")
                 }
             }
             Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -159,11 +161,8 @@ fun main(args: Array<String>) {
                     // executing that invocation interpreted despite valid guest
                     // code. Settle once on a known warm input, never a cold one.
                     // This is not a retry loop or a measured compiled-entry pass.
-                    val (input, expected) = warm.first()
-                    val before = count(function, "compiledEntries")
-                    check(function.execute(input).asLong() == expected) { "$backend $phase settling result: $name($input)" }
-                    checkPolicy(function)
-                    println("LIBRARY_COMPILE_SETTLE\t$backend\t$phase\t$name\t$input\t${count(function, "compiledEntries") - before}")
+                    // Use the same host execution site as the measured replay.
+                    checkRows(function, listOf(warm.first()), phase, compiled = false, settling = true)
                     check(function.invokeMember("compile").asBoolean()) { "Failed $phase compilation recheck: $backend $name" }
                 }
                 compileForReplay("warm")
