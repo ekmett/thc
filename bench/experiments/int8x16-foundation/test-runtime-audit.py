@@ -63,6 +63,26 @@ def resummarize(value):
     return value
 
 
+def frame_tags():
+    value = graph()
+    owner = 'com.oracle.truffle.api.impl.FrameWithoutBoxing'
+    value['nodes'] += [
+        node(90, 'VirtualArrayNode', stamp='a!# byte[]', componentType='byte', length=3),
+        node(91, 'VirtualInstanceNode', type=owner, fields=[owner+'.'+name for name in (
+            'descriptor', 'arguments', 'indexedLocals', 'indexedPrimitiveLocals', 'indexedTags', 'auxiliarySlots')]),
+        node(92, 'VirtualObjectState'), node(93, 'VirtualObjectState'), node(94, 'FrameState'),
+        node(95, 'VirtualArrayNode', componentType='java.lang.Object', length=3),
+        node(96, 'VirtualArrayNode', componentType='long', length=3),
+        node(97, 'ConstantNode', stamp='i32 [7]', rawvalue='7'), node(98, 'ConstantNode')]
+    def add(source, target, label, index=-1, kind='Value'):
+        value['edges'].append(dict(**{'from': source}, to=target, label=label, type=kind, listIndex=index))
+    add(91, 92, 'object'); add(90, 93, 'object'); add(91, 94, 'values', 0)
+    for state in (92, 93): add(state, 94, 'virtualObjectMappings', kind='State')
+    for index, source in enumerate((98, 98, 95, 96, 90, 98)): add(source, 92, 'values', index)
+    for index in range(3): add(97, 93, 'values', index)
+    return resummarize(value)
+
+
 def cfg(entry='plusCase', instruction=None):
     register = 'WORD' if entry == 'timesCase' else 'BYTE'
     line = instruction or ('nr 42 <|@ instruction xmm1|V128_' + register + ' = ' + audit.OPCODES[entry]
@@ -122,6 +142,63 @@ class GraphGateTest(unittest.TestCase):
                       'a jdk.incubator.vector.Short128Vector', 'a byte[]', 'a short[]'):
             value = graph()
             value['nodes'].append(node(90, 'PiNode', stamp=stamp))
+            self.rejected(value)
+
+    def test_only_exact_virtual_frame_tag_metadata_is_allowed(self):
+        audit.inspect_graph(frame_tags(), 'plusCase')
+        for name in ('VirtualArrayNode', 'ConstantNode', 'NewArrayNode'):
+            value = graph()
+            value['nodes'].append(node(90, name, stamp='a!# byte[]', componentType='byte', length=16))
+            self.rejected(value)
+
+    def test_virtual_tag_owner_and_slot_identity_are_required(self):
+        for mutation in ('owner_type', 'owner_fields', 'field_index', 'sibling_length', 'sibling_kind', 'not_virtual'):
+            with self.subTest(mutation=mutation):
+                value = frame_tags(); by_id = {n['id']: n for n in value['nodes']}
+                if mutation == 'owner_type': by_id[91]['properties']['type'] = 'jdk.incubator.vector.Byte128Vector'
+                elif mutation == 'owner_fields': by_id[91]['properties']['fields'][4] = 'payload'
+                elif mutation == 'field_index': next(e for e in value['edges'] if e['from'] == 90 and e['label'] == 'values')['listIndex'] = 5
+                elif mutation == 'sibling_length': by_id[96]['properties']['length'] = 2
+                elif mutation == 'sibling_kind': by_id[95]['properties']['componentType'] = 'byte'
+                else: by_id[90]['nodeClass'] = 'test.NewArrayNode'
+                self.rejected(value)
+
+    def test_virtual_tag_materialization_or_escape_is_rejected(self):
+        for source in (90, 91, 92, 93, 94):
+            for target in (4, 5):
+                value = frame_tags()
+                value['edges'].append(dict(**{'from': source}, to=target, label='value', type='Value'))
+                self.rejected(value)
+        value = frame_tags()
+        value['edges'].append(dict(**{'from': 1}, to=91, label='value', type='Value'))
+        self.rejected(value)
+        for name in ('CommitAllocationNode', 'MaterializedObjectState', 'AllocatedObjectNode'):
+            value = frame_tags(); value['nodes'].append(node(99, name))
+            value['edges'].append(dict(**{'from': 90}, to=99, label='object', type='Value'))
+            self.rejected(value)
+
+    def test_virtual_tag_values_must_be_complete_initial_constants(self):
+        for mutation in ('value', 'dynamic', 'missing', 'duplicate', 'wrong_edge_kind'):
+            with self.subTest(mutation=mutation):
+                value = frame_tags(); constant = next(n for n in value['nodes'] if n['id'] == 97)
+                if mutation == 'value': constant['properties']['rawvalue'] = '6'
+                elif mutation == 'dynamic': constant['nodeClass'] = 'test.PhiNode'
+                else:
+                    e = next(e for e in value['edges'] if e['to'] == 93 and e['label'] == 'values')
+                    if mutation == 'missing': value['edges'].remove(e)
+                    elif mutation == 'duplicate': e['listIndex'] = 1
+                    else: e['type'] = 'State'
+                self.rejected(value)
+
+    def test_virtual_tag_states_must_remain_same_frame_metadata(self):
+        for mutation in ('state_type', 'edge_type', 'label', 'different_frame'):
+            value = frame_tags()
+            edge = next(e for e in value['edges'] if e['from'] == 93)
+            if mutation == 'state_type': next(n for n in value['nodes'] if n['id'] == 94)['nodeClass'] = 'test.PiNode'
+            elif mutation == 'edge_type': edge['type'] = 'Value'
+            elif mutation == 'label': edge['label'] = 'value'
+            else:
+                value['nodes'].append(node(99, 'FrameState')); edge['to'] = 99
             self.rejected(value)
 
     def test_dead_or_partially_observed_vector_fails(self):
@@ -216,6 +293,34 @@ class LirGateTest(unittest.TestCase):
                       correct.replace('size: XMM', 'size: YMM'), correct.replace('instruction', 'comment')):
             with self.subTest(line=wrong), self.assertRaises(AssertionError):
                 audit.inspect_lir(cfg(instruction=wrong), 'lambda a, b', 'plusCase', 'x86_64')
+
+    def test_negation_accepts_only_exact_narrowed_zero_view(self):
+        zero = ('nr 40 <|@ instruction xmm2|V256_BYTE = AVXCLEARVECTORCONSTANT encoding: VEX input: SIMD<'
+                + ','.join(['0']*32) + '> <|@ <|@')
+        sub = ('nr 42 <|@ instruction xmm1|V128_BYTE = VPSUBB '
+               '(x: xmm2|V128_BYTE(V256_BYTE), y: xmm0|V128_BYTE) size: XMM <|@ <|@')
+        good = cfg('negateCase', zero+'\n'+sub)
+        audit.inspect_lir(good, 'lambda a, b', 'negateCase', 'x86_64')
+        for bad in (cfg('negateCase', sub), good.replace('SIMD<0,', 'SIMD<1,'),
+                    good.replace('instruction xmm2|V256_BYTE', 'instruction xmm3|V256_BYTE'),
+                    good.replace('V128_BYTE(V256_BYTE)', 'V128_BYTE(V512_BYTE)'),
+                    good.replace('xmm2|V128_BYTE(V256_BYTE)', 'xmm2|V256_BYTE'),
+                    good.replace('xmm2|V128_BYTE(V256_BYTE)', 'ymm2|V128_BYTE(V256_BYTE)'),
+                    good.replace('xmm0|V128_BYTE', 'zmm0|V128_BYTE'),
+                    good.replace('size: XMM', 'size: ZMM'),
+                    good.replace('nr 42', 'nr 41 <|@ instruction xmm2|V128_BYTE = OTHER <|@\nnr 42')):
+            with self.subTest(lir=bad), self.assertRaises(AssertionError):
+                audit.inspect_lir(bad, 'lambda a, b', 'negateCase', 'x86_64')
+        with self.assertRaises(AssertionError):
+            audit.inspect_lir(good.replace('VPSUBB', 'VPADDB'), 'lambda a, b', 'plusCase', 'x86_64')
+
+    def test_operand_width_and_register_are_checked_not_just_result(self):
+        good = cfg()
+        for old, new in (('x: xmm2', 'x: ymm2'), ('y: xmm0', 'y: zmm0'),
+                         ('x: xmm2|V128_BYTE', 'x: xmm2|V256_BYTE'),
+                         ('y: xmm0|V128_BYTE', 'y: xmm0|V512_BYTE')):
+            with self.assertRaises(AssertionError):
+                audit.inspect_lir(good.replace(old, new), 'lambda a, b', 'plusCase', 'x86_64')
 
     def test_times_rejects_missing_extra_or_fictional_byte_multiply(self):
         good = cfg('timesCase')

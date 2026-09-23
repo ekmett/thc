@@ -209,6 +209,92 @@ def byte_multiply_expansion(nodes, edges, live):
         maskPerShort=255, shiftBits=8)
 
 
+def virtual_frame_tags(node, nodes, edges):
+    """Recognize only the eliminated FrameWithoutBoxing.indexedTags metadata.
+
+    VirtualObjectState describes deoptimization reconstruction, not an allocation.
+    This is deliberately not a general exception for virtual byte/vector payloads.
+    """
+    frame_type = 'com.oracle.truffle.api.impl.FrameWithoutBoxing'
+    fields = [frame_type + '.' + name for name in (
+        'descriptor', 'arguments', 'indexedLocals', 'indexedPrimitiveLocals', 'indexedTags', 'auxiliarySlots')]
+    props = node['properties']
+    length = props.get('length')
+    if (kind(node) != 'VirtualArrayNode' or props.get('stamp') != 'a!# byte[]'
+            or props.get('componentType') != 'byte' or type(length) is not int or length <= 0):
+        return False
+
+    def incoming(number):
+        return [e for e in edges if e['to'] == number]
+
+    def outgoing(number):
+        return [e for e in edges if e['from'] == number]
+
+    def object_of(state):
+        objects = [e['from'] for e in incoming(state) if e['label'] == 'object' and e['type'] == 'Value']
+        return objects[0] if len(objects) == 1 else None
+
+    uses = outgoing(node['id'])
+    if incoming(node['id']) or len(uses) != 2 or any(
+            e['type'] != 'Value' or kind(nodes[e['to']]) != 'VirtualObjectState' for e in uses):
+        return False
+    own = [e['to'] for e in uses if e['label'] == 'object']
+    owners = [e['to'] for e in uses if e['label'] == 'values' and e.get('listIndex') == 4]
+    if len(own) != 1 or len(owners) != 1 or own == owners:
+        return False
+    own, owner_state = own[0], owners[0]
+    owner = object_of(owner_state)
+    if owner not in nodes or object_of(own) != node['id']:
+        return False
+    owner_node = nodes[owner]
+    if (incoming(owner) or kind(owner_node) != 'VirtualInstanceNode' or owner_node['properties'].get('type') != frame_type
+            or owner_node['properties'].get('fields') != fields):
+        return False
+    # Both reconstruction records must be used exclusively as state mappings of
+    # the same actual FrameState; the virtual owner must not escape either.
+    state_users = []
+    for state in (own, owner_state):
+        consumers = outgoing(state)
+        if not consumers or any(e['type'] != 'State' or e['label'] != 'virtualObjectMappings'
+                                or kind(nodes[e['to']]) != 'FrameState' for e in consumers):
+            return False
+        state_users.append({e['to'] for e in consumers})
+    if state_users[0] != state_users[1]:
+        return False
+    for use in outgoing(owner):
+        if use['type'] != 'Value' or not (
+                (use['to'] == owner_state and use['label'] == 'object')
+                or (kind(nodes[use['to']]) == 'FrameState' and use['label'] == 'values')):
+            return False
+    frames = state_users[0] | {e['to'] for e in outgoing(owner) if kind(nodes[e['to']]) == 'FrameState'}
+    pending = list(frames)
+    while pending:
+        for use in outgoing(pending.pop()):
+            if use['type'] != 'State':
+                return False
+            if kind(nodes[use['to']]) == 'FrameState' and use['to'] not in frames:
+                frames.add(use['to']); pending.append(use['to'])
+    values = [e for e in incoming(owner_state) if e['label'] == 'values' and e['type'] == 'Value']
+    if len(incoming(owner_state)) != 7 or sorted(e.get('listIndex', -1) for e in values) != list(range(6)):
+        return False
+    slots = {e['listIndex']: nodes[e['from']] for e in values}
+    if slots[4]['id'] != node['id']:
+        return False
+    for index, component in ((2, 'java.lang.Object'), (3, 'long')):
+        sibling = slots[index]
+        if (kind(sibling) != 'VirtualArrayNode' or sibling['properties'].get('componentType') != component
+                or sibling['properties'].get('length') != length):
+            return False
+    tags = [e for e in incoming(own) if e['label'] == 'values' and e['type'] == 'Value']
+    if len(incoming(own)) != length + 1 or sorted(e.get('listIndex', -1) for e in tags) != list(range(length)):
+        return False
+    # Pinned FrameWithoutBoxing.ILLEGAL_TAG is 7: these are initial frame tags,
+    # not data from any guest lane. No reference is accepted merely by its name.
+    return all(kind(nodes[e['from']]) == 'ConstantNode'
+               and re.match(r'^i32(?:\s|$)', nodes[e['from']]['properties'].get('stamp', ''))
+               and nodes[e['from']]['properties'].get('rawvalue') == '7' for e in tags)
+
+
 def inspect_graph(graph, entry):
     nodes = {node['id']: node for node in graph['nodes']}
     require(len(nodes) == len(graph['nodes']), 'Duplicate graph node id')
@@ -222,7 +308,9 @@ def inspect_graph(graph, entry):
         name, props = kind(node), node['properties']
         require(not any(fragment in name for fragment in forbidden), 'Residual allocation/memory/call: ' + name)
         stamp = props.get('stamp', '')
-        require(not re.search(r'thc\.runtime\.Int8X16|(?:Byte|Short)(?:\d+)?Vector|(?:byte|short)\[\]|\[(?:B|S)(?:;|$)', str(stamp)),
+        forbidden_reference = re.search(
+            r'thc\.runtime\.Int8X16|(?:Byte|Short)(?:\d+)?Vector|(?:byte|short)\[\]|\[(?:B|S)(?:;|$)', str(stamp))
+        require(not forbidden_reference or virtual_frame_tags(node, nodes, graph['edges']),
                 'Residual carrier/vector/payload reference: ' + str(stamp))
         if 'UnboxNode' in name:
             require(props.get('boxingKind') == 'JavaKind.Long', 'Intermediate lane unbox')
@@ -287,9 +375,25 @@ def inspect_lir(text, target, entry, arch):
     # Match instruction position, physical register, exact lane kind and XMM size.
     # A scalar instruction, YMM/ZMM operation, comment, or mnemonic substring cannot pass.
     operations = [line.strip() for line in lir.splitlines() if re.search(
-        r'<\|@ instruction xmm\d+\|V128_' + register_kind + ' = ' + opcode + r'\b.*\bsize: XMM\b', line)]
+        r'<\|@ instruction .* = ' + opcode + r'\b', line)]
     require(len(operations) == (2 if entry == 'timesCase' else 1), 'Wrong count of allocated XMM ' + opcode)
-    require(all(not re.search(r'\b(?:YMM|ZMM|V256_\w+|V512_\w+)\b', line) for line in operations), 'Wrong packed width')
+    operand = r'xmm\d+\|V128_' + register_kind
+    for line in operations:
+        match = re.fullmatch(r'nr\s+\d+\s+<\|@ instruction ' + operand + ' = ' + opcode
+            + r' \(x: (?P<x>' + operand + r')(?P<cast>\(V256_BYTE\))?, y: ' + operand
+            + r'\) size: XMM <\|@(?: <\|@)?', line)
+        require(match is not None, 'Wrong physical register, operand kind or packed width')
+        if match['cast']:
+            # LIRKindWithCast prints toKind(actualKind): this is a 128-bit view
+            # of a wider zero, not a 256-bit subtraction. Accept ONLY negation's
+            # first input, immediately defined by the exact pinned zero idiom.
+            require(entry == 'negateCase', 'Only negation permits a narrowed zero register view')
+            prior = [part.strip() for part in lir[:lir.index(line)].splitlines() if '<|@ instruction ' in part]
+            zero = (r'nr\s+\d+\s+<\|@ instruction ' + re.escape(match['x'].split('|')[0])
+                    + r'\|V256_BYTE = AVXCLEARVECTORCONSTANT encoding: VEX input: SIMD<'
+                    + ','.join(['0'] * 32) + r'> <\|@(?: <\|@)?')
+            require(prior and re.fullmatch(zero, prior[-1]) is not None,
+                    'Narrowed zero view lacks the immediately preceding exact zero definition')
     require('VPMULLB' not in lir, 'x86 has no packed low-byte multiply instruction')
     # For negateCase, the connected NegateNode (or explicit zero-minus SubNode)
     # establishes the operand semantics; VPSUBB establishes the physical lowering.
