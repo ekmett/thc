@@ -14,6 +14,7 @@ import sys
 
 from core_sums import is_sum, contains_sum, lifted_payload, proof_error as sum_proof_error, constructor_tag as sum_constructor_tag
 from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error, signature_matches as vector_signature_matches
+from core_tuple_inputs import contains_tuple, proof_error as tuple_input_proof_error
 
 
 # The identical checked-in resource is packaged in the JVM runtime jar.
@@ -226,6 +227,10 @@ class Audit:
     def supported_empty_input(self, rep):
         return self.is_empty_tuple(rep) and 'empty-unboxed-tuple' in self.cap.get('aggregateInputs', [])
 
+    def supported_tuple_input(self, rep):
+        return (self.supported_empty_input(rep) or
+                'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep) is None)
+
     @classmethod
     def shape(cls, rep):
         """Logical tuple boundaries are significant even at zero/one register.
@@ -310,6 +315,15 @@ class Audit:
                     any(not isinstance(binder, dict) for binder in expression[1])):
                 return None
             return [binder.get('rep') for binder in expression[1]]
+        if expression[0] == 'con':
+            constructor = self.constructors.get(expression[1], {})
+            arity = constructor.get('arity')
+            if constructor.get('kind', 'boxed') == 'boxed' and type(arity) is int and arity >= 0:
+                fields = constructor.get('fieldTypes')
+                # Heap constructors cannot consume logical tuples, even through
+                # aliases/PAPs. Legacy missing fields stay unknown, never inferred
+                # as aggregate signatures from their physical register width.
+                return fields if isinstance(fields, list) and len(fields) == arity else [None] * arity
         if expression[0] == 'var':
             key = expression[1]
             if key in seen:
@@ -509,6 +523,8 @@ class Audit:
         fields = info.get('fieldTypes')
         if isinstance(fields, list) and any(contains_sum(field) for field in fields):
             self.issue('aggregate-boundary', owner, path, 'unboxed-sum heap field')
+        if isinstance(fields, list) and any(contains_tuple(field) for field in fields):
+            self.issue('aggregate-boundary', owner, path, 'unboxed-tuple heap field')
         reps = info.get('fieldReps')
         if not isinstance(reps, list) or len(reps) != expected:
             self.issue('constructor-representations', owner, path, f'{key}: missing/misaligned fieldReps')
@@ -564,12 +580,12 @@ class Audit:
                     self.reference(expr[1], owner, path)
                     stored = self.bindings.get(expr[1], {}).get('rep')
                     if self.is_tuple(stored) or self.is_tuple(self.expression_rep(expr)) or is_sum(stored) or is_sum(self.expression_rep(expr)):
-                        self.compare_shapes(stored, self.effective_rep(expr, bound) if sum_payload or is_sum(stored) else self.expression_rep(expr), owner, path + '/rep')
+                        self.compare_shapes(stored, self.effective_rep(expr, bound) if sum_payload or is_sum(stored) or self.is_tuple(stored) else self.expression_rep(expr), owner, path + '/rep')
                 else:
                     proof = bound[expr[1]]
                     if isinstance(proof, dict) and proof.get('_join_arity') == 0 and primitive_arity is None:
                         proof = proof['_join_result']
-                    self.compare_shapes(proof, self.effective_rep(expr, bound) if sum_payload or is_sum(proof) else self.expression_rep(expr), owner, path + '/rep')
+                    self.compare_shapes(proof, self.effective_rep(expr, bound) if sum_payload or is_sum(proof) or self.is_tuple(proof) else self.expression_rep(expr), owner, path + '/rep')
             elif tag == 'lit':
                 self.literal(expr[1], expr[2], owner, path)
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
@@ -588,10 +604,10 @@ class Audit:
                     if is_vector(binder.get('rep')):
                         self.issue('vector-boundary', owner, path, 'vector formal argument')
                     if self.is_tuple(binder.get('rep')) and (index < join_prefix or
-                            not self.supported_empty_input(binder.get('rep'))):
+                            not self.supported_tuple_input(binder.get('rep'))):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple formal argument')
-                    if self.is_empty_tuple(binder.get('rep')) and binder.get('lifted') is not False:
-                        self.issue('application-levity', owner, path, 'Empty tuple formal must be unlifted')
+                    if self.is_tuple(binder.get('rep')) and binder.get('lifted') is not False:
+                        self.issue('application-levity', owner, path, 'Tuple formal must be unlifted')
                 captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                             if self.is_tuple(bound[key])}
                 if any(is_sum(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
@@ -604,8 +620,10 @@ class Audit:
                 metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
                 if is_vector(metadata.get('resultRep')) or is_vector(self.expression_rep(expr[2])):
                     self.issue('vector-boundary', owner, path, 'vector function result')
-                self.compare_shapes(metadata.get('resultRep'), self.expression_rep(expr[2]), owner, path + '/resultRep')
-                self.walk(expr[2], bound | self.binder_scope(expr[1]), owner, path + '/body')
+                local = bound | self.binder_scope(expr[1])
+                self.compare_shapes(metadata.get('resultRep'), self.effective_rep(expr[2], local)
+                                    if self.is_tuple(metadata.get('resultRep')) else self.expression_rep(expr[2]), owner, path + '/resultRep')
+                self.walk(expr[2], local, owner, path + '/body')
             elif tag == 'app':
                 arguments = expr[2]
                 flags = expr[3] if len(expr) > 3 else None
@@ -713,8 +731,9 @@ class Audit:
                 formals = self.call_formals(function, bound)
                 if formals is not None:
                     for index, (formal, actual) in enumerate(zip(formals, arguments)):
-                        if self.is_tuple(formal) or self.is_tuple(self.expression_rep(actual)) or is_sum(formal) or is_sum(self.effective_rep(actual, bound)):
-                            self.compare_shapes(formal, self.expression_rep(actual), owner,
+                        actual_proof = self.effective_rep(actual, bound)
+                        if self.is_tuple(formal) or self.is_tuple(actual_proof) or is_sum(formal) or is_sum(actual_proof):
+                            self.compare_shapes(formal, actual_proof, owner,
                                                 f'{path}/arguments/{index}/formal')
                 vector_operation = function[1] if function[0] == 'prim' and function[1] in VECTOR_OPERATIONS else None
                 if vector_operation:
@@ -752,21 +771,21 @@ class Audit:
                     if tuple_constructor and self.is_tuple(proof) and isinstance(proof.get('components'), list):
                         components = proof['components']
                         if index < len(components):
-                            self.compare_shapes(components[index], self.effective_rep(argument, bound) if sum_payload else self.expression_rep(argument), owner,
+                            self.compare_shapes(components[index], self.effective_rep(argument, bound), owner,
                                                 f'{path}/arguments/{index}/rep', component=True)
                     if not vector_operation and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
                         self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
                     if not tuple_constructor and not sum_constructor and not vector_operation:
-                        argument_rep = self.expression_rep(argument)
+                        argument_rep = self.effective_rep(argument, bound)
                         stored = bound.get(argument[1]) if argument[0] == 'var' else None
                         if self.is_tuple(argument_rep) or self.is_tuple(stored):
                             ordinary = function[0] not in ('prim', 'con') and not (
                                 isinstance(target, dict) and '_join_arity' in target)
-                            if not ordinary or not self.supported_empty_input(argument_rep):
+                            if not ordinary or not self.supported_tuple_input(argument_rep):
                                 self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
-                            if (self.is_empty_tuple(argument_rep) and isinstance(flags, list) and
+                            if (self.is_tuple(argument_rep) and isinstance(flags, list) and
                                     index < len(flags) and flags[index] is not False):
-                                self.issue('application-levity', owner, f'{path}/arguments/{index}', 'Empty tuple argument must be unlifted')
+                                self.issue('application-levity', owner, f'{path}/arguments/{index}', 'Tuple argument must be unlifted')
                     self.walk(argument, bound, owner, f'{path}/arguments/{index}', sum_payload=sum_constructor or sum_payload)
             elif tag == 'let':
                 recursive, group = expr[1], expr[2]
@@ -781,7 +800,9 @@ class Audit:
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum let binding')
                     if is_vector(binding.get('rep')):
                         self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector let binding')
-                    if self.is_tuple(binding.get('rep')) and 'joinValueArity' not in binding:
+                    tuple_value = self.is_tuple(binding.get('rep')) or self.is_tuple(
+                        self.effective_rep(binding.get('expr'), local if recursive else bound))
+                    if tuple_value and 'joinValueArity' not in binding:
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
                     if 'joinValueArity' in binding:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
@@ -795,7 +816,8 @@ class Audit:
                         self.issue('recursive-unlifted', owner, f'{path}/bindings/{index}', binding.get('id'))
                     self.walk(binding.get('expr'), local if recursive else bound,
                               owner, f'{path}/bindings/{index}/rhs', join_prefix=binding.get('joinValueArity', 0), sum_payload=sum_payload)
-                self.compare_shapes(self.expression_rep(expr), self.effective_rep(expr[3], local) if sum_payload else self.expression_rep(expr[3]), owner, path + '/body/rep')
+                self.compare_shapes(self.expression_rep(expr), self.effective_rep(expr[3], local)
+                                    if sum_payload or self.is_tuple(self.expression_rep(expr)) else self.expression_rep(expr[3]), owner, path + '/body/rep')
                 self.walk(expr[3], local, owner, path + '/body', sum_payload=sum_payload)
             elif tag == 'case':
                 self.walk(expr[1], bound, owner, path + '/scrutinee', sum_payload=sum_payload)
@@ -803,7 +825,8 @@ class Audit:
                     raise ValueError('Case binder must be a string')
                 metadata = expr[4] if len(expr) > 4 and isinstance(expr[4], dict) else {}
                 binder_proof = metadata.get('binder', {}).get('rep', self.expression_rep(expr[1]))
-                self.compare_shapes(binder_proof, self.effective_rep(expr[1], bound) if sum_payload or is_sum(binder_proof) else self.expression_rep(expr[1]), owner, path + '/binder/rep')
+                self.compare_shapes(binder_proof, self.effective_rep(expr[1], bound)
+                                    if sum_payload or is_sum(binder_proof) or self.is_tuple(binder_proof) else self.expression_rep(expr[1]), owner, path + '/binder/rep')
                 if is_sum(binder_proof) and metadata.get('binder', {}).get('lifted') is not False:
                     self.issue('case-binder-metadata', owner, path, 'Sum case binder must be unlifted')
                 if is_sum(binder_proof) and not expr[3]:
@@ -877,7 +900,8 @@ class Audit:
                     local = bound | {expr[2]: binder_proof} | dict.fromkeys(ids)
                     if isinstance(records, list):
                         local.update(self.binder_scope(records))
-                    self.compare_shapes(self.expression_rep(expr), self.effective_rep(rhs, local) if sum_payload else self.expression_rep(rhs), owner, altpath + '/body/rep')
+                    self.compare_shapes(self.expression_rep(expr), self.effective_rep(rhs, local)
+                                        if sum_payload or self.is_tuple(self.expression_rep(expr)) else self.expression_rep(rhs), owner, altpath + '/body/rep')
                     self.walk(rhs, local, owner, altpath + '/body', sum_payload=sum_payload)
             elif tag == 'con':
                 if self.constructors.get(expr[1], {}).get('kind') == 'unboxed-sum' and primitive_arity != 1:
@@ -906,13 +930,13 @@ class Audit:
                 key = candidates[0]
                 roots.append(key)
                 expression = self.bindings[key].get('expr')
-                if (isinstance(expression, list) and len(expression) > 1 and expression[0] == 'lam' and
-                        isinstance(expression[1], list)):
-                    if any(self.is_tuple(b.get('rep')) for b in expression[1] if isinstance(b, dict)):
-                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
-                if (isinstance(expression, list) and expression and expression[0] == 'lam' and
-                        len(expression) > 3 and isinstance(expression[3], dict) and
-                        self.is_tuple(expression[3].get('resultRep'))):
+                try:
+                    formals = self.call_formals(expression, {})
+                except (IndexError, KeyError, TypeError):
+                    formals = None  # walk() reports malformed metadata in context.
+                if formals is not None and any(self.is_tuple(proof) for proof in formals):
+                    self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
+                if self.is_tuple(self.known_result(expression)):
                     self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
                 if is_sum(self.known_result(expression)) or is_sum(self.bindings[key].get('rep')):
                     self.issue('aggregate-boundary', key, '/entry', 'unboxed-sum host result')
