@@ -1,0 +1,24 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/work/bytecode-v3/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/thc/work/tail-reentry-review/old-inner
+[engine] opt done   engine=1  id=4     lambda innerC_n, innerC_acc                        |Tier 2|Time    85(  75+11  )ms|AST    2|Inlined   2Y   0N|IR    105/   502|CodeSize    1996|Addr 0x000118fbd440|CompId 2149   |UTC 2026-09-23T02:27:40.405|Src n/a
+[engine] opt deopt  engine=1  id=4     lambda innerC_n, innerC_acc                        |Invalidated  true|                                                                                                            |UTC 2026-09-23T02:27:40.406|Src n/a|Reason uncommon trap
+Dumping IGV graphs in /Users/ekmett/thc/work/tail-reentry-review/old-inner
+[engine] opt done   engine=1  id=4     lambda innerC_n, innerC_acc                        |Tier 2|Time    51(  40+10  )ms|AST    2|Inlined   2Y   0N|IR    110/   552|CodeSize    2188|Addr 0x000118fc76c0|CompId 2267   |UTC 2026-09-23T02:27:40.459|Src n/a
+Dumping IGV graphs in /Users/ekmett/thc/work/tail-reentry-review/old-inner
+[engine] opt done   engine=1  id=9     EntryRoot@274e9a08                                 |Tier 2|Time   196(  70+126 )ms|AST   21|Inlined   9Y   0N|IR   1147/  7202|CodeSize   31416|Addr 0x000118fced40|CompId 2295   |UTC 2026-09-23T02:27:40.657|Src n/a
+[engine] opt done   engine=1  id=7     lambda cycleInner_input                            |Tier 2|Time    26(  21+5   )ms|AST    2|Inlined   5Y   0N|IR     99/   351|CodeSize    1316|Addr 0x000118fd8b40|CompId 2342   |UTC 2026-09-23T02:27:40.693|Src n/a
+PHASE WARM BEGIN
+[engine] opt done   engine=1  id=41    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time   219(  69+150 )ms|AST   10|Inlined  10Y   0N|IR   1410/  8112|CodeSize   35432|Addr 0x000118fe81c0|CompId 2437   |UTC 2026-09-23T02:27:41.245|Src n/a
+PHASE WARM END calls=596224 elapsedNs=10001386792 checksum=5966711680
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"backend":"bytecode","bytecodeRootCount":7,"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

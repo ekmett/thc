@@ -1,0 +1,166 @@
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :kaptGenerateStubsKotlin UP-TO-DATE
+> Task :kaptKotlin UP-TO-DATE
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :processResources NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :kaptGenerateStubsTestKotlin UP-TO-DATE
+> Task :kaptTestKotlin UP-TO-DATE
+> Task :compileTestKotlin UP-TO-DATE
+> Task :compileTestJava NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.nodes.NodeClassImpl$NodeFieldData (file:/Users/ekmett/thc/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-api/25.3.4.1/d0ad4561c54b72dae2918cf8ba0d899844912df8/truffle-api-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.nodes.NodeClassImpl$NodeFieldData
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+
+BloomHeaderTest > selfAndConservativeBloomHitsStillBounceBeforeWritingAnyHeader() PASSED
+
+BloomHeaderTest > compiledDynamicAncestryPreservesEveryBitAndStillDetectsBloomHits() PASSED
+
+BytecodeBackendTest > unsupportedCodeRejectsAtLoadOrTrapsOnlyWhenTheDiagnosticBranchIsEntered() PASSED
+
+BytecodeBackendTest > backendSelectionAndMutableProgramStateAreIsolatedWithinASharedEngine() PASSED
+
+BytecodeBackendTest > allExportedFixturesMatchNativeGhcBeforeAndAfterCompilation() PASSED
+
+BytecodeBackendTest > managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() PASSED
+
+BytecodeBackendTest > coldRaiseKeepsItsBottomPayloadLazyAndMemoizesTheGuestFailure() PASSED
+
+BytecodeBackendTest > unusedBottomStaysLazyAndFailedThunksAreNotReentered() PASSED
+
+BytecodeBackendTest > strictConstructorWorkersForceOnlyAtFullSaturationIncludingColdCompiledPaths() PASSED
+
+BytecodeBackendTest > sharingPartialAndOverapplicationPreserveTheirSemantics() PASSED
+
+BytecodeBackendTest > aSelfTailCallThroughAPapRestoresBothItsPrefixAndNewArguments() PASSED
+
+BytecodeBackendTest > compiledBaseCasesCanGrowIntoLongSelfMutualAndCapturedLoops() PASSED
+
+BytecodeBackendTest > wideArgumentsCapturesAndConstructorFieldsPreserveEveryOperand() PASSED
+
+CStringTest > literalPrimitivesExecuteInGuestCodeAndRejectNumericFakePointers() PASSED
+
+CStringTest > genuineGhcCStringDecoderConsumesLiteralBytesBeforeAndAfterCompilation() PASSED
+
+CStringTest > literalAddressBoundsRejectOverflowAndForeignMemoryAccess() PASSED
+
+CStringTest > literalStoragePreservesUnsignedBytesEmbeddedNulsAndImplicitTerminator() PASSED
+
+CasePrimitiveTest > nestedLiteralAndDefaultCasesFeedPrimitiveOperandsThroughLetAndEvaluation() PASSED
+
+CasePrimitiveTest > dataAndDefaultArmsPreserveFieldsAndWholeScrutineeBindingsInPrimitiveContext() PASSED
+
+CasePrimitiveTest > primitiveCaseForcesSharedScrutineesOnceAndKeepsUnselectedFailureLazy() PASSED
+
+CoreLinkerTest > shadowedGlobalsDoNotBringTheirUnsupportedDependenciesIntoTheProgram() PASSED
+
+CoreLinkerTest > nonrecursiveRhsAndCaseScrutineeRetainTheirOuterDependencies() PASSED
+
+CoreLinkerTest > recursiveGlobalClosureTerminatesAndKeepsAllTransitiveDependencies() PASSED
+
+DiagnosticModeTest > diagnosticPrimitiveGapsRemainExplicitAndMalformedCoreStillRejects() PASSED
+
+DiagnosticModeTest > normalExecutionStillRejectsUnavailableCodeAtLoad() PASSED
+
+DiagnosticModeTest > diagnosticBranchesCompileAndUnavailablePathsTrapExplicitly() PASSED
+
+FramesTest > supportedTagsAndUnwrittenNullRetainTheirValues() PASSED
+
+FramesTest > typedLongWritesWidenBooleanSlotsWithoutChangingSuspendedFrames() PASSED
+
+FramesTest > livePrimitiveFramesSurviveDescriptorWideningInAnotherActivation() PASSED
+
+FramesTest > typedLongWritesRespectDescriptorWideningAcrossActivations() PASSED
+
+FramesTest > unrelatedTruffleNumericTagsAreRejectedInsteadOfSilentlyBoxed() PASSED
+
+GuestExceptionsTest > coldRaiseBranchStaysLazyCompilesAndReportsAGuestException() PASSED
+
+GuestExceptionsTest > raisingAnEvaluatedConstructorPreservesItsPayloadIdentity() PASSED
+
+GuestExceptionsTest > raiseKeepsBottomPayloadUnevaluatedAndMemoizesTheSameGuestException() PASSED
+
+RuntimeTest > cadenzaTailLoopsAndProductiveCafUseBoundedHostStack() PASSED
+
+RuntimeTest > hostKernelAbiRejectsNonIntegralArgumentsAndWrongArity() PASSED
+
+RuntimeTest > constructorCasesDistinguishEqualArityAlternativesBeforeAndAfterCompilation() PASSED
+
+RuntimeTest > selfTailCallsRefreshChangingPrimitiveCapturesAndReplayOriginalCaf() PASSED
+
+RuntimeTest > transportRejectsAmbiguityAndRoundTripsControlCharacters() PASSED
+
+RuntimeTest > recursiveAliasStaysLazyUntilDemanded() PASSED
+
+RuntimeTest > sharingPapAndOverapplicationHaveObservableRuntimeCoverage() PASSED
+
+RuntimeTest > repeatedHostEntryKeepsGuestAndInteropCompilable() PASSED
+
+RuntimeTest > boundedDispatchCacheSurvivesMoreThanThreeTargets() PASSED
+
+RuntimeTest > constructorLayoutsRejectCrossConstructorReadsAndShareNullaryValues() PASSED
+
+RuntimeTest > papPrefixesSurviveRepeatedUnderapplicationAndMegamorphicOverapplication() PASSED
+
+RuntimeTest > recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() PASSED
+
+RuntimeTest > unusedBottomRemainsLazyAndDemandedBottomBlackholes() PASSED
+
+RuntimeTest > constructorLayoutsPreservePrimitiveWidthObjectIdentityAndVoidSlots() PASSED
+
+RuntimeTest > exportedHaskellMatchesNativeGhcBeforeAndAfterGuestCompilation() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRemainsStackSafeAndRecompiles() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRestoresChangingCaptures() PASSED
+
+StrictFieldsTest > unknownStrictFieldLevityStillFailsClosed() PASSED
+
+StrictFieldsTest > strictFieldsShareTheirWhnfWhileAnOrdinaryFieldKeepsItsUnevaluatedThunk() PASSED
+
+StrictFieldsTest > directSaturatedStrictOperandsDoNotAllocateAnImmediatelyForcedThunk() PASSED
+
+StrictFieldsTest > partialConstructorRetainsStrictArgumentLazilyUntilItIsSaturated() PASSED
+
+StrictFieldsTest > strictWorkerForcesIgnoredFieldsInDirectAndFirstClassApplications() PASSED
+
+StrictFieldsTest > realGhcStrictConstructorPreservesPrimitiveValuesBeforeAndAfterCompilation() PASSED
+
+TailCycleTest > twoRootCyclesReenterLocallyBeforeAndAfterCompilation() PASSED
+
+TailCycleTest > aNonTailEdgeRetainsEveryPendingAddition() PASSED
+
+TailCycleTest > aClonedRootConsumesTransfersTargetingItsOriginalBody() PASSED
+
+TailCycleTest > anInteriorRootHandlesABCDECReturnsAndCanRetargetOutwardToB() PASSED
+
+TailCycleTest > falsePositiveAncestryStillUsesTheTrampolineWhenNoActiveRootMatches() PASSED
+
+TailCycleTest > overapplicationAndNonTailWorkSurviveAnInnerTailCycle() PASSED
+
+TailCycleTest > reentryRestoresChangedCapturesAndPapPrefixesAcrossDifferentArities() PASSED
+
+ThunkDispatchTest > closedAndCapturedThunksKeepTheirArgumentsAfterTargetCacheSaturates() PASSED
+
+ThunkDispatchTest > capturedThunkTailBounceStillUpdatesTheOriginalThunk() PASSED
+
+TypedApplicationTest > partialAndOverapplicationReachTheNumericResultAfterAnIntermediateCapturedFunction() PASSED
+
+TypedApplicationTest > aPolymorphicLiftedResultCanChangeFromDataToClosureAfterCompilation() PASSED
+
+TypedApplicationTest > closedAndCapturedLambdasForwardNumericCaseAndLetResultsToPrimitiveConsumers() PASSED
+
+TypedExecutionTest > typedEvaluationRunsItsChildOnceWhenACompiledLongPathReceivesAThunk() PASSED
+
+TypedExecutionTest > runtimeTypesPreserveUnexpectedValuesAndDoNotCoerceDistinctPrimitiveKinds() PASSED
+
+BUILD SUCCESSFUL in 4s
+9 actionable tasks: 1 executed, 8 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

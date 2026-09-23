@@ -1,0 +1,455 @@
+{
+  "schema": 1,
+  "claimScope": "Static sites in selected compiler phases; no dynamic allocation counts or execution-frequency claims.",
+  "graphs": [
+    {
+      "root": "TruffleIR.Tier2.lambda_innerD_n,_innerD_acc()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 61,
+      "afterMidNodes": 242,
+      "committedPacketCount": 1,
+      "lateObjectArrayCount": 1,
+      "packetsBySource": {
+        "application-packet": 1
+      },
+      "packetsByClassification": {
+        "stored-or-escaping": 1
+      },
+      "lateArraysBySource": {
+        "application-packet": 1
+      },
+      "methodTargets": {},
+      "packets": [
+        {
+          "commit": 1730,
+          "block": "2",
+          "virtualArray": 1682,
+          "length": 3,
+          "values": [
+            "102",
+            "1728",
+            "1729"
+          ],
+          "sourceFamily": "application-packet",
+          "sourcePosition": [
+            "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:258) [bci:6]",
+            "thc.runtime.ApplicationKt.access$appendWithHeader(Application.kt:1) [bci:6]",
+            "thc.runtime.Dispatch.direct(Application.kt:149) [bci:21]",
+            "thc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]",
+            "thc.runtime.Application.execute(Program.kt:227) [bci:63]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]",
+            "thc.runtime.Calls.direct(Calls.java:10) [bci:2]",
+            "thc.runtime.DirectCallerNode.call(Application.kt:303) [bci:22]",
+            "thc.runtime.Dispatch.direct(Application.kt:152) [bci:48]",
+            "thc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]",
+            "thc.runtime.Application.execute(Program.kt:227) [bci:63]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "classification": "stored-or-escaping",
+          "sinks": [
+            {
+              "node": 1730,
+              "class": "CommitAllocationNode",
+              "block": "2",
+              "edge": "values",
+              "path": [
+                1682,
+                1730
+              ],
+              "stamp": "void",
+              "name": "Alloc 1683, 1682"
+            }
+          ]
+        }
+      ],
+      "lateArrays": [
+        {
+          "id": 1985,
+          "block": "23",
+          "lengthInputs": [
+            {
+              "node": 28,
+              "value": "int[3|0x3]",
+              "stamp": "i32 [3]"
+            }
+          ],
+          "sourceFamily": "application-packet",
+          "sourcePosition": [
+            "thc.runtime.ApplicationKt.appendWithHeader(Application.kt:258) [bci:6]",
+            "thc.runtime.ApplicationKt.access$appendWithHeader(Application.kt:1) [bci:6]",
+            "thc.runtime.Dispatch.direct(Application.kt:149) [bci:21]",
+            "thc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]",
+            "thc.runtime.Application.execute(Program.kt:227) [bci:63]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]",
+            "thc.runtime.Calls.direct(Calls.java:10) [bci:2]",
+            "thc.runtime.DirectCallerNode.call(Application.kt:303) [bci:22]",
+            "thc.runtime.Dispatch.direct(Application.kt:152) [bci:48]",
+            "thc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]",
+            "thc.runtime.Application.execute(Program.kt:227) [bci:63]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "lateLongBoxCount": 3,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.FunctionBody.execute": 1,
+        "thc.runtime.Primitive.execute": 2
+      },
+      "lateLongBoxes": [
+        {
+          "id": 1845,
+          "block": "9",
+          "origin": "thc.runtime.FunctionBody.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        },
+        {
+          "id": 1878,
+          "block": "16",
+          "origin": "thc.runtime.Primitive.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.Primitive.execute(Program.kt:410) [bci:5]",
+            "thc.runtime.Evaluate.execute(Program.kt:173) [bci:10]",
+            "thc.runtime.Application.execute(Program.kt:226) [bci:46]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]",
+            "thc.runtime.Calls.direct(Calls.java:10) [bci:2]",
+            "thc.runtime.DirectCallerNode.call(Application.kt:303) [bci:22]",
+            "thc.runtime.Dispatch.direct(Application.kt:152) [bci:48]",
+            "thc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]",
+            "thc.runtime.Application.execute(Program.kt:227) [bci:63]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        },
+        {
+          "id": 1911,
+          "block": "21",
+          "origin": "thc.runtime.Primitive.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.Primitive.execute(Program.kt:410) [bci:5]",
+            "thc.runtime.Evaluate.execute(Program.kt:173) [bci:10]",
+            "thc.runtime.Application.execute(Program.kt:226) [bci:46]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]",
+            "thc.runtime.Calls.direct(Calls.java:10) [bci:2]",
+            "thc.runtime.DirectCallerNode.call(Application.kt:303) [bci:22]",
+            "thc.runtime.Dispatch.direct(Application.kt:152) [bci:48]",
+            "thc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]",
+            "thc.runtime.Application.execute(Program.kt:227) [bci:63]",
+            "thc.runtime.Expr.executeLong(Program.kt:68) [bci:2]",
+            "thc.runtime.Case.executeLong(Program.kt:335) [bci:109]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "compilationId": 1947,
+      "rootInstanceId": 5,
+      "rootKey": "TruffleIR.Tier2.lambda_innerD_n,_innerD_acc() [rootId=5]",
+      "bgv": "TruffleHotSpotCompilation-1947[lambda_innerD_n,_innerD_acc].bgv"
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_innerC_n,_innerC_acc()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 111,
+      "afterMidNodes": 161,
+      "committedPacketCount": 0,
+      "lateObjectArrayCount": 0,
+      "packetsBySource": {},
+      "packetsByClassification": {},
+      "lateArraysBySource": {},
+      "methodTargets": {},
+      "packets": [],
+      "lateArrays": [],
+      "lateLongBoxCount": 1,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.FunctionBody.execute": 1
+      },
+      "lateLongBoxes": [
+        {
+          "id": 2556,
+          "block": "18",
+          "origin": "thc.runtime.FunctionBody.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.SelfRepeater.executeRepeatingWithValue(Program.kt:460) [bci:3]",
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:210]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "compilationId": 2115,
+      "rootInstanceId": 4,
+      "rootKey": "TruffleIR.Tier2.lambda_innerC_n,_innerC_acc() [rootId=4]",
+      "bgv": "TruffleHotSpotCompilation-2115[lambda_innerC_n,_innerC_acc].bgv"
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_cycleInner_input()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 238,
+      "afterMidNodes": 347,
+      "committedPacketCount": 0,
+      "lateObjectArrayCount": 0,
+      "packetsBySource": {},
+      "packetsByClassification": {},
+      "lateArraysBySource": {},
+      "methodTargets": {},
+      "packets": [],
+      "lateArrays": [],
+      "lateLongBoxCount": 1,
+      "lateLongBoxesByOrigin": {
+        "thc.runtime.FunctionBody.execute": 1
+      },
+      "lateLongBoxes": [
+        {
+          "id": 1824,
+          "block": "28",
+          "origin": "thc.runtime.FunctionBody.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "compilationId": 2204,
+      "rootInstanceId": 7,
+      "rootKey": "TruffleIR.Tier2.lambda_cycleInner_input() [rootId=7]",
+      "bgv": "TruffleHotSpotCompilation-2204[lambda_cycleInner_input].bgv"
+    },
+    {
+      "root": "TruffleIR.Tier2.org_graalvm_polyglot_Value<EntryValue>_execute()",
+      "beforeHighOrdinal": 5,
+      "midOrdinal": 7,
+      "beforeHighNodes": 498,
+      "afterMidNodes": 842,
+      "committedPacketCount": 0,
+      "lateObjectArrayCount": 1,
+      "packetsBySource": {},
+      "packetsByClassification": {},
+      "lateArraysBySource": {
+        "thc.EntryValue.execute": 1
+      },
+      "methodTargets": {
+        "com.oracle.truffle.polyglot.PolyglotContextImpl.enterThreadChanged(Z, Z, Z, Lcom/oracle/truffle/polyglot/PolyglotThreadTask;, Z)": 1,
+        "com.oracle.truffle.polyglot.PolyglotContextImpl.leaveThreadChanged([Ljava/lang/Object;, Z, Z)": 1,
+        "java.lang.Long.longValue()": 1,
+        "java.lang.Integer.intValue()": 1,
+        "java.lang.Short.shortValue()": 1,
+        "java.lang.Number.byteValue()": 1
+      },
+      "packets": [],
+      "lateArrays": [
+        {
+          "id": 3833,
+          "block": "12",
+          "lengthInputs": [
+            {
+              "node": 3142,
+              "value": null,
+              "stamp": "i32 [0 - 2147483647] bits:0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          ],
+          "sourceFamily": "thc.EntryValue.execute",
+          "sourcePosition": [
+            "thc.EntryValue.execute(Language.kt:139) [bci:42]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$ExecuteNodeGen.executeImpl(PolyglotValueDispatchFactory.java:8859) [bci:10]",
+            "com.oracle.truffle.polyglot.HostToGuestRootNode.execute(HostToGuestRootNode.java:126) [bci:239]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "lateLongBoxCount": 4,
+      "lateLongBoxesByOrigin": {
+        "unknown": 3,
+        "thc.runtime.FunctionBody.execute": 1
+      },
+      "lateLongBoxes": [
+        {
+          "id": 3513,
+          "block": "22",
+          "origin": "unknown",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.EntryValue.execute(Language.kt:147) [bci:171]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$ExecuteNodeGen.executeImpl(PolyglotValueDispatchFactory.java:8859) [bci:10]",
+            "com.oracle.truffle.polyglot.HostToGuestRootNode.execute(HostToGuestRootNode.java:126) [bci:239]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        },
+        {
+          "id": 3559,
+          "block": "31",
+          "origin": "unknown",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.EntryValue.execute(Language.kt:147) [bci:171]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$ExecuteNodeGen.executeImpl(PolyglotValueDispatchFactory.java:8859) [bci:10]",
+            "com.oracle.truffle.polyglot.HostToGuestRootNode.execute(HostToGuestRootNode.java:126) [bci:239]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        },
+        {
+          "id": 3605,
+          "block": "40",
+          "origin": "unknown",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.EntryValue.execute(Language.kt:147) [bci:171]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$ExecuteNodeGen.executeImpl(PolyglotValueDispatchFactory.java:8859) [bci:10]",
+            "com.oracle.truffle.polyglot.HostToGuestRootNode.execute(HostToGuestRootNode.java:126) [bci:239]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        },
+        {
+          "id": 3766,
+          "block": "84",
+          "origin": "thc.runtime.FunctionBody.execute",
+          "sourcePosition": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]",
+            "thc.runtime.Calls.direct(Calls.java:10) [bci:2]",
+            "thc.runtime.DirectCallerNode.call(Application.kt:307) [bci:39]",
+            "thc.runtime.Dispatch.direct(Application.kt:152) [bci:48]",
+            "thc.runtime.DispatchNodeGen.execute(DispatchNodeGen.java:90) [bci:76]",
+            "thc.runtime.EntryRoot.execute(Program.kt:519) [bci:130]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]",
+            "thc.runtime.Calls.direct(Calls.java:10) [bci:2]",
+            "thc.runtime.DispatchCallTarget.direct(Application.kt:67) [bci:3]",
+            "thc.runtime.DispatchCallTargetNodeGen.execute(DispatchCallTargetNodeGen.java:68) [bci:53]",
+            "thc.runtime.TargetCache.call(Application.kt:88) [bci:17]",
+            "thc.HostDispatch.execute(Language.kt:182) [bci:6]",
+            "thc.EntryValue.execute(Language.kt:151) [bci:210]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$ExecuteNodeGen.executeImpl(PolyglotValueDispatchFactory.java:8859) [bci:10]",
+            "com.oracle.truffle.polyglot.HostToGuestRootNode.execute(HostToGuestRootNode.java:126) [bci:239]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "compilationId": 2305,
+      "rootInstanceId": 40,
+      "rootKey": "TruffleIR.Tier2.org_graalvm_polyglot_Value<EntryValue>_execute() [rootId=40]",
+      "bgv": "TruffleHotSpotCompilation-2305[org.graalvm.polyglot.Value<EntryValue>.execute].bgv"
+    }
+  ],
+  "latestCompilationByRoot": {
+    "TruffleIR.Tier2.lambda_innerD_n,_innerD_acc() [rootId=5]": 1947,
+    "TruffleIR.Tier2.lambda_innerC_n,_innerC_acc() [rootId=4]": 2115,
+    "TruffleIR.Tier2.lambda_cycleInner_input() [rootId=7]": 2204,
+    "TruffleIR.Tier2.org_graalvm_polyglot_Value<EntryValue>_execute() [rootId=40]": 2305
+  }
+}

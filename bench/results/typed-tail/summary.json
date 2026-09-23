@@ -1,0 +1,20 @@
+{
+  "windowCount": 90,
+  "protocol": "Two serialized, rotated three-engine comparisons. Native reference measured separately in each comparison.",
+  "backends": {
+    "ast": {
+      "baselineMs": 2.8256570638020837,
+      "candidateMs": 2.4260030927734375,
+      "nativeMs": 1.2922505580357144,
+      "changePercent": -14.143753541375915,
+      "costVsGhc": 1.8773472974630276
+    },
+    "bytecode": {
+      "baselineMs": 2.3305751142578126,
+      "candidateMs": 2.3561781416015624,
+      "nativeMs": 1.2595535714285713,
+      "changePercent": 1.0985712147665971,
+      "costVsGhc": 1.8706454374379742
+    }
+  }
+}

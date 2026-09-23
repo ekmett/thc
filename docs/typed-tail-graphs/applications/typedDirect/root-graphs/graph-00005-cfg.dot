@@ -1,0 +1,9 @@
+digraph cfg {
+  graph [rankdir=TB]; node [shape=box,fontname="Menlo",fontsize=10];
+  label="2: Before phase HighTierLowering";
+  "B0" [label="B0\n0 StartNode void\n2 ParameterNode a java.lang.Object[]\n1 ConstantNode a!# com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget\n3 FrameState\n28 ConstantNode i32 [2]\n29 PiArrayNode a java.lang.Object[]\n31 PiNode a!# java.lang.Object[]\n5 ConstantNode i32 [0]\n22 ConstantNode i32 [1]\n842 ConstantNode i64 [0]\n1661 ConstantNode i64 [17]\n1557 ConstantNode i64 [-9223372036854775808]\n40 LoadIndexedNode a java.lang.Object\n58 LoadIndexedNode a java.lang.Object\n62 PiNode a!# java.lang.Long\n1702 UnboxNode i64\n1657 IntegerEqualsNode void\n1662 AddNode i64\n1570 ConditionalNode i64\n1369 AddNode i64\n1663 AddNode i64\n1727 AddNode i64\n1658 IfNode void"];
+  "B0" -> "B1";
+  "B0" -> "B2";
+  "B1" [label="B1\n1660 BeginNode void\n1725 BoxNode$AllocatingBoxNode a!# java.lang.Long\n1453 ReturnNode void"];
+  "B2" [label="B2\n1659 BeginNode void\n1729 BoxNode$AllocatingBoxNode a!# java.lang.Long\n1728 ReturnNode void"];
+}

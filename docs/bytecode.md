@@ -3,7 +3,7 @@
 THC has two interpreters for the same exported GHC Core. The AST interpreter
 remains the default. The experimental bytecode interpreter uses Truffle's
 Bytecode DSL, with primitive `long` and `boolean` stack values and locals. On the
-current Map workload it takes **16.3% less elapsed time** and allocates **8.1% less**
+initial measured Map workload it takes **16.3% less elapsed time** and allocates **8.1% less**
 than the AST backend in the same build.
 
 ```sh
@@ -16,6 +16,10 @@ THC_BACKEND=bytecode THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
 `-Dthc.backend=bytecode`; this takes precedence over the environment variable.
 The Core request also accepts an explicit `backend` field, so requests for both
 backends can coexist in one context. Diagnostics report the selected backend.
+
+The measurements below describe the initial bytecode implementation at
+`0ef73a0`. The [typed execution and tail-cycle follow-up](typed-tail.md) records
+the subsequent changes and current comparison.
 
 ## What changes
 

@@ -1,0 +1,494 @@
+{
+  "scope": "Actual compiled graph inventory. A loop by itself is not proof of a guest-cycle loop: inspect source positions, phi/backedge data flow, and absence of trampoline frames/calls.",
+  "roots": [
+    {
+      "root": "TruffleIR.Tier2.lambda_innerD_n,_innerD_acc() [rootId=5]",
+      "compilationId": 1947,
+      "peNodes": 154,
+      "beforeHighNodes": 61,
+      "afterMidNodes": 242,
+      "lateObjectArrays": 1,
+      "lateInstances": {
+        "java.lang.Long": 3,
+        "thc.runtime.TailCall": 1
+      },
+      "methodTargets": {},
+      "loops": [],
+      "primitivePhis": [],
+      "trampolineSourceNodes": [],
+      "callNodes": []
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_innerC_n,_innerC_acc() [rootId=4]",
+      "compilationId": 2115,
+      "peNodes": 189,
+      "beforeHighNodes": 111,
+      "afterMidNodes": 161,
+      "lateObjectArrays": 0,
+      "lateInstances": {
+        "java.lang.Long": 1
+      },
+      "methodTargets": {},
+      "loops": [
+        {
+          "node": 353,
+          "class": "LoopBeginNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 1832,
+          "class": "LoopExitNode",
+          "block": "9",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:161) [bci:247]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 1835,
+          "class": "LoopEndNode",
+          "block": "8",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:159) [bci:244]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "void"
+        }
+      ],
+      "primitivePhis": [
+        {
+          "node": 1541,
+          "class": "ValuePhiNode",
+          "block": "7",
+          "source": [],
+          "stamp": "i64"
+        },
+        {
+          "node": 1945,
+          "class": "ValuePhiNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "i64"
+        },
+        {
+          "node": 1946,
+          "class": "ValuePhiNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "i64"
+        },
+        {
+          "node": 1947,
+          "class": "ValuePhiNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "i64 [0 - 1] bits:0...0x"
+        }
+      ],
+      "trampolineSourceNodes": [],
+      "callNodes": []
+    },
+    {
+      "root": "TruffleIR.Tier2.lambda_cycleInner_input() [rootId=7]",
+      "compilationId": 2204,
+      "peNodes": 83,
+      "beforeHighNodes": 238,
+      "afterMidNodes": 347,
+      "lateObjectArrays": 0,
+      "lateInstances": {
+        "java.lang.Long": 1
+      },
+      "methodTargets": {},
+      "loops": [
+        {
+          "node": 980,
+          "class": "LoopBeginNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 1062,
+          "class": "LoopExitNode",
+          "block": "9",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:161) [bci:247]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 1063,
+          "class": "LoopEndNode",
+          "block": "8",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:159) [bci:244]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "void"
+        }
+      ],
+      "primitivePhis": [
+        {
+          "node": 1022,
+          "class": "ValuePhiNode",
+          "block": "7",
+          "source": [],
+          "stamp": "i64"
+        },
+        {
+          "node": 1094,
+          "class": "ValuePhiNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "i64"
+        },
+        {
+          "node": 1095,
+          "class": "ValuePhiNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "i64"
+        },
+        {
+          "node": 1096,
+          "class": "ValuePhiNode",
+          "block": "1",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "i64 [0 - 1] bits:0...0x"
+        }
+      ],
+      "trampolineSourceNodes": [],
+      "callNodes": []
+    },
+    {
+      "root": "TruffleIR.Tier2.org_graalvm_polyglot_Value<EntryValue>_execute() [rootId=40]",
+      "compilationId": 2305,
+      "peNodes": 283,
+      "beforeHighNodes": 498,
+      "afterMidNodes": 842,
+      "lateObjectArrays": 1,
+      "lateInstances": {
+        "java.lang.Long": 4,
+        "org.graalvm.polyglot.Value": 1
+      },
+      "methodTargets": {
+        "com.oracle.truffle.polyglot.PolyglotContextImpl.enterThreadChanged(Z, Z, Z, Lcom/oracle/truffle/polyglot/PolyglotThreadTask;, Z)": 1,
+        "com.oracle.truffle.polyglot.PolyglotContextImpl.leaveThreadChanged([Ljava/lang/Object;, Z, Z)": 1,
+        "java.lang.Long.longValue()": 1,
+        "java.lang.Integer.intValue()": 1,
+        "java.lang.Short.shortValue()": 1,
+        "java.lang.Number.byteValue()": 1
+      },
+      "loops": [
+        {
+          "node": 958,
+          "class": "LoopBeginNode",
+          "block": "8",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:139) [bci:47]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 966,
+          "class": "LoopExitNode",
+          "block": "24",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:139) [bci:181]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 1092,
+          "class": "LoopEndNode",
+          "block": "11",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:139) [bci:178]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 2045,
+          "class": "LoopBeginNode",
+          "block": "28",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 2127,
+          "class": "LoopExitNode",
+          "block": "36",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:161) [bci:247]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 2128,
+          "class": "LoopEndNode",
+          "block": "35",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:159) [bci:244]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 2896,
+          "class": "LoopEndNode",
+          "block": "15",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:139) [bci:178]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 2902,
+          "class": "LoopEndNode",
+          "block": "19",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:139) [bci:178]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void"
+        },
+        {
+          "node": 2908,
+          "class": "LoopEndNode",
+          "block": "23",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:139) [bci:178]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void"
+        }
+      ],
+      "primitivePhis": [
+        {
+          "node": 2087,
+          "class": "ValuePhiNode",
+          "block": "34",
+          "source": [],
+          "stamp": "i64"
+        },
+        {
+          "node": 2159,
+          "class": "ValuePhiNode",
+          "block": "28",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "i64"
+        },
+        {
+          "node": 2160,
+          "class": "ValuePhiNode",
+          "block": "28",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "i64"
+        },
+        {
+          "node": 2161,
+          "class": "ValuePhiNode",
+          "block": "28",
+          "source": [
+            "com.oracle.truffle.runtime.OptimizedOSRLoopNode.execute(OptimizedOSRLoopNode.java:154) [bci:206]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:493) [bci:117]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.callInlined(OptimizedCallTarget.java:589) [bci:23]",
+            "com.oracle.truffle.runtime.OptimizedDirectCallNode.call(OptimizedDirectCallNode.java:94) [bci:30]"
+          ],
+          "stamp": "i64 [0 - 1] bits:0...0x"
+        }
+      ],
+      "trampolineSourceNodes": [],
+      "callNodes": [
+        {
+          "node": 414,
+          "class": "MethodCallTargetNode",
+          "block": "0",
+          "source": [
+            "com.oracle.truffle.polyglot.PolyglotEngineImpl.enterCached(PolyglotEngineImpl.java:2484) [bci:102]",
+            "com.oracle.truffle.polyglot.HostToGuestRootNode.execute(HostToGuestRootNode.java:111) [bci:167]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "void",
+          "targetMethod": "com.oracle.truffle.polyglot.PolyglotContextImpl.enterThreadChanged(Z, Z, Z, Lcom/oracle/truffle/polyglot/PolyglotThreadTask;, Z)"
+        },
+        {
+          "node": 1534,
+          "class": "MethodCallTargetNode",
+          "block": "7",
+          "source": [
+            "com.oracle.truffle.polyglot.PolyglotEngineImpl.leaveCached(PolyglotEngineImpl.java:2533) [bci:127]",
+            "com.oracle.truffle.polyglot.HostToGuestRootNode.execute(HostToGuestRootNode.java:134) [bci:286]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "stamp": "void",
+          "targetMethod": "com.oracle.truffle.polyglot.PolyglotContextImpl.leaveThreadChanged([Ljava/lang/Object;, Z, Z)"
+        },
+        {
+          "node": 2777,
+          "class": "MethodCallTargetNode",
+          "block": "10",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:141) [bci:113]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void",
+          "targetMethod": "java.lang.Long.longValue()"
+        },
+        {
+          "node": 2791,
+          "class": "MethodCallTargetNode",
+          "block": "14",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:142) [bci:124]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void",
+          "targetMethod": "java.lang.Integer.intValue()"
+        },
+        {
+          "node": 2804,
+          "class": "MethodCallTargetNode",
+          "block": "18",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:143) [bci:136]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void",
+          "targetMethod": "java.lang.Short.shortValue()"
+        },
+        {
+          "node": 2817,
+          "class": "MethodCallTargetNode",
+          "block": "22",
+          "source": [
+            "thc.EntryValue.execute(Language.kt:144) [bci:148]",
+            "thc.EntryValueGen$InteropLibraryExports$Cached.execute(EntryValueGen.java:102) [bci:76]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$SharedExecuteNode.doDefault(PolyglotValueDispatch.java:4683) [bci:14]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatchFactory$InteropValueFactory$SharedExecuteNodeGen$Inlined.executeShared(PolyglotValueDispatchFactory.java:8483) [bci:80]",
+            "com.oracle.truffle.polyglot.PolyglotValueDispatch$InteropValue$ExecuteNode.doDefault(PolyglotValueDispatch.java:4765) [bci:15]"
+          ],
+          "stamp": "void",
+          "targetMethod": "java.lang.Number.byteValue()"
+        }
+      ]
+    }
+  ]
+}

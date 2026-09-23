@@ -1,0 +1,22 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/work/typed-tail-v1/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/thc/work/tail-reentry-review/ast-inner
+[engine] opt done   engine=1  id=5     lambda innerD_n, innerD_acc                        |Tier 2|Time    71(  51+20  )ms|AST  129|Inlined   1Y   0N|IR     61/   408|CodeSize    1644|Addr 0x00013322c300|CompId 1947   |UTC 2026-09-23T02:28:36.393|Src n/a
+Dumping IGV graphs in /Users/ekmett/thc/work/tail-reentry-review/ast-inner
+[engine] opt done   engine=1  id=4     lambda innerC_n, innerC_acc                        |Tier 2|Time    46(  25+21  )ms|AST  129|Inlined   2Y   0N|IR    111/   199|CodeSize     904|Addr 0x000133237980|CompId 2115   |UTC 2026-09-23T02:28:36.442|Src n/a
+Dumping IGV graphs in /Users/ekmett/thc/work/tail-reentry-review/ast-inner
+[engine] opt done   engine=1  id=7     lambda cycleInner_input                            |Tier 2|Time    59(  35+24  )ms|AST   54|Inlined   5Y   0N|IR    238/   385|CodeSize    1160|Addr 0x00013323d240|CompId 2204   |UTC 2026-09-23T02:28:36.507|Src n/a
+PHASE WARM BEGIN
+[engine] opt done   engine=1  id=40    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time    79(  33+46  )ms|AST   10|Inlined   7Y   0N|IR    514/  1087|CodeSize    4800|Addr 0x00013324bdc0|CompId 2305   |UTC 2026-09-23T02:28:36.613|Src n/a
+PHASE WARM END calls=5495040 elapsedNs=10000444792 checksum=54991612800
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"backend":"ast","instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"selfTailReentries":0,"trampolineIterations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"indexed primitive slots; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

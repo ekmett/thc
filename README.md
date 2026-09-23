@@ -13,8 +13,9 @@ GHC already knows quite a lot about compiling Haskell. The intention is to keep
 that information around long enough to use it.
 
 The runtime follows [Cadenza](https://github.com/ekmett/cadenza): indexed frames,
-selective closure captures, partial applications, overapplication and a tail-call
-trampoline. Haskell adds laziness, sharing, thunk updates and blackholes. Data
+selective closure captures, partial applications, overapplication and bloom-guided
+tail calls that close cycles at the matching active root. A trampoline handles
+the remaining transfers. Haskell adds laziness, sharing, thunk updates and blackholes. Data
 constructors have their own layouts, with primitive fields where GHC's
 representation permits them.
 
@@ -66,19 +67,23 @@ support for the paths exercised; they don't make the gaps disappear.
 ## Where things stand
 
 The Map example agrees with native GHC on inputs up to 100,000 operations, before
-and after requested compilation. In the latest macOS ARM64 comparison, a workload
-over roughly 10,000 input items takes **2.35 ms with bytecode, 2.81 ms with the AST
-interpreter, and 1.24 ms with GHC**. Bytecode is about **1.90 times the cost of GHC**.
-No unsupported trap was entered.
+and after requested compilation. Recent macOS ARM64 comparisons put both
+interpreters at about **1.87 times the cost of GHC**. A workload over roughly
+10,000 input items takes **2.43 ms with the AST interpreter** and **2.36 ms with
+bytecode**, against native references of 1.29 ms and 1.26 ms in their respective
+runs. No unsupported trap was entered.
 
-For this workload, bytecode takes 16.3% less time and allocates 8.1% less than the
-AST interpreter. The comparison uses the same runtime build and exported Core,
-three fresh processes per engine, and five measured windows per process. Each JVM
-warms for at least 12,000 complete workloads, past the host bridge's compilation
-threshold. AST remains the default while we extend the comparisons.
+Typed execution through cases, lets and lambda bodies reduced the AST time by
+14.1% against its preceding build. Bytecode was 1.1% slower in its comparison.
+The new bytecode handler for longer tail cycles is included, though this Map
+workload uses direct-self loops. AST remains the default.
 
-The [bytecode report](docs/bytecode.md) includes the measurements, actual
-instruction streams, and compiled Graal graphs. The [original Map report](docs/map-example.md),
+The [typed execution and tail-cycle report](docs/typed-tail.md) has the current
+measurements and compiled graph evidence. Each comparison uses three fresh
+processes per engine, five measured windows per process, and at least 12,000
+warmup workloads. All 90 windows passed validation.
+
+The [initial bytecode report](docs/bytecode.md), [original Map report](docs/map-example.md),
 [call-packet follow-up](docs/call-packets.md), and [inlining report](docs/map-inlining.md)
 record the preceding experiments. There is plenty left to do.
 

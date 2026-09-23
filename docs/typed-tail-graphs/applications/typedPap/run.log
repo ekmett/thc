@@ -1,0 +1,19 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/Users/ekmett/thc/work/typed-tail-v1/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /Users/ekmett/thc/work/typed-application-review/new-pap
+[engine] opt done   engine=1  id=4     lambda input                                       |Tier 2|Time    76(  55+21  )ms|AST  116|Inlined   2Y   0N|IR    121/   305|CodeSize    1424|Addr 0x00011cfa3cc0|CompId 1897   |UTC 2026-09-23T02:34:14.009|Src n/a
+PHASE WARM BEGIN
+Dumping IGV graphs in /Users/ekmett/thc/work/typed-application-review/new-pap
+[engine] opt done   engine=1  id=37    org.graalvm.polyglot.Value<EntryValue>.execute     |Tier 2|Time    80(  49+31  )ms|AST   10|Inlined   4Y   0N|IR    422/  1023|CodeSize    5328|Addr 0x00011cfb6b80|CompId 2120   |UTC 2026-09-23T02:34:14.103|Src n/a
+PHASE WARM END calls=239962368 elapsedNs=5000121917 checksum=5069205024
+PHASE MEASURE 1 BEGIN
+PHASE MEASURE 1 END
+PHASE VERIFY BEGIN
+PHASE VERIFY END guestLastTierInstalled=true
+diagnostics={"backend":"ast","instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"papAllocations":0,"selfTailReentries":0,"trampolineIterations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"indexed primitive slots; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

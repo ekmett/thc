@@ -1,0 +1,28 @@
+digraph actual_cfg {
+graph [rankdir=TB, bgcolor="white", label="new bytecode C: actual scheduled CFG before HighTierLowering\nDebug state, constants and bookkeeping labels omitted; node IDs and block edges preserved", labelloc=t];
+node [shape=box,fontname="Menlo",fontsize=10];
+"B0" [style=filled,fillcolor="#f4f5f7",label="B0\n0 StartNode void\n2 ParameterNode a java.lang.Object[]\n227 UnboxNode i64\n295 UnboxNode i64"];
+"B0" -> "B1";
+"B1" [style=filled,fillcolor="#def4e9",label="B1\n2990 LoopBeginNode void\n3096 IntegerLessThanNode void [x=3089, y=240:long[1|0x1]]\n3100 AddNode i64 [x=3089, y=168:long[-1|0xffffffffffffffff]]\n3266 IntegerLessThanNode void [x=3100, y=240:long[1|0x1]]\n3395 AddNode i64 [x=3089, y=3394:long[-2|0xfffffffffffffffe]]\n3326 IntegerLessThanNode void [x=3395, y=240:long[1|0x1]]\n1568 AddNode i64 [x=3090, y=240:long[1|0x1]]\n3397 AddNode i64 [x=3090, y=3396:long[2|0x2]]\n3401 AddNode i64 [x=3089, y=3400:long[-3|0xfffffffffffffffd]]\n3403 AddNode i64 [x=3090, y=3402:long[3|0x3]]\n823 IfNode void\n3089 ValuePhiNode i64 [values=227, values=3401]\n3090 ValuePhiNode i64 [values=295, values=3403]"];
+"B1" -> "B2";
+"B1" -> "B9";
+"B2" [style=filled,fillcolor="#def4e9",label="B2\n2102 UnboxNode i64\n3179 IfNode void"];
+"B2" -> "B3";
+"B2" -> "B4";
+"B3" [style=filled,fillcolor="#f4f5f7",label="B3"];
+"B3" -> "B6";
+"B4" [style=filled,fillcolor="#def4e9",label="B4\n3305 IfNode void"];
+"B4" -> "B5";
+"B4" -> "B7";
+"B5" [style=filled,fillcolor="#f4f5f7",label="B5"];
+"B5" -> "B6";
+"B6" [style=filled,fillcolor="#f4f5f7",label="B6\n3292 MergeNode void\n3380 ValuePhiNode i64 [values=3397, values=1568]"];
+"B6" -> "B8";
+"B7" [style=filled,fillcolor="#def4e9",label="B7\n2991 LoopEndNode void"];
+"B7" -> "B1";
+"B8" [style=filled,fillcolor="#f4f5f7",label="B8\n3000 LoopExitNode void"];
+"B8" -> "B10";
+"B9" [style=filled,fillcolor="#f4f5f7",label="B9\n2992 LoopExitNode void"];
+"B9" -> "B10";
+"B10" [style=filled,fillcolor="#f4f5f7",label="B10\n1019 MergeNode void\n3393 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=3390]\n3051 ReturnNode void [result=3393]\n3390 ValuePhiNode i64 [values=3337, values=3386]\n3143 ValuePhiNode i64 [values=3335, values=3336]\n3144 ValuePhiNode i64 [values=3337, values=3338]\n3145 ValuePhiNode i64 [0 - 1] bits:0...0x [values=3339, values=3340]\n3146 ValuePhiNode i32 [0 - 1] bits:0...0x [values=3341, values=3342]"];
+}

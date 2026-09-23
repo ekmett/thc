@@ -1,0 +1,556 @@
+{
+  "scope": "Frozen cb74882 AST, synthetic direct/captured and partial/overapplication. Static graph sites; allocations behind residual Java call boundaries are not inventoried as graph allocation nodes.",
+  "roots": [
+    {
+      "entry": "typedDirect",
+      "compilationId": 1891,
+      "sourceCommit": "cb7488259e8418ee1fdff5c5d37569e40b44af29",
+      "peNodes": 150,
+      "beforeHighNodes": 29,
+      "afterMidNodes": 102,
+      "inlineTargets": [
+        "lambda input",
+        "lambda direct",
+        "lambda delta"
+      ],
+      "terminalResultBoxes": [
+        {
+          "box": {
+            "node": 1725,
+            "class": "BoxNode$AllocatingBoxNode",
+            "block": "1",
+            "stamp": "a!# java.lang.Long",
+            "source": [
+              "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+              "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+              "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+              "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+            ]
+          },
+          "primitiveInput": [
+            {
+              "node": 1369,
+              "class": "AddNode",
+              "block": "0",
+              "stamp": "i64",
+              "source": [
+                "thc.runtime.Primitive.executeLong(Program.kt:416) [bci:962]",
+                "thc.runtime.Let.executeLong(Program.kt:256) [bci:10]",
+                "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+                "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+                "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+                "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+              ]
+            }
+          ],
+          "uses": [
+            {
+              "edge": {
+                "from": 1725,
+                "to": 1453,
+                "label": "result",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": -1
+              },
+              "target": {
+                "node": 1453,
+                "class": "ReturnNode",
+                "block": "1",
+                "stamp": "void",
+                "source": [
+                  "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "box": {
+            "node": 1729,
+            "class": "BoxNode$AllocatingBoxNode",
+            "block": "2",
+            "stamp": "a!# java.lang.Long",
+            "source": [
+              "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+              "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+              "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+              "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+            ]
+          },
+          "primitiveInput": [
+            {
+              "node": 1727,
+              "class": "AddNode",
+              "block": "0",
+              "stamp": "i64",
+              "source": [
+                "thc.runtime.Primitive.executeLong(Program.kt:416) [bci:962]",
+                "thc.runtime.Let.executeLong(Program.kt:256) [bci:10]",
+                "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+                "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+                "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+                "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+              ]
+            }
+          ],
+          "uses": [
+            {
+              "edge": {
+                "from": 1729,
+                "to": 1728,
+                "label": "result",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": -1
+              },
+              "target": {
+                "node": 1728,
+                "class": "ReturnNode",
+                "block": "2",
+                "stamp": "void",
+                "source": [
+                  "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "calls": {},
+      "lateObjectArrays": 0,
+      "lateInstances": [
+        {
+          "node": 1791,
+          "class": "java.lang.Long",
+          "block": "5",
+          "source": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        },
+        {
+          "node": 1824,
+          "class": "java.lang.Long",
+          "block": "12",
+          "source": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "packets": [],
+      "blocks": [
+        {
+          "name": "0",
+          "nodes": [
+            0,
+            2,
+            1,
+            3,
+            28,
+            29,
+            31,
+            5,
+            22,
+            842,
+            1661,
+            1557,
+            40,
+            58,
+            62,
+            1702,
+            1657,
+            1662,
+            1570,
+            1369,
+            1663,
+            1727,
+            1658
+          ],
+          "successors": [
+            "1",
+            "2"
+          ]
+        },
+        {
+          "name": "1",
+          "nodes": [
+            1660,
+            1725,
+            1453
+          ],
+          "successors": []
+        },
+        {
+          "name": "2",
+          "nodes": [
+            1659,
+            1729,
+            1728
+          ],
+          "successors": []
+        }
+      ]
+    },
+    {
+      "entry": "typedPap",
+      "compilationId": 1897,
+      "sourceCommit": "cb7488259e8418ee1fdff5c5d37569e40b44af29",
+      "peNodes": 169,
+      "beforeHighNodes": 99,
+      "afterMidNodes": 220,
+      "inlineTargets": [
+        "lambda input",
+        "lambda base, adjustment",
+        "lambda extra"
+      ],
+      "terminalResultBoxes": [
+        {
+          "box": {
+            "node": 2439,
+            "class": "BoxNode$AllocatingBoxNode",
+            "block": "2",
+            "stamp": "a!# java.lang.Long",
+            "source": [
+              "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+              "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+              "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+              "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+            ]
+          },
+          "primitiveInput": [
+            {
+              "node": 2448,
+              "class": "AddNode",
+              "block": "1",
+              "stamp": "i64",
+              "source": [
+                "thc.runtime.Primitive.executeLong(Program.kt:416) [bci:962]",
+                "thc.runtime.Let.executeLong(Program.kt:256) [bci:10]",
+                "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+                "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+                "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+                "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+              ]
+            }
+          ],
+          "uses": [
+            {
+              "edge": {
+                "from": 2439,
+                "to": 2070,
+                "label": "result",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": -1
+              },
+              "target": {
+                "node": 2070,
+                "class": "ReturnNode",
+                "block": "2",
+                "stamp": "void",
+                "source": [
+                  "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "box": {
+            "node": 2446,
+            "class": "BoxNode$AllocatingBoxNode",
+            "block": "3",
+            "stamp": "a!# java.lang.Long",
+            "source": [
+              "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+              "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+              "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+              "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+              "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+            ]
+          },
+          "primitiveInput": [
+            {
+              "node": 2444,
+              "class": "AddNode",
+              "block": "1",
+              "stamp": "i64",
+              "source": [
+                "thc.runtime.Primitive.executeLong(Program.kt:416) [bci:962]",
+                "thc.runtime.Let.executeLong(Program.kt:256) [bci:10]",
+                "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+                "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+                "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+                "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+                "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+              ]
+            }
+          ],
+          "uses": [
+            {
+              "edge": {
+                "from": 2446,
+                "to": 2445,
+                "label": "result",
+                "type": "Value",
+                "fromIndex": 1,
+                "toIndex": 2,
+                "listIndex": -1
+              },
+              "target": {
+                "node": 2445,
+                "class": "ReturnNode",
+                "block": "3",
+                "stamp": "void",
+                "source": [
+                  "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:724) [bci:50]"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "calls": {
+        "thc.runtime.Closure.pap([Ljava/lang/Object;, I, I)": 1
+      },
+      "lateObjectArrays": 1,
+      "lateInstances": [
+        {
+          "node": 2619,
+          "class": "java.lang.Long",
+          "block": "15",
+          "source": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        },
+        {
+          "node": 2652,
+          "class": "java.lang.Long",
+          "block": "21",
+          "source": [
+            "jdk.graal.compiler.replacements.BoxingSnippets.longValueOf((Unknown%20Source):-1) [bci:0]",
+            "java.lang.Long.valueOf(Long.java:-1) [bci:-1]",
+            "thc.runtime.FunctionBody.execute(Program.kt:453) [bci:43]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ]
+        }
+      ],
+      "packets": [
+        {
+          "commit": 2424,
+          "block": "0",
+          "virtualArray": 2121,
+          "length": 1,
+          "values": [
+            "62"
+          ],
+          "sourceFamily": "application-temporary",
+          "sourcePosition": [
+            "thc.runtime.Application.execute(Program.kt:225) [bci:14]",
+            "thc.runtime.LocalBinding.write(Program.kt:236) [bci:23]",
+            "thc.runtime.Let.initialize(Program.kt:286) [bci:272]",
+            "thc.runtime.Let.executeLong(Program.kt:255) [bci:2]",
+            "thc.runtime.Evaluate.executeLong(Program.kt:177) [bci:33]",
+            "thc.runtime.FunctionBody.execute(Program.kt:450) [bci:22]",
+            "thc.runtime.SelfRepeater.once(Program.kt:458) [bci:5]",
+            "thc.runtime.FunctionRoot.execute(Program.kt:494) [bci:139]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci:5]",
+            "com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci:40]"
+          ],
+          "classification": "residual-call-abi",
+          "sinks": [
+            {
+              "node": 454,
+              "class": "MethodCallTargetNode",
+              "block": "0",
+              "edge": "arguments",
+              "path": [
+                2121,
+                2425,
+                454
+              ],
+              "targetMethod": "thc.runtime.Closure.pap([Ljava/lang/Object;, I, I)",
+              "stamp": "void",
+              "name": "MethodCallTarget"
+            }
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "name": "0",
+          "nodes": [
+            0,
+            2,
+            1,
+            3,
+            28,
+            29,
+            31,
+            5,
+            22,
+            2121,
+            310,
+            92,
+            2126,
+            150,
+            91,
+            90,
+            2116,
+            2112,
+            87,
+            84,
+            86,
+            2114,
+            95,
+            171,
+            279,
+            273,
+            267,
+            263,
+            80,
+            116,
+            142,
+            141,
+            383,
+            384,
+            382,
+            381,
+            380,
+            379,
+            378,
+            457,
+            456,
+            455,
+            773,
+            851,
+            2447,
+            1957,
+            2441,
+            461,
+            40,
+            45,
+            46,
+            58,
+            62,
+            63,
+            2115,
+            146,
+            151,
+            2404,
+            2125,
+            2424,
+            2425,
+            454,
+            453
+          ],
+          "successors": [
+            "1",
+            "4"
+          ]
+        },
+        {
+          "name": "1",
+          "nodes": [
+            459,
+            458,
+            581,
+            580,
+            2106,
+            750,
+            2108,
+            2076,
+            770,
+            774,
+            2080,
+            810,
+            814,
+            813,
+            816,
+            2136,
+            2180,
+            2228,
+            2235,
+            2406,
+            2448,
+            2442,
+            2414,
+            2355,
+            2361,
+            2444,
+            2356
+          ],
+          "successors": [
+            "2",
+            "3"
+          ]
+        },
+        {
+          "name": "2",
+          "nodes": [
+            2358,
+            2439,
+            2070
+          ],
+          "successors": []
+        },
+        {
+          "name": "3",
+          "nodes": [
+            2357,
+            2446,
+            2445
+          ],
+          "successors": []
+        },
+        {
+          "name": "4",
+          "nodes": [
+            460,
+            462,
+            465
+          ],
+          "successors": []
+        }
+      ]
+    }
+  ]
+}

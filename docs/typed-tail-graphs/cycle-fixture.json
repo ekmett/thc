@@ -1,0 +1,1372 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "module": "Synthetic.TailReentry",
+  "constructors": [],
+  "bindings": [
+    {
+      "id": "threeA",
+      "name": "threeA",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "threeA_n",
+            "name": "threeA_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "threeA_acc",
+            "name": "threeA_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "threeA_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "threeA_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "threeA_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "threeB"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "threeA_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "threeA_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "threeB",
+      "name": "threeB",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "threeB_n",
+            "name": "threeB_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "threeB_acc",
+            "name": "threeB_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "threeB_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "threeB_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "threeB_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "threeC"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "threeB_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "threeB_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "threeC",
+      "name": "threeC",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "threeC_n",
+            "name": "threeC_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "threeC_acc",
+            "name": "threeC_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "threeC_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "threeC_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "threeC_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "threeA"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "threeC_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "threeC_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "innerA",
+      "name": "innerA",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "innerA_n",
+            "name": "innerA_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "innerA_acc",
+            "name": "innerA_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "innerA_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "innerA_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "innerA_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "innerB"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerA_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerA_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "innerB",
+      "name": "innerB",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "innerB_n",
+            "name": "innerB_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "innerB_acc",
+            "name": "innerB_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "innerB_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "innerB_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "innerB_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "innerC"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerB_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerB_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "innerC",
+      "name": "innerC",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "innerC_n",
+            "name": "innerC_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "innerC_acc",
+            "name": "innerC_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "innerC_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "innerC_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "innerC_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "innerD"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerC_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerC_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "innerD",
+      "name": "innerD",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "innerD_n",
+            "name": "innerD_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "innerD_acc",
+            "name": "innerD_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "innerD_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "innerD_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "innerD_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "innerE"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerD_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerD_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "innerE",
+      "name": "innerE",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "innerE_n",
+            "name": "innerE_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "innerE_acc",
+            "name": "innerE_acc",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "innerE_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "innerE_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "var",
+                "innerE_acc"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "innerC"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerE_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "+#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "innerE_acc"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "cycle3",
+      "name": "cycle3",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "cycle3_input",
+            "name": "cycle3_input",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "app",
+          [
+            "var",
+            "threeA"
+          ],
+          [
+            [
+              "var",
+              "cycle3_input"
+            ],
+            [
+              "lit",
+              "int",
+              "0"
+            ]
+          ],
+          [
+            false,
+            false
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "cycleInner",
+      "name": "cycleInner",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "cycleInner_input",
+            "name": "cycleInner_input",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "app",
+          [
+            "var",
+            "innerA"
+          ],
+          [
+            [
+              "var",
+              "cycleInner_input"
+            ],
+            [
+              "lit",
+              "int",
+              "0"
+            ]
+          ],
+          [
+            false,
+            false
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "cycleNonTail",
+      "name": "cycleNonTail",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "cycleNonTail_input",
+            "name": "cycleNonTail_input",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "app",
+          [
+            "prim",
+            "+#"
+          ],
+          [
+            [
+              "lit",
+              "int",
+              "17"
+            ],
+            [
+              "app",
+              [
+                "var",
+                "threeA"
+              ],
+              [
+                [
+                  "var",
+                  "cycleNonTail_input"
+                ],
+                [
+                  "lit",
+                  "int",
+                  "0"
+                ]
+              ],
+              [
+                false,
+                false
+              ]
+            ]
+          ],
+          [
+            false,
+            false
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "arityA",
+      "name": "arityA",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "arityA_n",
+            "name": "arityA_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "prim",
+              "<=#"
+            ],
+            [
+              [
+                "var",
+                "arityA_n"
+              ],
+              [
+                "lit",
+                "int",
+                "0"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ],
+          "arityA_n_case",
+          [
+            [
+              "lit",
+              [
+                "int",
+                "1"
+              ],
+              [],
+              [
+                "lit",
+                "int",
+                "42"
+              ]
+            ],
+            [
+              "default",
+              null,
+              [],
+              [
+                "app",
+                [
+                  "var",
+                  "arityB"
+                ],
+                [
+                  [
+                    "app",
+                    [
+                      "prim",
+                      "-#"
+                    ],
+                    [
+                      [
+                        "var",
+                        "arityA_n"
+                      ],
+                      [
+                        "lit",
+                        "int",
+                        "1"
+                      ]
+                    ],
+                    [
+                      false,
+                      false
+                    ]
+                  ],
+                  [
+                    "lit",
+                    "int",
+                    "1"
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "arityB",
+      "name": "arityB",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "arityB_n",
+            "name": "arityB_n",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "arityB_step",
+            "name": "arityB_step",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "app",
+          [
+            "var",
+            "arityA"
+          ],
+          [
+            [
+              "app",
+              [
+                "prim",
+                "-#"
+              ],
+              [
+                [
+                  "var",
+                  "arityB_n"
+                ],
+                [
+                  "var",
+                  "arityB_step"
+                ]
+              ],
+              [
+                false,
+                false
+              ]
+            ]
+          ],
+          [
+            false
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "cycleArity",
+      "name": "cycleArity",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "cycleArity_input",
+            "name": "cycleArity_input",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "app",
+          [
+            "var",
+            "arityA"
+          ],
+          [
+            [
+              "var",
+              "cycleArity_input"
+            ]
+          ],
+          [
+            false
+          ]
+        ]
+      ]
+    }
+  ]
+}

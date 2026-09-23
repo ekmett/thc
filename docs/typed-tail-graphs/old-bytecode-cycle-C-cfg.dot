@@ -1,0 +1,21 @@
+digraph actual_cfg {
+graph [rankdir=TB, bgcolor="white", label="old bytecode C: actual scheduled CFG before HighTierLowering\nDebug state, constants and bookkeeping labels omitted; node IDs and block edges preserved", labelloc=t];
+node [shape=box,fontname="Menlo",fontsize=10];
+"B0" [style=filled,fillcolor="#f4f5f7",label="B0\n0 StartNode void\n2 ParameterNode a java.lang.Object[]\n227 UnboxNode i64\n2514 IntegerLessThanNode void [x=227, y=240:long[1|0x1]]\n2518 AddNode i64 [x=227, y=168:long[-1|0xffffffffffffffff]]\n2615 IntegerLessThanNode void [x=2518, y=240:long[1|0x1]]\n2695 AddNode i64 [x=227, y=2694:long[-2|0xfffffffffffffffe]]\n2677 IntegerLessThanNode void [x=2695, y=240:long[1|0x1]]\n2718 AddNode i64 [x=227, y=2717:long[-3|0xfffffffffffffffd]]\n295 UnboxNode i64\n1567 AddNode i64 [x=295, y=240:long[1|0x1]]\n2697 AddNode i64 [x=295, y=2696:long[2|0x2]]\n2720 AddNode i64 [x=295, y=2719:long[3|0x3]]\n824 IfNode void"];
+"B0" -> "B1";
+"B0" -> "B2";
+"B1" [style=filled,fillcolor="#f4f5f7",label="B1"];
+"B1" -> "B6";
+"B2" [style=filled,fillcolor="#f4f5f7",label="B2\n2102 UnboxNode i64\n2566 IfNode void"];
+"B2" -> "B3";
+"B2" -> "B4";
+"B3" [style=filled,fillcolor="#f4f5f7",label="B3\n2699 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=1567]"];
+"B3" -> "B6";
+"B4" [style=filled,fillcolor="#f4f5f7",label="B4\n2656 IfNode void"];
+"B4" -> "B5";
+"B4" -> "B7";
+"B5" [style=filled,fillcolor="#f4f5f7",label="B5\n2704 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=2697]"];
+"B5" -> "B6";
+"B6" [style=filled,fillcolor="#f4f5f7",label="B6\n1020 MergeNode void\n1156 UnboxNode i64\n2706 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=1156]\n2480 ReturnNode void [result=2706]\n2534 ValuePhiNode a!# java.lang.Long [values=79, values=2704, values=2699]"];
+"B7" [style=filled,fillcolor="#f4f5f7",label="B7\n2710 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=2718]\n2711 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=2720]\n2712 CommitAllocationNode void {'object(2680)': 'TailCall[166,166,166,2670,5,2671,1,2679]', 'object(2679)': 'Object[][166,2710,2711]'}\n2713 AllocatedObjectNode a!# thc.runtime.TailCall\n2481 UnwindNode void [exception=2713]"];
+}

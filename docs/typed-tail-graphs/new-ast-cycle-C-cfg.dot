@@ -1,0 +1,26 @@
+digraph actual_cfg {
+graph [rankdir=TB, bgcolor="white", label="new AST C: actual scheduled CFG before HighTierLowering\nDebug state, constants and bookkeeping labels omitted; node IDs and block edges preserved", labelloc=t];
+node [shape=box,fontname="Menlo",fontsize=10];
+"B0" [style=filled,fillcolor="#f4f5f7",label="B0\n0 StartNode void\n2 ParameterNode a java.lang.Object[]\n162 UnboxNode i64\n2242 UnboxNode i64\n2244 UnboxNode i64"];
+"B0" -> "B1";
+"B1" [style=filled,fillcolor="#def4e9",label="B1\n353 LoopBeginNode void\n567 IntegerLessThanNode void [x=1945, y=566:long[1|0x1]]\n1097 AddNode i64 [x=1945, y=1096:long[-1|0xffffffffffffffff]]\n2031 IntegerLessThanNode void [x=1097, y=566:long[1|0x1]]\n2271 AddNode i64 [x=1945, y=2270:long[-2|0xfffffffffffffffe]]\n2189 IntegerLessThanNode void [x=2271, y=566:long[1|0x1]]\n1297 AddNode i64 [x=1946, y=566:long[1|0x1]]\n2273 AddNode i64 [x=1946, y=2272:long[2|0x2]]\n2299 AddNode i64 [x=1945, y=2298:long[-3|0xfffffffffffffffd]]\n2301 AddNode i64 [x=1946, y=2300:long[3|0x3]]\n734 IfNode void\n1945 ValuePhiNode i64 [values=2242, values=2299]\n1946 ValuePhiNode i64 [values=2244, values=2301]\n1947 ValuePhiNode i64 [0 - 1] bits:0...0x [values=532:long[0|0x0], values=569]\n1948 ValuePhiNode i32 [0 - 1] bits:0...0x [values=5:int[0|0x0], values=22:int[1|0x1]]"];
+"B1" -> "B2";
+"B1" -> "B3";
+"B2" [style=filled,fillcolor="#f4f5f7",label="B2"];
+"B2" -> "B7";
+"B3" [style=filled,fillcolor="#def4e9",label="B3\n2033 IfNode void"];
+"B3" -> "B4";
+"B3" -> "B5";
+"B4" [style=filled,fillcolor="#f4f5f7",label="B4"];
+"B4" -> "B7";
+"B5" [style=filled,fillcolor="#def4e9",label="B5\n2191 IfNode void"];
+"B5" -> "B6";
+"B5" -> "B8";
+"B6" [style=filled,fillcolor="#f4f5f7",label="B6"];
+"B6" -> "B7";
+"B7" [style=filled,fillcolor="#f4f5f7",label="B7\n1539 MergeNode void\n1541 ValuePhiNode i64 [values=1946, values=2273, values=1297]"];
+"B7" -> "B9";
+"B8" [style=filled,fillcolor="#def4e9",label="B8\n1835 LoopEndNode void"];
+"B8" -> "B1";
+"B9" [style=filled,fillcolor="#f4f5f7",label="B9\n1832 LoopExitNode void\n2293 BoxNode$AllocatingBoxNode a!# java.lang.Long [value=2241]\n1889 ReturnNode void [result=2293]"];
+}

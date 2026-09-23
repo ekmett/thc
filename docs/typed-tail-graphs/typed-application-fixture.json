@@ -1,0 +1,445 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "module": "Synthetic.TypedApplications",
+  "constructors": [],
+  "bindings": [
+    {
+      "id": "maker",
+      "name": "maker",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 2,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "base",
+            "name": "base",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          },
+          {
+            "id": "adjustment",
+            "name": "adjustment",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "lam",
+          [
+            {
+              "id": "extra",
+              "name": "extra",
+              "type": "Int#",
+              "lifted": false,
+              "coercion": false
+            }
+          ],
+          [
+            "case",
+            [
+              "var",
+              "extra"
+            ],
+            "extraValue",
+            [
+              [
+                "lit",
+                [
+                  "int",
+                  "0"
+                ],
+                [],
+                [
+                  "app",
+                  [
+                    "prim",
+                    "+#"
+                  ],
+                  [
+                    [
+                      "var",
+                      "base"
+                    ],
+                    [
+                      "var",
+                      "adjustment"
+                    ]
+                  ],
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ],
+              [
+                "default",
+                null,
+                [],
+                [
+                  "app",
+                  [
+                    "prim",
+                    "+#"
+                  ],
+                  [
+                    [
+                      "app",
+                      [
+                        "prim",
+                        "-#"
+                      ],
+                      [
+                        [
+                          "var",
+                          "base"
+                        ],
+                        [
+                          "var",
+                          "adjustment"
+                        ]
+                      ],
+                      [
+                        false,
+                        false
+                      ]
+                    ],
+                    [
+                      "var",
+                      "extraValue"
+                    ]
+                  ],
+                  [
+                    false,
+                    false
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "typedDirect",
+      "name": "typedDirect",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "input",
+            "name": "input",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "let",
+          false,
+          [
+            {
+              "id": "captured",
+              "name": "captured",
+              "type": "Synthetic",
+              "lifted": true,
+              "arity": 1,
+              "expr": [
+                "lam",
+                [
+                  {
+                    "id": "delta",
+                    "name": "delta",
+                    "type": "Int#",
+                    "lifted": false,
+                    "coercion": false
+                  }
+                ],
+                [
+                  "let",
+                  false,
+                  [
+                    {
+                      "id": "saved",
+                      "name": "saved",
+                      "type": "Int#",
+                      "lifted": false,
+                      "arity": 0,
+                      "expr": [
+                        "case",
+                        [
+                          "var",
+                          "delta"
+                        ],
+                        "deltaValue",
+                        [
+                          [
+                            "lit",
+                            [
+                              "int",
+                              "0"
+                            ],
+                            [],
+                            [
+                              "app",
+                              [
+                                "prim",
+                                "+#"
+                              ],
+                              [
+                                [
+                                  "var",
+                                  "input"
+                                ],
+                                [
+                                  "lit",
+                                  "int",
+                                  "17"
+                                ]
+                              ],
+                              [
+                                false,
+                                false
+                              ]
+                            ]
+                          ],
+                          [
+                            "default",
+                            null,
+                            [],
+                            [
+                              "app",
+                              [
+                                "prim",
+                                "+#"
+                              ],
+                              [
+                                [
+                                  "var",
+                                  "input"
+                                ],
+                                [
+                                  "var",
+                                  "deltaValue"
+                                ]
+                              ],
+                              [
+                                false,
+                                false
+                              ]
+                            ]
+                          ]
+                        ]
+                      ]
+                    }
+                  ],
+                  [
+                    "case",
+                    [
+                      "var",
+                      "saved"
+                    ],
+                    "result",
+                    [
+                      [
+                        "default",
+                        null,
+                        [],
+                        [
+                          "var",
+                          "result"
+                        ]
+                      ]
+                    ]
+                  ]
+                ]
+              ]
+            }
+          ],
+          [
+            "app",
+            [
+              "prim",
+              "+#"
+            ],
+            [
+              [
+                "app",
+                [
+                  "lam",
+                  [
+                    {
+                      "id": "direct",
+                      "name": "direct",
+                      "type": "Int#",
+                      "lifted": false,
+                      "coercion": false
+                    }
+                  ],
+                  [
+                    "case",
+                    [
+                      "var",
+                      "direct"
+                    ],
+                    "directValue",
+                    [
+                      [
+                        "lit",
+                        [
+                          "int",
+                          "0"
+                        ],
+                        [],
+                        [
+                          "lit",
+                          "int",
+                          "-9223372036854775808"
+                        ]
+                      ],
+                      [
+                        "default",
+                        null,
+                        [],
+                        [
+                          "var",
+                          "directValue"
+                        ]
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  [
+                    "var",
+                    "input"
+                  ]
+                ],
+                [
+                  false
+                ]
+              ],
+              [
+                "app",
+                [
+                  "var",
+                  "captured"
+                ],
+                [
+                  [
+                    "var",
+                    "input"
+                  ]
+                ],
+                [
+                  false
+                ]
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "typedPap",
+      "name": "typedPap",
+      "type": "Synthetic",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "input",
+            "name": "input",
+            "type": "Int#",
+            "lifted": false,
+            "coercion": false
+          }
+        ],
+        [
+          "let",
+          false,
+          [
+            {
+              "id": "partial",
+              "name": "partial",
+              "type": "Synthetic",
+              "lifted": true,
+              "arity": 0,
+              "expr": [
+                "app",
+                [
+                  "var",
+                  "maker"
+                ],
+                [
+                  [
+                    "var",
+                    "input"
+                  ]
+                ],
+                [
+                  false
+                ],
+                true,
+                true
+              ]
+            }
+          ],
+          [
+            "app",
+            [
+              "prim",
+              "+#"
+            ],
+            [
+              [
+                "app",
+                [
+                  "var",
+                  "partial"
+                ],
+                [
+                  [
+                    "lit",
+                    "int",
+                    "1"
+                  ],
+                  [
+                    "var",
+                    "input"
+                  ]
+                ],
+                [
+                  false,
+                  false
+                ]
+              ],
+              [
+                "lit",
+                "int",
+                "7"
+              ]
+            ],
+            [
+              false,
+              false
+            ]
+          ]
+        ]
+      ]
+    }
+  ]
+}
