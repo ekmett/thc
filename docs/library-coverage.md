@@ -112,6 +112,54 @@ raising limits or adding Haskell optimizer fences. Regression tests exercise
 deep acyclic nesting, actual cloned compiled targets, shadowed ancestor jumps,
 full-width values and recursive/nonrecursive reference-result laziness.
 
+## Data.Sequence: four supported public workloads
+
+The regular library matrix includes four entries from the genuine
+`THC.SequenceWorkload` source, compiled with the same unmodified containers-0.8
+archive. Each has 38 inputs covering negative and empty sizes, small digit/tree
+boundaries, 159/160/161, 255/256/257, 512, 1024 and both machine-Int extremes.
+Sizes are explicitly bounded to 0–1024 by the workload.
+
+| Entry | Public operations exercised |
+| --- | --- |
+| `sequenceBuild` | `fromList`, left/right order-sensitive folds, length |
+| `sequenceEnds` | alternating prepend/append, both view directions, folds, length |
+| `sequenceAppend` | concatenation in both operand orders, folds, length |
+| `sequenceLazyPayloads` | lazy lifted payloads through end insertion, length and a spine-only fold |
+
+The lazy workload places a genuine recursive bottom at each endpoint; neither
+length nor the constant-valued spine fold demands either payload. The list/deque
+model derives element order independently of the library's finger-tree
+representation. Fresh native GHC output is checked against that model before any
+JVM execution. Exact-empty unboxed tuple inputs are now supported at the guest
+call boundaries reached by these workloads; this does not equate them with
+`State#`, boxed unit, or general nonempty aggregate arguments.
+
+`sequenceSplit`, `sequenceIndexUpdate` and `sequenceAggregate` remain explicit
+strict frontiers. Their 114 native/model rows are retained separately and never
+count as supported JVM execution. Fresh per-entry audits require zero capability
+issues and the exact remaining exception/backtrace/call-stack definitions; the
+index/update and combined entries additionally lack
+`GHC.Internal.Show.$fShowCallStack_itos'`. Both newly introduced gaps and resolved
+gaps fail preparation for review. Strict loading must reject one of the recorded
+missing definitions. Each selected entry has its own hash-verified audit even
+though the source is exported only once.
+
+The additional view-only and lazy-length source entries are excluded from the
+regular matrix. The historical first-compiled-call host linkage observation is
+documented in the separate
+[Sequence boundary investigation](https://github.com/ekmett/thc/blob/ffdbca6f091b6ee48cd9baed2a8f61e3a6eb5a3d/docs/sequence-entry-boundary.md).
+Adding the four workloads above is coverage integration, not a claim that the
+historical linkage condition has been fixed.
+
+The complete native oracle now contains 2,812 rows: 2,676 supported inputs and
+136 frontier-only inputs (22 Set and 114 Sequence). Each successful backend/mode
+library run checks 8,028 native results, with a positive compiled-entry counter
+delta required for all 2,760 compiled-warm/final calls. The 152 supported Sequence
+inputs contribute 456 of those comparisons and 164 required compiled calls.
+All calls use the normal public JSON loader and `Value.execute` path, with the
+existing compiler limits and no added settling or recovery phase.
+
 ## Running the checks
 
 Run `scripts/try-libraries.sh` with the pinned GHC and GraalVM environments.
@@ -129,9 +177,9 @@ then checks the withheld cold inputs. Cold branches may legitimately invalidate
 code. After broad warmup and another compilation request, **every** input must
 produce the native result and enter installed guest code. Unsupported traps and
 blackholes must remain zero; no diagnostic unsupported mode is needed for
-IntMap, IntSet or the primitive entries. The existing Linux/macOS library CI step
-prepares all groups and runs both explicit backends; no separate opt-in is needed
-for the IntSet workload.
+IntMap, IntSet, the four Sequence workloads or the primitive entries. The existing
+Linux/macOS library CI step prepares all groups and runs both explicit backends
+with handoff disabled and enabled; no separate opt-in is needed.
 
 To additionally exercise opt-in dense argument handoff transport, run
 `JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/try-libraries.sh --rerun-tasks`.

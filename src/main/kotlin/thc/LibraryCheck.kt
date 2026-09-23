@@ -32,7 +32,10 @@ fun main(args: Array<String>) {
             "unsignedLessThanMaxSigned", "unsignedLessThanSignBit", "unsignedLessThanAllOnes"),
         "intset" to setOf("intSetAggregate"),
         "intset-primops" to setOf("populationCount", "countTrailingZeros", "unsignedLessEqualZero",
-            "unsignedLessEqualMaxSigned", "unsignedLessEqualSignBit", "unsignedLessEqualAllOnes"))
+            "unsignedLessEqualMaxSigned", "unsignedLessEqualSignBit", "unsignedLessEqualAllOnes"),
+        "sequence" to setOf("sequenceBuild", "sequenceEnds", "sequenceAppend", "sequenceSplit",
+            "sequenceIndexUpdate", "sequenceAggregate", "sequenceLazyPayloads"))
+    val supportedSequence = setOf("sequenceBuild", "sequenceEnds", "sequenceAppend", "sequenceLazyPayloads")
     require(groups.size == expectedEntries.size && groups.map { it["id"] }.toSet() == expectedEntries.keys)
     val manifestRows = groups.flatMap { group ->
         val entries = group["entries"] as List<Map<String, Any?>>
@@ -54,15 +57,22 @@ fun main(args: Array<String>) {
     fun count(function: Value, name: String) = (diagnostics(function)[name] as Number).toLong()
     for (group in groups) {
         val modules = (group["modules"] as List<String>).also { require(it.isNotEmpty()) }
-        val execution = group["execution"] as String
-        require(execution in setOf("supported", "diagnostic", "frontier"))
-        val diagnostic = execution == "diagnostic"
-        val audit = Json.parse(File(group["audit"] as String).readText()) as Map<String, Any?>
-        require(audit["accepted"] == (execution == "supported")) { "Static audit disagrees with the declared coverage frontier" }
         val entries = group["entries"] as List<Map<String, Any?>>
         require(entries.isNotEmpty())
         for (entry in entries) {
             val name = entry["name"] as String
+            val sequence = group["id"] == "sequence"
+            val execution = (if (sequence) entry["execution"] else group["execution"]) as String
+            require(execution in setOf("supported", "diagnostic", "frontier"))
+            if (sequence) {
+                require(execution == if (name in supportedSequence) "supported" else "frontier") {
+                    "Unexpected Sequence support declaration for $name"
+                }
+                require(entry["audit"] is String) { "Sequence requires a strict per-entry audit" }
+            }
+            val diagnostic = execution == "diagnostic"
+            val audit = Json.parse(File((if (sequence) entry["audit"] else group["audit"]) as String).readText()) as Map<String, Any?>
+            require(audit["accepted"] == (execution == "supported")) { "Static audit disagrees with the declared coverage frontier" }
             fun rows(key: String): List<Pair<Long, Long>> = (entry[key] as List<List<Number>>).map {
                 require(it.size == 2)
                 it[0].toLong() to it[1].toLong()
@@ -84,6 +94,13 @@ fun main(args: Array<String>) {
                     check(failure.message.orEmpty().contains("Unsupported") ||
                         failure.message.orEmpty().contains("Unresolved") ||
                         failure.message.orEmpty().contains("unsupported")) { "Unexpected loader failure: $failure" }
+                    if (sequence) {
+                        val missing = (audit["missingGlobals"] as List<Map<String, Any?>>).map { it["id"] as String }
+                        check(failure.message.orEmpty().contains("Unresolved external binding") &&
+                            missing.any { failure.message.orEmpty().contains(it) }) {
+                            "Sequence loader rejection does not match its recorded missing-definition frontier: $failure"
+                        }
+                    }
                     println("LIBRARY_UNSUPPORTED\t$backend\t$name\t${failure.message}")
                 }
                 continue

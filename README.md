@@ -88,7 +88,8 @@ evaluated once.
 the suite; missing dependencies and unsupported constructs remain explicit.
 
 [Library coverage](docs/library-coverage.md) adds ordinary `Data.IntMap.Strict`
-and `Data.IntSet` operations, bitmap primitives and unsigned word boundaries,
+and `Data.IntSet` operations, four public `Data.Sequence` workloads, bitmap
+primitives and unsigned word boundaries,
 checked against native GHC and independent models. `scripts/try-libraries.sh`
 runs those checks on both backends.
 The [unsigned scalar primop slice](docs/integer-primops.md) adds native-checked
