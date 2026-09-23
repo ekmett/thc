@@ -100,6 +100,7 @@
     "AddrRep"
   ],
   "strictLiftedFields": true,
+  "dataToTag": "concrete-algebraic-family-64",
   "primitives": {
     "quotWord#": 2,
     "remWord#": 2,

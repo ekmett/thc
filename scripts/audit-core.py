@@ -9,6 +9,7 @@ check, not a proof that arbitrary inputs terminate or avoid a Haskell error.
 import argparse
 from collections import deque
 import json
+import core_data_tags
 from pathlib import Path
 import sys
 
@@ -615,6 +616,29 @@ class Audit:
                     self.issue('application-levity', owner, path, 'Missing/invalid argument representation flags')
                 function = expr[1]
                 sum_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-sum'
+                data_tag = function[0] == 'prim' and function[1] in core_data_tags.OPERATIONS
+                if data_tag:
+                    if self.cap.get('dataToTag') != 'concrete-algebraic-family-64':
+                        self.issue('data-tag-family', owner, path, 'capability disabled')
+                    actual = self.expression_rep(arguments[0]) if len(arguments) == 1 else None
+                    if len(arguments) == 1 and arguments[0][0] == 'var':
+                        key = arguments[0][1]
+                        lexical = bound.get(key) if key in bound else self.bindings.get(key, {}).get('rep')
+                        if actual is None:
+                            actual = lexical
+                        elif isinstance(actual, dict) and isinstance(lexical, dict):
+                            effective = dict(lexical, **actual)
+                            if actual.get('kind') in ('unknown', 'object'): effective['kind'] = lexical.get('kind')
+                            if actual.get('primReps') is None: effective['primReps'] = lexical.get('primReps')
+                            if actual.get('primReps') == ['BoxedRep Nothing'] and lexical.get('primReps') in (
+                                    ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
+                                effective['primReps'] = lexical['primReps']
+                            actual = effective
+                    try:
+                        for key in core_data_tags.validate(expr, actual, self.constructors):
+                            self.constructor(key, owner, path + '/dataToTagFamily', False, self.constructors[key]['arity'])
+                    except ValueError as error:
+                        self.issue('data-tag-family', owner, path, str(error))
                 tuple_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind') == 'unboxed-tuple'
                 proof = self.expression_rep(expr)
                 if sum_constructor:
@@ -732,9 +756,9 @@ class Audit:
                     self.compare_shapes(result, proof, owner, path + '/rep', component=True)
                 elif is_vector(proof):
                     self.issue('vector-boundary', owner, path, 'vector call result')
-                if enum_application:
+                if enum_application or data_tag:
                     self.expression_metadata(function, owner, path + '/function')
-                    self.primitives.setdefault('tagToEnum#', []).append(dict(self.location(owner, path), arity=len(arguments)))
+                    self.primitives.setdefault(function[1], []).append(dict(self.location(owner, path), arity=len(arguments)))
                 else:
                     self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
                 for index, argument in enumerate(arguments):

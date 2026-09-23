@@ -755,6 +755,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 ProvenExpression(Expression { e ->
                     e.builder.beginTagToEnum(family); operand.emit(e); e.builder.endTagToEnum()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] in CoreDataTags.operations) {
+                if (args.size != 1) throw RuntimeFault("dataToTag: Exactly one operand required")
+                val operand = argument(args[0], scope, false)
+                val ids = CoreDataTags.validate(expr, operand.proof, constructors)
+                val family = DataTagFamily(ids.map(::dataLayout).toTypedArray())
+                ProvenExpression(Expression { e ->
+                    e.builder.beginDataToTag(family); operand.emit(e); e.builder.endDataToTag()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)

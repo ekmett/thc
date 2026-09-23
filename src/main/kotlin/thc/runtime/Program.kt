@@ -1251,6 +1251,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operand = compile(args[0], scope, false)
                 val ids = CoreEnums.validate(expr, operand.representation, constructors)
                 TagToEnum(EnumFamily(ids.map { dataLayout(it).allocate() }.toTypedArray()), operand)
+            } else if (fn[0] == "prim" && fn[1] in CoreDataTags.operations) {
+                if (args.size != 1) throw RuntimeFault("dataToTag: Exactly one operand required")
+                val operand = argument(args[0], scope, false)
+                val ids = CoreDataTags.validate(expr, operand.representation, constructors)
+                DataToTag(DataTagFamily(ids.map(::dataLayout).toTypedArray()), operand)
             } else if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
                 val name = fn[1] as String
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)

@@ -230,6 +230,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static DataValue select(EnumFamily family, long tag) { return family.select(tag); }
     }
 
+    @Operation
+    @ConstantOperand(type = DataTagFamily.class, name = "family")
+    public static final class DataToTag {
+        @Specialization public static long tag(DataTagFamily family, DataValue value) { return family.tag(value); }
+        @Fallback public static long invalid(DataTagFamily family, Object value) {
+            throw new RuntimeFault("dataToTag: expected demanded DataValue");
+        }
+    }
+
     /** Saturated tuple arithmetic never constructs a result carrier or payload array. */
     @Operation
     @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")

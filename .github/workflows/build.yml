@@ -141,6 +141,7 @@ jobs:
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-arrays.py
           python3 scripts/test-address-fields.py
+          python3 scripts/test-core-data-tags.py
           python3 scripts/test-core-mutvars.py
           python3 scripts/test-int-array-model.py
           python3 scripts/test-double-array-model.py
@@ -204,6 +205,7 @@ jobs:
             build/mutvar/*/core/*.json
             build/boxed-arrays/
             build/address-fields/
+            build/data-to-tag/
             build/bytearray/manifest.json
             build/bytearray/oracle.tsv
             build/bytearray/NativeByteArray.hs
