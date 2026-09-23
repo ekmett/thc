@@ -43,8 +43,8 @@ combining, adjustment, deletion, membership, lookup, size and an order-sensitive
 fold. Its signed keys include `minBound`, `maxBound`, negative keys and zero;
 the workload includes duplicate, absent and empty-map operations.
 
-The dedicated native driver and independent Python set/dictionary/integer models
-agree on 994 entry/input pairs: 22 Set inputs, 22 IntMap inputs and 190 inputs
+The original Set/IntMap entries in the dedicated native driver and independent
+Python models agree on 994 entry/input pairs: 22 Set inputs, 22 IntMap inputs and 190 inputs
 for each of five word-primitive entries. The primitive fixtures cover `clz#`
 and unsigned `ltWord#`, including zero, all 64 bit positions, adjacent values,
 the sign boundary and the all-ones word.
@@ -65,6 +65,43 @@ regenerated strict audit accepts 26 reachable definitions with zero missing
 globals or capability issues. The helper requires `clz#` and `ltWord#` to remain
 reachable in both the genuine IntMap workload and primitive fixture.
 
+## IntSet and bitmap primitives
+
+`THC.IntSetWorkload.intSetAggregate` exercises the public `Data.IntSet` insertion,
+deletion, membership, size, union, intersection, difference and ascending-list
+APIs. The workload combines dense bitmap leaves with mixed-sign Patricia
+prefixes, explicit `minBound`/`maxBound` keys, values on both sides of 64-bit
+leaf boundaries, duplicates, absent deletions and empty/negative inputs.
+An order-sensitive checksum distinguishes signed ascending traversal from
+unsigned or reversed traversal. Expected results come from the same native GHC
+driver and a separate Python set model, not from reproducing the Patricia tree.
+
+The three additional runtime primitives are `popCnt#`, `ctz#` and unsigned
+`leWord#`. Both the workload and the dedicated primitive fixture must retain all
+three in reachable Core. The fixture checks every bit position and its adjacent
+values, zero, all-ones, single cleared bits, alternating bit patterns, and
+inclusive comparisons at zero, the signed maximum, the sign bit and all-ones.
+All values cross the host boundary as their unchanged signed `Int#` bit patterns.
+Focused JVM tests also exercise both comparison operands and reject malformed
+arities in strict and diagnostic modes.
+
+The IntSet additions contribute 22 workload inputs and 255 inputs for each of
+six primitive entries, bringing the complete native/model oracle to 2,546 rows.
+The strict IntSet audit accepts 22 reachable bindings with no missing globals
+or capability issues; `ctz#`, `popCnt#` and `leWord#` all remain reachable.
+
+This example also exposed excessive AST loop nesting: nonrecursive joins were
+being lowered to `LoopNode`, causing Graal escape analysis to exceed the existing
+30-second compilation limit. Nonrecursive groups now dispatch once without a
+loop; their RHS lexical scopes cannot jump back into the same group. Recursive
+joins still use loops, and ancestor transfers, typed results and lazy values
+retain their semantics. The unchanged workload then passed compilation without
+raising limits or adding Haskell optimizer fences. Regression tests exercise
+deep acyclic nesting, actual cloned compiled targets, shadowed ancestor jumps,
+full-width values and recursive/nonrecursive reference-result laziness.
+
+## Running the checks
+
 Run `scripts/try-libraries.sh` with the pinned GHC and GraalVM environments.
 Reports are under `build/libraries/`: per-bundle source provenance and strict
 audits, `oracle.tsv`, `oracle-validation.json`, `cases.json`, and explicit AST
@@ -80,9 +117,12 @@ then checks the withheld cold inputs. Cold branches may legitimately invalidate
 code. After broad warmup and another compilation request, **every** input must
 produce the native result and enter installed guest code. Unsupported traps and
 blackholes must remain zero; no diagnostic unsupported mode is needed for
-IntMap or the primitive entries.
+IntMap, IntSet or the primitive entries. The existing Linux/macOS library CI step
+prepares all groups and runs both explicit backends; no separate opt-in is needed
+for the IntSet workload.
 
-Validated on Linux x86-64 with GHC 9.14.1 and GraalVM 25.3.4.1: 225 JVM tests
+The initial Set/IntMap checkpoint was validated on Linux x86-64 with GHC 9.14.1
+and GraalVM 25.3.4.1: 225 JVM tests
 passed, and each backend passed 2,916 native-oracle comparisons (972 interpreted,
 33 compiled-warm, 939 after-compilation cold, 972 final compiled). The 1,005
 compiled-warm/final calls per backend each required a positive installed-code

@@ -134,7 +134,7 @@ An update frame records the thunk being evaluated and restores the correct state
 
 ### Tail calls are only part of the problem
 
-Compile local joins and suitable self-recursion to `LoopNode`/repeating control flow. Mutual/general tail calls can transfer through a trampoline. JVM host-stack depth must remain bounded even when the call graph or application shapes change.
+Compile recursive local joins and suitable self-recursion to `LoopNode`/repeating control flow. Nonrecursive join groups dispatch once without a loop: their RHS scopes exclude the current group, and transfers to ancestor groups propagate by lexical identity. Both paths retain typed frame-slot results and parallel argument moves. Avoid artificial loop nesting for acyclic control flow; the ordinary IntSet workload exposed a Graal escape-analysis timeout when every nonrecursive join used a loop. Mutual/general tail calls can transfer through a trampoline. JVM host-stack depth must remain bounded even when the call graph or application shapes change.
 
 Deep **non-tail** evaluation also needs a guest stack: evaluating a thunk can leave a pending case, an update and an overapplication continuation behind. The proposed baseline is an explicit continuation representation (`Case`, `Update`, `ApplyRest`, `Return`, then `Catch`, masking and STM frames) with a bounded host recursion policy. Typed continuation payloads can use chunked storage rather than allocating a fresh generic Java object for every step. That is a design to implement and benchmark, not an assumption that PE erases a heap stack.
 

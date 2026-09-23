@@ -58,18 +58,37 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
     @field:Children private var bodies: Array<Expr>, proof: CoreRepresentation) : Node(), RepeatingNode {
     private val exactLong = proof.isLong
     private val referenceKind = if (proof.evaluated) proof.kind else CoreKind.UNKNOWN
-    @ExplodeLoop override fun executeRepeating(frame: VirtualFrame): Boolean {
+    private fun executeBody(frame: VirtualFrame, body: Expr) {
+        if (exactLong) FrameAccess.writeLong(frame, result, body.executeRequiredLong(frame))
+        else if (referenceKind == CoreKind.DATA) FrameAccess.write(frame, result, body.executeRequiredDataValue(frame))
+        else if (referenceKind == CoreKind.CLOSURE) FrameAccess.write(frame, result, body.executeRequiredClosure(frame))
+        else if (referenceKind == CoreKind.ADDRESS) FrameAccess.write(frame, result, body.executeRequiredAddress(frame))
+        else FrameAccess.write(frame, result, body.execute(frame))
+    }
+    @ExplodeLoop private fun executeTarget(frame: VirtualFrame, selected: Long) {
+        // Structurally exclude entry even when PE cannot resolve a caught jump's
+        // target. Otherwise nested entry regions can be expanded a second time.
+        for (index in 1 until bodies.size) if (selected == index.toLong()) {
+            executeBody(frame, bodies[index])
+            return
+        }
+        fault("Invalid local join selector")
+    }
+    fun executeOnce(frame: VirtualFrame) {
+        try {
+            executeBody(frame, bodies[0])
+        } catch (jump: LocalJoinJump) {
+            if (jump.target.group !== group) throw jump
+            // A nonrecursive RHS has only the outer join scope. It cannot jump
+            // to this group again; any ancestor transfer escapes this catch.
+            executeTarget(frame, jump.target.index.toLong())
+        }
+    }
+    override fun executeRepeating(frame: VirtualFrame): Boolean {
         try {
             val selected = frame.getLong(selector)
-            for (index in bodies.indices) if (selected == index.toLong()) {
-                if (exactLong) FrameAccess.writeLong(frame, result, bodies[index].executeRequiredLong(frame))
-                else if (referenceKind == CoreKind.DATA) FrameAccess.write(frame, result, bodies[index].executeRequiredDataValue(frame))
-                else if (referenceKind == CoreKind.CLOSURE) FrameAccess.write(frame, result, bodies[index].executeRequiredClosure(frame))
-                else if (referenceKind == CoreKind.ADDRESS) FrameAccess.write(frame, result, bodies[index].executeRequiredAddress(frame))
-                else FrameAccess.write(frame, result, bodies[index].execute(frame))
-                return false
-            }
-            fault("Invalid local join selector")
+            if (selected == 0L) executeBody(frame, bodies[0]) else executeTarget(frame, selected)
+            return false
         } catch (jump: LocalJoinJump) {
             if (jump.target.group !== group) throw jump
             frame.setLong(selector, jump.target.index.toLong())
@@ -78,15 +97,21 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
     }
 }
 
-/** A local region returns through a frame slot, keeping primitive results off LoopNode's Object ABI. */
+/** Only recursive groups need loops; all regions preserve their typed result through a frame slot. */
 internal class LocalJoinRegion(group: Any, private val selector: Int, private val result: Int,
-    bodies: Array<Expr>, proof: CoreRepresentation) : Expr() {
+    bodies: Array<Expr>, proof: CoreRepresentation, recursive: Boolean) : Expr() {
     init { representation = proof }
-    @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(
-        LocalJoinRepeater(group, selector, result, bodies, proof))
+    @Child private var single: LocalJoinRepeater? =
+        if (recursive) null else LocalJoinRepeater(group, selector, result, bodies, proof)
+    @Child private var loop: LoopNode? = if (recursive) Truffle.getRuntime().createLoopNode(
+        LocalJoinRepeater(group, selector, result, bodies, proof)) else null
     private fun run(frame: VirtualFrame) {
-        FrameAccess.writeLong(frame, selector, 0L)
-        loop.execute(frame)
+        val once = single
+        if (once != null) once.executeOnce(frame)
+        else {
+            FrameAccess.writeLong(frame, selector, 0L)
+            loop!!.execute(frame)
+        }
     }
     private fun resultValue(frame: VirtualFrame): Any? =
         if (representation.isEvaluatedReference) frame.getObject(result) else FrameAccess.read(frame, result)

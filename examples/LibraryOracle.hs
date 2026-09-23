@@ -7,6 +7,8 @@ import System.Exit (die)
 import Text.Read (readMaybe)
 import qualified THC.IntMapPrimops as P
 import qualified THC.IntMapWorkload as I
+import qualified THC.IntSetPrimops as SP
+import qualified THC.IntSetWorkload as IS
 import qualified THC.SetWorkload as S
 
 entries :: [(String, Int# -> Int#)]
@@ -18,6 +20,13 @@ entries =
   , ("unsignedLessThanMaxSigned", P.unsignedLessThanMaxSigned)
   , ("unsignedLessThanSignBit", P.unsignedLessThanSignBit)
   , ("unsignedLessThanAllOnes", P.unsignedLessThanAllOnes)
+  , ("intSetAggregate", IS.intSetAggregate)
+  , ("populationCount", SP.populationCount)
+  , ("countTrailingZeros", SP.countTrailingZeros)
+  , ("unsignedLessEqualZero", SP.unsignedLessEqualZero)
+  , ("unsignedLessEqualMaxSigned", SP.unsignedLessEqualMaxSigned)
+  , ("unsignedLessEqualSignBit", SP.unsignedLessEqualSignBit)
+  , ("unsignedLessEqualAllOnes", SP.unsignedLessEqualAllOnes)
   ]
 
 main :: IO ()

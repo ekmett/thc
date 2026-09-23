@@ -29,7 +29,10 @@ fun main(args: Array<String>) {
         "set" to setOf("setAggregate"),
         "intmap" to setOf("intMapAggregate"),
         "intmap-primops" to setOf("countLeadingZeros", "unsignedLessThanZero",
-            "unsignedLessThanMaxSigned", "unsignedLessThanSignBit", "unsignedLessThanAllOnes"))
+            "unsignedLessThanMaxSigned", "unsignedLessThanSignBit", "unsignedLessThanAllOnes"),
+        "intset" to setOf("intSetAggregate"),
+        "intset-primops" to setOf("populationCount", "countTrailingZeros", "unsignedLessEqualZero",
+            "unsignedLessEqualMaxSigned", "unsignedLessEqualSignBit", "unsignedLessEqualAllOnes"))
     require(groups.size == expectedEntries.size && groups.map { it["id"] }.toSet() == expectedEntries.keys)
     val manifestRows = groups.flatMap { group ->
         val entries = group["entries"] as List<Map<String, Any?>>

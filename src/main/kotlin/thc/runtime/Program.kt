@@ -510,11 +510,11 @@ private class Primitive(private val name: String, @field:Children private var ar
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
-            "negateInt#", "not#", "notI#", "clz#", "int2Word#", "word2Int#", "ord#", "chr#",
+            "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
             "narrow8Int#", "narrow16Int#", "narrow32Int#",
             "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
-            "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leChar#",
+            "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
             ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
             "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2
             else -> throw UnsupportedCore("Unsupported primitive $name")
@@ -538,6 +538,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "<#", "ltChar#" -> b(x < y)
             "ltWord#" -> b(java.lang.Long.compareUnsigned(x, y) < 0)
             "<=#", "leChar#" -> b(x <= y)
+            "leWord#" -> b(java.lang.Long.compareUnsigned(x, y) <= 0)
             ">#", "gtChar#" -> b(x > y)
             ">=#", "geChar#" -> b(x >= y)
             "and#", "andI#" -> x and y
@@ -545,6 +546,8 @@ private class Primitive(private val name: String, @field:Children private var ar
             "xor#", "xorI#" -> x xor y
             "not#", "notI#" -> x.inv()
             "clz#" -> java.lang.Long.numberOfLeadingZeros(x).toLong()
+            "ctz#" -> java.lang.Long.numberOfTrailingZeros(x).toLong()
+            "popCnt#" -> java.lang.Long.bitCount(x).toLong()
             "uncheckedIShiftL#", "uncheckedShiftL#" -> x shl y.toInt()
             "uncheckedIShiftRA#" -> x shr y.toInt()
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> x ushr y.toInt()
@@ -1075,6 +1078,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val identity = Any()
         val local = outer.child()
         val entryContracts = definitions.map(CoreEntries::join)
+        // Snapshot the outer join scope before publishing this group. Besides
+        // lexical correctness, this lets nonrecursive regions dispatch once.
         val bodyScopes = definitions.map { definition ->
             val scope = local.child()
             val entryStrict = CoreEntries.join(definition)
@@ -1110,7 +1115,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             inferred.copy(evaluated = entry.representation.evaluated && bodies.all { it.representation.evaluated })
         }
         return LocalJoinRegion(identity, local.layout.bind("<join selector>"), local.layout.bind("<join result>"),
-            (listOf(entry) + bodies).toTypedArray(), result)
+            (listOf(entry) + bodies).toTypedArray(), result, recursive)
     }
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")

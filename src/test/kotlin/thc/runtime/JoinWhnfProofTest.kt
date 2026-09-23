@@ -32,8 +32,8 @@ class JoinWhnfProofTest {
         mapOf("rep" to long, "binder" to parameter("boxed", data)))
     private fun join(id: String, parameters: List<Map<String, Any>>, body: WhnfCore) =
         binding(id, lambda(parameters, body, data)) + mapOf("joinValueArity" to parameters.size, "joinResultRep" to data)
-    private fun region(join: Map<String, Any?>, entry: WhnfCore): WhnfCore =
-        listOf("let", true, listOf(join), entry, mapOf("rep" to data))
+    private fun region(join: Map<String, Any?>, entry: WhnfCore, recursive: Boolean): WhnfCore =
+        listOf("let", recursive, listOf(join), entry, mapOf("rep" to data))
     private fun call(p: ExecutableProgram, name: String, input: Long): Any? =
         Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue(name), arrayOf<Any?>(input)))
     private fun count(p: ExecutableProgram, name: String) = (p.diagnostics().getValue(name) as Number).toLong()
@@ -43,16 +43,20 @@ class JoinWhnfProofTest {
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
     }
 
-    @Test fun recursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() {
+    @Test fun recursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() = checkDataJoins(true)
+    @Test fun nonrecursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() = checkDataJoins(false)
+
+    private fun checkDataJoins(recursive: Boolean) {
         val step = listOf("case", variable("remaining"), "choice", listOf(
             listOf("lit", listOf("int", "0"), emptyList<String>(), box(variable("acc"))),
             listOf("default", null, emptyList<String>(), apply(variable("loop"), listOf(
                 primitive("-#", variable("remaining"), integer(1)), primitive("+#", variable("acc"), integer(1))), result = data))),
             mapOf("rep" to data, "binder" to parameter("choice")))
-        val returning = region(join("loop", listOf(parameter("remaining"), parameter("acc")), step),
-            apply(variable("loop"), listOf(integer(1_001), variable("input")), result = data))
+        val returningBody = if (recursive) step else box(primitive("+#", variable("acc"), variable("remaining")))
+        val returning = region(join("loop", listOf(parameter("remaining"), parameter("acc")), returningBody),
+            apply(variable("loop"), listOf(integer(1_001), variable("input")), result = data), recursive)
         val lazy = region(join("identity", listOf(parameter("value", data)), variable("value")),
-            apply(variable("identity"), listOf(variable("tree")), listOf(true), data))
+            apply(variable("identity"), listOf(variable("tree")), listOf(true), data), recursive)
         val unsafe = apply(listOf("con", "Box", 1), listOf(primitive("quotInt#", integer(1), variable("input"))), result = data)
         val lazyCall = apply(variable("lazyJoin"), listOf(unsafe), listOf(true), data)
         val ignored = listOf("let", false, listOf(binding("unused", lazyCall, data)), integer(7))

@@ -45,6 +45,14 @@ def primitive_model(entry, value):
     word = value & WORD_MASK
     if entry == 'countLeadingZeros':
         return 64 - word.bit_length()
+    if entry == 'populationCount':
+        return word.bit_count()
+    if entry == 'countTrailingZeros':
+        return (word & -word).bit_length() - 1 if word else 64
+    inclusive_limits = {'unsignedLessEqualZero': 0, 'unsignedLessEqualMaxSigned': (1 << 63) - 1,
+                        'unsignedLessEqualSignBit': 1 << 63, 'unsignedLessEqualAllOnes': WORD_MASK}
+    if entry in inclusive_limits:
+        return int(word <= inclusive_limits[entry])
     limits = {'unsignedLessThanZero': 0, 'unsignedLessThanMaxSigned': (1 << 63) - 1,
               'unsignedLessThanSignBit': 1 << 63, 'unsignedLessThanAllOnes': WORD_MASK}
     return int(word < limits[entry])
@@ -74,6 +82,34 @@ def intmap_model(value):
     for k in sorted(counts):
         ordered = (ordered * 33 + (k & 65535) + 3 * counts[k]) & 2147483647
     return signed(ordered + 17 * queried + 23 * edges + 31 * len(counts))
+
+
+def intset_model(value):
+    n = max(0, value)
+    key = lambda i: ((37 * i + 11) & 1023) - 512
+    other_key = lambda i: ((53 * i + 7) & 2047) - 1024
+    edges = [-(1 << 63), -65, -64, -1, 0, 63, 64, (1 << 63) - 1]
+    seeded = set(edges) if n else set()
+    inserted = seeded | {key(i) for i in range(n)} | {key(i // 3) for i in range(n)}
+    deleted = inserted - {key(3 * i) for i in range(n // 4)} - {4096 + i for i in range(n // 4)}
+    other = {(-(1 << 63) if n & 1 == 0 else (1 << 63) - 1)} if n else set()
+    other |= {other_key(i) for i in range(n // 2)}
+    united, shared, remaining = deleted | other, deleted & other, deleted - other
+
+    def ordered(items):
+        acc = 0
+        for k in sorted(items):
+            acc = (acc * 33 + (k & 65535) + 1) & 2147483647
+        return acc
+
+    queried = sum(i + 1 if ((97 * i + 13) & 2047) - 1024 in deleted else -(i + 1)
+                  for i in range(n))
+    edge_membership = 0
+    for k in edges:
+        edge_membership = edge_membership * 3 + int(k in remaining)
+    return signed(ordered(united) + 3 * ordered(shared) + 5 * ordered(remaining) +
+                  7 * queried + 11 * len(deleted) + 13 * len(united) + 17 * len(shared) +
+                  19 * len(remaining) + 23 * edge_membership)
 
 
 def run(argv, **kwargs):
@@ -125,6 +161,9 @@ def main():
     cold = [-3, 0, 2, 3, 7, 15, 16, 31, 63, 65, 127, 128, 129, 255, 256, 257, 1024, 4096, 4097]
     primitive_warm = [0, 1, 7, -1, -(1 << 63), (1 << 63) - 1]
     primitive_cold = sorted({signed((1 << bit) + delta) for bit in range(64) for delta in [-1, 0, 1]} - set(primitive_warm))
+    intset_primitive_cold = sorted((set(primitive_cold) |
+                                   {signed(WORD_MASK ^ (1 << bit)) for bit in range(64)} |
+                                   {signed(0xaaaaaaaaaaaaaaaa), 0x5555555555555555}) - set(primitive_warm))
     groups = [
         dict(id='set', module='THC.SetWorkload', source='examples/THC/SetWorkload.hs',
              execution='frontier', postTidy=True, names=['setAggregate'], warm=warm, cold=cold),
@@ -134,6 +173,13 @@ def main():
              execution='supported', postTidy=False, names=['countLeadingZeros', 'unsignedLessThanZero', 'unsignedLessThanMaxSigned',
                                           'unsignedLessThanSignBit', 'unsignedLessThanAllOnes'],
              warm=primitive_warm, cold=primitive_cold),
+        dict(id='intset', module='THC.IntSetWorkload', source='examples/THC/IntSetWorkload.hs',
+             execution='supported', postTidy=True, names=['intSetAggregate'], warm=warm, cold=cold),
+        dict(id='intset-primops', module='THC.IntSetPrimops', source='examples/THC/IntSetPrimops.hs',
+             execution='supported', postTidy=False, names=['populationCount', 'countTrailingZeros',
+                 'unsignedLessEqualZero', 'unsignedLessEqualMaxSigned',
+                 'unsignedLessEqualSignBit', 'unsignedLessEqualAllOnes'],
+             warm=primitive_warm, cold=intset_primitive_cold),
     ]
     violations = []
     for group in groups:
@@ -163,6 +209,8 @@ def main():
         primitives = {primitive['name'] for primitive in audit['primitives']}
         if group['id'] in ['intmap', 'intmap-primops'] and not {'clz#', 'ltWord#'} <= primitives:
             violations.append(group['id'] + ': required word primitives disappeared from reachable Core')
+        if group['id'] in ['intset', 'intset-primops'] and not {'popCnt#', 'ctz#', 'leWord#'} <= primitives:
+            violations.append(group['id'] + ': required IntSet word primitives disappeared from reachable Core')
         if group['id'] == 'set':
             frontier = {(issue['code'], issue['detail']) for issue in audit['issues']}
             if not {('aggregate-representation', 'unboxed-tuple'),
@@ -200,8 +248,9 @@ def main():
                     if len(fields) != 3 or fields[:2] != [name, str(value)]:
                         raise RuntimeError('Malformed native oracle row: ' + row)
                     actual = int(fields[2])
-                    expected = (set_model(value) if name == 'setAggregate' else intmap_model(value)
-                                if name == 'intMapAggregate' else primitive_model(name, value))
+                    model = {'setAggregate': set_model, 'intMapAggregate': intmap_model,
+                             'intSetAggregate': intset_model}.get(name)
+                    expected = model(value) if model else primitive_model(name, value)
                     if actual != expected:
                         raise RuntimeError(f'{name}({value}): native {actual} != independent model {expected}')
                     entry[phase].append([value, actual])

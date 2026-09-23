@@ -85,8 +85,9 @@ evaluated once.
 the suite; missing dependencies and unsupported constructs remain explicit.
 
 [Library coverage](docs/library-coverage.md) adds ordinary `Data.IntMap.Strict`
-operations and unsigned word boundaries, checked against native GHC and an
-independent model. `scripts/try-libraries.sh` runs those checks on both backends.
+and `Data.IntSet` operations, bitmap primitives and unsigned word boundaries,
+checked against native GHC and independent models. `scripts/try-libraries.sh`
+runs those checks on both backends.
 The `Data.Set` example currently stops at the unboxed-tuple and pointer-identity
 frontier; its native results are not counted as THC execution passes.
 

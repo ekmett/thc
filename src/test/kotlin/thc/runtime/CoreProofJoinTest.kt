@@ -2,6 +2,12 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.LoopNode
+import com.oracle.truffle.api.nodes.NodeUtil
+import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
@@ -46,6 +52,73 @@ class CoreProofJoinTest {
         val target = program.entryTarget("entry")
         type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
+    }
+
+    private class CloneCaller(target: RootCallTarget) : RootNode(null) {
+        @Child private var call = DirectCallNode.create(target)
+        override fun execute(frame: VirtualFrame): Any? = Calls.direct(call, frame.arguments)
+        fun cloneTarget(): RootCallTarget {
+            callTarget
+            assertTrue(call.cloneCallTarget())
+            return call.clonedCallTarget as RootCallTarget
+        }
+    }
+
+    private fun assertBranchRegions(root: RootNode, expected: Int) {
+        val regions = NodeUtil.findAllNodeInstances(root, LocalJoinRegion::class.java)
+        assertEquals(expected, regions.size)
+        // Roots and generic forcing nodes retain their own tail-call loops;
+        // the acyclic join regions themselves must not own any LoopNode.
+        assertTrue(regions.all { region -> region.children.none { it is LoopNode } })
+    }
+
+    @Test fun deeplyNestedNonrecursiveJoinsAreBranchesIncludingInClonedCompiledTargets() {
+        var region = let(false, listOf(
+            bind("positive", lam(listOf("value"), prim("+#", v("value"), n(17))), 1),
+            bind("negative", lam(listOf("value"), prim("-#", n(0), v("value"))), 1)),
+            choose(prim("<#", v("input"), n(0)), call("negative", v("input")),
+                choose(prim("==#", v("input"), n(0)), n(4096), call("positive", v("input")))))
+        // Acyclic joins must not multiply Graal loop nesting. Cover zero-arity
+        // transfers, several targets, a direct return, and a non-tail continuation.
+        repeat(24) { index ->
+            region = let(false, listOf(bind("finish$index", region, 0)), v("finish$index"))
+        }
+        program(prim("+#", region, n(19))) { p ->
+            val original = p.entryTarget("entry")
+            assertBranchRegions(original.rootNode, 25)
+            val caller = CloneCaller(original)
+            val cloned = caller.cloneTarget()
+            assertBranchRegions(cloned.rootNode, 25)
+            fun check(input: Long) {
+                val expected = (if (input < 0) -input else if (input == 0L) 4096L else input + 17) + 19
+                assertEquals(expected, run(p, input))
+                assertEquals(expected, Calls.target(caller.callTarget, arrayOf(0L, input)))
+            }
+            repeat(30) { check(it.toLong() - 15) }
+            compile(p)
+            val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+            type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(cloned, true)
+            assertEquals(true, type.getMethod("isValidLastTier").invoke(cloned))
+            val before = count(p, "compiledEntries")
+            for (input in listOf(Long.MIN_VALUE, Long.MAX_VALUE, 0L, 3_000_000_001L, -3_000_000_001L)) check(input)
+            assertTrue(count(p, "compiledEntries") > before)
+            assertTrue(count(p, "localJoinTransfers") > 0)
+        }
+    }
+
+    @Test fun nonrecursiveShadowedJoinRhsTransfersToItsLexicalAncestor() {
+        val inner = let(false, listOf(bind("finish", lam(listOf("inner"),
+            call("finish", prim("+#", v("inner"), n(5)))), 1)), call("finish", v("input")))
+        val outer = let(false, listOf(bind("finish", lam(listOf("outer"),
+            prim("+#", v("outer"), n(7))), 1)), inner)
+        program(prim("+#", outer, n(11))) { p ->
+            assertBranchRegions(p.entryTarget("entry").rootNode, 2)
+            repeat(30) { assertEquals(it.toLong() + 23, run(p, it.toLong())) }
+            compile(p)
+            for (input in listOf(Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_001L)) assertEquals(input + 23, run(p, input))
+            assertEquals(66L, count(p, "localJoinTransfers"))
+            assertEquals(0L, count(p, "tailBounces"))
+        }
     }
 
     @Test fun recursivePrimitiveJoinUsesParallelMovesAndReturnsToNonTailContinuation() {

@@ -23,26 +23,41 @@ class WordPrimitiveTest {
                 "constructors" to emptyList<Any?>(), "bindings" to listOf(entry)))))
     }
 
-    @Test fun leadingZerosIncludesZeroAndTheUnsignedSignBoundary() {
-        val cases = listOf(0L to 64L, 1L to 63L, 2L to 62L, (1L shl 32) to 31L,
-            Long.MAX_VALUE to 1L, Long.MIN_VALUE to 0L, (Long.MIN_VALUE + 1L) to 0L, -1L to 0L)
+    @Test fun bitCountsCoverEveryPositionNeighborsAndAlternatingPatterns() {
+        val alternating = 0x5555_5555_5555_5555L
+        val inputs = (0 until 64).flatMap { bit ->
+            val single = 1L shl bit
+            listOf(single - 1L, single, single + 1L)
+        }.toSet() + setOf(0L, -1L, alternating, alternating.inv())
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-            val function = context.eval("thc", request(backend, "clz#", 1))
-            for ((input, expected) in cases) {
-                assertEquals(expected, function.execute(input).asLong(), "$backend clz#($input)")
+            for (name in listOf("clz#", "ctz#", "popCnt#")) {
+                val function = context.eval("thc", request(backend, name, 1))
+                for (input in inputs) {
+                    // Enumerate set positions independently of the runtime's Long intrinsics.
+                    val setBits = (0 until 64).filter { bit -> ((input ushr bit) and 1L) != 0L }
+                    val expected = when (name) {
+                        "clz#" -> setBits.lastOrNull()?.let { 63 - it } ?: 64
+                        "ctz#" -> setBits.firstOrNull() ?: 64
+                        else -> setBits.size
+                    }.toLong()
+                    assertEquals(expected, function.execute(input).asLong(), "$backend $name($input)")
+                }
             }
         }
     }
 
-    @Test fun lessThanFollowsUnsignedOrderIncludingEquality() {
+    @Test fun comparisonsFollowUnsignedOrderIncludingEquality() {
         // This literal order is the unsigned order, independent of the runtime comparator.
-        val ordered = listOf(0L, 1L, Long.MAX_VALUE, Long.MIN_VALUE, -1L)
+        val alternating = 0x5555_5555_5555_5555L
+        val ordered = listOf(0L, 1L, alternating, Long.MAX_VALUE, Long.MIN_VALUE, alternating.inv(), -1L)
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
-            val function = context.eval("thc", request(backend, "ltWord#", 2))
-            for ((leftIndex, left) in ordered.withIndex()) {
-                for ((rightIndex, right) in ordered.withIndex()) {
-                    val expected = if (leftIndex < rightIndex) 1L else 0L
-                    assertEquals(expected, function.execute(left, right).asLong(), "$backend ltWord#($left, $right)")
+            for (name in listOf("ltWord#", "leWord#")) {
+                val function = context.eval("thc", request(backend, name, 2))
+                for ((leftIndex, left) in ordered.withIndex()) {
+                    for ((rightIndex, right) in ordered.withIndex()) {
+                        val expected = if (leftIndex < rightIndex || name == "leWord#" && leftIndex == rightIndex) 1L else 0L
+                        assertEquals(expected, function.execute(left, right).asLong(), "$backend $name($left, $right)")
+                    }
                 }
             }
         }
@@ -51,7 +66,8 @@ class WordPrimitiveTest {
     @Test fun wrongAritiesAreRejectedAtLoadEvenInDiagnosticMode() {
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
             executionContext().use { context ->
-                for ((name, arity) in listOf("clz#" to 1, "ltWord#" to 2)) {
+                for ((name, arity) in listOf("clz#" to 1, "ctz#" to 1, "popCnt#" to 1,
+                                            "ltWord#" to 2, "leWord#" to 2)) {
                     for (supplied in listOf(arity - 1, arity + 1)) {
                         val failure = assertThrows(PolyglotException::class.java) {
                             context.eval("thc", request(backend, name, arity, supplied, diagnostic))
