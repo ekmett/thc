@@ -159,9 +159,12 @@ aggregateRuntimeKind ty = case splitTyConApp_maybe (getRuntimeRep ty) of
 typeRep :: Type -> Bool -> J
 typeRep ty evaluated = O $
   [("primReps",maybe Z (A . map (S . show)) reps),("kind",S kind),("evaluated",B evaluated)]
-  ++ aggregateFields
+  ++ aggregateFields ++ vectorFields
   where
     reps = typePrimReps ty
+    vectorFields = case reps of
+      Just [VecRep lanes element] -> [("vector",O [("lanes",num lanes),("element",S (show element))])]
+      _ -> []
     -- Type abstraction erases, but a newtype/family is not evidence for either
     -- a data object or a closure. isBoxedDataTyCon makes that distinction in GHC.
     (_,rho) = splitForAllTyVars ty
@@ -199,6 +202,7 @@ typeRep ty evaluated = O $
       Just [r] | longRep r -> "long"
       Just [FloatRep] -> "float"
       Just [DoubleRep] -> "double"
+      Just [VecRep _ _] -> "vector"
       Just [AddrRep] -> "address"
       Just [BoxedRep _]
         | isFunTy rho -> "closure"

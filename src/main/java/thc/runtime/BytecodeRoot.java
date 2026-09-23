@@ -219,6 +219,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    /** Saturated tuple arithmetic never constructs a result carrier or payload array. */
+    @Operation
+    @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    public static final class TupleArithmetic {
+        @Specialization public static void execute(VirtualFrame frame, TupleArithmeticOp operation,
+                LocalAccessor first, LocalAccessor second, long left, long right, @Bind("$node") Node node) {
+            long a = operation.first(left, right);
+            long b = operation.second(left, right);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, a);
+            second.setLong(bytecode, frame, b);
+        }
+    }
+
     /** Tuple operands are scalar inputs; each dispatch arm consumes into typed locals. */
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
@@ -464,6 +480,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     // GHC machine integers wrap. Comparisons return Int# 0/1, not boxed Bool.
+    @Operation public static final class VectorPack {
+        @Specialization public static Int64X2 pack(long first, long second) { return new Int64X2(first, second); }
+    }
+    @Operation public static final class VectorBroadcast {
+        @Specialization public static Int64X2 broadcast(long value) { return new Int64X2(value, value); }
+    }
+    @Operation public static final class VectorNegate {
+        @Specialization public static Int64X2 negate(Int64X2 value) { return Int64X2.negate(value); }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "subtract")
+    public static final class VectorBinary {
+        @Specialization public static Int64X2 binary(boolean subtract, Int64X2 first, Int64X2 second) {
+            return subtract ? Int64X2.subtract(first, second) : Int64X2.add(first, second);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    public static final class VectorUnpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                Int64X2 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
+        }
+    }
+
     @Operation public static final class Add { @Specialization public static long apply(long x, long y) { return x + y; } }
     @Operation public static final class Subtract { @Specialization public static long apply(long x, long y) { return x - y; } }
     @Operation public static final class Multiply { @Specialization public static long apply(long x, long y) { return x * y; } }
@@ -538,6 +580,60 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleToFloat { @Specialization public static float apply(double x) { return (float) x; } }
     @Operation public static final class ToFloat { @Specialization public static float apply(float x) { return x; } }
     @Operation public static final class ToDouble { @Specialization public static double apply(double x) { return x; } }
+    @Operation public static final class QuotientUnsigned { @Specialization public static long apply(long x, long y) { return Long.divideUnsigned(x, y); } }
+    @Operation public static final class RemainderUnsigned { @Specialization public static long apply(long x, long y) { return Long.remainderUnsigned(x, y); } }
+    @Operation public static final class GreaterThanUnsigned { @Specialization public static long apply(long x, long y) { return Long.compareUnsigned(x, y) > 0 ? 1L : 0L; } }
+    @Operation public static final class GreaterEqualUnsigned { @Specialization public static long apply(long x, long y) { return Long.compareUnsigned(x, y) >= 0 ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class QuotientNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) / (y & mask); } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class RemainderNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) % (y & mask); } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class EqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) == (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class NotEqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) != (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class GreaterThanNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) > (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class GreaterEqualNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) >= (y & mask) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitAndNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitOrNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x | y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitXorNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x ^ y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class BitNotNarrowWord { @Specialization public static long apply(long mask, long x) { return ~x & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class ShiftLeftNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x << (int) y) & mask; } }
+    @Operation @ConstantOperand(type = long.class, name = "mask")
+    public static final class ShiftRightNarrowWord { @Specialization public static long apply(long mask, long x, long y) { return (x & mask) >>> (int) y; } }
+    // A constant shift truncates to the primop width, then sign-extends its Long carrier.
+    private static long signedNarrow(long value, int shift) { return (value << shift) >> shift; }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class NegateNarrowInt { @Specialization public static long apply(int shift, long x) { return signedNarrow(-x, shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class AddNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x + y, shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class SubtractNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x - y, shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class MultiplyNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x * y, shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class QuotientNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(signedNarrow(x, shift) / signedNarrow(y, shift), shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class RemainderNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(signedNarrow(x, shift) % signedNarrow(y, shift), shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class EqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) == signedNarrow(y, shift) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class NotEqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) != signedNarrow(y, shift) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class LessThanNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) < signedNarrow(y, shift) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class LessEqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) <= signedNarrow(y, shift) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class GreaterThanNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) > signedNarrow(y, shift) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class GreaterEqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) >= signedNarrow(y, shift) ? 1L : 0L; } }
     @Operation public static final class ToLong { @Specialization public static long apply(long x) { return x; } }
 
     private static RuntimeFault fail(String message) {

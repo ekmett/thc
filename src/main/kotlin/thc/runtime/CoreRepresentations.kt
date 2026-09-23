@@ -2,15 +2,17 @@
 package thc.runtime
 
 /** Exact Core runtime kinds are independent of evidence that a lifted value is already evaluated. */
-internal enum class CoreKind { LONG, FLOAT, DOUBLE, ADDRESS, VOID, DATA, CLOSURE, OBJECT, UNKNOWN }
+internal enum class CoreKind { LONG, FLOAT, DOUBLE, ADDRESS, VOID, DATA, CLOSURE, OBJECT, VECTOR, UNKNOWN }
 
 internal data class CoreRepresentation(
     val kind: CoreKind,
     val evaluated: Boolean = false,
     val present: Boolean = false,
     val primReps: List<String>? = null,
-    val components: List<CoreRepresentation>? = null
+    val components: List<CoreRepresentation>? = null,
+    val vector: CoreVector? = null
 ) {
+    val isVector: Boolean get() = vector != null
     val isTuple: Boolean get() = components != null
     val isLong: Boolean get() = kind == CoreKind.LONG
     val isFloat: Boolean get() = kind == CoreKind.FLOAT
@@ -25,6 +27,13 @@ internal data class CoreRepresentation(
         else -> null
     }
     fun refine(other: CoreRepresentation): CoreRepresentation {
+        // A Long is only the host carrier: distinct exact GHC scalar reps cannot
+        // replace one another on a lexical value. Unknown/legacy proofs add no constraint.
+        if (present && other.present && kind == CoreKind.LONG && other.kind == CoreKind.LONG &&
+            primReps?.size == 1 && other.primReps?.size == 1 && primReps != other.primReps)
+            throw RuntimeFault("Conflicting Core scalar representation proofs: $primReps and ${other.primReps}")
+        if ((isVector || other.isVector) && present && other.present && vector != other.vector)
+            throw RuntimeFault("Conflicting Core vector representation proofs")
         if (isTuple && other.isTuple && !TupleShape.compatible(this, other))
             throw RuntimeFault("Conflicting logical tuple representation proofs")
         if (isTuple && other.present && !other.isTuple && other.kind != CoreKind.UNKNOWN ||
@@ -39,7 +48,7 @@ internal data class CoreRepresentation(
             else -> throw RuntimeFault("Conflicting Core representation proofs: $kind and ${other.kind}")
         }
         return CoreRepresentation(merged, evaluated || other.evaluated,
-            present || other.present, other.primReps ?: primReps, other.components ?: components)
+            present || other.present, other.primReps ?: primReps, other.components ?: components, other.vector ?: vector)
     }
     companion object { val UNKNOWN = CoreRepresentation(CoreKind.UNKNOWN) }
 }
@@ -61,7 +70,11 @@ internal object CoreRepresentations {
         visit(bindings)
     }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {
+        requireNoVector(proof, boundary)
         if (proof.isTuple) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple ($boundary)")
+    }
+    fun requireNoVector(proof: CoreRepresentation, boundary: String) {
+        if (proof.isVector) throw UnsupportedCore("Unsupported Core vector boundary: $boundary")
     }
     fun parse(value: Any?): CoreRepresentation {
         if (value == null) return CoreRepresentation.UNKNOWN
@@ -77,6 +90,7 @@ internal object CoreRepresentations {
             "long" -> CoreKind.LONG; "address" -> CoreKind.ADDRESS; "void" -> CoreKind.VOID
             "float" -> CoreKind.FLOAT; "double" -> CoreKind.DOUBLE
             "data" -> CoreKind.DATA; "closure" -> CoreKind.CLOSURE; "object" -> CoreKind.OBJECT
+            "vector" -> CoreKind.VECTOR
             "unknown" -> CoreKind.UNKNOWN
             else -> throw RuntimeFault("Unknown Core representation kind ${map["kind"]}")
         }
@@ -97,8 +111,9 @@ internal object CoreRepresentations {
         if (kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
             (reps?.size != 1 || reps[0] !in setOf("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)", "BoxedRep Nothing")))
             throw RuntimeFault("Core reference proof lacks a single boxed representation")
+        val vector = CoreVector.parse(map["vector"], kind, reps, components)
         val evaluated = map["evaluated"] as? Boolean ?: throw RuntimeFault("Missing Core evaluatedness proof")
-        val proof = CoreRepresentation(kind, evaluated, true, reps, components)
+        val proof = CoreRepresentation(kind, evaluated, true, reps, components, vector)
         if (components != null) TupleShape.validate(proof)
         return proof
     }
@@ -145,6 +160,10 @@ internal object CoreJoins {
                 if (rhs.firstOrNull() != "lam") throw RuntimeFault("Join value arity exceeds its lambda prefix")
                 val all = rhs[1] as List<Map<String, Any?>>
                 if (arity > all.size) throw RuntimeFault("Join value arity exceeds its lambda prefix")
+                if (arity == all.size) {
+                    val result = CoreRepresentations.joinResult(binding)
+                    TupleShape.requireCompatible(result, CoreRepresentations.lambdaResult(rhs))
+                }
                 parameters = all.take(arity)
                 body = if (arity == all.size) rhs[2] as List<Any?> else {
                     val meta = CoreRepresentations.metadata(rhs)?.toMutableMap() ?: linkedMapOf()

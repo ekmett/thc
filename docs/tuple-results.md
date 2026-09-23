@@ -4,6 +4,9 @@ Both execution backends support exact unboxed tuple results from functions whose
 inputs use the ordinary scalar/reference ABI. This includes empty and singleton
 tuples, nested tuples, lazy lifted references, boxed unlifted reference fields,
 non-tail calls, tail forwarding, scalar PAP prefixes and overapplication.
+Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
+typed local destinations without using the function-return carrier.
+
 Ordinary boxed tuples, boxed unit and unlifted boxed products continue to use
 `DataValue` references. An empty unboxed tuple remains logically distinct from
 `State#` and `Proxy#`.
@@ -41,8 +44,11 @@ proofs. Scalar reference kind/evaluatedness may refine at each use without forci
 a lazy field. Polymorphic constructor-table fields are not layout evidence;
 the instantiated constructor application and case metadata provide the layout.
 
-Aggregate formal arguments, captures, ordinary let bindings, join parameters and
-join results remain unsupported, including unused formals and zero-width tuples.
+Aggregate formal arguments, captures, ordinary let bindings and join parameters
+remain unsupported, including unused formals and zero-width tuples. Exact tuple
+join results use typed local slots inside the same guest root; no result carrier
+or pool loan is needed for that local control flow. Join captures of whole tuples
+remain unsupported; individual scalar/reference fields can be used normally.
 Sums, unknown/null aggregate layouts, unsupported physical leaves and scalar
 void components inside tuples are also rejected. Host entries must return a
 scalar/reference result; diagnostic mode defers an unsupported host result to a
@@ -65,3 +71,13 @@ LIR computes the dynamic leaves in scalar registers. A host-result `Long` box
 remains. Residual controls retain a call boundary and typed slab traffic. This
 proves those compiled entries, not the inlining frequency of arbitrary programs
 or a multiple-register return convention across residual calls.
+
+The [real Set diagnostic experiment](../bench/experiments/set-diagnostic/README.md)
+also runs all 22 existing native oracle rows on both backends, including the
+exported `minViewSure`/`maxViewSure` tuple-result joins and `glue`, with no
+unsupported traps and valid compiled entries after replay. Its focused AST
+`minViewSure` graph keeps join results as separate SSA values until outer tuple
+completion; residual call traffic and three exception-control join guard groups
+(nine field reads) remain.
+This is diagnostic execution only: strict Set still rejects the remaining cold
+exception/backtrace and state-representation gaps.

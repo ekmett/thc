@@ -1,4 +1,4 @@
-{-# LANGUAGE MagicHash, NoImplicitPrelude, GADTs #-}
+{-# LANGUAGE MagicHash, NoImplicitPrelude, GADTs, UnliftedNewtypes #-}
 {-# OPTIONS_GHC -fno-cpr-anal #-}
 -- A worker retains an equality coercion before the strict boxed tree slot.
 module CbvCoercionAudit where
@@ -17,3 +17,18 @@ witnessed (Witness n) tree = case tree of
 {-# OPAQUE coercionEntry #-}
 coercionEntry :: Int# -> Int#
 coercionEntry n = case witnessed (Witness n) (More 7# Done) of I# result -> result
+
+-- Legal erased scalar casts preserve IntRep across the newtype boundary.
+newtype RawInt = RawInt Int#
+
+{-# OPAQUE wrapRaw #-}
+wrapRaw :: Int# -> RawInt
+wrapRaw x = RawInt x
+
+{-# OPAQUE unwrapRaw #-}
+unwrapRaw :: RawInt -> Int#
+unwrapRaw (RawInt x) = x
+
+{-# OPAQUE scalarCastEntry #-}
+scalarCastEntry :: Int# -> Int#
+scalarCastEntry x = unwrapRaw (wrapRaw x)

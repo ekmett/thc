@@ -27,11 +27,22 @@ internal fun fault(message: String): Nothing {
 }
 /** Narrow unsigned carriers are zero-extended Longs, unlike signed Int8/16/32 carriers. */
 internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {
-    "wordToWord8#", "word8ToWord#", "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#" -> 0xffL
-    "wordToWord16#", "word16ToWord#", "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#" -> 0xffffL
-    "wordToWord32#", "word32ToWord#", "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#" -> 0xffff_ffffL
+    "wordToWord8#", "word8ToWord#", "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
+    "quotWord8#", "remWord8#", "eqWord8#", "neWord8#", "gtWord8#", "geWord8#", "andWord8#", "orWord8#", "xorWord8#", "notWord8#", "uncheckedShiftLWord8#", "uncheckedShiftRLWord8#" -> 0xffL
+    "wordToWord16#", "word16ToWord#", "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
+    "quotWord16#", "remWord16#", "eqWord16#", "neWord16#", "gtWord16#", "geWord16#", "andWord16#", "orWord16#", "xorWord16#", "notWord16#", "uncheckedShiftLWord16#", "uncheckedShiftRLWord16#" -> 0xffffL
+    "wordToWord32#", "word32ToWord#", "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#",
+    "quotWord32#", "remWord32#", "eqWord32#", "neWord32#", "gtWord32#", "geWord32#", "andWord32#", "orWord32#", "xorWord32#", "notWord32#", "uncheckedShiftLWord32#", "uncheckedShiftRLWord32#" -> 0xffff_ffffL
     else -> 0L
 }
+/** Fixed-width signed arithmetic retains canonical sign-extended Long carriers. */
+internal fun narrowIntPrimitiveShift(name: String): Int = when (name) {
+    "negateInt8#", "plusInt8#", "subInt8#", "timesInt8#", "quotInt8#", "remInt8#", "eqInt8#", "neInt8#", "ltInt8#", "leInt8#", "gtInt8#", "geInt8#" -> 56
+    "negateInt16#", "plusInt16#", "subInt16#", "timesInt16#", "quotInt16#", "remInt16#", "eqInt16#", "neInt16#", "ltInt16#", "leInt16#", "gtInt16#", "geInt16#" -> 48
+    "negateInt32#", "plusInt32#", "subInt32#", "timesInt32#", "quotInt32#", "remInt32#", "eqInt32#", "neInt32#", "ltInt32#", "leInt32#", "gtInt32#", "geInt32#" -> 32
+    else -> 0
+}
+private fun signedNarrow(value: Long, shift: Int): Long = (value shl shift) shr shift
 internal fun narrowWordLiteral(kind: String, value: String): Long {
     val maximum = when (kind) {
         "word8" -> 0xffL; "word16" -> 0xffffL; "word32" -> 0xffff_ffffL
@@ -40,6 +51,12 @@ internal fun narrowWordLiteral(kind: String, value: String): Long {
     val number = value.toLongOrNull()
     if (number == null || number !in 0L..maximum || number.toString() != value)
         throw RuntimeFault("Invalid $kind literal: $value")
+    return number
+}
+/** Int64 literals are canonical decimal signed 64-bit carriers, including both endpoints. */
+internal fun int64Literal(value: String): Long {
+    val number = value.toLongOrNull()
+    if (number == null || number.toString() != value) throw RuntimeFault("Invalid int64 literal: $value")
     return number
 }
 /** Cadenza's recursive indirection: captured by identity, initialized once. */
@@ -441,7 +458,8 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
             kinds.isNotEmpty() && kinds.all { it in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) } -> CoreKind.OBJECT
             else -> CoreKind.UNKNOWN
         }
-        representation = CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
+        representation = CoreVectors.caseResult(proofs)
+            ?: CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
     }
     // Preserve primitive scrutinees through their frame write and literal comparisons.
     @Child private var scrutinee = LocalBinding(binderSlot, Evaluate(scrutinee, metrics).apply {
@@ -607,11 +625,41 @@ private class PointerEquality(@field:Child private var left: Expr, @field:Child 
 }
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val wordMask = narrowWordPrimitiveMask(name)
+    private val intShift = narrowIntPrimitiveShift(name)
     init {
         representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
         val arity = when (name) {
+            "negateInt8#", "negateInt16#", "negateInt32#" -> 1
+            "plusInt8#", "plusInt16#", "plusInt32#" -> 2
+            "subInt8#", "subInt16#", "subInt32#" -> 2
+            "timesInt8#", "timesInt16#", "timesInt32#" -> 2
+            "quotInt8#", "quotInt16#", "quotInt32#" -> 2
+            "remInt8#", "remInt16#", "remInt32#" -> 2
+            "eqInt8#", "eqInt16#", "eqInt32#" -> 2
+            "neInt8#", "neInt16#", "neInt32#" -> 2
+            "ltInt8#", "ltInt16#", "ltInt32#" -> 2
+            "leInt8#", "leInt16#", "leInt32#" -> 2
+            "gtInt8#", "gtInt16#", "gtInt32#" -> 2
+            "geInt8#", "geInt16#", "geInt32#" -> 2
+
+            "quotWord#" -> 2
+            "remWord#" -> 2
+            "gtWord#" -> 2
+            "geWord#" -> 2
+            "quotWord8#", "quotWord16#", "quotWord32#" -> 2
+            "remWord8#", "remWord16#", "remWord32#" -> 2
+            "eqWord8#", "eqWord16#", "eqWord32#" -> 2
+            "neWord8#", "neWord16#", "neWord32#" -> 2
+            "gtWord8#", "gtWord16#", "gtWord32#" -> 2
+            "geWord8#", "geWord16#", "geWord32#" -> 2
+            "andWord8#", "andWord16#", "andWord32#" -> 2
+            "orWord8#", "orWord16#", "orWord32#" -> 2
+            "xorWord8#", "xorWord16#", "xorWord32#" -> 2
+            "notWord8#", "notWord16#", "notWord32#" -> 1
+            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> 2
+            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> 2
             "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
-            "narrow8Int#", "narrow16Int#", "narrow32Int#",
+            "narrow8Int#", "narrow16Int#", "narrow32Int#", "intToInt64#", "int64ToInt#",
             "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#",
             "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
@@ -631,6 +679,35 @@ private class Primitive(private val name: String, @field:Children private var ar
         val y = if (arguments.size == 2) arguments[1].executeRequiredLong(frame) else 0L
         fun b(value: Boolean) = if (value) 1L else 0L
         return when (name) {
+            "negateInt8#", "negateInt16#", "negateInt32#" -> signedNarrow(-x, intShift)
+            "plusInt8#", "plusInt16#", "plusInt32#" -> signedNarrow(x + y, intShift)
+            "subInt8#", "subInt16#", "subInt32#" -> signedNarrow(x - y, intShift)
+            "timesInt8#", "timesInt16#", "timesInt32#" -> signedNarrow(x * y, intShift)
+            "quotInt8#", "quotInt16#", "quotInt32#" -> signedNarrow(signedNarrow(x, intShift) / signedNarrow(y, intShift), intShift)
+            "remInt8#", "remInt16#", "remInt32#" -> signedNarrow(signedNarrow(x, intShift) % signedNarrow(y, intShift), intShift)
+            "eqInt8#", "eqInt16#", "eqInt32#" -> b(signedNarrow(x, intShift) == signedNarrow(y, intShift))
+            "neInt8#", "neInt16#", "neInt32#" -> b(signedNarrow(x, intShift) != signedNarrow(y, intShift))
+            "ltInt8#", "ltInt16#", "ltInt32#" -> b(signedNarrow(x, intShift) < signedNarrow(y, intShift))
+            "leInt8#", "leInt16#", "leInt32#" -> b(signedNarrow(x, intShift) <= signedNarrow(y, intShift))
+            "gtInt8#", "gtInt16#", "gtInt32#" -> b(signedNarrow(x, intShift) > signedNarrow(y, intShift))
+            "geInt8#", "geInt16#", "geInt32#" -> b(signedNarrow(x, intShift) >= signedNarrow(y, intShift))
+
+            "quotWord#" -> java.lang.Long.divideUnsigned(x, y)
+            "remWord#" -> java.lang.Long.remainderUnsigned(x, y)
+            "gtWord#" -> b(java.lang.Long.compareUnsigned(x, y) > 0)
+            "geWord#" -> b(java.lang.Long.compareUnsigned(x, y) >= 0)
+            "quotWord8#", "quotWord16#", "quotWord32#" -> (x and wordMask) / (y and wordMask)
+            "remWord8#", "remWord16#", "remWord32#" -> (x and wordMask) % (y and wordMask)
+            "eqWord8#", "eqWord16#", "eqWord32#" -> b((x and wordMask) == (y and wordMask))
+            "neWord8#", "neWord16#", "neWord32#" -> b((x and wordMask) != (y and wordMask))
+            "gtWord8#", "gtWord16#", "gtWord32#" -> b((x and wordMask) > (y and wordMask))
+            "geWord8#", "geWord16#", "geWord32#" -> b((x and wordMask) >= (y and wordMask))
+            "andWord8#", "andWord16#", "andWord32#" -> (x and y) and wordMask
+            "orWord8#", "orWord16#", "orWord32#" -> (x or y) and wordMask
+            "xorWord8#", "xorWord16#", "xorWord32#" -> (x xor y) and wordMask
+            "notWord8#", "notWord16#", "notWord32#" -> x.inv() and wordMask
+            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> (x shl y.toInt()) and wordMask
+            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> (x and wordMask) ushr y.toInt()
             "+#", "plusWord#" -> x + y
             "-#", "minusWord#" -> x - y
             "*#", "timesWord#" -> x * y
@@ -667,7 +744,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "narrow16Int#", "intToInt16#", "int16ToInt#" -> x.toShort().toLong()
             "narrow32Int#", "intToInt32#", "int32ToInt#" -> x.toInt().toLong()
             "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> x and wordMask
-            "int2Word#", "word2Int#", "ord#", "chr#" -> x
+            "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> x
             else -> fault("Unsupported primitive")
         }
     }
@@ -971,6 +1048,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
                          entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
+        CoreRepresentations.requireNoVector(resultProof, "function result")
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val scope = Scope(FrameLayout())
         val free = freeVariables(expression)
@@ -1009,6 +1087,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val body = compile(expression, scope, true)
         val handoff = HandoffEntry.create(language, scope.layout, args.map(CoreRepresentations::binder), resultProof, captures != null)
         val effectiveResult = body.representation.refine(resultProof)
+        CoreRepresentations.requireNoVector(effectiveResult, "function result")
         val tuple = if (effectiveResult.isTuple) TupleShape(effectiveResult, language as thc.Language) else null
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<tuple return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
@@ -1027,7 +1106,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expr {
         CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
         if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireScalar(it.proof, "argument") }
-        if (!lifted) return Evaluate(compile(expr, scope, false), metrics)
+        if (!lifted) return Evaluate(compile(expr, scope, false).also {
+            CoreRepresentations.requireNoVector(it.representation, "argument")
+        }, metrics)
         // GHC's context-aware exprOkForSpecEval certificate also covers total
         // primitive operands in constructors, without strictifying recursive
         // dictionary knots. Allocate these values directly instead of creating
@@ -1038,6 +1119,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int64" -> int64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
         "float" -> value.toFloat()
@@ -1070,6 +1152,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
+            CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
             scope.joins[id]?.let { joinJump(it, emptyList(), emptyList<Boolean>(), scope) }
                 ?: scope.locals[id]?.let {
                     if (it.tupleSlots != null) TupleLocalRead(TupleShape(it.proof, language as thc.Language), it.tupleSlots)
@@ -1092,7 +1175,21 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
-            if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
+            val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
+            if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
+                val name = fn[1] as String
+                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                val operands = args.map { compile(it, scope, false) }.toTypedArray()
+                when (name) {
+                    "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })
+                    "unpackInt64X2#" -> VectorUnpack(operands[0])
+                    else -> VectorOperation(name, operands)
+                }
+            } else if (tupleOperation != null) {
+                tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                TupleArithmeticExpression(tupleOperation, tupleProof,
+                    argument(args[0], scope, false), argument(args[1], scope, false))
+            } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language as thc.Language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size)
@@ -1105,6 +1202,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "var" && fn[1] in scope.joins) {
                 joinJump(scope.joins.getValue(fn[1] as String), args, flags, scope, callStrict)
             } else {
+            CoreRepresentations.requireNoVector(tupleProof, "call result")
             val constructorStrictFields = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size)
                 strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
@@ -1265,11 +1363,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     }
     private fun compileJoins(expr: List<Any?>, outer: Scope, tail: Boolean,
                              definitions: List<CoreJoinDefinition>): Expr {
-        definitions.forEach { definition ->
-            CoreRepresentations.requireScalar(definition.result, "join result")
-            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
-        }
         val recursive = expr[1] == true
+        val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
+        definitions.forEach { definition ->
+            definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            val formals = definition.parameters.map { it["id"] as String }.toSet()
+            (freeVariables(definition.body) - formals - shadowed).forEach { id ->
+                outer.locals[id]?.let { CoreRepresentations.requireScalar(it.proof, "join capture") }
+            }
+        }
         CoreJoins.validate(expr[2] as List<Map<String, Any?>>, expr[3] as List<Any?>, recursive)
         val identity = Any()
         val local = outer.child()
@@ -1289,7 +1391,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val targets = definitions.mapIndexed { index, definition ->
             val parameters = definition.parameters.map { bodyScopes[index].locals.getValue(it["id"] as String) }
             LocalJoinTarget(identity, index + 1, parameters.map { it.slot }.toIntArray(),
-                parameters.map { it.proof }.toTypedArray(), entryContracts[index])
+                parameters.map { it.proof }.toTypedArray(), entryContracts[index], definition.result)
         }
         definitions.forEachIndexed { index, definition -> local.bindJoin(definition.id, targets[index]) }
         if (recursive) bodyScopes.forEachIndexed { index, scope ->
@@ -1299,19 +1401,24 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         val entry = compile(expr[3] as List<Any?>, local, tail)
+        CoreRepresentations.requireNoVector(entry.representation, "join result")
         val bodies = definitions.mapIndexed { index, definition ->
             withSource(sources.binding(definition.binding, currentSource)) {
                 compile(definition.body, bodyScopes[index], tail).also { node ->
+                    CoreRepresentations.requireNoVector(node.representation, "join result")
                     node.representation = node.representation.refine(definition.result.copy(evaluated = false))
                 }
             }
         }
         val result = CoreRepresentations.expression(expr).let { proof ->
             val inferred = entry.representation.refine(proof.copy(evaluated = false))
+            bodies.forEach { TupleShape.requireCompatible(inferred, it.representation) }
             inferred.copy(evaluated = entry.representation.evaluated && bodies.all { it.representation.evaluated })
         }
+        val tuple = if (result.isTuple) TupleShape(result, language as thc.Language) else null
+        val tupleSlots = IntArray(tuple?.width ?: 0) { local.layout.bind("<join tuple result $it>") }
         return LocalJoinRegion(identity, local.layout.bind("<join selector>"), local.layout.bind("<join result>"),
-            (listOf(entry) + bodies).toTypedArray(), result, recursive)
+            (listOf(entry) + bodies).toTypedArray(), result, recursive, tuple, tupleSlots)
     }
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")

@@ -70,7 +70,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private class JoinRegion
     private class JoinTarget(val region: JoinRegion, val index: Int, val parameters: List<Map<String, Any?>>,
-                             val locals: List<Local>, val entryStrict: BooleanArray)
+                             val locals: List<Local>, val entryStrict: BooleanArray, val result: CoreRepresentation)
     private class JoinEmission(val selector: BytecodeLocal?, val next: BytecodeLabel?, val labels: List<BytecodeLabel>) {
         var emittedIndex = -1
     }
@@ -224,6 +224,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
                          entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
+        CoreRepresentations.requireNoVector(resultProof, "function result")
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val context = FunctionContext(args.size, entryStrict.copyOf())
         val scope = Scope(context, source = outer.source)
@@ -232,6 +233,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         args.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "formal argument") }
         if ((free - argumentIds).any { it in outer.tuples }) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
         val captureSources = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
+        captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
         context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry) }
         context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
             captureSources.map { it.directLong }.toBooleanArray(),
@@ -249,6 +251,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
             ::dataLayout, sources, compiled.source)
         val body = ProvenExpression(compiled, compiled.proof.refine(resultProof).copy(evaluated = compiled.proof.evaluated))
+        CoreRepresentations.requireNoVector(body.proof, "function result")
         context.tuple = if (body.proof.isTuple) TupleShape(body.proof, language) else null
         return FunctionSpec(build(label, context, body, forceResult = !body.proof.evaluated), context.captureLayout, captureSources)
     }
@@ -375,12 +378,16 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
     private fun argument(expr: List<Any?>, scope: Scope, lifted: Boolean, label: String = "argument thunk"): Expression {
         CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
+        if (expr[0] == "var") scope.locals[expr[1]]?.let { CoreRepresentations.requireNoVector(it.proof, "argument") }
         if (expr[0] == "var" && expr[1] in scope.tuples) throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (argument)")
-        if (!lifted) return force(compile(expr, scope, false))
+        if (!lifted) return force(compile(expr, scope, false).also {
+            CoreRepresentations.requireNoVector(it.proof, "argument")
+        })
         if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return compile(expr, scope, false)
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
+        "int64" -> int64Literal(value)
         "int", "char" -> value.toLong()
         "word" -> value.toULong().toLong()
         "float" -> value.toFloat()
@@ -390,8 +397,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
-        CoreRepresentation(if (value is Float) CoreKind.FLOAT else if (value is Double) CoreKind.DOUBLE else CoreKind.UNKNOWN,
-            evaluated = true))
+        CoreRepresentation(when (value) {
+            is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
+            is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+        }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
         val source = sources.expression(expr, scope.source)
         val value = try {
@@ -518,7 +527,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     /** A join transfer is a parallel move into this activation followed by bytecode control flow. */
     private fun joinCall(target: JoinTarget, arguments: List<Expression>): Expression {
         if (arguments.size != target.parameters.size) throw UnsupportedCore("Local join is not exactly saturated")
-        return evaluated(Expression { e ->
+        return ProvenExpression(ResultExpression { e, destination ->
             val b = e.builder
             val region = e.joins[target.region] ?: throw RuntimeFault("Local join escapes its owning activation")
             b.beginBlock()
@@ -543,18 +552,21 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.emitBranch(next)
             }
             // Unreachable value preserves the surrounding expression's builder signature.
-            b.emitLoadConstant(Unit)
+            if (destination == null) b.emitLoadConstant(Unit)
             b.endBlock()
-        })
+        }, target.result.copy(evaluated = true))
     }
 
     private fun joinRegion(group: List<Map<String, Any?>>, expression: List<Any?>, recursive: Boolean,
                            scope: Scope, tail: Boolean): Expression {
         CoreJoins.validate(group, expression, recursive)
         val definitions = CoreJoins.definitions(group) ?: throw RuntimeFault("Missing local join definitions")
+        val shadowed = if (recursive) definitions.map { it.id }.toSet() else emptySet()
         definitions.forEach { definition ->
-            CoreRepresentations.requireScalar(definition.result, "join result")
             definition.parameters.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "join argument") }
+            val formals = definition.parameters.map { it["id"] as String }.toSet()
+            if ((freeVariables(definition.body) - formals - shadowed).any { it in scope.tuples })
+                throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple (join capture)")
         }
         val region = JoinRegion()
         val local = scope.child()
@@ -566,19 +578,25 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 Local(nextLocal++, parameter["id"] as String,
                     if (proof.present) proof.isLong else !representation(parameter) && parameter["coercion"] != true, proof)
             }
-            JoinTarget(region, index, definition.parameters, parameters, entryStrict).also { local.bindJoin(definition.id, it) }
+            JoinTarget(region, index, definition.parameters, parameters, entryStrict, definition.result).also { local.bindJoin(definition.id, it) }
         }
         localJoinCount += targets.size
         val bodies = definitions.mapIndexed { index, definition ->
             val bodyScope = (if (recursive) local else scope).child()
             targets[index].locals.forEach { bodyScope.bindLocal(it.name, it) }
-            compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
+            val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
+            CoreRepresentations.requireNoVector(body.proof, "join result")
+            ProvenExpression(body, body.proof.refine(definition.result.copy(evaluated = false)))
         }
         val entry = compile(expression, local, tail)
-        return ProvenExpression(Expression { e ->
+        CoreRepresentations.requireNoVector(entry.proof, "join result")
+        val proof = entry.proof.refine(CoreRepresentations.expression(expression).copy(evaluated = false))
+        bodies.forEach { TupleShape.requireCompatible(proof, it.proof) }
+        return ProvenExpression(ResultExpression { e, destination ->
+            if (proof.isTuple != (destination != null)) throw RuntimeFault("Join result destination disagrees with its representation")
             val b = e.builder
             b.beginBlock()
-            val result = b.createLocal("join result", null)
+            val result = if (destination == null) b.createLocal("join result", null) else null
             val selector = if (recursive) b.createLocal("join selector", "primitive") else null
             val exit = b.createLabel()
             targets.flatMap { it.locals }.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
@@ -600,12 +618,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.emitBranch(labels[index])
                 b.endIfThen()
             }
-            b.beginStoreLocal(result); entry.emit(e); b.endStoreLocal()
+            if (result != null) { b.beginStoreLocal(result); entry.emit(e); b.endStoreLocal() }
+            else entry.emitTuple(e, destination!!)
             b.emitBranch(exit)
             targets.forEachIndexed { index, _ ->
                 b.emitLabel(labels[index])
                 active.emittedIndex = index
-                b.beginStoreLocal(result); bodies[index].emit(e); b.endStoreLocal()
+                if (result != null) { b.beginStoreLocal(result); bodies[index].emit(e); b.endStoreLocal() }
+                else bodies[index].emitTuple(e, destination!!)
                 b.emitBranch(exit)
             }
             if (next != null) {
@@ -614,16 +634,17 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endWhile()
             }
             b.emitLabel(exit)
-            b.emitLoadLocal(result)
+            if (result != null) b.emitLoadLocal(result)
             b.endBlock()
             e.joins.remove(region)
             targets.flatMap { it.locals }.forEach { e.locals.remove(it.id) }
-        }, CoreRepresentations.expression(expression).copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
+        }, proof.copy(evaluated = entry.proof.evaluated && bodies.all { it.proof.evaluated }))
     }
 
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expression = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
+            CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
             scope.tuples[id]?.let { (proof, fields) ->
                 TupleShape.requireCompatible(proof, CoreRepresentations.expression(expr))
                 tupleExpression(proof) { e, destination ->
@@ -649,7 +670,20 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             if (flags.size != args.size) throw RuntimeFault("Application representation flag count mismatch")
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
-            if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
+            val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
+            if (fn[0] == "prim" && fn[1] in CoreVectors.operations) {
+                val name = fn[1] as String
+                CoreVectors.validate(name, args.map(CoreRepresentations::expression), tupleProof)
+                vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (tupleOperation != null) {
+                tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { argument(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1])
+                    operands.forEach { it.emit(e) }
+                    e.builder.endTupleArithmetic()
+                }
+            } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size) throw RuntimeFault("Tuple constructor arity mismatch")
@@ -672,6 +706,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     e.builder.endBlock()
                 }
             } else {
+            CoreRepresentations.requireNoVector(tupleProof, "call result")
             val strict = if (fn[0] == "con" && (fn[2] as Number).toInt() == args.size) strictConstructorFields(fn[1] as String, args.size) else null
             val entryStrict = when (fn[0]) {
                 "lam" -> CoreEntries.lambda(fn)
@@ -779,6 +814,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 if (actual.isFloat || actual.isDouble || resultProof.isFloat || resultProof.isDouble)
                     resultProof = resultProof.refine(actual)
             }
+            val mergedProof = CoreVectors.caseResult(alternatives.map { it.body.proof })?.refine(resultProof)
+                ?: resultProof.copy(evaluated = alternatives.all { it.body.proof.evaluated })
             LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
                 val b = e.builder
                 b.beginBlock()
@@ -825,7 +862,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 emitChoice(0)
                 b.endBlock()
                 e.locals.remove(binder.id)
-            }, resultProof.copy(evaluated = alternatives.all { it.body.proof.evaluated })))
+            }, mergedProof))
             }
         }
         "con" -> {
@@ -889,6 +926,32 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endBlock()
             }
         }
+    }
+
+    private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackInt64X2#" -> tupleExpression(CoreVectors.unpacked) { e, destination ->
+            e.builder.beginVectorUnpack(destination[0], destination[1])
+            operands[0].emit(e)
+            e.builder.endVectorUnpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packInt64X2#" -> {
+                    b.beginBlock()
+                    val lanes = List(2) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorPack(); lanes.forEach(b::emitLoadLocal); b.endVectorPack()
+                    b.endBlock()
+                }
+                "broadcastInt64X2#" -> { b.beginVectorBroadcast(); operands[0].emit(e); b.endVectorBroadcast() }
+                "negateInt64X2#" -> { b.beginVectorNegate(); operands[0].emit(e); b.endVectorNegate() }
+                else -> {
+                    b.beginVectorBinary(name == "minusInt64X2#")
+                    operands.forEach { it.emit(e) }; b.endVectorBinary()
+                }
+            }
+        }, CoreVectors.proof)
     }
 
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
@@ -1038,7 +1101,37 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun primitive(name: String, args: List<Expression>): Expression {
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
+        val intShift = narrowIntPrimitiveShift(name)
         val operation = when (name) {
+            "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
+            "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
+            "subInt8#", "subInt16#", "subInt32#" -> "SubtractNarrowInt"
+            "timesInt8#", "timesInt16#", "timesInt32#" -> "MultiplyNarrowInt"
+            "quotInt8#", "quotInt16#", "quotInt32#" -> "QuotientNarrowInt"
+            "remInt8#", "remInt16#", "remInt32#" -> "RemainderNarrowInt"
+            "eqInt8#", "eqInt16#", "eqInt32#" -> "EqualNarrowInt"
+            "neInt8#", "neInt16#", "neInt32#" -> "NotEqualNarrowInt"
+            "ltInt8#", "ltInt16#", "ltInt32#" -> "LessThanNarrowInt"
+            "leInt8#", "leInt16#", "leInt32#" -> "LessEqualNarrowInt"
+            "gtInt8#", "gtInt16#", "gtInt32#" -> "GreaterThanNarrowInt"
+            "geInt8#", "geInt16#", "geInt32#" -> "GreaterEqualNarrowInt"
+
+            "quotWord#" -> "QuotientUnsigned"
+            "remWord#" -> "RemainderUnsigned"
+            "gtWord#" -> "GreaterThanUnsigned"
+            "geWord#" -> "GreaterEqualUnsigned"
+            "quotWord8#", "quotWord16#", "quotWord32#" -> "QuotientNarrowWord"
+            "remWord8#", "remWord16#", "remWord32#" -> "RemainderNarrowWord"
+            "eqWord8#", "eqWord16#", "eqWord32#" -> "EqualNarrowWord"
+            "neWord8#", "neWord16#", "neWord32#" -> "NotEqualNarrowWord"
+            "gtWord8#", "gtWord16#", "gtWord32#" -> "GreaterThanNarrowWord"
+            "geWord8#", "geWord16#", "geWord32#" -> "GreaterEqualNarrowWord"
+            "andWord8#", "andWord16#", "andWord32#" -> "BitAndNarrowWord"
+            "orWord8#", "orWord16#", "orWord32#" -> "BitOrNarrowWord"
+            "xorWord8#", "xorWord16#", "xorWord32#" -> "BitXorNarrowWord"
+            "notWord8#", "notWord16#", "notWord32#" -> "BitNotNarrowWord"
+            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> "ShiftLeftNarrowWord"
+            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> "ShiftRightNarrowWord"
             "+#", "plusWord#" -> "Add"
             "-#", "minusWord#" -> "Subtract"
             "*#", "timesWord#" -> "Multiply"
@@ -1074,19 +1167,47 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "narrow16Int#", "intToInt16#", "int16ToInt#" -> "Narrow16"
             "narrow32Int#", "intToInt32#", "int32ToInt#" -> "Narrow32"
             "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#" -> "NarrowWord"
-            "int2Word#", "word2Int#", "ord#", "chr#" -> "Identity"
+            "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
-        val unary = operation in setOf("Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
+        val unary = operation in setOf("NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
             "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
+                "NegateNarrowInt" -> b.beginNegateNarrowInt(intShift)
+                "AddNarrowInt" -> b.beginAddNarrowInt(intShift)
+                "SubtractNarrowInt" -> b.beginSubtractNarrowInt(intShift)
+                "MultiplyNarrowInt" -> b.beginMultiplyNarrowInt(intShift)
+                "QuotientNarrowInt" -> b.beginQuotientNarrowInt(intShift)
+                "RemainderNarrowInt" -> b.beginRemainderNarrowInt(intShift)
+                "EqualNarrowInt" -> b.beginEqualNarrowInt(intShift)
+                "NotEqualNarrowInt" -> b.beginNotEqualNarrowInt(intShift)
+                "LessThanNarrowInt" -> b.beginLessThanNarrowInt(intShift)
+                "LessEqualNarrowInt" -> b.beginLessEqualNarrowInt(intShift)
+                "GreaterThanNarrowInt" -> b.beginGreaterThanNarrowInt(intShift)
+                "GreaterEqualNarrowInt" -> b.beginGreaterEqualNarrowInt(intShift)
+                "QuotientUnsigned" -> b.beginQuotientUnsigned()
+                "RemainderUnsigned" -> b.beginRemainderUnsigned()
+                "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
+                "GreaterEqualUnsigned" -> b.beginGreaterEqualUnsigned()
+                "QuotientNarrowWord" -> b.beginQuotientNarrowWord(wordMask)
+                "RemainderNarrowWord" -> b.beginRemainderNarrowWord(wordMask)
+                "EqualNarrowWord" -> b.beginEqualNarrowWord(wordMask)
+                "NotEqualNarrowWord" -> b.beginNotEqualNarrowWord(wordMask)
+                "GreaterThanNarrowWord" -> b.beginGreaterThanNarrowWord(wordMask)
+                "GreaterEqualNarrowWord" -> b.beginGreaterEqualNarrowWord(wordMask)
+                "BitAndNarrowWord" -> b.beginBitAndNarrowWord(wordMask)
+                "BitOrNarrowWord" -> b.beginBitOrNarrowWord(wordMask)
+                "BitXorNarrowWord" -> b.beginBitXorNarrowWord(wordMask)
+                "BitNotNarrowWord" -> b.beginBitNotNarrowWord(wordMask)
+                "ShiftLeftNarrowWord" -> b.beginShiftLeftNarrowWord(wordMask)
+                "ShiftRightNarrowWord" -> b.beginShiftRightNarrowWord(wordMask)
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
                 "AddNarrowWord" -> b.beginAddNarrowWord(wordMask); "SubtractNarrowWord" -> b.beginSubtractNarrowWord(wordMask)
                 "MultiplyNarrowWord" -> b.beginMultiplyNarrowWord(wordMask)
@@ -1107,6 +1228,34 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
             args.forEach { it.emit(e) }
             when (operation) {
+                "NegateNarrowInt" -> b.endNegateNarrowInt()
+                "AddNarrowInt" -> b.endAddNarrowInt()
+                "SubtractNarrowInt" -> b.endSubtractNarrowInt()
+                "MultiplyNarrowInt" -> b.endMultiplyNarrowInt()
+                "QuotientNarrowInt" -> b.endQuotientNarrowInt()
+                "RemainderNarrowInt" -> b.endRemainderNarrowInt()
+                "EqualNarrowInt" -> b.endEqualNarrowInt()
+                "NotEqualNarrowInt" -> b.endNotEqualNarrowInt()
+                "LessThanNarrowInt" -> b.endLessThanNarrowInt()
+                "LessEqualNarrowInt" -> b.endLessEqualNarrowInt()
+                "GreaterThanNarrowInt" -> b.endGreaterThanNarrowInt()
+                "GreaterEqualNarrowInt" -> b.endGreaterEqualNarrowInt()
+                "QuotientUnsigned" -> b.endQuotientUnsigned()
+                "RemainderUnsigned" -> b.endRemainderUnsigned()
+                "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()
+                "GreaterEqualUnsigned" -> b.endGreaterEqualUnsigned()
+                "QuotientNarrowWord" -> b.endQuotientNarrowWord()
+                "RemainderNarrowWord" -> b.endRemainderNarrowWord()
+                "EqualNarrowWord" -> b.endEqualNarrowWord()
+                "NotEqualNarrowWord" -> b.endNotEqualNarrowWord()
+                "GreaterThanNarrowWord" -> b.endGreaterThanNarrowWord()
+                "GreaterEqualNarrowWord" -> b.endGreaterEqualNarrowWord()
+                "BitAndNarrowWord" -> b.endBitAndNarrowWord()
+                "BitOrNarrowWord" -> b.endBitOrNarrowWord()
+                "BitXorNarrowWord" -> b.endBitXorNarrowWord()
+                "BitNotNarrowWord" -> b.endBitNotNarrowWord()
+                "ShiftLeftNarrowWord" -> b.endShiftLeftNarrowWord()
+                "ShiftRightNarrowWord" -> b.endShiftRightNarrowWord()
                 "Add" -> b.endAdd(); "Subtract" -> b.endSubtract(); "Multiply" -> b.endMultiply()
                 "AddNarrowWord" -> b.endAddNarrowWord(); "SubtractNarrowWord" -> b.endSubtractNarrowWord()
                 "MultiplyNarrowWord" -> b.endMultiplyNarrowWord()

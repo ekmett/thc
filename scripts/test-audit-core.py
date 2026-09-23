@@ -80,7 +80,151 @@ def run_tuple(module):
     return audit_core.Audit([('tuple.json', module)], TUPLE_CAP).run(['root'])
 
 
+def tuple_join_fixture(zero=False):
+    module = tuple_fixture()
+    producer = module['bindings'][1]['expr']
+    proof = copy.deepcopy(producer[3]['resultRep'])
+    rhs = producer[2] if zero else ['lam', [dict(id='arg', lifted=False, rep=LONG)], producer[2],
+                                  dict(rep=CLOSURE, resultRep=copy.deepcopy(proof))]
+    join = dict(id='finish', name='finish', lifted=not zero, rep=proof if zero else CLOSURE,
+                joinValueArity=0 if zero else 1, joinResultRep=copy.deepcopy(proof),
+                info=dict(joinArity=0 if zero else 1), expr=rhs)
+    call = [*var('finish'), dict(rep=copy.deepcopy(proof))] if zero else [
+        'app', [*var('finish'), dict(rep=CLOSURE)], [[*var('x'), dict(rep=LONG)]],
+        [False], False, False, dict(rep=copy.deepcopy(proof))]
+    producer[2] = ['let', False, [join], call, dict(rep=copy.deepcopy(proof))]
+    return module, join
+
+
 class AuditTest(unittest.TestCase):
+    def test_floating_literal_carriers_cannot_be_overridden_by_metadata(self):
+        carriers = [(['lit', 'float', '1.0'], dict(kind='float', primReps=['FloatRep'], evaluated=True)),
+                    (['lit', 'double', '1.0'], dict(kind='double', primReps=['DoubleRep'], evaluated=True)),
+                    (lit(1), LONG),
+                    (['lit', 'string-bytes', '41'], dict(kind='address', primReps=['AddrRep'], evaluated=True)),
+                    (['void'], dict(kind='void', primReps=[], evaluated=True))]
+        for literal, actual in carriers:
+            self.assertTrue(run(literal)['accepted'], literal)
+            self.assertTrue(run([*literal, dict(rep=actual)])['accepted'], literal)
+            for _, declared in carriers:
+                if actual['kind'] == declared['kind'] or not {'float', 'double'} & {actual['kind'], declared['kind']}:
+                    continue
+                case = ['case', [*lit(0), dict(rep=LONG)], 's', [['default', None, [], literal]],
+                        dict(rep=declared, binder=dict(id='s', lifted=False, rep=LONG))]
+                for expr in [[*literal, dict(rep=declared)], case]:
+                    report = run(expr)
+                    self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, expr)
+
+    def test_scalar_lexical_occurrences_cannot_replace_exact_binder_registers(self):
+        for primitive, expected, declared in [('quotRemInt#', 'IntRep', 'WordRep'), ('plusInt8#', 'Int8Rep', 'Word8Rep')]:
+            scalar = dict(LONG, primReps=[expected])
+            if primitive == 'quotRemInt#':
+                module = tuple_fixture(tuple_rep(scalar, scalar))
+                root = module['bindings'][0]['expr']
+                root[1][0]['rep'] = dict(LONG, primReps=[declared])
+                root[2][1] = ['app', ['prim', primitive], [['var', 'x', dict(rep=scalar)]] * 2,
+                              [False, False], False, False, dict(rep=tuple_rep(scalar, scalar))]
+                report = run_tuple(module)
+            else:
+                binder = dict(id='x', lifted=False, rep=dict(LONG, primReps=[declared]))
+                body = ['app', ['prim', primitive], [['var', 'x', dict(rep=scalar)]] * 2,
+                        [False, False], False, False, dict(rep=scalar)]
+                report = run(['lam', [binder], body, dict(rep=CLOSURE, resultRep=scalar)])
+            self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, primitive)
+
+    def test_scalar_lexical_absent_unknown_and_matching_proofs_remain_compatible(self):
+        unknown = dict(kind='unknown', primReps=None, evaluated=False)
+        for stored, occurrence in [(None, LONG), (unknown, LONG), (LONG, None), (LONG, unknown), (LONG, LONG)]:
+            binder = dict(id='x', lifted=False)
+            if stored is not None:
+                binder['rep'] = stored
+            body = ['var', 'x'] + ([dict(rep=occurrence)] if occurrence is not None else [])
+            self.assertTrue(run(['lam', [binder], body])['accepted'], (stored, occurrence))
+        # Lexical shadowing replaces the name, not the representation of one value.
+        word = dict(LONG, primReps=['WordRep'])
+        inner = ['lam', [dict(id='x', lifted=False, rep=word)], ['var', 'x', dict(rep=word)]]
+        self.assertTrue(run(['lam', [dict(id='x', lifted=False, rep=LONG)], inner])['accepted'])
+
+    def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
+        for name, contract in CAP['tuplePrimitives'].items():
+            scalar = dict(LONG, primReps=[contract['arguments'][0]])
+            proof = tuple_rep(scalar, scalar)
+            module = tuple_fixture(proof)
+            call = module['bindings'][0]['expr'][2][1]
+            call[:] = ['app', ['prim', name],
+                       [['lit', 'word' if scalar['primReps'] == ['WordRep'] else 'int', '1', dict(rep=scalar)]] * 2,
+                       [False, False], False, False, dict(rep=proof)]
+            self.assertTrue(run_tuple(module)['accepted'], name)
+            for mutation in ('nested', 'scalar', 'unknown', 'wrong-register', 'unknown-argument', 'lifted', 'partial', 'overapplied'):
+                changed = copy.deepcopy(module)
+                bad = changed['bindings'][0]['expr'][2][1]
+                if mutation == 'nested':
+                    bad[6]['rep']['components'][0] = tuple_rep(copy.deepcopy(scalar))
+                elif mutation == 'scalar':
+                    bad[6]['rep'] = copy.deepcopy(scalar)
+                elif mutation == 'unknown':
+                    bad[6].pop('rep')
+                elif mutation == 'wrong-register':
+                    bad[2][0][3]['rep']['primReps'] = ['WordRep' if scalar['primReps'] == ['IntRep'] else 'IntRep']
+                elif mutation == 'unknown-argument':
+                    bad[2][0][3]['rep']['kind'] = 'unknown'
+                elif mutation == 'lifted':
+                    bad[3][0] = True
+                elif mutation == 'partial':
+                    bad[2].pop(); bad[3].pop()
+                else:
+                    bad[2].append(copy.deepcopy(bad[2][0])); bad[3].append(False)
+                report = run_tuple(changed)
+                self.assertFalse(report['accepted'], (name, mutation))
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
+
+    def test_tuple_arithmetic_first_class_values_remain_unsupported(self):
+        for name in CAP['tuplePrimitives']:
+            self.assertIn('primitive-arity', {i['code'] for i in run(['prim', name])['issues']})
+
+    def test_exact_tuple_join_results_include_zero_arity_binders(self):
+        for zero in (False, True):
+            module, _ = tuple_join_fixture(zero)
+            self.assertTrue(run_tuple(module)['accepted'])
+            oldcap = dict(TUPLE_CAP, aggregateJoinResults=[])
+            report = audit_core.Audit([('join', module)], oldcap).run(['root'])
+            self.assertIn('aggregate-boundary', {i['code'] for i in report['issues']})
+
+    def test_tuple_join_result_lambda_and_call_proofs_must_agree(self):
+        for location in ('join', 'lambda', 'call'):
+            module, join = tuple_join_fixture()
+            proof = (join['joinResultRep'] if location == 'join' else join['expr'][3]['resultRep']
+                     if location == 'lambda' else module['bindings'][1]['expr'][2][3][6]['rep'])
+            proof['components'][0] = tuple_rep(LONG)
+            self.assert_shape_rejected(module)
+
+    def test_zero_arity_tuple_join_cannot_capture_an_aggregate(self):
+        module, join = tuple_join_fixture(True)
+        producer = module['bindings'][1]['expr']
+        region = producer[2]
+        original = join['expr']
+        proof = join['joinResultRep']
+        join['expr'] = [*var('held'), dict(rep=proof)]
+        producer[2] = ['case', original, 'held', [['default', None, [], region, dict(binders=[])]],
+                       dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
+        report = run_tuple(module)
+        self.assertIn('unboxed-tuple join capture', [i['detail'] for i in report['issues']])
+
+    def test_recursive_join_identity_shadows_outer_tuple_for_capture_checks(self):
+        module, join = tuple_join_fixture()
+        producer = module['bindings'][1]['expr']
+        region = producer[2]; region[1] = True
+        original = join['expr'][2]
+        proof = join['joinResultRep']
+        call = copy.deepcopy(region[3])
+        join['expr'][2] = ['case', [*var('arg'), dict(rep=LONG)], 'condition', [
+            ['lit', ['int', '0'], [], original, dict(binders=[])],
+            ['default', None, [], call, dict(binders=[])]],
+            dict(rep=proof, binder=dict(id='condition', lifted=False, rep=LONG))]
+        producer[2] = ['case', copy.deepcopy(original), 'finish', [['default', None, [], region, dict(binders=[])]],
+                       dict(rep=proof, binder=dict(id='finish', lifted=False, rep=proof))]
+        self.assertTrue(run_tuple(module)['accepted'])
+
     def assert_shape_rejected(self, module):
         report = run_tuple(module)
         self.assertFalse(report['accepted'])

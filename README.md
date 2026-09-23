@@ -89,8 +89,14 @@ the suite; missing dependencies and unsupported constructs remain explicit.
 and `Data.IntSet` operations, bitmap primitives and unsigned word boundaries,
 checked against native GHC and independent models. `scripts/try-libraries.sh`
 runs those checks on both backends.
+The [unsigned scalar primop slice](docs/integer-primops.md) adds native-checked
+machine-word division and narrow-word comparisons, bitwise operations and shifts.
+Local [Int64X2 SIMD operations](docs/simd.md) run on both backends with exact
+vector metadata and primitive lane storage. Vector calls, returns, captures,
+fields and joins remain explicit boundaries.
+
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
-scalar/reference inputs; aggregate arguments, joins, captures, sums and scalar
+scalar/reference inputs and local join results; aggregate arguments, join captures, ordinary captures, sums and scalar
 void tuple components remain explicit boundaries.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and

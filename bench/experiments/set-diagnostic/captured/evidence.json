@@ -1,0 +1,504 @@
+{
+  "status": "diagnostic-execution-only",
+  "strictSupported": false,
+  "inventory": {
+    "root": "main:THC.SetWorkload.setAggregate",
+    "strictAccepted": false,
+    "currentAuditSummary": {
+      "suppliedBindings": 634,
+      "reachableBindings": 71,
+      "missingGlobals": 3,
+      "issues": 17
+    },
+    "fullModuleTupleJoinCount": 4,
+    "reachableTupleJoinCount": 2,
+    "tupleJoins": [
+      {
+        "owner": "main:Data.Set.Internal.$wgo",
+        "join": "main:Data.Set.Internal.$j_shRd",
+        "arity": 1,
+        "primReps": [
+          "BoxedRep (Just Lifted)",
+          "BoxedRep (Just Lifted)"
+        ],
+        "reachableFromSetAggregate": true,
+        "module": "/Users/ekmett/thc/build/libraries/set/core/Data.Set.Internal.json",
+        "sourceNote": "(\"/Users/ekmett/thc/vendor/containers-0.8/src/Data/Set/Internal.hs\",1795,5,1798,44,\"maxViewSure\")"
+      },
+      {
+        "owner": "main:Data.Set.Internal.$wgo1",
+        "join": "main:Data.Set.Internal.$j_shRt",
+        "arity": 1,
+        "primReps": [
+          "BoxedRep (Just Lifted)",
+          "BoxedRep (Just Lifted)"
+        ],
+        "reachableFromSetAggregate": true,
+        "module": "/Users/ekmett/thc/build/libraries/set/core/Data.Set.Internal.json",
+        "sourceNote": "(\"/Users/ekmett/thc/vendor/containers-0.8/src/Data/Set/Internal.hs\",1781,5,1784,44,\"minViewSure\")"
+      },
+      {
+        "owner": "main:Data.Set.Internal.$wpoly_go",
+        "join": "main:Data.Set.Internal.$j_shRZ",
+        "arity": 1,
+        "primReps": [
+          "BoxedRep (Just Lifted)",
+          "BoxedRep (Just Lifted)"
+        ],
+        "reachableFromSetAggregate": false,
+        "module": "/Users/ekmett/thc/build/libraries/set/core/Data.Set.Internal.json",
+        "sourceNote": null
+      },
+      {
+        "owner": "main:Data.Set.Internal.$wpoly_go",
+        "join": "main:Data.Set.Internal.$j_shS3",
+        "arity": 1,
+        "primReps": [
+          "BoxedRep (Just Lifted)",
+          "BoxedRep (Just Lifted)"
+        ],
+        "reachableFromSetAggregate": false,
+        "module": "/Users/ekmett/thc/build/libraries/set/core/Data.Set.Internal.json",
+        "sourceNote": null
+      }
+    ],
+    "sha256": {
+      "/Users/ekmett/thc/build/libraries/cases.json": "e5710557a689394d2832c0f88fb956c3e7c8649b687bd3c4fad80b090822a929",
+      "/Users/ekmett/thc/build/libraries/set/core/Utils.Containers.Internal.Prelude.json": "9ed609c684b2b5edc24994d6a7020eda4f24027a444ad71b992f9180badeee89",
+      "/Users/ekmett/thc/build/libraries/set/core/Utils.Containers.Internal.PtrEquality.json": "df6bef0cf1ab708a0bcbb2c80539e881fc930621eed93d3d2a72b23184446d1e",
+      "/Users/ekmett/thc/build/libraries/set/core/Utils.Containers.Internal.StrictPair.json": "c8026a85b83061c7acb524b734ccc09b9c36945c1ffd65201691e276d216a766",
+      "/Users/ekmett/thc/build/libraries/set/core/Utils.Containers.Internal.EqOrdUtil.json": "6454aa1347cb6a7a07f31758b28005ad76b471209280cbd9704dd64cf32307e7",
+      "/Users/ekmett/thc/build/libraries/set/core/Data.Set.Internal.json": "46c5ed8752f440dcfba7dec37d38f19245b7dabc247e635963378e69cee011b4",
+      "/Users/ekmett/thc/build/libraries/set/core/Data.Set.json": "4e87cfc45ff55d151463c434667de212fc624bb4563644e500d1fd4b8d08d84a",
+      "/Users/ekmett/thc/build/libraries/set/core/THC.SetWorkload.json": "d330ea89c1a092486f6e6cf89806ff6648d3b6b5148c1c1a29d537a3e7598fd7",
+      "/Users/ekmett/thc/build/libraries/set/core/THC.InterfaceClosure.json": "d84479d7f66ec7a4db90255333b9c2a7e162e952ff79f0c70b23e11de4bb6181",
+      "/Users/ekmett/thc/build/libraries/boot/core/GHC.Internal.CString.json": "2e7bcae42d99579f6dc2dc7adbd373ee2bdb72683a1a4516531dd9ddf873342e",
+      "/Users/ekmett/thc/build/libraries/boot/core/GHC.Internal.Err.json": "35f9da9766f2d0f9da10bdb11611924cc37574a2fa9f94ac95a2705ca6415a44",
+      "/Users/ekmett/thc/build/libraries/boot/core/GHC.InterfaceClosure.json": "75222651c7d7e0727525b6f6605e0e8c5fe4f1752c088865e17679fb21531f5b",
+      "/Users/ekmett/thc/build/libraries/oracle.tsv": "60d8e42c9cfe8830314321b095623b1e591ddb3bcf61519307858c9a900d2ce1",
+      "/private/tmp/thc-list-library/scripts/audit-core.py": "1f147a3968ac24a69d31c2ebe079eb5e352d5f728f6945a8b06893a3d74cb4a9",
+      "/private/tmp/thc-list-library/scripts/core-capabilities.json": "43c4a04477296bd4af7330fed07bfc8783240868d2b7d960263800b44c86e1ac"
+    }
+  },
+  "currentIssueCounts": {
+    "aggregate-representation": 13,
+    "constructor-field-representation": 2,
+    "constructor-kind": 1,
+    "unsupported-primitive": 1
+  },
+  "missingGlobals": [
+    {
+      "id": "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+      "reachableVia": [
+        "main:THC.SetWorkload.setAggregate",
+        "main:THC.SetWorkload.$waggregate",
+        "main:THC.SetWorkload.aggregate1",
+        "main:THC.SetWorkload.$w$sgo4",
+        "main:Data.Set.Internal.balanceL_",
+        "main:Data.Set.Internal.lvl31_riSV",
+        "ghc-internal:GHC.Internal.Err.error",
+        "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+        "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+        "ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException"
+      ],
+      "references": [
+        {
+          "owner": "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+          "path": "/expr/body/alternatives/0/body/alternatives/0/body/arguments/1/scrutinee/function"
+        }
+      ]
+    },
+    {
+      "id": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef",
+      "reachableVia": [
+        "main:THC.SetWorkload.setAggregate",
+        "main:THC.SetWorkload.$waggregate",
+        "main:THC.SetWorkload.aggregate1",
+        "main:THC.SetWorkload.$w$sgo4",
+        "main:Data.Set.Internal.balanceL_",
+        "main:Data.Set.Internal.lvl31_riSV",
+        "ghc-internal:GHC.Internal.Err.error",
+        "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+        "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException_$stoExceptionWithBacktrace",
+        "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation",
+        "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+        "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+      ],
+      "references": [
+        {
+          "owner": "ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotation1",
+          "path": "/expr/body/scrutinee"
+        }
+      ]
+    },
+    {
+      "id": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+      "reachableVia": [
+        "main:THC.SetWorkload.setAggregate",
+        "main:THC.SetWorkload.$waggregate",
+        "main:THC.SetWorkload.aggregate1",
+        "main:THC.SetWorkload.$w$sgo4",
+        "main:Data.Set.Internal.balanceL_",
+        "main:Data.Set.Internal.lvl31_riSV",
+        "ghc-internal:GHC.Internal.Err.error",
+        "ghc-internal:GHC.Internal.Exception.errorCallWithCallStackException",
+        "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+        "ghc-internal:GHC.Internal.Stack.withFrozenCallStack1"
+      ],
+      "references": [
+        {
+          "owner": "ghc-internal:GHC.Internal.Stack.withFrozenCallStack",
+          "path": "/expr/body/arguments/0/arguments/0/alternatives/0/body"
+        }
+      ]
+    }
+  ],
+  "inputs": {
+    "runtimeCheckoutHeadAtLaunch": "2d40d8bc72a1fdf481ab5d6b50c553a44491990a",
+    "inputsSha256": {
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/SetDiagnosticProbe.java": "5807370504cdbe1fa41103a33921c5057ab28e3152ba53ce62ea48d0e3086ded",
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/inputs.py": "d1994b1b7c71eaa3ad6fe0fcf296ff56f347d78ef5141711e68423fab9db4d7f",
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/inventory.py": "d71af02ac947084609d1f20507b16f33e96ebdf0f3fe7036b335f73b1032d948",
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/summarize-graph.py": "f7f6d64b797d7f5ee147e1a7332790529f72c024d67e4c111286d81f15942a9f",
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/summarize.py": "358e2876853c6f8ee40e1bc09e119d1350ae22e8524c32efef2baab40a2da367",
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/graph-min-view.sh": "fe1c64eb28095a804cba21c7986c471c9c04161dac736820d9ea5291e97c2e03",
+      "/private/tmp/thc-list-library/bench/experiments/set-diagnostic/run.sh": "c9881114c1df78f8285655c234b6285ce0fd2984bd147b61eb767fc97878fac1",
+      "/private/tmp/thc-list-library/build/install/thc/lib/annotations-13.0.jar": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478",
+      "/private/tmp/thc-list-library/build/install/thc/lib/collections-25.3.4.1.jar": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/jniutils-25.3.4.1.jar": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067",
+      "/private/tmp/thc-list-library/build/install/thc/lib/kotlin-stdlib-2.4.20.jar": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/nativeimage-25.3.4.1.jar": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/polyglot-25.3.4.1.jar": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356",
+      "/private/tmp/thc-list-library/build/install/thc/lib/thc-0.1-experiment.jar": "e180659e0bd7f42fdd1d4ce0a7549d71d9a46599fabf3bc729807687f922dbb0",
+      "/private/tmp/thc-list-library/build/install/thc/lib/truffle-api-25.3.4.1.jar": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f",
+      "/private/tmp/thc-list-library/build/install/thc/lib/truffle-compiler-25.3.4.1.jar": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c",
+      "/private/tmp/thc-list-library/build/install/thc/lib/truffle-runtime-25.3.4.1.jar": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3",
+      "/private/tmp/thc-list-library/build/install/thc/lib/word-25.3.4.1.jar": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+    }
+  },
+  "javaVersion": "java version \"25.0.4.1\" 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)\n",
+  "backends": {
+    "ast": {
+      "strictRejection": "Unsupported Core aggregate representation: unboxed-tuple has unresolved or void fields",
+      "phaseRows": {
+        "interpreted": 22,
+        "compiled-warm": 3,
+        "after-compilation-cold": 19,
+        "train-all": 44,
+        "post-cold-compiled": 22
+      },
+      "nativeRows": [
+        [
+          1,
+          334
+        ],
+        [
+          8,
+          128985
+        ],
+        [
+          64,
+          282694
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          2,
+          57290
+        ],
+        [
+          3,
+          65034
+        ],
+        [
+          7,
+          69316
+        ],
+        [
+          15,
+          102730
+        ],
+        [
+          16,
+          312395
+        ],
+        [
+          31,
+          492644
+        ],
+        [
+          63,
+          387897
+        ],
+        [
+          65,
+          281888
+        ],
+        [
+          127,
+          373479
+        ],
+        [
+          128,
+          352124
+        ],
+        [
+          129,
+          325253
+        ],
+        [
+          255,
+          -379335
+        ],
+        [
+          256,
+          -382624
+        ],
+        [
+          257,
+          -385926
+        ],
+        [
+          1024,
+          -6747424
+        ],
+        [
+          4096,
+          -108883744
+        ],
+        [
+          4097,
+          -108936966
+        ]
+      ],
+      "warmEntryValid": true,
+      "postColdEntryValid": true,
+      "actualExportedHelperCalls": {
+        "main:Data.Set.Internal.$wgo": 298,
+        "main:Data.Set.Internal.$wgo1": 271,
+        "main:Data.Set.Internal.glue": 622
+      },
+      "finalDiagnostics": {
+        "backend": "ast",
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 1895,
+        "sourceRootCount": 47,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "karg": 43526,
+          "united": 125,
+          "argument thunk": 1763,
+          "aggregate2": 1
+        },
+        "compiledEntries": 52,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 45415,
+        "thunkHits": 3,
+        "blackholes": 0,
+        "directCacheMisses": 105,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "papAllocations": 0,
+        "localJoinTransfers": 214017,
+        "selfTailReentries": 35025,
+        "trampolineIterations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unsupported Core aggregate representation: unboxed-tuple has unresolved or void fields"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "indexed primitive slots; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "validationToolDrift": [
+        {
+          "manifestSha256": "eb3f13423a4a25cd9c83da84e84032b14fb62b66dce1e2d4c4a3cb4efa7d2893",
+          "currentSha256": "1f147a3968ac24a69d31c2ebe079eb5e352d5f728f6945a8b06893a3d74cb4a9",
+          "path": "/Users/ekmett/thc/scripts/audit-core.py"
+        },
+        {
+          "manifestSha256": "65a273981fd088f98d309bdbc600377d42dd2e6f52814968524084267fc0de18",
+          "currentSha256": "a0c54a3f3a50b1f47a4b7545d640fa5eeda0f13bbff38a9c3a5b5cc27bab6c97",
+          "path": "/Users/ekmett/thc/scripts/core-capabilities.json"
+        },
+        {
+          "manifestSha256": "fa18a5733a2689c900cc407f447b85e9fb44ba7abf81248c3ee18bad30c49c37",
+          "currentSha256": "9d03fcaa12f21f676bca1a6058da0ec3deec589b2fcd29342c73568fa89a918e",
+          "path": "/Users/ekmett/thc/scripts/prepare-library-tests.py"
+        }
+      ],
+      "logSha256": "4029bad4ef3c9bf31cbbce144e094de262d091b88aafc8ce937697c8e02670d7"
+    },
+    "bytecode": {
+      "strictRejection": "Unsupported Core aggregate representation: unboxed-tuple has unresolved or void fields",
+      "phaseRows": {
+        "interpreted": 22,
+        "compiled-warm": 3,
+        "after-compilation-cold": 19,
+        "train-all": 44,
+        "post-cold-compiled": 22
+      },
+      "nativeRows": [
+        [
+          1,
+          334
+        ],
+        [
+          8,
+          128985
+        ],
+        [
+          64,
+          282694
+        ],
+        [
+          -3,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          2,
+          57290
+        ],
+        [
+          3,
+          65034
+        ],
+        [
+          7,
+          69316
+        ],
+        [
+          15,
+          102730
+        ],
+        [
+          16,
+          312395
+        ],
+        [
+          31,
+          492644
+        ],
+        [
+          63,
+          387897
+        ],
+        [
+          65,
+          281888
+        ],
+        [
+          127,
+          373479
+        ],
+        [
+          128,
+          352124
+        ],
+        [
+          129,
+          325253
+        ],
+        [
+          255,
+          -379335
+        ],
+        [
+          256,
+          -382624
+        ],
+        [
+          257,
+          -385926
+        ],
+        [
+          1024,
+          -6747424
+        ],
+        [
+          4096,
+          -108883744
+        ],
+        [
+          4097,
+          -108936966
+        ]
+      ],
+      "warmEntryValid": true,
+      "postColdEntryValid": true,
+      "actualExportedHelperCalls": {
+        "main:Data.Set.Internal.$wgo": 298,
+        "main:Data.Set.Internal.$wgo1": 271,
+        "main:Data.Set.Internal.glue": 622
+      },
+      "finalDiagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 85,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 1895,
+        "sourceRootCount": 47,
+        "localJoinCount": 20,
+        "localJoinTransfers": 214017,
+        "instrumented": true,
+        "thunkEvaluationsByLabel": {
+          "karg": 43526,
+          "united": 125,
+          "argument thunk": 1763,
+          "aggregate2": 1
+        },
+        "compiledEntries": 8576,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 45415,
+        "thunkHits": 3,
+        "blackholes": 0,
+        "directCacheMisses": 105,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unsupported constructor representation unboxed-tuple: ghc-internal:GHC.Internal.Types.(#,#)",
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unsupported Core aggregate representation: unboxed-tuple has unresolved or void fields"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "validationToolDrift": [
+        {
+          "manifestSha256": "eb3f13423a4a25cd9c83da84e84032b14fb62b66dce1e2d4c4a3cb4efa7d2893",
+          "path": "/Users/ekmett/thc/scripts/audit-core.py",
+          "currentSha256": "1f147a3968ac24a69d31c2ebe079eb5e352d5f728f6945a8b06893a3d74cb4a9"
+        },
+        {
+          "manifestSha256": "65a273981fd088f98d309bdbc600377d42dd2e6f52814968524084267fc0de18",
+          "path": "/Users/ekmett/thc/scripts/core-capabilities.json",
+          "currentSha256": "a0c54a3f3a50b1f47a4b7545d640fa5eeda0f13bbff38a9c3a5b5cc27bab6c97"
+        },
+        {
+          "manifestSha256": "fa18a5733a2689c900cc407f447b85e9fb44ba7abf81248c3ee18bad30c49c37",
+          "path": "/Users/ekmett/thc/scripts/prepare-library-tests.py",
+          "currentSha256": "9d03fcaa12f21f676bca1a6058da0ec3deec589b2fcd29342c73568fa89a918e"
+        }
+      ],
+      "logSha256": "fc12edb1bce50c274cfda8c3b5240c5c1ad6e76ed4a5e2229a4f982e922052f1"
+    }
+  }
+}

@@ -1,0 +1,303 @@
+  name "After FinalCodeAnalysisStage"
+  begin_block
+    name "B0"
+    from_bci -1
+    to_bci -1
+    predecessors
+    successors "B1" "B4"
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr    0  <|@ instruction [rsi|QWORD[.], rdx|QWORD[.], rbp|QWORD] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr    2  <|@ instruction stack:16|QWORD = MOVE input: rbp|QWORD moveKind: QWORD <|@ <|@
+      nr    4  <|@ instruction [] = HOTSPOTLOCKSTACK frameMapBuilder: jdk.graal.compiler.hotspot.amd64.AMD64HotSpotFrameMapBuilder@5bd083bb slotKind: QWORD <|@ <|@
+      nr    6  <|@ instruction rax|DWORD[_] = MOV input: [rdx|QWORD[.] + 20] size: DWORD <|@ <|@
+      nr    8  <|@ instruction rsi|QWORD = MOV input: [rax|DWORD[_] * 8 + 8] size: QWORD <|@ <|@
+      nr   10  <|@ instruction r10|QWORD = LEA address: [rsi|QWORD - 19] size: QWORD <|@ <|@
+      nr   12  <|@ instruction xmm0|V128_QWORD = LONGTOVECTOR value: r10|QWORD encoding: VEX <|@ <|@
+      nr   14  <|@ instruction xmm0|V128_QWORD = VPBROADCASTQ (input: xmm0|V128_QWORD, opmask: -) size: XMM z: 0 b: 0 <|@ <|@
+      nr   16  <|@ instruction xmm0|V128_QWORD = INSERT (vec: xmm0|V128_QWORD, val: r10|QWORD) offset: 1 encoding: VEX <|@ <|@
+      nr   18  <|@ instruction xmm1|V256_BYTE = AVXCLEARVECTORCONSTANT encoding: VEX input: SIMD<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0> <|@ <|@
+      nr   20  <|@ instruction xmm0|V128_QWORD = VPSUBQ (x: xmm1|V128_QWORD(V256_BYTE), y: xmm0|V128_QWORD) size: XMM <|@ <|@
+      nr   22  <|@ instruction r10|QWORD = EXTRACTLONG vector: xmm0|V128_QWORD selector: 0 encoding: VEX <|@ <|@
+      nr   24  <|@ instruction r11|QWORD = EXTRACTLONG vector: xmm0|V128_QWORD selector: 1 encoding: VEX <|@ <|@
+      nr   26  <|@ instruction xmm0|V128_QWORD = LONGTOVECTOR value: r10|QWORD encoding: VEX <|@ <|@
+      nr   28  <|@ instruction xmm0|V128_QWORD = VPBROADCASTQ (input: xmm0|V128_QWORD, opmask: -) size: XMM z: 0 b: 0 <|@ <|@
+      nr   30  <|@ instruction xmm0|V128_QWORD = INSERT (vec: xmm0|V128_QWORD, val: r11|QWORD) offset: 1 encoding: VEX <|@ <|@
+      nr   32  <|@ instruction r10|DWORD[_] = MOV input: [rdx|QWORD[.] + 16] size: DWORD <|@ <|@
+      nr   34  <|@ instruction r11|QWORD = MOV input: [r10|DWORD[_] * 8 + 8] size: QWORD <|@ <|@
+      nr   36  <|@ instruction xmm1|V128_QWORD = LONGTOVECTOR value: r11|QWORD encoding: VEX <|@ <|@
+      nr   38  <|@ instruction xmm1|V128_QWORD = VPBROADCASTQ (input: xmm1|V128_QWORD, opmask: -) size: XMM z: 0 b: 0 <|@ <|@
+      nr   40  <|@ instruction xmm1|V128_QWORD = INSERT (vec: xmm1|V128_QWORD, val: rsi|QWORD) offset: 1 encoding: VEX <|@ <|@
+      nr   42  <|@ instruction xmm0|V128_QWORD = VPSUBQ (x: xmm1|V128_QWORD, y: xmm0|V128_QWORD) size: XMM <|@ <|@
+      nr   44  <|@ instruction rsi|QWORD = EXTRACTLONG vector: xmm0|V128_QWORD selector: 1 encoding: VEX <|@ <|@
+      nr   46  <|@ instruction r11|QWORD = SHL x: rsi|QWORD size: QWORD y: 4 <|@ <|@
+      nr   48  <|@ instruction r11|QWORD = ADD (x: r11|QWORD, y: rsi|QWORD) size: QWORD <|@ <|@
+      nr   50  <|@ instruction rsi|QWORD = EXTRACTLONG vector: xmm0|V128_QWORD selector: 0 encoding: VEX <|@ <|@
+      nr   52  <|@ instruction rsi|QWORD = IMUL x: rsi|QWORD size: QWORD y: 13 <|@ <|@
+      nr   54  <|@ instruction r11|QWORD = XOR (x: rsi|QWORD, y: r11|QWORD) size: QWORD <|@ <|@
+      nr   56  <|@ instruction rsi|QWORD = LEA address: [r11|QWORD + 128] size: QWORD <|@ <|@
+      nr   58  <|@ instruction rax|QWORD[.] = UNCOMPRESSPOINTER (input: rax|DWORD[_], ~baseRegister: r12|ILLEGAL) lirKindTool: jdk.graal.compiler.vector.lir.hotspot.amd64.AMD64HotSpotSimdLIRKindTool@3330b554 encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr   60  <|@ instruction r10|QWORD[.] = UNCOMPRESSPOINTER (input: r10|DWORD[_], ~baseRegister: r12|ILLEGAL) lirKindTool: jdk.graal.compiler.vector.lir.hotspot.amd64.AMD64HotSpotSimdLIRKindTool@3330b554 encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr   62  <|@ instruction r8|DWORD[_] = MOV input: [rdx|QWORD[.] + 12] size: DWORD <|@ <|@
+      nr   64  <|@ instruction CMPCONSTBRANCH x: rsi|QWORD condition: |<| trueDestination: B0 -> B1 falseDestination: B0 -> B4 trueDestinationProbability: 0.9 size: QWORD y: 256 inlinedY: null <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B1"
+    from_bci -1
+    to_bci -1
+    predecessors "B0"
+    successors "B2" "B3"
+    xhandlers
+    flags
+    probability 4606281698874543309
+    begin_IR
+      LIR
+      nr   66  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr   68  <|@ instruction rsi|DWORD = MOV value: r11|QWORD size: DWORD <|@ <|@
+      nr   70  <|@ instruction rsi|DWORD = LEA address: [rsi|DWORD + 128] size: DWORD <|@ <|@
+      nr   72  <|@ instruction CMPCONSTBRANCH x: rsi|DWORD condition: |<| trueDestination: B1 -> B2 falseDestination: B1 -> B3 trueDestinationProbability: 1.0 size: DWORD y: 256 inlinedY: null <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B2"
+    from_bci -1
+    to_bci -1
+    predecessors "B1"
+    successors "B8"
+    xhandlers
+    flags
+    probability 4606281698874543309
+    begin_IR
+      LIR
+      nr   74  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr   76  <|@ instruction r11|QWORD[.] = HOTSPOTLOADOBJECTCONSTANT input: Object[Instance<java.lang.Long[]>] <|@ <|@
+      nr   78  <|@ instruction rsi|DWORD[_] = MOV input: [r11|QWORD[.] + rsi|DWORD * 4 + 12] size: DWORD <|@ <|@
+      nr   80  <|@ instruction rsi|QWORD[.] = UNCOMPRESSPOINTER (input: rsi|DWORD[_], ~baseRegister: r12|ILLEGAL) lirKindTool: jdk.graal.compiler.vector.lir.hotspot.amd64.AMD64HotSpotSimdLIRKindTool@3330b554 encoding: base: 0 shift: 3 nonNull: false <|@ <|@
+      nr   82  <|@ instruction JUMP ~outgoingValues: [] destination: B2 -> B8 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B8"
+    from_bci -1
+    to_bci -1
+    predecessors "B7" "B2"
+    successors "B11" "B10"
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr  150  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@
+      nr  152  <|@ instruction CMPCONSTBRANCH x: [r15|QWORD + 1416] condition: = trueDestination: B8 -> B11 falseDestination: B8 -> B10 trueDestinationProbability: 0.999 size: DWORD y: 0 inlinedY: null <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B11"
+    from_bci -1
+    to_bci -1
+    predecessors "B10" "B8"
+    successors
+    xhandlers
+    flags
+    probability 4607182418800017408
+    begin_IR
+      LIR
+      nr  178  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  180  <|@ instruction rax|QWORD[.] = MOVE input: rsi|QWORD[.] moveKind: QWORD <|@ <|@
+      nr  182  <|@ instruction RETURN (savedRbp: stack:16|QWORD, value: rax|QWORD[.], additionalReturns: []) isStub: false thread: r15 scratchForSafepointOnReturn: rcx config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@c8e73f7 requiresReservedStackAccessCheck: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B4"
+    from_bci -1
+    to_bci -1
+    predecessors "B0"
+    successors "B5" "B6"
+    xhandlers
+    flags
+    probability 4591870180066957720
+    begin_IR
+      LIR
+      nr   92  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr   94  <|@ instruction rsi|QWORD = MOV input: [r15|QWORD + 456] size: QWORD <|@ <|@
+      nr   96  <|@ instruction r9|QWORD = LEA address: [rsi|QWORD + 16] size: QWORD <|@ <|@
+      nr   98  <|@ instruction CMPBRANCH (x: r9|QWORD, y: [r15|QWORD + 472]) condition: |>| trueDestination: B4 -> B5 falseDestination: B4 -> B6 trueDestinationProbability: 0.010000000000000009 size: QWORD <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B6"
+    from_bci -1
+    to_bci -1
+    predecessors "B4"
+    successors "B7"
+    xhandlers
+    flags
+    probability 4591798122472919792
+    begin_IR
+      LIR
+      nr  124  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  126  <|@ instruction MOV (x: [r15|QWORD + 456], y: r9|QWORD) size: QWORD <|@ <|@
+      nr  128  <|@ instruction AMD64PREFETCH ~address: [rsi|QWORD + 208] instr: 3 <|@ <|@
+      nr  130  <|@ instruction r9|DWORD = HOTSPOTLOADMETASPACECONSTANT input: meta{HotSpotType<Ljava/lang/Long;, resolved>;compressed} <|@ <|@
+      nr  132  <|@ instruction r9|QWORD = MOVE input: r9|DWORD moveKind: DWORD <|@ <|@
+      nr  134  <|@ instruction r9|QWORD = SHL x: r9|QWORD size: QWORD y: 42 <|@ <|@
+      nr  136  <|@ instruction r9|QWORD = INC value: r9|QWORD size: QWORD <|@ <|@
+      nr  138  <|@ instruction MOV (x: [rsi|QWORD], y: r9|QWORD) size: QWORD <|@ <|@
+      nr  140  <|@ instruction rsi|QWORD[.] = MOVE input: rsi|QWORD moveKind: QWORD <|@ <|@
+      nr  142  <|@ instruction JUMP ~outgoingValues: [] destination: B6 -> B7 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B7"
+    from_bci -1
+    to_bci -1
+    predecessors "B5" "B6"
+    successors "B8"
+    xhandlers
+    flags
+    probability 4591870180066957720
+    begin_IR
+      LIR
+      nr  144  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 1 <|@ <|@
+      nr  146  <|@ instruction MOV (x: [rsi|QWORD[.] + 8], y: r11|QWORD) size: QWORD <|@ <|@
+      nr  148  <|@ instruction JUMP ~outgoingValues: [] destination: B7 -> B8 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B10"
+    from_bci -1
+    to_bci -1
+    predecessors "B8"
+    successors "B11"
+    xhandlers
+    flags
+    probability 4562254508917369344
+    begin_IR
+      LIR
+      nr  158  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  160  <|@ instruction stack:56|QWORD[.] = MOVE input: rsi|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  162  <|@ instruction stack:28|DWORD[_] = MOVE input: r8|DWORD[_] moveKind: DWORD // MoveResolver resolve mapping <|@ <|@
+      nr  164  <|@ instruction stack:40|QWORD[.] = MOVE input: r10|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  166  <|@ instruction stack:48|QWORD[.] = MOVE input: rax|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  168  <|@ instruction r11|QWORD[.] = HOTSPOTLOADOBJECTCONSTANT input: Object[Instance<thc.runtime.BytecodeRootGen>] <|@ <|@
+      nr  170  <|@ instruction rsi|QWORD[.] = MOVE input: r11|QWORD[.] moveKind: QWORD <|@ <|@
+      nr  172  <|@ st <@st|@reference-map: [stack:8, stack:16, stack:24, stack:36]
+live-base-pointers: []
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:8236) [bci: 19]
+locals: Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} long[30064771072|0x700000000] - int[1|0x1] - - - - - - - - - - - -
+thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:2971) [bci: 28]
+locals: Object[Instance<thc.runtime.BytecodeRootGen>] Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - - - - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} int[1|0x1] - - -
+thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:2963) [bci: 15]
+locals: - -
+com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci: 5]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Object[Instance<com.oracle.truffle.runtime.CompilationState>] - - -
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci: 40]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] - - -
+vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Lcom/oracle/truffle/api/impl/FrameWithoutBoxing; Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>] vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]} vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} Object[Instance<java.lang.Object[]>]
+vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]} [Ljava/lang/Object; stack:28|DWORD[_] stack:40|QWORD[.] stack:48|QWORD[.]
+vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} [Ljava/lang/Object; Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null]
+vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} [J long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0]
+vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} [B int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7]
+>@ <|@ instruction (result: -, additionalReturns: []) = CALL_DIRECT parameters: [rsi|QWORD[.]] temps: [] callTarget: HotSpotMethod<HotSpotThreadLocalHandshake.doHandshake(Object)> invokeKind: Static config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@c8e73f7 state [bci:19, 28, 15, 5, 40] <|@ <|@
+      nr  174  <|@ instruction rsi|QWORD[.] = MOVE input: stack:56|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  176  <|@ instruction JUMP ~outgoingValues: [] destination: B10 -> B11 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B5"
+    from_bci -1
+    to_bci -1
+    predecessors "B4"
+    successors "B7"
+    xhandlers
+    flags
+    probability 4562254508917369343
+    begin_IR
+      LIR
+      nr  100  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr  102  <|@ instruction stack:28|DWORD[_] = MOVE input: r8|DWORD[_] moveKind: DWORD // MoveResolver resolve mapping <|@ <|@
+      nr  104  <|@ instruction stack:40|QWORD[.] = MOVE input: r10|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  106  <|@ instruction stack:48|QWORD[.] = MOVE input: rax|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  108  <|@ instruction rsi|QWORD = HOTSPOTLOADMETASPACECONSTANT input: meta{HotSpotType<Ljava/lang/Long;, resolved>} <|@ <|@
+      nr  110  <|@ st <@st|@reference-map: [stack:16, stack:24, stack:36]
+live-base-pointers: []
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:8236) [bci: 19]
+locals: Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} long[30064771072|0x700000000] - int[1|0x1] - - - - - - - - - - - -
+thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:2971) [bci: 28]
+locals: Object[Instance<thc.runtime.BytecodeRootGen>] Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - - - - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} int[1|0x1] - - -
+thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:2963) [bci: 15]
+locals: - -
+com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci: 5]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Object[Instance<com.oracle.truffle.runtime.CompilationState>] - - -
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci: 40]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] - - -
+vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Lcom/oracle/truffle/api/impl/FrameWithoutBoxing; Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>] vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]} vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} Object[Instance<java.lang.Object[]>]
+vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]} [Ljava/lang/Object; stack:28|DWORD[_] stack:40|QWORD[.] stack:48|QWORD[.]
+vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} [Ljava/lang/Object; Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null]
+vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} [J long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0]
+vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} [B int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7]
+>@ <|@ instruction (result: rax|QWORD[.], additionalReturns: []) = NEAR_FOREIGN_CALL parameters: [rsi|QWORD] temps: [rax|ILLEGAL, xmm0|ILLEGAL, xmm1|ILLEGAL, xmm2|ILLEGAL, xmm3|ILLEGAL, xmm4|ILLEGAL, xmm5|ILLEGAL, xmm6|ILLEGAL, xmm7|ILLEGAL, xmm8|ILLEGAL, xmm9|ILLEGAL, xmm10|ILLEGAL, xmm11|ILLEGAL, xmm12|ILLEGAL, xmm13|ILLEGAL, xmm14|ILLEGAL, xmm15|ILLEGAL] callTarget: Stub<new_instance_or_null(KlassPointer)Object>@0x718bb5be46e0:CallingConvention[rsi|QWORD -> rax|QWORD[.]]:CallingConvention[rsi|QWORD -> rax|QWORD[.]]; temps=rax|ILLEGAL,xmm0|ILLEGAL,xmm1|ILLEGAL,xmm2|ILLEGAL,xmm3|ILLEGAL,xmm4|ILLEGAL,xmm5|ILLEGAL,xmm6|ILLEGAL,xmm7|ILLEGAL,xmm8|ILLEGAL,xmm9|ILLEGAL,xmm10|ILLEGAL,xmm11|ILLEGAL,xmm12|ILLEGAL,xmm13|ILLEGAL,xmm14|ILLEGAL,xmm15|ILLEGAL state [bci:19, 28, 15, 5, 40] <|@ <|@
+      nr  112  <|@ st <@st|@reference-map: [rax:0, stack:16, stack:24, stack:36]
+live-base-pointers: []
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:8236) [bci: 19]
+locals: Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} long[30064771072|0x700000000] - int[1|0x1] - - - - - - - - - - - -
+thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:2971) [bci: 28]
+locals: Object[Instance<thc.runtime.BytecodeRootGen>] Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - - - - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} int[1|0x1] - - -
+thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:2963) [bci: 15]
+locals: - -
+com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci: 5]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Object[Instance<com.oracle.truffle.runtime.CompilationState>] - - -
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci: 40]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] - - -
+vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Lcom/oracle/truffle/api/impl/FrameWithoutBoxing; Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>] vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]} vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} Object[Instance<java.lang.Object[]>]
+vobject:Object[]:1{0=stack:28|DWORD[_],1=stack:40|QWORD[.],2=stack:48|QWORD[.]} [Ljava/lang/Object; stack:28|DWORD[_] stack:40|QWORD[.] stack:48|QWORD[.]
+vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} [Ljava/lang/Object; Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null]
+vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} [J long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0]
+vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} [B int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7]
+>@ <|@ instruction NULLCHECK address: [rax|QWORD[.]] state [bci:19, 28, 15, 5, 40] <|@ <|@
+      nr  114  <|@ instruction rsi|QWORD[.] = MOVE input: rax|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  116  <|@ instruction r8|DWORD[_] = MOVE input: stack:28|DWORD[_] moveKind: DWORD // MoveResolver resolve mapping <|@ <|@
+      nr  118  <|@ instruction r10|QWORD[.] = MOVE input: stack:40|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  120  <|@ instruction rax|QWORD[.] = MOVE input: stack:48|QWORD[.] moveKind: QWORD // MoveResolver resolve mapping <|@ <|@
+      nr  122  <|@ instruction JUMP ~outgoingValues: [] destination: B5 -> B7 isThreadedJump: false <|@ <|@
+    end_IR
+  end_block
+  begin_block
+    name "B3"
+    from_bci -1
+    to_bci -1
+    predecessors "B1"
+    successors
+    xhandlers
+    flags
+    probability 2355382605114769408
+    begin_IR
+      LIR
+      nr   84  <|@ instruction [] = LABEL label: ? alignment: 0 numbPhis: 0 <|@ <|@
+      nr   86  <|@ instruction MOV x: [r15|QWORD + 1376] size: DWORD y: -8219 <|@ <|@
+      nr   88  <|@ instruction MOV x: [r15|QWORD + 1384] size: QWORD y: 0 <|@ <|@
+      nr   90  <|@ st <@st|@reference-map: [rax:0, r8:0, r10:0]
+live-base-pointers: []
+thc.runtime.BytecodeRootGen$CachedBytecodeNode.continueAt(BytecodeRootGen.java:8236) [bci: 19]
+locals: Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=r8|DWORD[_],1=r10|QWORD[.],2=rax|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} long[30064771072|0x700000000] - int[1|0x1] - - - - - - - - - - - -
+thc.runtime.BytecodeRootGen.continueAt(BytecodeRootGen.java:2971) [bci: 28]
+locals: Object[Instance<thc.runtime.BytecodeRootGen>] Object[Instance<thc.runtime.BytecodeRootGen$CachedBytecodeNode>] - - - - vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=r8|DWORD[_],1=r10|QWORD[.],2=rax|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} int[1|0x1] - - -
+thc.runtime.BytecodeRootGen.execute(BytecodeRootGen.java:2963) [bci: 15]
+locals: - -
+com.oracle.truffle.runtime.OptimizedCallTarget.executeRootNode(OptimizedCallTarget.java:808) [bci: 5]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=r8|DWORD[_],1=r10|QWORD[.],2=rax|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Object[Instance<com.oracle.truffle.runtime.CompilationState>] - - -
+com.oracle.truffle.runtime.OptimizedCallTarget.profiledPERoot(OptimizedCallTarget.java:722) [bci: 40]
+locals: Object[Instance<com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget>] - - -
+vobject:FrameWithoutBoxing:0{descriptor=Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>],arguments=vobject:Object[]:1{0=r8|DWORD[_],1=r10|QWORD[.],2=rax|QWORD[.]},indexedLocals=vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]},indexedPrimitiveLocals=vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]},indexedTags=vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]},auxiliarySlots=Object[Instance<java.lang.Object[]>]} Lcom/oracle/truffle/api/impl/FrameWithoutBoxing; Object[Instance<com.oracle.truffle.api.frame.FrameDescriptor>] vobject:Object[]:1{0=r8|DWORD[_],1=r10|QWORD[.],2=rax|QWORD[.]} vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} Object[Instance<java.lang.Object[]>]
+vobject:Object[]:1{0=r8|DWORD[_],1=r10|QWORD[.],2=rax|QWORD[.]} [Ljava/lang/Object; r8|DWORD[_] r10|QWORD[.] rax|QWORD[.]
+vobject:Object[]:2{0=Object[null],1=Object[null],2=Object[null],3=Object[null],4=Object[null],5=Object[null],6=Object[null],7=Object[null],8=Object[null],9=Object[null]} [Ljava/lang/Object; Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null] Object[null]
+vobject:long[]:3{0=long[0|0x0],1=long[0|0x0],2=long[0|0x0],3=long[0|0x0],4=long[0|0x0],5=long[0|0x0],6=long[0|0x0],7=long[0|0x0],8=long[0|0x0],9=long[0|0x0]} [J long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0] long[0|0x0]
+vobject:byte[]:4{0=int[7|0x7],1=int[7|0x7],2=int[7|0x7],3=int[7|0x7],4=int[7|0x7],5=int[7|0x7],6=int[7|0x7],7=int[7|0x7],8=int[7|0x7],9=int[7|0x7]} [B int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7] int[7|0x7]
+>@ <|@ instruction DEOPT info [bci:19, 28, 15, 5, 40] <|@ <|@
+    end_IR
+  end_block
+end_cfg

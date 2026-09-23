@@ -2,6 +2,30 @@
   "schema": 1,
   "groups": [
     {
+      "id": "int64-conversions",
+      "source": "examples/THC/Int64Conversions.hs",
+      "module": "THC.Int64Conversions",
+      "entries": [
+        {
+          "name": "int64Roundtrip",
+          "focus": "Int#/Int64# conversion across exact primitive argument and result boundaries on 64-bit targets",
+          "warmInputs": [0, 1, -1, 17],
+          "coldInputs": [-128, 127, -32768, 32767, -2147483648, 2147483647,
+            -2147483649, 2147483648, -4294967296, 4294967295,
+            -9223372036854775808, -9223372036854775807, 9223372036854775806, 9223372036854775807],
+          "requiredPrimitives": ["intToInt64#", "int64ToInt#"]
+        },
+        {
+          "name": "int64LiteralBoundary",
+          "focus": "Canonical Int64# literals retain both signed 64-bit endpoints",
+          "warmInputs": [0, 1],
+          "coldInputs": [-1, -9223372036854775808, 9223372036854775807],
+          "requiredPrimitives": ["int64ToInt#"],
+          "requiredLiteralKinds": ["int64"]
+        }
+      ]
+    },
+    {
       "id": "lists",
       "source": "examples/THC/ListCoverage.hs",
       "module": "THC.ListCoverage",
