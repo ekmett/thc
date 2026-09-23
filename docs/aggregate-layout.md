@@ -104,3 +104,52 @@ and both exported bundles. `checks.json` references that manifest's hash. Runnin
 the checker again without `--prepare` verifies the recorded inputs and outputs
 before checking metadata, so a stale bundle cannot certify an edited exporter.
 These generated records are included in CI artifacts.
+
+## Sum storage projections
+
+A sum now records `tagSlot: 0` and `alternativeSlots` alongside its ordered logical
+`alternatives` and exact physical `primReps`. The outer list follows constructor
+order; each inner list maps that alternative's ordered physical leaves to
+zero-based slots in the enclosing sum, excluding the tag from the payload.
+For `(# Int# | Word# #)`, GHC gives `[WordRep, WordRep]` and `[[1], [1]]`.
+For `(# State# s | (# #) #)`, the vector is `[WordRep]` and the map is `[[], []]`;
+the logical State and empty tuple alternatives remain distinct. Float and Double
+use distinct slots, as do lifted and unlifted boxed references. A sum constructor
+record adds `sumArity`, obtained from its GHC TyCon's constructor family. This is
+separate from the existing `arity`, which counts the single logical payload.
+Constructor tags remain one-based; slot indices are zero-based.
+
+The exporter calls pinned GHC 9.14.1 `ubxSumRepType`, `primRepSlot`, and
+`layoutUbxSum`, matching the layout computation in `GHC.Stg.Unarise.mkUbxSum`.
+It checks the resulting `slotPrimRep` vector against `typePrimRep_maybe` before
+publishing projections. Address, narrow/wide integer, and fixed vector slots are
+valid metadata even though those alternatives are outside current THC sum
+execution support. The only partial `primRepSlot` case in this pinned API is
+`BoxedRep Nothing`; it is rejected before calling either placement API.
+Unknown physical representations, and abstract sum types with unknown logical
+alternatives, retain `alternativeSlots: null`. A nested abstract tuple may have
+known physical slots while retaining `components: null`; a physical projection
+does not certify that missing logical structure. No printed type is parsed.
+
+[SumLayoutAudit.hs](../compiler/test-fixtures/SumLayoutAudit.hs) and its native
+driver check 130 values against an independent arithmetic model. Genuine exports
+before and after Tidy retain 17 exact sum shapes, including nested sums/tuples,
+newtype aliases, runtime/levity polymorphism, three-way sums, lazy boxed payloads,
+and the zero-width distinctions above. Address/vector raising producers are
+native compilation and metadata controls, never native execution claims.
+An independent projection checker tests source field order, duplicate-slot
+rejection, tag indexing, pointer levity, floating width, and null layouts.
+`python3 scripts/check-sum-layout.py --prepare` freezes source, compiler, toolchain,
+package, command and artifact hashes in `build/sum-layout/provenance.json`;
+running it without `--prepare` verifies those hashes before checking the exports.
+Normal test preparation and CI include these checks.
+
+No sum capability is enabled. The auditor still rejects all retained-sum roots,
+and `SumLayoutMetadataTest` checks strict load rejection on both backends and both
+export stages. The direct-case control is optimized by GHC to ordinary scalar
+Core and alone executes in THC. Future sum lowering must validate the complete
+logical alternatives, family arity, physical storage classes and projection,
+then construct and project the selected alternative using typed destinations.
+It must preserve lazy reference leaves, validate tags, and keep unknown layouts
+and unsupported input/capture boundaries explicit. This metadata does not define
+a hardware call-register ABI or permit generic object-array sum payloads.

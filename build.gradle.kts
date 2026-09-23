@@ -42,6 +42,7 @@ tasks.test {
             "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
+            "sum-layout/**/*.json", "sum-layout/*.tsv", "sum-layout/native/**",
             "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
             "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
@@ -73,7 +74,8 @@ tasks.test {
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-double-arrays.py", "test-double-array-model.py",
-            "audit-core.py", "core-capabilities.json", "check-corpus-structure.py")
+            "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
+            "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py")
     })
     jvmArgs(application.applicationDefaultJvmArgs)
     systemProperty("thc.projectRoot", projectDir.absolutePath)

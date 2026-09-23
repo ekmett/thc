@@ -9,6 +9,7 @@ python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-sqrt-audit.py
 sh scripts/prepare-aggregate-frontier.sh
+python3 scripts/check-sum-layout.py --prepare
 python3 scripts/prepare-tuple-return-audit.py
 python3 scripts/prepare-state-tuple-audit.py
 python3 scripts/prepare-empty-tuple-input-audit.py
