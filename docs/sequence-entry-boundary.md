@@ -115,3 +115,85 @@ ee89d095b2a4bc4197eca2b727911b156148a7dc359510fd7937026cac9f40e7  check-bytecode
 The same checker-output hash was produced by the uninstrumented candidate run
 and the compilation-log-only candidate run. The remaining blocker is actual
 public compiled entry, not numeric correctness or missing source definitions.
+
+## Follow-up: the first interpreted root is the host bridge
+
+A separate build-only root-entry overlay reproduces the same bytecode failure.
+It stores root references and entry-time `inCompiledCode()` values in a bounded
+ring, armed after explicit compilation, and dumps only when the original
+assertion fails. No guest invocation, settling call or retry was added.
+
+The 15 recorded events have no overflow. The stable `THC host entry/1` root
+enters in interpreter mode. Its selected `lambda raw` target and the actual
+guest root entered have identical identities; the actual guest entry is also
+interpreted. All twelve following nested guest-root events are interpreted.
+At the later failure dump, the host and selected guest still have valid
+last-tier code. Entry mode and post-failure validity are distinct observations;
+this does not assert that no target state could change between them.
+
+This localizes the first observed bypass to the public host bridge, not merely
+a deeper guest function or the wrong split clone. It does not by itself name
+the native caller link responsible. The diagnostic preserves the original
+failure after 7,610 comparisons and 2,596 earlier required compiled calls.
+Its JAR SHA256 is
+`39629c8f2e474bb9139c6a707a66debe0576d9ac6f201f94432983e66576808e`,
+and its failed checker log is
+`adc9ae21106345bad6437f052cd0e353d6c477bb354cb59e0357c55f5781760f`.
+The overlay changes generated code and timing; it is a diagnostic reproduction,
+not an unmodified coverage pass.
+The [compact experiment](../bench/experiments/sequence-entry-attribution/README.md)
+retains the exact overlay, failure excerpt, hashes and reproduction commands.
+
+## Controls that do not establish a fix
+
+Two further build-only checker overlays inspect the host, guest and five Java
+caller methods immediately before the first Sequence call. One only observes;
+the other additionally invokes JVMCI `reprofile()` on the five caller methods.
+Both finish with 8,028 comparisons and 2,760 positive required compiled calls.
+Both preserve host/guest code addresses and call counts across the diagnostic,
+with zero compiled entries before the measured call. Because observation alone
+changes the outcome, this pair is **inconclusive** about caller retirement as a
+remedy. Neither observation nor re-profiling is proposed for production.
+
+A tiny standalone public-call experiment also fails to reproduce the desired
+zero-entry symptom: both first and second calls add one compiled entry. It is
+not a deterministic regression for the production failure.
+
+## Boundary lifetime lead and its limits
+
+The pinned AMD64 compiler source emits its successful G1 boundary tail jump
+before frame setup and the boundary nmethod's entry barrier. Under ZGC it emits
+that jump after the barrier instead. The pinned native binary connects that
+barrier to aging: `BarrierSetNMethod::nmethod_entry_barrier` calls
+`nmethod::mark_as_maybe_on_stack` at `0x562d8c`; that method writes the current
+`CodeCache::gc_epoch()` to nmethod offset `0x48` at `0xe29c11`.
+`nmethod::is_cold` reads the same field and compares its age with
+`CodeCache::cold_gc_count()` at `0xe2a342` through `0xe2a35a`.
+This strengthens the explanation for an active fast trampoline aging as cold,
+but is not a direct sample of the retired boundary's age field.
+
+An unchanged-checker bytecode replay with only ZGC and lifecycle logging added
+passes 8,028 comparisons and 2,760 required compiled calls. Its log shows one
+boundary installation and no boundary retirement. This is **not** an isolated
+entry-barrier experiment: the collector also changes compressed-oop behavior,
+timing, and the recorded `cold_count` (2147483647 versus 32 in the earlier G1
+cold-flush record). Compact object headers remain enabled. No default collector
+change or default-runtime coverage pass follows from this result.
+
+The controls are retained under `build/link-control-*` in the owner's
+`thc-sequence-linkage-control-01a0cdeb` worktree. Their output SHA256 values are:
+
+```text
+527208b38d0902b8e8df44ec22bfc16368c1c9063c4aa1bceb896de26a69baa8  observe.log
+318eabecd4e3488194122df23c0ff69334a320c049ce23c8db58c49493a95975  reprofile.log
+599756cd9dc3151a52e0ccf2a4039a3724147b90c4ee80c63ba24a14d3138d3f  zgc.log
+5a2104a2d4c2a8777c749840a18fd0f6bbbbd74309b890c080892d6a0ed621f0  zgc-lifecycle.log
+```
+
+The remaining blocker is the pinned public host-entry/VM caller-link path.
+Restoring the stub alone does not guarantee first-call compiled guest activity;
+no supported public API to repair all preexisting caller links was found.
+Further work needs a discriminating caller-link or runtime-lifetime fix while
+retaining the ordinary public call and unchanged default-runtime gate. More
+primops, Sequence source substitutions, counter relaxation and diagnostic
+settling do not address this observed failure.
