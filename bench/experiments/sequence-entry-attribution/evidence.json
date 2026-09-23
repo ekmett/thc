@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "status": "diagnostic-reproduced-original-assertion-failure",
+  "date": "2026-09-23",
+  "platform": "Linux x86-64",
+  "graalvm": "25.3.4.1",
+  "ghc": "9.14.1",
+  "sourceBase": "85dff0b83d90c07accd7f3567a89b3f9741be284",
+  "backend": "bytecode",
+  "exitCode": 1,
+  "failure": {
+    "entry": "sequenceBuildViews",
+    "phase": "compiled-warm",
+    "input": 1,
+    "nativeResultMatched": true,
+    "compiledEntryDelta": 0,
+    "extraDiagnosticGuestCalls": 0
+  },
+  "completedBeforeFailure": {
+    "interpreted": 2562,
+    "compiledWarm": 72,
+    "afterCompilationCold": 2452,
+    "postColdCompiled": 2524,
+    "totalComparisons": 7610,
+    "requiredCompiledCalls": 2596,
+    "cleanSupportedDiagnostics": 13,
+    "strictFrontiers": 8
+  },
+  "trace": {
+    "capacity": 4096,
+    "events": 15,
+    "overwritten": 0,
+    "hostEntryMode": "interpreter",
+    "selectedAndActualGuestIdentityMatch": true,
+    "actualGuestEntryMode": "interpreter",
+    "nestedGuestEntries": 12,
+    "nestedGuestEntryModes": "all interpreter",
+    "hostAndActualGuestValidLastTierAtDump": true,
+    "modeObservation": "at root entry before opaque recorder call",
+    "validityObservation": "post-failure dump, not entry time"
+  },
+  "sha256": {
+    "diagnosticRuntimeJar": "39629c8f2e474bb9139c6a707a66debe0576d9ac6f201f94432983e66576808e",
+    "diagnosticFullLog": "adc9ae21106345bad6437f052cd0e353d6c477bb354cb59e0357c55f5781760f",
+    "originalCasesJson": "b9a7e8cda32b448cb9d5e54af08bec112eab4c112b1a8a63a23b32b6dad4179a",
+    "unmodifiedRuntimeJar": "ce0b5621f91f91461cabb371a386123ce54fb2f4bc939241398cbc7c4b2f46de",
+    "unmodifiedFailureLog": "ee89d095b2a4bc4197eca2b727911b156148a7dc359510fd7937026cac9f40e7",
+    "overlayProgramKt": "5640679add318540252ecbdc3d9bb93c3171b2d3ddc5d576d6c65c8e194e1fe4",
+    "overlayBytecodeRootJava": "98cde0c359c35ff70d24856a8e3d00b91d51d76ab55ca4e9de5a276e5770be40",
+    "overlayLibraryCheckKt": "bda649da53dc71ab5e3f82ba773244383d4aa8823e82c7efc4273c61c817206b"
+  },
+  "preservedArtifacts": {
+    "directory": "/home/ekmett/ai/thc-sequence-entry-attribution-01a0cdeb/build/root-entry-attribution",
+    "fullLog": "check-bytecode.log",
+    "unmodifiedFailureLog": "baseline-unmodified-bytecode.log",
+    "runtimeClasspath": "runtime-libs/*",
+    "sourceOverlay": "source-overlay",
+    "entryBytecode": "root-entry-bytecode.txt",
+    "buildLog": "build.log",
+    "handoff": "HANDOFF-85dff0b-root-trace.md",
+    "manifest": "/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/build/libraries/cases.json"
+  },
+  "unmodifiedFailureSourceRuntime": "3e5ee6d3506b6ebbb19322eb91df6eed5c250952",
+  "unmodifiedRuntimeRelationship": "All src/main files unchanged between 3e5ee6d and 85dff0b; separate earlier run, not relabeled as newly rerun",
+  "limitations": [
+    "Instrumentation changes compiled code, timing and Java profiles",
+    "Post-failure target validity is not an entry-time sample",
+    "Does not identify the exact Java caller link or prove a universal boundary mechanism",
+    "No full production pass or runtime fix is claimed"
+  ]
+}

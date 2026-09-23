@@ -1,0 +1,11 @@
+// Diagnostic-only overlay: the tracked 85dff0b sources remain unchanged.
+allprojects {
+    afterEvaluate {
+        def kotlinMain = extensions.getByName('kotlin').sourceSets.getByName('main').kotlin
+        kotlinMain.exclude('thc/runtime/Program.kt', 'thc/LibraryCheck.kt')
+        kotlinMain.srcDir(file('build/root-trace-src/kotlin'))
+        def javaMain = extensions.getByName('sourceSets').getByName('main').java
+        javaMain.exclude('thc/runtime/BytecodeRoot.java')
+        javaMain.srcDir(file('build/root-trace-src/java'))
+    }
+}

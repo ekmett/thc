@@ -1,0 +1,19 @@
+ROOT_TRACE_FAILURE backend=bytecode phase=compiled-warm entry=sequenceBuildViews input=1 events=15 capacity=4096 overwritten=0
+ROOT_TRACE seq=0 kind=host-entry mode=interpreter root=thc.runtime.EntryRoot@2a59d473 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@35a0e495 name=THC host entry/1 valid=true lastTier=true code=139821557864704
+ROOT_TRACE seq=1 kind=selected-guest mode=interpreter root=thc.runtime.BytecodeRootGen@4e7b2c21 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@37c41ec0 name=lambda raw valid=true lastTier=true code=139821557930496
+ROOT_TRACE seq=2 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@4e7b2c21 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@37c41ec0 name=lambda raw valid=true lastTier=true code=139821557930496
+ROOT_TRACE seq=3 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@3522c8de target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@9b86cf2 name=lambda ds valid=false lastTier=false code=0
+ROOT_TRACE seq=4 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@3721b5ab target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@6026c03 name=xs valid=false lastTier=false code=0
+ROOT_TRACE seq=5 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@65e0b505 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@67de7a99 name=lambda ww valid=false lastTier=false code=0
+ROOT_TRACE seq=6 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@795f5d51 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@34aeacd1 name=lambda ds valid=false lastTier=false code=0
+ROOT_TRACE seq=7 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@54067fdc target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@4098dd77 name=argument thunk valid=false lastTier=false code=0
+ROOT_TRACE seq=8 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@43aeb5e0 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@2274160 name=lambda x valid=false lastTier=false code=0
+ROOT_TRACE seq=9 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@65383667 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@63cd2cd2 name=argument thunk valid=false lastTier=false code=0
+ROOT_TRACE seq=10 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@103f57bc target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@5d038e54 name=lambda ww, xs valid=false lastTier=false code=0
+ROOT_TRACE seq=11 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@1b6a6f8 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@4866416d name=lambda ds valid=false lastTier=false code=0
+ROOT_TRACE seq=12 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@103f57bc target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@5d038e54 name=lambda ww, xs valid=false lastTier=false code=0
+ROOT_TRACE seq=13 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@1b6a6f8 target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@4866416d name=lambda ds valid=false lastTier=false code=0
+ROOT_TRACE seq=14 kind=guest-entry mode=interpreter root=thc.runtime.BytecodeRootGen@3522c8de target=com.oracle.truffle.runtime.hotspot.HotSpotOptimizedCallTarget@9b86cf2 name=lambda ds valid=false lastTier=false code=0
+Exception in thread "main" java.lang.IllegalStateException: bytecode compiled-warm sequenceBuildViews(1) did not enter installed guest code
+	at thc.LibraryCheckKt.main$checkRows(LibraryCheck.kt:128)
+	at thc.LibraryCheckKt.main(LibraryCheck.kt:159)

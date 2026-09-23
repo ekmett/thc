@@ -1,0 +1,55 @@
+--- a/build/root-trace-src/kotlin/Program.kt
++++ b/build/root-trace-src/kotlin/Program.kt
+@@ -811,6 +811,7 @@
+     }
+
+     override fun execute(frame: VirtualFrame): Any? {
++        RootEntryTrace.record(2, this, CompilerDirectives.inCompiledCode())
+         if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.compiledEntries++
+         val entry = handoff
+         if (entry != null && frame.arguments.isEmpty()) {
+@@ -868,10 +869,12 @@
+     @Child private var dispatch = Dispatch.create(arity, false, metrics)
+     @Child private var force = Force(metrics)
+     override fun execute(frame: VirtualFrame): Any? {
++        RootEntryTrace.record(0, this, CompilerDirectives.inCompiledCode())
+         frame.setLong(FrameLayout.BLOOM_FILTER, 0L)
+         val value = force.execute(frame, frame.arguments[0])
+         if (arity == 0) return value
+         val fn = value as? Closure ?: fault("Application of a non-function")
++        RootEntryTrace.record(1, fn.target, CompilerDirectives.inCompiledCode())
+         val args = frame.arguments[1] as? Array<Any?> ?: fault("Invalid host arguments")
+         return force.execute(frame, dispatch.execute(frame, fn, args))
+     }
+--- a/build/root-trace-src/java/BytecodeRoot.java
++++ b/build/root-trace-src/java/BytecodeRoot.java
+@@ -56,7 +56,8 @@
+     @Operation
+     @ConstantOperand(type = Metrics.class, name = "metrics")
+     public static final class EnterRoot {
+-        @Specialization public static void enter(Metrics metrics) {
++        @Specialization public static void enter(Metrics metrics, @Bind("$node") Node node) {
++            RootEntryTrace.record(2, node.getRootNode(), CompilerDirectives.inCompiledCode());
+             if (metrics.getEnabled() && CompilerDirectives.inCompiledCode()) {
+                 metrics.setCompiledEntries(metrics.getCompiledEntries() + 1);
+             }
+--- a/build/root-trace-src/kotlin/LibraryCheck.kt
++++ b/build/root-trace-src/kotlin/LibraryCheck.kt
+@@ -126,6 +126,7 @@
+                     val actual = function.execute(input).asLong()
+                     check(actual == expected) { "$backend $phase $name($input): $actual != native $expected" }
+                     if (compiled) check(count(function, "compiledEntries") > before) {
++                        thc.runtime.RootEntryTrace.dump(backend, phase, name, input)
+                         "$backend $phase $name($input) did not enter installed guest code"
+                     }
+                     checkPolicy(function)
+@@ -154,7 +155,9 @@
+                 }
+                 checkPolicy(function)
+                 check(function.invokeMember("compile").asBoolean()) { "Failed guest compilation: $backend $name" }
++                if (name == "sequenceBuildViews") thc.runtime.RootEntryTrace.arm()
+                 checkRows(function, warm, "compiled-warm", compiled = true)
++                if (name == "sequenceBuildViews") thc.runtime.RootEntryTrace.disarm()
+                 // A previously unseen branch can legitimately invalidate installed code.
+                 // Check cold results after compilation, then train every input and require
+                 // installed-code entry for every input in the final replay.
