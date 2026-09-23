@@ -12,6 +12,8 @@ and the `automation` job in the latest Build run and attempt, and publishes the
 This explicit status also covers bot-dispatched builds, whose workflow job checks
 are not always eligible for GitHub PR requirements. A failed,
 skipped or missing required check does not pass the bot's gate.
+After all its checks pass, the bot may attempt a protected merge for GitHub's
+`clean` or `unstable` state; GitHub can still refuse it.
 
 The repository owner applies `auto-merge` when a PR is ready to land. The bot
 verifies the latest label application in GitHub's event history was by `ekmett`;

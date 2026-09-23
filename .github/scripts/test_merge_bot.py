@@ -112,6 +112,53 @@ class MergeBotTest(unittest.TestCase):
         self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
         self.assertEqual(api.statuses[0]["state"], "success")
 
+    def test_green_fresh_unstable_head_attempts_protected_merge(self):
+        api = FakeAPI()
+        api.pr["mergeable_state"] = "blocked"
+        api.before_pr_read = lambda n: api.pr.update(mergeable_state="unstable") if n == 2 else None
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
+        self.assertEqual(api.statuses[0]["state"], "success")
+
+    def test_unstable_requires_complete_trusted_build(self):
+        mutations = {
+            "missing": lambda a: a.runs.clear(),
+            "wrong workflow": lambda a: a.runs[0].update(workflow_id=18),
+            "wrong head": lambda a: a.runs[0].update(head_sha="other"),
+            "pending": lambda a: a.runs[0].update(status="in_progress", conclusion=None),
+            "failed run": lambda a: a.runs[0].update(conclusion="failure"),
+            "failed job": lambda a: a.jobs[0].update(conclusion="failure"),
+            "skipped job": lambda a: a.jobs[0].update(conclusion="skipped"),
+            "missing job": lambda a: a.jobs.pop(),
+            "duplicate job": lambda a: a.jobs.append(copy.deepcopy(a.jobs[0])),
+            "extra failed job": lambda a: a.jobs.append(
+                {"name": "extra", "status": "completed", "conclusion": "failure"}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                api = FakeAPI()
+                api.pr["mergeable_state"] = "unstable"
+                mutate(api)
+                self.run_bot(api)
+                self.assertFalse(any(path.endswith("/merge") for _, path, _ in api.actions))
+                self.assertNotEqual(api.statuses[0]["state"], "success")
+
+    def test_unstable_preserves_fresh_authorization_base_and_build_rechecks(self):
+        mutations = {
+            "head": lambda a: a.pr["head"].update(sha="new"),
+            "owner": lambda a: a.events[0]["actor"].update(login="collaborator"),
+            "consent": lambda a: a.pr.update(labels=[]),
+            "main": lambda a: setattr(a, "base", "new"),
+            "build": lambda a: a.runs[0].update(run_attempt=2, status="in_progress"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                api = FakeAPI()
+                api.pr["mergeable_state"] = "unstable"
+                api.before_pr_read = lambda n: mutate(api) if n == 2 else None
+                self.run_bot(api)
+                self.assertEqual(api.actions, [])
+
     def test_no_owner_label_no_action(self):
         for actor in ("collaborator", "github-actions[bot]", None):
             with self.subTest(actor=actor):
@@ -349,19 +396,26 @@ class MergeBotTest(unittest.TestCase):
         self.assertEqual(api.statuses[0]["state"], "pending")
 
     def test_conflicted_unknown_or_blocked_pr_never_merges(self):
-        for mergeable, state in ((False, "dirty"), (None, "unknown"), (True, "blocked")):
+        states = ((False, "dirty"), (None, "unknown")) + tuple(
+            (True, state) for state in ("blocked", "dirty", "unknown", "behind", "draft", "has_hooks", None))
+        for mergeable, state in states:
             api = FakeAPI()
             api.pr.update(mergeable=mergeable, mergeable_state=state)
             self.run_bot(api)
             self.assertEqual(api.actions, [])
 
     def test_server_rejection_does_not_retry_or_bypass(self):
-        api = FakeAPI()
-        api.merge_error = HTTPError("", 409, "Head changed", {}, None)
-        self.addCleanup(api.merge_error.close)
-        messages = self.run_bot(api)
-        self.assertEqual(len(api.actions), 1)
-        self.assertIn("GitHub refused", messages[-1])
+        for state in ("clean", "unstable"):
+            for code in (405, 409):
+                with self.subTest(state=state, code=code):
+                    api = FakeAPI()
+                    api.pr["mergeable_state"] = state
+                    api.merge_error = HTTPError("", code, "Merge refused", {}, None)
+                    self.addCleanup(api.merge_error.close)
+                    messages = self.run_bot(api)
+                    self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
+                    self.assertEqual(api.base, "base")
+                    self.assertIn("GitHub refused", messages[-1])
 
     def test_publisher_does_not_replace_latest_failure_with_old_success(self):
         api = FakeAPI()
