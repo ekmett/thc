@@ -1,0 +1,98 @@
+=== ast/complexFloatCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r0|QWORD op: L2F <|@ <|@
+nr   12  <|@ instruction v1|SINGLE = FSUB (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   14  <|@ instruction v2|SINGLE = FMUL (a: v1|SINGLE, b: v0|SINGLE) <|@ <|@
+nr   18  <|@ instruction v3|SINGLE = FADD (a: v0|SINGLE, b: v3|SINGLE) <|@ <|@
+nr   20  <|@ instruction v1|SINGLE = FMUL (a: v3|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   24  <|@ instruction v0|SINGLE = FMUL (a: v0|SINGLE, b: v4|SINGLE) <|@ <|@
+nr   26  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   28  <|@ instruction v0|SINGLE = FNEG x: v0|SINGLE <|@ <|@
+nr   30  <|@ instruction v0|SINGLE = FMUL (a: v0|SINGLE, b: v4|SINGLE) <|@ <|@
+nr   32  <|@ instruction v1|SINGLE = FMUL (a: v3|SINGLE, b: v4|SINGLE) <|@ <|@
+nr   34  <|@ instruction v1|SINGLE = FSUB (a: v2|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   36  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   38  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr  158  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@291b2210 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== ast/complexDoubleCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r0|QWORD op: L2D <|@ <|@
+nr   12  <|@ instruction v1|DOUBLE = FSUB (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   14  <|@ instruction v2|DOUBLE = FMUL (a: v1|DOUBLE, b: v0|DOUBLE) <|@ <|@
+nr   18  <|@ instruction v3|DOUBLE = FADD (a: v0|DOUBLE, b: v3|DOUBLE) <|@ <|@
+nr   20  <|@ instruction v1|DOUBLE = FMUL (a: v3|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   24  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v4|DOUBLE) <|@ <|@
+nr   26  <|@ instruction v0|DOUBLE = FADD (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   28  <|@ instruction v0|DOUBLE = FNEG x: v0|DOUBLE <|@ <|@
+nr   30  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v4|DOUBLE) <|@ <|@
+nr   32  <|@ instruction v1|DOUBLE = FMUL (a: v3|DOUBLE, b: v4|DOUBLE) <|@ <|@
+nr   34  <|@ instruction v1|DOUBLE = FSUB (a: v2|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   36  <|@ instruction v0|DOUBLE = FADD (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   38  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr  158  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@6a6f612e thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== ast/mixedCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r0|QWORD op: L2F <|@ <|@
+nr   12  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   16  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   18  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v0|SINGLE) <|@ <|@
+nr   20  <|@ instruction r1|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr   22  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r0|QWORD op: L2D <|@ <|@
+nr   26  <|@ instruction v0|DOUBLE = FSUB (a: v0|DOUBLE, b: v2|DOUBLE) <|@ <|@
+nr   30  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v3|DOUBLE) <|@ <|@
+nr   32  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr   38  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r3|QWORD op: L2F <|@ <|@
+nr   40  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   44  <|@ instruction v0|SINGLE = FMUL (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   46  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr   52  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r0|QWORD op: L2D <|@ <|@
+nr   54  <|@ instruction v0|DOUBLE = FSUB (a: v0|DOUBLE, b: v2|DOUBLE) <|@ <|@
+nr   58  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   60  <|@ instruction r0|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr  182  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@1180c51a thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== bytecode/complexFloatCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r1|QWORD op: L2F <|@ <|@
+nr   12  <|@ instruction v1|SINGLE = FSUB (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   14  <|@ instruction v2|SINGLE = FMUL (a: v1|SINGLE, b: v0|SINGLE) <|@ <|@
+nr   18  <|@ instruction v3|SINGLE = FADD (a: v0|SINGLE, b: v3|SINGLE) <|@ <|@
+nr   20  <|@ instruction v1|SINGLE = FMUL (a: v3|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   24  <|@ instruction v0|SINGLE = FMUL (a: v0|SINGLE, b: v4|SINGLE) <|@ <|@
+nr   26  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   28  <|@ instruction v0|SINGLE = FNEG x: v0|SINGLE <|@ <|@
+nr   30  <|@ instruction v0|SINGLE = FMUL (a: v0|SINGLE, b: v4|SINGLE) <|@ <|@
+nr   32  <|@ instruction v1|SINGLE = FMUL (a: v3|SINGLE, b: v4|SINGLE) <|@ <|@
+nr   34  <|@ instruction v1|SINGLE = FSUB (a: v2|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   36  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   38  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr  172  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@1d761dd7 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== bytecode/complexDoubleCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r1|QWORD op: L2D <|@ <|@
+nr   12  <|@ instruction v1|DOUBLE = FSUB (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   14  <|@ instruction v2|DOUBLE = FMUL (a: v1|DOUBLE, b: v0|DOUBLE) <|@ <|@
+nr   18  <|@ instruction v3|DOUBLE = FADD (a: v0|DOUBLE, b: v3|DOUBLE) <|@ <|@
+nr   20  <|@ instruction v1|DOUBLE = FMUL (a: v3|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   24  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v4|DOUBLE) <|@ <|@
+nr   26  <|@ instruction v0|DOUBLE = FADD (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   28  <|@ instruction v0|DOUBLE = FNEG x: v0|DOUBLE <|@ <|@
+nr   30  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v4|DOUBLE) <|@ <|@
+nr   32  <|@ instruction v1|DOUBLE = FMUL (a: v3|DOUBLE, b: v4|DOUBLE) <|@ <|@
+nr   34  <|@ instruction v1|DOUBLE = FSUB (a: v2|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   36  <|@ instruction v0|DOUBLE = FADD (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   38  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr  172  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@18ea6ea9 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
+=== bytecode/mixedCase: After FinalCodeAnalysisStage ===
+nr    8  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r1|QWORD op: L2F <|@ <|@
+nr   12  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   16  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   18  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v0|SINGLE) <|@ <|@
+nr   20  <|@ instruction r3|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr   22  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r1|QWORD op: L2D <|@ <|@
+nr   26  <|@ instruction v0|DOUBLE = FSUB (a: v0|DOUBLE, b: v2|DOUBLE) <|@ <|@
+nr   30  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v3|DOUBLE) <|@ <|@
+nr   32  <|@ instruction r4|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr   38  <|@ instruction v0|SINGLE = FLOATCONVERT inputValue: r4|QWORD op: L2F <|@ <|@
+nr   40  <|@ instruction v0|SINGLE = FADD (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   44  <|@ instruction v0|SINGLE = FMUL (a: v0|SINGLE, b: v1|SINGLE) <|@ <|@
+nr   46  <|@ instruction r4|QWORD = FLOATCONVERT inputValue: v0|SINGLE op: F2L <|@ <|@
+nr   52  <|@ instruction v0|DOUBLE = FLOATCONVERT inputValue: r1|QWORD op: L2D <|@ <|@
+nr   54  <|@ instruction v0|DOUBLE = FSUB (a: v0|DOUBLE, b: v2|DOUBLE) <|@ <|@
+nr   58  <|@ instruction v0|DOUBLE = FMUL (a: v0|DOUBLE, b: v1|DOUBLE) <|@ <|@
+nr   60  <|@ instruction r1|QWORD = FLOATCONVERT inputValue: v0|DOUBLE op: D2L <|@ <|@
+nr  196  <|@ instruction RETURN (result: r0|QWORD[.], additionalReturns: []) config: jdk.graal.compiler.hotspot.GraalHotSpotVMConfig@3959a495 thread: r28 isStub: false requiresReservedStackAccessCheck: false <|@ <|@
