@@ -116,7 +116,11 @@ internal object CoreRepresentations {
         return resolve(expression, emptySet())?.second
     }
     fun requireInput(proof: CoreRepresentation) {
-        if (!proof.isEmptyTuple) requireScalar(proof, "argument")
+        if (proof.isTuple) {
+            TupleShape.validate(proof)
+            if (TupleShape.flatten(proof).any { it.primReps == listOf("BoxedRep Nothing") })
+                throw UnsupportedCore("Unsupported Core tuple input with unknown boxed levity")
+        } else requireScalar(proof, "argument")
     }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {
         requireNoVector(proof, boundary)

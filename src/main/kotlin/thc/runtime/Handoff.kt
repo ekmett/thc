@@ -167,6 +167,7 @@ internal class HandoffEntry(
         fun create(language: TruffleLanguage<*>?, layout: FrameLayout, argumentReps: List<CoreRepresentation>,
                    resultRep: CoreRepresentation, hasEnvironment: Boolean): HandoffEntry? {
             val thc = language as? Language ?: return null
+            if (argumentReps.any { it.isTuple && !it.isEmptyTuple }) return null
             if (!thc.handoffLayouts.enabled || resultRep.isAggregate) return null
             val resultReference = resultRep.primReps?.singleOrNull()?.startsWith("BoxedRep ") == true
             if (!resultRep.isLong && !resultReference) return null

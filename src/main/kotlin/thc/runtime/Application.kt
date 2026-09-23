@@ -38,7 +38,9 @@ internal class Closure @JvmOverloads constructor(
     @JvmField val arity: Int,
     @JvmField val target: RootCallTarget,
     /** Logical prefix length can exceed the number of stored scalar values. */
-    @JvmField val suppliedCount: Int = supplied.size
+    @JvmField val suppliedCount: Int = supplied.size,
+    /** An escaping typed prefix owns these fields; it never owns a reusable loan. */
+    @JvmField val typedSupplied: HandoffStorage? = null
 ) {
     init { require(arity >= 0) { "Negative closure arity" } }
 
@@ -146,6 +148,14 @@ internal abstract class Dispatch(
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1)
     var evaluatedArguments: BooleanArray = booleanArrayOf()
     @JvmField @CompilerDirectives.CompilationFinal var argumentLayout: ArgumentLayout? = null
+    @Child private var typed: InputDispatch? = null
+    private fun typed(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any? {
+        if (typed == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate()
+            typed = insert(InputDispatch(ScalarArrayInputSource(argumentLayout), argsSize, tailCall, metrics))
+        }
+        return typed!!.execute(frame, function, arguments)
+    }
     abstract fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any?
 
     @Specialization(guards = ["function.arity == argsSize", "function.target == cachedTarget"], limit = "3")
@@ -156,6 +166,7 @@ internal abstract class Dispatch(
                @Cached("function.suppliedCount") prefixCount: Int,
                @Cached("function.environment != null") hasEnvironment: Boolean,
                @Cached("createCaller(cachedTarget, prefixCount)") caller: DirectCallerNode): Any? {
+        if ((cachedTarget.rootNode as? GuestRoot)?.typedInput != null) return typed(frame, function, arguments)
         ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, argsSize)
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
             function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, argsSize))
@@ -174,6 +185,7 @@ internal abstract class Dispatch(
                           @Cached("createCaller(cachedTarget, prefixCount)") caller: DirectCallerNode,
                           @Cached("createRemainder(arity)") rest: Dispatch,
                           @Cached("createForce()") force: Force): Any? {
+        if ((cachedTarget.rootNode as? GuestRoot)?.typedInput != null) return typed(frame, function, arguments)
         ArgumentLayout.validate(formalLayout, prefixCount, argumentLayout, 0, arity)
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
             function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, arity))
@@ -185,7 +197,8 @@ internal abstract class Dispatch(
     }
 
     @Specialization(guards = ["function.arity > argsSize"])
-    fun underapplied(function: Closure, arguments: Array<Any?>): Any? {
+    fun underapplied(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any? {
+        if ((function.target.rootNode as? GuestRoot)?.typedInput != null) return typed(frame, function, arguments)
         if (metrics.enabled) metrics.papAllocations++
         ArgumentLayout.validate(function, argumentLayout, 0, argsSize)
         return function.papCompact(arguments, 0, arguments.size, argsSize)
@@ -194,6 +207,7 @@ internal abstract class Dispatch(
     @Specialization(guards = ["function.arity == argsSize"], replaces = ["direct"])
     fun indirect(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                  @Cached(value = "createIndirectCaller()", neverDefault = true) caller: IndirectCallerNode): Any? {
+        if ((function.target.rootNode as? GuestRoot)?.typedInput != null) return typed(frame, function, arguments)
         val hasEnvironment = function.environment != null
         ArgumentLayout.validate(function, argumentLayout, 0, minOf(argsSize, function.arity))
         val packet = appendWithHeader(if (hasEnvironment) 2 else 1,
@@ -236,6 +250,7 @@ internal abstract class GenericDispatch : Node() {
                   logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean, metrics: Metrics,
                   @Cached(value = "createCaller(metrics)", neverDefault = true) caller: IndirectCallerNode,
                   @Cached(value = "createForce(metrics)", neverDefault = true) force: Force,
+                  @Cached(value = "createTyped(layout, logicalCount, tailCall, metrics)", neverDefault = true) typed: GenericInputCall,
                   @Cached underapplied: InlinedConditionProfile,
                   @Cached exact: InlinedConditionProfile): Any? {
             var function = initial
@@ -244,6 +259,8 @@ internal abstract class GenericDispatch : Node() {
                 val remaining = logicalCount - offset
                 val physicalOffset = ArgumentLayout.offset(layout, offset)
                 ArgumentLayout.validate(function, layout, offset, minOf(function.arity, remaining))
+                if ((function.target.rootNode as? GuestRoot)?.typedInput != null)
+                    return typed.execute(frame, function, arguments, offset)
                 if (underapplied.profile(node, function.arity > remaining)) {
                     if (metrics.enabled) metrics.papAllocations++
                     return function.papCompact(arguments, physicalOffset, arguments.size - physicalOffset, remaining)
@@ -267,6 +284,8 @@ internal abstract class GenericDispatch : Node() {
 
         @JvmStatic fun createCaller(metrics: Metrics) = IndirectCallerNode.create(metrics)
         @JvmStatic fun createForce(metrics: Metrics): Force = Force(metrics)
+        @JvmStatic fun createTyped(layout: ArgumentLayout?, count: Int, tail: Boolean, metrics: Metrics) =
+            GenericInputCall(ScalarArrayInputSource(layout), count, tail, metrics, null, 0)
     }
 }
 
@@ -284,7 +303,8 @@ private fun appendWithHeader(skip: Int, prefix: Array<Any?>, prefixSize: Int,
     return packet
 }
 
-internal class TailCall(val target: RootCallTarget, val args: Array<Any?>) : ControlFlowException()
+internal class TailCall(val target: RootCallTarget, val args: Array<Any?>,
+    val input: HandoffStorage? = null) : ControlFlowException()
 
 internal class TailCheck(private val metrics: Metrics) : Node() {
     @Child private var bloomValue: BloomValue = BloomValueNodeGen.create()
@@ -399,18 +419,25 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private va
 
     fun setNext(frame: VirtualFrame, call: TailCall) {
         frame.setObject(FrameLayout.TAIL_FUNCTION, call.target)
-        frame.setObject(FrameLayout.TAIL_ARGUMENTS, call.args)
+        frame.setObject(FrameLayout.TAIL_ARGUMENTS, call)
     }
 
     override fun executeRepeating(frame: VirtualFrame): Boolean = try {
         if (metrics.enabled) metrics.trampolineIterations++
         val target = frame.getObject(FrameLayout.TAIL_FUNCTION) as RootCallTarget
-        @Suppress("UNCHECKED_CAST")
-        val arguments = frame.getObject(FrameLayout.TAIL_ARGUMENTS) as Array<Any?>
+        val transfer = frame.getObject(FrameLayout.TAIL_ARGUMENTS) as TailCall
+        val arguments = transfer.args
         frame.setObject(FrameLayout.TAIL_FUNCTION, null)
         frame.setObject(FrameLayout.TAIL_ARGUMENTS, null)
-        arguments[0] = 0L
-        frame.setObject(FrameLayout.TAIL_RESULT, dispatch.call(target, arguments))
+        val input = transfer.input
+        val result = if (input != null) {
+            input.layout.setLong(input, 0, 0L)
+            invokeTypedInput(target, input) { dispatch.call(target, NO_PAP_ARGUMENTS) }
+        } else {
+            arguments[0] = 0L
+            dispatch.call(target, arguments)
+        }
+        frame.setObject(FrameLayout.TAIL_RESULT, result)
         false
     } catch (tail: TailCall) {
         setNext(frame, tail)

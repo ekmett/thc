@@ -1,7 +1,7 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
-/** Lowering-only proof checks for known function inputs. Runtime masks cover unknown
+/** Lowering-only proof checks for known function inputs. Runtime layouts cover unknown
  * higher-order targets. No scalar signature is inferred from a physical carrier. */
 internal object CoreInputCalls {
     private data class Binding(val proof: CoreRepresentation, val inputs: List<CoreRepresentation>?)
@@ -34,9 +34,9 @@ internal object CoreInputCalls {
                         for (i in 0 until minOf(signature.size, args.size)) {
                             val actual = proof(args[i], scope)
                             val expected = signature[i]
-                            if (expected.isEmptyTuple || actual.isEmptyTuple) {
-                                if (!expected.isEmptyTuple || !actual.isEmptyTuple)
-                                    throw UnsupportedCore("Missing or conflicting exact empty tuple argument proof")
+                            if (expected.isTuple || actual.isTuple) {
+                                if (!expected.isTuple || !actual.isTuple || !TupleShape.compatible(expected, actual))
+                                    throw UnsupportedCore("Missing or conflicting exact tuple argument proof")
                             } else if (expected.isAggregate || actual.isAggregate) TupleShape.requireCompatible(expected, actual, component = true)
                         }
                     }

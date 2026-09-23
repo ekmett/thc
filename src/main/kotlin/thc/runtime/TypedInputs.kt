@@ -1,0 +1,418 @@
+package thc.runtime
+
+import com.oracle.truffle.api.CompilerDirectives
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
+import com.oracle.truffle.api.bytecode.BytecodeNode
+import com.oracle.truffle.api.bytecode.LocalAccessor
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.ExplodeLoop
+import com.oracle.truffle.api.nodes.Node
+import thc.Language
+
+/** Typed physical input fields, separate from both logical shapes and result storage. */
+internal class TypedInputLayout(val language: Language, val logical: ArgumentLayout, val hasEnvironment: Boolean) {
+    val header = if (hasEnvironment) 2 else 1
+    @field:CompilationFinal(dimensions = 1)
+    val leaves = (0 until logical.logicalArity).flatMap { ArgumentLayout.leaves(logical.proof(it)) }.toTypedArray()
+    private val reps = leaves.map(::fieldRep)
+    val packet = language.handoffLayouts.intern(listOf("WordRep") +
+        (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps)
+    @field:CompilationFinal(dimensions = 1)
+    private val prefixes = Array(logical.logicalArity + 1) { count ->
+        language.handoffLayouts.intern(reps.take(logical.offset(count)))
+    }
+    fun state(): HandoffState = language.handoffState.get()
+    fun prefix(count: Int): HandoffLayout = prefixes[count]
+    fun take(): HandoffStorage {
+        val state = state()
+        val input = state.pending ?: fault("Missing typed input loan")
+        state.pending = null
+        if (input.layout !== packet || !input.live) {
+            if (input.live) state.arguments.release(input)
+            fault("Conflicting typed input layout")
+        }
+        return input
+    }
+    fun release(input: HandoffStorage) = state().arguments.release(input, packet)
+
+    /** A scalar State#/unknown/address retains one reference field in the old ABI;
+     * only fields recursively inside an exact tuple are erased or flattened. */
+    companion object {
+        private fun fieldRep(proof: CoreRepresentation): String = when {
+            proof.isLong -> "IntRep"
+            proof.isFloat -> "FloatRep"
+            proof.isDouble -> "DoubleRep"
+            else -> "BoxedRep (Just Lifted)"
+        }
+        fun create(language: Language, logical: ArgumentLayout?, hasEnvironment: Boolean): TypedInputLayout? =
+            logical?.takeIf { it.requiresTyped }?.let { TypedInputLayout(language, it, hasEnvironment) }
+    }
+}
+
+/** Compile-time source descriptors only: no activation frame or guest payload is retained. */
+internal abstract class InputSource(val layout: ArgumentLayout?) {
+    abstract fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long
+    abstract fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float
+    abstract fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double
+    abstract fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Any?
+    abstract fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?)
+    @ExplodeLoop fun copy(frame: VirtualFrame, node: Node, values: Array<Any?>?, sourceOffset: Int,
+        destination: HandoffStorage, targetOffset: Int, count: Int) {
+        val shape = destination.layout
+        for (i in 0 until count) {
+            val source = sourceOffset + i
+            val target = targetOffset + i
+            if (shape.isLong(target)) shape.setLong(destination, target, long(frame, node, values, source))
+            else if (shape.isFloat(target)) shape.setFloat(destination, target, float(frame, node, values, source))
+            else if (shape.isDouble(target)) shape.setDouble(destination, target, double(frame, node, values, source))
+            else shape.setObject(destination, target, reference(frame, node, values, source))
+        }
+    }
+}
+
+/** Used only for pre-existing scalar/empty call sites; tuple payloads never enter this array. */
+internal class ScalarArrayInputSource(layout: ArgumentLayout?) : InputSource(layout) {
+    init { require(layout?.requiresTyped != true) }
+    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+        values!![index] as? Long ?: fault("Expected primitive Long input")
+    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+        values!![index] as? Float ?: fault("Expected primitive Float input")
+    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+        values!![index] as? Double ?: fault("Expected primitive Double input")
+    override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = values!![index]
+    override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) { values!![index] = value }
+}
+
+internal class AstInputSource(layout: ArgumentLayout,
+    @field:CompilationFinal(dimensions = 1) val slots: IntArray) : InputSource(layout) {
+    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = frame.getLong(slots[index])
+    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = frame.getFloat(slots[index])
+    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = frame.getDouble(slots[index])
+    override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = FrameAccess.read(frame, slots[index])
+    override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
+        FrameAccess.write(frame, slots[index], value)
+    }
+    @ExplodeLoop fun clear(frame: VirtualFrame) { for (slot in slots) frame.clear(slot) }
+}
+
+internal class BytecodeInputSource(layout: ArgumentLayout,
+    @field:CompilationFinal(dimensions = 1) val slots: Array<LocalAccessor>) : InputSource(layout) {
+    private fun bytecode(node: Node): BytecodeNode = (node.rootNode as BytecodeRoot).bytecodeNode
+    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getLong(bytecode(node), frame)
+    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getFloat(bytecode(node), frame)
+    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getDouble(bytecode(node), frame)
+    override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getObject(bytecode(node), frame)
+    override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
+        slots[index].setObject(bytecode(node), frame, value)
+    }
+}
+
+/** Copies between separately owned typed storage; logical compatibility is checked before this operation. */
+@ExplodeLoop
+internal fun copyInputFields(source: HandoffStorage, destination: HandoffStorage, sourceOffset: Int, targetOffset: Int, count: Int) {
+    val from = source.layout
+    val into = destination.layout
+    for (i in 0 until count) {
+        val s = sourceOffset + i
+        val d = targetOffset + i
+        if (into.isLong(d)) into.setLong(destination, d, from.getLong(source, s))
+        else if (into.isFloat(d)) into.setFloat(destination, d, from.getFloat(source, s))
+        else if (into.isDouble(d)) into.setDouble(destination, d, from.getDouble(source, s))
+        else into.setObject(destination, d, from.getObject(source, s))
+    }
+}
+
+/** Prefix fields are immutable after publication and cannot be confused with a pool loan. */
+internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputSource,
+    frame: VirtualFrame, node: Node, values: Array<Any?>?, offset: Int, count: Int): Closure {
+    check(count < function.arity)
+    val oldCount = function.suppliedCount
+    val prefixWidth = input.logical.offset(oldCount)
+    val sourceOffset = ArgumentLayout.offset(source.layout, offset)
+    val sourceWidth = ArgumentLayout.offset(source.layout, offset + count) - sourceOffset
+    val storage = input.prefix(oldCount + count).create()
+    function.typedSupplied?.let { copyInputFields(it, storage, 0, 0, prefixWidth) } ?: run {
+        check(prefixWidth == function.supplied.size)
+        ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, storage, 0, prefixWidth)
+    }
+    source.copy(frame, node, values, sourceOffset, storage, prefixWidth, sourceWidth)
+    return Closure(function.environment, NO_PAP_ARGUMENTS, function.arity - count, function.target, oldCount + count, storage)
+}
+
+/** The loan is consumed by entry before any guest continuation. Failed entry and
+ * deoptimization still have one generation-checked owner in the caller. */
+internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarget, input: HandoffStorage, action: () -> Any?): Any? {
+    val layout = (target.rootNode as GuestRoot).typedInput ?: fault("Target has no typed input entry")
+    val state = layout.state()
+    val generation = input.generation
+    check(state.pending == null)
+    state.pending = input
+    try { return action() }
+    finally {
+        state.pending = null
+        if (input.live && input.generation == generation) state.arguments.release(input)
+    }
+}
+
+/** All operand evaluation and strict scalar-prefix forcing happens before the
+ * loan. Aggregate strictness never forces a lifted field inside the tuple. */
+private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, input: TypedInputLayout,
+    source: InputSource, values: Array<Any?>?, logicalOffset: Int, count: Int, force: Force): HandoffStorage {
+    val root = function.target.rootNode as GuestRoot
+    val prefixCount = function.suppliedCount
+    val prefixWidth = input.logical.offset(prefixCount)
+    val strictPrefix = root.entryStrict.indices.any { i -> i < prefixCount && root.entryStrict[i] &&
+        !input.logical.isTuple(i) && input.packet.isObject(input.header + input.logical.offset(i)) }
+    // Only strict scalar reference values appear here. No tuple field is boxed
+    // or put in this temporary override array, and it never escapes the call.
+    val overrides = if (strictPrefix) arrayOfNulls<Any>(prefixWidth) else null
+    for (i in root.entryStrict.indices) {
+        if (!root.entryStrict[i] || input.logical.isTuple(i)) continue
+        val physical = input.logical.offset(i)
+        if (!input.packet.isObject(input.header + physical)) continue
+        if (i < prefixCount) {
+            val raw = function.typedSupplied?.let { it.layout.getObject(it, physical) } ?: function.supplied[physical]
+            overrides!![physical] = force.execute(frame, raw)
+        } else {
+            val position = ArgumentLayout.offset(source.layout, logicalOffset + i - prefixCount)
+            source.setReference(frame, node, values, position, force.execute(frame, source.reference(frame, node, values, position)))
+        }
+    }
+    val loan = input.state().arguments.acquire(input.packet)
+    try {
+        input.packet.setLong(loan, 0, 0L)
+        if (input.hasEnvironment) input.packet.setObject(loan, 1, function.environment)
+        function.typedSupplied?.let { copyInputFields(it, loan, 0, input.header, prefixWidth) } ?: run {
+            check(function.supplied.size == prefixWidth)
+            ScalarArrayInputSource(null).copy(frame, node, function.supplied, 0, loan, input.header, prefixWidth)
+        }
+        val from = ArgumentLayout.offset(source.layout, logicalOffset)
+        val width = ArgumentLayout.offset(source.layout, logicalOffset + count) - from
+        source.copy(frame, node, values, from, loan, input.header + prefixWidth, width)
+        if (overrides != null) for (i in 0 until prefixCount) {
+            val physical = input.logical.offset(i)
+            if (root.entryStrict[i] && !input.logical.isTuple(i) && input.packet.isObject(input.header + physical))
+                input.packet.setObject(loan, input.header + physical, overrides[physical])
+        }
+        return loan
+    } catch (failure: Throwable) { input.release(loan); throw failure }
+}
+
+/** One call-site cache serves both scalar and aggregate results. Each arm consumes
+ * aggregate completion before returning, so virtual results never merge in a PIC. */
+internal class InputDispatch(private val source: InputSource, private val count: Int, private val tail: Boolean,
+    private val metrics: Metrics, private val destination: TupleDestination? = null, private val start: Int = 0) : Node() {
+    @Children private var direct = emptyArray<InputCallArm>()
+    @Child private var generic = GenericInputCall(source, count, tail, metrics, destination, start)
+    @CompilationFinal private var megamorphic = false
+    @ExplodeLoop fun execute(frame: VirtualFrame, function: Closure, values: Array<Any?>? = null): Any? {
+        for (arm in direct) if (arm.matches(function)) return arm.execute(frame, function, values)
+        if (!megamorphic) {
+            CompilerDirectives.transferToInterpreterAndInvalidate()
+            if (direct.size < 3) {
+                val arm = insert(InputCallArm(source, count, tail, metrics, destination, start, function))
+                direct = direct + arm
+                return arm.execute(frame, function, values)
+            }
+            megamorphic = true
+        }
+        return generic.execute(frame, function, values)
+    }
+}
+
+private class InputCallArm(private val source: InputSource, private val count: Int, private val tail: Boolean,
+    private val metrics: Metrics, private val destination: TupleDestination?, private val start: Int, function: Closure) : Node() {
+    private val target = function.target
+    private val arity = function.arity
+    private val prefixCount = function.suppliedCount
+    private val hasEnvironment = function.environment != null
+    private val root = target.rootNode as GuestRoot
+    private val input = root.typedInput
+    @Child private var direct = com.oracle.truffle.api.nodes.DirectCallNode.create(target)
+    @Child private var legacy = DirectCallerNode(target, metrics, prefixSize = prefixCount)
+    @Child private var force = Force(metrics)
+    @Child private var loop = TailCallLoop(metrics)
+    @Child private var remainder: InputDispatch? = if (arity < count)
+        InputDispatch(source, count - arity, tail, metrics, destination, start + arity) else null
+    init { if (metrics.enabled) metrics.directCacheMisses++ }
+    fun matches(function: Closure): Boolean = function.target === target && function.arity == arity &&
+        function.suppliedCount == prefixCount && (function.environment != null) == hasEnvironment
+    fun execute(frame: VirtualFrame, function: Closure, values: Array<Any?>?): Any? {
+        val used = minOf(arity, count)
+        ArgumentLayout.validate(root.inputLayout, prefixCount, source.layout, start, used)
+        if (arity > count) {
+            if (destination != null) fault("Aggregate result application is under-saturated")
+            if (metrics.enabled) metrics.papAllocations++
+            return if (input != null) typedPap(function, input, source, frame, this, values, start, count)
+            else legacyPap(frame, this, function, source, values, start, count)
+        }
+        checkResult(root, destination, arity == count)
+        val isTail = tail && arity == count
+        val result = if (input == null) {
+            legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity), isTail)
+        } else {
+            val loan = prepareInput(frame, this, function, input, source, values, start, arity, force)
+            if (isTail) checkTypedTail(frame, this, target, loan, metrics)
+            if (metrics.enabled) input.state().calls++
+            if (isTail) invokeTypedInput(target, loan) { Calls.direct(direct, NO_PAP_ARGUMENTS) }
+            else try { invokeTypedInput(target, loan) { Calls.direct(direct, NO_PAP_ARGUMENTS) } }
+                catch (transfer: TailCall) { loop.execute(transfer) }
+        }
+        if (arity < count) return remainder!!.execute(frame, requireClosure(force.execute(frame, result)), values)
+        if (destination != null) { destination.consume(frame, this, result); return null }
+        return result
+    }
+}
+
+internal class GenericInputCall(private val source: InputSource, private val count: Int, private val tail: Boolean,
+    private val metrics: Metrics, private val destination: TupleDestination?, private val start: Int) : Node() {
+    @Child private var indirect = com.oracle.truffle.api.nodes.IndirectCallNode.create()
+    @Child private var legacy = IndirectCallerNode(metrics)
+    @Child private var force = Force(metrics)
+    @Child private var loop = TailCallLoop(metrics)
+    fun execute(frame: VirtualFrame, initial: Closure, values: Array<Any?>?, initialOffset: Int = start): Any? {
+        var function = initial
+        var offset = initialOffset
+        while (true) {
+            val remaining = count + start - offset
+            val target = function.target
+            val root = target.rootNode as GuestRoot
+            val input = root.typedInput
+            val used = minOf(function.arity, remaining)
+            ArgumentLayout.validate(root.inputLayout, function.suppliedCount, source.layout, offset, used)
+            if (function.arity > remaining) {
+                if (destination != null) fault("Aggregate result application is under-saturated")
+                if (metrics.enabled) metrics.papAllocations++
+                return if (input != null) typedPap(function, input, source, frame, this, values, offset, remaining)
+                    else legacyPap(frame, this, function, source, values, offset, remaining)
+            }
+            val exact = function.arity == remaining
+            checkResult(root, destination, exact)
+            val isTail = tail && exact
+            val result = if (input == null) {
+                legacy.call(frame, target, scalarPacket(frame, this, function, source, values, offset, function.arity), isTail)
+            } else {
+                val loan = prepareInput(frame, this, function, input, source, values, offset, function.arity, force)
+                if (isTail) checkTypedTail(frame, this, target, loan, metrics)
+                if (metrics.enabled) { metrics.indirectCalls++; input.state().calls++ }
+                if (isTail) invokeTypedInput(target, loan) { Calls.indirect(indirect, target, NO_PAP_ARGUMENTS) }
+                else try { invokeTypedInput(target, loan) { Calls.indirect(indirect, target, NO_PAP_ARGUMENTS) } }
+                    catch (transfer: TailCall) { loop.execute(transfer) }
+            }
+            if (exact) {
+                if (destination != null) { destination.consume(frame, this, result); return null }
+                return result
+            }
+            offset += function.arity
+            function = requireClosure(force.execute(frame, result))
+        }
+    }
+}
+
+private fun checkResult(root: GuestRoot, destination: TupleDestination?, exact: Boolean) {
+    if (exact && destination == null && root.tupleResult != null)
+        fault("Aggregate call target requires a typed result destination")
+    if (exact && destination != null && root.tupleResult?.matches(destination.shape) != true)
+        fault("Aggregate call target result shape mismatch")
+    if (!exact && root.tupleResult != null) fault("Cannot overapply an unboxed aggregate")
+}
+private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.truffle.api.RootCallTarget,
+    loan: HandoffStorage, metrics: Metrics) {
+    val source = node.rootNode as? GuestRoot
+    val targetRoot = target.rootNode as GuestRoot
+    val mask = source?.bloom(frame) ?: 0L
+    if (source == null || mask and targetRoot.mask == targetRoot.mask) {
+        if (metrics.enabled) { metrics.tailBounces++; targetRoot.typedInput!!.state().tailTransfers++ }
+        throw TailCall(target, NO_PAP_ARGUMENTS, loan)
+    }
+    loan.layout.setLong(loan, 0, mask)
+}
+
+/** A crossing back into the scalar ABI can contain only scalar logical arguments. */
+private fun scalarValues(frame: VirtualFrame, node: Node, source: InputSource, values: Array<Any?>?, start: Int, count: Int): Array<Any?> {
+    val result = arrayOfNulls<Any>(ArgumentLayout.offset(source.layout, start + count) - ArgumentLayout.offset(source.layout, start))
+    var to = 0
+    for (i in start until start + count) {
+        val proof = source.layout?.proof(i)
+        if (proof?.isEmptyTuple == true) continue
+        if (proof?.isTuple == true) fault("Tuple input cannot enter a scalar packet")
+        val from = ArgumentLayout.offset(source.layout, i)
+        result[to++] = when {
+            proof?.isLong == true -> source.long(frame, node, values, from)
+            proof?.isFloat == true -> source.float(frame, node, values, from)
+            proof?.isDouble == true -> source.double(frame, node, values, from)
+            else -> source.reference(frame, node, values, from)
+        }
+    }
+    return result
+}
+private fun scalarPacket(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
+    values: Array<Any?>?, start: Int, count: Int): Array<Any?> {
+    check(function.typedSupplied == null)
+    val args = scalarValues(frame, node, source, values, start, count)
+    val skip = if (function.environment == null) 1 else 2
+    return arrayOfNulls<Any>(skip + function.supplied.size + args.size).also { packet ->
+        if (function.environment != null) packet[1] = function.environment
+        System.arraycopy(function.supplied, 0, packet, skip, function.supplied.size)
+        System.arraycopy(args, 0, packet, skip + function.supplied.size, args.size)
+    }
+}
+private fun legacyPap(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
+    values: Array<Any?>?, start: Int, count: Int): Closure {
+    val args = scalarValues(frame, node, source, values, start, count)
+    return function.papCompact(args, 0, args.size, count)
+}
+
+/** Evaluate logical operands in order into caller-owned typed locals. Even a
+ * zero-storage component runs through its writer before the next argument. */
+internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout) : Node() {
+    @Children private var arguments = arguments
+    val layout = ArgumentLayout.fromProofs(arguments.map { it.representation })!!
+    val source = AstInputSource(layout, IntArray(layout.physicalArity) { frameLayout.bind("<typed input $it>") })
+    @ExplodeLoop fun evaluate(frame: VirtualFrame) {
+        for (i in arguments.indices) {
+            val proof = layout.proof(i)
+            val offset = layout.offset(i)
+            if (proof.isTuple) arguments[i].executeTuple(frame, source.slots, offset)
+            else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], arguments[i].executeRequiredLong(frame))
+            else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], arguments[i].executeRequiredFloat(frame))
+            else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], arguments[i].executeRequiredDouble(frame))
+            else FrameAccess.write(frame, source.slots[offset], arguments[i].execute(frame))
+        }
+    }
+}
+
+internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frameLayout: FrameLayout,
+    private val tail: Boolean, private val metrics: Metrics, private val shape: TupleShape? = null) : Expr() {
+    @Child private var function = Evaluate(function, metrics)
+    @Child private var operands = AstInputOperands(arguments, frameLayout)
+    @Child private var dispatch: InputDispatch? = if (shape == null)
+        InputDispatch(operands.source, arguments.size, tail, metrics) else null
+    @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
+    @CompilationFinal private var destinationOffset = -1
+    init { representation = shape?.proof?.copy(evaluated = true) ?: CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any? {
+        if (shape != null) fault("Aggregate value requires a typed destination")
+        val closure = function.executeRequiredClosure(frame)
+        try { operands.evaluate(frame); return dispatch!!.execute(frame, closure) }
+        finally { operands.source.clear(frame) }
+    }
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val tuple = shape ?: fault("Scalar application has no aggregate destination")
+        val closure = function.executeRequiredClosure(frame)
+        try {
+            operands.evaluate(frame)
+            if (dispatch == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate()
+                destinationSlots = slots; destinationOffset = offset
+                dispatch = insert(InputDispatch(operands.source, operands.layout.logicalArity, tail, metrics,
+                    object : TupleDestination(tuple) {
+                        override fun consume(frame: VirtualFrame, node: Node, result: Any?) = tuple.consume(frame, result, slots, offset)
+                    }))
+            }
+            check(destinationSlots === slots && destinationOffset == offset)
+            dispatch!!.execute(frame, closure)
+            return null
+        } finally { operands.source.clear(frame) }
+    }
+}

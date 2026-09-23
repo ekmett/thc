@@ -11,7 +11,7 @@ internal class EntryArguments(target: RootCallTarget, metrics: Metrics,
                               knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
     @field:CompilationFinal(dimensions = 1)
     private val positions: IntArray = (target.rootNode as? GuestRoot)?.let { root ->
-        root.entryStrict.indices.filter { root.entryStrict[it] && root.inputLayout?.isEmpty(it) != true &&
+        root.entryStrict.indices.filter { root.entryStrict[it] && root.inputLayout?.isTuple(it) != true &&
             (it < prefixSize || knownEvaluated.getOrNull(it - prefixSize) != true)
         }.map { ArgumentLayout.offset(root.inputLayout, it) + root.entryArgumentOffset }.toIntArray()
     } ?: intArrayOf()

@@ -834,7 +834,7 @@ private class SelfRepeater(@field:Child private var body: FunctionBody, private 
         val root = rootNode as FunctionRoot
         if (!root.isSelf(tail.target)) throw tail
         if (metrics.enabled) metrics.selfTailReentries++
-        root.buildFrame(tail.args, frame)
+        root.restoreTail(frame, tail)
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
 }
@@ -881,6 +881,38 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     }
     fun handoffDestination(frame: VirtualFrame): Int = handoff?.destination(frame) ?: -1
 
+    fun restoreTail(frame: VirtualFrame, transfer: TailCall) {
+        val input = transfer.input
+        if (input != null) restoreTypedInput(frame, input, false)
+        else {
+            if (typedInput != null) fault("Typed input target received a scalar packet")
+            buildFrame(transfer.args, frame)
+        }
+    }
+    @ExplodeLoop private fun restoreTypedInput(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
+        val entry = typedInput ?: fault("Target does not support typed tuple inputs")
+        try {
+            if (input.layout !== entry.packet || !input.live) fault("Conflicting typed input layout")
+            if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entry.packet.getLong(input, 0) or mask)
+            for (i in argumentSlots.indices) {
+                val from = argumentIndices[i] + entry.header
+                val to = argumentSlots[i]
+                if (entry.packet.isLong(from)) FrameAccess.writeLong(frame, to, entry.packet.getLong(input, from))
+                else if (entry.packet.isFloat(from)) FrameAccess.writeFloat(frame, to, entry.packet.getFloat(input, from))
+                else if (entry.packet.isDouble(from)) FrameAccess.writeDouble(frame, to, entry.packet.getDouble(input, from))
+                else {
+                    val value = entry.packet.getObject(input, from)
+                    val expected = argumentReferences.getOrNull(i)
+                    FrameAccess.write(frame, to, if (expected == null) value else requireReferenceCarrier(value, expected))
+                }
+            }
+            if (captureLayout != null) {
+                val environment = entry.packet.getObject(input, 1) as? CapturedFrame ?: fault("Invalid captured frame")
+                for (i in environmentSlots.indices) captureLayout.restore(environment, i, frame, environmentSlots[i])
+            }
+        } finally { entry.state().arguments.release(input) }
+    }
+
     @ExplodeLoop internal fun restoreHandoff(frame: VirtualFrame, input: HandoffStorage, initial: Boolean) {
         val entry = handoff ?: fault("Target does not support the handoff ABI")
         check(input.layout === entry.arguments && input.live)
@@ -911,7 +943,11 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     override fun execute(frame: VirtualFrame): Any? {
         if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.compiledEntries++
         val entry = handoff
-        if (entry != null && frame.arguments.isEmpty()) {
+        val typed = typedInput
+        if (typed != null) {
+            if (frame.arguments.isNotEmpty()) fault("Tuple input entry requires typed transport")
+            restoreTypedInput(frame, typed.take(), true)
+        } else if (entry != null && frame.arguments.isEmpty()) {
             val state = entry.state()
             val input = state.pending ?: fault("Missing typed argument loan")
             state.pending = null
@@ -952,7 +988,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             CompilerDirectives.transferToInterpreterAndInvalidate()
             hasSelfTail = true
             // Keep this frame's bloom ancestry and restore the new captures.
-            buildFrame(tail.args, frame)
+            restoreTail(frame, tail)
             loop.execute(frame)
         }
     }
@@ -1112,9 +1148,16 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         for ((index, arg) in args.withIndex()) {
             val lifted = representation(arg)
             val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
-            if (proof.isEmptyTuple) {
-                if (lifted) throw RuntimeFault("Empty tuple formal cannot be lifted")
-                scope.bindTuple(arg["id"] as String, proof, EMPTY_TUPLE_SLOTS)
+            if (proof.isTuple) {
+                if (lifted) throw RuntimeFault("Tuple formal cannot be lifted")
+                val fields = TupleShape.flatten(proof)
+                val slots = IntArray(fields.size) { leaf -> scope.layout.bind("${arg["id"]} tuple input $leaf") }
+                scope.bindTuple(arg["id"] as String, proof, slots)
+                fields.forEachIndexed { leaf, field ->
+                    argumentIndices += ArgumentLayout.offset(inputLayout, index) + leaf
+                    argumentProofs += field
+                    argumentSlots += slots[leaf]
+                }
             } else if (arg["id"] in free) {
                 argumentIndices += ArgumentLayout.offset(inputLayout, index); argumentProofs += proof
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
@@ -1145,6 +1188,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout)
+        if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
         if (body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
             ::dataLayout, sources, body.coreSourceLocation))
@@ -1163,10 +1207,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         check(proof)
         val lexical = if (expr[0] == "var") scope.locals[expr[1]]?.proof else null
         lexical?.let(::check)
-        if (proof.isEmptyTuple || lexical?.isEmptyTuple == true) {
-            if (declaredLifted) throw RuntimeFault("Empty tuple argument cannot be lifted")
+        if (proof.isTuple || lexical?.isTuple == true) {
+            if (declaredLifted) throw RuntimeFault("Tuple argument cannot be lifted")
             return compile(expr, scope, false).also {
-                if (!it.representation.isEmptyTuple) throw RuntimeFault("Missing exact empty tuple argument proof")
+                if (!it.representation.isTuple) throw RuntimeFault("Missing exact tuple argument proof")
             }
         }
         if (!lifted) return Evaluate(compile(expr, scope, false).also {
@@ -1337,7 +1381,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 constructorStrictFields != null -> Construct(dataLayout(fn[1] as String), nodes)
                 else -> {
                     val function = compile(fn, scope, false)
-                    if (tupleProof.isAggregate) TupleApplication(language as thc.Language, TupleShape(tupleProof, language), function, nodes, tail, metrics)
+                    if (ArgumentLayout.fromProofs(nodes.map { it.representation })?.requiresTyped == true)
+                        AstTypedApplication(function, nodes, scope.layout, tail, metrics,
+                            if (tupleProof.isAggregate) TupleShape(tupleProof, language as thc.Language) else null)
+                    else if (tupleProof.isAggregate) TupleApplication(language as thc.Language, TupleShape(tupleProof, language), function, nodes, tail, metrics)
                     else {
                     val self = scope.self
                     if (tail && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
