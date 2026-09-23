@@ -1,0 +1,27 @@
+# Map on castlemeadow (2026-09-23)
+
+The combined all-on runtime took 1.21× GHC’s elapsed time on this Map workload, 2.4% less than the earlier v7 runtime. Class-owned layouts with the other switches off measured 1.19× GHC in the separate matched ablation. The extra experimental switches showed no benefit over that simpler configuration; their observed difference was small relative to JVM fork variability.
+
+| Comparison | Baseline ms | Candidate ms | GHC ms | Candidate / baseline | Candidate / GHC |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Earlier v7 compact → combined all-on | 1.660926 | 1.620660 | 1.339032 | 0.97576 | 1.21032 |
+| Combined cache-on → cache-off | 1.620815 | 1.608363 | 1.339801 | 0.99232 | 1.20045 |
+| Owned-only → other switches on, cache off | 1.597569 | 1.607596 | 1.343460 | 1.00628 | 1.19661 |
+
+Each row is an independent, serialized comparison: three JVM forks per configuration and three native GHC processes, five two-second windows per process, with the run order rotated. The reported value is the median of the three fork medians. All three rows passed their 45 checksum-validated windows, installed-code checks, and the check for zero Truffle compilation/invalidation events during measurement and final verification. This does not rule out host JIT, GC or other machine effects.
+
+The workload is `mapAggregate` over the repeating inputs 10000–10015. The cost includes the host entry call and excludes startup, module loading and warmup. JVM warmup is at least 45 seconds and 30,000 calls; native warmup is ten seconds. Instrumentation is off, source notes are on, and diagnostic unsupported handling is enabled; all correctness checks entered zero unsupported paths.
+
+The host is an Intel Core i9-12900K running Ubuntu 22.04, with approximately 94 GiB RAM. Timed processes inherit affinity 0–15, the P-core threads; a lightweight telemetry sampler runs on E-core 16. The governor remains `powersave`. Both JVM configurations use `-Xms4g -Xmx4g -XX:+UseCompactObjectHeaders`, recursion depth 2 and expansion/inlining budgets 12000. A matching verification invocation reports G1, compressed oops, compressed class pointers and compact object headers enabled. Recorded per-fork values and host telemetry should be read alongside the aggregates.
+
+The frozen v7 runtime is JAR `a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d`. The combined runtime is JAR `3acc923ce7112d2dd015b63e6aa814a49816ada53905e4a5cdd4961b026829db`. All-on enables `classOwnedLayouts`, `typedCases`, `leadingCaseReturn`, `constructorClassIdentity`, `staticShapeUnchecked` and `boxedValueCache`; v7 has those switches explicitly false. The cache ablation changes only `boxedValueCache` on the same combined JAR. The third row compares class-owned layouts alone, with all five other switches false, against all-on with only the boxed cache false. Every configuration uses compact headers.
+
+THC runs byte-identical frozen Core exported on macOS and re-JITed by x86_64 GraalVM on Linux. This is not a Linux Core re-export experiment. Native GHC was rebuilt on this Linux host using GHC 9.14.1, `-O2`, Core/STG lint and the matching Map workload plus vendored containers-0.8 source. Its ELF SHA256 is `2657dd2c89fa63d94c68dc574a9f90128c2822f15a088c57fa3114f308685dec`; no macOS native executable was transferred. Its 18 oracle results match both an independent histogram calculation and the frozen oracle. Each runtime configuration also passes all 18 inputs before and after requested compilation.
+
+Oracle GraalVM 25.3.4.1+1.1 (JDK 25.0.4.1) and the Ubuntu 22.04 GHC bindist were installed in an isolated user directory. The Graal archive matches the official GDS checksum; the GHC checksum file signature was verified against the release-page-linked signing key. Its download record predates the separate signature-verification record. Original setup paths and exact commands are retained in provenance. The transient signed Oracle download redirect is omitted; its official GDS source URL, artifact ID and verified digest remain.
+
+`comparisons/` retains every raw timing window, JVM log, run configuration, summary and validation. `preflights/` contains the full 18-input checks. `provenance/` records hardware, versions, source-transfer hashes, native build and download verification. No runtime binary or large source/Core corpus is bundled. The source hashes identify the supplied frozen inputs; the recorded native build and remote checks establish how they were used.
+
+Run `python3 /path/to/this/bundle/tools/verify.py` from any directory. It checks the publication inventory, exact JAR/Core/native hash relationships, feature vectors, warmup and compilation guards, all 18-input preflights, the independent histogram, all 135 raw timing windows and recomputed medians. It uses the actual archived remote harness (`01936c494e89b2321c10a30fa2758105c2b62d93b8ca6abd1ad18c212fcf0182`), not the later evolving main-checkout helper. Verification requires no JVM, network or original absolute paths.
+
+The JVM fork medians are retained in each summary. For the final ablation, owned-only forks were 1.597569, 1.599845 and 1.588392 ms; experimental forks were 1.604974, 1.607596 and 1.608257 ms. The 0.63% aggregate difference is not a broad performance claim. Across all three comparisons the sampled package temperature peaked at 62°C, and the governor did not change. No system-wide toolchain or governor changes were made.

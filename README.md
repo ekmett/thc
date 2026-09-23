@@ -96,6 +96,12 @@ The [local entry-contract comparison](bench/results/constructor-class/powered-de
 records the frozen runtime and fork variation. A separate
 [hosted comparison](bench/results/hosted-2026-09-23/) found a similar broad
 improvement, but was too noisy to settle the smaller storage experiments.
+The [Linux comparison](bench/results/castlemeadow-2026-09-23/) on an i9-12900K
+measured **1.60 ms against GHC’s 1.34 ms**, again about **1.19 times GHC’s cost**,
+with class-owned layouts and compact headers. The other experimental storage
+switches did not improve on that configuration in the matched comparison.
+Those runs used at least 45 seconds and 30,000 calls of JVM warmup, with three
+fresh processes per configuration and every timing window checked.
 
 Constructor layouts now belong to their generated classes. With compact headers,
 a Map `Bin` is 32 bytes and an `I#` is 16 bytes. The

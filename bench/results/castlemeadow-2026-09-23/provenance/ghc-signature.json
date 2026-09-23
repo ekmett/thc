@@ -1,0 +1,37 @@
+{
+  "keyUrl": "https://keys.openpgp.org/vks/v1/by-fingerprint/88B57FCF7DB53B4DB3BFA4B1588764FBE22D19C4",
+  "keySha256": "92e1e3ff17a7f8ebb9c70c9b38c9df403990d40b7133e599da4d59021ca85724",
+  "officialKeyReference": "https://www.haskell.org/ghc/download_ghc_9_14_1.html",
+  "verified": true,
+  "commands": [
+    {
+      "argv": [
+        "gpg",
+        "--homedir",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/gnupg",
+        "--batch",
+        "--import",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/downloads/ghc-release-key.asc"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": "gpg: keybox '/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/gnupg/pubring.kbx' created\ngpg: /home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/gnupg/trustdb.gpg: trustdb created\ngpg: key 588764FBE22D19C4: public key \"Zubin Duggal (GHC signing key) <zubin@well-typed.com>\" imported\ngpg: Total number processed: 1\ngpg:               imported: 1\n"
+    },
+    {
+      "argv": [
+        "gpg",
+        "--homedir",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/gnupg",
+        "--batch",
+        "--status-fd",
+        "1",
+        "--verify",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/downloads/ghc-SHA256SUMS.sig",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/downloads/ghc-SHA256SUMS"
+      ],
+      "status": 0,
+      "stdout": "[GNUPG:] NEWSIG\n[GNUPG:] KEY_CONSIDERED 88B57FCF7DB53B4DB3BFA4B1588764FBE22D19C4 0\n[GNUPG:] SIG_ID FSlkhh7c0i8AYnWN0pbYCO857yk 2025-12-19 1766128395\n[GNUPG:] GOODSIG 588764FBE22D19C4 Zubin Duggal (GHC signing key) <zubin@well-typed.com>\n[GNUPG:] VALIDSIG 88B57FCF7DB53B4DB3BFA4B1588764FBE22D19C4 2025-12-19 1766128395 0 4 0 1 10 00 88B57FCF7DB53B4DB3BFA4B1588764FBE22D19C4\n[GNUPG:] KEY_CONSIDERED 88B57FCF7DB53B4DB3BFA4B1588764FBE22D19C4 0\n[GNUPG:] TRUST_UNDEFINED 0 pgp\n[GNUPG:] VERIFICATION_COMPLIANCE_MODE 23\n",
+      "stderr": "gpg: Signature made Fri Dec 19 02:13:15 2025 EST\ngpg:                using RSA key 88B57FCF7DB53B4DB3BFA4B1588764FBE22D19C4\ngpg: Good signature from \"Zubin Duggal (GHC signing key) <zubin@well-typed.com>\" [unknown]\ngpg: WARNING: This key is not certified with a trusted signature!\ngpg:          There is no indication that the signature belongs to the owner.\nPrimary key fingerprint: 88B5 7FCF 7DB5 3B4D B3BF  A4B1 5887 64FB E22D 19C4\n"
+    }
+  ]
+}

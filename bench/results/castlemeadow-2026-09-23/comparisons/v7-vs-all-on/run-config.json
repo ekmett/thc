@@ -1,0 +1,635 @@
+{
+  "schema": 1,
+  "recordedAtUtc": "2026-09-23T08:49:51.375440+00:00",
+  "entry": "mapAggregate",
+  "baselineCommit": "frozen boxed-value-cache-v7 a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d compact all runtime toggles false",
+  "backends": {
+    "baseline": "bytecode",
+    "candidate": "bytecode"
+  },
+  "inputBase": 10000,
+  "forks": 3,
+  "samples": 5,
+  "sampleSeconds": 2,
+  "jvmWarmSeconds": 45.0,
+  "nativeWarmSeconds": 10.0,
+  "minimumJvmWarmCalls": 30000,
+  "diagnosticUnsupported": true,
+  "instrumented": false,
+  "moduleManifests": {
+    "baseline": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/modules-remote.txt",
+    "candidate": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/modules-remote.txt"
+  },
+  "sourceNotesModes": {
+    "baseline": "on",
+    "candidate": "on"
+  },
+  "protocol": "serialized rotated engine order; median of per-fork window medians; signed64 checksums",
+  "candidateSourceNote": "Recorded source hashes identify the supplied tree; the caller must build these runtime JARs from that tree.",
+  "host": {
+    "system": "Linux",
+    "platform": "Linux-6.8.0-100-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64"
+  },
+  "commands": [
+    {
+      "fork": 1,
+      "position": 1,
+      "engine": "baseline",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.classOwnedLayouts=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.boxedValueCache=false",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 2,
+      "engine": "candidate",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.typedCases=true",
+        "-Dthc.leadingCaseReturn=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.boxedValueCache=true",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 1,
+      "position": 3,
+      "engine": "native",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "10.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 1,
+      "engine": "candidate",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.typedCases=true",
+        "-Dthc.leadingCaseReturn=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.boxedValueCache=true",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 2,
+      "engine": "native",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "10.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 2,
+      "position": 3,
+      "engine": "baseline",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.classOwnedLayouts=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.boxedValueCache=false",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 1,
+      "engine": "native",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/native-oracle",
+        "--bench-steady",
+        "mapAggregate",
+        "10.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 2,
+      "engine": "baseline",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.classOwnedLayouts=false",
+        "-Dthc.typedCases=false",
+        "-Dthc.leadingCaseReturn=false",
+        "-Dthc.constructorClassIdentity=false",
+        "-Dthc.staticShapeUnchecked=false",
+        "-Dthc.boxedValueCache=false",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    },
+    {
+      "fork": 3,
+      "position": 3,
+      "engine": "candidate",
+      "argv": [
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "-Dthc.sourceNotesEnabled=true",
+        "-Xms4g",
+        "-Xmx4g",
+        "-XX:+UseCompactObjectHeaders",
+        "-Dpolyglot.compiler.InliningRecursionDepth=2",
+        "-Dpolyglot.compiler.InliningExpansionBudget=12000",
+        "-Dpolyglot.compiler.InliningInliningBudget=12000",
+        "-Dthc.classOwnedLayouts=true",
+        "-Dthc.typedCases=true",
+        "-Dthc.leadingCaseReturn=true",
+        "-Dthc.constructorClassIdentity=true",
+        "-Dthc.staticShapeUnchecked=true",
+        "-Dthc.boxedValueCache=true",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Xss2m",
+        "-Dthc.traceCompilation=true",
+        "-Dthc.diagnosticUnsupported=true",
+        "-Dthc.minimumWarmCalls=30000",
+        "-Dthc.backend=bytecode",
+        "-cp",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/annotations-13.0.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/collections-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/jniutils-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/nativeimage-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/polyglot-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/thc-0.1-experiment.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-api-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/word-25.3.4.1.jar",
+        "thc.ProbeKt",
+        "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/00-Utils.Containers.Internal.BitUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/01-Utils.Containers.Internal.BitQueue.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/02-Utils.Containers.Internal.Prelude.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/03-Utils.Containers.Internal.PtrEquality.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/04-Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/05-Utils.Containers.Internal.StrictPair.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/07-Data.Set.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/08-Data.Map.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/09-Data.Map.Internal.Debug.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/10-Data.Map.Strict.Internal.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/11-Data.Map.Strict.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/12-THC.MapWorkload.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/13-THC.InterfaceClosure.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/14-GHC.Internal.CString.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/15-GHC.Internal.Err.json,/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/16-GHC.InterfaceClosure.json",
+        "mapAggregate",
+        "--steady",
+        "45.0",
+        "2",
+        "5",
+        "10000"
+      ]
+    }
+  ],
+  "provenance": {
+    "runtimeJars": {
+      "baseline": [
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/thc-0.1-experiment.jar",
+          "sha256": "a73ec0e731b96b63523933cafc876b5e1c64884e24a42ded1b504b60d5bb0d7d"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/baseline-v7/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        }
+      ],
+      "candidate": [
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/annotations-13.0.jar",
+          "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/collections-25.3.4.1.jar",
+          "sha256": "3d0d2287f0217e7e765a47d69681c0ac1bb4ef50d70c9440449e86045bbe158f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/jniutils-25.3.4.1.jar",
+          "sha256": "b1d78402c744e5022fcb19f620644ab38b834c024020f3570dadaaf9cbe77067"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/kotlin-stdlib-2.4.20.jar",
+          "sha256": "2226de463d309d4a5500a481320b3dea515a6981dcae1def531fbc158884e25f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/nativeimage-25.3.4.1.jar",
+          "sha256": "a4315500775e98d16f083812bf5b8b664d84abad736da14ebbea5b38d7752b0f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/polyglot-25.3.4.1.jar",
+          "sha256": "befec2cbfb6ca279a73ee20626718a917ab1d1a3970793698ddc11b4d41e0356"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/thc-0.1-experiment.jar",
+          "sha256": "3acc923ce7112d2dd015b63e6aa814a49816ada53905e4a5cdd4961b026829db"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-api-25.3.4.1.jar",
+          "sha256": "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-compiler-25.3.4.1.jar",
+          "sha256": "a422df88ffaabe4669b8b6e5d63f04f2a8152e5fe763b3bfbf3dc58d7e5dd41c"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/truffle-runtime-25.3.4.1.jar",
+          "sha256": "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3"
+        },
+        {
+          "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/lib/word-25.3.4.1.jar",
+          "sha256": "fe1c3723e27907789732ac9f3d639ba6055d459529cfcfbd96156e73911ee7b7"
+        }
+      ]
+    },
+    "nativeBinary": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/native-oracle",
+        "sha256": "2657dd2c89fa63d94c68dc574a9f90128c2822f15a088c57fa3114f308685dec"
+      }
+    ],
+    "moduleManifest": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/modules-remote.txt",
+        "sha256": "7a9fc03a7d04ac2e4ce89fcc1b6128674c80340a0a68759cb430d254e161aa37"
+      }
+    ],
+    "modules": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/00-Utils.Containers.Internal.BitUtil.json",
+        "sha256": "c4c88de25ba27717ccc22de3cb402aef23ca9bfef17925ca1492ad88f426ea49"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/01-Utils.Containers.Internal.BitQueue.json",
+        "sha256": "3ffc657bc6e40f266941e219f653dedb740320f9c2960c79d8fef31437466db1"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/02-Utils.Containers.Internal.Prelude.json",
+        "sha256": "42c50c0369200660ed32029fa0d6c8b74022b0f95dc12dc81e5437aac128cc8e"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/03-Utils.Containers.Internal.PtrEquality.json",
+        "sha256": "604d9e9d0cb0a23471232b5a31869b7593af743d8a6d38f2e42034041d77c452"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/04-Utils.Containers.Internal.StrictMaybe.json",
+        "sha256": "2d0ab4bdf25eff50c5ea2a98d2c1077571eb8783893331ebd649f51c75e3e352"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/05-Utils.Containers.Internal.StrictPair.json",
+        "sha256": "b0120781c863b39b916a14db082408c3d75698fb1652e36c4e8e2710d30882ef"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/06-Utils.Containers.Internal.EqOrdUtil.json",
+        "sha256": "4a9ea1570612e9434a1011acc08d88fa33cf22567f889d7923ad99d88607b925"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/07-Data.Set.Internal.json",
+        "sha256": "dca6d746596ea85ec2a063fc0bc195a27a296b6d5bbaedb07db2e1d3693f8eac"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/08-Data.Map.Internal.json",
+        "sha256": "8fe30a776467f3cf86391aa03a470a6c554c9382b09f5d8a377cbf2c717225fc"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/09-Data.Map.Internal.Debug.json",
+        "sha256": "e62c79ae58493078b97c51f190f7d5968ccfff8801bf379eac1ad36031dbe64d"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/10-Data.Map.Strict.Internal.json",
+        "sha256": "f0b5e1c1c95298aefa9c05d8e08bc36d8384493ea683654998c17090c153649b"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/11-Data.Map.Strict.json",
+        "sha256": "908240bdeb2af854ca9c14efdebcaa46039b74bc85f1ba73efa31c7f57343ca0"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/12-THC.MapWorkload.json",
+        "sha256": "71d2e304b0a434a8bbf29970532b8c4fdca0216f30c21df9d97784159b1fffa7"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/13-THC.InterfaceClosure.json",
+        "sha256": "9b8bc1add839d2808ad8fa7a03014a448c0e20ad77ea1e32854b18e8a3617c89"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/14-GHC.Internal.CString.json",
+        "sha256": "a57f55695efb7f5699023526ec3a477d38e90db4571e37d6ce71273bf7664d3e"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/15-GHC.Internal.Err.json",
+        "sha256": "8156f71c7c453f5f3ca9a2df29c3668813b1615e64a1d616b170965761260d16"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/map/16-GHC.InterfaceClosure.json",
+        "sha256": "7ebf265d2999e33609870e788d69ef71cf41ac9d230a2c4e612140836f6a6438"
+      }
+    ],
+    "candidateSources": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/java/thc/runtime/BytecodeRoot.java",
+        "sha256": "15f605a87d408b53557a647c145be170cc21ab963e10d1d55930932d2f744be8"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/java/thc/runtime/Calls.java",
+        "sha256": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/java/thc/runtime/RuntimeTypes.java",
+        "sha256": "5bf8dcad9b6735aa028b8f62d483ba5ad18f8f674c51d81aba0af65cd8b90a08"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/Json.kt",
+        "sha256": "23475efddb087dffcb067bb5cc705f3101263b52d99905a352e8ef21c32a4c80"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/Language.kt",
+        "sha256": "0bcf93c9d7b3757b982d459823658094a2d6d0f8f95fd656f1bb9b6876991bf5"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/Main.kt",
+        "sha256": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/MapCheck.kt",
+        "sha256": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/Probe.kt",
+        "sha256": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/Application.kt",
+        "sha256": "ace8f255f0a369828d5dfd1fbf55df90ccd0bf3afad8ac900e7f880650aa2118"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/AstSelfCalls.kt",
+        "sha256": "7c6102b8852f5db93e07abd5ac05583a85f241c42eddf8736d070c4db0c5c1da"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/BloomValue.kt",
+        "sha256": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+        "sha256": "ba0b17e1e3c254de51ee3d68c943153bc17c75c3257166baecbf10942a32fbfa"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/CaseCategories.kt",
+        "sha256": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt",
+        "sha256": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt",
+        "sha256": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/CoreEntries.kt",
+        "sha256": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/CoreFields.kt",
+        "sha256": "8e2438e979fd078bfaeb765d58a1aa1f9e657360cf837173653a025d1f911d4c"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+        "sha256": "578b57e67f93c61f498ad503c078299c5c269e3f966efabbb4ff6b4ee78b8d30"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/CoreSources.kt",
+        "sha256": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/DataValues.kt",
+        "sha256": "6ead068652a07fb6fcf3f8a7322dcef5a7fba00f48b4ec0891c50ccb8c07501f"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/EntryArguments.kt",
+        "sha256": "9c7af82a990fe84121de81070323258cd1654b86c3d00ebc494b5923d468e1ce"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/Frames.kt",
+        "sha256": "6846ac154751c3d8485d82a1adc0939ae8ca596774189f1d44c0446b3fae7185"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/GuestExceptions.kt",
+        "sha256": "91cb6c35d5ef04c3006dc3ff732fa2fa4786e121ec588f3e8362c96af4d82e37"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/GuestRoot.kt",
+        "sha256": "df27ac8e8ff41f180a30df708033505bfc875cb6b3ba8d3de11427946afd6b54"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/LeadingCaseReturn.kt",
+        "sha256": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+        "sha256": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/LocalJoins.kt",
+        "sha256": "404f83c6e543764458bb426ceb7188226372485a2f91b4f0a0f342c3c75ea9b7"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/combined-v1/src/main/kotlin/thc/runtime/Program.kt",
+        "sha256": "7dd5bbdc735fc3c388587533028f3727c0b580f8275b8d9b07ee235ed5b79956"
+      }
+    ],
+    "java": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java",
+        "sha256": "f29a1a3f9f2d1c54cc6cbc5db756eea8da062a3b02712d4052ccf855a0a57b57"
+      },
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/release",
+        "sha256": "41cfd6836fbaa2d7e301c52141c7086779a4a05767efcbde06a95ad665250c96"
+      }
+    ],
+    "harness": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/sources/compare-map-runtimes.py",
+        "sha256": "01936c494e89b2321c10a30fa2758105c2b62d93b8ca6abd1ad18c212fcf0182"
+      }
+    ]
+  },
+  "oracle": {
+    "values": [
+      56348923,
+      56349446,
+      56349569,
+      56353391,
+      56359652,
+      56362669,
+      56365275,
+      56367476,
+      56392339,
+      56393734,
+      56394726,
+      56395324,
+      56410122,
+      56414010,
+      56417496,
+      56420571
+    ],
+    "cycleChecksumSigned64": 902094723,
+    "rows": [
+      {
+        "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/results/v7-vs-all-on/oracle.tsv",
+        "sha256": "81dff827f844730a41c6bff3d3f4c8e1c77e0d04fef2770521a30c084bed5277"
+      }
+    ]
+  }
+}

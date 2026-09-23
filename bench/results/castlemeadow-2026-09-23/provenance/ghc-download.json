@@ -1,0 +1,31 @@
+{
+  "archive": {
+    "url": "https://downloads.haskell.org/~ghc/9.14.1/ghc-9.14.1-x86_64-ubuntu22_04-linux.tar.xz",
+    "finalUrl": "https://downloads.haskell.org/~ghc/9.14.1/ghc-9.14.1-x86_64-ubuntu22_04-linux.tar.xz",
+    "headers": {
+      "Connection": "close",
+      "Content-Length": "307280744",
+      "Server": "nginx",
+      "Content-Type": "application/x-xz",
+      "Last-Modified": "Thu, 18 Dec 2025 13:51:44 GMT",
+      "ETag": "\"694406f0-1250bb68\"",
+      "Expires": "Thu, 03 Sep 2026 03:53:57 GMT",
+      "Cache-Control": "max-age=2592000, public",
+      "Via": "1.1 varnish, 1.1 varnish",
+      "Accept-Ranges": "bytes",
+      "Age": "164719",
+      "Date": "Wed, 23 Sep 2026 08:40:16 GMT",
+      "X-Served-By": "cache-dfw-kdal2120093-DFW, cache-iad-khef600090-IAD",
+      "X-Cache": "HIT, HIT",
+      "X-Cache-Hits": "103, 0",
+      "X-Timer": "S1790152816.071756,VS0,VE1"
+    },
+    "sha256": "29410b9856dcb47fe5038e69478fbcf96137166ced8a789e566440747c2b9393",
+    "bytes": 307280744,
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/downloads/ghc-9.14.1-x86_64-ubuntu22_04-linux.tar.xz"
+  },
+  "expectedSha256": "29410b9856dcb47fe5038e69478fbcf96137166ced8a789e566440747c2b9393",
+  "checksumDocument": "/home/ekmett/thc-benchmarks/2026-09-23-083914/downloads/ghc-SHA256SUMS",
+  "checksumVerified": true,
+  "signatureVerified": false
+}

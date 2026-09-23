@@ -1,0 +1,23 @@
+<no location info>: warning: [GHC-98887]
+    -XGeneralizedNewtypeDeriving is not allowed in Safe Haskell; ignoring -XGeneralizedNewtypeDeriving
+
+<no location info>: warning: [GHC-98887]
+    -XGeneralizedNewtypeDeriving is not allowed in Safe Haskell; ignoring -XGeneralizedNewtypeDeriving
+
+[ 1 of 17] Compiling THC.Prim         ( THC/Prim.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/THC/Prim.o )
+[ 2 of 17] Compiling THC.Fixtures     ( THC/Fixtures.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/THC/Fixtures.o )
+[ 3 of 17] Compiling Utils.Containers.Internal.BitUtil ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Utils/Containers/Internal/BitUtil.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Utils/Containers/Internal/BitUtil.o )
+[ 4 of 17] Compiling Utils.Containers.Internal.BitQueue ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Utils/Containers/Internal/BitQueue.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Utils/Containers/Internal/BitQueue.o )
+[ 5 of 17] Compiling Utils.Containers.Internal.Prelude ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Utils/Containers/Internal/Prelude.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Utils/Containers/Internal/Prelude.o )
+[ 6 of 17] Compiling Utils.Containers.Internal.PtrEquality ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Utils/Containers/Internal/PtrEquality.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Utils/Containers/Internal/PtrEquality.o )
+[ 7 of 17] Compiling Utils.Containers.Internal.StrictMaybe ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Utils/Containers/Internal/StrictMaybe.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Utils/Containers/Internal/StrictMaybe.o )
+[ 8 of 17] Compiling Utils.Containers.Internal.StrictPair ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Utils/Containers/Internal/StrictPair.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Utils/Containers/Internal/StrictPair.o )
+[ 9 of 17] Compiling Utils.Containers.Internal.EqOrdUtil ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Utils/Containers/Internal/EqOrdUtil.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Utils/Containers/Internal/EqOrdUtil.o )
+[10 of 17] Compiling Data.Set.Internal ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Data/Set/Internal.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Data/Set/Internal.o )
+[11 of 17] Compiling Data.Map.Internal ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Data/Map/Internal.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Data/Map/Internal.o )
+[12 of 17] Compiling Data.Map.Internal.Debug ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Data/Map/Internal/Debug.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Data/Map/Internal/Debug.o )
+[13 of 17] Compiling Data.Map.Strict.Internal ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Data/Map/Strict/Internal.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Data/Map/Strict/Internal.o )
+[14 of 17] Compiling Data.Map.Strict  ( /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/vendor/containers-0.8/src/Data/Map/Strict.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Data/Map/Strict.o )
+[15 of 17] Compiling THC.MapWorkload  ( THC/MapWorkload.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/THC/MapWorkload.o )
+[16 of 17] Compiling Main             ( NativeOracle.hs, /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/Main.o )
+[17 of 17] Linking /home/ekmett/thc-benchmarks/2026-09-23-083914/sources/native/build/map/native/native-oracle

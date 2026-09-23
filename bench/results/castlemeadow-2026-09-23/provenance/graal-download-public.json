@@ -1,0 +1,95 @@
+{
+  "archive": {
+    "url": "https://gds.oracle.com/api/20220101/artifacts/47B3692F0EC54D22A1DAC450AD7225D1/content",
+    "headers": {
+      "accept-ranges": "bytes",
+      "Content-Length": "384494003",
+      "content-md5": "EIXECrBGkXliH2rI7MgjWw==",
+      "last-modified": "Fri, 21 Aug 2026 20:08:36 GMT",
+      "etag": "c2eb580c-bea3-49f7-abc9-86680c8bc023",
+      "version-id": "2950ffe6-54ab-4b72-a77d-38f9656d0d04",
+      "storage-tier": "Standard",
+      "opc-meta-content-sha256": "814deac144a912035c4e824e05fa06a2e0c83821f0fb9d1084bc916e5eeef247",
+      "Content-Type": "application/octet-stream",
+      "connection": "close",
+      "date": "Wed, 23 Sep 2026 08:39:16 GMT",
+      "opc-request-id": "lhr-1:x-J3yO3cTj831WwRnu0--2-sYGs3ZOpQDoWHhMSs4ahe5TzWI4SCrjVWI-Hx-dhm",
+      "x-api-id": "native",
+      "x-content-type-options": "nosniff",
+      "strict-transport-security": "max-age=31536000; includeSubDomains",
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "POST,PUT,GET,HEAD,DELETE,OPTIONS",
+      "access-control-allow-credentials": "true",
+      "access-control-expose-headers": "accept-ranges,access-control-allow-credentials,access-control-allow-methods,access-control-allow-origin,connection,content-length,content-md5,content-type,date,etag,last-modified,opc-client-info,opc-meta-content-sha256,opc-request-id,storage-tier,strict-transport-security,version-id,x-api-id,x-content-type-options"
+    },
+    "sha256": "814deac144a912035c4e824e05fa06a2e0c83821f0fb9d1084bc916e5eeef247",
+    "bytes": 384494003,
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/downloads/graalvm-jdk-25.3.4.1_linux-x64_bin.tar.gz",
+    "redirectOmission": "Transient signed redirect omitted; official GDS source URL, artifact ID and verified SHA256 retained."
+  },
+  "gdsMetadata": {
+    "url": "https://gds.oracle.com/api/20220101/artifacts?productId=D53FAE8052773FFAE0530F15000AA6C6&metadata=edition:ee&metadata=isBase:True&status=PUBLISHED&responseFields=id&responseFields=checksum&metadata=java:jdk25&metadata=os:linux&metadata=arch:amd64&displayName=Oracle%20GraalVM&sortBy=timeCreated&sortOrder=DESC&responseFields=metadata",
+    "finalUrl": "https://gds.oracle.com/api/20220101/artifacts?productId=D53FAE8052773FFAE0530F15000AA6C6&metadata=edition:ee&metadata=isBase:True&status=PUBLISHED&responseFields=id&responseFields=checksum&metadata=java:jdk25&metadata=os:linux&metadata=arch:amd64&displayName=Oracle%20GraalVM&sortBy=timeCreated&sortOrder=DESC&responseFields=metadata",
+    "headers": {
+      "Content-Type": "application/json",
+      "opc-request-id": "oci-58979549BF9442B-202609230753/0836F4AF68442E4C7A85B36A4C485208/3155D81114DDC3134FE52DC0AB89E1FF",
+      "opc-next-page": "1",
+      "Vary": "Accept-Encoding",
+      "Expires": "Wed, 23 Sep 2026 08:39:15 GMT",
+      "Cache-Control": "max-age=0, no-cache, no-store",
+      "Pragma": "no-cache",
+      "Date": "Wed, 23 Sep 2026 08:39:15 GMT",
+      "Content-Length": "5673",
+      "Connection": "close",
+      "Akamai-GRN": "0.4048c817.1790152755.2a2232e"
+    },
+    "sha256": "d7964a7a9edf2b2f1881d6ac617bcf79527b2cf927dab57705b11a68bf5fa051",
+    "bytes": 5673,
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/downloads/graal-gds-response.json"
+  },
+  "selectedArtifact": {
+    "id": "47B3692F0EC54D22A1DAC450AD7225D1",
+    "metadata": [
+      {
+        "key": "arch",
+        "value": "amd64",
+        "description": "Architecture"
+      },
+      {
+        "key": "edition",
+        "value": "ee",
+        "description": "Edition"
+      },
+      {
+        "key": "isBase",
+        "value": "True",
+        "description": "Artifact type"
+      },
+      {
+        "key": "java",
+        "value": "jdk25",
+        "description": "Java version"
+      },
+      {
+        "key": "os",
+        "value": "linux",
+        "description": "Operating System"
+      },
+      {
+        "key": "supported",
+        "value": "True",
+        "description": "Latest version"
+      },
+      {
+        "key": "version",
+        "value": "25.3.4.1",
+        "description": "Release version"
+      }
+    ],
+    "checksum": "814deac144a912035c4e824e05fa06a2e0c83821f0fb9d1084bc916e5eeef247"
+  },
+  "checksumVerified": true,
+  "setupAction": "graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276",
+  "originalCaptureSha256": "db00d44841f659249668a82341ca9a48c6456e187b7ec3402771425ae51fb657",
+  "originalCaptureLocalPath": "work/castlemeadow-2026-09-23/provenance/graal-download.json"
+}
