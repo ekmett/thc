@@ -25,6 +25,8 @@ internal class RaiseException(@field:Child private var exception: Expr) : Expr()
         raise(payload, this)
     }
 
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Nothing = execute(frame)
+
     companion object {
         @TruffleBoundary
         private fun raise(payload: Any?, location: Node): Nothing = throw GuestException(payload, location)

@@ -7,11 +7,11 @@ import org.junit.jupiter.api.Test
 import java.io.File
 import java.security.MessageDigest
 
-/** Sum storage evidence is not an execution capability. */
+/** Exact metadata retains unsupported families alongside bounded result consumers. */
 class SumLayoutMetadataTest {
     private val root = File(System.getProperty("thc.projectRoot"))
 
-    @Test fun genuineSumLayoutsStillRejectBeforeExecutionOnBothBackends() {
+    @Test fun genuineSumLayoutsEnforceResultCapabilityBoundariesOnBothBackends() {
         val manifest = Json.parse(File(root, "build/sum-layout/provenance.json").readText()) as Map<String, Any?>
         for (item in (manifest["sources"] as List<Map<String, String>>) +
                 (manifest["artifacts"] as List<Map<String, String>>)) {
@@ -25,7 +25,7 @@ class SumLayoutMetadataTest {
         val stages = checks["coverage"] as List<Map<String, Any?>>
         assertEquals(listOf("pre", "post"), stages.map { it["stage"] })
         assertEquals(130, (checks["nativeRows"] as Number).toInt())
-        assertEquals(0, (checks["supportedSumEntries"] as Number).toInt())
+        assertEquals(6, (checks["supportedSumEntries"] as Number).toInt())
         val manifestProof = checks["provenance"] as Map<String, String>
         assertEquals("build/sum-layout/provenance.json", manifestProof["path"])
         assertEquals(manifestProof["sha256"], MessageDigest.getInstance("SHA-256")
@@ -40,16 +40,15 @@ class SumLayoutMetadataTest {
                     val request = Json.stringify(mapOf("modules" to listOf(module), "entry" to entry["entry"],
                         "backend" to backend, "diagnosticUnsupported" to false))
                     if (entry["accepted"] == true) {
-                        assertEquals("directCase", entry["entry"], "Only the optimized scalar control may run")
                         val target = context.eval("thc", request)
                         File(root, "build/sum-layout/oracle.tsv").forEachLine { row ->
                             val columns = row.split('\t')
-                            if (columns[0] == "directCase")
+                            if (columns[0] == entry["entry"])
                                 assertEquals(columns[2].toLong(), target.execute(columns[1].toLong()).asLong(), "$name/$backend/$row")
                         }
                     } else {
                         val error = assertThrows(PolyglotException::class.java) { context.eval("thc", request) }
-                        assertTrue(error.message.orEmpty().contains("Unsupported Core aggregate representation: unboxed-sum"),
+                        assertTrue(error.message.orEmpty().contains("Unsupported Core aggregate representation:"),
                             "$name/$backend/${entry["entry"]}: ${error.message}")
                     }
                 }

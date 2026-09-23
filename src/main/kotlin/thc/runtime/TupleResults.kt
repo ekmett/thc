@@ -15,10 +15,11 @@ internal fun requireVoidCarrier(value: Any?) {
     if (value !== Unit) fault("Invalid zero-width scalar carrier")
 }
 
-/** Logical tuple boundaries remain distinct even when their physical widths agree. */
+/** Typed aggregate result storage; logical tuple/sum identity is independent of physical fields. */
 internal class TupleShape(val proof: CoreRepresentation, val language: Language) {
-    @field:CompilationFinal(dimensions = 1) val components = (proof.components ?: fault("Missing tuple components")).toTypedArray()
-    @field:CompilationFinal(dimensions = 1) val leaves = flatten(proof).toTypedArray()
+    init { if (!proof.isAggregate) fault("Aggregate result shape requires a logical aggregate proof") }
+    @field:CompilationFinal(dimensions = 1) val components = (proof.components ?: emptyList()).toTypedArray()
+    @field:CompilationFinal(dimensions = 1) val leaves = (if (proof.isSum) SumShape.storage(proof) else flatten(proof)).toTypedArray()
     val layout = language.handoffLayouts.intern(leaves.map { it.primReps!!.single() })
     @field:CompilationFinal(dimensions = 1) val offsets = IntArray(components.size).also { offsets ->
         var next = 0
@@ -75,11 +76,14 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
         fun compatible(left: CoreRepresentation, right: CoreRepresentation): Boolean = signature(left) == signature(right)
         fun requireCompatible(expected: CoreRepresentation, actual: CoreRepresentation, component: Boolean = false) {
-            if (actual.present && (component || expected.isTuple || actual.isTuple) && !compatible(expected, actual))
+            if (actual.present && (component || expected.isAggregate || actual.isAggregate) && !compatible(expected, actual))
                 throw RuntimeFault("Conflicting logical tuple representation proofs")
         }
-        private fun signature(proof: CoreRepresentation): Any = if (proof.components != null)
-            listOf("tuple", proof.components.map(::signature)) else listOf("scalar", proof.primReps ?: listOf("?"))
+        private fun signature(proof: CoreRepresentation): Any = when {
+            proof.components != null -> listOf("tuple", proof.components.map(::signature))
+            proof.alternatives != null -> listOf("sum", proof.alternatives.map(::signature), proof.primReps, proof.tagSlot, proof.alternativeSlots)
+            else -> listOf("scalar", proof.primReps ?: listOf("?"))
+        }
         fun validate(proof: CoreRepresentation) {
             if (proof.kind != CoreKind.UNKNOWN) throw RuntimeFault("Tuple proof must retain its aggregate kind")
             if (proof.primReps == null)

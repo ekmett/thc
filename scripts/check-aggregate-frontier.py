@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check staged aggregate support against genuine GHC exports and a native oracle.
 
-Result-only tuples execute in the JVM suite; sums and aggregate argument
-boundaries remain rejected. These rows stay separate from the library corpus.
+Supported tuple and binary-sum results execute in the JVM suite; aggregate
+argument boundaries remain rejected. These rows stay separate from the library corpus.
 """
 import argparse
 import importlib.util
@@ -15,6 +15,8 @@ audit_core = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit_core)
 SUPPORTED = {'tupleOutstanding', 'tupleZeroLazy', 'coldTuple'}
 CAP = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
+if 'unboxed-sum' in CAP.get('aggregateResults', []):
+    SUPPORTED |= {'sumPayload', 'sumZeroLazy', 'coldSum'}
 CASES = {
     'tupleOutstanding': ['tuple', 'opaque-producer', 'forwarder', 'two-outstanding-results', 'unequal-weights'],
     'tupleZeroLazy': ['tuple', 'nested-zero-width', 'lazy-bottom-payload'],
@@ -123,7 +125,7 @@ def check_native(path):
     check(actual == expected, 'Native aggregate oracle disagrees with bounded independent wraparound formulas')
     check(31337 not in INPUTS, 'Cold branch inputs accidentally exercised')
     return dict(rows=len(actual), inputs=INPUTS, coldBranchInput=31337, coldBranchesExecuted=False,
-                purpose='native semantic oracle; result-only tuple subset also executed by JVM tests')
+                purpose='native semantic oracle; supported tuple and binary-sum results also executed by JVM tests')
 
 
 def check_unknown_compatibility():

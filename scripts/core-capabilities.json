@@ -398,13 +398,15 @@
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
-    "Unboxed tuple result leaves use concrete Long, Float, Double or reference fields with exact recursive layouts; nonempty or nested aggregate arguments, captures, ordinary let bindings, join arguments/captures, sums, and first-class tuple constructors remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots."
+    "Unboxed tuple result leaves use concrete Long, Float, Double or reference fields with exact recursive layouts; nonempty or nested aggregate arguments, captures, ordinary let bindings, join arguments/captures, and first-class tuple constructors remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots.",
+    "Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported."
   ],
   "aggregateInputs": [
     "empty-unboxed-tuple"
   ],
   "aggregateResults": [
-    "unboxed-tuple"
+    "unboxed-tuple",
+    "unboxed-sum"
   ],
   "aggregateJoinResults": [
     "unboxed-tuple"

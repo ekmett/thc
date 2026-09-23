@@ -219,6 +219,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    @Operation
+    public static final class CheckSumTag {
+        @Specialization public static long execute(long value) { return SumShape.INSTANCE.checkedTag(value); }
+    }
+
     /** Saturated tuple arithmetic never constructs a result carrier or payload array. */
     @Operation
     @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")
