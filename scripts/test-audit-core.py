@@ -539,5 +539,168 @@ class AuditTest(unittest.TestCase):
                             self.assertEqual({i['code'] for i in report['issues']}, {'invalid-literal-value'})
 
 
+
+class EmptyTupleInputTests(unittest.TestCase):
+    capability = dict(CAP, aggregateInputs=['empty-unboxed-tuple'])
+    empty = tuple_rep()
+    state = dict(kind='void', primReps=[], evaluated=True)
+
+    @classmethod
+    def fixture(cls, formal=None, actual=None):
+        formal = copy.deepcopy(formal if formal is not None else [cls.empty, LONG])
+        actual = copy.deepcopy(actual if actual is not None else formal)
+        constructors = {}
+
+        def value(rep):
+            if audit_core.Audit.is_tuple(rep):
+                children = rep.get('components')
+                fields = children if isinstance(children, list) else []
+                key = 'Tuple' + str(len(fields))
+                constructors[key] = dict(id=key, kind='unboxed-tuple', arity=len(fields),
+                    fieldReps=[None] * len(fields), strictFields=[False] * len(fields), fieldLifted=[None] * len(fields))
+                if not fields:
+                    return ['con', key, 0, dict(rep=rep)]
+                return ['app', ['con', key, len(fields)], [value(p) for p in fields],
+                        [False] * len(fields), True, True, dict(rep=rep)]
+            if isinstance(rep, dict) and rep.get('kind') == 'void':
+                return ['void', dict(rep=rep)]
+            if isinstance(rep, dict) and rep.get('kind') in ('data', 'object', 'closure'):
+                constructors['Unit'] = dict(id='Unit', kind='boxed', arity=0, fieldReps=[], strictFields=[], fieldLifted=[])
+                return ['con', 'Unit', 0, dict(rep=rep)]
+            return [*lit(0)] + ([dict(rep=rep)] if rep is not None else [])
+
+        parameters = [dict(id=f'p{i}', lifted=isinstance(p, dict) and p.get('primReps') == ['BoxedRep (Just Lifted)'],
+                           **({'rep': p} if p is not None else {})) for i, p in enumerate(formal)]
+        worker = dict(bind('worker', ['lam', parameters, [*lit(7), dict(rep=LONG)], dict(rep=CLOSURE, resultRep=LONG)]),
+                      rep=CLOSURE, arity=len(formal))
+        call = ['app', [*var('worker'), dict(rep=CLOSURE)], [value(p) for p in actual],
+                [isinstance(p, dict) and p.get('primReps') == ['BoxedRep (Just Lifted)'] for p in actual],
+                False, False, dict(rep=LONG)]
+        return dict(schema=1, ghc='9.14.1', bindings=[bind('root', call), worker], constructors=list(constructors.values()))
+
+    def audit(self, module, entry='root', cap=None):
+        return audit_core.Audit([('empty-input.json', module)], self.capability if cap is None else cap).run([entry])
+
+    def test_exact_empty_positions_and_scalar_zero_width_controls(self):
+        for formal in [[self.empty, LONG], [LONG, self.empty, LONG], [LONG, self.empty],
+                       [self.empty, self.empty, LONG], [self.state, LONG], [REFERENCE, LONG]]:
+            self.assertTrue(self.audit(self.fixture(formal))['accepted'], formal)
+        self.assertFalse(self.audit(self.fixture(), cap=dict(self.capability, aggregateInputs=[]))['accepted'])
+
+    def test_equal_width_other_logical_shapes_cannot_satisfy_empty_formal(self):
+        others = [self.state, REFERENCE, tuple_rep(self.empty), tuple_rep(self.state), tuple_rep(LONG),
+                  dict(self.empty, components=None), dict(self.empty, aggregate='unboxed-sum', alternatives=[]),
+                  None, dict(kind='unknown', primReps=None, evaluated=False)]
+        for actual in others:
+            report = self.audit(self.fixture([self.empty], [actual]))
+            self.assertFalse(report['accepted'], actual)
+            self.assertIn('aggregate-shape', {i['code'] for i in report['issues']}, actual)
+        for formal in [self.state, REFERENCE, LONG, None]:
+            self.assertFalse(self.audit(self.fixture([formal], [self.empty]))['accepted'], formal)
+        self.assertFalse(self.audit(self.fixture([self.empty, self.state, LONG], [self.state, self.empty, LONG]))['accepted'])
+
+    def test_only_exact_empty_formals_are_enabled(self):
+        for formal in [tuple_rep(self.empty), tuple_rep(self.state), tuple_rep(LONG),
+                       dict(self.empty, components=None), dict(self.empty, kind='void'),
+                       dict(self.empty, primReps=['IntRep'])]:
+            self.assertFalse(self.audit(self.fixture([formal]))['accepted'], formal)
+
+    def test_empty_input_is_unlifted_and_unavailable_at_host_boundary(self):
+        module = self.fixture()
+        self.assertFalse(self.audit(module, 'worker')['accepted'])
+        module['bindings'][0]['expr'][3][0] = True
+        self.assertIn('application-levity', {i['code'] for i in self.audit(module)['issues']})
+        module = self.fixture()
+        module['bindings'][1]['expr'][1][0]['lifted'] = True
+        self.assertIn('application-levity', {i['code'] for i in self.audit(module)['issues']})
+
+    def test_join_formals_and_ordinary_empty_let_values_stay_rejected(self):
+        module = self.fixture([self.empty])
+        worker = module['bindings'].pop()
+        worker.update(joinValueArity=1, joinResultRep=LONG, info=dict(joinArity=1))
+        call = module['bindings'][0]['expr']
+        module['bindings'][0]['expr'] = ['let', False, [worker], call, dict(rep=LONG)]
+        self.assertFalse(self.audit(module)['accepted'])
+        module = self.fixture()
+        value = module['bindings'][0]['expr'][2][0]
+        local = dict(bind('e', value, False), rep=self.empty)
+        module['bindings'][0]['expr'] = ['let', False, [local], [*lit(1), dict(rep=LONG)], dict(rep=LONG)]
+        self.assertIn('unboxed-tuple let binding', [i['detail'] for i in self.audit(module)['issues']])
+
+    def test_known_partial_application_keeps_logical_positions(self):
+        module = self.fixture([LONG, self.empty, LONG])
+        call = module['bindings'][0]['expr']
+        partial = ['app', call[1], call[2][:1], call[3][:1], False, False, dict(rep=CLOSURE)]
+        suffix = ['app', partial, call[2][1:], call[3][1:], False, False, dict(rep=LONG)]
+        module['bindings'][0]['expr'] = suffix
+        self.assertTrue(self.audit(module)['accepted'])
+        suffix[2][0] = ['void', dict(rep=self.state)]
+        self.assertIn('aggregate-shape', {i['code'] for i in self.audit(module)['issues']})
+        local = dict(bind('pap', partial), rep=CLOSURE)
+        suffix[1] = [*var('pap'), dict(rep=CLOSURE)]
+        module['bindings'][0]['expr'] = ['let', False, [local], suffix, dict(rep=LONG)]
+        self.assertIn('aggregate-shape', {i['code'] for i in self.audit(module)['issues']})
+
+    def test_global_and_local_alias_signatures_use_definition_scope(self):
+        for local_alias in [False, True]:
+            module = self.fixture([self.empty])
+            call = module['bindings'][0]['expr']
+            call[1] = [*var('alias'), dict(rep=CLOSURE)]
+            alias = dict(bind('alias', [*var('worker'), dict(rep=CLOSURE)]), rep=CLOSURE)
+            shadow = self.fixture([self.state])['bindings'][1]
+            shadowed = ['let', False, [shadow], call, dict(rep=LONG)]
+            if local_alias:
+                module['bindings'][0]['expr'] = ['let', False, [alias], shadowed, dict(rep=LONG)]
+            else:
+                module['bindings'].append(alias)
+                module['bindings'][0]['expr'] = shadowed
+            self.assertTrue(self.audit(module)['accepted'], local_alias)
+            call[2][0] = ['void', dict(rep=self.state)]
+            self.assertIn('aggregate-shape', {i['code'] for i in self.audit(module)['issues']}, local_alias)
+
+    def test_empty_formal_cannot_be_captured_by_a_nested_function(self):
+        module = self.fixture([self.empty])
+        worker = module['bindings'][1]
+        inner = ['lam', [dict(id='x', lifted=False, rep=LONG)],
+                 ['var', 'p0', dict(rep=self.empty)], dict(rep=CLOSURE, resultRep=self.empty)]
+        worker['expr'][2] = inner
+        worker['expr'][3]['resultRep'] = CLOSURE
+        module['bindings'][0]['expr'][6]['rep'] = CLOSURE
+        self.assertIn('unboxed-tuple capture', [i['detail'] for i in self.audit(module)['issues']])
+
+    def test_genuine_native_empty_input_exports_are_accepted(self):
+        paths = [ROOT.parent / f'build/empty-tuple-input/{stage}-core/EmptyTupleInputAudit.json' for stage in ['pre', 'post']]
+        if not all(path.exists() for path in paths):
+            self.skipTest('Run prepare-empty-tuple-input-audit.py for genuine native exports')
+        entries = ['scalarControl', 'beforeCase', 'betweenCase', 'afterCase', 'usedCase',
+                   'papEmptyCase', 'papTwoEmptyCase', 'papMixedCase', 'overCase', 'lazyCase',
+                   'pairCase', 'selfCase', 'mutualCase', 'selfDepth', 'mutualDepth',
+                   'effectCase', 'effectPapCase', 'betweenInputs']
+        for path in paths:
+            module = json.loads(path.read_text())
+            report = audit_core.Audit([(str(path), module)], self.capability).run(entries)
+            self.assertTrue(report['accepted'], report['issues'])
+
+    def test_global_scalar_cannot_be_relabelled_as_an_empty_actual(self):
+        module = self.fixture([self.empty])
+        global_value = dict(bind('scalar', ['void', dict(rep=self.state)], False), rep=self.state)
+        module['bindings'].append(global_value)
+        module['bindings'][0]['expr'][2][0] = ['var', 'scalar', dict(rep=self.empty)]
+        self.assertIn('aggregate-shape', {i['code'] for i in self.audit(module)['issues']})
+
+    def test_state_primitive_contracts_do_not_accept_empty_tuple(self):
+        module = self.fixture()
+        empty = module['bindings'][0]['expr'][2][0]
+        reference = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        for state in [['void', dict(rep=self.state)], empty]:
+            module['bindings'][0]['expr'] = ['app', ['prim', 'newByteArray#'], [[*lit(1), dict(rep=LONG)], state],
+                    [False, False], False, False, dict(rep=tuple_rep(self.state, reference))]
+            report = self.audit(module)
+            # Tuple host result remains unsupported in either case; only the
+            # malformed empty-as-State operand violates the primitive contract.
+            primitive_errors = [i for i in report['issues'] if i['code'] == 'primitive-representation']
+            self.assertEqual(bool(primitive_errors), state is empty)
+
+
 if __name__ == '__main__':
     unittest.main()

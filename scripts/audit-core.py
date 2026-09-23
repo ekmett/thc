@@ -206,6 +206,14 @@ class Audit:
         return isinstance(rep, dict) and rep.get('aggregate') == 'unboxed-tuple'
 
     @classmethod
+    def is_empty_tuple(cls, rep):
+        return (cls.is_tuple(rep) and rep.get('kind') == 'unknown' and
+                rep.get('components') == [] and rep.get('primReps') == [])
+
+    def supported_empty_input(self, rep):
+        return self.is_empty_tuple(rep) and 'empty-unboxed-tuple' in self.cap.get('aggregateInputs', [])
+
+    @classmethod
     def shape(cls, rep):
         """Logical tuple boundaries are significant even at zero/one register.
 
@@ -253,6 +261,51 @@ class Audit:
                     proof = dict(proof or {}, _join_result=record.get('joinResultRep'), _join_arity=record['joinValueArity'])
                 scope[record['id']] = proof
         return scope
+
+    def function_scope(self, records, bound, recursive):
+        local = bound | self.binder_scope(records)
+        # Resolve definition-site signatures, not aliases in the eventual
+        # caller's scope (where an unrelated binder may shadow the same id).
+        for _ in range(max(1, len(records))):
+            changed = False
+            for record in records:
+                if not isinstance(record, dict) or not isinstance(record.get('id'), str):
+                    continue
+                formals = self.call_formals(record.get('expr'), local if recursive else bound)
+                if formals is not None:
+                    key = record['id']
+                    proof = local.get(key)
+                    if not isinstance(proof, dict) or proof.get('_call_formals') != formals:
+                        local[key] = dict(proof or {}, _call_formals=formals)
+                        changed = True
+            if not changed:
+                break
+        return local
+
+    def call_formals(self, expression, bound, seen=frozenset()):
+        """Known lambda/PAP prefixes only; dynamic targets validate their layout at dispatch."""
+        if not isinstance(expression, list) or not expression:
+            return None
+        if expression[0] == 'lam':
+            if (len(expression) < 2 or not isinstance(expression[1], list) or
+                    any(not isinstance(binder, dict) for binder in expression[1])):
+                return None
+            return [binder.get('rep') for binder in expression[1]]
+        if expression[0] == 'var':
+            key = expression[1]
+            if key in seen:
+                return None
+            if key in bound:
+                stored = bound[key]
+                return stored.get('_call_formals') if isinstance(stored, dict) else None
+            definition = self.bindings.get(key, {}).get('expr')
+            return self.call_formals(definition, {}, seen | {key})
+        if expression[0] == 'app':
+            formals = self.call_formals(expression[1], bound, seen)
+            count = len(expression[2])
+            if formals is not None and count < len(formals):
+                return formals[count:]
+        return None
 
     @staticmethod
     def literal_rep(expr):
@@ -358,7 +411,7 @@ class Audit:
                     elif is_strict and is_lifted and not self.cap['strictLiftedFields']:
                         self.issue('strict-lifted-field', owner, path, f'{key}[{index}]')
 
-    def walk(self, expr, bound, owner, path, primitive_arity=None, tuple_result=None):
+    def walk(self, expr, bound, owner, path, primitive_arity=None, tuple_result=None, join_prefix=0):
         if not isinstance(expr, list) or not expr or not isinstance(expr[0], str):
             self.issue('malformed-expression', owner, path, repr(expr)[:160])
             return
@@ -370,6 +423,9 @@ class Audit:
                     raise ValueError('Variable id must be a string')
                 if expr[1] not in bound:
                     self.reference(expr[1], owner, path)
+                    stored = self.bindings.get(expr[1], {}).get('rep')
+                    if self.is_tuple(stored) or self.is_tuple(self.expression_rep(expr)):
+                        self.compare_shapes(stored, self.expression_rep(expr), owner, path + '/rep')
                 else:
                     proof = bound[expr[1]]
                     if isinstance(proof, dict) and proof.get('_join_arity') == 0 and primitive_arity is None:
@@ -382,11 +438,14 @@ class Audit:
                 self.compare_shapes(self.expression_rep(expr), self.literal_rep(expr), owner, path + '/rep')
             elif tag == 'lam':
                 ids = self.binder_ids(expr[1], owner, path + '/binders')
-                for binder in expr[1]:
+                for index, binder in enumerate(expr[1]):
                     if is_vector(binder.get('rep')):
                         self.issue('vector-boundary', owner, path, 'vector formal argument')
-                    if self.is_tuple(binder.get('rep')):
+                    if self.is_tuple(binder.get('rep')) and (index < join_prefix or
+                            not self.supported_empty_input(binder.get('rep'))):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-tuple formal argument')
+                    if self.is_empty_tuple(binder.get('rep')) and binder.get('lifted') is not False:
+                        self.issue('application-levity', owner, path, 'Empty tuple formal must be unlifted')
                 captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                             if self.is_tuple(bound[key])}
                 vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys() if is_vector(bound[key])}
@@ -438,6 +497,12 @@ class Audit:
                 target = bound.get(function[1]) if function[0] == 'var' else None
                 if isinstance(target, dict) and '_join_result' in target:
                     self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')
+                formals = self.call_formals(function, bound)
+                if formals is not None:
+                    for index, (formal, actual) in enumerate(zip(formals, arguments)):
+                        if self.is_tuple(formal) or self.is_tuple(self.expression_rep(actual)):
+                            self.compare_shapes(formal, self.expression_rep(actual), owner,
+                                                f'{path}/arguments/{index}/formal')
                 vector_operation = function[1] if function[0] == 'prim' and function[1] in VECTOR_OPERATIONS else None
                 if vector_operation:
                     expected, result = VECTOR_OPERATIONS[vector_operation]
@@ -457,16 +522,24 @@ class Audit:
                                                 f'{path}/arguments/{index}/rep', component=True)
                     if not vector_operation and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
                         self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
-                    if not tuple_constructor and not vector_operation and (self.is_tuple(self.expression_rep(argument)) or
-                            argument[0] == 'var' and self.is_tuple(bound.get(argument[1]))):
-                        self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
+                    if not tuple_constructor and not vector_operation:
+                        argument_rep = self.expression_rep(argument)
+                        stored = bound.get(argument[1]) if argument[0] == 'var' else None
+                        if self.is_tuple(argument_rep) or self.is_tuple(stored):
+                            ordinary = function[0] not in ('prim', 'con') and not (
+                                isinstance(target, dict) and '_join_arity' in target)
+                            if not ordinary or not self.supported_empty_input(argument_rep):
+                                self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-tuple argument')
+                            if (self.is_empty_tuple(argument_rep) and isinstance(flags, list) and
+                                    index < len(flags) and flags[index] is not False):
+                                self.issue('application-levity', owner, f'{path}/arguments/{index}', 'Empty tuple argument must be unlifted')
                     self.walk(argument, bound, owner, f'{path}/arguments/{index}')
             elif tag == 'let':
                 recursive, group = expr[1], expr[2]
                 if type(recursive) is not bool:
                     raise ValueError('Let recursive flag must be boolean')
                 ids = self.binder_ids(group, owner, path + '/bindings')
-                local = bound | self.binder_scope(group)
+                local = self.function_scope(group, bound, recursive)
                 for index, binding in enumerate(group):
                     if not isinstance(binding, dict):
                         continue
@@ -483,7 +556,7 @@ class Audit:
                     if recursive and binding.get('lifted') is False:
                         self.issue('recursive-unlifted', owner, f'{path}/bindings/{index}', binding.get('id'))
                     self.walk(binding.get('expr'), local if recursive else bound,
-                              owner, f'{path}/bindings/{index}/rhs')
+                              owner, f'{path}/bindings/{index}/rhs', join_prefix=binding.get('joinValueArity', 0))
                 self.compare_shapes(self.expression_rep(expr), self.expression_rep(expr[3]), owner, path + '/body/rep')
                 self.walk(expr[3], local, owner, path + '/body')
             elif tag == 'case':
@@ -567,6 +640,10 @@ class Audit:
                 key = candidates[0]
                 roots.append(key)
                 expression = self.bindings[key].get('expr')
+                if (isinstance(expression, list) and len(expression) > 1 and expression[0] == 'lam' and
+                        isinstance(expression[1], list)):
+                    if any(self.is_tuple(b.get('rep')) for b in expression[1] if isinstance(b, dict)):
+                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
                 if (isinstance(expression, list) and expression and expression[0] == 'lam' and
                         len(expression) > 3 and isinstance(expression[3], dict) and
                         self.is_tuple(expression[3].get('resultRep'))):
@@ -581,7 +658,7 @@ class Audit:
             self.binding_metadata(binding, key, '/binding')
             if type(binding.get('lifted')) is not bool:
                 self.issue('unknown-binder-levity', key, '/binding', key)
-            self.walk(binding.get('expr'), {}, key, '/expr')
+            self.walk(binding.get('expr'), {}, key, '/expr', join_prefix=binding.get('joinValueArity', 0))
         for issue in self.issues:
             if issue['owner'] in self.chains:
                 issue['reachableVia'] = self.chains[issue['owner']]
