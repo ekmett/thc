@@ -181,10 +181,23 @@ class CaptureLayout @JvmOverloads constructor(language: TruffleLanguage<*>, prim
         check(sourceSlots.size == fields.size)
         val environment = shape.factory.create(this, allocationKey)
         for (index in fields.indices) {
-            if (fields[index].exactLong) fields[index].initializeLong(environment, frame.getLong(sourceSlots[index]))
-            else if (fields[index].exactFloat) fields[index].initializeFloat(environment, frame.getFloat(sourceSlots[index]))
-            else if (fields[index].exactDouble) fields[index].initializeDouble(environment, frame.getDouble(sourceSlots[index]))
-            else fields[index].initialize(environment, FrameAccess.read(frame, sourceSlots[index]))
+            val slot = sourceSlots[index]
+            // A shared descriptor may have widened before this activation wrote
+            // its exact scalar. Keep the primitive fast path and accept only the
+            // same boxed carrier; do not expose other primitive reads to PE.
+            if (fields[index].exactLong) fields[index].initializeLong(environment,
+                if (frame.isLong(slot)) frame.getLong(slot)
+                else if (frame.isObject(slot)) frame.getObject(slot) as? Long ?: fault("Expected primitive Long capture")
+                else fault("Expected primitive Long capture"))
+            else if (fields[index].exactFloat) fields[index].initializeFloat(environment,
+                if (frame.isFloat(slot)) frame.getFloat(slot)
+                else if (frame.isObject(slot)) frame.getObject(slot) as? Float ?: fault("Expected primitive Float capture")
+                else fault("Expected primitive Float capture"))
+            else if (fields[index].exactDouble) fields[index].initializeDouble(environment,
+                if (frame.isDouble(slot)) frame.getDouble(slot)
+                else if (frame.isObject(slot)) frame.getObject(slot) as? Double ?: fault("Expected primitive Double capture")
+                else fault("Expected primitive Double capture"))
+            else fields[index].initialize(environment, FrameAccess.read(frame, slot))
         }
         return environment
     }

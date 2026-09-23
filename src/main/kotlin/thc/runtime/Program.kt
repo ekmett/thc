@@ -1316,6 +1316,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail))
             }.toTypedArray()
+            CoreRepresentations.validateFloatingCaseResult(CoreRepresentations.expression(expr),
+                alternatives.map { it.body.representation })
             when (caseCategory(binderProof, alternatives.map { it.kind },
                 alternatives.all { it.kind != LITERAL_ALTERNATIVE || it.value is Long })) {
                 CaseCategory.DATA -> DataCase(scrutinee, binder, alternatives, metrics, binderProof)

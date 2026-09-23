@@ -62,6 +62,12 @@ requiring each final row to execute installed guest code with the default
 splitting policy. Additional checks cover previously cold non-finite paths,
 direct primitive storage and exact signed-zero/NaN-payload preservation across
 fields and captures, shared frame-descriptor widening, and unsupported boundaries.
+Exact captures also accept the same boxed scalar carrier after shared descriptor
+widening, without numeric coercion. This is API/legacy robustness: no ordinary
+valid GHC lowering path that widens an exact scalar binder is currently known.
+Malformed case results are checked against every known alternative independent
+of ordering; an unknown alternative does not inherit a floating proof from its
+peers.
 
 For actual compiler evidence, `floatingLoop` has both f32 and f64 accumulators.
 Capture its graph with `scripts/dump-graph.sh`, selecting

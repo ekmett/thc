@@ -25,6 +25,9 @@ def main():
     parser.add_argument('--bytecode', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    # Record runtime source state before replacing any tracked evidence files.
+    runtime_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    tracked_clean = subprocess.run(['git', 'diff', '--quiet', 'HEAD'], cwd=ROOT).returncode == 0
     args.output.mkdir(parents=True, exist_ok=True)
     evidence = {}
     archive = args.output / 'selected-bgv.tar.xz'
@@ -52,8 +55,7 @@ def main():
     checks = ROOT / 'build/floating/checks.json'
     jars = sorted((ROOT / 'build/install/thc/lib').glob('thc*.jar'))
     assert len(jars) == 1, jars
-    manifest = dict(runtimeCommit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
-        trackedWorktreeClean=subprocess.run(['git', 'diff', '--quiet', 'HEAD'], cwd=ROOT).returncode == 0,
+    manifest = dict(runtimeCommit=runtime_commit, trackedWorktreeClean=tracked_clean,
         javaVersion=subprocess.check_output(['java', '--version'], text=True).strip(),
         installedJarSha256=sha(jars[0]), floatingChecksSha256=sha(checks),
         nativeCoreSha256=sha(ROOT / 'build/floating/core/FloatingAudit.json'),

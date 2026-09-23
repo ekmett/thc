@@ -56,6 +56,12 @@ internal data class CoreRepresentation(
 internal object CoreRepresentations {
     private val longs = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
         "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
+    /** Validate every known arm, but never infer an unknown arm from its peers. */
+    fun validateFloatingCaseResult(declared: CoreRepresentation, alternatives: List<CoreRepresentation>) {
+        val proofs = listOf(declared) + alternatives
+        val floating = proofs.firstOrNull { it.isFloat || it.isDouble } ?: return
+        proofs.forEach { floating.refine(it) }
+    }
     /** Validate every retained proof, including cold branches and unused binders. */
     fun validateAggregates(bindings: List<Map<String, Any?>>) {
         fun visit(value: Any?) {
