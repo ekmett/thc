@@ -91,7 +91,7 @@ checked against native GHC and independent models. `scripts/try-libraries.sh`
 runs those checks on both backends.
 The [unsigned scalar primop slice](docs/integer-primops.md) adds native-checked
 machine-word division and narrow-word comparisons, bitwise operations and shifts.
-Local [Int64X2 SIMD operations](docs/simd.md) run on both backends with exact
+Local [Int64X2 and Int32X4 SIMD operations](docs/simd.md) run on both backends with exact
 vector metadata and primitive lane storage. Vector calls, returns, captures,
 fields and joins remain explicit boundaries.
 

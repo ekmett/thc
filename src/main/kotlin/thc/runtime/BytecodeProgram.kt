@@ -928,6 +928,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operations32 -> vector32Primitive(name, operands)
         "unpackInt64X2#" -> tupleExpression(CoreVectors.unpacked) { e, destination ->
             e.builder.beginVectorUnpack(destination[0], destination[1])
             operands[0].emit(e)
@@ -951,6 +952,32 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof)
+    }
+
+    private fun vector32Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackInt32X4#" -> tupleExpression(CoreVectors.unpacked32) { e, destination ->
+            e.builder.beginVector32Unpack(destination[0], destination[1], destination[2], destination[3])
+            operands[0].emit(e)
+            e.builder.endVector32Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packInt32X4#" -> {
+                    b.beginBlock()
+                    val lanes = List(4) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVector32Pack(); lanes.forEach(b::emitLoadLocal); b.endVector32Pack()
+                    b.endBlock()
+                }
+                "broadcastInt32X4#" -> { b.beginVector32Broadcast(); operands[0].emit(e); b.endVector32Broadcast() }
+                "negateInt32X4#" -> { b.beginVector32Negate(); operands[0].emit(e); b.endVector32Negate() }
+                else -> {
+                    b.beginVector32Binary(name == "minusInt32X4#")
+                    operands.forEach { it.emit(e) }; b.endVector32Binary()
+                }
+            }
+        }, CoreVectors.proof32)
     }
 
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {

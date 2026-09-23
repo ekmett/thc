@@ -1198,6 +1198,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 when (name) {
                     "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })
                     "unpackInt64X2#" -> VectorUnpack(operands[0])
+                    "packInt32X4#" -> Vector32Pack(operands[0], IntArray(4) { scope.layout.bind("<vector lane $it>") })
+                    "unpackInt32X4#" -> Vector32Unpack(operands[0])
+                    in CoreVectors.operations32 -> Vector32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
             } else if (tupleOperation != null) {

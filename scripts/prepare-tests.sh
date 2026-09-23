@@ -12,10 +12,12 @@ python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py
 # GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately
 # validates pre-Core/model execution; the x86 job also requires native + post-Tidy.
-case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-simd-audit.py --export-only ;;
-  *) python3 scripts/prepare-simd-audit.py ;;
-esac
+for simd_vector in int64x2 int32x4; do
+  case "$(uname -m)" in
+    arm64|aarch64) python3 scripts/prepare-simd-audit.py --vector "$simd_vector" --export-only ;;
+    *) python3 scripts/prepare-simd-audit.py --vector "$simd_vector" ;;
+  esac
+done
 python3 scripts/prepare-tuple-arithmetic.py
 python3 scripts/prepare-signed-narrow-primops.py
 python3 scripts/prepare-explicit64-primops.py

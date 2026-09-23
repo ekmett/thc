@@ -326,7 +326,13 @@
     "uncheckedIShiftRA64#": 2,
     "uncheckedIShiftRL64#": 2,
     "uncheckedShiftL64#": 2,
-    "uncheckedShiftRL64#": 2
+    "uncheckedShiftRL64#": 2,
+    "packInt32X4#": 1,
+    "unpackInt32X4#": 1,
+    "broadcastInt32X4#": 1,
+    "plusInt32X4#": 2,
+    "minusInt32X4#": 2,
+    "negateInt32X4#": 1
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
@@ -342,6 +348,11 @@
     {
       "lanes": 2,
       "element": "Int64ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 4,
+      "element": "Int32ElemRep",
       "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
     }
   ],

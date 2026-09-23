@@ -49,6 +49,8 @@ jobs:
           from pathlib import Path
           proof = json.loads(Path('build/simd/provenance.json').read_text())
           assert proof['nativeRows'] == 147 and proof['stages'] == ['pre', 'post'], proof
+          proof = json.loads(Path('build/simd-int32x4/provenance.json').read_text())
+          assert proof['nativeRows'] == 243 and proof['stages'] == ['pre', 'post'], proof
           PY
       - name: Test opt-in dense handoff
         env:
@@ -118,6 +120,7 @@ jobs:
             build/explicit64-primops/manifest.json
             build/explicit64-primops/oracle.tsv
             build/explicit64-primops/*.audit.json
+            build/simd-int32x4/
             build/signed-narrow-primops/manifest.json
             build/signed-narrow-primops/oracle.tsv
             build/signed-narrow-primops/*.audit.json

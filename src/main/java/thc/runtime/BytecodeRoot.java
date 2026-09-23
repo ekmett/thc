@@ -506,6 +506,40 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class Vector32Pack {
+        @Specialization public static Int32X4 pack(long first, long second, long third, long fourth) {
+            return new Int32X4((int) first, (int) second, (int) third, (int) fourth);
+        }
+    }
+    @Operation public static final class Vector32Broadcast {
+        @Specialization public static Int32X4 broadcast(long value) {
+            int lane = (int) value;
+            return new Int32X4(lane, lane, lane, lane);
+        }
+    }
+    @Operation public static final class Vector32Negate {
+        @Specialization public static Int32X4 negate(Int32X4 value) { return Int32X4.negate(value); }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "subtract")
+    public static final class Vector32Binary {
+        @Specialization public static Int32X4 binary(boolean subtract, Int32X4 first, Int32X4 second) {
+            return subtract ? Int32X4.subtract(first, second) : Int32X4.add(first, second);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    public static final class Vector32Unpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, Int32X4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first); second.setLong(bytecode, frame, value.second);
+            third.setLong(bytecode, frame, value.third); fourth.setLong(bytecode, frame, value.fourth);
+        }
+    }
+
     @Operation public static final class Add { @Specialization public static long apply(long x, long y) { return x + y; } }
     @Operation public static final class Subtract { @Specialization public static long apply(long x, long y) { return x - y; } }
     @Operation public static final class Multiply { @Specialization public static long apply(long x, long y) { return x * y; } }
