@@ -109,6 +109,8 @@ lazy reference storage and exact State sequencing on both backends.
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
 pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
+[Int-array operations](docs/int-arrays.md) extend the same byte storage to
+public `UArray`/`STUArray` examples with native-endian, full-width values.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
 Double storage and 30 arithmetic/comparison/conversion primops, including square

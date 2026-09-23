@@ -74,7 +74,7 @@ class ByteArrayContracts(unittest.TestCase):
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
 
     def test_state_is_not_an_empty_tuple_and_reference_is_not_lifted(self):
-        for name in ('newByteArray#', 'unsafeFreezeByteArray#'):
+        for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#'):
             for mutation in ('empty-tuple', 'missing-state', 'lifted-reference'):
                 module, app = fixture(name)
                 proof = app[6]['rep']
@@ -82,6 +82,9 @@ class ByteArrayContracts(unittest.TestCase):
                     proof['components'][0].update(aggregate='unboxed-tuple', components=[], kind='unknown')
                 elif mutation == 'missing-state':
                     proof['components'].pop(0)
+                elif name == 'readIntArray#':
+                    proof['components'][1]['primReps'] = ['WordRep']
+                    proof['primReps'] = ['WordRep']
                 else:
                     proof['components'][1]['primReps'] = ['BoxedRep (Just Lifted)']
                     proof['primReps'] = ['BoxedRep (Just Lifted)']
@@ -89,12 +92,24 @@ class ByteArrayContracts(unittest.TestCase):
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
 
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
-        for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#', 'copyByteArray#'):
+        for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',
+                     'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#'):
             module, _ = fixture(name)
             parameter = module['bindings'][0]['expr'][1][0]
             parameter['rep']['primReps'] = ['BoxedRep (Just Lifted)']
             report = check(module)
             self.assertIn('scalar-representation', {i['code'] for i in report['issues']}, name)
+
+    def test_int_array_requires_machine_int_not_same_width_word_or_int64(self):
+        for name in ('readIntArray#', 'writeIntArray#', 'indexIntArray#'):
+            for replacement in ('WordRep', 'Int64Rep', 'Word64Rep'):
+                for operand in ([1, 2] if name == 'writeIntArray#' else [1]):
+                    module, app = fixture(name)
+                    module['bindings'][0]['expr'][1][operand]['rep']['primReps'] = [replacement]
+                    app[2][operand][2]['rep']['primReps'] = [replacement]
+                    report = check(module)
+                    self.assertIn('primitive-representation', {i['code'] for i in report['issues']},
+                                  (name, operand, replacement))
 
     def test_copy_requires_exact_proofs_for_both_references_offsets_count_and_state(self):
         for argument in range(6):

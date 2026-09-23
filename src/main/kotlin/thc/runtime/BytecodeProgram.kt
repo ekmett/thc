@@ -757,17 +757,27 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { compile(it, scope, false) }
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
-                    if (operation == ByteArrayOp.NEW) e.builder.beginNewByteArray(destination[0])
-                    else e.builder.beginFreezeByteArray(destination[0])
+                    when (operation) {
+                        ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
+                        ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
+                        ByteArrayOp.READ_INT -> e.builder.beginReadIntArray(destination[0])
+                        else -> error("Scalar ByteArray operation")
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == ByteArrayOp.NEW) e.builder.endNewByteArray()
-                    else e.builder.endFreezeByteArray()
+                    when (operation) {
+                        ByteArrayOp.NEW -> e.builder.endNewByteArray()
+                        ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
+                        ByteArrayOp.READ_INT -> e.builder.endReadIntArray()
+                        else -> error("Scalar ByteArray operation")
+                    }
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
                         ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
                         ByteArrayOp.WRITE -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.WRITE_INT -> e.builder.beginWriteIntArray()
+                        ByteArrayOp.INDEX_INT -> e.builder.beginIndexIntArray()
                         else -> error("Tuple ByteArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -776,6 +786,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.WRITE -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        ByteArrayOp.WRITE_INT -> e.builder.endWriteIntArray()
+                        ByteArrayOp.INDEX_INT -> e.builder.endIndexIntArray()
                         else -> error("Tuple ByteArray operation")
                     }
                 }, tupleProof.copy(evaluated = true))

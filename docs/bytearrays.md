@@ -8,6 +8,9 @@ installed bytestring `$wpack`/`$wgo`/`uncons`/`$wuncons` bodies and the original
 `GHC.Internal.List.$wlenAcc`. Preparation requires those exact dependencies and
 all five original primitives to remain reachable, plus `copyByteArray#` in both
 the uncons roundtrip and direct copy workload; it does not substitute library bodies.
+The [Int-array extension](int-arrays.md) adds `readIntArray#`, `writeIntArray#`,
+and `indexIntArray#` over the same backing storage, with element rather than
+byte offsets.
 
 `ByteArray#` and `MutableByteArray# s` are each one unlifted boxed reference,
 represented directly by a mutable JVM primitive `byte[]`, with no wrapper

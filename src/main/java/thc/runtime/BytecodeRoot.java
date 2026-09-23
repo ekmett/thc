@@ -615,6 +615,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class IndexByteArray {
         @Specialization public static long index(Object value, long offset) { return ManagedByteArray.read(ManagedByteArray.require(value), offset); }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadIntArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = ManagedIntArray.read(array, index);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteIntArray {
+        @Specialization public static Object write(Object value, long index, long integer, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedIntArray.write(array, index, integer);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class IndexIntArray {
+        @Specialization public static long index(Object value, long index) {
+            return ManagedIntArray.read(ManagedByteArray.require(value), index);
+        }
+    }
 
     // GHC machine integers wrap. Comparisons return Int# 0/1, not boxed Bool.
     @Operation public static final class VectorPack {
