@@ -1,28 +1,28 @@
 {
-  "runtimeCommit": "427834b83db29fc538e4327bac51ccf96c59d92c",
+  "runtimeCommit": "3897800fa22cc9624d2e34512587dbd364c8b0b1",
   "trackedWorktreeClean": true,
   "javaVersion": "java 25.0.4.1 2026-08-18 LTS\nJava(TM) SE Runtime Environment Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22)\nJava HotSpot(TM) 64-Bit Server VM Oracle GraalVM 25.3.4.1+1.1 (build 25.0.4.1+1-LTS-jvmci-25.3-b22, mixed mode, sharing)",
-  "installedJarSha256": "4859deda44ff1f8f644a1ba72dc3c74ebb252aa634521f053567e9cfcf581680",
-  "floatingChecksSha256": "43a5dc37c26b77ebf3e2fa9b09c65b4b7933dc23ddc544062a1a281b7fa9be0d",
+  "installedJarSha256": "e78257bb167ad3ce8a7979043a57f84031621261b6bcf9996b0cafb069b88732",
+  "floatingChecksSha256": "39f44048c0e8715b8e3e846d5e71b13f6f138e8e832dcc3d64cc2efee4cda0de",
   "nativeCoreSha256": "e832f077f48bf8f14f5275cde1e3a5dd957cab2ae6ae44f36ae4a689b2db9b14",
-  "archiveSha256": "15d027e54f1435510e1af28b41915fdf0c2d07e1cc7cf8100da0bbf9152bfbe3",
+  "archiveSha256": "7c59cb7f9466c57e8bb0e575915acca5259ee56ffee5121ec9eaea71bde17e71",
   "evidence": {
     "ast": {
       "snapshot": "ast-high-tier.json.gz",
-      "snapshotSha256": "9586a0cc39a7bb2a6ace093eb63dc86b6a44dee736c4780b2cff6b631fd6b0fc",
+      "snapshotSha256": "9b1749c0d72942c7620bc25e46e353dac6a11e5afa9014d13b2cee3052a8368e",
       "bgvArchiveMember": "ast.bgv",
-      "bgvSha256": "61bd9faddbe1b2dc56ebd72e870dfa375e2788cd4922b6937e4ce6776f026ab0",
-      "originalSnapshot": "build/floating/graphs/checkpoint-ast/parsed-TruffleHotSpotCompilation-2209[lambda_n]/graph-00005.json",
-      "originalBgv": "/tmp/thc-floating-foundations-01a0cdeb.GbQuX4/build/floating/graphs/checkpoint-ast/TruffleHotSpotCompilation-2209[lambda_n].bgv",
+      "bgvSha256": "101dde0a81a212fbd96ca40ab2a04be06b69344151c2ab1453897e84f2fdd4a2",
+      "originalSnapshot": "build/floating/graphs/integrated-ast/parsed-TruffleHotSpotCompilation-2227[lambda_n]/graph-00005.json",
+      "originalBgv": "/tmp/thc-floating-foundations-01a0cdeb.GbQuX4/build/floating/graphs/integrated-ast/TruffleHotSpotCompilation-2227[lambda_n].bgv",
       "loopBegin": 1036
     },
     "bytecode": {
       "snapshot": "bytecode-high-tier.json.gz",
-      "snapshotSha256": "b2abcfe461ad7c2df072d5593825cfac55c234f1e8473db74b33fbb1e78d47ae",
+      "snapshotSha256": "df829d3cd15d4ac366ded78c3c30bdaf080a02b5c20c11e7e8464d155e3ef45e",
       "bgvArchiveMember": "bytecode.bgv",
-      "bgvSha256": "62c70427a1d4fc3bc8cf76e34a02b39f62600b0db78e20a3844e500b3c1cda55",
-      "originalSnapshot": "build/floating/graphs/checkpoint-bytecode/parsed-TruffleHotSpotCompilation-2369[lambda_n]/graph-00005.json",
-      "originalBgv": "/tmp/thc-floating-foundations-01a0cdeb.GbQuX4/build/floating/graphs/checkpoint-bytecode/TruffleHotSpotCompilation-2369[lambda_n].bgv",
+      "bgvSha256": "aea068918c6a68604d2f1be1d2cd4943aef2581c8888e8f12e0218cf9ad81a42",
+      "originalSnapshot": "build/floating/graphs/integrated-bytecode/parsed-TruffleHotSpotCompilation-2366[lambda_n]/graph-00005.json",
+      "originalBgv": "/tmp/thc-floating-foundations-01a0cdeb.GbQuX4/build/floating/graphs/integrated-bytecode/TruffleHotSpotCompilation-2366[lambda_n].bgv",
       "loopBegin": 1559
     }
   }
