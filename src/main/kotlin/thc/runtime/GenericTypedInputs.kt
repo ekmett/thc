@@ -111,7 +111,7 @@ private fun forceActuals(frame: VirtualFrame, node: Node, function: Closure, sou
 
 @CompilerDirectives.TruffleBoundary
 private fun acquireGenericInput(input: TypedInputLayout, compiled: Boolean): HandoffStorage =
-    if (compiled) input.packet.create().also { it.inputMode = 2 }
+    if (compiled) input.packet.create().also { it.inputMode = 3 }
     else input.state().arguments.acquire(input.packet).also { it.inputMode = 1 }
 
 @CompilerDirectives.TruffleBoundary
