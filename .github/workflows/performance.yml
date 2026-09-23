@@ -20,7 +20,6 @@ jobs:
       THC_DIAGNOSTIC_UNSUPPORTED: 'true'
       THC_SOURCE_NOTES: 'true'
       THC_BACKEND: bytecode
-      THC_GRADLE_USER_HOME: ${{ runner.temp }}/thc-performance-gradle
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -50,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work/ci-performance/logs
+          echo "THC_GRADLE_USER_HOME=$RUNNER_TEMP/thc-performance-gradle" >> "$GITHUB_ENV"
           test "$(ghc --numeric-version)" = 9.14.1
           test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
           python3 - <<'PY'
