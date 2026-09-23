@@ -85,6 +85,13 @@ EXPECTED = {
     'sumAliasIdentity': summ([VOID, BOX], ['WordRep', LIFTED]),
     'nestedAliasIdentity': ALIASED_TUPLE,
     'emptyAliasIdentity': EMPTY,
+    'abstractTupleRep': tup(None, None, False),
+    'abstractSumRep': summ(None, None, False),
+    'abstractFixedTupleIdentity': tup(None, ['IntRep']),
+    'abstractEmptyIdentity': tup(None, []),
+    'abstractSumIdentity': summ(None, ['WordRep', LIFTED, 'WordRep']),
+    'familyTupleIdentity': tup(None, ['IntRep']),
+    'abstractComponentIdentity': tup([tup(None, ['IntRep']), INT], ['IntRep', 'IntRep']),
 }
 
 
@@ -104,9 +111,10 @@ def inventory(stage):
         field = 'components' if tag == 'unboxed-tuple' else 'alternatives'
         other = 'alternatives' if field == 'components' else 'components'
         check(value['kind'] == 'unknown' and other not in value, 'Conflicting layout metadata')
-        check(isinstance(value[field], list), 'Missing recursive logical layout')
-        check(all(isinstance(child, dict) and {'kind', 'primReps', 'evaluated'} <= child.keys()
-                  for child in value[field]), 'Component is not representation evidence')
+        check(value[field] is None or isinstance(value[field], list), 'Invalid recursive logical layout')
+        if value[field] is not None:
+            check(all(isinstance(child, dict) and {'kind', 'primReps', 'evaluated'} <= child.keys()
+                      for child in value[field]), 'Component is not representation evidence')
     for name, expected in EXPECTED.items():
         expr = bindings[name]['expr']
         check(expr[0] == 'lam', f'{stage}/{name}: lost the actual function boundary')
@@ -121,14 +129,19 @@ def inventory(stage):
         check(not report['missingGlobals'], f'{stage}/{name}: unrelated missing globals')
         if name.endswith('Identity'):
             check(not report['constructors'], f'{stage}/{name}: constructor fallback masks the boundary')
-    # An abstract type with a TupleRep kind has no known logical decomposition.
-    check(bindings['abstractTupleRep']['expr'][3]['resultRep'] == UNKNOWN,
-          'RuntimeRep alone must not invent logical aggregate components')
+    # Null layouts above prove a boundary without inventing logical components
+    # from an abstract type's RuntimeRep, including zero/one physical registers.
     recursive = bindings['recursiveNewtypeIdentity']['expr']
     check(recursive[1][0]['rep'] == leaf('object', [LIFTED], False),
           'Recursive scalar newtype changed classification or unwrapping did not terminate')
     check(audit_core.Audit([(str(path), module)], CAP).run(['recursiveNewtypeIdentity'])['accepted'],
           'Unreachable aggregate bindings must not reject the scalar newtype control')
+    for name in ('stateAliasIdentity', 'proxyIdentity'):
+        primitive = bindings[name]['expr']
+        check(primitive[1][0]['rep'] == VOID and primitive[3]['resultRep'] == VOID,
+              f'{name}: an exposed zero-width primitive must not become an empty tuple')
+        check(audit_core.Audit([(str(path), module)], CAP).run([name])['accepted'],
+              f'{name}: a known primitive/alias must remain supported')
     return dict(stage=stage, boundary=module['boundary'], aggregateRecords=records,
                 checkedLayouts=list(EXPECTED), supportedEntries=0)
 
@@ -209,7 +222,7 @@ def main():
     report = dict(schema=1, category='unsupported-aggregate-layout', supportedEntries=0,
                   coverage=coverage, provenance=record(provenance_path))
     (OUT / 'checks.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(f'Aggregate layout: {len(EXPECTED)} exact recursive layouts in both native stages; '
+    print(f'Aggregate layout: {len(EXPECTED)} recursive/unknown layout proofs in both native stages; '
           'polymorphic/alias regressions checked; 0 supported entries')
 
 

@@ -37,8 +37,20 @@ foralls, synonyms, and newtype aliases with GHC's recursive-newtype cycle check.
 `dropRuntimeRepArgs` then supply the ordered logical child types. No printed type
 text or physical register count is used to infer shape. The representation view
 is used only to detect aggregates: scalar newtypes still receive their original
-conservative classification, and opaque type families are not expanded. An
-abstract type with a `TupleRep` kind has no inferred logical decomposition.
+conservative classification, and opaque type families are not expanded. If an
+abstract type variable or opaque family exposes a `TupleRep` or `SumRep` kind,
+the aggregate marker remains, but `components` or `alternatives` is `null`:
+the boundary is known while its logical decomposition is unavailable. This is
+different from `components: []`, which proves a logical empty tuple. Consumers
+must reject unknown layouts for aggregate execution, including when the exact
+physical vector contains zero registers or one register. RuntimeRep TyCon identity
+establishes these boundaries; register counts never do.
+
+GHC also gives known primitives such as `State# s` and `Proxy# a` the kind
+`TYPE ('TupleRep '[])`. Their exposed primitive TyCons, including through newtype aliases, preserve the
+ordinary `void` proof without an aggregate marker. An abstract type at that same
+kind could instead be a logical empty tuple, so its null layout conservatively
+retains the unsupported boundary until the logical type is known.
 
 Each node retains the exact vector from `typePrimRep_maybe`, when available.
 GHC 9.14.1's `TupleRep` and `SumRep` callbacks internally call the partial
@@ -62,8 +74,10 @@ Run `python3 scripts/check-aggregate-layout.py --prepare` with the pinned GHC an
 ghc-pkg to rebuild the plugin, compile the fixture natively without the plugin,
 and check genuine optimized exports before and after Tidy. It checks eleven exact
 recursive layouts, including mixed physical reps, lifted payloads, nested
-polymorphism, and constructor-free newtype aliases, plus abstract-representation
-and recursive scalar-newtype controls. The existing aggregate frontier driver
+polymorphism, and constructor-free newtype aliases, plus seven partial or unknown
+layouts for abstract/family types. Controls cover a recursive scalar newtype,
+a newtype over the zero-width state primitive, and the zero-width `Proxy#` primitive.
+The existing aggregate frontier driver
 runs this check during normal test preparation. `AggregateLayoutTest` checks
 strict loading on both backends at both stages before invoking any guest input.
 
