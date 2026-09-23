@@ -98,6 +98,10 @@ not a switch that enables return-type profiling. The remaining generic ABI
 still materializes argument arrays and primitive boxes when a call does not
 inline.
 
+The [call-boundary audit](call-boundaries.md) follows that ABI through the pinned
+Truffle runtime and Cadenza. It also records why mutable packet reuse needs a
+frame-lifetime contract, and a smaller partial-inlining opportunity in the fold.
+
 Separate allocation runs measured **9,575,492.5 to 8,329,466.5 bytes per workload**
 for the original and typed-frame bytecode runtimes, a **13.0% reduction**. Three
 warmed 256-workload samples agree in each run. The measurement uses the executing

@@ -58,19 +58,55 @@ def copy_file(source, destination):
     shutil.copy2(source, destination)
 
 
-def freeze(out, baseline):
+def selected_suite(args):
+    suite = args.suite or 'standard'
+    options = {name: getattr(args, name) == 'true'
+               for name in ('constructor_class', 'unchecked', 'compact_headers')}
+    if suite == 'standard':
+        if any(options.values()):
+            raise ValueError('Combination flags require --suite combined')
+        configurations, comparisons = CONFIGURATIONS, COMPARISONS
+        required_configs, required_comparisons = REQUIRED_CONFIGURATIONS, REQUIRED_COMPARISONS
+    else:
+        if not any(options.values()):
+            raise ValueError('Combined suite requires at least one selected flag')
+        def flags(values):
+            return ['-Dthc.constructorClassIdentity=' + str(values['constructor_class']).lower(),
+                    '-Dthc.staticShapeUnchecked=' + str(values['unchecked']).lower(),
+                    '-XX:' + ('+' if values['compact_headers'] else '-') + 'UseCompactObjectHeaders']
+        configurations = {'current-default': ('current', flags(dict.fromkeys(options, False))),
+                          'selected-combination': ('current', flags(options))}
+        comparisons = {'combined': ('current-default', 'selected-combination')}
+        required_configs, required_comparisons = tuple(configurations), tuple(comparisons)
+    return {'suite': suite, 'selectedOptions': options, 'configurations': configurations,
+            'comparisons': comparisons, 'requiredConfigurations': required_configs,
+            'requiredComparisons': required_comparisons}
+
+
+def suite_config(out):
+    return json.loads((out / 'frozen/suite.json').read_text())
+
+
+def freeze(out, baseline, selection):
     root = Path(__file__).resolve().parents[1]
-    baseline = baseline.resolve(strict=True)
-    assert revision(baseline) == ORIGINAL, 'Unexpected baseline checkout'
+    checkouts = [('current', root)]
+    if selection['suite'] == 'standard':
+        assert baseline is not None, 'Pass --baseline-checkout for the standard suite'
+        baseline = baseline.resolve(strict=True)
+        assert revision(baseline) == ORIGINAL, 'Unexpected baseline checkout'
+        checkouts.insert(0, ('original', baseline))
     frozen = out / 'frozen'
     assert not frozen.exists(), 'Frozen inputs already exist'
     frozen.mkdir(parents=True)
-    for name, checkout in [('original', baseline), ('current', root)]:
+    for name, checkout in checkouts:
         libraries = sorted((checkout / 'build/install/thc/lib').glob('*.jar'))
         assert libraries, f'Missing built libraries: {name}'
         for path in libraries:
             copy_file(path, frozen / name / 'lib' / path.name)
         shutil.copytree(checkout / 'src/main', frozen / name / 'src/main')
+    if selection['suite'] == 'combined':
+        shutil.copytree(root / 'src/test', frozen / 'current/src/test')
+    write_json(frozen / 'suite.json', dict(selection, currentCommit=revision(root)))
     source_manifest = root / 'build/map/modules.txt'
     modules = [(source_manifest.parent / line.strip()).resolve(strict=True)
                for line in source_manifest.read_text().splitlines() if line.strip()]
@@ -98,16 +134,17 @@ def freeze(out, baseline):
     write_json(out / 'run.json', {
         'recordedAtUtc': datetime.now(timezone.utc).isoformat(),
         'scope': 'New GitHub-hosted macOS hardware; compare only within this run, not absolute local M3 timings.',
-        'originalCommit': ORIGINAL, 'currentCommit': revision(root), 'repository': str(root),
+        'originalCommit': ORIGINAL if selection['suite'] == 'standard' else None,
+        'currentCommit': revision(root), 'repository': str(root),
         'host': {'system': platform.system(), 'machine': platform.machine(), 'platform': platform.platform()},
         'githubRunId': os.environ.get('GITHUB_RUN_ID'), 'githubRunAttempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
-        'policy': POLICY, 'configurations': CONFIGURATIONS, 'comparisons': COMPARISONS,
-        'sharedCore': 'Both original and current JARs use this one current exported Core/native corpus.',
+        'policy': POLICY, **selection,
+        'sharedCore': 'All compared configurations use this one current exported Core/native corpus.',
         'protocol': 'Full MapCheck uses counters to verify installed code; timing harness instrumentation is disabled.',
         'commands': [],
     })
     (out / 'logs').mkdir(exist_ok=True)
-    print(f'Frozen {len(records)} files, including both runtime/source trees and one current Core/native corpus.', flush=True)
+    print(f'Frozen {len(records)} files for {selection["suite"]}, with one shared current Core/native corpus.', flush=True)
 
 
 def verify(out):
@@ -163,7 +200,7 @@ def run(out, command, name, timeout, environment=None):
 
 def check_configuration(out, java, name):
     frozen = out / 'frozen'
-    runtime, flags = CONFIGURATIONS[name]
+    runtime, flags = suite_config(out)['configurations'][name]
     expected = [line.split('\t') for line in (frozen / 'map/oracle.tsv').read_text().splitlines() if line]
     assert len(expected) == 18, 'Expected the full 18-input Map oracle'
     verify(out)
@@ -184,9 +221,10 @@ def check_configuration(out, java, name):
 
 def check(out, java):
     results = []
-    for name in REQUIRED_CONFIGURATIONS:
+    required = suite_config(out)['requiredConfigurations']
+    for name in required:
         results.append(check_configuration(out, java, name))
-        write_json(out / 'checks.json', {'passed': len(results) == len(REQUIRED_CONFIGURATIONS), 'configurations': results})
+        write_json(out / 'checks.json', {'passed': len(results) == len(required), 'configurations': results})
     verify(out)
 
 
@@ -195,13 +233,16 @@ def compare(out, name, java_home):
     assert checks['passed'] is True, 'All Map configurations must pass before timing'
     if name == 'compact-headers':
         assert json.loads((out / 'compact-status.json').read_text())['readyToTime'] is True
+    elif name == 'combined':
+        assert json.loads((out / 'combined-status.json').read_text())['compatibilityPassed'] is True
     verify(out)
     frozen = out / 'frozen'
-    left, right = COMPARISONS[name]
-    baseline, baseline_flags = CONFIGURATIONS[left]
+    selection = suite_config(out)
+    left, right = selection['comparisons'][name]
+    baseline, baseline_flags = selection['configurations'][left]
     if name == 'compact-headers':
         baseline_flags = baseline_flags + ['-XX:-UseCompactObjectHeaders']
-    candidate, candidate_flags = CONFIGURATIONS[right]
+    candidate, candidate_flags = selection['configurations'][right]
     config = json.loads((out / 'run.json').read_text())
     command = [sys.executable, frozen / 'helpers/compare-map-runtimes.py',
                frozen / baseline / 'lib', frozen / candidate / 'lib', frozen / 'map/native-oracle',
@@ -218,8 +259,82 @@ def compare(out, name, java_home):
     verify(out)
 
 
+def full_tests(out, name, flags):
+    root = Path(json.loads((out / 'run.json').read_text())['repository'])
+    source = root / 'build/test-results/test'
+    destination = out / 'test-results' / name
+    assert not destination.exists(), 'Compatibility results already exist'
+    # Default results are already archived. Do not mistake stale XML for this run.
+    if source.exists():
+        shutil.rmtree(source)
+    totals = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
+    try:
+        run(out, [root / 'scripts/gradle.sh', '--no-daemon', 'test', '--rerun'],
+            name + '-full-tests', 1500, {'JAVA_TOOL_OPTIONS': ' '.join(flags)})
+    finally:
+        if source.exists():
+            shutil.copytree(source, destination)
+        for path in destination.glob('TEST-*.xml'):
+            suite = ET.parse(path).getroot()
+            for key in totals:
+                totals[key] += int(suite.attrib.get(key, 0))
+        write_json(out / (name + '-test-totals.json'), totals)
+    assert totals['tests'] >= 148 and all(totals[key] == 0 for key in ('failures', 'errors', 'skipped')), totals
+    return totals
+
+
+def verify_test_sources(out):
+    root = Path(json.loads((out / 'run.json').read_text())['repository'])
+    assert revision(root) == suite_config(out)['currentCommit'], 'Source commit changed'
+    for subtree in ('src/main', 'src/test'):
+        frozen = out / 'frozen/current' / subtree
+        expected = {str(path.relative_to(frozen)): sha(path) for path in frozen.rglob('*') if path.is_file()}
+        actual = {str(path.relative_to(root / subtree)): sha(path)
+                  for path in (root / subtree).rglob('*') if path.is_file()}
+        assert actual == expected, 'Compatibility source tree changed: ' + subtree
+
+
+def combined(out, java_home):
+    selection = suite_config(out)
+    assert selection['suite'] == 'combined', 'Combined action requires the combined suite'
+    status = {'selectedOptions': selection['selectedOptions'], 'configurations': selection['configurations'],
+              'compatibilityPassed': False, 'timingAccepted': False, 'stage': 'full-tests'}
+    status_path = out / 'combined-status.json'
+    write_json(status_path, status)
+    try:
+        verify(out)
+        verify_test_sources(out)
+        try:
+            status['tests'] = full_tests(out, 'combined', selection['configurations']['selected-combination'][1])
+        finally:
+            verify_test_sources(out)
+        status['stage'] = 'full-map-check'
+        write_json(status_path, status)
+        check(out, java_home / 'bin/java')
+        status['mapChecks'] = json.loads((out / 'checks.json').read_text())['configurations']
+        status.update(compatibilityPassed=True, stage='timing')
+        write_json(status_path, status)
+        compare(out, 'combined', java_home)
+        status.update(timingAccepted=True, stage='complete')
+    except Exception as error:
+        status['error'] = str(error)
+        raise
+    finally:
+        totals = out / 'combined-test-totals.json'
+        if totals.exists():
+            status['tests'] = json.loads(totals.read_text())
+        try:
+            verify(out)
+        except Exception as error:
+            status.update(timingAccepted=False, error=str(error))
+            raise
+        finally:
+            write_json(status_path, status)
+
+
 def compact(out, java_home):
     """An incompatible VM/compiler records a failed optional lane, without losing prior results."""
+    assert suite_config(out)['suite'] == 'standard', 'Compact action requires the standard suite'
     verify(out)
     status = {'optional': True, 'passed': False, 'readyToTime': False, 'stage': 'full-tests'}
     status_path = out / 'compact-status.json'
@@ -227,19 +342,7 @@ def compact(out, java_home):
     config = json.loads((out / 'run.json').read_text())
     root, frozen = Path(config['repository']), out / 'frozen'
     try:
-        try:
-            run(out, [root / 'scripts/gradle.sh', '--no-daemon', 'test', '--rerun'],
-                'compact-full-tests', 1500, {'JAVA_TOOL_OPTIONS': '-XX:+UseCompactObjectHeaders'})
-        finally:
-            if (root / 'build/test-results/test').exists():
-                shutil.copytree(root / 'build/test-results/test', out / 'test-results/compact')
-        totals = {'tests': 0, 'failures': 0, 'errors': 0, 'skipped': 0}
-        for path in (out / 'test-results/compact').glob('TEST-*.xml'):
-            suite = ET.parse(path).getroot()
-            for name in totals:
-                totals[name] += int(suite.attrib.get(name, 0))
-        assert totals['tests'] >= 148 and all(totals[name] == 0 for name in ('failures', 'errors', 'skipped')), totals
-        status['tests'] = totals
+        status['tests'] = full_tests(out, 'compact', ['-XX:+UseCompactObjectHeaders'])
         status['stage'] = 'full-map-check'
         write_json(status_path, status)
         status['mapCheck'] = check_configuration(out, java_home / 'bin/java', 'compact-checked-class-off')
@@ -281,15 +384,22 @@ def compact(out, java_home):
 def finish(out):
     verify(out)
     comparisons = {}
-    for name in REQUIRED_COMPARISONS:
+    selection = suite_config(out)
+    for name in selection['requiredComparisons']:
         path = out / 'comparisons' / name
         validation = json.loads((path / 'validation.json').read_text())
         assert validation['passed'] is True and validation['validatedWindows'] == 45
         comparisons[name] = json.loads((path / 'summary.json').read_text())
-    compact_status = json.loads((out / 'compact-status.json').read_text())
-    if compact_status['passed']:
-        comparisons['compact-headers'] = json.loads((out / 'comparisons/compact-headers/summary.json').read_text())
-    summary = {'compactHeaders': compact_status, 'scope': json.loads((out / 'run.json').read_text())['scope'],
+    if selection['suite'] == 'standard':
+        status = json.loads((out / 'compact-status.json').read_text())
+        if status['passed']:
+            comparisons['compact-headers'] = json.loads((out / 'comparisons/compact-headers/summary.json').read_text())
+        experiment = {'compactHeaders': status}
+    else:
+        status = json.loads((out / 'combined-status.json').read_text())
+        assert status['compatibilityPassed'] is True and status['timingAccepted'] is True
+        experiment = {'combined': status}
+    summary = {**experiment, 'suite': selection['suite'], 'scope': json.loads((out / 'run.json').read_text())['scope'],
                'immutableInputsUnchanged': True, 'comparisons': comparisons}
     write_json(out / 'summary.json', summary)
     if os.environ.get('GITHUB_STEP_SUMMARY'):
@@ -298,20 +408,27 @@ def finish(out):
             for name, result in comparisons.items():
                 ratios = result['ratios']
                 output.write(f'| {name} | {ratios["candidate/baseline"]:.4f} | {ratios["candidate/native"]:.4f} |\n')
-    print('All three required comparisons passed, 45 windows each; frozen inputs unchanged. Compact status:', compact_status['passed'], flush=True)
+    print(f'All {len(selection["requiredComparisons"])} required comparisons passed, 45 windows each; frozen inputs unchanged.', flush=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('freeze', 'check', 'compare', 'compact', 'finish'))
+    parser.add_argument('action', choices=('validate', 'freeze', 'check', 'compare', 'compact', 'combined', 'finish'))
     parser.add_argument('out', type=Path)
     parser.add_argument('--baseline-checkout', type=Path)
-    parser.add_argument('--comparison', choices=COMPARISONS)
+    parser.add_argument('--comparison', choices=(*COMPARISONS, 'combined'))
+    parser.add_argument('--suite', choices=('standard', 'combined'))
+    for flag in ('constructor-class', 'unchecked', 'compact-headers'):
+        parser.add_argument('--' + flag, choices=('false', 'true'))
     args = parser.parse_args()
     out = args.out.resolve()
-    if args.action == 'freeze':
-        assert args.baseline_checkout, 'Pass --baseline-checkout'
-        freeze(out, args.baseline_checkout)
+    if args.action not in ('validate', 'freeze') and any(getattr(args, key) is not None
+            for key in ('suite', 'constructor_class', 'unchecked', 'compact_headers')):
+        parser.error('Suite options are accepted only by validate/freeze; later actions use the frozen selection')
+    if args.action == 'validate':
+        print(json.dumps(selected_suite(args), indent=2))
+    elif args.action == 'freeze':
+        freeze(out, args.baseline_checkout, selected_suite(args))
     elif args.action == 'finish':
         finish(out)
     else:
@@ -320,6 +437,8 @@ def main():
             check(out, java_home / 'bin/java')
         elif args.action == 'compact':
             compact(out, java_home)
+        elif args.action == 'combined':
+            combined(out, java_home)
         else:
             assert args.comparison, 'Pass --comparison'
             compare(out, args.comparison, java_home)
