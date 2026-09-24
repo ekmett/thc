@@ -12,6 +12,7 @@ import com.oracle.truffle.api.frame.Frame
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.source.SourceSection
 import java.util.Collections
+import thc.Language
 
 /** Detached SourceSection coordinates; end columns are inclusive, unlike Core source notes. */
 @ConsistentCopyVisibility
@@ -51,7 +52,7 @@ class ManagedStackFrame internal constructor(
  * A local, immutable snapshot of live THC GuestRoots, newest first. This is not a native StgStack
  * layout or an IPE table. No call targets, nodes, frames, arguments or Source objects escape capture.
  */
-class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>) {
+class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>, internal val ownerToken: Any?) {
     val frames: List<ManagedStackFrame> = immutableStackList(frames)
 
     /** Source-only JVM diagnostics; GHC's own formatter consumes the compatibility layer. */
@@ -126,7 +127,8 @@ class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>) 
                 null
             }
             if (captured.isEmpty()) throw RuntimeFault("Stack capture found no live guest frames")
-            return ManagedStackSnapshot(captured)
+            val owner = if (currentRoot.languageInfo == null) null else Language.currentState(current).stackSnapshots.token
+            return ManagedStackSnapshot(captured, owner)
         }
 
         private fun coreLocation(node: Node?): CoreSourceLocation? {

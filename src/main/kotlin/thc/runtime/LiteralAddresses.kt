@@ -148,6 +148,14 @@ internal class ManagedAddress private constructor(
         allocation.writeAddressByteOffset(offset + displacement, value)
     }
 
+    /** Commit an allocation image to this byte-addressed view in one checked copy.
+     * The owner validates all pointer-cell overlaps and raw aliases before mutation. */
+    internal fun copyFromAllocationBytes(source: ManagedAllocation, sourceByteOffset: Long, countBytes: Long) {
+        val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
+        requireRange(0, countBytes, writable = true)
+        allocation.copyFrom(source, sourceByteOffset, offset, countBytes)
+    }
+
     companion object {
         private val NULL = ManagedAddress(null, null, 0L)
         fun nullAddress(): ManagedAddress = NULL
