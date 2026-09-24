@@ -1,0 +1,35 @@
+{-# LANGUAGE MagicHash #-}
+module Main where
+import GHC.Exts
+import Data.Bits (finiteBitSize)
+import Data.List (intercalate)
+import SimdFloatX4ByteArray
+
+emit :: [String] -> Int -> IO ()
+emit fields answer = putStrLn (intercalate "\t" (fields ++ [show answer]))
+
+dispatch :: [String] -> IO ()
+dispatch fields@[name, a, b, c, d, e] = case (read a, read b, read c, read d, read e) of
+  (I# offset, I# x0, I# x1, I# x2, I# x3) -> emit fields (I# (case name of
+    "vectorGraphIndexCase" -> vectorGraphIndexCase offset x0 x1 x2 x3
+    "scalarGraphIndexCase" -> scalarGraphIndexCase offset x0 x1 x2 x3
+    _ -> error "unknown graph index entry"))
+dispatch fields@[name, a, b, c, d, e, f] = case (read a, read b, read c, read d, read e, read f) of
+  (I# offset, I# x0, I# x1, I# x2, I# x3, I# selector) -> emit fields (I# (case name of
+    "vectorUnitCase" -> vectorUnitCase offset x0 x1 x2 x3 selector
+    "vectorIndexCase" -> vectorIndexCase offset x0 x1 x2 x3 selector
+    "vectorReadCase" -> vectorReadCase offset x0 x1 x2 x3 selector
+    "vectorWriteCase" -> vectorWriteCase offset x0 x1 x2 x3 selector
+    "vectorGraphStoreCase" -> vectorGraphStoreCase offset x0 x1 x2 x3 selector
+    "scalarUnitCase" -> scalarUnitCase offset x0 x1 x2 x3 selector
+    "scalarIndexCase" -> scalarIndexCase offset x0 x1 x2 x3 selector
+    "scalarReadCase" -> scalarReadCase offset x0 x1 x2 x3 selector
+    "scalarWriteCase" -> scalarWriteCase offset x0 x1 x2 x3 selector
+    "scalarGraphStoreCase" -> scalarGraphStoreCase offset x0 x1 x2 x3 selector
+    _ -> error "unknown raw or store entry"))
+dispatch _ = error "invalid input"
+
+main :: IO ()
+main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"
+       else getContents >>= mapM_ (dispatch . words) . lines
+
