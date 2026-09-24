@@ -78,7 +78,8 @@ internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
     @Child private var payload: Expr) : Expr() {
     private val proof = shape.proof.alternatives!![tag - 1]
     @field:CompilationFinal(dimensions = 1) private val projection = shape.proof.alternativeSlots!![tag - 1].toIntArray()
-    private class Mapping(val destination: IntArray, val offset: Int, val fields: IntArray)
+    private class Mapping(val destination: IntArray, val offset: Int,
+        @field:CompilationFinal(dimensions = 1) val fields: IntArray)
     @field:CompilationFinal @Volatile private var mapping: Mapping? = null
     init { representation = shape.proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Sum value requires a typed destination")
