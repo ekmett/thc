@@ -74,9 +74,12 @@ The project path requires cabal-install 3.16 and GHC 9.14.1. Cabal performs the
 normal native build, including preprocessing and compile-time Haskell. The driver
 reads `plan.json` and Cabal's `--enable-build-info` records, retaining exact
 unit IDs and GHC arguments for a separate post-Tidy export of local dependencies.
-It writes one compressed Core ZIP per local component in the OS application
-cache (`THC_CACHE_HOME` overrides the location) and a checked `packages.json`
-manifest. Each ZIP includes `manifest.json`, its Core modules, and
+It writes one compressed Core ZIP per local component under
+`<dist-dir>/native/cache/thc/core-bundles/v1`, inside Cabal's build directory,
+and a checked `packages.json` manifest. `cabal clean --builddir <dist-dir>/native`
+removes these in-place bundles along with the native build. The OS application
+cache (`THC_CACHE_HOME` overrides its location) is reserved for stable package
+IDs. Each ZIP includes `manifest.json`, its Core modules, and
 `inplace-manifest.json` with hashes of that component's native `.o`/`.hi`
 artifacts and dependency build identities. Unchanged native artifacts reuse
 the ZIP without another GHC export; a changed artifact or exporter refreshes it.
