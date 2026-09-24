@@ -13,6 +13,12 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "word-floating": {
+      "junit": ["thc.runtime.WordFloatingTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],
+      "outputs": ["build/word-floating"],
+      "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
+    },
     "original-stack-formatter": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
@@ -27,12 +33,6 @@
         "src/THC/Driver/Wired.hs",
         "compiler/target-layout.c"
       ]
-    },
-    "word-floating": {
-      "junit": ["thc.runtime.WordFloatingTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}],
-      "outputs": ["build/word-floating"],
-      "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
     },
     "boxed-array-extensions": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"],

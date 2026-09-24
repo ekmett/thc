@@ -37,7 +37,7 @@ class IntegerPrimopsTest {
         val manifest = manifest()
         verifyHashes(manifest)
         val entries = manifest["entries"] as List<Map<String, Any?>>
-        assertEquals(40, entries.size)
+        assertEquals(50, entries.size)
         val composite = manifest["composite"] as Map<String, Any?>
         assertEquals("composite", composite["name"])
         assertEquals(3, (composite["arity"] as Number).toInt())
@@ -52,7 +52,9 @@ class IntegerPrimopsTest {
         for (entry in entries) {
             val name = entry["name"] as String
             val operation = name.substringBefore("Word")
-            val word = if (name.endsWith("Word")) "WordRep" else "Word${(entry["width"] as Number).toInt()}Rep"
+            val word = if (operation in setOf("pdep", "pext")) {
+                if (name.endsWith("Word64")) "Word64Rep" else "WordRep"
+            } else if (name.endsWith("Word")) "WordRep" else "Word${(entry["width"] as Number).toInt()}Rep"
             val arguments = if ((entry["arity"] as Number).toInt() == 1) listOf(word) else
                 listOf(word, if (operation.startsWith("uncheckedShift")) "IntRep" else word)
             val result = if (operation in setOf("eq", "ne", "gt", "ge")) "IntRep" else word

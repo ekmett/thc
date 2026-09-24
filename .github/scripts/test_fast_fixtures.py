@@ -161,7 +161,7 @@ class FixturePreparationTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         for pattern in fast_fixtures.COMMON_SOURCES:
             name = pattern.replace("**/*.hs", "Plugin.hs").replace("*.py", "core_vectors.py")
             path = self.root / name

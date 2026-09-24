@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 291 | Implemented fixed numeric/character scalar forms. |
+| Supported | 301 | Implemented fixed numeric/character scalar forms. |
 | Partial | 262 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 938 | No declared lowering. |
+| Missing | 928 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -229,6 +229,16 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `orWord32#` — arity 2
 - [x] `orWord8#` — arity 2
 - [x] `ord#` — arity 1
+- [x] `pdep#` — arity 2
+- [x] `pdep16#` — arity 2
+- [x] `pdep32#` — arity 2
+- [x] `pdep64#` — arity 2
+- [x] `pdep8#` — arity 2
+- [x] `pext#` — arity 2
+- [x] `pext16#` — arity 2
+- [x] `pext32#` — arity 2
+- [x] `pext64#` — arity 2
+- [x] `pext8#` — arity 2
 - [x] `plusFloat#` — arity 2
 - [x] `plusInt16#` — arity 2
 - [x] `plusInt32#` — arity 2
@@ -1048,16 +1058,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `packWord8X32#` — arity 1
 - [ ] `packWord8X64#` — arity 1
 - [ ] `par#` — arity 1
-- [ ] `pdep#` — arity 2
-- [ ] `pdep16#` — arity 2
-- [ ] `pdep32#` — arity 2
-- [ ] `pdep64#` — arity 2
-- [ ] `pdep8#` — arity 2
-- [ ] `pext#` — arity 2
-- [ ] `pext16#` — arity 2
-- [ ] `pext32#` — arity 2
-- [ ] `pext64#` — arity 2
-- [ ] `pext8#` — arity 2
 - [ ] `plusDoubleX8#` — arity 2
 - [ ] `plusFloatX16#` — arity 2
 - [ ] `plusInt16X16#` — arity 2

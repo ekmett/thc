@@ -32,6 +32,12 @@ class ScalarPrimopModelTest {
         assertEquals(8L, ScalarPrimopModel.bit("popCnt", 8, -1))
         assertEquals(0x80L, ScalarPrimopModel.bit("bitReverse", 8, 1))
         assertEquals(0x3412L, ScalarPrimopModel.bit("byteSwap", 16, 0x1234))
+        assertEquals(0x22L, ScalarPrimopModel.scalar("pdep", 8, true, 0b0101, 0xaa))
+        assertEquals(0b0101L, ScalarPrimopModel.scalar("pext", 8, true, 0x22, 0xaa))
+        assertEquals(0L, ScalarPrimopModel.scalar("pdep", 8, true, -1, 0x100))
+        assertEquals(0L, ScalarPrimopModel.scalar("pext", 8, true, 0x100, 0x100))
+        assertEquals(Long.MIN_VALUE, ScalarPrimopModel.scalar("pdep", 64, true, 1, Long.MIN_VALUE))
+        assertEquals(1L, ScalarPrimopModel.scalar("pext", 64, true, Long.MIN_VALUE, Long.MIN_VALUE))
         assertEquals(-1L, ScalarPrimopModel.explicit64("literals", false, 2, 0))
         assertEquals(13L, ScalarPrimopModel.explicit64("case", true, Long.MIN_VALUE, 0))
     }
