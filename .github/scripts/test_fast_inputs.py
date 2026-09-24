@@ -245,6 +245,66 @@ class FastInputTests(unittest.TestCase):
                      "build/compiler/thc-core-plugin.conf", ".gradle/cache.bin"):
             self.assertFalse(cache.allowed_payload(name, pins), name)
 
+    def test_original_native_executable_names_and_cstring_are_in_scope(self):
+        pins = cache.vendor_pins(self.root)
+        for name in ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"):
+            self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}", pins))
+        self.assertIn("build/map/boot-core", cache.CORE_DIRS)
+
+    def test_legacy_launcher_digest_and_explicit_binary_digest_are_distinct(self):
+        launcher = Path(self.temp.name)/"launcher"; launcher.write_bytes(b"launcher script")
+        binary = Path(self.temp.name)/"binary"; binary.write_bytes(b"actual ELF")
+        tc = {"ghcLauncher": {"path": str(launcher)}}
+        legacy = {"ghcVersion": "9.14.1", "ghcInfo": "info", "ghcBinarySha256": cache.digest(launcher)}
+        self.assertEqual([(str(launcher), cache.digest(launcher))], list(cache.hashes_in(legacy, tc)))
+        explicit = {"ghcBinaryPath": str(binary), "ghcBinarySha256": cache.digest(binary)}
+        self.assertEqual([(str(binary), cache.digest(binary))], list(cache.hashes_in(explicit, tc)))
+        with self.assertRaises(cache.CacheMiss): list(cache.hashes_in({"ghcBinarySha256": "f"*64}, tc))
+
+    def test_original_external_dotdot_path_is_validated_without_rewriting(self):
+        folder = Path(self.tc["ghcLibdir"]); folder.mkdir(parents=True)
+        interface = folder/"Foo.dyn_hi"; interface.write_bytes(b"installed interface")
+        raw = str(folder/".."/"lib"/"Foo.dyn_hi")
+        self.manifest["installedInterface"] = {"path": raw, "sha256": cache.digest(interface)}
+        self.write_manifest(); original = (self.root/"build/bytearray/manifest.json").read_bytes()
+        m = self.pack();self.assertIn(raw,m["external"]);self.remove_payload(m)
+        cache.restore(self.root,self.current,self.bundle)
+        self.assertEqual(original,(self.root/"build/bytearray/manifest.json").read_bytes())
+        self.assertFalse(cache.external_allowed(str(folder/"../../../etc/passwd"),self.current))
+
+    def test_native_execute_mode_preserved_and_special_or_data_execute_modes_rejected(self):
+        path = self.root/"build/bytearray/oracle.tsv"
+        # A real executable has a native executable name, not an oracle TSV.
+        name = "build/bytearray/native/oracle"
+        self.put(name,b"native bytes");(self.root/name).chmod(0o755)
+        self.manifest["artifactHashes"][name]=cache.digest(self.root/name);self.write_manifest()
+        m=self.pack();self.remove_payload(m);cache.restore(self.root,self.current,self.bundle)
+        self.assertEqual(0o755,(self.root/name).stat().st_mode & 0o7777)
+        with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o4755,name)
+        with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o777,name)
+        with self.assertRaises(cache.CacheMiss):cache.safe_mode(0o755,"build/core/Fixture.json")
+
+    def test_malformed_bundle_shapes_are_cache_misses(self):
+        m=self.pack();self.remove_payload(m)
+        variants=[[],None,{"schema":cache.SCHEMA,"identity":self.current,"key":cache.cache_key(self.current),
+                           "payload":m["payload"],"coreFiles":None}]
+        for value in variants:
+            def mutate(es):return [(es[0][0],cache.canonical(value)),*es[1:]]
+            with self.subTest(value=value):self.rejected_without_writes(self.rewrite(mutate))
+
+    def test_custom_or_user_package_databases_rejected(self):
+        with patch.dict(os.environ,{"GHC_ENVIRONMENT":"-"},clear=True), patch.object(cache,"command",return_value=""):
+            cache.check_package_scope(self.root,"ghc-pkg")
+            with patch.dict(os.environ,{"GHC_PACKAGE_PATH":"/same/mutable/db"}),self.assertRaises(cache.CacheMiss):
+                cache.check_package_scope(self.root,"ghc-pkg")
+            with patch.dict(os.environ,{"GHC_ENVIRONMENT":"/same/environment"}),self.assertRaises(cache.CacheMiss):
+                cache.check_package_scope(self.root,"ghc-pkg")
+        with patch.dict(os.environ,{"GHC_ENVIRONMENT":"-"},clear=True), patch.object(cache,"command",return_value="custom-package-1.0"),self.assertRaises(cache.CacheMiss):
+            cache.check_package_scope(self.root,"ghc-pkg")
+        self.put(".ghc.environment.x86_64-linux-9.14.1","package-id changed")
+        with patch.dict(os.environ,{},clear=True),patch.object(cache,"command",return_value=""),self.assertRaises(cache.CacheMiss):
+            cache.check_package_scope(self.root,"ghc-pkg")
+
 
 if __name__ == "__main__":
     unittest.main()

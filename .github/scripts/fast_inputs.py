@@ -7,6 +7,7 @@ copied verbatim. Workspace paths intentionally participate in the key.
 """
 import argparse
 import ast
+import gzip
 import hashlib
 import io
 import json
@@ -16,9 +17,11 @@ import platform
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
+import zlib
 
 SCHEMA = 1
 HEX = re.compile(r"[0-9a-f]{64}\Z")
@@ -43,7 +46,7 @@ CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tup
 sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
 tuple-return unsafe-equality""".split()
 CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
-             "build/cbv-post-core", "build/source-core", "build/map/core")
+             "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
@@ -56,6 +59,7 @@ REQUIRED = tuple(sorted({
     "build/aggregate-core/AggregateFrontier.json",
     "build/aggregate-post-core/AggregateFrontier.json",
     "build/map/core/GHC.InterfaceClosure.json",
+    "build/map/boot-core/GHC.Internal.CString.json",
     *(f"build/core/{n}.json" for n in ("StrictFields", "SpeculationAudit",
       "RepresentationAudit", "SourceNotes", "CbvAudit", "CbvJoinAudit",
       "CbvCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
@@ -69,6 +73,10 @@ MAX_FILES = 30000
 MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
+MAX_JSON_BYTES = 384 * 1024 * 1024
+NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
+    *(f"build/{name}/native/{name}" for name in
+      ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
 
 
 class CacheMiss(RuntimeError):
@@ -103,7 +111,7 @@ def digest(path):
 
 def relative(name):
     require(isinstance(name, str) and bool(name), "Invalid path type")
-    require(not name.startswith("/") and "\\" not in name and "\0" not in name
+    require(not name.startswith("/") and "\\" not in name and all(ord(c) >= 32 for c in name)
             and all(p not in ("", ".", "..") for p in name.split("/")), "Unsafe path: " + name)
     require(not re.match(r"^[A-Za-z]:", name), "Drive-qualified path: " + name)
     return name
@@ -131,12 +139,27 @@ def tool(name, root):
     return {"path": str(path), "sha256": digest(path)}
 
 
+def check_package_scope(root, pkg):
+    # This cache intentionally supports the clean pinned CI installation only.
+    # A same-path mutable user/override DB is not covered by the global ABI tree.
+    require("GHC_PACKAGE_PATH" not in os.environ, "Custom GHC_PACKAGE_PATH is outside the cache scope")
+    require(os.environ.get("GHC_ENVIRONMENT", "-") == "-", "Custom GHC_ENVIRONMENT is outside the cache scope")
+    require(not command([pkg, "list", "--user", "--simple-output"], root),
+            "User GHC packages are outside the cache scope")
+    if os.environ.get("GHC_ENVIRONMENT") != "-":
+        require(not any(list(p.glob(".ghc.environment.*")) for p in (root, *root.parents)),
+                "Automatic GHC package environment is outside the cache scope")
+        require(not list((Path.home()/".ghc").glob("*/environments/default")),
+                "Default GHC package environment is outside the cache scope")
+
+
 def toolchain(root):
     ghc = tool(os.environ.get("GHC", "ghc"), root)
     pkg = tool(os.environ.get("GHC_PKG", "ghc-pkg"), root)
     require(command([ghc["path"], "--numeric-version"], root) == "9.14.1", "Requires GHC9.14.1")
     require(command([pkg["path"], "--version"], root) == "GHC package manager version 9.14.1",
             "Requires ghc-pkg9.14.1")
+    check_package_scope(root, pkg["path"])
     info = command([ghc["path"], "--info"], root)
     settings = dict(ast.literal_eval(info))
     libdir = Path(command([ghc["path"], "--print-libdir"], root)).resolve()
@@ -169,9 +192,9 @@ def toolchain(root):
     require(bool(installed), "Installed GHC ABI files missing")
     result["installedAbiSha256"] = sha(canonical(installed))
     # Explicit preparation-affecting overrides cannot silently share a key.
-    result["environment"] = {k: v for k, v in sorted(os.environ.items())
-        if k.startswith(("THC_", "GHC_")) or k in
-        ("GHCRTS", "GHC", "CC", "CFLAGS", "CPATH", "LIBRARY_PATH", "LD_LIBRARY_PATH", "LANG", "LC_ALL")}
+    result["environment"] = {k: v for k, v in sorted(os.environ.items()) if k in
+        ("THC_SOURCE_NOTES", "THC_CORE_OUT", "THC_GHC_OUT", "GHC", "GHC_PKG", "GHC_ENVIRONMENT",
+         "GHCRTS", "CC", "CFLAGS", "CPATH", "LIBRARY_PATH", "LD_LIBRARY_PATH", "LANG", "LC_ALL")}
     return result
 
 
@@ -225,7 +248,7 @@ def allowed_payload(name, pins):
         return True
     if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
         return True
-    if name == "build/unsafe-equality/api/predicate":
+    if name in NATIVE_EXECUTABLES:
         return True
     if len(parts) < 3 or parts[0] != "build":
         return False
@@ -240,24 +263,31 @@ def allowed_payload(name, pins):
         not suffix and ("oracle" in parts[-1] or parts[-1] == "aggregate-frontier"))
 
 
-def hashes_in(value):
+def hashes_in(value, tc):
     """All fingerprint spellings used by current original preparation manifests."""
     if isinstance(value, dict):
         if "path" in value and "sha256" in value:
             yield value["path"], value["sha256"]
         for stem in ("ghcBinary", "ghcLauncher"):
             if stem + "Path" in value or stem + "Sha256" in value:
-                yield value.get(stem + "Path"), value.get(stem + "Sha256")
+                path = value.get(stem + "Path")
+                if path is None and stem == "ghcBinary":
+                    # Legacy prepare-simd/floatx4/... named the launcher digest
+                    # ghcBinarySha256. New memory preparers explicitly name both.
+                    require(value.get("ghcVersion") == "9.14.1" and "ghcInfo" in value,
+                            "Unknown pathless GHC fingerprint format")
+                    path = tc["ghcLauncher"]["path"]
+                yield path, value.get(stem + "Sha256")
         for key, child in value.items():
             if key in ("inputHashes", "artifactHashes") or (key == "inputs" and isinstance(child, dict)
                     and child and all(isinstance(v, str) and HEX.fullmatch(v) for v in child.values())):
                 require(isinstance(child, dict), "Invalid original hash map")
                 yield from child.items()
             else:
-                yield from hashes_in(child)
+                yield from hashes_in(child, tc)
     elif isinstance(value, list):
         for child in value:
-            yield from hashes_in(child)
+            yield from hashes_in(child, tc)
 
 
 def original_name(root, value):
@@ -265,21 +295,24 @@ def original_name(root, value):
     path = Path(value)
     if not path.is_absolute():
         return relative(value), False
-    require(str(path) == value and ".." not in path.parts, "Noncanonical original path")
     try:
-        return relative(path.relative_to(root).as_posix()), False
+        name = relative(path.resolve().relative_to(root).as_posix())
     except ValueError:
+        # ghc-pkg legitimately returns lib/../lib interface paths. Their raw
+        # provenance stays unchanged; external_allowed checks the resolved scope.
         return value, True
+    require(str(root / name) == value, "Noncanonical original workspace path")
+    return name, False
 
 
 def external_allowed(name, current):
-    path = Path(name)
+    path = Path(name).resolve()
     tc = current["toolchain"]
-    explicit = {v["path"] for v in tc.values() if isinstance(v, dict) and "path" in v}
-    return name in explicit or path.is_relative_to(Path(tc["ghcLibdir"]).parent)
+    explicit = {Path(v["path"]).resolve() for v in tc.values() if isinstance(v, dict) and "path" in v}
+    return path in explicit or path.is_relative_to(Path(tc["ghcLibdir"]).resolve().parent)
 
 
-def inventory(root, current, read, core_files):
+def inventory(root, current, read, core_files, verified=None):
     """Derive inventory independently from preserved original manifests."""
     tracked, pins = tracked_files(root), vendor_pins(root)
     for name in core_files:
@@ -293,9 +326,14 @@ def inventory(root, current, read, core_files):
             continue
         visited.add(name)
         require(name not in tracked and allowed_payload(name, pins), "Unknown/tracked payload: " + name)
-        data = read(name)
-        require(len(data) <= MAX_FILE_BYTES, "Oversized payload: " + name)
-        actual = sha(data)
+        require(verified is None or name in verified, "Missing original dependency: " + name)
+        # Restore has already hashed all bytes in one sequential archive pass.
+        # Reuse those hashes and cached JSON rather than randomly seeking gzip
+        # once per native artifact during dependency traversal.
+        data = read(name) if verified is None or name.endswith(".json") else None
+        if data is not None:
+            require(len(data) <= MAX_FILE_BYTES, "Oversized payload: " + name)
+        actual = sha(data) if verified is None else verified[name]
         require(name not in expected or expected[name] == actual, "Stale original artifact: " + name)
         require(name not in pins or pins[name] == actual, "Vendor source differs from authoritative pin: " + name)
         payload[name] = actual
@@ -306,7 +344,7 @@ def inventory(root, current, read, core_files):
         # interpreted as filesystem paths. All other preparation JSON is scanned.
         if isinstance(doc, dict) and "bindings" in doc and "module" in doc:
             continue
-        for raw, recorded in hashes_in(doc):
+        for raw, recorded in hashes_in(doc, current["toolchain"]):
             require(isinstance(recorded, str) and HEX.fullmatch(recorded), "Invalid original fingerprint")
             target, outside = original_name(root, raw)
             if outside:
@@ -328,6 +366,17 @@ def inventory(root, current, read, core_files):
     return payload, external
 
 
+def safe_mode(mode, name):
+    require(type(mode) is int and mode & ~0o755 == 0 and mode & 0o600 == 0o600,
+            "Unsafe payload permissions: " + name)
+    if mode & 0o111:
+        path = PurePosixPath(name)
+        require(name in NATIVE_EXECUTABLES or (not path.suffix and
+                ("oracle" in path.name or path.name == "aggregate-frontier")) or path.suffix in (".so", ".dylib"),
+                "Executable non-native input: " + name)
+    return mode
+
+
 def pack(root, current, output):
     require(not output.exists() and not output.is_symlink(), "Bundle already exists; preserve the prior attempt")
     core = sorted(p.relative_to(root).as_posix() for d in CORE_DIRS
@@ -338,8 +387,10 @@ def pack(root, current, output):
         return path.read_bytes()
     payload, external = inventory(root, current, read, core)
     require(sum(file_path(root, n).stat().st_size for n in payload) <= MAX_TOTAL_BYTES, "Fixture bundle too large")
+    modes = {n: safe_mode((stat.S_IMODE(file_path(root, n).stat().st_mode) & 0o555) | 0o600, n)
+             for n in payload}
     manifest = {"schema": SCHEMA, "identity": current, "key": cache_key(current),
-                "coreFiles": core, "payload": payload, "external": external}
+                "coreFiles": core, "payload": payload, "modes": modes, "external": external}
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("xb") as stream, tarfile.open(fileobj=stream, mode="w:gz", compresslevel=3) as archive:
         raw = canonical(manifest)
@@ -348,7 +399,11 @@ def pack(root, current, output):
         for name in sorted(payload):
             path = file_path(root, name)
             require(digest(path) == payload[name], "Input changed during pack: " + name)
-            archive.add(path, arcname="files/" + name, recursive=False)
+            info = archive.gettarinfo(str(path), arcname="files/" + name)
+            require(info.isfile(), "Nonregular file during pack: " + name)
+            info.mode = modes[name]
+            with path.open("rb") as data:
+                archive.addfile(info, data)
     print(f"PACKED {len(payload)} native/Core input files; no JVM outcomes", file=sys.stderr)
     return manifest
 
@@ -373,32 +428,52 @@ def restore(root, current, source):
         require("bundle.json" in names and archive.getmember("bundle.json").size <= MAX_MANIFEST_BYTES,
                 "Missing/oversized bundle manifest")
         manifest = json.load(archive.extractfile("bundle.json"))
+        require(isinstance(manifest, dict), "Bundle manifest must be an object")
         require(manifest.get("schema") == SCHEMA and manifest.get("identity") == current
                 and manifest.get("key") == cache_key(current), "Source/toolchain/platform/workspace identity mismatch")
+        core_files = manifest.get("coreFiles")
+        require(isinstance(core_files, list) and all(isinstance(n, str) for n in core_files)
+                and len(core_files) == len(set(core_files)), "Invalid Core inventory")
         payload = manifest.get("payload")
         require(isinstance(payload, dict) and payload, "Missing payload inventory")
+        modes = manifest.get("modes")
+        require(isinstance(modes, dict) and set(modes) == set(payload), "Invalid mode inventory")
         require(set(names) == {"bundle.json", *("files/" + relative(n) for n in payload)},
                 "Unknown/missing archive member")
+        require(names == ["bundle.json", *("files/" + n for n in sorted(payload))],
+                "Noncanonical archive order")
         require(all(not any(str(p) in payload for p in PurePosixPath(n).parents) for n in payload),
                 "Conflicting file/directory payload paths")
         tracked, pins = tracked_files(root), vendor_pins(root)
+        documents, json_bytes = {}, 0
         # Every path, destination and byte digest is checked before any writes.
-        for name, expected in payload.items():
+        for name in sorted(payload):
+            expected = payload[name]
             require(name not in tracked and allowed_payload(name, pins), "Unknown/tracked archive payload: " + name)
             require(isinstance(expected, str) and HEX.fullmatch(expected), "Invalid payload fingerprint")
             path = file_path(root, name)
+            mode = safe_mode(modes[name], name)
+            require(archive.getmember("files/" + name).mode == mode, "Archive mode mismatch: " + name)
             for parent in path.parents:
                 if parent == root:
                     break
                 require(not parent.exists() or parent.is_dir(), "Non-directory destination parent")
             if path.exists():
                 require(path.is_file() and digest(path) == expected, "Conflicting existing file: " + name)
+                require(stat.S_IMODE(path.stat().st_mode) == mode, "Conflicting existing permissions: " + name)
             with archive.extractfile("files/" + name) as stream:
-                require(digest_stream(stream) == expected, "Corrupt payload: " + name)
+                if name.endswith(".json"):
+                    json_bytes += archive.getmember("files/" + name).size
+                    require(json_bytes <= MAX_JSON_BYTES, "Too much JSON metadata")
+                    documents[name] = stream.read()
+                    actual = sha(documents[name])
+                else:
+                    actual = digest_stream(stream)
+                require(actual == expected, "Corrupt payload: " + name)
         def read(name):
             require(name in payload, "Missing original dependency: " + name)
-            return archive.extractfile("files/" + name).read()
-        actual, external = inventory(root, current, read, manifest.get("coreFiles", []))
+            return documents[name]
+        actual, external = inventory(root, current, read, core_files, verified=payload)
         require(actual == payload and external == manifest.get("external"), "Original provenance inventory mismatch")
         for name in sorted(payload):
             path = file_path(root, name)
@@ -406,6 +481,7 @@ def restore(root, current, source):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 with archive.extractfile("files/" + name) as src, path.open("xb") as dst:
                     shutil.copyfileobj(src, dst, 1024 * 1024)
+                path.chmod(modes[name])
     print(f"HIT {cache_key(current)}: verified {len(payload)} fixture files; tests must run", file=sys.stderr)
     return manifest
 
@@ -437,7 +513,8 @@ def main(argv=None):
             else:
                 restore(root, current, args.bundle)
         return 0
-    except (CacheMiss, json.JSONDecodeError, tarfile.TarError, EOFError) as error:
+    except (CacheMiss, json.JSONDecodeError, UnicodeDecodeError, tarfile.TarError,
+            gzip.BadGzipFile, zlib.error, EOFError) as error:
         print("MISS: " + str(error), file=sys.stderr)
         return 1
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as error:
