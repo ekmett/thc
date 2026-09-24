@@ -50,6 +50,13 @@ adapter during the Gradle resource build. Clang and the installed GHC 9.14.1
 headers are required. The compiler target must match the current Linux/macOS
 64-bit host; a packaged runtime also rejects bitcode for a different platform.
 `THC_CLANG` can select the compiler; no local bitcode is committed for other hosts.
+On GNU/Linux the build explicitly selects `x86_64-unknown-linux-gnu` or
+`aarch64-unknown-linux-gnu`, matching Sulong's exact vendor spelling. The compiler
+must already match the host architecture and GNU LP64 ABI; musl, x32 and cross-OS
+targets are rejected, not converted. The build rechecks the selected target and
+records it, the compiler's default target and the actual compile command in the
+manifest. Native Darwin target/deployment-version selection is unchanged. Neither
+the packaged-platform check nor Sulong's target-triple check is relaxed.
 The entire 88-byte context is guest-visible: four hash words, two counter words
 and 64 scratch bytes. Init leaves scratch untouched; Final emits 16 bytes then
 clears the context. Native-endian context words, little-endian MD5 input and the
