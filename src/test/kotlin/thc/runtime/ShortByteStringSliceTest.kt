@@ -9,6 +9,7 @@ import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Tag
 import thc.*
 import java.io.File
 import java.lang.reflect.Method
@@ -124,7 +125,11 @@ class ShortByteStringSliceTest {
     })
     @Test fun publicSlicesWithInlining() = native(true)
     @Test fun publicSlicesAcrossResidualCalls() = native(false)
-    private fun native(inlining: Boolean) {
+    @Test @Tag("jit-stability")
+    fun publicSlicesRetainCodeWithInlining() = native(true, stability = true)
+    @Test @Tag("jit-stability")
+    fun publicSlicesRetainCodeAcrossResidualCalls() = native(false, stability = true)
+    private fun native(inlining: Boolean, stability: Boolean = false) {
         val manifest = manifest()
         val rows = File(directory, "oracle.tsv").readLines().map { line ->
             val p = line.split('\t')
@@ -176,41 +181,45 @@ class ShortByteStringSliceTest {
                         // Warm the complete native corpus once; no settling calls,
                         // retries, automatic threshold changes or compiler budget overrides.
                         selected.forEach(::check)
-                        val targets = activeTargets(host)
-                        assertTrue(targets.size > 1, "$label adopted guest call path")
-                        targets.filter { it !== host }.forEach(::compile)
-                        compile(original); compile(worker)
-                        assertTrue(function.invokeMember("compile").asBoolean())
-                        val state = language.handoffState.get()
-                        val resultAllocations = state.results.allocations
-                        val probes = snapshotProbes(host)
-                        val observed = targets + listOf(original, worker).filter { candidate -> targets.none { it === candidate } }
-                        for (row in selected.asReversed()) {
-                            // Read-only snapshots add no guest invocation, repair, or compilation.
-                            // Failed optional observations cannot replace the unchanged assertions.
-                            val beforeTargets = snapshot(observed, probes)
-                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                            check(row)
-                            val after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                            val afterTargets = snapshot(observed, probes)
-                            try {
-                                assertTrue(after > before, "$label: actual compiled guest entry")
-                                assertEquals(targets, activeTargets(host), "$label active target identity")
-                                valid(original, "$label original", row, host); valid(worker, "$label List worker", row, host)
-                                targets.forEachIndexed { index, target -> valid(target, "$label active[$index]", row, host) }
-                            } catch (error: AssertionError) {
-                                System.err.println("ShortByteStringSlice FIRST FAILURE $label row=$row " +
-                                    "context@${System.identityHashCode(context).toString(16)} " +
-                                    "handoff=${System.getProperty("thc.handoffSlabs", "false")} countBefore=$before countAfter=$after " +
-                                    "before={${describe(beforeTargets, host, original, worker)}} " +
-                                    "after={${describe(afterTargets, host, original, worker)}}")
-                                throw error
+                        if (stability) {
+                            val targets = activeTargets(host)
+                            assertTrue(targets.size > 1, "$label adopted guest call path")
+                            targets.filter { it !== host }.forEach(::compile)
+                            compile(original); compile(worker)
+                            assertTrue(function.invokeMember("compile").asBoolean())
+                            val state = language.handoffState.get()
+                            val resultAllocations = state.results.allocations
+                            val probes = snapshotProbes(host)
+                            val observed = targets + listOf(original, worker).filter { candidate -> targets.none { it === candidate } }
+                            for (row in selected.asReversed()) {
+                                // Read-only snapshots add no guest invocation, repair, or compilation.
+                                // Failed optional observations cannot replace the unchanged assertions.
+                                val beforeTargets = snapshot(observed, probes)
+                                val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                                check(row)
+                                val after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                                val afterTargets = snapshot(observed, probes)
+                                try {
+                                    assertTrue(after > before, "$label: actual compiled guest entry")
+                                    assertEquals(targets, activeTargets(host), "$label active target identity")
+                                    valid(original, "$label original", row, host); valid(worker, "$label List worker", row, host)
+                                    targets.forEachIndexed { index, target -> valid(target, "$label active[$index]", row, host) }
+                                } catch (error: AssertionError) {
+                                    System.err.println("ShortByteStringSlice FIRST FAILURE $label row=$row " +
+                                        "context@${System.identityHashCode(context).toString(16)} " +
+                                        "handoff=${System.getProperty("thc.handoffSlabs", "false")} countBefore=$before countAfter=$after " +
+                                        "before={${describe(beforeTargets, host, original, worker)}} " +
+                                        "after={${describe(afterTargets, host, original, worker)}}")
+                                    throw error
+                                }
                             }
+                            assertEquals(resultAllocations, state.results.allocations, "$label result slabs reused")
+                        } else {
+                            selected.asReversed().forEach(::check)
                         }
-                        assertEquals(resultAllocations, state.results.allocations, "$label result slabs reused")
                         for (counter in listOf("unsupportedTraps", "blackholes"))
                             assertEquals(0L, (program.diagnostics().getValue(counter) as Number).toLong(), "$label/$counter")
-                        println("ShortByteStringSlice PASS $label rows=${selected.size} activeTargets=${targets.size}")
+                        println("ShortByteStringSlice PASS $label rows=${selected.size} stability=$stability")
                     } finally { context.leave() }
                 }
             }

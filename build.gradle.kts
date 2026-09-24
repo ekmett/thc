@@ -30,7 +30,7 @@ application {
     mainClass.set("thc.MainKt")
     applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
 }
-tasks.test {
+tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
@@ -134,6 +134,18 @@ tasks.test {
     // Keep the default tests independent of THC_BACKEND; bytecode tests select their backend explicitly.
     systemProperty("thc.backend", "ast")
     testLogging { events("failed", "skipped", "passed") }
+}
+tasks.test {
+    useJUnitPlatform { excludeTags("jit-stability") }
+}
+tasks.register<Test>("jitStabilityTest") {
+    group = "verification"
+    description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("jit-stability") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("JIT stability must be measured in a fresh test process") { true }
 }
 tasks.register<JavaExec>("probe") {
     group = "verification"

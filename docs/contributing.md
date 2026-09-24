@@ -33,6 +33,23 @@ backends, both handoff modes and library checks on Linux and macOS. A failed ful
 build stops further automatic merges until a successful build containing the fix.
 A full build that is still running does not hold up an otherwise ready PR.
 
+`JIT stability` is a separate advisory workflow. It checks that ShortByteString
+call targets stay compiled throughout a warmed run, retaining failed rows and
+target snapshots in its artifacts. Code retirement is tracked in
+[#72](https://github.com/ekmett/thc/issues/72); a failure here does not block
+merges or stop the merge bot. The complete native-result comparisons, strict
+closure checks and handoff cleanup checks remain in the required test suite.
+Run the advisory checks locally with:
+
+```sh
+python3 scripts/prepare-short-bytes-slices.py
+scripts/gradle.sh --no-daemon jitStabilityTest --rerun
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon jitStabilityTest --rerun
+```
+
+The local task exits unsuccessfully if a stability assertion fails; only CI
+allows that failure. Its XML and reports are separate from ordinary tests.
+
 The merge bot runs code from `main`. It checks the required workflow's exact
 commit and current attempt, then publishes the `required-tests` status enforced
 by branch protection. Missing, skipped or failed required jobs do not pass.
