@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="thc.runtime.TypedInputScalarSourceTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-24T05:03:49.561Z" hostname="eak-quartus" time="1.685">
-  <properties/>
-  <testcase name="unknownScalarBesideTupleSurvivesLongFloatDoubleLocalGeneralization()" classname="thc.runtime.TypedInputScalarSourceTest" time="1.684"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

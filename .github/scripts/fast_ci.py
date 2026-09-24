@@ -204,6 +204,10 @@ def execute(recorder, base, head, identity_path, bundle):
     write_json(recorder.directory / "selection.json", selection)
     gradle_command(selection)  # Fail closed before preparing or running anything.
     recorder.data["selection"] = {key: selection[key] for key in ("mode", "reasons")}
+    # Check generated documentation against the actual pinned GHC API on hits
+    # as well as misses. Keep this fresh report separate from cached provenance.
+    recorder.command("primop-checklist", [sys.executable, "scripts/primop-coverage.py",
+                     "--check", "--output", str(recorder.directory / "primop-coverage.json")])
     code, _ = recorder.command("native-restore", [sys.executable, ".github/scripts/fast_inputs.py",
         "restore", "--identity", str(identity_path), "--bundle", str(bundle)], allowed=(0, 1))
     recorder.data["nativeInputs"] = "verified-hit" if code == 0 else "miss-or-rejected"

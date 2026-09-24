@@ -16,8 +16,10 @@ The initial compiled smoke suite is:
 
 The selector always includes those tests, adds every changed test and reviewed
 source-to-test dependencies, and widens when it cannot prove a smaller set is
-sufficient. The initial leaf mapping is deliberately small: `BitPrimitives.kt`
-also selects `BitPrimopsTest`. New dependencies must be reviewed in
+sufficient. Reviewed mappings cover bit operations, scalar floating/raw-bit casts,
+and the grouped integer/floating vector implementations, including their native,
+memory, storage and proof consumers. Shared scalar dispatch, vector-memory proof
+and representation code still widen. New dependencies must be reviewed in
 `.github/scripts/fast-tests.json`; there is no force-narrow option. A missing base,
 rename, deletion, dirty checkout or ambiguous helper cannot silently narrow tests.
 
@@ -47,7 +49,8 @@ they do not replace this producer-trust rule.
 No previous test result is accepted. Existing XML is moved aside before each
 test task. The runner requires nonempty fresh XML for exactly the selected class
 set, no failed/errored/skipped cases, and matching default/dense testcase sets.
-It retains failed runs and checks Python tests with and without `-O`.
+It retains failed runs and checks Python tests with and without `-O`. The primop
+checklist is checked against the installed GHC API on every run, including hits.
 
 ## Bootstrap and measurement
 
@@ -59,9 +62,11 @@ making a full-workflow failure stop automatic merging are separate policy change
 Cold native preparation, a toolchain-cache miss and widened checks may take much
 longer than the ordinary target. `build/fast/results/` retains the selection,
 commands, exit codes, phase timings, cache outcomes, fresh XML and an Actions
-summary. Total elapsed time starts just after checkout and includes tool setup,
+summary. Automation must pass before the runtime job can seed caches. The runtime
+job's elapsed time starts just after checkout and includes tool setup,
 cache transfer/validation, tests and cache saves, but not queue time or the final
-artifact upload. Do not report summed warmed JUnit case times as gate latency.
+artifact upload or the preceding automation job. Do not report summed warmed
+JUnit case times as gate latency.
 
 For a local run, use the pinned environment and a fresh report directory:
 

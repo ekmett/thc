@@ -48,6 +48,7 @@ jobs:
           "$RUNNER_TEMP/actionlint" .github/workflows/fast.yml .github/workflows/build.yml .github/workflows/merge.yml
 
   fast-check:
+    needs: automation
     runs-on: ubuntu-24.04
     # This is the warm ordinary-change gate. Compiler/ABI or unknown changes run
     # the full tests and may exceed the ordinary 2–3 minute target.

@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="thc.runtime.Explicit64PrimopsTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-09-24T05:03:39.101Z" hostname="eak-quartus" time="0.637">
-  <properties/>
-  <testcase name="malformedAritiesAndWord64LiteralsRejectAtLoadIncludingCaseAlternatives()" classname="thc.runtime.Explicit64PrimopsTest" time="0.025"/>
-  <testcase name="sharedLongCarrierDoesNotPermitReplacingInt64ProofWithWord64()" classname="thc.runtime.Explicit64PrimopsTest" time="0.009"/>
-  <testcase name="exactNativeScalarEntriesAgreeWithIndependentModelAndInstalledCode()" classname="thc.runtime.Explicit64PrimopsTest" time="0.603"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

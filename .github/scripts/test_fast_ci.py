@@ -150,6 +150,20 @@ class FastRunnerTest(unittest.TestCase):
             recorder.data["revision"] = "b" * 40
             self.assertFalse(ci.successful_revision(recorder))
 
+    def test_primop_check_runs_on_cache_hit_without_overwriting_cached_provenance(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": []}}
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, ""), (0, "")]) as run:
+            with patch.object(ci, "run_mode", return_value={"cases": [["example.Test", "works"]]}):
+                ci.execute(recorder, "HEAD", "HEAD", self.root / "identity", self.root / "bundle")
+        self.assertEqual(run.call_args_list[1].args[0], "primop-checklist")
+        self.assertEqual(run.call_args_list[1].args[1][1:],
+                         ["scripts/primop-coverage.py", "--check", "--output",
+                          str(recorder.directory / "primop-coverage.json")])
+        self.assertEqual(run.call_args_list[2].args[0], "native-restore")
+        self.assertTrue(recorder.data["passed"])
+
 
 if __name__ == "__main__":
     unittest.main()
