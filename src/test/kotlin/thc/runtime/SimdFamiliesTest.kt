@@ -54,6 +54,7 @@ class SimdFamiliesTest {
 
     @Test fun generatedCarriersHaveOnlyFinalPrimitiveLanes() {
         for ((carrier, count, primitive) in listOf(Triple(Word64X2::class.java, 2, Long::class.javaPrimitiveType),
+            Triple(Word32X8::class.java, 8, Int::class.javaPrimitiveType),
             Triple(Int32X8::class.java, 8, Int::class.javaPrimitiveType), Triple(Int32X16::class.java, 16, Int::class.javaPrimitiveType))) {
             val fields = carrier.declaredFields
             assertEquals(count, fields.size)
@@ -63,9 +64,10 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(25, GeneratedVectors.operations.size)
+        assertEquals(31, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
+            Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
             Triple("Int32X8", GeneratedVectors.unpackedInt32X8, GeneratedVectors.proofInt32X8),
             Triple("Int32X16", GeneratedVectors.unpackedInt32X16, GeneratedVectors.proofInt32X16))) {
             CoreVectors.validate("pack$name#", listOf(tuple), vector)
@@ -110,7 +112,7 @@ class SimdFamiliesTest {
             assertEquals(listOf("pre", "post"), manifest["stages"])
         }
         val rows = expectedText.lineSequence().filter(String::isNotEmpty).map { it.split('\t') }.groupBy { it[0] }
-        val names = if (earlyWideGate) listOf("timesInt32X8", "timesInt32X16", "timesWord64X2") else rows.keys.toList()
+        val names = if (earlyWideGate) listOf("timesInt32X8", "timesInt32X16", "timesWord64X2", "timesWord32X8") else rows.keys.toList()
         for (stage in manifest["stages"] as List<String>) {
             val module = Json.parse(File(directory, "$stage-core/GeneratedSimdFamilies.json").readText()) as Map<String, Any?>
             val calls = ((manifest["structures"] as Map<String, Map<String, Any?>>).getValue(stage)["expectedGuestCalls"] as Map<String, Number>)

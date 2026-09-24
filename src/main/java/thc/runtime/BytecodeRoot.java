@@ -1611,6 +1611,43 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedWord64X2Times {
         @Specialization public static Word64X2 apply(Word64X2 left, Word64X2 right) { return Word64X2.multiply(left, right); }
     }
+    @Operation public static final class GeneratedWord32X8Pack {
+        @Specialization public static Word32X8 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7) { return new Word32X8((int) lane0, (int) lane1, (int) lane2, (int) lane3, (int) lane4, (int) lane5, (int) lane6, (int) lane7); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
+    public static final class GeneratedWord32X8Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, Word32X8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setLong(bytecode, frame, value.lane0 & 0xffff_ffffL);
+            lane1.setLong(bytecode, frame, value.lane1 & 0xffff_ffffL);
+            lane2.setLong(bytecode, frame, value.lane2 & 0xffff_ffffL);
+            lane3.setLong(bytecode, frame, value.lane3 & 0xffff_ffffL);
+            lane4.setLong(bytecode, frame, value.lane4 & 0xffff_ffffL);
+            lane5.setLong(bytecode, frame, value.lane5 & 0xffff_ffffL);
+            lane6.setLong(bytecode, frame, value.lane6 & 0xffff_ffffL);
+            lane7.setLong(bytecode, frame, value.lane7 & 0xffff_ffffL);
+        }
+    }
+    @Operation public static final class GeneratedWord32X8Broadcast {
+        @Specialization public static Word32X8 apply(long value) { return Word32X8.broadcast((int) value); }
+    }
+    @Operation public static final class GeneratedWord32X8Plus {
+        @Specialization public static Word32X8 apply(Word32X8 left, Word32X8 right) { return Word32X8.add(left, right); }
+    }
+    @Operation public static final class GeneratedWord32X8Minus {
+        @Specialization public static Word32X8 apply(Word32X8 left, Word32X8 right) { return Word32X8.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedWord32X8Times {
+        @Specialization public static Word32X8 apply(Word32X8 left, Word32X8 right) { return Word32X8.multiply(left, right); }
+    }
     @Operation public static final class GeneratedInt32X8Pack {
         @Specialization public static Int32X8 apply(long lane0, long lane1, long lane2, long lane3, long lane4, long lane5, long lane6, long lane7) { return new Int32X8((int) lane0, (int) lane1, (int) lane2, (int) lane3, (int) lane4, (int) lane5, (int) lane6, (int) lane7); }
     }

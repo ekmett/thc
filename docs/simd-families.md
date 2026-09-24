@@ -1,16 +1,16 @@
 # Generated SIMD families
 
 This is the first bounded generator experiment. The repository capability table
-does not yet advertise its 25 new operations. Passing a model-only experiment is
+does not yet advertise its 31 new operations. Passing a model-only experiment is
 not a native GHC validation result.
 
 The declarative table is `scripts/simd-families.json`. It currently describes
-local pack, unpack, broadcast and arithmetic for Word64X2, Int32X8 and Int32X16,
+local pack, unpack, broadcast and arithmetic for Word64X2, Word32X8, Int32X8 and Int32X16,
 plus Int64X2 multiplication and FloatX4/DoubleX2 negation and division. Existing
 carrier class names and memory operations remain unchanged. Vector arguments,
 returns, captures, heap fields and join boundaries remain unsupported.
 
-The generator emits three concrete carriers with final primitive fields, typed
+The generator emits four concrete carriers with final primitive fields, typed
 AST nodes and exact proof checks under `build/generated/simd`. Each arithmetic
 method uses a fixed Vector API species. Two marked regions in the existing
 bytecode loader/root contain concrete operation calls and specializations;
@@ -34,7 +34,7 @@ Prepare the genuine scalar-entry fixture without native code generation:
 python3 scripts/prepare-simd-families.py --export-only
 ```
 
-This produces pre-Tidy Core, 38,658 independent model rows and an explicitly
+This produces pre-Tidy Core, 45,858 independent model rows and an explicitly
 experimental audit profile. Integer arithmetic uses mathematical modular
 arithmetic. Floating division uses rational arithmetic with ties-to-even
 rounding; arithmetic NaNs are normalized, while all other result bits, including
