@@ -175,7 +175,12 @@ def main():
     libdir = Path(run([ghc, '--print-libdir'], text=True, capture_output=True).stdout.strip())
     compiler_binary = libdir.parent/'bin/ghc-9.14.1'
     compiler_launcher = Path(shutil.which(ghc) or ghc).resolve()
-    check(compiler_binary.read_bytes()[:4] == b'\x7fELF', 'This native proof pins the installed x86_64 Linux GHC ELF')
+    # Hash the native compiler, not merely a shell launcher. Linux ELF and
+    # Darwin thin/fat Mach-O are both legitimate source-owned CI toolchains.
+    magic = compiler_binary.read_bytes()[:4]
+    check(magic in (b'\x7fELF', b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf',
+                    b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca',
+                    b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'), 'Expected native GHC compiler binary')
     compiler_info = run([ghc, '--info'], text=True, capture_output=True).stdout
     domain = list(cases())
     requests = ''.join(name+'\t'+'\t'.join(map(str, arguments))+'\n' for name, arguments in domain)
