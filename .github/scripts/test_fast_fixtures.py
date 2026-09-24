@@ -18,6 +18,19 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_boxed_array_extensions_focused_full_and_gradle_inputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['boxed-array-extensions']
+        self.assertEqual('boxed-array-extensions', owners['thc.runtime.BoxedArrayExtensionsTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'boxed-array-extensions']}], group['commands'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" boxed-array-extensions', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/boxed-array-extensions/manifest.json', fast_fixtures.FULL_REQUIRED)
+        gradle = (project / 'build.gradle.kts').read_text()
+        for pattern in ('"boxed-array-extensions/manifest.json"', '"boxed-array-extensions/run-*/**"', 'inputs.file("thc.cabal")'):
+            self.assertIn(pattern, gradle)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)

@@ -520,6 +520,36 @@ class Audit:
                 check(expected, stored, f'arguments/{index}/binder')
         check(signature['result'], result, 'rep')
 
+    def original_stack_operand(self, expression, primitive, bound, index):
+        """Check stored/intrinsic producers as well as the foreign occurrence proof."""
+        check = core_original_foreign.validate_operand_binding
+        core_original_foreign.require(isinstance(expression, list) and bool(expression), f'lowered operand {index}')
+        tag = expression[0]
+        if tag == 'var':
+            key = expression[1]
+            check(bound.get(key) if key in bound else self.bindings.get(key, {}).get('rep'),
+                  primitive, f'stored operand {index}')
+        elif tag in ('lit', 'void'):
+            intrinsic = self.literal_rep(expression)
+            core_original_foreign.require(intrinsic is not None, f'lowered operand {index}')
+            check(intrinsic, primitive, f'lowered operand {index}')
+        elif tag in ('lam', 'con') or tag == 'app' and expression[1][0] == 'con':
+            # No accepted operand role is a closure, constructor, or aggregate.
+            core_original_foreign.require(False, f'lowered operand {index}')
+        elif tag == 'let':
+            self.original_stack_operand(expression[3], primitive, bound | self.binder_scope(expression[2]), index)
+        elif tag == 'case':
+            metadata = expression[4] if len(expression) > 4 else {}
+            core_original_foreign.require(isinstance(metadata, dict) and isinstance(metadata.get('binder', {}), dict),
+                                          f'lowered operand {index}')
+            local = bound | {expression[2]: metadata.get('binder', {}).get('rep', self.expression_rep(expression[1]))}
+            for alternative in expression[3]:
+                arm_metadata = alternative[4] if len(alternative) > 4 else {}
+                core_original_foreign.require(isinstance(arm_metadata, dict), f'lowered operand {index}')
+                records = arm_metadata.get('binders', [])
+                self.original_stack_operand(alternative[3], primitive,
+                                            local | dict.fromkeys(alternative[2]) | self.binder_scope(records), index)
+
     def polyglot_call(self, expr, bound, owner, path):
         """Accept closed managed ABI or exact saturated polyglot FCallId applications."""
         function, arguments = expr[1:3]
@@ -537,6 +567,9 @@ class Audit:
                 head_id = function[1] if isinstance(function, list) and len(function) > 1 else None
                 defined = isinstance(head_id, str) and (head_id in bound or head_id in self.bindings)
                 core_original_foreign.validate_head(function, defined)
+                if symbol in core_original_foreign.STACK_INFO:
+                    for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.OPERATIONS[symbol][2])):
+                        self.original_stack_operand(argument, primitive, bound, index)
                 if symbol == core_original_foreign.STACK_CLONE:
                     state = arguments[0]
                     if state[0] == 'var':
@@ -938,7 +971,8 @@ class Audit:
                 array = self.cap.get('managedArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if array is not None:
                     def array_role(rep, role):
-                        if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                        if (not isinstance(rep, dict) or set(rep) != {'kind', 'primReps', 'evaluated'} or
+                                type(rep.get('evaluated')) is not bool):
                             return False
                         kind, reps = rep.get('kind'), rep.get('primReps')
                         if role == 'state':
@@ -949,13 +983,16 @@ class Audit:
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         return kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
                     expected = array['arguments']
-                    if (len(arguments) != len(expected) or flags != [r == 'element' for r in expected] or
+                    if (len(arguments) != len(expected) or any(type(flag) is not bool for flag in flags) or
+                            flags != [r == 'element' for r in expected] or
                             any(not array_role(self.expression_rep(a), r) for a, r in zip(arguments, expected))):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact Array arguments required')
                     result = array['result']
                     if isinstance(result, list):
                         fields = proof.get('components') if isinstance(proof, dict) else None
                         valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                                 set(proof) == {'kind', 'primReps', 'evaluated', 'aggregate', 'components'} and
+                                 type(proof.get('evaluated')) is bool and
                                  isinstance(fields, list) and len(fields) == len(result) and
                                  all(array_role(rep, role) for rep, role in zip(fields, result)) and
                                  proof.get('primReps') == [r for field in fields for r in field['primReps']])

@@ -575,7 +575,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives",
+        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "ManagedSmallArrays",
                           "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -624,7 +624,18 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(7, len(consumers))
+        self.assertEqual(8, len(consumers))
+        self.assertEqual(consumers, set(group["junit"]))
+        self.assertEqual([], group["python"])
+
+    def test_stack_info_layout_helper_selects_both_consumers(self):
+        group = self.policy["owners"]["src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt"]
+        consumers = set()
+        for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
+            source = path.read_text()
+            if "StackInfoTestLayout" in source:
+                consumers.update(select.junit_info(source)[0])
+        self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest"}, consumers)
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 

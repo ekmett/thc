@@ -9,8 +9,11 @@ module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
 import WordFloatingFixtures (prepareWordFloating)
+import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
+import SmallArrayFixtures (prepareSmallArrays)
 import StackFixtures (prepareOriginalStack)
+import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -740,9 +743,10 @@ preparePinnedPointers root = do
     forM_ [core, ghcOut] (createDirectoryIfMissing True . (root </>))
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
       "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip",
-        "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip", source]) ""
+        "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip",
+        "-fplugin-opt=THC.Plugin:closure=pointerOrder", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
-      "--entry", "pointerArrayRoundtrip",
+      "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
@@ -760,7 +764,7 @@ preparePinnedPointers root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "pinned-pointer-cells: 7 native rows, strict pre/post Core"
+  putStrLn "pinned-pointer-cells: 7 native rows, three strict pre/post Core roots"
 
 main :: IO ()
 main = do
@@ -775,10 +779,13 @@ main = do
     ["word-floating"] -> prepareWordFloating root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
+    ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
     ["pinned-pointer-cells"] -> preparePinnedPointers root
+    ["core-continuation"] -> prepareCoreContinuation root
+    ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (original-stack|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|tuple-arithmetic|pinned-pointer-cells|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

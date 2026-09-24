@@ -87,7 +87,7 @@ def classify(data, capability, scalars):
                     scope = label
                     break
             if signature and 'AddrRep' in signature['arguments'] + [signature['result']]:
-                scope = 'Managed literal addresses only'
+                scope = 'Managed addresses with operation-specific storage restrictions'
             if name == 'tagToEnum#' and 'tagToEnum' in capability:
                 scope = capability['tagToEnum']
             if name in ('dataToTagSmall#', 'dataToTagLarge#') and 'dataToTag' in capability:

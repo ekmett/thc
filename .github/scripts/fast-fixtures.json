@@ -17,6 +17,19 @@
       "outputs": ["build/word-floating"],
       "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
     },
+    "boxed-array-extensions": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-array-extensions"]}],
+      "outputs": ["build/boxed-array-extensions"],
+      "sources": [
+        "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs",
+        "compiler/test-fixtures/BoxedArrayExtensionsNative.hs",
+        "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stack": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}],
@@ -80,6 +93,17 @@
         "compiler/test-fixtures/PinnedPointerCellsNative.hs"
       ]
     },
+    "small-arrays": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "small-arrays"]}],
+      "outputs": ["build/small-arrays"],
+      "sources": [
+        "test/haskell-fixtures/SmallArrayFixtures.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/SmallArrayAudit.hs",
+        "compiler/test-fixtures/SmallArrayAuditNative.hs"
+      ]
+    },
     "synchronous-exceptions": {
       "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
       "commands": [
@@ -91,6 +115,19 @@
         "scripts/prepare-synchronous-exceptions.py",
         "compiler/test-fixtures/SynchronousExceptionsAudit.hs",
         "compiler/test-fixtures/SynchronousExceptionsNative.hs"
+      ]
+    },
+    "core-continuation": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "core-continuation"]}],
+      "outputs": ["build/core-continuation"],
+      "sources": [
+        "test/haskell-fixtures/ContinuationFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "compiler/test-fixtures/CoreContinuationAudit.hs",
+        "compiler/test-fixtures/CoreContinuationNative.hs"
       ]
     },
     "io-main-pap": {
