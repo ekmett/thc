@@ -91,3 +91,24 @@ char8Roundtrip raw = runRW# (\s0 ->
                 +# ord# arrayIndex) #)
     } } } }) of { (# _, I# answer #) -> answer }
   } } } } } })
+
+-- A single pinned byte compares signed and unsigned pure/effectful reads.
+-- Add 128 to each signed lane before packing to keep four exact 8-bit fields.
+{-# OPAQUE byte8Roundtrip #-}
+byte8Roundtrip :: Int# -> Int#
+byte8Roundtrip raw = runRW# (\s0 ->
+  case newPinnedByteArray# 32# s0 of { (# s1, mutable #) ->
+  case unsafeFreezeByteArray# mutable s1 of { (# s2, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s2 (\s3 ->
+    case writeInt8OffAddr# base 24# (intToInt8# raw) s3 of { s4 ->
+    case readInt8OffAddr# base 24# s4 of { (# s5, signedRead #) ->
+    case readWord8OffAddr# base 24# s5 of { (# s6, unsignedRead #) ->
+    case indexInt8OffAddr# base 24# of { signedIndex ->
+    case indexWord8OffAddr# base 24# of { unsignedIndex ->
+      (# s6, I# ((int8ToInt# signedRead +# 128#) *# 16777216#
+                +# (int8ToInt# signedIndex +# 128#) *# 65536#
+                +# word2Int# (word8ToWord# unsignedIndex) *# 256#
+                +# word2Int# (word8ToWord# unsignedRead)) #)
+    } } } } }) of { (# _, I# answer #) -> answer }
+  } } })

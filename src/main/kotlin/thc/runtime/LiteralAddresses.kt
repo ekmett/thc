@@ -252,11 +252,12 @@ internal class PlusManagedAddress(@field:Child private var address: Expr,
     override fun executeAddress(frame: VirtualFrame): ManagedAddress = execute(frame)
 }
 
-internal class IndexLiteralChar(@field:Child private var address: Expr,
+internal class IndexManagedByte(private val signed: Boolean, @field:Child private var address: Expr,
                                 @field:Child private var displacement: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
         val value = address.executeRequiredAddress(frame)
-        return value.indexChar(displacement.executeRequiredLong(frame))
+        val byte = value.readWord8(displacement.executeRequiredLong(frame))
+        return if (signed) byte.toByte().toLong() else byte
     }
 }

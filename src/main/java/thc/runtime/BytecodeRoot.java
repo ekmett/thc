@@ -494,6 +494,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadInt8OffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            long value = (byte) address.readWord8(offset);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadAddrOffAddr {
         @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
@@ -1309,9 +1320,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected primitive Long");
         }
     }
-    @Operation public static final class AddressIndexChar {
-        @Specialization public static long index(ManagedAddress address, long displacement) { return address.indexChar(displacement); }
-        @Fallback public static long invalid(Object address, Object displacement) {
+    @Operation @ConstantOperand(type = boolean.class, name = "signed")
+    public static final class AddressIndexByte {
+        @Specialization public static long index(boolean signed, ManagedAddress address, long displacement) {
+            long value = address.readWord8(displacement);
+            return signed ? (byte) value : value;
+        }
+        @Fallback public static long invalid(boolean signed, Object address, Object displacement) {
             if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
             throw fail("Expected primitive Long");
         }

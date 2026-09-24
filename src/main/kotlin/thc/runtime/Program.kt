@@ -2082,9 +2082,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 else -> ManagedAddressOrder.GE
             })
         }
-        "plusAddr#", "indexCharOffAddr#" -> {
+        "plusAddr#", "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
-            if (name == "plusAddr#") PlusManagedAddress(args[0], args[1]) else IndexLiteralChar(args[0], args[1])
+            if (name == "plusAddr#") PlusManagedAddress(args[0], args[1])
+            else IndexManagedByte(name == "indexInt8OffAddr#", args[0], args[1])
         }
         else -> Primitive(name, args)
     }
