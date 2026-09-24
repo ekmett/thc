@@ -478,6 +478,18 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 self.assertTrue((self.root / path).is_file(), path)
                 self.assertTrue(select.standalone_python_test((self.root / path).read_text()), path)
 
+    def test_fast_automation_sources_have_control_owners(self):
+        automation = self.policy["automation"]
+        for path in (".github/scripts/fast_ci.py", ".github/scripts/fast_inputs.py",
+                     ".github/scripts/fast_fixtures.py", ".github/scripts/fast_select.py",
+                     ".github/scripts/fast-fixtures.json", ".github/scripts/fast-tests.json",
+                     ".github/scripts/test_fast_ci.py", ".github/scripts/test_fast_inputs.py",
+                     ".github/scripts/test_fast_fixtures.py", ".github/scripts/test_fast_select.py",
+                     ".github/workflows/fast.yml"):
+            with self.subTest(path=path):
+                self.assertIn(path, automation)
+                self.assertIn(".github/scripts/test_fast_select.py", automation[path]["python"])
+
     def test_floating_dispatch_retains_hidden_native_sum_tuple_memory_and_bitcast_consumers(self):
         floating = self.family("FloatingPrimitives")
         self.assertEqual(floating, self.family("RawBitCasts"))

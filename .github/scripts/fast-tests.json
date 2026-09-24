@@ -286,7 +286,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/fast-tests.json": {
@@ -294,7 +295,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/fast_ci.init.gradle": {
@@ -302,7 +304,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/fast_ci.py": {
@@ -310,7 +313,17 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
+      ]
+    },
+    ".github/scripts/fast_fixtures.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/fast_inputs.py": {
@@ -318,7 +331,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/fast_select.py": {
@@ -326,7 +340,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/library_bundle.py": {
@@ -352,7 +367,17 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
+      ]
+    },
+    ".github/scripts/test_fast_fixtures.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/test_fast_inputs.py": {
@@ -360,7 +385,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/test_fast_select.py": {
@@ -368,7 +394,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/scripts/test_library_bundle.py": {
@@ -394,7 +421,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/workflows/fast.yml": {
@@ -402,7 +430,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/workflows/jit-stability.yml": {
@@ -410,7 +439,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     },
     ".github/workflows/merge.yml": {
@@ -427,7 +457,8 @@
       "python": [
         ".github/scripts/test_fast_select.py",
         ".github/scripts/test_fast_ci.py",
-        ".github/scripts/test_fast_inputs.py"
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_fast_fixtures.py"
       ]
     }
   }
