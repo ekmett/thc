@@ -509,6 +509,62 @@ class Audit:
         if not isinstance(target, dict) or target.get('kind') != 'static' or target.get('isFunction') is not True:
             return reject('Requires a static function target')
         symbol = target.get('symbol')
+        javascript_prefix = 'thc_javascript_v1_'
+        if ('intrinsic' in call or 'javascriptSource' in call or
+                isinstance(symbol, str) and symbol.startswith(javascript_prefix)):
+            if call.get('intrinsic') != 'javascript-v1' or not isinstance(call.get('javascriptSource'), str):
+                return reject('Missing exact javascript-v1 source evidence')
+            source = call['javascriptSource']
+            try:
+                encoded = source.encode('utf-8').hex()
+            except UnicodeEncodeError:
+                return reject('JavaScript source is not valid UTF-8')
+            if symbol != javascript_prefix + encoded:
+                return reject('JavaScript target does not encode the declared source')
+            if call.get('convention') != 'ccall' or call.get('safety') not in ('safe', 'unsafe'):
+                return reject('JavaScript import requires a synchronous ccall declaration')
+            declared = call.get('argumentReps')
+            if not isinstance(declared, list) or not declared or len(declared) != len(arguments):
+                return reject('JavaScript import lacks exact argument declarations')
+            def exact_js(rep, register):
+                if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                    return False
+                return (rep.get('kind') == {'IntRep': 'long', 'DoubleRep': 'double',
+                                            'State# RealWorld': 'void'}[register] and
+                        rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
+            register_names = [value.get('primReps') if isinstance(value, dict) else None for value in declared]
+            if (register_names[-1] != [] or any(value not in (["IntRep"], ["DoubleRep"])
+                                                 for value in register_names[:-1])):
+                return reject('JavaScript import requires Int/Double arguments followed by State#')
+            if (type(call.get('arity')) is not int or call['arity'] != len(declared) or
+                    type(call.get('suppliedArity')) is not int or call['suppliedArity'] != len(declared)):
+                return reject('JavaScript import must be exactly saturated')
+            for index, (argument, declared_rep) in enumerate(zip(arguments, declared)):
+                register = 'State# RealWorld' if index == len(declared) - 1 else declared_rep['primReps'][0]
+                if not exact_js(declared_rep, register) or not exact_js(self.effective_rep(argument, bound), register):
+                    return reject(f'JavaScript argument {index} lacks exact {register} proof')
+            if expr[3] != [False] * len(declared):
+                return reject('JavaScript FFI arguments must be unlifted')
+            result = call.get('resultRep')
+            actual_result = self.expression_rep(expr)
+            def exact_result(proof):
+                if not isinstance(proof, dict) or proof.get('aggregate') != 'unboxed-tuple' or proof.get('kind') != 'unknown':
+                    return None
+                components = proof.get('components')
+                if not isinstance(components, list) or len(components) not in (1, 2) or not exact_js(components[0], 'State# RealWorld'):
+                    return None
+                if len(components) == 1:
+                    return 'void' if proof.get('primReps') == [] else None
+                for register in ('IntRep', 'DoubleRep'):
+                    if exact_js(components[1], register) and proof.get('primReps') == [register]:
+                        return register
+                return None
+            output = exact_result(result)
+            if output is None or exact_result(actual_result) != output:
+                return reject('JavaScript result requires exact State# singleton or State#/Int#/Double# tuple')
+            self.foreign_calls.append(dict(symbol=symbol, javascriptSource=source,
+                                           result=output, owner=owner, path=path))
+            return True
         spec = POLYGLOT_ABI['operations'].get(symbol)
         if spec is None:
             return reject('Unsupported foreign target ' + repr(symbol))
