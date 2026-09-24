@@ -127,7 +127,7 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual("Linux", manifest["system"])
             self.assertEqual("x86_64", manifest["architecture"])
             self.assertEqual([compile_call.call_args.args[0]], manifest["commands"])
-            self.assertEqual(4, len(manifest["sources"]))
+            self.assertEqual(3, len(manifest["sources"]))
             self.assertEqual(1, len(manifest["artifacts"]))
             for entry in manifest["sources"] + manifest["artifacts"]:
                 self.assertEqual(hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest(), entry["sha256"])

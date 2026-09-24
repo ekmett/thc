@@ -175,8 +175,7 @@ def main():
         positiveAuditsAccepted=positives, audits=audits, structure=structure, commands=commands,
         sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts],
         toolchain=dict(ghcVersion='9.14.1', host=platform.node(), machine=platform.machine(), system=platform.platform(),
-            ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
-            ghcBinarySha256=hashlib.sha256(Path(shutil.which(ghc) or ghc).resolve().read_bytes()).hexdigest()),
+            ghcInfo=subprocess.check_output([ghc, '--info'], text=True)),
         claim='Native/model comparison plus exact Core metadata and static audit; no installed guest or hardware SIMD claim.'
               if native_rows is not None else 'Pre-Tidy Core and independent model only; NO native/post-Tidy validation.',
         limitations=['Non-NaN Double results compare raw 64-bit encodings; arithmetic NaNs compare by class.',

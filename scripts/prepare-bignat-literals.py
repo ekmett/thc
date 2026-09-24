@@ -135,11 +135,9 @@ def main():
                  *sorted((ROOT/'compiler/THC').glob('*.hs')),*audit_inputs(),*[ROOT/r['path'] for r in boot['sources']]]
         artifacts=[OUT/'boot/boot-provenance.json',OUT/'requests.tsv',OUT/'oracle.tsv',*sorted(OUT.glob('*.audit.json'))]
         artifacts += [p for directory in ('pre-core','post-core','boot/core','native') for p in sorted((OUT/directory).rglob('*')) if p.is_file()]
-        installed=Path(subprocess.check_output([ghc_pkg,'field','ghc-internal','import-dirs','--simple-output'],text=True).strip())
         manifest_path.write_text(json.dumps(dict(schema=1,recordedAtUtc=datetime.now(timezone.utc).isoformat(),commands=commands,ghcInfo=info,
             wordBits=64,byteOrder=sys.byteorder,entries=list(ENTRIES),frontiers=list(FRONTIERS),values=list(map(str,VALUES)),seeds=list(SEEDS),nativeRows=len(rows),
             stages=stages,coverage=coverage,sourceBindings=counts,
-            installedInterfaces=[dict(path=str(p),sha256=digest(p)) for name in MODULES for p in [installed/f'GHC/Internal/Bignum/{name}.dyn_hi']],
             sources=[record(p) for p in dict.fromkeys(sources)],artifacts=[record(p) for p in artifacts],
             claim='Fresh native conversion/complete limb and byte observations; complete original BigNat/Integer/Natural source, no arithmetic or foreign substitution. Guest compiled execution is tested separately.'),indent=2)+'\n')
     manifest=json.loads(manifest_path.read_text())

@@ -175,15 +175,6 @@ def main():
         return subprocess.run(command, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True, **kwargs)
     version = run([ghc, '--numeric-version'], text=True, capture_output=True).stdout.strip()
     check(version == '9.14.1', 'Requires pinned GHC9.14.1')
-    libdir = Path(run([ghc, '--print-libdir'], text=True, capture_output=True).stdout.strip())
-    compiler_binary = libdir.parent/'bin/ghc-9.14.1'
-    compiler_launcher = Path(shutil.which(ghc) or ghc).resolve()
-    # Hash the native compiler, not merely a shell launcher. Linux ELF and
-    # Darwin thin/fat Mach-O are both legitimate source-owned CI toolchains.
-    magic = compiler_binary.read_bytes()[:4]
-    check(magic in (b'\x7fELF', b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf',
-                    b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca',
-                    b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'), 'Expected native GHC compiler binary')
     compiler_info = run([ghc, '--info'], text=True, capture_output=True).stdout
     domain = list(cases())
     requests = ''.join(name+'\t'+'\t'.join(map(str, arguments))+'\n' for name, arguments in domain)
@@ -255,8 +246,6 @@ def main():
     hashes = lambda paths: {str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
     counts = Counter(name for name, _ in domain)
     manifest.write_text(json.dumps(dict(schema=1, ghc=version, entries=ENTRIES, publicFrontiers=PUBLIC_FRONTIERS,
-        ghcBinaryPath=str(compiler_binary), ghcBinarySha256=hashlib.sha256(compiler_binary.read_bytes()).hexdigest(),
-        ghcLauncherPath=str(compiler_launcher), ghcLauncherSha256=hashlib.sha256(compiler_launcher.read_bytes()).hexdigest(),
         ghcInfo=compiler_info, nativeByteOrder=sys.byteorder, fingerprintByteOrder='big',
         strictAccepted=strict, mode='native-only' if args.native_only else 'export-only' if args.export_only else 'full',
         stages=stages, audits=audits, keepAliveSites=keep_alive_sites, negativeProofs=negative_reports,

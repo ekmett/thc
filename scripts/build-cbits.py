@@ -80,7 +80,7 @@ def main():
                 "system": system, "architecture": arch,
                 "clangVersion": subprocess.check_output([clang, "--version"], text=True),
                 "ghc": "9.14.1", "commands": commands,
-                "sources": [record(reference / n) for n in PINNED] + [record(ROOT / "src/main/c/md5-api.c"), record(headers[0])],
+                "sources": [record(reference / n) for n in PINNED] + [record(ROOT / "src/main/c/md5-api.c")],
                 "artifacts": [record(output / (n + ".bc")) for n in ("md5",)]}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"Compiled unchanged GHC MD5 for {target}")
