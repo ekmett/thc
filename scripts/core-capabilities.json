@@ -88,6 +88,12 @@
   ],
   "strictLiftedFields": true,
   "primitives": {
+    "indexInt32X4Array#": 2,
+    "indexInt32ArrayAsInt32X4#": 2,
+    "readInt32X4Array#": 3,
+    "readInt32ArrayAsInt32X4#": 3,
+    "writeInt32X4Array#": 4,
+    "writeInt32ArrayAsInt32X4#": 4,
     "quotWord#": 2,
     "remWord#": 2,
     "gtWord#": 2,

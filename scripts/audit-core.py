@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 
 from core_vectors import OPERATIONS as VECTOR_OPERATIONS, is_vector, proof_error as vector_proof_error, signature_matches as vector_signature_matches
+from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case as vector_read_case, validate_direct as validate_vector_memory
 
 
 # The identical checked-in resource is packaged in the JVM runtime jar.
@@ -428,6 +429,37 @@ class Audit:
             return
         tag = expr[0]
         try:
+            read = vector_read_case(expr, self.constructors)
+            if read is not None:
+                # Exempt only these two checked structural sites, never a shared
+                # proof object or an equal map reused at another ABI boundary.
+                exempt = {('case', 'binder', 'rep'), ('producer', 'rep')}
+                def metadata_proofs(value, site):
+                    if isinstance(value, dict):
+                        for key, child in value.items():
+                            child_site = site + (key,)
+                            if key in ('rep', 'resultRep', 'joinResultRep') and child_site not in exempt:
+                                self.representation(child, owner, path + '/' + '/'.join(map(str, child_site)))
+                            metadata_proofs(child, child_site)
+                    elif isinstance(value, list):
+                        for index, child in enumerate(value):
+                            metadata_proofs(child, site + (index,))
+                metadata_proofs(expr[4], ('case',))
+                metadata_proofs(expr[1][6], ('producer',))
+                alternative = expr[3][0]
+                metadata_proofs(alternative[4], ('pattern',))
+                self.binder_ids(alternative[4]['binders'], owner, path + '/alternatives/0/binders')
+                self.constructor(alternative[1], owner, path + '/alternatives/0', False, 2, expr[4]['binder']['rep'])
+                self.walk(expr[1][1], bound, owner, path + '/scrutinee/function', 3)
+                for index, argument in enumerate(read['arguments']):
+                    self.walk(argument, bound, owner, f'{path}/scrutinee/arguments/{index}')
+                declared, actual = self.expression_rep(expr), self.expression_rep(read['body'])
+                known = all(isinstance(rep, dict) and isinstance(rep.get('primReps'), list)
+                            for rep in (declared, actual))
+                self.compare_shapes(declared, actual, owner, path + '/alternatives/0/body/rep', component=known)
+                self.walk(read['body'], bound | self.binder_scope(alternative[4]['binders']), owner,
+                          path + '/alternatives/0/body')
+                return
             self.expression_metadata(expr, owner, path)
             if tag == 'var':
                 if not isinstance(expr[1], str):
@@ -575,6 +607,9 @@ class Audit:
                             self.compare_shapes(formal, self.expression_rep(actual), owner,
                                                 f'{path}/arguments/{index}/formal')
                 vector_operation = function[1] if function[0] == 'prim' and function[1] in VECTOR_OPERATIONS else None
+                vector_memory = function[1] if function[0] == 'prim' and function[1] in VECTOR_MEMORY_OPERATIONS else None
+                if vector_memory:
+                    validate_vector_memory(vector_memory, arguments, flags, proof)
                 if vector_operation:
                     expected, result = VECTOR_OPERATIONS[vector_operation]
                     if not isinstance(flags, list) or len(flags) != len(arguments) or any(flag is not False for flag in flags):
@@ -588,7 +623,7 @@ class Audit:
                     if not vector_signature_matches(result, proof):
                         self.issue('vector-shape', owner, path + '/rep', 'Exact vector primitive result representation required')
                     self.compare_shapes(result, proof, owner, path + '/rep', component=True)
-                elif is_vector(proof):
+                elif is_vector(proof) and not vector_memory:
                     self.issue('vector-boundary', owner, path, 'vector call result')
                 self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor else None)
                 for index, argument in enumerate(arguments):
@@ -597,7 +632,7 @@ class Audit:
                         if index < len(components):
                             self.compare_shapes(components[index], self.expression_rep(argument), owner,
                                                 f'{path}/arguments/{index}/rep', component=True)
-                    if not vector_operation and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
+                    if not vector_operation and not vector_memory and (is_vector(self.expression_rep(argument)) or argument[0] == 'var' and is_vector(bound.get(argument[1]))):
                         self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
                     if not tuple_constructor and not vector_operation:
                         argument_rep = self.expression_rep(argument)

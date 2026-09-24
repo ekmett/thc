@@ -5,7 +5,8 @@ package thc.runtime
  * higher-order targets. No scalar signature is inferred from a physical carrier. */
 internal object CoreInputCalls {
     private data class Binding(val proof: CoreRepresentation, val inputs: List<CoreRepresentation>?)
-    fun validate(bindings: List<Map<String, Any?>>) {
+    fun validate(bindings: List<Map<String, Any?>>,
+                 constructors: Map<String, Map<String, Any?>> = emptyMap()) {
         val globals = bindings.associateBy { it["id"] as String }
         fun inputs(expr: List<Any?>, scope: Map<String, Binding>, seen: Set<String> = emptySet()): List<CoreRepresentation>? = when (expr[0]) {
             "lam" -> (expr[1] as List<Map<String, Any?>>).map(CoreRepresentations::binder)
@@ -64,6 +65,14 @@ internal object CoreInputCalls {
                     visit(expr[3] as List<Any?>, local)
                 }
                 "case" -> {
+                    val read = CoreVectorMemory.readCase(expr, constructors)
+                    if (read != null) {
+                        read.arguments.forEach { visit(it, scope) }
+                        visit(read.body, scope + mapOf(
+                            read.stateBinder to Binding(CoreVectorMemory.stateProof, null),
+                            read.vectorBinder to Binding(CoreVectors.proof32, null)))
+                        return
+                    }
                     visit(expr[1] as List<Any?>, scope)
                     val meta = CoreRepresentations.metadata(expr)
                     val binder = meta?.get("binder") as? Map<String, Any?>

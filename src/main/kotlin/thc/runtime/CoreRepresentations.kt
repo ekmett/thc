@@ -77,17 +77,26 @@ internal object CoreRepresentations {
         proofs.forEach { floating.refine(it) }
     }
     /** Validate every retained proof, including cold branches and unused binders. */
-    fun validateAggregates(bindings: List<Map<String, Any?>>) {
-        fun visit(value: Any?) {
+    fun validateAggregates(bindings: List<Map<String, Any?>>,
+                           constructors: Map<String, Map<String, Any?>> = emptyMap()) {
+        fun visit(value: Any?, path: List<Any>, exemptions: Set<List<Any>>) {
             when (value) {
                 is Map<*, *> -> value.forEach { (key, child) ->
-                    if (key in setOf("rep", "resultRep", "joinResultRep") && child is Map<*, *>) parse(child)
-                    visit(child)
+                    val next = path + (key ?: "<null>")
+                    if (key in setOf("rep", "resultRep", "joinResultRep") && child is Map<*, *> && next !in exemptions) parse(child)
+                    visit(child, next, exemptions)
                 }
-                is List<*> -> value.forEach(::visit)
+                is List<*> -> {
+                    // Only these structural sites are exempt: shared/equal proof maps
+                    // elsewhere (including function results) still use generic parse.
+                    val local = if (CoreVectorMemory.readCase(value, constructors) != null)
+                        exemptions + setOf(path + listOf(1, 6, "rep"), path + listOf(4, "binder", "rep"))
+                    else exemptions
+                    value.forEachIndexed { index, child -> visit(child, path + index, local) }
+                }
             }
         }
-        visit(bindings)
+        visit(bindings, emptyList(), emptySet())
     }
     fun requireInput(proof: CoreRepresentation) {
         if (!proof.isEmptyTuple) requireScalar(proof, "argument")
