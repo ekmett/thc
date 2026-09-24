@@ -160,9 +160,10 @@ internal class PinnedPointerArrayRead(proof: CoreRepresentation,
 internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation,
     @field:Children private var operands: Array<Expr>) : Expr() {
     init { representation = proof.copy(evaluated = true) }
-    override fun execute(frame: VirtualFrame): Any = when (operation) {
-        PinnedMemoryOp.CONTENTS -> ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
-        PinnedMemoryOp.WRITE, PinnedMemoryOp.WRITE_INT8, PinnedMemoryOp.WRITE_CHAR -> {
+    override fun execute(frame: VirtualFrame): Any = when {
+        operation == PinnedMemoryOp.CONTENTS -> ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
+        operation == PinnedMemoryOp.WRITE || operation == PinnedMemoryOp.WRITE_INT8 ||
+            operation == PinnedMemoryOp.WRITE_CHAR -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredLong(frame)
@@ -170,7 +171,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             address.writeWord8(offset, value)
             Unit
         }
-        PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> {
+        operation == PinnedMemoryOp.WRITE_INT16 || operation == PinnedMemoryOp.WRITE_WORD16 -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredLong(frame)
@@ -178,9 +179,9 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             address.writeWord16(offset, value)
             Unit
         }
-        PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
-        PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
-        PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> {
+        operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32 ||
+            operation == PinnedMemoryOp.WRITE_INT || operation == PinnedMemoryOp.WRITE_WORD ||
+            operation == PinnedMemoryOp.WRITE_INT64 || operation == PinnedMemoryOp.WRITE_WORD64 -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredLong(frame)
@@ -189,7 +190,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             address.writeNativeScalar(offset, width, value)
             Unit
         }
-        PinnedMemoryOp.WRITE_ADDR -> {
+        operation == PinnedMemoryOp.WRITE_ADDR -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredAddress(frame)
@@ -200,10 +201,8 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
         else -> fault("Pinned memory tuple operation requires a destination")
     }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress =
-        when (operation) {
-            PinnedMemoryOp.CONTENTS -> ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
-            else -> super.executeAddress(frame)
-        }
+        if (operation == PinnedMemoryOp.CONTENTS) ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
+        else super.executeAddress(frame)
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         when (operation) {
             PinnedMemoryOp.NEW, PinnedMemoryOp.NEW_ALIGNED -> {
