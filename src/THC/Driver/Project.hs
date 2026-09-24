@@ -244,6 +244,9 @@ freshExport component unit pluginDb pluginUnit unitRoot destination = do
     let actual = sort (map fst checked)
     require (length actual == length (nub actual) && actual == expected)
       ("Core module inventory differs from Cabal build-info for " ++ unitId unit ++ ": " ++ show actual)
+    -- These are export-only GHC objects; Cabal's native products above are the
+    -- durable incremental inputs. Keep just the content-addressed Core.
+    removePathForcibly objects
     metadata <- forM checked $ \(name, path) -> do
       hash <- digestFile path
       pure (object ["name" .= name, "path" .= makeRelative staging path, "sha256" .= hash])
