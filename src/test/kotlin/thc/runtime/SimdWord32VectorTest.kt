@@ -75,8 +75,9 @@ class SimdWord32VectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packWord32X4#", listOf(bad), proof) }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() - "vector") }
         assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(metadata() + ("primReps" to List(4) { "Word32Rep" })) }
-        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata() + mapOf("primReps" to listOf("VecRep 8 Word32ElemRep"),
-            "vector" to mapOf("lanes" to 8L, "element" to "Word32ElemRep"))) }
+        // Word32X8 is supported; a three-lane vector still has no carrier.
+        assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata() + mapOf("primReps" to listOf("VecRep 3 Word32ElemRep"),
+            "vector" to mapOf("lanes" to 3L, "element" to "Word32ElemRep"))) }
     }
 
     @Test fun sampledBitPatternsAndBoundaryPairsWrapWithoutSaturationOrHighProduct() {

@@ -48,7 +48,9 @@ object CoreModules {
             require(module["ghc"] == "9.14.1") { "This adapter requires GHC 9.14.1 exports" }
             val unit = module["unit"] as? String
             val name = module["module"] as? String
-            if (unit != null && name != null) {
+            val interfaceFragment = unit == "dependency-closure" && name == "THC.InterfaceClosure" &&
+                module["boundary"] == "actual-interface-unfoldings"
+            if (unit != null && name != null && !interfaceFragment) {
                 require(moduleKeys.add(unit to name)) { "Duplicate GHC module: $unit:$name" }
             }
             for ((key, table) in listOf("sourceFiles" to sourceFiles, "sourceSpans" to sourceSpans)) {
