@@ -39,8 +39,15 @@ captures the caller frame. The dependency-resolution path for an already
 suspended thunk is a cold Truffle boundary. Production Core lowering is still
 yield-disabled.
 
-This is a cooperative two-root proof, not `throwTo` support. It does not
-deliver asynchronous exceptions, capture arbitrary safepoint PCs, or compose
-arbitrary nested calls, Haskell handlers and mask state. An uncaptured caller
-still fails closed rather than replaying effects. The next step is a general
-caller-segment chain through those update and handler boundaries.
+The cold resolver now walks parked caller dependencies iteratively, then
+claims and resumes each continuation from the child outward. A changed link
+causes a rescan before any claim. When a child yields again, it reports the
+requested paused thunk as the update boundary; a new caller must not skip an
+intermediate continuation. Tests cover 64 parked callers, two compiled caller
+frames with primitive operands, two callers sharing a child, repeated yields,
+concurrent readers, and guest failure through three callers.
+
+This remains a cooperative test-only proof, not `throwTo` support. It does not
+deliver asynchronous exceptions, capture arbitrary safepoint PCs, or restore
+Haskell handler and mask state. An uncaptured caller still fails closed rather
+than replaying effects. Production Core lowering is yield-disabled.

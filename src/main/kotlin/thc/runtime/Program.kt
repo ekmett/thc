@@ -283,6 +283,8 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
     override fun execute(frame: VirtualFrame): Thunk = Thunk(target, captureLayout?.capture(frame, captures))
 }
 internal class Force(private val metrics: Metrics) : Node() {
+    private object Retry
+    private class Parked(val thunk: Thunk, val continuation: ContinuationResult)
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
@@ -303,13 +305,22 @@ internal class Force(private val metrics: Metrics) : Node() {
                 3 -> rethrowFailure(original)
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
-            // A caller continuation yielded because its child thunk suspended.
-            // Finish the shared child before claiming the caller: while the child
-            // is still suspended, other threads may also enter this caller.
             val observed = if (original.state == 5) original.value as? ContinuationResult else null
             val child = (observed?.result as? ThunkSuspended)?.thunk
-            if (child === original) fault("Suspended thunk depends on itself")
-            val resumeValue = if (child != null) resumeChild(frame.materialize(), child) else Unit
+            if (child != null) return resumeChain(frame.materialize(), original)
+            val result = executeOne(frame, original, observed, Unit)
+            if (result !== Retry) return result
+        }
+    }
+
+    private fun executeOne(frame: VirtualFrame, original: Thunk,
+                           observed: ContinuationResult?, resumeValue: Any?): Any? {
+        while (true) {
+            when (original.state) {
+                2 -> { if (metrics.enabled) metrics.incrementThunkHits(); return original.value }
+                3 -> rethrowFailure(original)
+                4 -> fault("Interrupted thunk has no resumable continuation")
+            }
             // A volatile state read alone cannot claim an unevaluated thunk:
             // another thread can enter during the single-threaded transition.
             var continuation: ContinuationResult? = null
@@ -318,7 +329,9 @@ internal class Force(private val metrics: Metrics) : Node() {
                 val claim = synchronized(original.monitor) {
                     when (original.state) {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
-                        5 -> if (observed == null || original.value !== observed) 3 else {
+                        5 -> if ((observed != null && original.value !== observed) ||
+                            (observed == null &&
+                                ((original.value as? ContinuationResult)?.result is ThunkSuspended))) 3 else {
                             continuation = original.value as? ContinuationResult
                                 ?: fault("Suspended thunk has no bytecode continuation")
                             original.value = null // One owner consumes the one-shot continuation.
@@ -335,6 +348,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                     0 -> return evaluateOwned(original, continuation, resumeValue)
                     1 -> awaitOwner(original)
                     2 -> { if (metrics.enabled) metrics.incrementBlackholes(); fault("Blackhole: cyclic thunk entered while evaluating") }
+                    3 -> return Retry
                 }
             } catch (failure: Throwable) {
                 // A safepoint can transfer control after the ownership store but
@@ -346,12 +360,46 @@ internal class Force(private val metrics: Metrics) : Node() {
     }
 
     @CompilerDirectives.TruffleBoundary
-    private fun resumeChild(frame: MaterializedFrame, child: Thunk): Any? {
-        // Only a parked caller reaches this cold path. A child guest failure
-        // must reenter the caller's captured handler rather than strand its
-        // update or replay effects. Keep recursion out of ordinary JIT graphs.
-        return try { ChildResume(execute(frame, child), null) }
-        catch (failure: GuestException) { ChildResume(null, failure) }
+    private fun resumeChain(frame: MaterializedFrame, original: Thunk): Any? {
+        val parked = java.util.ArrayDeque<Parked>()
+        val seen = java.util.IdentityHashMap<Thunk, Boolean>()
+        while (true) {
+            parked.clear()
+            seen.clear()
+            var leaf = original
+            var leafContinuation: ContinuationResult? = null
+            while (true) {
+                if (seen.put(leaf, true) != null) fault("Suspended thunk dependency cycle")
+                leafContinuation = if (leaf.state == 5) leaf.value as? ContinuationResult else null
+                val child = (leafContinuation?.result as? ThunkSuspended)?.thunk ?: break
+                parked.addLast(Parked(leaf, leafContinuation))
+                leaf = child
+            }
+            var current = leaf
+            var expected = leafContinuation
+            var input: Any? = Unit
+            while (true) {
+                val outcome = try {
+                    val answer = executeOne(frame, current, expected, input)
+                    if (answer === Retry) null else ChildResume(answer, null)
+                } catch (suspension: ThunkSuspended) {
+                    // The requested thunk is still parked even if a deeper
+                    // dependency yielded again. A new caller must capture the
+                    // requested update boundary, not skip its continuation.
+                    if (original.state == 5) throw ThunkSuspended(original)
+                    throw suspension
+                } catch (failure: GuestException) { ChildResume(null, failure) }
+                if (outcome == null) break // Another evaluator advanced a link; rescan from the root.
+                if (parked.isEmpty()) {
+                    outcome.failure?.let { throw it }
+                    return outcome.value
+                }
+                val parent = parked.removeLast()
+                current = parent.thunk
+                expected = parent.continuation
+                input = outcome
+            }
+        }
     }
 
     private fun evaluateOwned(thunk: Thunk, continuation: ContinuationResult?, resumeValue: Any?): Any? {

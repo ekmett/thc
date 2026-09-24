@@ -26,6 +26,8 @@ class CallerContinuationProofTest {
         override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
         fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
     }
+    private data class ThreeRoots(val child: Thunk, val lower: Thunk, val upper: Thunk, val driver: Driver)
+    private data class FourRoots(val child: Thunk, val shared: Thunk, val callers: List<Thunk>, val driver: Driver)
 
     private fun <T> entered(context: Context, action: () -> T): T {
         context.enter()
@@ -79,7 +81,7 @@ class CallerContinuationProofTest {
                 })
 
             val second = entered(context) { assertThrows(ThunkSuspended::class.java) { driver.force(caller) } }
-            assertSame(child, second.thunk, "Only the child yielded again; the caller stayed suspended")
+            assertSame(caller, second.thunk, "The caller's update boundary remains suspended")
             assertEquals(5, child.state)
             assertEquals(5, caller.state)
             assertSame(callerSegment, caller.value)
@@ -165,7 +167,7 @@ class CallerContinuationProofTest {
             }
             entered(context) {
                 assertSame(caller, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
-                assertSame(child, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
+                assertSame(caller, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
                 val failure = assertThrows(GuestException::class.java) { driver.force(caller) }
                 assertSame(payload, failure.payload)
                 assertSame(payload, assertThrows(GuestException::class.java) { driver.force(caller) }.payload)
@@ -176,6 +178,173 @@ class CallerContinuationProofTest {
             assertFalse(caller.value is ThunkSuspended)
             assertEquals(1, childEffects.get())
             assertEquals(1, callerEffects.get())
+        }
+    }
+
+    @Test fun twoCompiledCallersKeepPrimitiveOperandsAcrossThreeRootChain() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val childEffects = AtomicInteger()
+            val lowerEffects = AtomicInteger()
+            val upperEffects = AtomicInteger()
+            val lowerCompiled = AtomicInteger()
+            val upperCompiled = AtomicInteger()
+            val (child, lower, upper, driver) = entered(context) {
+                val driver = Driver()
+                val warm = Thunk(object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any = ThunkYieldProofRoot.Answer(42L, this)
+                }.callTarget, null)
+                val lowerChild = AtomicReference(warm)
+                val lowerTarget = ThunkYieldProofRoot.caller(language, lowerChild, lowerEffects, lowerCompiled)
+                val upperChild = AtomicReference(Thunk(lowerTarget, null))
+                val upperTarget = ThunkYieldProofRoot.caller(language, upperChild, upperEffects, upperCompiled)
+                repeat(8) {
+                    assertEquals(142L, driver.force(Thunk(lowerTarget, null)))
+                    assertEquals(242L, driver.force(Thunk(upperTarget, null)))
+                }
+                compile(lowerTarget)
+                compile(upperTarget)
+                val child = Thunk(ThunkYieldProofRoot.target(language, childEffects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), Any()), null)
+                val lower = Thunk(lowerTarget, null)
+                val upper = Thunk(upperTarget, null)
+                lowerChild.set(child)
+                upperChild.set(lower)
+                ThreeRoots(child, lower, upper, driver)
+            }
+            val lowerBefore = lowerEffects.get()
+            val upperBefore = upperEffects.get()
+            val lowerCompiledBefore = lowerCompiled.get()
+            val upperCompiledBefore = upperCompiled.get()
+            entered(context) {
+                assertSame(upper, assertThrows(ThunkSuspended::class.java) { driver.force(upper) }.thunk)
+            }
+            assertEquals(5, child.state)
+            for (caller in listOf(lower, upper)) {
+                assertEquals(5, caller.state)
+                val frame = (caller.value as ContinuationResult).frame
+                assertTrue((0 until frame.frameDescriptor.numberOfSlots).any {
+                    frame.isLong(it) && frame.getLong(it) == 100L
+                }, "Each compiled caller keeps its primitive operand below the child call")
+            }
+            assertTrue(lowerCompiled.get() > lowerCompiledBefore)
+            assertTrue(upperCompiled.get() > upperCompiledBefore)
+            entered(context) {
+                assertSame(upper, assertThrows(ThunkSuspended::class.java) { driver.force(upper) }.thunk)
+                assertEquals(242L, driver.force(upper))
+            }
+            assertEquals(1, childEffects.get())
+            assertEquals(lowerBefore + 1, lowerEffects.get())
+            assertEquals(upperBefore + 1, upperEffects.get())
+            assertEquals(2, child.state)
+            assertEquals(2, lower.state)
+            assertEquals(2, upper.state)
+        }
+    }
+
+    @Test fun deepParkedChainResolvesIterativelyAfterRepeatedChildYield() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val childEffects = AtomicInteger()
+            val callerEffects = AtomicInteger()
+            val (child, callers, driver) = entered(context) {
+                val child = Thunk(ThunkYieldProofRoot.target(language, childEffects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), Any()), null)
+                var previous = child
+                val callers = List(64) {
+                    Thunk(ThunkYieldProofRoot.caller(language, previous, callerEffects), null)
+                        .also { previous = it }
+                }
+                Triple(child, callers, Driver())
+            }
+            val top = callers.last()
+            entered(context) {
+                assertSame(top, assertThrows(ThunkSuspended::class.java) { driver.force(top) }.thunk)
+            }
+            assertEquals(5, child.state)
+            assertTrue(callers.all { it.state == 5 })
+            assertEquals(64, callerEffects.get())
+            entered(context) {
+                assertSame(top, assertThrows(ThunkSuspended::class.java) { driver.force(top) }.thunk)
+            }
+            assertTrue(callers.all { it.state == 5 })
+            assertEquals(64, callerEffects.get(), "No caller prefix replays after the child yields twice")
+            assertEquals(6442L, entered(context) { driver.force(top) })
+            assertEquals(1, childEffects.get())
+            assertEquals(64, callerEffects.get())
+            assertEquals(2, child.state)
+            assertTrue(callers.all { it.state == 2 })
+        }
+    }
+
+    @Test fun twoCallersShareAThreeRootDependencyAndWakeTheirReaders() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val childEffects = AtomicInteger()
+            val callerEffects = AtomicInteger()
+            val (child, shared, callers, driver) = entered(context) {
+                val child = Thunk(ThunkYieldProofRoot.target(language, childEffects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), Any()), null)
+                val shared = Thunk(ThunkYieldProofRoot.caller(language, child, callerEffects), null)
+                val topTarget = ThunkYieldProofRoot.caller(language, shared, callerEffects)
+                FourRoots(child, shared, List(2) { Thunk(topTarget, null) }, Driver())
+            }
+            entered(context) {
+                callers.forEach { caller ->
+                    assertSame(caller, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
+                }
+            }
+            assertEquals(5, child.state)
+            assertEquals(5, shared.state)
+            assertTrue(callers.all { it.state == 5 })
+            Executors.newFixedThreadPool(4).use { pool ->
+                val start = CountDownLatch(1)
+                val results = List(4) { index -> pool.submit<Any?> { entered(context) {
+                    assertTrue(start.await(5, TimeUnit.SECONDS))
+                    driver.force(callers[index % 2])
+                } } }
+                start.countDown()
+                results.forEach { assertEquals(242L, it.get(5, TimeUnit.SECONDS)) }
+            }
+            assertEquals(1, childEffects.get())
+            assertEquals(3, callerEffects.get())
+            assertEquals(2, shared.state)
+            assertTrue(callers.all { it.state == 2 })
+        }
+    }
+
+    @Test fun guestFailurePropagatesThroughThreeParkedCallersWithoutReplay() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val payload = Any()
+            val childEffects = AtomicInteger()
+            val callerEffects = AtomicInteger()
+            val (child, callers, driver) = entered(context) {
+                val driver = Driver()
+                val child = Thunk(ThunkYieldProofRoot.target(language, childEffects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), GuestException(payload, driver)), null)
+                var previous = child
+                val callers = List(3) {
+                    Thunk(ThunkYieldProofRoot.caller(language, previous, callerEffects), null)
+                        .also { previous = it }
+                }
+                Triple(child, callers, driver)
+            }
+            val top = callers.last()
+            entered(context) {
+                assertSame(top, assertThrows(ThunkSuspended::class.java) { driver.force(top) }.thunk)
+                assertSame(top, assertThrows(ThunkSuspended::class.java) { driver.force(top) }.thunk)
+                assertSame(payload, assertThrows(GuestException::class.java) { driver.force(top) }.payload)
+                assertSame(payload, assertThrows(GuestException::class.java) { driver.force(top) }.payload)
+            }
+            assertEquals(1, childEffects.get())
+            assertEquals(3, callerEffects.get())
+            assertEquals(3, child.state)
+            assertTrue(callers.all { it.state == 3 })
         }
     }
 }
