@@ -14,13 +14,32 @@ prepareCoreContinuation :: FilePath -> IO ()
 prepareCoreContinuation root = do
   let base = root </> "build/core-continuation"
       source = "compiler/test-fixtures/CoreContinuationAudit.hs"
+      lazySource = "compiler/test-fixtures/LazyIOCallbackAudit.hs"
   mapM_ (createDirectoryIfMissing True . (base </>)) ["core", "ghc", "native"]
   _ <- run root [("THC_CORE_OUT", base </> "core"), ("THC_GHC_OUT", base </> "ghc")]
-       "compiler/export.sh" [source] ""
+       "compiler/export.sh" [source, lazySource] ""
+  mapM_ (\(entry, report) -> run root [] "python3"
+      ["scripts/audit-core.py", base </> "core/LazyIOCallbackAudit.json",
+       "--entry", entry, "--output", base </> report] "")
+      [("catchLazyActionHead", "lazy-action-audit.json"),
+       ("catchLazyHandlerHead", "lazy-handler-audit.json"),
+       ("keepAliveScalar", "keep-alive-scalar-audit.json"),
+       ("keepAliveTuple", "keep-alive-tuple-audit.json")]
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "sharedAnswer", "--output", base </> "audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "applicationAnswer", "--output", base </> "application-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "overapplicationThunk", "--output", base </> "overapplication-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "overapplicationTail", "--output", base </> "overapplication-tail-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "directOverapplicationTailThunk", "--output", base </> "direct-overapplication-tail-audit.json"] ""
+  mapM_ (\(entry, report) -> run root [] "python3"
+      ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", entry, "--output", base </> report] "")
+      [("compactScalarAnswer", "compact-scalar-audit.json"),
+       ("typedScalarAnswer", "typed-scalar-audit.json")]
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "nestedApplication", "--output", base </> "nested-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
@@ -33,6 +52,10 @@ prepareCoreContinuation root = do
        "--entry", "asyncPayload", "--output", base </> "async-payload-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "tupleApplicationAnswer", "--output", base </> "tuple-application-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "tupleOverapplicationThunk", "--output", base </> "tuple-overapplication-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "tupleTailOverapplicationThunk", "--output", base </> "tuple-tail-overapplication-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "tupleApplicationFailure", "--output", base </> "tuple-application-failure-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
@@ -56,6 +79,12 @@ prepareCoreContinuation root = do
        "-hidir", base </> "native", "-o", base </> "native-oracle",
        "compiler/test-fixtures/CoreContinuationNative.hs", source] ""
   native <- run root [] (base </> "native-oracle") [] ""
-  unless (native == "108\n208\n42\n77\n43\n114\n114\n79\n2\n0\n1\n208\n")
+  unless (native == "108\n208\n42\n77\n43\n114\n114\n79\n2\n0\n1\n208\n208\n209\n209\n208\n8\n114\n114\n")
     (die "core-continuation native oracle disagreed with checkpoint results")
   writeFile (base </> "native-output.txt") native
+  _ <- run root [] ghc ["-O2", "-i./compiler/test-fixtures", "-odir", base </> "native",
+       "-hidir", base </> "native", "-o", base </> "lazy-native-oracle",
+       "compiler/test-fixtures/LazyIOCallbackNative.hs", lazySource] ""
+  lazyNative <- run root [] (base </> "lazy-native-oracle") [] ""
+  unless (lazyNative == "42\n77\n43\n44\n") (die "lazy IO callbacks disagree with native GHC")
+  writeFile (base </> "lazy-native-output.txt") lazyNative

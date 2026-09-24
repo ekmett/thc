@@ -9,6 +9,8 @@ import com.oracle.truffle.api.bytecode.BytecodeConfig
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -37,6 +39,69 @@ class CallMaskSegmentsTest {
         assertTrue(type.isInstance(target))
         type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
+    }
+
+    @Test fun parkingKeepsTheRequestEvenIfAnotherEvaluatorHasFinishedTheSegment() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val threads = Language.currentState().threads
+                val request = threads.send(Long.MIN_VALUE, "request identity")
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    b.beginReturn()
+                    b.beginYield(); b.emitLoadConstant(request); b.endYield()
+                    b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
+                val captured = CallSegmentSuspended(segment)
+                assertSame(request, captured.asyncRequest)
+                segment.value = 42L
+                segment.state = 2
+                val parked = BytecodeRoot.ParkCallMask.park(captured, MaskingState.UNMASKED,
+                    MaskingState.UNMASKED, Driver())
+                assertSame(request, parked.asyncRequest)
+                // A later evaluator may replace a segment's mutable answer. A
+                // missing immutable delivery token must not be recovered from it.
+                val changed = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
+                val noToken = CallSegmentSuspended(changed, asyncRequest = null)
+                changed.value = Calls.target(target, arrayOf(0L)) as ContinuationResult
+                assertThrows(RuntimeFault::class.java) {
+                    AsyncContinuations.publicSuspension(noToken, Driver())
+                }
+            }
+        }
+    }
+
+    @Test fun aClonedThunkTargetKeepsItsContinuationBodyIdentity() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginReturn(); b.emitLoadConstant(42L); b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val driver = Driver()
+                val warm = Thunk(target, null)
+                assertThrows(ThunkSuspended::class.java) { driver.force(warm) }
+                assertEquals(42L, driver.force(warm))
+                val call = NodeUtil.findAllNodeInstances(driver, DirectCallNode::class.java)
+                    .single { it.callTarget === target }
+                assertTrue(call.cloneCallTarget())
+                val fresh = Thunk(target, null)
+                assertThrows(ThunkSuspended::class.java) { driver.force(fresh) }
+                val saved = fresh.value as ContinuationResult
+                assertNotSame(target.rootNode, saved.continuationRootNode.sourceRootNode)
+                assertTrue((saved.continuationRootNode.sourceRootNode as GuestRoot).isSelf(target))
+                assertEquals(42L, driver.force(fresh))
+                assertEquals(2, fresh.state)
+            }
+        }
     }
 
     /** Exactly the private Core call stages, including root-entry and call-active locals. */

@@ -418,7 +418,8 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
 
 /** Replay-specific BytecodeLocal accessors, never a frame or guest payload. */
 internal class BytecodeTupleSlots(shape: TupleShape,
-    @field:CompilationFinal(dimensions = 1) private val slots: Array<com.oracle.truffle.api.bytecode.LocalAccessor>) : TupleDestination(shape) {
+    @field:CompilationFinal(dimensions = 1) private val slots: Array<com.oracle.truffle.api.bytecode.LocalAccessor>,
+    val capturesYield: Boolean = false) : TupleDestination(shape) {
     @ExplodeLoop private fun write(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode, output: HandoffStorage) {
         for (index in slots.indices) {
             if (shape.layout.isLong(index)) shape.layout.setLong(output, index, slots[index].getLong(node, frame))
@@ -468,13 +469,16 @@ internal class BytecodeTupleSlots(shape: TupleShape,
 internal class ContinuationTupleDestination(private val destination: BytecodeTupleSlots) :
     TupleDestination(destination.shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
+        if (result is TailYield) throw TupleCallYield(result.continuation, true, result.target)
         if (result is com.oracle.truffle.api.bytecode.ContinuationResult)
             throw TupleCallYield(result)
         destination.consume(frame, node, result)
     }
 }
 
-internal class TupleCallYield(val continuation: com.oracle.truffle.api.bytecode.ContinuationResult) :
+internal class TupleCallYield @JvmOverloads constructor(
+    val continuation: com.oracle.truffle.api.bytecode.ContinuationResult,
+    val tail: Boolean = false, val tailTarget: RootCallTarget? = null) :
     com.oracle.truffle.api.exception.AbstractTruffleException("Internal tuple call suspension", null, 0, null)
 
 /** A completion token names a thread-local slab; copy and release it before cross-thread publication. */

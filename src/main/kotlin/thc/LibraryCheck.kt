@@ -133,7 +133,7 @@ fun main(args: Array<String>) {
                     println("VERIFIED_LIBRARY\t$backend\t$phase\t$name\t$input\t$actual")
                 }
             }
-            Context.newBuilder("thc").allowExperimentalOptions(true)
+            Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
                 .option("engine.Compilation", "false").build().use { context ->
                 if (diagnostic) {
                     val failure = try {

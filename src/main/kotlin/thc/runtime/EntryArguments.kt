@@ -13,7 +13,9 @@ import com.oracle.truffle.api.nodes.Node
 internal class EntryArguments(target: RootCallTarget, metrics: Metrics,
                               knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
     @field:CompilationFinal(dimensions = 1)
-    private val positions: IntArray = (target.rootNode as? GuestRoot)?.let { root ->
+    private val positions: IntArray = (target.rootNode as? GuestRoot)?.takeUnless {
+        it is BytecodeRoot && it.isAsyncEnabled
+    }?.let { root ->
         root.entryStrict.indices.filter { root.entryStrict[it] && root.inputLayout?.isTuple(it) != true &&
             (it < prefixSize || knownEvaluated.getOrNull(it - prefixSize) != true)
         }.map { ArgumentLayout.offset(root.inputLayout, it) + root.entryArgumentOffset }.toIntArray()
@@ -33,6 +35,7 @@ internal class IndirectEntryArguments(metrics: Metrics) : Node() {
     @Child private var force = Force(metrics)
     fun execute(frame: VirtualFrame, target: RootCallTarget, packet: Array<Any?>) {
         val root = target.rootNode as? GuestRoot ?: return
+        if (root is BytecodeRoot && root.isAsyncEnabled) return
         // These positions are physical and already exclude zero-storage logical
         // inputs. Iterating logical arity here also invites speculative range
         // checks against a shorter compact packet before any marked operand runs.

@@ -134,4 +134,54 @@ class EntrySelfCallTest {
             check(0L)
         }
     }
+
+    @Test fun asyncAncestorReentryDefersColdStrictFormalUntilCapturedPrologue() {
+        val remaining = variable("remaining")
+        val a = binding("a", lambda(listOf(parameter("unused", data), parameter("remaining")),
+            choose(remaining, integer(73), apply(variable("b"), listOf(primitive("-#", remaining, integer(1))))), listOf(true, false)))
+        val b = binding("b", lambda(listOf(parameter("remaining")), caseDefault(variable("a"), "unknown",
+            apply(variable("unknown"), listOf(delayedBox(remaining), remaining), listOf(true, false)))))
+        val makeBox = binding("makeBox", lambda(listOf(parameter("input")), box(variable("input")), result = data))
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val module = mapOf("bindings" to listOf(a, b, makeBox), "instrument" to true, "constructors" to listOf(
+                    mapOf("id" to "Box", "name" to "Box", "arity" to 1, "kind" to "boxed",
+                        "fieldReps" to listOf(listOf("IntRep")), "strictFields" to listOf(false), "fieldLifted" to listOf(false))))
+                val program = (0 until 64).asSequence().map { BytecodeProgram(language, module, true) }
+                    .first { candidate ->
+                        val left = (candidate.entryTarget("a").rootNode as GuestRoot).mask
+                        val right = (candidate.entryTarget("b").rootNode as GuestRoot).mask
+                        left and right == 0L
+                    }
+                val initial = call(program, "makeBox", Long.MIN_VALUE)
+                assertEquals(73L, call(program, "a", initial, 2L))
+                assertEquals(2L, count(program, "selfTailReentries"), "Both cold returns must use the ancestor packet")
+                assertEquals(2L, count(program, "thunkEvaluations"), "Each strict delayed Box is demanded once")
+                assertEquals(0L, count(program, "trampolineIterations"))
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun asyncDirectSelfCallKeepsTheLocalLoopWithoutTailPackets() {
+        val remaining = variable("remaining")
+        val loop = binding("loop", lambda(listOf(parameter("remaining")),
+            choose(remaining, integer(73), apply(variable("loop"),
+                listOf(primitive("-#", remaining, integer(1)))))))
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val program = BytecodeProgram(language,
+                    mapOf("bindings" to listOf(loop), "instrument" to true), true)
+                assertEquals(73L, call(program, "loop", 10L))
+                compile(program.entryTarget("loop"))
+                assertEquals(73L, call(program, "loop", 10_000L))
+                assertEquals(0L, count(program, "selfTailReentries"),
+                    "Direct self calls must use local parallel moves rather than tail packets")
+                assertEquals(0L, count(program, "trampolineIterations"))
+            } finally { context.leave() }
+        }
+    }
 }

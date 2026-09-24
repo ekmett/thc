@@ -148,6 +148,40 @@ class EntryContractTest {
         assertThrows(RuntimeFault::class.java) { CoreEntries.binding(binding("bad", rhs) + mapOf("entryStrict" to listOf(false))) }
     }
 
+    @Test fun asyncBytecodeCalleeDemandsUnusedStrictFormalsAndPapPrefixes() {
+        val worker = binding("worker", lambda(listOf(parameter("ignored", data), parameter("answer")),
+            variable("answer"), listOf(true, false)))
+        val indirect = binding("indirect", lambda(listOf(parameter("fn", closure), parameter("tree", data), parameter("answer")),
+            apply(variable("fn"), listOf(variable("tree"), variable("answer")), listOf(true, false))))
+        val generic = binding("generic", lambda(listOf(parameter("input")),
+            apply(variable("indirect"), listOf(variable("worker"), delayedBox(variable("input")), variable("input")),
+                listOf(true, true, false))))
+        val partial = binding("partial", lambda(listOf(parameter("input")),
+            apply(variable("worker"), listOf(delayedBox(variable("input"))), listOf(true)), result = closure))
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val module = mapOf("bindings" to listOf(worker, indirect, generic, partial), "instrument" to true,
+                    "constructors" to listOf(mapOf("id" to "Box", "name" to "Box", "arity" to 1,
+                        "kind" to "boxed", "fieldReps" to listOf(listOf("IntRep")),
+                        "strictFields" to listOf(false), "fieldLifted" to listOf(false))))
+                val program = BytecodeProgram(language, module, true)
+                assertThrows(RuntimeFault::class.java) { run(program, "worker", 7L, 9L) }
+                assertEquals(7L, run(program, "generic", 7L))
+                assertEquals(1L, count(program, "thunkEvaluations"), "Unused strict formal must still be demanded")
+                val pap = run(program, "partial", 3_000_000_017L) as Closure
+                assertEquals(1L, count(program, "thunkEvaluations"), "PAP construction remains lazy")
+                assertEquals(5L, call(program, pap, 5L))
+                assertEquals(2L, count(program, "thunkEvaluations"), "Saturation demands the stored prefix once")
+                assertEquals(6L, call(program, pap, 6L))
+                assertEquals(2L, count(program, "thunkEvaluations"), "The evaluated PAP prefix is shared")
+                compile(program.entryTarget("worker"))
+                assertEquals(11L, run(program, "generic", 11L))
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun megamorphicCallsEnforceAndShareStrictPapPrefixes() {
         val workers = (0..3).map { index -> binding("worker$index",
             lambda(listOf(parameter("tree", data), parameter("extra")),

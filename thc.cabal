@@ -16,6 +16,8 @@ extra-source-files:
   compiler/test-fixtures/MaskFunctionNative.hs
   compiler/test-fixtures/BoxedArrayExtensionsAudit.hs
   compiler/test-fixtures/BoxedArrayExtensionsNative.hs
+  compiler/test-fixtures/LazyIOCallbackAudit.hs
+  compiler/test-fixtures/LazyIOCallbackNative.hs
   compiler/target-layout.c
   compiler/test-fixtures/OriginalStackAudit.hs
   compiler/test-fixtures/OriginalStackAuditNative.hs
@@ -215,6 +217,9 @@ executable thc-fixtures
   other-modules:
     AggregateFixtures
     ContinuationFixtures
+    LiveAsyncFixtures
+    ThreadAsyncFixtures
+    UncaughtSelfFixtures
     MaskFunctionFixtures
     FixtureSupport
     WordFloatingFixtures

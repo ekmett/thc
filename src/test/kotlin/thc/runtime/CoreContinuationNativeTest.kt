@@ -51,6 +51,38 @@ class CoreContinuationNativeTest {
         try { return action() } finally { context.leave() }
     }
 
+    @Test fun compiledCoreRootPollParksTheClaimedRequestAndResumesItsFrame() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val program = BytecodeProgram(language, CoreModules.reachable(module, "applicationAnswer"), true)
+                val thunk = program.entryValue("applicationAnswer") as Thunk
+                val target = thunk.target!!
+                val warm = Calls.target(target, arrayOf(0L)) as DataValue
+                assertEquals(208L, warm.layout.readLong(warm, 0))
+                compile(target)
+                val threads = Language.currentState().threads
+                val id = threads.enterCurrent()
+                try {
+                    val request = threads.send(id, "compiled poll")
+                    val driver = Driver()
+                    assertSame(thunk, assertThrows(ThunkSuspended::class.java) { driver.force(thunk) }.thunk)
+                    assertEquals(AsyncRequestState.CLAIMED, request.state)
+                    assertTrue(request.compiledCapture, "Installed bytecode must notice the request before its cold mailbox call")
+                    assertSame(request, AsyncContinuations.request(thunk.value as ContinuationResult))
+                    request.acknowledge()
+                    val answer = driver.force(thunk) as DataValue
+                    assertEquals(208L, answer.layout.readLong(answer, 0))
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                    assertEquals(2, thunk.state)
+                } finally { threads.leaveCurrent() }
+            }
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun linkedWithPayload(module: Map<String, Any?>, entry: String): Map<String, Any?> {
         val action = CoreModules.reachable(module, entry)
@@ -124,7 +156,162 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test fun applicationRejectsUnownedNestedRootAndPreservesMaskedCarrier() {
+    @Test fun originalOverapplicationKeepsItsSavedSuffixAfterTheFirstCalleeYields() {
+        assertEquals("209", File(root, "build/core-continuation/native-output.txt").readLines()[14])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        val binding = (module["bindings"] as List<Map<String, Any?>>).single {
+            (it["id"] as String).endsWith(".overapplicationAnswer")
+        }
+        fun hasOverapplication(value: Any?): Boolean = when (value) {
+            is List<*> -> (value.firstOrNull() == "app" &&
+                ((value.getOrNull(1) as? List<*>)?.getOrNull(1) as? String)?.endsWith(".stagedFunction") == true &&
+                (value.getOrNull(2) as? List<*>)?.size == 2) || value.any(::hasOverapplication)
+            else -> false
+        }
+        assertTrue(hasOverapplication(binding["expr"]), "GHC must retain a two-argument call to the one-arity prefix")
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val linked = CoreModules.reachable(module, "overapplicationThunk", strictLink = true)
+                val driver = Driver()
+                for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val answer = driver.force(ordinary.entryValue("overapplicationThunk") as Thunk) as DataValue
+                    assertEquals(209L, answer.layout.readLong(answer, 0))
+                }
+                val checkpoint = BytecodeCheckpoint()
+                val program = BytecodeProgram(language, linked, checkpoint)
+                val parent = program.entryValue("overapplicationThunk") as Thunk
+                val stage = program.entryTarget("stagedFunction")
+                assertEquals(1, (program.entryValue("stagedFunction") as Closure).arity)
+                assertTrue(Calls.target(parent.target!!, arrayOf(0L)) is DataValue)
+                compile(parent.target!!)
+                checkpoint.armed = true
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                val caller = parent.value as ContinuationResult
+                val segment = (caller.result as CallSegmentSuspended).segment
+                var current = segment
+                val savedRoots = mutableListOf<BytecodeRoot>()
+                while (true) {
+                    val continuation = current.value as? ContinuationResult ?: break
+                    savedRoots += continuation.continuationRootNode.sourceRootNode as BytecodeRoot
+                    current = (continuation.result as? CallSegmentSuspended)?.segment ?: break
+                }
+                assertTrue(savedRoots.any { it.isSelf(stage) },
+                    "The saved suffix must retain the exact one-arity callee: $savedRoots")
+                assertEquals(1, checkpoint.visits.get())
+                val answer = driver.force(parent) as DataValue
+                assertEquals(209L, answer.layout.readLong(answer, 0))
+                assertEquals(1, checkpoint.visits.get(), "The first stage must not be called again on suffix resume")
+                assertEquals(2, segment.state)
+            }
+        }
+    }
+
+    @Test fun exactTailCallerForwardsTheFinalOverapplicationContinuation() {
+        assertEquals("208", File(root, "build/core-continuation/native-output.txt").readLines()[15])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val linked = CoreModules.reachable(module, "overapplicationTail", strictLink = true)
+                val driver = Driver()
+                val checkpoint = BytecodeCheckpoint()
+                val program = BytecodeProgram(language, linked, checkpoint)
+                val parent = program.entryValue("overapplicationTail") as Thunk
+                val target = parent.target!!
+                assertTrue(Calls.target(target, arrayOf(0L)) is DataValue)
+                compile(target)
+                checkpoint.armed = true
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(1, checkpoint.visits.get())
+                val answer = driver.force(parent) as DataValue
+                assertEquals(208L, answer.layout.readLong(answer, 0))
+                assertEquals(1, checkpoint.visits.get())
+            }
+        }
+    }
+
+    @Test fun directlyOverappliedTailRootKeepsItsSuffixAfterYield() {
+        assertEquals("8", File(root, "build/core-continuation/native-output.txt").readLines()[16])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val direct = (module["bindings"] as List<Map<String, Any?>>).single {
+            (it["id"] as String).endsWith(".directOverapplicationTail")
+        }
+        assertTrue((direct["expr"] as List<*>).toString().contains("stagedFunction"))
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val linked = CoreModules.reachable(module, "directOverapplicationTailThunk", strictLink = true)
+                val checkpoint = BytecodeCheckpoint()
+                val program = BytecodeProgram(language, linked, checkpoint)
+                val parent = program.entryValue("directOverapplicationTailThunk") as Thunk
+                val driver = Driver()
+                val warm = Calls.target(parent.target!!, arrayOf(0L)) as DataValue
+                assertEquals(8L, warm.layout.readLong(warm, 0))
+                compile(parent.target!!)
+                checkpoint.armed = true
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                val answer = driver.force(parent) as DataValue
+                assertEquals(8L, answer.layout.readLong(answer, 0))
+                assertEquals(1, checkpoint.visits.get())
+            }
+        }
+    }
+
+    @Test fun compactAndTypedScalarCallsResumeTheirExactCalleeWithoutReplayingInputs() {
+        val oracle = File(root, "build/core-continuation/native-output.txt").readLines()
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        data class Case(val line: Int, val entry: String, val callee: String, val expected: Long)
+        for ((line, entry, callee, expected) in listOf(
+            Case(12, "compactScalarAnswer", "compactScalarDelayed", 208L),
+            Case(13, "typedScalarAnswer", "typedScalarDelayed", 209L))) {
+            assertEquals(expected.toString(), oracle[line])
+            executionContext().use { context ->
+                context.initialize("thc")
+                entered(context) {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val linked = CoreModules.reachable(module, entry, strictLink = true)
+                    val driver = Driver()
+                    for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                        val answer = driver.force(ordinary.entryValue(entry) as Thunk) as DataValue
+                        assertEquals(expected, answer.layout.readLong(answer, 0), "$entry ordinary")
+                    }
+                    val checkpoint = BytecodeCheckpoint()
+                    val program = BytecodeProgram(language, linked, checkpoint)
+                    val parent = program.entryValue(entry) as Thunk
+                    val target = parent.target!!
+                    val warm = Calls.target(target, arrayOf(0L)) as DataValue
+                    assertEquals(expected, warm.layout.readLong(warm, 0))
+                    compile(target)
+                    val compiled = Calls.target(target, arrayOf(0L)) as DataValue
+                    assertEquals(expected, compiled.layout.readLong(compiled, 0))
+                    checkpoint.armed = true
+                    assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    val suspended = (parent.value as ContinuationResult).result as CallSegmentSuspended
+                    val segment = suspended.segment
+                    val calleeTarget = program.entryTarget(callee)
+                    assertTrue(((segment.value as ContinuationResult).continuationRootNode.sourceRootNode as BytecodeRoot)
+                        .isSelf(calleeTarget), "$entry must capture its actual typed/compact callee")
+                    assertEquals(1, checkpoint.visits.get(), "$entry input/callee prefix runs once")
+                    val result = driver.force(parent) as DataValue
+                    assertEquals(expected, result.layout.readLong(result, 0))
+                    assertEquals(1, checkpoint.visits.get(), "$entry must not replay its callee")
+                    assertEquals(2, segment.state)
+                    assertEquals(2, parent.state)
+                }
+            }
+        }
+    }
+
+    @Test fun nestedExactTailRootForwardsYieldAndPreservesMaskedCarrier() {
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -139,9 +326,10 @@ class CoreContinuationNativeTest {
                 }
                 val driver = Driver()
                 val (_, nested) = checked("nestedApplication")
-                val wrongRoot = assertThrows(IllegalStateException::class.java) { driver.force(nested) }
-                assertTrue(wrongRoot.message!!.contains("unrelated bytecode continuation"))
-                assertEquals(4, nested.state, "An unowned nested root cannot be replayed")
+                assertSame(nested, assertThrows(ThunkSuspended::class.java) { driver.force(nested) }.thunk)
+                val nestedAnswer = driver.force(nested) as DataValue
+                assertEquals(208L, nestedAnswer.layout.readLong(nestedAnswer, 0))
+                assertEquals(2, nested.state, "The exact nested tail root completes without replay")
 
                 val (_, masked) = checked("applicationAnswer")
                 val maskNode = masked.target!!.rootNode
@@ -421,7 +609,7 @@ class CoreContinuationNativeTest {
                     b.beginBlock()
                     b.beginTryCatch()
                     b.beginStoreLocal(result)
-                    b.beginForceLocal(metrics, local, true); b.emitLoadLocal(local); b.endForceLocal()
+                    b.beginForceLocal(metrics, local, true, false); b.emitLoadLocal(local); b.endForceLocal()
                     b.endStoreLocal()
                     b.beginBlock()
                     b.beginStoreLocal(suspended)
@@ -457,7 +645,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209", "208", "8", "114", "114"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -506,8 +694,53 @@ class CoreContinuationNativeTest {
         }
     }
 
+    @Test fun lazyOriginalActionAndHandlerHeadsSuspendInsideTheirCatchScopes() {
+        checkLazyCallbacks(listOf("catchLazyHandlerHead" to 77L, "catchLazyActionHead" to 42L))
+    }
+
+    @Test fun keepAliveBodySuspendsAndResumesWithItsSavedReference() {
+        checkLazyCallbacks(listOf("keepAliveScalar" to 43L, "keepAliveTuple" to 44L), compiled = true)
+    }
+
+    private fun checkLazyCallbacks(entries: List<Pair<String, Long>>, compiled: Boolean = false) {
+        val oracle = File(root, "build/core-continuation/lazy-native-output.txt").readLines()
+        assertEquals(listOf("42", "77", "43", "44"), oracle)
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/LazyIOCallbackAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            for ((name, expected) in entries) {
+                val linked = CoreModules.reachable(module, name, strictLink = true)
+                val checkpoint = BytecodeCheckpoint()
+                val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+                val parent = entered(context) { program.entryValue(name) as Thunk }
+                entered(context) {
+                    if (compiled) {
+                        val target = parent.target!!
+                        val warm = Calls.target(target, arrayOf(0L)) as DataValue
+                        assertEquals(expected, warm.layout.readLong(warm, 0))
+                        compile(target)
+                    }
+                    checkpoint.armed = true
+                    assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    if (compiled) assertTrue(checkpoint.compiledVisits.get() > 0,
+                        "$name checkpoint must run in installed guest code")
+                    assertEquals(1, checkpoint.visits.get(), "$name head checkpoint")
+                    assertEquals(5, parent.state, "$name must retain its captured bytecode frame")
+                    val answer = driver.force(parent) as DataValue
+                    assertEquals(expected, answer.layout.readLong(answer, 0), name)
+                    assertEquals(1, checkpoint.visits.get(), "$name head prefix must not replay")
+                    assertEquals(2, parent.state, "$name must publish completion")
+                    assertEquals(0, language.handoffState.get().results.depth)
+                }
+            }
+        }
+    }
+
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209", "208", "8", "114", "114"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -1194,6 +1427,121 @@ class CoreContinuationNativeTest {
         }
     }
 
+    @Test fun originalTupleOverapplicationKeepsItsSuffixAndNestedFields() {
+        assertEquals("114", File(root, "build/core-continuation/native-output.txt").readLines()[17])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val binding = (module["bindings"] as List<Map<String, Any?>>).single {
+            (it["id"] as String).endsWith(".tupleOverapplicationAnswer")
+        }
+        fun hasOverapplication(value: Any?): Boolean = when (value) {
+            is List<*> -> (value.firstOrNull() == "app" &&
+                ((value.getOrNull(1) as? List<*>)?.getOrNull(1) as? String)?.endsWith(".tupleStage") == true &&
+                (value.getOrNull(2) as? List<*>)?.size == 2) || value.any(::hasOverapplication)
+            else -> false
+        }
+        assertTrue(hasOverapplication(binding["expr"]), "GHC must retain a two-argument tuple call")
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "tupleOverapplicationThunk", strictLink = true)
+            entered(context) {
+                for (program in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val result = driver.force(program.entryValue("tupleOverapplicationThunk") as Thunk) as DataValue
+                    assertEquals(114L, result.layout.readLong(result, 0))
+                }
+            }
+            val checkpoint = BytecodeCheckpoint()
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            val parent = entered(context) { program.entryValue("tupleOverapplicationThunk") as Thunk }
+            entered(context) {
+                val target = parent.target!!
+                val firstStage = program.entryValue("tupleStage") as Closure
+                assertEquals(1, firstStage.arity)
+                assertTrue(Calls.target(firstStage.target, arrayOf(0L, 6L)) is Closure)
+                compile(firstStage.target)
+                val ordinary = Calls.target(target, arrayOf(0L)) as DataValue
+                assertEquals(114L, ordinary.layout.readLong(ordinary, 0))
+                compile(target)
+            }
+            checkpoint.armed = true
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(1, checkpoint.visits.get())
+                assertTrue(checkpoint.compiledVisits.get() > 0, "The first exact stage yielded from installed code")
+            }
+            Executors.newSingleThreadExecutor().use { pool ->
+                val resumed = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        val result = driver.force(parent) as DataValue
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        result.layout.readLong(result, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(114L, resumed.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(1, checkpoint.visits.get(), "The first stage must not replay after the tuple suffix")
+            assertEquals(2, parent.state)
+        }
+    }
+
+    @Test fun originalTailTupleOverapplicationForwardsItsFinalCalleeYield() {
+        assertEquals("114", File(root, "build/core-continuation/native-output.txt").readLines()[18])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val tail = (module["bindings"] as List<Map<String, Any?>>).single {
+            (it["id"] as String).endsWith(".tupleTailOverapplication")
+        }
+        val body = (tail["expr"] as List<*>)[2] as List<*>
+        assertEquals("app", body[0])
+        assertEquals(2, (body[2] as List<*>).size, "GHC retained a tuple tail overapplication")
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "tupleTailOverapplicationThunk", strictLink = true)
+            entered(context) {
+                for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val answer = driver.force(ordinary.entryValue("tupleTailOverapplicationThunk") as Thunk) as DataValue
+                    assertEquals(114L, answer.layout.readLong(answer, 0))
+                }
+            }
+            val checkpoint = BytecodeCheckpoint()
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            val parent = entered(context) { program.entryValue("tupleTailOverapplicationThunk") as Thunk }
+            entered(context) {
+                val target = parent.target!!
+                val ordinary = Calls.target(target, arrayOf(0L)) as DataValue
+                assertEquals(114L, ordinary.layout.readLong(ordinary, 0))
+                compile(target)
+                checkpoint.armed = true
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(1, checkpoint.visits.get())
+            }
+            Executors.newSingleThreadExecutor().use { pool ->
+                val result = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        val answer = driver.force(parent) as DataValue
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        answer.layout.readLong(answer, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(114L, result.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(1, checkpoint.visits.get(), "The tail prefix must not replay")
+            assertEquals(2, parent.state)
+        }
+    }
+
     @Test fun nestedTupleResultIsReleasedBeforePostCallGuestFailure() {
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -1428,7 +1776,7 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test fun malformedResumeAndUncapturedCallStayClosed() {
+    @Test fun malformedResumeStaysClosedAndExactTailCallCanSuspend() {
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -1451,10 +1799,12 @@ class CoreContinuationNativeTest {
                 val other = BytecodeProgram(language, CoreModules.reachable(module, "uncaptured"),
                     BytecodeCheckpoint().also { it.armed = true })
                 val uncaptured = other.entryValue("uncaptured") as Thunk
-                assertThrows(IllegalStateException::class.java) {
+                assertSame(uncaptured, assertThrows(ThunkSuspended::class.java) {
                     Calls.target(other.hostEntryTarget(0), arrayOf(uncaptured))
-                }
-                assertEquals(4, uncaptured.state)
+                }.thunk)
+                val answer = Calls.target(other.hostEntryTarget(0), arrayOf(uncaptured)) as DataValue
+                assertEquals(8L, answer.layout.readLong(answer, 0))
+                assertEquals(2, uncaptured.state)
             } finally { context.leave() }
         }
     }
@@ -1491,6 +1841,47 @@ class CoreContinuationNativeTest {
                     assertEquals(expected, caught.layout.readLong(caught, 0))
                 }
             } finally { context.leave() }
+        }
+    }
+
+    @Test fun asyncEnabledOrdinaryCoreKeepsTypedTuplesAndStagedCalls() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        val oracle = File(root, "build/core-continuation/native-output.txt").readLines()
+        // These are ordinary GHC roots with no async request. The public parser
+        // enables continuation capture even for their tuple and staged-call paths.
+        val cases = listOf(
+            Triple("applicationAnswer", 1, 208L),
+            Triple("typedScalarAnswer", 13, 209L),
+            Triple("overapplicationThunk", 14, 209L),
+            Triple("tupleApplicationAnswer", 5, 114L),
+            Triple("tupleOverapplicationThunk", 6, 114L))
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for ((entry, oracleLine, expected) in cases) {
+                    assertEquals(expected.toString(), oracle[oracleLine], "$entry native result")
+                    val linked = CoreModules.reachable(module, entry, strictLink = true)
+                    val ordinary = BytecodeProgram(language, linked)
+                    val async = BytecodeProgram(language, linked, true)
+                    fun result(program: BytecodeProgram): Long {
+                        val target = program.entryTarget(entry)
+                        val answer = Calls.target(target, arrayOf(0L)) as DataValue
+                        return answer.layout.readLong(answer, 0)
+                    }
+                    assertEquals(expected, result(ordinary), "$entry ordinary interpreted")
+                    assertEquals(expected, result(async), "$entry async interpreted")
+                    val target = async.entryTarget(entry)
+                    assertTrue((target.rootNode as BytecodeRoot).isAsyncEnabled, "$entry uses public parser mode")
+                    compile(target)
+                    val before = (async.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    assertEquals(expected, result(async), "$entry async compiled")
+                    assertTrue((async.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
+                        "$entry must enter installed guest code")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), entry)
+                }
+            }
         }
     }
 }

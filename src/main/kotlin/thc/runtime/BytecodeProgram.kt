@@ -19,8 +19,14 @@ import thc.Language
  * same selective captures, lazy update protocol and PAP convention as the AST backend.
  */
 class BytecodeProgram internal constructor(private val language: Language, moduleData: Map<String, Any?>,
-                                           private val checkpoint: BytecodeCheckpoint?) : ExecutableProgram {
-    constructor(language: Language, moduleData: Map<String, Any?>) : this(language, moduleData, null)
+                                           private val checkpoint: BytecodeCheckpoint?,
+                                           private val enableAsync: Boolean) : ExecutableProgram {
+    constructor(language: Language, moduleData: Map<String, Any?>) : this(language, moduleData, null, false)
+    constructor(language: Language, moduleData: Map<String, Any?>, enableAsync: Boolean) :
+        this(language, moduleData, null, enableAsync)
+    internal constructor(language: Language, moduleData: Map<String, Any?>, checkpoint: BytecodeCheckpoint) :
+        this(language, moduleData, checkpoint, false)
+    private val resumable = checkpoint != null || enableAsync
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val sources = CoreSources(moduleData)
@@ -40,6 +46,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         else proof.copy(evaluated = binding["lifted"] == false || rhs[0] in listOf("lam", "lit", "con", "void"))
     }
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
+    private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val roots = arrayListOf<BytecodeRoot>()
     private var nextLocal = 0
@@ -47,7 +54,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     private data class Local(val id: Int, val name: String, val primitive: Boolean,
                              val proof: CoreRepresentation = CoreRepresentation.UNKNOWN,
-                             val cell: Boolean = false, val entry: BooleanArray? = null) {
+                             val cell: Boolean = false, val entry: BooleanArray? = null,
+                             val arityCertificate: CoreApplicationCertificates.Arity? = null) {
         // The denoted value can be primitive while a pre-publication capture
         // still holds its recursive cell. Raw captures must retain that cell.
         val directLong: Boolean get() = !cell && proof.isLong && proof.evaluated
@@ -135,8 +143,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private fun tupleExpression(proof: CoreRepresentation, action: (Emission, List<BytecodeLocal>) -> Unit): Expression =
         ProvenExpression(ResultExpression { e, destination -> action(e, destination ?: throw RuntimeFault("Tuple result requires a destination")) }, proof.copy(evaluated = true))
-    private fun tupleSlots(shape: TupleShape, locals: List<BytecodeLocal>) =
-        BytecodeTupleSlots(shape, locals.map(LocalAccessor::constantOf).toTypedArray())
+    private fun tupleSlots(shape: TupleShape, locals: List<BytecodeLocal>, capturesYield: Boolean = false) =
+        BytecodeTupleSlots(shape, locals.map(LocalAccessor::constantOf).toTypedArray(), capturesYield)
     private class LocalExpression(val local: Local, val resolve: Boolean) : Expression {
         override val proof get() = local.proof
         override fun emit(emission: Emission) {
@@ -192,7 +200,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val initializer = build("Core module initialization", scope.function, body, forceResult = false)
         Calls.target(initializer, arrayOf(0L))
         bindings.forEach { binding ->
-            CoreFunctionIdentity.install(moduleData, binding, globals.getValue(binding["id"] as String).read())
+            CoreFunctionIdentity.install(moduleData, binding, globals.getValue(binding["id"] as String).read(),
+                globalArityCertificates)
         }
     }
 
@@ -228,8 +237,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     private fun bind(scope: Scope, name: String, primitive: Boolean,
                      proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
-                     entry: BooleanArray? = null): Local =
-        Local(nextLocal++, name, !cell && (if (proof.present) proof.isLong else primitive), proof, cell, entry).also { scope.bindLocal(name, it) }
+                     entry: BooleanArray? = null,
+                     arityCertificate: CoreApplicationCertificates.Arity? = null): Local =
+        Local(nextLocal++, name, !cell && (if (proof.present) proof.isLong else primitive), proof, cell, entry,
+            arityCertificate).also { scope.bindLocal(name, it) }
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
@@ -264,7 +275,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
         val captureSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
         captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
-        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry) }
+        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
         context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
             captureSources.map { it.directLong }.toBooleanArray(),
             captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
@@ -285,13 +296,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else emptyList()
                 scope.bindTuple(arg["id"] as String, proof, fields)
                 null
-            } else if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true, proof).also {
+            } else if (arg["id"] in free || enableAsync && context.entryStrict[index]) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true, proof).also {
                 physicalArguments += offset to it
             } else null
         }
         context.typedArguments = physicalArguments
         val compiled = compile(expression, scope, true)
-        if (compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
+        if ((!enableAsync || context.entryStrict.none { it }) && compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
             ::dataLayout, sources, compiled.source)
         if ((compiled.proof.isSum || resultProof.isSum) && (!compiled.proof.isSum || !resultProof.isSum))
@@ -311,7 +322,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginRoot()
             val e = Emission(b)
             b.emitEnterRoot(metrics)
-            if (checkpoint != null) {
+            if (resumable) {
                 // Only proof roots pay for a mask snapshot. A yielded caller
                 // parks to this root's entry mask before its frame is captured.
                 e.checkpointRootEntry = b.createLocal("checkpoint root entry mask", "object").also {
@@ -326,9 +337,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val bloom = LocalAccessor.constantOf(b.createLocal("typed input bloom", "primitive"))
                 typedBloom = bloom
                 val physical = context.typedArguments
+                val deferredStrict = context.arguments.mapIndexedNotNull { index, local ->
+                    if (enableAsync && context.entryStrict[index] && local != null && !local.primitive) local.id else null
+                }.toSet()
                 val slots = BytecodeTypedInputSlots(typed, bloom,
                     physical.map { LocalAccessor.constantOf(e.locals.getValue(it.second.id)) }.toTypedArray(),
-                    physical.map { it.first }.toIntArray(), physical.map { it.second.proof }.toTypedArray(),
+                    physical.map { it.first }.toIntArray(), physical.map {
+                        if (it.second.id in deferredStrict) it.second.proof.copy(evaluated = false) else it.second.proof
+                    }.toTypedArray(),
                     context.captureLayout,
                     context.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(),
                     context.captures.map { if (it.cell) CoreRepresentation.UNKNOWN else it.proof }.toTypedArray())
@@ -344,7 +360,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    restoreArgument(e, local) { b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset) }
+                    restoreArgument(e, local, enableAsync && context.entryStrict[index]) {
+                        b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset)
+                    }
                 } }
             }
             if (context.mayLoop) {
@@ -353,6 +371,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.beginBlock()
                 e.continueLabel = b.createLabel()
             }
+            if (enableAsync) emitAsyncPoll(e)
+            if (enableAsync) emitEntryStrictDemands(e, context)
             val tuple = context.tuple
             if (tuple != null) {
                 val result = List(tuple.width) { b.createLocal("tuple result $it", null) }
@@ -365,6 +385,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             if (context.mayLoop) {
                 b.emitLabel(e.continueLabel!!)
+                if (enableAsync) emitAsyncPoll(e)
                 b.endBlock()
                 b.endWhile()
                 // The loop condition is true; retain an explicit terminating operation for the builder.
@@ -376,6 +397,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             source?.let { BytecodeSources.end(b) }
         }.getNode(0)
         root.setLabel(label)
+        root.configureAsync(enableAsync)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
         root.configureInput(context.inputLayout)
         root.configureTypedInput(context.typedInput)
@@ -386,10 +408,122 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         return root.callTarget
     }
 
-    /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
-    private fun restoreArgument(e: Emission, local: Local, value: () -> Unit) {
+    /** The cold Yield carries the exact bytecode frame; ordinary polls allocate no packet. */
+    private fun emitAsyncPoll(e: Emission) {
         val b = e.builder
-        val reference = if (local.cell) null else local.proof.referenceCarrier()
+        b.beginBlock()
+        val request = b.createLocal("pending async request", "object")
+        val active = b.createLocal("async logical mask", "object")
+        b.beginIfThen()
+        b.emitPollAsync(request)
+        b.beginBlock()
+        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkAsyncMask()
+        b.emitLoadLocal(request)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.endParkAsyncMask()
+        b.endYield()
+        b.emitLoadLocal(active)
+        b.endReenterCallMask()
+        b.endBlock()
+        b.endIfThen()
+        b.endBlock()
+    }
+
+    /** Blocking MVar operands are evaluated once; only an uncommitted cell request is retried. */
+    private fun emitBlockingMVar(e: Emission, operands: List<Expression>,
+                                 result: Boolean, operation: (List<BytecodeLocal>) -> Unit) {
+        val b = e.builder
+        b.beginBlock()
+        val values = operands.mapIndexed { index, operand ->
+            b.createLocal("MVar operand $index", null).also {
+                b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+            }
+        }
+        val retry = b.createLocal("MVar request pending", "primitive")
+        val request = b.createLocal("MVar async request", "object")
+        val active = b.createLocal("MVar logical mask", "object")
+        val discard = b.createLocal("MVar resume value", "object")
+        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
+        b.beginWhile()
+        b.emitLoadLocal(retry)
+        b.beginBlock()
+        b.beginTryCatch()
+        b.beginBlock()
+        operation(values)
+        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal()
+        b.endBlock()
+        b.beginBlock()
+        b.beginStoreLocal(request)
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+        b.endStoreLocal()
+        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginStoreLocal(discard)
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkAsyncMask()
+        b.emitLoadLocal(request)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.endParkAsyncMask()
+        b.endYield()
+        b.emitLoadLocal(active)
+        b.endReenterCallMask()
+        b.endStoreLocal()
+        b.endBlock()
+        b.endTryCatch()
+        b.endBlock()
+        b.endWhile()
+        if (result) b.emitLoadConstant(Unit)
+        b.endBlock()
+    }
+
+    /** Only a foreign owner wait may restart; the producer/local operand stays saved. */
+    private fun emitOwnerWaitRetry(e: Emission, attempt: () -> Unit) {
+        if (!enableAsync) { attempt(); return }
+        val b = e.builder
+        b.beginBlock()
+        val retry = b.createLocal("owner wait pending", "primitive")
+        val request = b.createLocal("owner wait async request", "object")
+        val active = b.createLocal("owner wait logical mask", "object")
+        val discard = b.createLocal("owner wait resume value", "object")
+        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
+        b.beginWhile()
+        b.emitLoadLocal(retry)
+        b.beginBlock()
+        b.beginTryCatch()
+        b.beginBlock()
+        attempt()
+        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal()
+        b.endBlock()
+        b.beginBlock()
+        b.beginStoreLocal(request)
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+        b.endStoreLocal()
+        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginStoreLocal(discard)
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkAsyncMask()
+        b.emitLoadLocal(request)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.endParkAsyncMask()
+        b.endYield()
+        b.emitLoadLocal(active)
+        b.endReenterCallMask()
+        b.endStoreLocal()
+        b.endBlock()
+        b.endTryCatch()
+        b.endBlock()
+        b.endWhile()
+        b.endBlock()
+    }
+
+    /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
+    private fun restoreArgument(e: Emission, local: Local, deferStrictDemand: Boolean = false, value: () -> Unit) {
+        val b = e.builder
+        val reference = if (local.cell || deferStrictDemand) null else local.proof.referenceCarrier()
         b.beginStoreLocal(e.locals.getValue(local.id))
         when {
             local.directLong -> { b.beginToLong(); value(); b.endToLong() }
@@ -414,6 +548,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (local.id < 0 && local.proof.kind == CoreKind.VOID) ProvenExpression(constant(Unit), local.proof)
         else LocalExpression(local, resolve)
     private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.copy(evaluated = true))
+    /** Async callees demand their own CBV formals at a captured bytecode cut.
+     * The caller has already transferred PAP prefixes and typed input fields.
+     * Recheck the declared carrier only after the resumable force completes. */
+    private fun emitEntryStrictDemands(e: Emission, context: FunctionContext) {
+        context.arguments.forEachIndexed { index, local ->
+            if (!context.entryStrict[index] || local == null || local.primitive || local.proof.isAggregate) return@forEachIndexed
+            val raw = ProvenExpression(read(local), local.proof.copy(evaluated = false))
+            restoreArgument(e, local) { force(raw).emit(e) }
+        }
+    }
     private fun force(value: Expression): Expression {
         if (value.proof.isAggregate) return value
         if (value.proof.evaluated) return value
@@ -423,17 +567,18 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val localValue = undecorated(value)
                 if (localValue is LocalExpression && localValue.resolve) {
                     val local = e.locals.getValue(localValue.local.id)
-                    if (checkpoint == null) {
-                        b.beginForceLocal(metrics, local, localValue.local.cell)
+                    if (!resumable) {
+                        b.beginForceLocal(metrics, local, localValue.local.cell, false)
                         b.emitLoadLocal(local)
                         b.endForceLocal()
                     } else {
                         val result = b.createLocal("forced local result", null)
                         val suspended = b.createLocal("forced local suspension", "object")
                         b.beginBlock()
+                        emitOwnerWaitRetry(e) {
                         b.beginTryCatch()
                         b.beginStoreLocal(result)
-                        b.beginForceLocal(metrics, local, localValue.local.cell)
+                        b.beginForceLocal(metrics, local, localValue.local.cell, enableAsync)
                         b.emitLoadLocal(local)
                         b.endForceLocal()
                         b.endStoreLocal()
@@ -451,12 +596,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endStoreLocal()
                         b.endBlock()
                         b.endTryCatch()
+                        }
                         b.emitLoadLocal(result)
                         b.endBlock()
                     }
                 } else {
-                    if (checkpoint == null) {
-                        b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+                    if (!resumable) {
+                        b.beginForceValue(metrics, false); value.emit(e); b.endForceValue()
                     } else {
                         val operand = b.createLocal("saved force operand", null)
                         val result = b.createLocal("forced value result", null)
@@ -464,9 +610,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginBlock()
                         // Evaluate the producer once, before any child ownership is claimed.
                         b.beginStoreLocal(operand); value.emit(e); b.endStoreLocal()
+                        emitOwnerWaitRetry(e) {
                         b.beginTryCatch()
                         b.beginStoreLocal(result)
-                        b.beginForceValue(metrics); b.emitLoadLocal(operand); b.endForceValue()
+                        b.beginForceValue(metrics, enableAsync); b.emitLoadLocal(operand); b.endForceValue()
                         b.endStoreLocal()
                         b.beginBlock()
                         b.beginStoreLocal(suspended)
@@ -481,6 +628,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endStoreLocal()
                         b.endBlock()
                         b.endTryCatch()
+                        }
                         b.emitLoadLocal(result)
                         b.endBlock()
                     }
@@ -490,6 +638,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private fun requireClosure(value: Expression) = Expression { e ->
         e.builder.beginRequireClosure(); force(value).emit(e); e.builder.endRequireClosure()
+    }
+    private fun forceSavedCallback(e: Emission, slot: BytecodeLocal, proof: CoreRepresentation) {
+        // The Java invoke operation cannot capture a suspension raised while
+        // forcing its own callback operand. Enter the enclosing catch/mask
+        // scope first, then use the bytecode force path and its resumable yield.
+        val saved = ProvenExpression(Expression { it.builder.emitLoadLocal(slot) },
+            proof.copy(evaluated = false))
+        force(saved).emit(e)
     }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expression {
         val fn = function(label, emptyList(), expr, scope)
@@ -525,7 +681,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         // Lowering can expose a tuple behind omitted outer case metadata. It
         // must remain a destination writer and may never be forced or delayed.
         if (!lifted) return force(lowered())
-        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return lowered()
+        val head = (expr.getOrNull(1) as? List<*>)?.takeIf { expr[0] == "app" && it.firstOrNull() == "var" }
+        val headId = head?.getOrNull(1) as? String
+        val arityCertificate = headId?.let { id ->
+            if (id in scope.locals) scope.locals.getValue(id).arityCertificate else globalArityCertificates[id]
+        }
+        if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate)) return lowered()
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> lowered(); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
@@ -644,32 +805,51 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }
         val offset = if (context.captureLayout == null) 1 else 2
         context.arguments.forEachIndexed { index, local -> if (local != null) {
-            restoreArgument(e, local) {
+            restoreArgument(e, local, enableAsync && context.entryStrict[index]) {
                 b.beginTailArgument(ArgumentLayout.offset(context.inputLayout, index) + offset)
                 b.emitLoadLocal(transfer); b.endTailArgument()
             }
         } }
     }
 
-    /** Private proof: only a directly yielding, exactly saturated scalar call is resumable. */
-    private fun checkpointedApplication(e: Emission, function: Expression, arguments: List<Expression>,
-                                        evaluatedArguments: BooleanArray) {
+    private fun savedApply(e: Emission, fn: BytecodeLocal, values: List<BytecodeLocal>,
+                           layout: ArgumentLayout?, evaluatedArguments: BooleanArray,
+                           arity: Int, tail: Boolean) {
+        val b = e.builder
+        val typedSource = if (layout?.requiresTyped == true)
+            BytecodeInputSource(layout, values.map(LocalAccessor::constantOf).toTypedArray()) else null
+        when {
+            typedSource != null -> {
+                b.beginApplyTypedInput(typedSource, tail, metrics)
+                b.emitLoadLocal(fn)
+                b.endApplyTypedInput()
+            }
+            layout != null -> {
+                b.beginApplyCompact(layout, tail, metrics, evaluatedArguments)
+                b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+                b.endApplyCompact()
+            }
+            else -> {
+                b.beginApply(arity, tail, metrics, evaluatedArguments)
+                b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+                b.endApply()
+            }
+        }
+    }
+
+    /** One exact call or PAP step; a yielded callee is captured before any suffix runs. */
+    private fun checkpointedCall(e: Emission, fn: BytecodeLocal, values: List<BytecodeLocal>,
+                                 layout: ArgumentLayout?, evaluatedArguments: BooleanArray,
+                                 arity: Int, callerMask: BytecodeLocal) {
         val b = e.builder
         b.beginBlock()
-        val fn = b.createLocal("captured application function", "object")
-        val callerMask = b.createLocal("captured application caller mask", "object")
         val result = b.createLocal("captured application result", "object")
         val suspended = b.createLocal("captured application suspension", "object")
-        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
-        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
         b.beginTryCatch()
         b.beginStoreLocal(result)
-        b.beginCaptureApplicationResult(arguments.size)
+        b.beginCaptureApplicationResult(arity)
         b.emitLoadLocal(fn)
-        b.beginApply(arguments.size, false, metrics, evaluatedArguments)
-        b.emitLoadLocal(fn)
-        arguments.forEach { it.emit(e) }
-        b.endApply()
+        savedApply(e, fn, values, layout, evaluatedArguments, arity, false)
         b.emitLoadLocal(callerMask)
         b.endCaptureApplicationResult()
         b.endStoreLocal()
@@ -698,6 +878,128 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endBlock()
     }
 
+    /** A saved application can cross several exact call boundaries without replaying operands. */
+    private fun stagedOverapplication(e: Emission, fn: BytecodeLocal, values: List<BytecodeLocal>,
+                                      layout: ArgumentLayout?, evaluatedArguments: BooleanArray,
+                                      callerMask: BytecodeLocal, result: BytecodeLocal, count: Int,
+                                      tail: Boolean,
+                                      finishTuple: ((List<BytecodeLocal>, ArgumentLayout?, Int) -> Unit)? = null) {
+        val b = e.builder
+        b.beginBlock()
+        val arity = b.createLocal("remaining closure arity", "primitive")
+        val stages = List(count) { b.createLabel() }
+        val complete = b.createLabel()
+        b.emitBranch(stages[0])
+        stages.forEachIndexed { start, stage ->
+            b.emitLabel(stage)
+            if (enableAsync) emitAsyncPoll(e)
+            // A zero-arity closure consumes no supplied arguments. Truffle DSL
+            // requires a structured loop for that genuine backward edge.
+            b.beginWhile()
+            b.beginMatchLiteral(0L)
+            b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity()
+            b.endMatchLiteral()
+            b.beginBlock()
+            if (enableAsync) emitAsyncPoll(e)
+            b.beginStoreLocal(result)
+            checkpointedCall(e, fn, emptyList(), null, booleanArrayOf(), 0, callerMask)
+            b.endStoreLocal()
+            b.beginStoreLocal(fn)
+            requireClosure(Expression { it.builder.emitLoadLocal(result) }).emit(e)
+            b.endStoreLocal()
+            b.endBlock()
+            b.endWhile()
+            b.beginStoreLocal(arity); b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity(); b.endStoreLocal()
+            val remaining = count - start
+            for (take in 1 until remaining) {
+                b.beginIfThen()
+                b.beginMatchLiteral(take.toLong()); b.emitLoadLocal(arity); b.endMatchLiteral()
+                b.beginBlock()
+                val from = ArgumentLayout.offset(layout, start)
+                val until = ArgumentLayout.offset(layout, start + take)
+                val input = layout?.let { ArgumentLayout.fromProofs((start until start + take).map(it::proof)) }
+                b.beginStoreLocal(result)
+                checkpointedCall(e, fn, values.subList(from, until), input,
+                    evaluatedArguments.copyOfRange(start, start + take), take, callerMask)
+                b.endStoreLocal()
+                // Only the demanded intermediate function is forced. A yielded force
+                // resumes from its saved result local, never from the original call.
+                b.beginStoreLocal(fn)
+                requireClosure(Expression { it.builder.emitLoadLocal(result) }).emit(e)
+                b.endStoreLocal()
+                b.emitBranch(stages[start + take])
+                b.endBlock()
+                b.endIfThen()
+            }
+            val from = ArgumentLayout.offset(layout, start)
+            val input = layout?.let { ArgumentLayout.fromProofs((start until count).map(it::proof)) }
+            val suffix = values.subList(from, values.size)
+            if (finishTuple != null) finishTuple(suffix, input, remaining)
+            else {
+                b.beginStoreLocal(result)
+                if (tail) savedApply(e, fn, suffix, input,
+                    evaluatedArguments.copyOfRange(start, count), remaining, true)
+                else checkpointedCall(e, fn, suffix, input,
+                    evaluatedArguments.copyOfRange(start, count), remaining, callerMask)
+                b.endStoreLocal()
+            }
+            b.emitBranch(complete)
+        }
+        b.emitLabel(complete)
+        if (finishTuple == null) b.emitLoadLocal(result)
+        b.endBlock()
+    }
+
+    /** Capture callees after evaluating operands once, including compact and typed inputs. */
+    private fun checkpointedApplication(e: Emission, function: Expression, arguments: List<Expression>,
+                                        evaluatedArguments: BooleanArray, layout: ArgumentLayout?, tail: Boolean) {
+        val b = e.builder
+        b.beginBlock()
+        val fn = b.createLocal("captured application function", "object")
+        val callerMask = b.createLocal("captured application caller mask", "object")
+        val result = b.createLocal("captured application result", "object")
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = if (layout?.requiresTyped == true) {
+            List(layout.physicalArity) { b.createLocal("captured typed input $it", null) }.also { slots ->
+                arguments.forEachIndexed { index, argument ->
+                    val offset = layout.offset(index)
+                    if (layout.isTuple(index)) argument.emitTuple(e, slots.subList(offset, layout.offset(index + 1)))
+                    else {
+                        b.beginStoreLocal(slots[offset]); argument.emit(e); b.endStoreLocal()
+                    }
+                }
+            }
+        } else {
+            arrayListOf<BytecodeLocal>().also { slots ->
+                arguments.forEachIndexed { index, argument ->
+                    if (layout?.isEmpty(index) == true) argument.emitTuple(e, emptyList())
+                    else slots += b.createLocal("captured application operand $index", null).also { local ->
+                        b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
+                    }
+                }
+            }
+        }
+        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
+        if (arguments.isEmpty()) {
+            if (tail) savedApply(e, fn, values, layout, evaluatedArguments, 0, true)
+            else checkpointedCall(e, fn, values, layout, evaluatedArguments, 0, callerMask)
+            b.endBlock()
+            return
+        }
+        b.beginConditional()
+        b.beginMatchLiteral(1L)
+        b.beginLessThan()
+        b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity()
+        b.emitLoadConstant(arguments.size.toLong())
+        b.endLessThan()
+        b.endMatchLiteral()
+        stagedOverapplication(e, fn, values, layout, evaluatedArguments, callerMask, result, arguments.size, tail)
+        if (tail) savedApply(e, fn, values, layout, evaluatedArguments, arguments.size, true)
+        else checkpointedCall(e, fn, values, layout, evaluatedArguments, arguments.size, callerMask)
+        b.endConditional()
+        b.endBlock()
+    }
+
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
         val evaluatedArguments = arguments.map { it.proof.evaluated }.toBooleanArray()
@@ -707,11 +1009,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (tail) context.mayLoop = true
         return evaluated(Expression { e ->
             val b = e.builder
+            if (enableAsync) {
+                b.beginBlock()
+                emitAsyncPoll(e)
+            }
             val reentryResult = if (tail) {
                 b.beginBlock()
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
             } else null
-            if (inputLayout?.requiresTyped == true) {
+            if (resumable && !loop) {
+                checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail)
+            } else if (inputLayout?.requiresTyped == true) {
                 typedArguments(e, function, arguments, inputLayout, tail)
             } else if (inputLayout != null) {
                 compactArguments(e, function, arguments, inputLayout) { fn, values ->
@@ -719,8 +1027,6 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
                     b.endApplyCompact()
                 }
-            } else if (checkpoint != null && !tail) {
-                checkpointedApplication(e, function, arguments, evaluatedArguments)
             } else if (!loop) {
                 b.beginApply(arguments.size, tail, metrics, evaluatedArguments)
                 requireClosure(function).emit(e)
@@ -747,11 +1053,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (!strict || index >= prefix && arguments[index - prefix].proof.evaluated) null
                     else b.createLocal("strict tail operand $index", null).also { temporary ->
                         b.beginStoreLocal(temporary)
-                        b.beginForceValue(metrics)
-                        if (index < prefix) {
-                            b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
-                        } else b.emitLoadLocal(args[index - prefix])
-                        b.endForceValue()
+                        if (enableAsync) {
+                            force(Expression { reentry ->
+                                val builder = reentry.builder
+                                if (index < prefix) {
+                                    builder.beginReadSupplied(index); builder.emitLoadLocal(fn); builder.endReadSupplied()
+                                } else builder.emitLoadLocal(args[index - prefix])
+                            }).emit(e)
+                        } else {
+                            b.beginForceValue(metrics, false)
+                            if (index < prefix) {
+                                b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
+                            } else b.emitLoadLocal(args[index - prefix])
+                            b.endForceValue()
+                        }
                         b.endStoreLocal()
                     }
                 }
@@ -774,17 +1089,26 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 // Unreachable value satisfies the expression shape of Conditional's then branch.
                 b.emitLoadConstant(Unit)
                 b.endBlock()
-                b.beginApply(arguments.size, true, metrics, evaluatedArguments)
-                b.emitLoadLocal(fn)
-                args.forEach { b.emitLoadLocal(it) }
-                b.endApply()
+                if (resumable) {
+                    val savedFunction = ProvenExpression(Expression { it.builder.emitLoadLocal(fn) },
+                        function.proof.copy(evaluated = true))
+                    val savedArguments = args.mapIndexed { index, local ->
+                        ProvenExpression(Expression { it.builder.emitLoadLocal(local) }, arguments[index].proof)
+                    }
+                    checkpointedApplication(e, savedFunction, savedArguments, evaluatedArguments, null, true)
+                } else {
+                    b.beginApply(arguments.size, true, metrics, evaluatedArguments)
+                    b.emitLoadLocal(fn)
+                    args.forEach { b.emitLoadLocal(it) }
+                    b.endApply()
+                }
                 b.endConditional()
                 b.endBlock()
             }
             if (reentryResult != null) {
                 b.endStoreLocal()
                 b.beginConditional()
-                b.beginIsTailReentry(); b.emitLoadLocal(reentryResult); b.endIsTailReentry()
+                b.beginIsTailReentry(); b.emitLoadLocal(reentryResult); b.emitLoadConstant(false); b.endIsTailReentry()
                 b.beginBlock()
                 restoreTailArguments(e, context, reentryResult)
                 b.emitBranch(e.continueLabel!!)
@@ -794,6 +1118,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.endConditional()
                 b.endBlock()
             }
+            if (enableAsync) b.endBlock()
         })
     }
 
@@ -922,6 +1247,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             if (next != null) {
                 b.emitLabel(next)
+                if (enableAsync) emitAsyncPoll(e)
                 b.endBlock()
                 b.endWhile()
             }
@@ -1181,9 +1507,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             val slots = tupleSlots(TupleShape(tupleProof, language), destination)
                             if (handler != null) {
                                 b.beginTryCatch()
-                                if (checkpoint == null) {
+                                if (!resumable) {
                                     b.beginInvokeIOAction(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadNull()
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadNull()
                                     b.endInvokeIOAction()
                                 } else {
                                     b.beginBlock()
@@ -1192,7 +1518,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeIOActionCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadConstant(true)
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadConstant(true)
                                     b.endInvokeIOActionCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1218,7 +1544,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 b.beginBlock()
                                 val payload = b.createLocal("caught exception payload", "object")
                                 b.beginStoreLocal(payload)
-                                if (checkpoint == null) {
+                                if (!resumable) {
                                     b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure()
                                 } else {
                                     b.beginRequireCaughtIOFailure(); b.emitLoadException(); b.endRequireCaughtIOFailure()
@@ -1229,9 +1555,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 b.beginTryFinally(Runnable {
                                     b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
                                 })
-                                if (checkpoint == null) {
+                                if (!resumable) {
                                     b.beginInvokeIOHandler(slots, metrics)
-                                    b.emitLoadLocal(handler); b.emitLoadLocal(payload); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, handler, operands[1].proof)
+                                    b.emitLoadLocal(payload); b.emitLoadLocal(prior)
                                     b.endInvokeIOHandler()
                                 } else {
                                     b.beginBlock()
@@ -1240,7 +1567,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(handlerMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeIOHandlerCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(handler); b.emitLoadLocal(payload); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, handler, operands[1].proof)
+                                    b.emitLoadLocal(payload); b.emitLoadLocal(prior)
                                     b.endInvokeIOHandlerCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1277,9 +1605,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 b.beginTryFinally(Runnable {
                                     b.beginRestoreMask(); b.emitLoadLocal(prior); b.endRestoreMask()
                                 })
-                                if (checkpoint == null) {
+                                if (!resumable) {
                                     b.beginInvokeIOAction(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadLocal(prior)
                                     b.endInvokeIOAction()
                                 } else {
                                     b.beginBlock()
@@ -1288,7 +1616,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginStoreLocal(actionMask); b.emitCurrentMask(); b.endStoreLocal()
                                     b.beginTryCatch()
                                     b.beginInvokeMaskedIOActionCheckpoint(slots, metrics)
-                                    b.emitLoadLocal(action); b.emitLoadLocal(prior)
+                                    forceSavedCallback(e, action, operands[0].proof); b.emitLoadLocal(prior)
                                     b.endInvokeMaskedIOActionCheckpoint()
                                     b.beginBlock()
                                     b.beginStoreLocal(suspended)
@@ -1343,6 +1671,78 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     state.emit(e)
                     e.builder.endGetCurrentCCS()
                 }
+            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "killThread#")) {
+                val name = fn[1] as String
+                CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (name == "killThread#") {
+                    if (!enableAsync) throw UnsupportedCore("killThread# requires resumable bytecode async delivery")
+                    ProvenExpression(Expression { e ->
+                        val b = e.builder
+                        b.beginBlock()
+                        val values = operands.mapIndexed { index, operand ->
+                            b.createLocal("killThread operand $index", null).also {
+                                b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+                            }
+                        }
+                        val sent = b.createLocal("killThread sent request", "object")
+                        b.beginStoreLocal(sent)
+                        b.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.BEGIN_KILL)
+                        values.forEach(b::emitLoadLocal)
+                        b.endThreadPrimitive()
+                        b.endStoreLocal()
+                        val retry = b.createLocal("killThread wait pending", "primitive")
+                        val incoming = b.createLocal("killThread incoming request", "object")
+                        val active = b.createLocal("killThread logical mask", "object")
+                        val discard = b.createLocal("killThread resume value", "object")
+                        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
+                        b.beginWhile()
+                        b.emitLoadLocal(retry)
+                        b.beginBlock()
+                        b.beginTryCatch()
+                        b.beginBlock()
+                        b.beginStoreLocal(discard)
+                        b.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.FINISH_KILL)
+                        b.emitLoadLocal(sent); b.emitLoadConstant(Unit); b.emitLoadConstant(Unit)
+                        b.endThreadPrimitive()
+                        b.endStoreLocal()
+                        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal()
+                        b.endBlock()
+                        b.beginBlock()
+                        b.beginStoreLocal(incoming)
+                        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+                        b.endStoreLocal()
+                        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+                        b.beginStoreLocal(discard)
+                        b.beginReenterCallMask()
+                        b.beginYield()
+                        b.beginParkAsyncMask()
+                        b.emitLoadLocal(incoming)
+                        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                        b.endParkAsyncMask()
+                        b.endYield()
+                        b.emitLoadLocal(active)
+                        b.endReenterCallMask()
+                        b.endStoreLocal()
+                        b.endBlock()
+                        b.endTryCatch()
+                        b.endBlock()
+                        b.endWhile()
+                        emitAsyncPoll(e) // Self-target delivery occurs only after enqueue.
+                        b.emitLoadConstant(Unit)
+                        b.endBlock()
+                    }, tupleProof.copy(evaluated = true))
+                } else tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    b.beginStoreLocal(destination[0])
+                    b.beginThreadPrimitive(if (name == "fork#") BytecodeRoot.ThreadPrimitiveKind.FORK
+                        else BytecodeRoot.ThreadPrimitiveKind.MY)
+                    if (name == "fork#") operands[0].emit(e) else b.emitLoadConstant(Unit)
+                    operands.last().emit(e)
+                    b.emitLoadConstant(Unit)
+                    b.endThreadPrimitive()
+                    b.endStoreLocal()
+                }
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1352,9 +1752,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 operation.validate(operands.map { it.proof }, flags, tupleProof)
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    if (enableAsync && operation in setOf(MVarOp.TAKE, MVarOp.READ)) {
+                        emitBlockingMVar(e, operands, false) { values ->
+                            e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE, true)
+                            values.forEach(e.builder::emitLoadLocal)
+                            e.builder.endReadMVar()
+                        }
+                    } else {
                     when (operation) {
                         MVarOp.NEW -> e.builder.beginNewMVar(destination[0])
-                        MVarOp.TAKE, MVarOp.READ -> e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE)
+                        MVarOp.TAKE, MVarOp.READ -> e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE, false)
                         MVarOp.TRY_TAKE, MVarOp.TRY_READ ->
                             e.builder.beginTryReadMVar(destination[0], destination[1], operation == MVarOp.TRY_TAKE)
                         MVarOp.TRY_PUT -> e.builder.beginTryPutMVar(destination[0])
@@ -1370,8 +1777,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         MVarOp.IS_EMPTY -> e.builder.endIsEmptyMVar()
                         else -> error("Not a tuple MVar operation")
                     }
+                    }
                 } else ProvenExpression(Expression { e ->
-                    e.builder.beginPutMVar(); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
+                    if (enableAsync && operation == MVarOp.PUT) {
+                        emitBlockingMVar(e, operands, true) { values ->
+                            e.builder.beginPutMVar(true)
+                            values.forEach(e.builder::emitLoadLocal)
+                            e.builder.endPutMVar()
+                        }
+                    } else {
+                        e.builder.beginPutMVar(false); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
@@ -1486,17 +1902,47 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
                 val kept = argument(args[0], scope, flags[0] as Boolean)
                 val state = compile(args[1], scope, false)
-                // Force the continuation only after validating State, inside the fence.
                 val function = argument(args[2], scope, true)
+                fun emitKeepAlive(e: Emission, destination: List<BytecodeLocal>?) {
+                    val b = e.builder
+                    b.beginBlock()
+                    val reference = b.createLocal("kept alive reference", "object")
+                    val stateLocal = b.createLocal("keepAlive state", "object")
+                    b.beginStoreLocal(reference); kept.emit(e); b.endStoreLocal()
+                    b.beginStoreLocal(stateLocal); state.emit(e); b.endStoreLocal()
+                    // The State# check precedes continuation forcing. A bytecode
+                    // finally owns the fence even when that force yields or fails
+                    // before the Java KeepAlive operation can be entered.
+                    b.beginRequireIOState(); b.emitLoadLocal(stateLocal); b.endRequireIOState()
+                    b.beginTryFinally(Runnable {
+                        b.beginStoreLocal(b.createLocal("keepAlive fence", null))
+                        b.beginTouch(); b.emitLoadLocal(reference); b.emitLoadLocal(stateLocal); b.endTouch()
+                        b.endStoreLocal()
+                    })
+                    val result = if (destination == null) b.createLocal("keepAlive result", null) else null
+                    if (result != null) b.beginStoreLocal(result)
+                    if (resumable) {
+                        val stateArgument = ProvenExpression(Expression { it.builder.emitLoadLocal(stateLocal) },
+                            state.proof.copy(evaluated = true))
+                        if (destination != null) {
+                            checkpointedTupleApplication(e, TupleShape(tupleProof, language), function,
+                                listOf(stateArgument), null, destination)
+                        } else checkpointedApplication(e, function, listOf(stateArgument), booleanArrayOf(true), null, false)
+                    } else {
+                        if (destination != null) b.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                        else b.beginKeepAlive(metrics)
+                        b.emitLoadLocal(reference); b.emitLoadLocal(stateLocal); force(function).emit(e)
+                        if (destination != null) b.endKeepAliveTuple() else b.endKeepAlive()
+                    }
+                    if (result != null) b.endStoreLocal()
+                    b.endTryFinally()
+                    if (result != null) b.emitLoadLocal(result)
+                    b.endBlock()
+                }
                 if (tupleProof.isAggregate) tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                    kept.emit(e); state.emit(e); function.emit(e)
-                    e.builder.endKeepAliveTuple()
-                } else ProvenExpression(Expression { e ->
-                    e.builder.beginKeepAlive(metrics)
-                    kept.emit(e); state.emit(e); function.emit(e)
-                    e.builder.endKeepAlive()
-                }, tupleProof.copy(evaluated = true))
+                    emitKeepAlive(e, destination)
+                } else ProvenExpression(Expression { e -> emitKeepAlive(e, null) },
+                    tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
                 val operation = FloatingAddressOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1718,11 +2164,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { argument(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
-                    if (tupleOperation.resultArity == 3)
-                        e.builder.beginTupleArithmetic3(tupleOperation, destination[0], destination[1], destination[2])
-                    else e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1])
+                    // The fixed-arity operation ignores its third accessor for pairs.
+                    e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1],
+                        destination.getOrElse(2) { destination[1] })
                     operands.forEach { it.emit(e) }
-                    if (tupleOperation.resultArity == 3) e.builder.endTupleArithmetic3() else e.builder.endTupleArithmetic()
+                    e.builder.endTupleArithmetic()
                 }
             } else if (tupleProof.isSum && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-sum") {
                 val tag = SumShape.constructor(tupleProof, constructors[fn[1]], fn[2])
@@ -1817,7 +2263,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 group.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "let binding") }
                 val local = scope.child()
                 val slots = group.map { bind(local, it["id"] as String, !representation(it),
-                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it)) }
+                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it),
+                    arityCertificate = CoreApplicationCertificates.binding(it)) }
                 val rhs = group.map {
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
                     CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding")
@@ -1985,12 +2432,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         return tupleExpression(shape.proof) { e, destination ->
             val b = e.builder
             if (!tail) {
-                if (inputLayout?.requiresTyped == true) {
+                if (resumable) {
+                    checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination)
+                } else if (inputLayout?.requiresTyped == true) {
                     b.beginStoreLocal(b.createLocal("typed tuple call", null))
                     typedArguments(e, function, arguments, inputLayout, false, tupleSlots(shape, destination))
                     b.endStoreLocal()
-                } else if (checkpoint != null) {
-                    checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination)
                 } else if (inputLayout == null) {
                     b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
                     requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endApplyTuple()
@@ -2002,7 +2449,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.beginBlock()
                 val result = b.createLocal("tuple tail result", null)
                 b.beginStoreLocal(result)
-                if (inputLayout?.requiresTyped == true) {
+                if (resumable) {
+                    checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true)
+                } else if (inputLayout?.requiresTyped == true) {
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination))
                 } else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
@@ -2012,8 +2461,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal); b.endTailApplyCompactTuple()
                 }
                 b.endStoreLocal()
+                if (resumable) {
+                    b.beginIfThen()
+                    b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(true); b.endIsTailReentry()
+                    b.beginBlock()
+                    b.beginReturn(); b.emitLoadLocal(result); b.endReturn()
+                    b.endBlock()
+                    b.endIfThen()
+                }
                 b.beginIfThenElse()
-                b.beginIsTailReentry(); b.emitLoadLocal(result); b.endIsTailReentry()
+                b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(false); b.endIsTailReentry()
                 b.beginBlock()
                 restoreTailArguments(e, context, result)
                 b.emitBranch(e.continueLabel!!)
@@ -2025,28 +2482,23 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }
     }
 
-    /** The private tuple call edge captures only an exact yielded callee; normal return writes typed slots. */
-    private fun checkpointedTupleApplication(e: Emission, shape: TupleShape, function: Expression,
-                                             arguments: List<Expression>, inputLayout: ArgumentLayout?,
-                                             destination: List<BytecodeLocal>) {
+    /** The final exact tuple callee owns the destination; earlier stages return scalar closures. */
+    private fun checkpointedTupleCall(e: Emission, slots: BytecodeTupleSlots,
+                                      fn: BytecodeLocal, values: List<BytecodeLocal>,
+                                      inputLayout: ArgumentLayout?, arity: Int,
+                                      callerMask: BytecodeLocal) {
         val b = e.builder
-        val slots = tupleSlots(shape, destination)
-        b.beginBlock()
-        val fn = b.createLocal("captured tuple function", "object")
-        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
-        val values = arrayListOf<BytecodeLocal>()
-        arguments.forEachIndexed { index, argument ->
-            if (inputLayout?.isEmpty(index) == true) argument.emitTuple(e, emptyList())
-            else values += b.createLocal("captured tuple operand $index", null).also { local ->
-                b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
-            }
-        }
-        val callerMask = b.createLocal("captured tuple caller mask", "object")
         val suspended = b.createLocal("captured tuple suspension", "object")
-        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
         b.beginTryCatch()
-        if (inputLayout == null) {
-            b.beginApplyTupleCheckpoint(slots, arguments.size, metrics)
+        if (inputLayout?.requiresTyped == true) {
+            val source = BytecodeInputSource(inputLayout, values.map(LocalAccessor::constantOf).toTypedArray())
+            b.beginStoreLocal(b.createLocal("typed tuple completion", "object"))
+            b.beginApplyTypedInputTuple(source, slots, false, metrics)
+            b.emitLoadLocal(fn)
+            b.endApplyTypedInputTuple()
+            b.endStoreLocal()
+        } else if (inputLayout == null) {
+            b.beginApplyTupleCheckpoint(slots, arity, metrics)
             b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
             b.endApplyTupleCheckpoint()
         } else {
@@ -2073,6 +2525,86 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endResumeTupleApplication()
         b.endBlock()
         b.endTryCatch()
+    }
+
+    /** The exact tuple tail writes its destination or forwards a trusted callee Yield. */
+    private fun savedTailTuple(e: Emission, slots: BytecodeTupleSlots,
+                               fn: BytecodeLocal, values: List<BytecodeLocal>,
+                               inputLayout: ArgumentLayout?, arity: Int) {
+        val b = e.builder
+        if (inputLayout?.requiresTyped == true) {
+            val source = BytecodeInputSource(inputLayout, values.map(LocalAccessor::constantOf).toTypedArray())
+            b.beginApplyTypedInputTuple(source, slots, true, metrics)
+            b.emitLoadLocal(fn)
+            b.endApplyTypedInputTuple()
+        } else if (inputLayout == null) {
+            b.beginTailApplyTuple(slots, arity, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endTailApplyTuple()
+        } else {
+            b.beginTailApplyCompactTuple(slots, inputLayout, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endTailApplyCompactTuple()
+        }
+    }
+
+    /** Saved logical and physical arguments survive every saturated prefix call. */
+    private fun checkpointedTupleApplication(e: Emission, shape: TupleShape, function: Expression,
+                                             arguments: List<Expression>, inputLayout: ArgumentLayout?,
+                                             destination: List<BytecodeLocal>, tail: Boolean = false) {
+        val b = e.builder
+        val slots = tupleSlots(shape, destination, capturesYield = true)
+        b.beginBlock()
+        val fn = b.createLocal("captured tuple function", "object")
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = if (inputLayout?.requiresTyped == true) {
+            List(inputLayout.physicalArity) { b.createLocal("captured typed tuple input $it", null) }.also { fields ->
+                arguments.forEachIndexed { index, argument ->
+                    val offset = inputLayout.offset(index)
+                    if (inputLayout.isTuple(index)) argument.emitTuple(e, fields.subList(offset, inputLayout.offset(index + 1)))
+                    else { b.beginStoreLocal(fields[offset]); argument.emit(e); b.endStoreLocal() }
+                }
+            }
+        } else arrayListOf<BytecodeLocal>().also { fields ->
+            arguments.forEachIndexed { index, argument ->
+                if (inputLayout?.isEmpty(index) == true) argument.emitTuple(e, emptyList())
+                else fields += b.createLocal("captured tuple operand $index", null).also { local ->
+                    b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
+                }
+            }
+        }
+        val callerMask = b.createLocal("captured tuple caller mask", "object")
+        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
+        val tailResult = if (tail) b.createLocal("captured tuple tail result", "object") else null
+        fun finish(suffix: List<BytecodeLocal>, layout: ArgumentLayout?, arity: Int) {
+            if (tail) {
+                b.beginStoreLocal(checkNotNull(tailResult))
+                savedTailTuple(e, slots, fn, suffix, layout, arity)
+                b.endStoreLocal()
+            } else checkpointedTupleCall(e, slots, fn, suffix, layout, arity, callerMask)
+        }
+        if (arguments.isEmpty()) finish(values, inputLayout, 0)
+        else {
+            b.beginIfThenElse()
+            b.beginMatchLiteral(1L)
+            b.beginLessThan()
+            b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity()
+            b.emitLoadConstant(arguments.size.toLong())
+            b.endLessThan()
+            b.endMatchLiteral()
+            b.beginBlock()
+            val result = b.createLocal("tuple prefix result", "object")
+            stagedOverapplication(e, fn, values, inputLayout,
+                arguments.map { it.proof.evaluated }.toBooleanArray(), callerMask, result, arguments.size, false) {
+                    suffix, layout, arity -> finish(suffix, layout, arity)
+                }
+            b.endBlock()
+            b.beginBlock()
+            finish(values, inputLayout, arguments.size)
+            b.endBlock()
+            b.endIfThenElse()
+        }
+        if (tail) b.emitLoadLocal(checkNotNull(tailResult))
         b.endBlock()
     }
 

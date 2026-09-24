@@ -1090,6 +1090,44 @@ class Audit:
                             proof.get('primReps') == output_reps):
                         self.issue('primitive-representation', owner, path,
                                    function[1] + ': exact State#/result tuple required')
+                thread = self.cap.get('managedThreadPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if thread is not None:
+                    def thread_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'threadId':
+                            return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'action':
+                            return kind == 'closure' and reps == ['BoxedRep (Just Lifted)']
+                        return role == 'payload' and kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
+                    expected = thread['arguments']
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    expected_flags = [role in ('action', 'payload') for role in expected]
+                    if (len(actual) != len(expected) or flags != expected_flags or
+                            any(not thread_role(rep, role) for rep, role in zip(actual, expected))):
+                        self.issue('primitive-representation', owner, path,
+                                   function[1] + ': exact thread action, ThreadId#, payload and State# arguments required')
+                    for argument, role in zip(arguments, expected):
+                        stored = (bound.get(argument[1]) if argument[1] in bound else
+                                  self.bindings.get(argument[1], {}).get('rep')) if argument[0] == 'var' else None
+                        if isinstance(stored, dict) and stored.get('primReps') not in (None, ['BoxedRep Nothing']) and not thread_role(stored, role):
+                            self.issue('primitive-representation', owner, path,
+                                       function[1] + ': binding metadata contradicts thread operand role')
+                    result = thread['result']
+                    if isinstance(result, list):
+                        fields = proof.get('components') if isinstance(proof, dict) else None
+                        valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                                 isinstance(fields, list) and len(fields) == len(result) and
+                                 all(thread_role(rep, role) for rep, role in zip(fields, result)) and
+                                 proof.get('primReps') == ['BoxedRep (Just Unlifted)'])
+                    else:
+                        valid = thread_role(proof, result)
+                    if not valid:
+                        self.issue('primitive-representation', owner, path,
+                                   function[1] + ': exact State#/ThreadId# result required')
                 if function[0] == 'prim' and function[1] == 'getCurrentCCS#':
                     def scalar(rep, kind, reps):
                         return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and

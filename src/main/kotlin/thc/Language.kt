@@ -217,6 +217,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stdio = thc.runtime.ManagedStdio(files)
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
+        internal val threads = thc.runtime.GuestThreads(env, maskingState)
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
@@ -258,6 +259,7 @@ class Language : TruffleLanguage<Language.State>() {
     override fun createContext(env: Env): State = State(env, this)
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
     override fun disposeContext(context: State) {
+        context.threads.close()
         context.capturedAsyncRequests.close()
         try { context.files.dispose() } finally {
             try { context.stdio.dispose() } finally { context.stackSnapshots.dispose() }
@@ -304,7 +306,7 @@ class Language : TruffleLanguage<Language.State>() {
         }
         val program = when (val backend = input["backend"] ?: defaultBackend()) {
             "ast" -> Program(this, linked)
-            "bytecode" -> BytecodeProgram(this, linked)
+            "bytecode" -> BytecodeProgram(this, linked, true)
             else -> throw IllegalArgumentException("Unknown THC backend: $backend")
         }
         val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this)
@@ -343,7 +345,17 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 }
             }
         }
-        return dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized))
+        val threads = Language.currentState(dispatch).threads
+        threads.enterCurrent()
+        try {
+            return thc.runtime.AsyncContinuations.publicResult(
+                dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)), dispatch)
+        } catch (suspended: thc.runtime.ThunkSuspended) {
+            thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+        } catch (suspended: thc.runtime.CallSegmentSuspended) {
+            thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+        }
+        finally { threads.leaveCurrent() }
     }
     @ExportMessage fun hasMembers() = true
     @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(
@@ -365,7 +377,15 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                      @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any {
         if (member == "runIO" && ioTarget != null) {
             require(arguments.isEmpty()) { "runIO takes no arguments" }
-            dispatch.execute(ioTarget, arrayOf(guestEntry))
+            val threads = Language.currentState(dispatch).threads
+            threads.enterCurrent()
+            try { dispatch.execute(ioTarget, arrayOf(guestEntry)) }
+            catch (suspended: thc.runtime.ThunkSuspended) {
+                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+            } catch (suspended: thc.runtime.CallSegmentSuspended) {
+                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+            }
+            finally { threads.leaveCurrent() }
             return true
         }
         if (member != "compile") throw UnknownIdentifierException.create(member)

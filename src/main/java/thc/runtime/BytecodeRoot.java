@@ -31,6 +31,9 @@ import thc.Language;
         defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
+    @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
+    public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
+    public final boolean isAsyncEnabled() { return asyncEnabled; }
     @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
     public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
 
@@ -261,17 +264,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class ForceValue {
-        @Specialization public static float floating(Metrics metrics, float value) { return value; }
-        @Specialization public static double doubleValue(Metrics metrics, double value) { return value; }
-        @Specialization public static long number(Metrics metrics, long value) { return value; }
-        @Specialization public static boolean bool(Metrics metrics, boolean value) { return value; }
+        @Specialization public static float floating(Metrics metrics, boolean async, float value) { return value; }
+        @Specialization public static double doubleValue(Metrics metrics, boolean async, double value) { return value; }
+        @Specialization public static long number(Metrics metrics, boolean async, long value) { return value; }
+        @Specialization public static boolean bool(Metrics metrics, boolean async, boolean value) { return value; }
         @Specialization(replaces = {"number", "bool", "floating", "doubleValue"})
-        public static Object force(VirtualFrame frame, Metrics metrics, Object value,
-                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+        public static Object force(VirtualFrame frame, Metrics metrics, boolean async, Object value,
+                @Cached(value = "createForce(metrics, async)", neverDefault = true) Force force) {
             return force.execute(frame, value);
         }
-        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+        public static Force createForce(Metrics metrics, boolean async) { return new Force(metrics, async); }
     }
 
     /** A cold nonlocal force resumes only the thunk saved before entering it. */
@@ -295,15 +299,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = LocalAccessor.class, name = "local")
     @ConstantOperand(type = boolean.class, name = "cell")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class ForceLocal {
-        @Specialization public static float floating(Metrics metrics, LocalAccessor local, boolean cell, float value) { return value; }
-        @Specialization public static double doubleValue(Metrics metrics, LocalAccessor local, boolean cell, double value) { return value; }
-        @Specialization public static long number(Metrics metrics, LocalAccessor local, boolean cell, long value) { return value; }
-        @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean cell, boolean value) { return value; }
+        @Specialization public static float floating(Metrics metrics, LocalAccessor local, boolean cell, boolean async, float value) { return value; }
+        @Specialization public static double doubleValue(Metrics metrics, LocalAccessor local, boolean cell, boolean async, double value) { return value; }
+        @Specialization public static long number(Metrics metrics, LocalAccessor local, boolean cell, boolean async, long value) { return value; }
+        @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean cell, boolean async, boolean value) { return value; }
         @Specialization(replaces = {"number", "bool", "floating", "doubleValue"})
-        public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, boolean cell, Object binding,
+        public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, boolean cell, boolean async, Object binding,
                 @Bind("$node") Node node,
-                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+                @Cached(value = "createForce(metrics, async)", neverDefault = true) Force force) {
             // The compiler knows whether this lexical binding retains a recursive
             // cell. Ordinary formals, fields and published values need no cell test.
             Object original = cell ? ReadCellIfNeeded.read(binding) : binding;
@@ -311,7 +316,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             publish(frame, local, cell, binding, original, result, node);
             return result;
         }
-        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+        public static Force createForce(Metrics metrics, boolean async) { return new Force(metrics, async); }
         static void publish(VirtualFrame frame, LocalAccessor local, boolean cell, Object binding,
                 Object original, Object result, Node node) {
             if (!(original instanceof Thunk thunk)) return;
@@ -377,7 +382,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class CaptureApplicationResult {
         @Specialization public static Object capture(int arity, Closure function, Object result, MaskingState callerMask,
                 @Bind("$node") Node node) {
-            if (!(result instanceof ContinuationResult continuation)) {
+            TailYield tail = result instanceof TailYield yielded ? yielded : null;
+            ContinuationResult continuation = tail == null
+                    ? result instanceof ContinuationResult resumed ? resumed : null : tail.getContinuation();
+            if (continuation == null) {
                 if (SynchronousMasking.current(node) != callerMask) {
                     SynchronousMasking.set(node, callerMask);
                     throw new IllegalStateException("Completed application did not restore its caller mask");
@@ -388,12 +396,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             try {
                 Object source = continuation.getContinuationRootNode().getSourceRootNode();
                 if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
-                        !callee.isSelf(function.target) ||
-                        !(continuation.getResult() == kotlin.Unit.INSTANCE || continuation.getResult() instanceof ThunkSuspended ||
-                                continuation.getResult() instanceof CallSegmentSuspended))
+                        !callee.isSelf(tail == null ? function.target : tail.getTarget()) ||
+                        !AsyncContinuations.isYieldMarker(continuation.getResult()))
                     throw new IllegalStateException("Application returned an unrelated bytecode continuation: " +
                             "arity=" + function.arity + "/" + arity + ", source=" + source +
-                            ", target=" + function.target.getRootNode() + ", yielded=" + continuation.getResult());
+                            ", target=" + (tail == null ? function.target : tail.getTarget()).getRootNode() +
+                            ", yielded=" + continuation.getResult());
                 MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                         ? suspended.getParkedActiveMask() : null;
                 if (parked != null && SynchronousMasking.current(node) != callerMask)
@@ -415,13 +423,68 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Poll only at a bytecode cut whose locals and operand stack can be resumed. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "request")
+    public static final class PollAsync {
+        @Specialization public static boolean poll(VirtualFrame frame, LocalAccessor request,
+                @Bind Node node) {
+            // Take the evidence before the mailbox's cold boundary leaves compiled code.
+            boolean compiled = CompilerDirectives.inCompiledCode();
+            AsyncRequest pending = GuestThreads.pollCurrent(node, false);
+            if (pending == null) return false;
+            pending.compiledCapture = compiled;
+            request.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, pending);
+            return true;
+        }
+    }
+
+    @Operation public static final class ParkAsyncMask {
+        @Specialization public static AsyncRequest park(AsyncRequest request, MaskingState rootEntry,
+                @Bind Node node) {
+            SynchronousMasking.set(node, rootEntry);
+            return request;
+        }
+    }
+
+    public enum ThreadPrimitiveKind { MY, FORK, BEGIN_KILL, FINISH_KILL }
+
+    /** One cold instruction keeps the generated interpreter below its partition limit. */
+    @Operation
+    @ConstantOperand(type = ThreadPrimitiveKind.class, name = "kind")
+    public static final class ThreadPrimitive {
+        @Specialization public static Object execute(ThreadPrimitiveKind kind, Object first, Object second,
+                Object third, @Bind Node node) {
+            return switch (kind) {
+                case MY -> {
+                    TupleResultsKt.requireVoidCarrier(second);
+                    yield GuestThreadOps.myThreadId(node);
+                }
+                case FORK -> {
+                    TupleResultsKt.requireVoidCarrier(second);
+                    // A lifted fork action may still be a thunk. Only the new
+                    // child may enter it; the parent must return after registration.
+                    yield GuestThreadOps.fork(node, first);
+                }
+                case BEGIN_KILL -> {
+                    TupleResultsKt.requireVoidCarrier(third);
+                    yield GuestThreadOps.beginKill(node, first, second);
+                }
+                case FINISH_KILL -> {
+                    GuestThreadOps.finishKill(node, (AsyncRequest) first);
+                    yield kotlin.Unit.INSTANCE;
+                }
+            };
+        }
+    }
+
     @Operation public static final class ParkCallMask {
         @Specialization public static CallSegmentSuspended park(CallSegmentSuspended suspended,
                 MaskingState rootEntry, MaskingState callerActive, @Bind("$node") Node node) {
             try {
                 if (SynchronousMasking.current(node) != callerActive)
                     throw new IllegalStateException("Captured caller lost its logical mask before Yield");
-                return new CallSegmentSuspended(suspended.getSegment(), callerActive);
+                return new CallSegmentSuspended(suspended.getSegment(), callerActive, suspended.getAsyncRequest());
             } finally {
                 // Yield skips lexical finally. Each root parks to its own entry
                 // mask, so a chain of callers unwinds to the carrier ambient.
@@ -440,8 +503,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     public static final class CallSuspensionOnly {
-        @Specialization public static CallSegmentSuspended capture(AbstractTruffleException failure) {
+        @Specialization public static Object capture(AbstractTruffleException failure) {
             if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
+            if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
             throw failure;
         }
     }
@@ -497,33 +561,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")
     @ConstantOperand(type = LocalAccessor.class, name = "first")
     @ConstantOperand(type = LocalAccessor.class, name = "second")
-    public static final class TupleArithmetic {
-        @Specialization public static void execute(VirtualFrame frame, TupleArithmeticOp operation,
-                LocalAccessor first, LocalAccessor second, long left, long right, @Bind("$node") Node node) {
-            long a = operation.first(left, right);
-            long b = operation.second(left, right);
-            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-            first.setLong(bytecode, frame, a);
-            second.setLong(bytecode, frame, b);
-        }
-    }
-
-    @Operation
-    @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")
-    @ConstantOperand(type = LocalAccessor.class, name = "first")
-    @ConstantOperand(type = LocalAccessor.class, name = "second")
     @ConstantOperand(type = LocalAccessor.class, name = "third")
-    public static final class TupleArithmetic3 {
+    public static final class TupleArithmetic {
         @Specialization public static void execute(VirtualFrame frame, TupleArithmeticOp operation,
                 LocalAccessor first, LocalAccessor second, LocalAccessor third,
                 long left, long right, @Bind("$node") Node node) {
             long a = operation.first(left, right);
             long b = operation.second(left, right);
-            long c = operation.third(left, right);
+            long c = operation.getResultArity() == 3 ? operation.third(left, right) : 0L;
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setLong(bytecode, frame, a);
             second.setLong(bytecode, frame, b);
-            third.setLong(bytecode, frame, c);
+            if (operation.getResultArity() == 3) third.setLong(bytecode, frame, c);
         }
     }
 
@@ -1031,7 +1080,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Metrics metrics, Closure function, @Bind("$node") Node node,
                 @Cached(value = "create(source, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
             try {
-                return dispatch.execute(frame, function, null);
+                return tailResult(dispatch.execute(frame, function, null), function,
+                        source.getLayout().getLogicalArity(), tail);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -1052,21 +1102,36 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class ApplyTypedInputTuple {
         @Specialization public static Object apply(VirtualFrame frame, BytecodeInputSource source,
-                BytecodeTupleSlots destination, boolean tail, Metrics metrics, Closure function, @Bind("$node") Node node,
+                BytecodeTupleSlots destination, boolean tail, Metrics metrics,
+                Closure function, @Bind("$node") Node node,
                 @Cached(value = "create(source, destination, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
+            boolean checkpoint = destination.getCapturesYield();
+            MaskingState callerMask = checkpoint ? SynchronousMasking.current(node) : null;
             try {
-                return dispatch.execute(frame, function, null);
+                Object result = dispatch.execute(frame, function, null);
+                if (checkpoint && SynchronousMasking.current(node) != callerMask) {
+                    SynchronousMasking.set(node, callerMask);
+                    throw new IllegalStateException("Completed typed tuple application did not restore its caller mask");
+                }
+                return result;
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
+            } catch (TupleCallYield yielded) {
+                if (!checkpoint) throw yielded;
+                if (tail) return tailTupleYield(function, source.getLayout().getLogicalArity(),
+                        destination, yielded, node, callerMask);
+                throw captureTupleCall(function, source.getLayout().getLogicalArity(),
+                        destination, yielded, node, callerMask);
             } finally {
                 BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
             }
         }
         public static InputDispatch create(BytecodeInputSource source, BytecodeTupleSlots destination,
                 boolean tail, Metrics metrics) {
-            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics, destination, 0);
+            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics,
+                    destination.getCapturesYield() ? new ContinuationTupleDestination(destination) : destination, 0);
         }
     }
 
@@ -1158,10 +1223,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ContinuationResult continuation = yielded.getContinuation();
             Object source = continuation.getContinuationRootNode().getSourceRootNode();
             if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
-                    !callee.isSelf(function.target) || !callee.hasTupleResult(destination.getShape()) ||
-                    !(continuation.getResult() == kotlin.Unit.INSTANCE ||
-                            continuation.getResult() instanceof ThunkSuspended ||
-                            continuation.getResult() instanceof CallSegmentSuspended))
+                    (!yielded.getTail() && !callee.isSelf(function.target)) ||
+                    !callee.hasTupleResult(destination.getShape()) ||
+                    !AsyncContinuations.isYieldMarker(continuation.getResult()))
                 throw new IllegalStateException("Tuple application returned an unrelated continuation");
             MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                     ? suspended.getParkedActiveMask() : null;
@@ -1173,6 +1237,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         } finally { SynchronousMasking.set(node, callerMask); }
     }
 
+    /** An exact tuple tail has no caller suffix and can return its trusted callee continuation. */
+    private static TailYield tailTupleYield(Closure function, int arity, BytecodeTupleSlots destination,
+            TupleCallYield yielded, Node node, MaskingState callerMask) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        try {
+            ContinuationResult continuation = yielded.getContinuation();
+            Object source = continuation.getContinuationRootNode().getSourceRootNode();
+            RootCallTarget target = yielded.getTail() ? yielded.getTailTarget() : function.target;
+            if (function.arity != arity || target == null || !(source instanceof BytecodeRoot callee) ||
+                    !callee.isSelf(target) || !callee.hasTupleResult(destination.getShape()) ||
+                    !AsyncContinuations.isYieldMarker(continuation.getResult()))
+                throw new IllegalStateException("Tuple tail returned an unrelated continuation");
+            if (SynchronousMasking.current(node) != callerMask)
+                throw new IllegalStateException("Parked tuple tail did not restore its caller mask");
+            return new TailYield(continuation, target);
+        } finally { SynchronousMasking.set(node, callerMask); }
+    }
+
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = int.class, name = "arity")
@@ -1181,9 +1263,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object apply(VirtualFrame frame, BytecodeTupleSlots destination, int arity, Metrics metrics,
                 Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
                 @Cached(value = "create(destination, arity, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            MaskingState callerMask = destination.getCapturesYield() ? SynchronousMasking.current(node) : null;
             try {
                 dispatch.execute(frame, function, arguments);
                 return null;
+            } catch (TupleCallYield yielded) {
+                return tailTupleYield(function, arity, destination, yielded, node, callerMask);
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -1191,7 +1276,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             }
         }
         public static TupleDispatch create(BytecodeTupleSlots destination, int arity, Metrics metrics) {
-            return new TupleDispatch(destination, metrics, arity, true);
+            return new TupleDispatch(destination.getCapturesYield()
+                    ? new ContinuationTupleDestination(destination) : destination, metrics, arity, true);
         }
     }
 
@@ -1244,9 +1330,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object apply(VirtualFrame frame, BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics,
                 Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
                 @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            MaskingState callerMask = destination.getCapturesYield() ? SynchronousMasking.current(node) : null;
             try {
                 dispatch.execute(frame, function, arguments);
                 return null;
+            } catch (TupleCallYield yielded) {
+                return tailTupleYield(function, layout.getLogicalArity(), destination,
+                        yielded, node, callerMask);
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -1254,7 +1344,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             }
         }
         public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
-            return new TupleDispatch(destination, metrics, layout.getLogicalArity(), true, layout);
+            return new TupleDispatch(destination.getCapturesYield()
+                    ? new ContinuationTupleDestination(destination) : destination,
+                    metrics, layout.getLogicalArity(), true, layout);
         }
     }
 
@@ -1273,6 +1365,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (value instanceof Closure closure) return closure;
             throw fail("Application of a non-function");
         }
+    }
+
+    /** Exact tail calls have no caller suffix; a nested yield carries its actual callee identity. */
+    private static Object tailResult(Object result, Closure function, int supplied, boolean tail) {
+        return tail && function.arity == supplied && result instanceof ContinuationResult continuation
+                ? new TailYield(continuation, function.target) : result;
+    }
+
+    /** Logical arity includes a PAP's remaining formals, not its physical prefix width. */
+    @Operation
+    public static final class ClosureArity {
+        @Specialization public static long read(Closure function) { return function.arity; }
     }
 
     /** Checked reference identities give restored formals a concrete Graal stamp. */
@@ -1303,7 +1407,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Bind("$node") Node node,
                 @Cached(value = "createDispatch(arity, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
             try {
-                return dispatch.execute(frame, function, arguments);
+                return tailResult(dispatch.execute(frame, function, arguments), function, arity, tail);
             } catch (TailCall call) {
                 // A -> B -> ... -> A unwinds to the owning activation. The compiler
                 // consumes this internal result and restores locals before a real
@@ -1329,7 +1433,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Bind("$node") Node node,
                 @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
             try {
-                return dispatch.execute(frame, function, arguments);
+                return tailResult(dispatch.execute(frame, function, arguments), function,
+                        layout.getLogicalArity(), tail);
             } catch (TailCall call) {
                 // A -> B -> ... -> A unwinds to the owning activation. The compiler
                 // consumes this internal result and restores locals before a real
@@ -1347,7 +1452,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     /** Internal control result of a matching-root tail bounce, never a guest value. */
     @Operation
     public static final class IsTailReentry {
-        @Specialization public static boolean test(Object value) { return value instanceof TailCall; }
+        @Specialization public static boolean test(Object value, boolean yielded) {
+            return yielded ? value instanceof TailYield : value instanceof TailCall;
+        }
     }
 
     @Operation
@@ -1533,16 +1640,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     ContinuationResult continuation = yielded.getContinuation();
                     Object source = continuation.getContinuationRootNode().getSourceRootNode();
                     if (closure.arity != 1 || !(source instanceof BytecodeRoot callee) ||
-                            !callee.isSelf(closure.target) || !callee.hasTupleResult(destination.getShape()) ||
-                            !(continuation.getResult() == kotlin.Unit.INSTANCE ||
-                                    continuation.getResult() instanceof ThunkSuspended ||
-                                    continuation.getResult() instanceof CallSegmentSuspended))
+                            (!yielded.getTail() && !callee.isSelf(closure.target)) ||
+                            !callee.hasTupleResult(destination.getShape()) ||
+                            !AsyncContinuations.isYieldMarker(continuation.getResult()))
                         throw new IllegalStateException("IO action returned an unrelated tuple continuation");
                     MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                             ? suspended.getParkedActiveMask() : null;
                     if (parked != null && SynchronousMasking.current(node) != callerMask)
                         throw new IllegalStateException("Parked IO action did not restore its caller mask");
                     MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
+                    AsyncContinuations.deliverIfCaught(continuation, caughtIOAction, node);
                     throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
                             destination.getShape(), caughtIOAction));
                 } finally { SynchronousMasking.set(node, callerMask); }
@@ -1632,6 +1739,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     /** Only the private captured catch# path may handle an async-origin payload. */
     @Operation public static final class RequireCaughtIOFailure {
         @Specialization public static Object payload(AbstractTruffleException failure) {
+            if (failure instanceof AsyncDelivery delivered) {
+                delivered.getRequest().acknowledge();
+                return delivered.getRequest().getPayload();
+            }
             if (failure instanceof CapturedAsyncDelivery delivered) {
                 if (delivered.getRequest() != null) delivered.getRequest().acknowledge();
                 return delivered.getPayload();
@@ -1684,10 +1795,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     ContinuationResult continuation = yielded.getContinuation();
                     Object source = continuation.getContinuationRootNode().getSourceRootNode();
                     if (closure == null || closure.arity != 2 || !(source instanceof BytecodeRoot callee) ||
-                            !callee.isSelf(closure.target) || !callee.hasTupleResult(destination.getShape()) ||
-                            !(continuation.getResult() == kotlin.Unit.INSTANCE ||
-                                    continuation.getResult() instanceof ThunkSuspended ||
-                                    continuation.getResult() instanceof CallSegmentSuspended))
+                            (!yielded.getTail() && !callee.isSelf(closure.target)) ||
+                            !callee.hasTupleResult(destination.getShape()) ||
+                            !AsyncContinuations.isYieldMarker(continuation.getResult()))
                         throw new IllegalStateException("IO handler returned an unrelated tuple continuation");
                     MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
                             ? suspended.getParkedActiveMask() : null;
@@ -1835,12 +1945,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = boolean.class, name = "remove")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class ReadMVar {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination, boolean remove,
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination, boolean remove, boolean async,
                 Object value, Object state, @Bind("$node") Node node) {
             ManagedMVar cell = ManagedMVar.require(value);
             TupleResultsKt.requireVoidCarrier(state);
-            Object result = remove ? cell.take(node) : cell.read(node);
+            Object result = remove ? cell.take(node, async) : cell.read(node, async);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1859,12 +1970,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             destination.setObject(bytecode, frame, result.getValue());
         }
     }
-    @Operation public static final class PutMVar {
-        @Specialization public static Object put(Object reference, Object value, Object state,
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "async")
+    public static final class PutMVar {
+        @Specialization public static Object put(boolean async, Object reference, Object value, Object state,
                 @Bind("$node") Node node) {
             ManagedMVar cell = ManagedMVar.require(reference);
             TupleResultsKt.requireVoidCarrier(state);
-            cell.put(value, node);
+            cell.put(value, node, async);
             return kotlin.Unit.INSTANCE;
         }
     }

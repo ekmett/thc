@@ -11,6 +11,7 @@ import org.graalvm.polyglot.io.IOAccess
 fun defaultBackend(): String = System.getProperty("thc.backend", System.getenv("THC_BACKEND") ?: "bytecode")
 
 fun executionContext(fileIO: Boolean = false): Context = Context.newBuilder("thc").allowNativeAccess(true)
+    .allowCreateThread(true)
     .allowIO(if (fileIO) IOAccess.ALL else IOAccess.NONE)
     .allowExperimentalOptions(true)
     .option("engine.BackgroundCompilation", "false")

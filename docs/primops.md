@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 317 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 865 | No declared lowering. |
+| Partial | 320 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 862 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -395,6 +395,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `divideFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `eqAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
+- [ ] `fork#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
 - [ ] `geAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -449,6 +450,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWordOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `leAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `ltAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -469,6 +471,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `mutableByteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `myThreadId#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `neAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `negateDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -797,7 +800,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fnmsubFloatX16#` — arity 3
 - [ ] `fnmsubFloatX4#` — arity 3
 - [ ] `fnmsubFloatX8#` — arity 3
-- [ ] `fork#` — arity 2
 - [ ] `forkOn#` — arity 3
 - [ ] `freezeSmallArray#` — arity 4
 - [ ] `getApStackVal#` — arity 2
@@ -976,7 +978,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `isCurrentThreadBound#` — arity 1
 - [ ] `isMutableByteArrayPinned#` — arity 1
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
-- [ ] `killThread#` — arity 3
 - [ ] `labelThread#` — arity 3
 - [ ] `listThreads#` — arity 1
 - [ ] `makeStableName#` — arity 2
@@ -1065,7 +1066,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `mkWeak#` — arity 4
 - [ ] `mkWeakNoFinalizer#` — arity 3
 - [ ] `mulIntMayOflo#` — arity 2
-- [ ] `myThreadId#` — arity 1
 - [ ] `negateDoubleX8#` — arity 1
 - [ ] `negateFloatX16#` — arity 1
 - [ ] `negateInt16X16#` — arity 1

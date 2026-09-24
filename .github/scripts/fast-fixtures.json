@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.GuestThreadsTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
     "thc.runtime.DoubleArrayTest",
     "thc.runtime.DoubleVectorMemoryProofTest",
@@ -329,7 +330,37 @@
         "test/haskell-fixtures/Main.hs",
         "thc.cabal",
         "compiler/test-fixtures/CoreContinuationAudit.hs",
-        "compiler/test-fixtures/CoreContinuationNative.hs"
+        "compiler/test-fixtures/CoreContinuationNative.hs",
+        "compiler/test-fixtures/LazyIOCallbackAudit.hs",
+        "compiler/test-fixtures/LazyIOCallbackNative.hs"
+      ]
+    },
+    "thread-async": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-async"]}],
+      "outputs": ["build/thread-async"],
+      "sources": [
+        "test/haskell-fixtures/ThreadAsyncFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/ThreadAsyncAudit.hs",
+        "compiler/test-fixtures/ThreadAsyncNative.hs",
+        "compiler/test-fixtures/LazyForkAudit.hs",
+        "compiler/test-fixtures/LazyForkNative.hs",
+        "thc.cabal"
+      ]
+    },
+    "uncaught-self": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "uncaught-self"]}],
+      "outputs": ["build/uncaught-self"],
+      "sources": [
+        "test/haskell-fixtures/UncaughtSelfFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/UncaughtSelfAudit.hs",
+        "compiler/test-fixtures/UncaughtSelfNative.hs",
+        "thc.cabal"
       ]
     },
     "io-main-pap": {
@@ -512,6 +543,19 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-word-arrays"]}],
       "outputs": ["build/float-word-arrays"],
       "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/FloatArrayAudit.hs", "compiler/test-fixtures/WordArrayAudit.hs", "examples/THC/UnboxedFloatArrays.hs", "examples/THC/UnboxedWordArrays.hs"]
+    },
+    "live-async": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "live-async"]}],
+      "outputs": ["build/live-async"],
+      "sources": [
+        "test/haskell-fixtures/LiveAsyncFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/LiveAsyncAudit.hs",
+        "compiler/test-fixtures/LiveAsyncNative.hs",
+        "thc.cabal"
+      ]
     },
     "simd-capability-smoke": {
       "junit": ["thc.runtime.SimdCapabilitySmokeTest"],

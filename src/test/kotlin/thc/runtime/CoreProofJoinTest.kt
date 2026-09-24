@@ -11,10 +11,13 @@ import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.LoopNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import com.oracle.truffle.api.nodes.RootNode
+import com.oracle.truffle.api.bytecode.ContinuationResult
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
 import thc.executionContext
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 private typealias Core = List<Any?>
 
@@ -73,6 +76,59 @@ class CoreProofJoinTest {
         // Roots and generic forcing nodes retain their own tail-call loops;
         // the acyclic join regions themselves must not own any LoopNode.
         assertTrue(regions.all { region -> region.children.none { it is LoopNode } })
+    }
+
+    @Test fun compiledRecursiveJoinPollsWithoutCallingAnotherRoot() {
+        val step = choose(prim("<=#", v("n"), n(0)), v("acc"),
+            call("loop", prim("-#", v("n"), n(1)), prim("+#", v("acc"), n(1))))
+        val body = let(true, listOf(bind("loop", lam(listOf("n", "acc"), step), 2)),
+            call("loop", v("input"), n(0)))
+        executionContext().use { context ->
+            context.initialize("thc")
+            lateinit var p: BytecodeProgram
+            lateinit var threads: GuestThreads
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                threads = Language.currentState().threads
+                p = BytecodeProgram(language, mapOf("bindings" to listOf(bind("entry", lam(listOf("input"), body))),
+                    "instrument" to true), true)
+                val target = p.entryTarget("entry")
+                assertEquals(10L, Calls.target(target, arrayOf(0L, 10L)))
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+            } finally { context.leave() }
+            val completed = CompletableFuture<Any?>()
+            val worker = Thread {
+                context.enter()
+                threads.enterCurrent()
+                try {
+                    val answer = Calls.target(p.entryTarget("entry"), arrayOf(0L, 10_000_000L))
+                    // This isolated loop test acknowledges the captured request;
+                    // native public-thread tests separately exercise catch#.
+                    if (answer is ContinuationResult) AsyncContinuations.request(answer)?.acknowledge()
+                    completed.complete(answer)
+                } catch (failure: Throwable) { completed.completeExceptionally(failure) }
+                finally { threads.leaveCurrent(); context.leave() }
+            }.apply { isDaemon = true }
+            worker.start()
+            try {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                while ((p.diagnostics().getValue("localJoinTransfers") as Number).toLong() < 1000 &&
+                    !completed.isDone && System.nanoTime() < deadline) Thread.sleep(1)
+                assertFalse(completed.isDone, "The request must arrive inside the join loop")
+                val request = threads.send(worker.threadId(), "join loop")
+                val saved = completed.get(10, TimeUnit.SECONDS) as ContinuationResult
+                worker.join(5000)
+                assertFalse(worker.isAlive)
+                assertSame(request, saved.result)
+                assertTrue(request.compiledCapture)
+                assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                context.enter()
+                try { assertEquals(10_000_000L, saved.continueWith(Unit)) }
+                finally { context.leave() }
+            } finally { if (worker.isAlive) context.close(true) }
+        }
     }
 
     @Test fun deeplyNestedNonrecursiveJoinsAreBranchesIncludingInClonedCompiledTargets() {

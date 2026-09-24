@@ -827,6 +827,50 @@ class AuditTest(unittest.TestCase):
                 with self.subTest(name=name, field=field):
                     self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
 
+    def test_public_thread_primops_require_exact_thread_id_and_lazy_payload(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        action = dict(kind='closure', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
+        payload = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
+        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload}
+        contracts = CAP['managedThreadPrimitives']
+        self.assertEqual({name: len(spec['arguments']) for name, spec in contracts.items()},
+                         {name: CAP['primitives'][name] for name in contracts})
+        for name, spec in contracts.items():
+            parameters = [dict(id=f'operand{i}', lifted=role in ('action', 'payload'),
+                               rep=copy.deepcopy(roles[role]))
+                          for i, role in enumerate(spec['arguments'])]
+            result = (tuple_rep(*(roles[role] for role in spec['result']))
+                      if isinstance(spec['result'], list) else copy.deepcopy(roles[spec['result']]))
+            app = ['app', ['prim', name],
+                   [[*var(parameter['id']), dict(rep=copy.deepcopy(parameter['rep']))]
+                    for parameter in parameters],
+                   [parameter['lifted'] for parameter in parameters], False, False,
+                   dict(rep=copy.deepcopy(result))]
+            body = ['case', app, 'result', [['default', None, [], lit(0)]],
+                    dict(rep=LONG, binder=dict(id='result', lifted=False, rep=copy.deepcopy(result)))]
+            module = dict(schema=1, ghc='9.14.1', constructors=[], bindings=[dict(
+                id='root', name='root', lifted=True, arity=len(parameters),
+                expr=['lam', parameters, body, dict(rep=CLOSURE, resultRep=LONG)])])
+            def issues():
+                return {issue['code'] for issue in audit_core.Audit([('thread.json', module)], CAP).run(['root'])['issues']}
+            with self.subTest(name=name):
+                self.assertEqual(set(), issues())
+                wrong = copy.deepcopy(app[2][0][-1]['rep'])
+                app[2][0][-1]['rep'] = state if spec['arguments'][0] != 'state' else thread
+                self.assertIn('primitive-representation', issues())
+                app[2][0][-1]['rep'] = wrong
+                app[3][0] = not app[3][0]
+                self.assertIn('primitive-representation', issues())
+                app[3][0] = not app[3][0]
+                saved = copy.deepcopy(app[6]['rep'])
+                app[6]['rep'] = state if isinstance(spec['result'], list) else thread
+                self.assertIn('primitive-representation', issues())
+                app[6]['rep'] = saved
+                if name == 'killThread#':
+                    parameters[0]['rep'] = state
+                    self.assertIn('primitive-representation', issues())
+
     def test_masking_state_primops_require_exact_continuation_state_and_int_result(self):
         state = dict(kind='void', primReps=[], evaluated=True)
         for name, args, result in (

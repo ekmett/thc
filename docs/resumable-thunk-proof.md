@@ -3,6 +3,9 @@
 
 # Resumable bytecode thunk proof
 
+These private experiments preceded the
+[production asynchronous exception path](async-exceptions.md).
+
 `ResumableThunkProofTest` uses a test-only Truffle Bytecode DSL root with two real
 `Yield` instructions. It keeps a primitive `Long` and an object local live across
 both yields. An observable effect runs before the first yield. The first entry
@@ -11,7 +14,7 @@ two concurrent readers observe one published answer without replaying the
 effect. The test checks the saved frame's primitive `Long` and object slot tags,
 as well as the DSL local's `Long` type profile. The generated interpreter
 materializes the frame in `handleYield`, not at ordinary bytecode entry.
-Production `BytecodeRoot` does not enable yield yet.
+The production bytecode backend now uses the same Yield machinery at async cuts.
 
 `Force` places the `ContinuationResult` in the thunk's existing value slot and
 publishes a paused state under the ownership monitor. Claiming that state

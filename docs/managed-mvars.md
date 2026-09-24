@@ -38,10 +38,11 @@ delivers an already committed operation: it does not compete for the cell again.
 Terminal cancellation removes only a still-pending request and releases its
 offered payload; it cannot revoke or replay a committed transfer.
 
-This does not introduce a guest scheduler, `fork#`, `throwTo#`, masking, Haskell
-exception recovery or resumable interrupted thunks. Language context policy and
-guest-thread admission are unchanged. Blocking integration tests use one active
-guest thread and external host cell operations, not concurrent guest admission.
+The bytecode backend also uses these requests for
+[asynchronous exception delivery](async-exceptions.md). Interruption cancels
+an uncommitted request and saves a retry at the guest continuation cut. The
+original cell protocol tests use external host operations; the public threading
+fixtures exercise concurrent guest admission and `killThread#`.
 Weak finalizers, other Handle dependencies and native IO remain separate work.
 
 ## Evidence and reproduction

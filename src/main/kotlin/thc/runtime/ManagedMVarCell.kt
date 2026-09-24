@@ -35,12 +35,14 @@ internal class ManagedMVar {
         private val awaitRequest = TruffleSafepoint.InterruptibleFunction<Request, Any?> { it.await() }
     }
 
-    @TruffleBoundary fun take(node: Node): Any? = awaitAt(Request(Operation.TAKE), node)
+    @JvmOverloads @TruffleBoundary fun take(node: Node, async: Boolean = false): Any? =
+        awaitAt(Request(Operation.TAKE, checkpoint = if (async) node else null), node)
 
-    @TruffleBoundary fun read(node: Node): Any? = awaitAt(Request(Operation.READ), node)
+    @JvmOverloads @TruffleBoundary fun read(node: Node, async: Boolean = false): Any? =
+        awaitAt(Request(Operation.READ, checkpoint = if (async) node else null), node)
 
-    @TruffleBoundary fun put(value: Any?, node: Node) {
-        awaitAt(Request(Operation.PUT, value), node)
+    @JvmOverloads @TruffleBoundary fun put(value: Any?, node: Node, async: Boolean = false) {
+        awaitAt(Request(Operation.PUT, value, if (async) node else null), node)
     }
 
     private fun awaitAt(request: Request, node: Node): Any? {
@@ -110,6 +112,7 @@ internal class ManagedMVar {
     internal inner class Request internal constructor(
         private val operation: Operation,
         offered: Any? = null,
+        private val checkpoint: Node? = null,
     ) {
         private val completed = lock.newCondition()
         private var status = RequestState.PENDING
@@ -161,7 +164,17 @@ internal class ManagedMVar {
             lock.lockInterruptibly()
             try {
                 submitLocked()
-                while (status == RequestState.PENDING) completed.await()
+                while (status == RequestState.PENDING) {
+                    val interruption = checkpoint?.let { GuestThreads.pollCurrent(it, true) }
+                    if (interruption != null) {
+                        // Cell commitment and cancellation share this lock. A
+                        // completed take/put always returns its answer; only an
+                        // uncommitted request can be retried by the continuation.
+                        check(cancel())
+                        throw AsyncBlocked(interruption, checkpoint)
+                    }
+                    completed.await()
+                }
                 if (status == RequestState.CANCELLED) throw CancellationException("Managed MVar request cancelled")
                 return result
             } finally {

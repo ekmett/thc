@@ -45,6 +45,23 @@ class CallDemandTest {
     private fun delayedBox(n: DemandCore) = choose(n, box(integer(9)), box(n))
     private fun failingBox(n: DemandCore) = apply(listOf("con", "Box", 1), listOf(primitive("quotInt#", integer(1), n)))
     private fun local(group: List<Map<String, Any?>>, body: DemandCore): DemandCore = listOf("let", false, group, body)
+    @Test fun certifiedPartialApplicationOfShorterRetainedLambdaStaysLazyInNonrecursiveLet() {
+        val later = lambda(listOf(parameter("later")), variable("later"))
+        val entered = listOf("case", primitive("quotInt#", integer(1), integer(0)), "quotient",
+            listOf(listOf("default", null, emptyList<String>(), later)), mapOf("rep" to closure))
+        val head = binding("localHead", lambda(listOf(parameter("first")), entered, closure)) + mapOf("arity" to 2)
+        val partial = binding("partial", listOf("app", variable("localHead"), listOf(variable("first")),
+            listOf(false), true, true, mapOf("rep" to closure)))
+        val bound = local(listOf(head), local(listOf(partial), integer(7)))
+        val forced = local(listOf(head), local(listOf(partial), listOf("case", variable("partial"), "forced",
+            listOf(listOf("default", null, emptyList<String>(), integer(7))))))
+        eachBackend(listOf(
+            binding("withoutForce", lambda(listOf(parameter("first")), bound)),
+            binding("withForce", lambda(listOf(parameter("first")), forced)))) { backend, program ->
+            assertEquals(7L, run(program, "withoutForce", 1L), backend)
+            assertThrows(RuntimeException::class.java, { run(program, "withForce", 1L) }, backend)
+        }
+    }
     private fun consumer() = binding("consumer", lambda(listOf(parameter("tree", data), parameter("extra")),
         unbox(variable("tree"), primitive("+#", variable("payload"), variable("extra")))))
     private fun count(p: ExecutableProgram, name: String) = (p.diagnostics().getValue(name) as Number).toLong()

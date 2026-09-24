@@ -195,6 +195,18 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/LiveAsyncAudit.hs": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LiveAsyncNative.hs": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/LiveAsyncFixtures.hs": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/OriginalStackFormatter.hs": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "python": []
@@ -322,6 +334,38 @@
     },
     "test/haskell-fixtures/Int32ByteOffsetFixtures.hs": {
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ThreadAsyncAudit.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ThreadAsyncNative.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LazyForkAudit.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LazyForkNative.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ThreadAsyncFixtures.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/UncaughtSelfAudit.hs": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/UncaughtSelfNative.hs": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/UncaughtSelfFixtures.hs": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
       "python": []
     },
     "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
@@ -719,6 +763,8 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ThreadAsyncNativeTest",
+        "thc.runtime.UncaughtSelfNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",
         "thc.runtime.Explicit64ArrayTest",
@@ -728,6 +774,7 @@
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
+        "thc.runtime.AsyncStrictEntryNativeTest",
         "thc.runtime.MaskFunctionNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
@@ -749,6 +796,14 @@
       "python": []
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LazyIOCallbackAudit.hs": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LazyIOCallbackNative.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
     },

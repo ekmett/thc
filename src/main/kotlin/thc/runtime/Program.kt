@@ -140,7 +140,7 @@ internal class CapturedAsyncDelivery @JvmOverloads constructor(
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Private captured IO-handler delivery", null, 0, null)
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
-internal class ThunkSuspended(val thunk: Thunk) :
+internal class ThunkSuspended @JvmOverloads constructor(val thunk: Thunk, val asyncRequest: AsyncRequest? = null) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode thunk suspension", null, 0, null)
 /** A call returned its own bytecode continuation; only that exact call edge may capture it. */
@@ -150,7 +150,8 @@ internal class CapturedCallSuspension(val segment: CallSegment) :
 internal class CallSegmentSuspended @JvmOverloads constructor(
     val segment: CallSegment,
     /** Logical mask before a caller parked to its root-entry mask for Yield. */
-    val parkedActiveMask: MaskingState? = null
+    val parkedActiveMask: MaskingState? = null,
+    val asyncRequest: AsyncRequest? = (segment.value as? ContinuationResult)?.let(AsyncContinuations::request)
 ) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call segment suspension", null, 0, null)
@@ -322,7 +323,7 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
                     @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
     override fun execute(frame: VirtualFrame): Thunk = Thunk(target, captureLayout?.capture(frame, captures))
 }
-internal class Force(private val metrics: Metrics) : Node() {
+internal class Force @JvmOverloads constructor(private val metrics: Metrics, private val asyncMode: Boolean = false) : Node() {
     private object Retry
     private class Parked(val boundary: Any, val continuation: ContinuationResult)
     @Child private var calls = ThunkTargetCache(metrics)
@@ -536,13 +537,13 @@ internal class Force(private val metrics: Metrics) : Node() {
                     if (answer === Retry) null else ChildResume(answer, null)
                 } catch (suspension: ThunkSuspended) {
                     // Resignal the requested update boundary, not a deeper child.
-                    if (original.state == 5) throw ThunkSuspended(original)
+                    if (original.state == 5) throw ThunkSuspended(original, suspension.asyncRequest)
                     throw suspension
                 } catch (suspension: CallSegmentSuspended) {
                     // The requested thunk is still parked even if a deeper
                     // dependency yielded again. A new caller must capture the
                     // requested update boundary, not skip its continuation.
-                    if (original.state == 5) throw ThunkSuspended(original)
+                    if (original.state == 5) throw ThunkSuspended(original, suspension.asyncRequest)
                     throw suspension
                 } catch (failure: GuestException) { ChildResume(null, failure) }
                 if (outcome == null) break // Another evaluator advanced a link; rescan from the root.
@@ -616,16 +617,19 @@ internal class Force(private val metrics: Metrics) : Node() {
         val carrierAmbient = SynchronousMasking.current(this)
         try {
             SynchronousMasking.set(this, resumeMask)
-            val result = try { continuation.continueWith(resumeValue) }
+            val returned = try { continuation.continueWith(resumeValue) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+            val result = if (returned is TailYield) returned.continuation else returned
             if (result is ContinuationResult) {
-                if (result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
+                if (returned !is TailYield && !sameContinuationBody(result.continuationRootNode.sourceRootNode,
+                        continuation.continuationRootNode.sourceRootNode))
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
                 val parkedMask = (result.result as? CallSegmentSuspended)?.parkedActiveMask
                 if (parkedMask != null && SynchronousMasking.current(this) != segment.callerMask)
                     throw IllegalStateException("Parked call segment did not restore its caller mask")
+                val request = AsyncContinuations.request(result)
                 publishCallContinuation(segment, result, parkedMask ?: SynchronousMasking.current(this))
-                throw CallSegmentSuspended(segment)
+                throw CallSegmentSuspended(segment, asyncRequest = request)
             }
             // A completed tuple may still be a producer-thread slab loan.
             // Release that loan even if the callee returned under a wrong mask.
@@ -706,7 +710,10 @@ internal class Force(private val metrics: Metrics) : Node() {
     private fun awaitCallOwner(segment: CallSegment) {
         TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<CallSegment> { waiting ->
             synchronized(waiting.monitor) {
-                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) waiting.monitor.wait()
+                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
+                    if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
+                    waiting.monitor.wait()
+                }
             }
         }, segment)
     }
@@ -717,7 +724,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                 val target = thunk.target ?: fault("Unevaluated thunk has no body")
                 metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name)
             }
-            val result = if (continuation == null) {
+            val returned = if (continuation == null) {
                 try { calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             } else {
@@ -731,13 +738,15 @@ internal class Force(private val metrics: Metrics) : Node() {
                     catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
                 } finally { SynchronousMasking.set(this, ambient) }
             }
+            val result = if (returned is TailYield) returned.continuation else returned
             if (result is ContinuationResult) {
                 val expectedRoot = continuation?.continuationRootNode?.sourceRootNode
                     ?: thunk.target?.rootNode
-                if (result.continuationRootNode.sourceRootNode !== expectedRoot)
+                if (returned !is TailYield && !sameContinuationBody(result.continuationRootNode.sourceRootNode, expectedRoot))
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
+                val request = AsyncContinuations.request(result)
                 publishContinuation(thunk, result)
-                throw ThunkSuspended(thunk)
+                throw ThunkSuspended(thunk, request)
             }
             if (result is Thunk) fault("Thunk target violated WHNF convention")
             synchronized(thunk.monitor) {
@@ -770,6 +779,9 @@ internal class Force(private val metrics: Metrics) : Node() {
             throw e
         }
     }
+
+    private fun sameContinuationBody(actual: Any, expected: Any?): Boolean =
+        actual === expected || actual is GuestRoot && expected is GuestRoot && actual.isSelf(expected.callTarget)
 
     private fun publishContinuation(thunk: Thunk, continuation: ContinuationResult) {
         // A side-effecting thread-local action must not unwind between storing
@@ -823,7 +835,10 @@ internal class Force(private val metrics: Metrics) : Node() {
     private fun awaitOwner(thunk: Thunk) {
         TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<Thunk> { waiting ->
             synchronized(waiting.monitor) {
-                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) waiting.monitor.wait()
+                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
+                    if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
+                    waiting.monitor.wait()
+                }
             }
         }, thunk)
     }
@@ -1581,14 +1596,16 @@ internal class EntryRoot(language: TruffleLanguage<*>?, private val arity: Int, 
     override fun getName() = "THC host entry/$arity"
 }
 private data class Local(val slot: Int, val primitive: Boolean, val proof: CoreRepresentation, val cell: Boolean,
-                         val entry: BooleanArray? = null, val tupleSlots: IntArray? = null)
+                         val entry: BooleanArray? = null, val tupleSlots: IntArray? = null,
+                         val arityCertificate: CoreApplicationCertificates.Arity? = null)
 private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Local> = linkedMapOf(),
                     val joins: MutableMap<String, LocalJoinTarget> = linkedMapOf(),
                     var self: AstSelfLayout? = null) {
     fun child() = Scope(layout.scope(), LinkedHashMap(locals), LinkedHashMap(joins), self)
     fun bind(id: String, primitive: Boolean, proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
-             entry: BooleanArray? = null): Local =
-        Local(layout.bind(id), if (proof.present) proof.isLong else primitive, proof, cell, entry).also { locals[id] = it; joins.remove(id) }
+             entry: BooleanArray? = null, arityCertificate: CoreApplicationCertificates.Arity? = null): Local =
+        Local(layout.bind(id), if (proof.present) proof.isLong else primitive, proof, cell, entry,
+            arityCertificate = arityCertificate).also { locals[id] = it; joins.remove(id) }
     fun bindTuple(id: String, proof: CoreRepresentation, slots: IntArray): Local =
         Local(-1, false, proof, false, tupleSlots = slots).also { locals[id] = it; joins.remove(id) }
     fun bindVoid(id: String, proof: CoreRepresentation): Local =
@@ -1635,6 +1652,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val names = bindings.withIndex().groupBy({ it.value["name"] as String }, { it.index })
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
+    private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     init {
         ArrayOp.validateApplications(bindings)
         CoreStackForeign.validateHeads(bindings)
@@ -1659,7 +1677,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scope.layout.build())
         bindings.forEachIndexed { index, binding ->
             val value = initializers[index].execute(frame)
-            CoreFunctionIdentity.install(moduleData, binding, value)
+            CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates)
             globals.getValue(binding["id"] as String).initialize(value)
         }
     }
@@ -1722,7 +1740,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val captureKinds = captured.map { outer.locals.getValue(it).primitive }.toBooleanArray()
         val environmentSlots = captured.map { id ->
             val local = outer.locals.getValue(id)
-            scope.bind(id, local.primitive, local.proof, local.cell, local.entry).slot
+            scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
         }.toIntArray()
         val argumentSlots = arrayListOf<Int>(); val argumentIndices = arrayListOf<Int>()
         val argumentProofs = arrayListOf<CoreRepresentation>()
@@ -1802,7 +1820,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         // dictionary knots. Allocate these values directly instead of creating
         // an update thunk and captures. A false certificate overrides HNF.
         // Older exports fall back to exprIsHNF; missing proofs stay lazy.
-        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true)))
+        val head = (expr.getOrNull(1) as? List<*>)?.takeIf { expr[0] == "app" && it.firstOrNull() == "var" }
+        val headId = head?.getOrNull(1) as? String
+        val arityCertificate = headId?.let { id ->
+            if (id in scope.locals) scope.locals.getValue(id).arityCertificate else globalArityCertificates[id]
+        }
+        if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate))
             return compile(expr, scope, false).also { check(it.representation) }
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
@@ -2133,7 +2156,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 group.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "let binding") }
                 val local = scope.child()
                 val slots = group.map { local.bind(it["id"] as String, !representation(it),
-                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it)).slot }.toIntArray()
+                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it),
+                    arityCertificate = CoreApplicationCertificates.binding(it)).slot }.toIntArray()
                 val rhs = group.map { binding -> withSource(sources.binding(binding, currentSource)) {
                     val it = binding
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
