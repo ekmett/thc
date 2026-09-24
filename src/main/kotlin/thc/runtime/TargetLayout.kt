@@ -14,6 +14,7 @@ class TargetLayout private constructor(
     val way: String,
     val wordBytes: Int,
     val endianness: String,
+    val tablesNextToCode: Boolean,
     private val values: Map<String, Int>,
 ) {
     fun offset(name: String): Int = values[name] ?: error("Unknown GHC target layout field: $name")
@@ -21,10 +22,11 @@ class TargetLayout private constructor(
     override fun equals(other: Any?): Boolean = other is TargetLayout &&
         compilerId == other.compilerId && compilerAbi == other.compilerAbi &&
         platform == other.platform && way == other.way &&
-        wordBytes == other.wordBytes && endianness == other.endianness && values == other.values
+        wordBytes == other.wordBytes && endianness == other.endianness &&
+        tablesNextToCode == other.tablesNextToCode && values == other.values
 
     override fun hashCode(): Int = listOf(compilerId, compilerAbi, platform, way,
-        wordBytes, endianness, values).hashCode()
+        wordBytes, endianness, tablesNextToCode, values).hashCode()
 
     fun document(): Map<String, Any> = mapOf(
         "format" to "thc-target-layout", "schema" to 1,
@@ -32,6 +34,7 @@ class TargetLayout private constructor(
             "platform" to platform, "way" to way),
         "layout" to (values + mapOf("schema" to 1, "profiled" to false,
             "wordBytes" to wordBytes, "endianness" to endianness,
+            "tablesNextToCode" to tablesNextToCode,
             "targetPlatform" to platform)),
     )
 
@@ -101,10 +104,12 @@ class TargetLayout private constructor(
                 abi.matches(Regex("[A-Za-z0-9._+-]+")) && platform == hostPlatform() &&
                 way == "dynamic-nonprofiling") { "GHC target identity or way differs from this runtime" }
             require(layout.keys == numbers + setOf("schema", "profiled", "wordBytes", "endianness",
-                "targetPlatform") && int(layout["schema"], "schema") == 1 &&
+                "targetPlatform", "tablesNextToCode") && int(layout["schema"], "schema") == 1 &&
                 layout["profiled"] == false && layout["targetPlatform"] == platform) {
                 "Incomplete or profiled GHC target layout"
             }
+            val tablesNextToCode = layout["tablesNextToCode"] as? Boolean
+                ?: error("Missing GHC tables-next-to-code setting")
             val word = int(layout["wordBytes"], "wordBytes")
             val endian = layout["endianness"] as? String
             val nativeEndian = if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big"
@@ -151,7 +156,7 @@ class TargetLayout private constructor(
             require(ordinals.all { (name, expected) -> v(name) == expected }) {
                 "GHC closure ordinals differ from 9.14.1"
             }
-            return TargetLayout(id, abi, platform, way, word, endian,
+            return TargetLayout(id, abi, platform, way, word, endian, tablesNextToCode,
                 Collections.unmodifiableMap(LinkedHashMap(values)))
         }
 

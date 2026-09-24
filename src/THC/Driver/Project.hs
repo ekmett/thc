@@ -688,6 +688,7 @@ validTargetLayout :: Value -> Bool
 validTargetLayout layout =
   jsonField layout "schema" == Just (1 :: Int) &&
   jsonField layout "profiled" == Just False &&
+  maybe False (const True) (jsonField layout "tablesNextToCode" :: Maybe Bool) &&
   maybe False (not . null) (jsonField layout "targetPlatform" :: Maybe String) &&
   (jsonField layout "endianness" :: Maybe String) `elem` [Just "little", Just "big"] &&
   maybe False (`elem` [4, 8]) (jsonField layout "wordBytes" :: Maybe Int) &&

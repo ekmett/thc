@@ -39,6 +39,11 @@ int main(void) {
     NUMBER("wordBytes", sizeof(void *));
     printf("\"targetPlatform\":\"%s-%s\",", THC_ARCH, THC_OS);
     printf("\"endianness\":\"%s\",", *(const unsigned char *) &endian_probe == 1 ? "little" : "big");
+#if defined(TABLES_NEXT_TO_CODE)
+    printf("\"tablesNextToCode\":true,");
+#else
+    printf("\"tablesNextToCode\":false,");
+#endif
     NUMBER("infoTableBytes", sizeof(struct StgInfoTable_));
     NUMBER("infoTablePtrsOffset", offsetof(struct StgInfoTable_, layout.payload.ptrs));
     NUMBER("infoTablePtrsBytes", MEMBER_BYTES(struct StgInfoTable_, layout.payload.ptrs));

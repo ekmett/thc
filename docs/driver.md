@@ -122,7 +122,8 @@ It is provenance for a future low-level snapshot adapter; source export alone
 does not make the original RTS stack primitives executable.
 The JVM package loader compares that layout in the ZIP index and hashed build
 receipt, checks the host architecture, word size, endianness, nonprofiling way
-and field bounds, then passes one immutable target-layout record to either
+and field bounds, and carries the installed GHC tables-next-to-code choice into
+one immutable target-layout record for either
 backend. Bundles without the receipt have no target layout; stack/IPE operations
 must reject that absence instead of assuming offsets from a particular host.
 
