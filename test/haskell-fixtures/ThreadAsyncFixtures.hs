@@ -24,6 +24,8 @@ prepareThreadAsync root = do
       manifest = output </> "manifest.json"
       source = "compiler/test-fixtures/ThreadAsyncAudit.hs"
       driver = "compiler/test-fixtures/ThreadAsyncNative.hs"
+      lazySource = "compiler/test-fixtures/LazyForkAudit.hs"
+      lazyDriver = "compiler/test-fixtures/LazyForkNative.hs"
       entries = ["forkAndThrow", "killUncaught", "selfThrow"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
@@ -49,6 +51,19 @@ prepareThreadAsync root = do
       case decodeStrict' bytes of
         Just value | supportedThreadContract entry value -> pure ()
         _ -> die ("Public thread Core audit did not accept " ++ entry)
+    _ <- run root [("THC_CORE_OUT", root </> core),
+      ("THC_GHC_OUT", output </> stage </> "lazy-ghc")]
+      "compiler/export.sh" (options ++ [lazySource]) ""
+    let lazyReport = directory </> stage </> "lazyFork-audit.json"
+    (lazyStatus, _, lazyErrors) <- readCreateProcessWithExitCode
+      ((proc "python3" ["scripts/audit-core.py", "--entry", "lazyFork",
+        "--output", lazyReport, core </> "LazyForkAudit.json"]) { cwd = Just root }) ""
+    unless (lazyStatus == ExitSuccess)
+      (die ("Lazy fork Core audit failed: " ++ lazyErrors))
+    lazyBytes <- BS.readFile (root </> lazyReport)
+    case decodeStrict' lazyBytes of
+      Just value | supportedThreadContract "lazyFork" value -> pure ()
+      _ -> die "Lazy fork Core audit did not accept"
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
@@ -62,22 +77,31 @@ prepareThreadAsync root = do
     ["extras", "+RTS", "-N2", "-RTS"] ""
   unless (extras == "5\n-1\n") (die "Public thread uncaught/self delivery oracle disagreed")
   writeFile (output </> "extra-oracle.txt") extras
+  _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
+    "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
+    root </> lazyDriver, "-o", native </> "lazy-oracle"] ""
+  lazyActual <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "lazy-oracle")
+    ["+RTS", "-N2", "-RTS"] ""
+  unless (lazyActual == "52\n53\n") (die "Lazy fork native child ownership/resume oracle disagreed")
+  writeFile (output </> "lazy-oracle.txt") lazyActual
   pluginFiles <- listDirectory (root </> "compiler/THC")
   coreScripts <- listDirectory (root </> "scripts")
-  let sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
+  let sources = sort $ [source, driver, lazySource, lazyDriver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ThreadAsyncFixtures.hs",
         "scripts/audit-core.py", "scripts/core-capabilities.json",
         "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
         ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
-      artifacts = [directory </> "oracle.txt", directory </> "extra-oracle.txt"] ++
+      artifacts = [directory </> "oracle.txt", directory </> "extra-oracle.txt", directory </> "lazy-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
-          suffix <- "core/ThreadAsyncAudit.json" : [entry ++ "-audit.json" | entry <- entries]]
+          suffix <- ["core/ThreadAsyncAudit.json", "core/LazyForkAudit.json", "lazyFork-audit.json"] ++
+                    [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entry" .= ("forkAndThrow" :: String), "entries" .= entries, "stages" .= stages,
     "native" .= ([43, 44] :: [Int]), "extraNative" .= ([5, -1] :: [Int]),
+    "lazyNative" .= ([52, 53] :: [Int]),
     "inputHashes" .= sourceHashes,
     "artifactHashes" .= artifactHashes, "installedArtifactsHashed" .= False]
   putStrLn "thread-async: native fork#/myThreadId#/killThread#, strict pre/post Core"
@@ -96,6 +120,7 @@ supportedThreadContract entry (Object report) = hasPublicThreadPrimitives && cas
               "forkAndThrow" -> ["fork#", "myThreadId#", "killThread#", "catch#"]
               "killUncaught" -> ["fork#", "myThreadId#", "killThread#"]
               "selfThrow" -> ["myThreadId#", "killThread#", "catch#"]
+              "lazyFork" -> ["fork#", "killThread#"]
               _ -> []
         in not (null required) && all ((`elem` names) . Just . String) required &&
            Just "noDuplicate#" `notElem` names

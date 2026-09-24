@@ -344,6 +344,14 @@
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
     },
+    "compiler/test-fixtures/LazyForkAudit.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LazyForkNative.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
     "test/haskell-fixtures/ThreadAsyncFixtures.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []

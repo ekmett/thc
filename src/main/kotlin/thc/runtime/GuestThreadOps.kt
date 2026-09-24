@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleSafepoint
+import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ControlFlowException
@@ -81,12 +82,31 @@ private class ForkDestination(shape: TupleShape, private val language: Language)
 }
 
 /** One child entry owns its dispatch tree; no caller frame or handoff loan crosses threads. */
-private class ForkActionRoot(shape: TupleShape) : RootNode(shape.language, FrameLayout().build()) {
-    @Child private var dispatch = TupleDispatch(ForkDestination(shape, shape.language), Metrics(false), 1, false)
+private class ForkActionRoot(private val language: Language, initialShape: TupleShape?) :
+    RootNode(language, FrameLayout().build()) {
+    @Child private var force = Force(Metrics(false), true)
+    @Child private var dispatch: TupleDispatch? = initialShape?.let {
+        TupleDispatch(ForkDestination(it, language), Metrics(false), 1, false)
+    }
     override fun execute(frame: VirtualFrame): Any {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L)
-        val action = frame.arguments[0] as? Closure ?: fault("fork# requires a state-transformer closure")
-        dispatch.execute(frame, action, arrayOf(Unit))
+        val input = frame.arguments[0]
+        var resolved: Closure? = null
+        while (resolved == null) {
+            try { resolved = requireClosure(force.execute(frame, input)) }
+            catch (suspended: ThunkSuspended) {
+                // The fork's head is outside the action's catch# scope. A real
+                // async request is uncaught; a private checkpoint resumes its
+                // exact thunk rather than replaying its already-run prefix.
+                suspended.asyncRequest?.let { throw UncaughtForkAsync(it) }
+                TruffleSafepoint.poll(this)
+            }
+        }
+        val action = resolved
+        val shape = GuestThreadOps.actionResult(action)
+        val callee = dispatch ?: insert(TupleDispatch(ForkDestination(shape, language), Metrics(false), 1, false))
+            .also { dispatch = it }
+        callee.execute(frame, action, arrayOf(Unit))
         return Unit
     }
     override fun getName() = "THC fork action"
@@ -94,7 +114,7 @@ private class ForkActionRoot(shape: TupleShape) : RootNode(shape.language, Frame
 
 internal object GuestThreadOps {
     private val lifted = listOf("BoxedRep (Just Lifted)")
-    private fun actionResult(action: Closure): TupleShape {
+    internal fun actionResult(action: Closure): TupleShape {
         val root = action.target.rootNode as? BytecodeRoot
             ?: fault("fork# requires an async-capable bytecode action")
         if (!root.isAsyncEnabled) fault("fork# action has no async continuation capture")
@@ -112,11 +132,14 @@ internal object GuestThreadOps {
     }
 
     /** Start a real Truffle thread and wait only until its guest registration is visible. */
-    @JvmStatic @TruffleBoundary fun fork(node: Node, action: Closure): GuestThreadId {
+    @JvmStatic @TruffleBoundary fun fork(node: Node, action: Any?): GuestThreadId {
         val state = Language.currentState(node)
         val threads = state.threads
-        val shape = actionResult(action)
-        val root = ForkActionRoot(shape).callTarget
+        // A known closure retains immediate contract validation. A lazy action
+        // must be forced after the child enters its own guest thread instead.
+        val shape = (action as? Closure)?.let(::actionResult)
+        val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(node)
+        val root = ForkActionRoot(language, shape).callTarget
         val inheritedMask = state.maskingState.get()
         val ready = CountDownLatch(1)
         val registrationFailure = AtomicReference<Throwable?>()
