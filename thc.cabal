@@ -45,8 +45,10 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Exception/Type.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/Fingerprint.hs
   compiler/pinned-ghc-internal/GHC/Internal/Fingerprint.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Foreign/C/String/Encoding.hs
   compiler/pinned-ghc-internal/GHC/Internal/Foreign/Marshal/Alloc.hs
   compiler/pinned-ghc-internal/GHC/Internal/Foreign/Storable.hs
+  compiler/pinned-ghc-internal/GHC/Internal/ForeignPtr.hs
   compiler/pinned-ghc-internal/GHC/Internal/Heap/Closures.hs
   compiler/pinned-ghc-internal/GHC/Internal/Heap/Constants.hsc
   compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc
@@ -54,9 +56,12 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF8.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/IO/Handle/Types.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Handle/Types.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/IO/Unsafe.hs
   compiler/pinned-ghc-internal/GHC/Internal/Ix.hs
   compiler/pinned-ghc-internal/GHC/Internal/List.hs

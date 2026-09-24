@@ -25,16 +25,16 @@ class OriginalStackFormatterTest {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun hash(file: File) = hash(file.readBytes())
     private val sourceRoot = "compiler/pinned-ghc-internal/"
-    // Pin the complete path/hash catalog independently, without duplicating its 52 entries.
+    // Pin the complete path/hash catalog independently, without duplicating its 57 entries.
     // A changed exporter catalog cannot silently drop or repin a source in the fixture receipt.
     private val pinned by lazy {
         val text = contained("src/THC/Driver/Wired.hs", true).readText()
             .substringAfter("sourceHashes =").substringBefore("\ndata WiredArtifacts")
         val entries = Regex("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").findAll(text)
             .map { it.groupValues[1] to it.groupValues[2] }.toList()
-        require(entries.size == 52 && entries.map { it.first }.toSet().size == 52)
+        require(entries.size == 57 && entries.map { it.first }.toSet().size == 57)
         require(hash(entries.sortedBy { it.first }.joinToString("") { (path, digest) -> "$path\u0000$digest\n" }.toByteArray()) ==
-            "c38a02f66da9221caf742eb2129044eac958bc2202e1d2140fc1d6540d9780fe")
+            "c2c7f0ccd2058579bc0f2513ecf34e37279f2a3ef5ff48b0bb659176c24d705c")
         entries.associate { (path, digest) -> sourceRoot + path to digest }
     }
     private val requiredInputs by lazy {
@@ -201,6 +201,34 @@ class OriginalStackFormatterTest {
         // the full Show closure: its missing Ptr/Word/Either helpers stay missing.
     }
 
+    @Test fun freshOriginalEncodingSourcesResolveTheirExactStackCallers() {
+        val receipt = manifest()
+        val originals = receipt["originals"] as List<String>
+        val cases = listOf(
+            Triple("GHC.Internal.Foreign.C.String.Encoding", "\$wpeekCString", "GHC.Internal.InfoProv.Types.\$wpeekInfoProv"),
+            Triple("GHC.Internal.IO.Encoding.UTF8", "utf2", "GHC.Internal.InfoProv.Types.\$wpeekInfoProv"),
+            Triple("GHC.Internal.IO.Encoding", "getForeignEncoding", "GHC.Internal.ExecutionStack.Internal.stackFrames"),
+            Triple("GHC.Internal.ForeignPtr", "\$winsertCFinalizer", "GHC.Internal.ExecutionStack.Internal.stackFrames"))
+        for ((module, name, callerName) in cases) {
+            val full = json(originals.single { it.endsWith("/$module.json") })
+            val id = "ghc-internal:$module.$name"
+            val original = (full["bindings"] as List<Map<String, Any?>>).single { it["id"] == id }
+            assertEquals(name, original["name"])
+            val callerModule = json(originals.single { it.endsWith("/${callerName.substringBeforeLast('.')}.json") })
+            val caller = (callerModule["bindings"] as List<Map<String, Any?>>).single { it["id"] == "ghc-internal:$callerName" }
+            fun references(value: Any?): Int = when (value) {
+                is List<*> -> if (value.getOrNull(0) == "var" && value.getOrNull(1) == id) 1 else value.sumOf(::references)
+                is Map<*, *> -> value.values.sumOf(::references)
+                else -> 0
+            }
+            assertTrue(references(caller["expr"]) > 0, "Fresh original $callerName must reference $id")
+            val linked = CoreModules.merge(listOf(full, callerModule))
+            assertEquals(original, (linked["bindings"] as List<Map<String, Any?>>).single { it["id"] == id })
+        }
+        // Exact source/worker availability is not execution or strict admission
+        // of locale/iconv, buffer codecs, finalizers, or the full error closure.
+    }
+
     @Test fun freshOriginalEnumWorkerResolvesClosureTypeErrorWithoutAlias() {
         val receipt = manifest()
         val path = sourceRoot + "GHC/Internal/Enum.hs"
@@ -309,8 +337,8 @@ class OriginalStackFormatterTest {
         val value = manifest()
         val inputs = value["inputHashes"] as Map<String, String>
         val artifacts = value["artifactHashes"] as Map<String, String>
-        assertEquals(81, requiredInputs.size)
-        assertEquals(81, artifacts.size)
+        assertEquals(86, requiredInputs.size)
+        assertEquals(85, artifacts.size)
         for (path in requiredInputs)
             assertThrows(IllegalArgumentException::class.java, {
                 checked(value + ("inputHashes" to (inputs - path)))
