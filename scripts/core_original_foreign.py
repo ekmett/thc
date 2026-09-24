@@ -3,12 +3,16 @@
 
 """Closed original GHC 9.14.1 foreign declarations, never wrapper-pattern aliases.
 
-Recognition is separate from capability admission. Stack payload getters,
-complete IPE decoding and remote capture remain unsupported.
+Recognition is separate from capability admission and runtime frame-kind checks.
+These declarations alone do not enable complete decoding or remote capture.
 """
 
 STACK_CLONE = 'stg_cloneMyStackzh'
-STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'lookupIPE'))
+STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'lookupIPE',
+    'getUnderflowFrameNextChunkzh', 'getWordzh', 'isArgGenBigRetFunTypezh',
+    'getLargeBitmapzh', 'getBCOLargeBitmapzh', 'getRetFunLargeBitmapzh',
+    'getSmallBitmapzh', 'getRetFunSmallBitmapzh', 'getStackClosurezh',
+    'getStackFieldszh', 'advanceStackFrameLocationzh'))
 
 OPERATIONS = {
     'ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
@@ -20,6 +24,18 @@ OPERATIONS = {
     'getStackInfoTableAddrzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)',), 'AddrRep'),
     'getInfoTableAddrszh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('AddrRep', 'AddrRep')),
     'lookupIPE': ('ccall', 'safe', ('AddrRep', 'AddrRep', None), (None, 'Word8Rep')),
+    'getUnderflowFrameNextChunkzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), 'BoxedRep (Just Unlifted)'),
+    'getWordzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), 'WordRep'),
+    'isArgGenBigRetFunTypezh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), 'IntRep'),
+    'getLargeBitmapzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('AddrRep', 'WordRep')),
+    'getBCOLargeBitmapzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('AddrRep', 'WordRep')),
+    'getRetFunLargeBitmapzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('AddrRep', 'WordRep')),
+    'getSmallBitmapzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('WordRep', 'WordRep')),
+    'getRetFunSmallBitmapzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('WordRep', 'WordRep')),
+    'getStackClosurezh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), 'BoxedRep (Just Lifted)'),
+    'getStackFieldszh': ('prim', 'safe', ('BoxedRep (Just Unlifted)',), 'Word32Rep'),
+    'advanceStackFrameLocationzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'),
+                                   ('BoxedRep (Just Unlifted)', 'WordRep', 'IntRep')),
 }
 SCALAR_KEYS = {'kind', 'primReps', 'evaluated'}
 TUPLE_KEYS = SCALAR_KEYS | {'aggregate', 'components'}
@@ -33,7 +49,7 @@ def require(condition, detail):
 
 def scalar_kind(primitive):
     return ('void' if primitive is None else 'address' if primitive == 'AddrRep'
-            else 'object' if primitive == 'BoxedRep (Just Unlifted)' else 'long')
+            else 'object' if primitive in ('BoxedRep (Just Unlifted)', 'BoxedRep (Just Lifted)') else 'long')
 
 
 def scalar(raw, primitive, declared=False):

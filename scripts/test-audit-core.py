@@ -1130,14 +1130,14 @@ class OriginalStackCloneAuditTest(unittest.TestCase):
         call[2][0] = ['void', dict(rep=copy.deepcopy(call[2][0][2]['rep']))]
         self.assertTrue(self.audit(module)['accepted'])
 
-    def test_capability_is_explicit_and_cold_getters_and_aliases_stay_closed(self):
+    def test_capability_is_explicit_and_remote_capture_and_aliases_stay_closed(self):
         module = self.fixture()
         report = self.audit(module, dict(CAP, managedForeignCalls=[]))
         self.assertFalse(report['accepted']); self.assertEqual([], report['foreignCalls'])
         self.assertTrue(any('capability disabled' in str(issue['detail']) for issue in report['issues']))
         for symbol in ('cloneMyStack#', 'stg_cloneMyStackzh2', 'prefixstg_cloneMyStackzh',
-                       'stg_sendCloneStackMessagezh', 'stg_decodeStackzh', 'getStackFieldszh',
-                       'getStackClosurezh', 'advanceStackFrameLocationzh', 'getWordzh'):
+                       'stg_sendCloneStackMessagezh', 'stg_decodeStackzh', 'getStackFieldszh2',
+                       'getStackClosurezh2', 'advanceStackFrameLocationzh2', 'getWordzh2'):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             self.assertNotIn(symbol, CAP['managedForeignCalls'])
             module = self.fixture(); self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
@@ -1216,28 +1216,49 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
     """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
 
     This is a raw-proof audit, not execution of GHC's complete Decode closure.
-    Production capabilities admit only the independently implemented protocols.
+    Production capabilities admit only the independently implemented protocols;
+    validator controls explicitly inject capabilities for the other declarations.
     """
-    symbols = ('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'lookupIPE')
+    info_symbols = ('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'lookupIPE')
+    symbols = (*info_symbols, 'getUnderflowFrameNextChunkzh', 'getWordzh', 'isArgGenBigRetFunTypezh',
+        'getLargeBitmapzh', 'getBCOLargeBitmapzh', 'getRetFunLargeBitmapzh', 'getSmallBitmapzh',
+        'getRetFunSmallBitmapzh', 'getStackClosurezh', 'getStackFieldszh', 'advanceStackFrameLocationzh')
     resource = ROOT.parent / 'src/test/resources/core/original-stack-info-calls.json'
+    reviewed_resource = ROOT.parent / 'compiler/test-fixtures/OriginalStackProof.json'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.info = json.loads(cls.resource.read_text())
+        cls.reviewed = json.loads(cls.reviewed_resource.read_text())
 
     def fixture(self, symbol):
-        resource = json.loads(self.resource.read_text())
-        call = next(r['application'] for r in resource['calls'] if r['application'][6]['foreignCall']['target']['symbol'] == symbol)
+        if symbol in self.info_symbols:
+            call = next(r['application'] for r in self.info['calls'] if r['application'][6]['foreignCall']['target']['symbol'] == symbol)
+        else:
+            call = next(r['expression'] for r in self.reviewed['calls']
+                if r['expression'][6]['foreignCall']['target']['symbol'] == symbol and all(a[0] == 'var' for a in r['expression'][2]))
+        call = copy.deepcopy(call)
         parameters = [dict(id=a[1], lifted=False, rep=copy.deepcopy(a[2]['rep'])) for a in call[2]]
         case = ['case', call, 'synthetic-result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
-                dict(rep=LONG, binder=dict(id='synthetic-result', lifted=False, rep=dict(copy.deepcopy(call[6]['rep']), evaluated=True)))]
+                dict(rep=LONG, binder=dict(id='synthetic-result',
+                    lifted=call[6]['rep']['primReps'] == ['BoxedRep (Just Lifted)'],
+                    rep=dict(copy.deepcopy(call[6]['rep']), evaluated=True)))]
         wrapper = dict(bind('synthetic-consumer', ['lam', parameters, case, dict(rep=CLOSURE, resultRep=LONG)]),
                        rep=CLOSURE, arity=len(parameters))
-        return dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[],
-                    sourceFiles=resource['sourceFiles'], sourceSpans=resource['sourceSpans'])
+        module = dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[])
+        if symbol in self.info_symbols:
+            module.update(sourceFiles=self.info['sourceFiles'], sourceSpans=self.info['sourceSpans'])
+        # Remaining excerpts deliberately carry no synthetic source-table data.
+        # They exercise the structural auditor, never an executable loader.
+        return module
 
     @staticmethod
     def call(module):
         return module['bindings'][0]['expr'][2][1]
 
     def audit(self, module, enabled=True):
-        capabilities = [s for s in CAP['managedForeignCalls'] if enabled or s not in self.symbols]
+        capabilities = [s for s in CAP['managedForeignCalls'] if s not in self.symbols]
+        if enabled: capabilities.extend(self.symbols)
         return audit_core.Audit([('genuine-stack-info-app-with-synthetic-consumer.json', module)],
             dict(CAP, managedForeignCalls=capabilities)).run(['synthetic-consumer'])
 
@@ -1250,10 +1271,10 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
 
     def test_exact_original_applications_accept_with_explicit_capability_only(self):
         resource = json.loads(self.resource.read_text())
-        self.assertTrue(set(self.symbols) <= set(CAP['managedForeignCalls']))
+        self.assertTrue(set(self.info_symbols) <= set(CAP['managedForeignCalls']))
         self.assertEqual('902339d332fb4ce2b3c87dcac1ee6495d41ad886', resource['ghcRevision'])
         self.assertEqual('62e3400c5b889d3971cb4047709c408fd270255f', resource['exporterRevision'])
-        self.assertEqual(set(self.symbols), {r['application'][6]['foreignCall']['target']['symbol'] for r in resource['calls']})
+        self.assertEqual(set(self.info_symbols), {r['application'][6]['foreignCall']['target']['symbol'] for r in resource['calls']})
         for record in resource['calls']:
             symbol = record['application'][6]['foreignCall']['target']['symbol']
             module = self.fixture(symbol)
@@ -1269,6 +1290,33 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
             # Foreign identity is the descriptor, not a particular owner/head ID.
             self.call(module)[1][1] = 'unrelated:InlinedCaller.foreign'
             self.assertTrue(self.audit(module)['accepted'])
+
+    def test_all_reviewed_original_declarations_and_getter_wrappers_are_exact(self):
+        self.assertEqual('902339d332fb4ce2b3c87dcac1ee6495d41ad886', self.reviewed['ghcSourceRevision'])
+        self.assertEqual('62e3400c5b889d3971cb4047709c408fd270255f', self.reviewed['exporterRevision'])
+        decode = next(m for m in self.reviewed['originals'] if m['module'] == 'GHC.Internal.Stack.Decode')
+        self.assertEqual('0ea6a82ea41bdf14b28aec5cb36a586ed86eb6f87f373ea21095d2b1b018089f', decode['sourceSha256'])
+        self.assertEqual(28, len(self.reviewed['calls']))
+        seen = set()
+        for record in self.reviewed['calls']:
+            call = record['expression']; symbol = call[6]['foreignCall']['target']['symbol']; seen.add(symbol)
+            with self.subTest(symbol=symbol, owner=record['owner'], path=record['path']):
+                self.assertEqual(symbol, core_original_foreign.validate(call[6],
+                    [core_original_foreign.raw_rep(a) for a in call[2]], call[3], call[6]['rep']))
+                core_original_foreign.validate_head(call[1], False)
+        self.assertEqual(set(self.symbols) | {'stg_cloneMyStackzh'}, seen)
+        self.assertEqual(set(self.symbols), core_original_foreign.STACK_INFO)
+        for symbol in self.symbols:
+            with self.subTest(symbol=symbol):
+                module = self.fixture(symbol)
+                self.assertIn(self.call(module), [r['expression'] for r in self.reviewed['calls']])
+                report = self.audit(module)
+                self.assertTrue(report['accepted'], report)
+                self.assertEqual([symbol], [call['symbol'] for call in report['foreignCalls']])
+                self.assertEqual([], report['missingGlobals'])
+                disabled = self.audit(module, enabled=False)
+                self.assertFalse(disabled['accepted']); self.assertEqual([], disabled['foreignCalls'])
+                self.assertTrue(any('capability disabled' in str(i['detail']) for i in disabled['issues']))
 
     def test_projected_source_records_exactly_cover_original_application_notes(self):
         resource = json.loads(self.resource.read_text())
@@ -1293,7 +1341,7 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
         self.assertEqual(len(spans), len({s['id'] for s in spans}))
         self.assertEqual(referenced, {s['id'] for s in spans})
         self.assertEqual({s['file'] for s in spans}, {f['id'] for f in files})
-        for symbol in self.symbols:
+        for symbol in self.info_symbols:
             wrapper = self.fixture(symbol)
             self.assertEqual(files, wrapper['sourceFiles'])
             self.assertEqual(spans, wrapper['sourceSpans'])
@@ -1345,23 +1393,23 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
                     else: values.pop()
                     self.reject(module)
 
-    def test_scalar_address_pair_and_state_word8_results_cannot_be_interchanged(self):
+    def test_exact_scalar_and_tuple_result_shapes_cannot_be_interchanged(self):
         originals = [self.call(self.fixture(symbol))[6]['rep'] for symbol in self.symbols]
         for symbol, original in zip(self.symbols, originals):
             for declared in (False, True):
                 for other in originals:
-                    if other == original: continue
+                    if dict(other, evaluated=False) == dict(original, evaluated=False): continue
                     module = self.fixture(symbol); meta = self.call(module)[6]
                     if declared: meta['foreignCall']['resultRep'] = copy.deepcopy(other)
                     else: meta['rep'] = copy.deepcopy(other)
                     self.reject(module)
-                for key, value in (('kind', 'object'), ('primReps', ['WordRep']), ('evaluated', 1),
+                for key, value in (('kind', 'void'), ('primReps', ['FloatRep']), ('evaluated', 1),
                                    ('aggregate', 'unboxed-sum'), ('components', []), ('extra', None)):
                     module = self.fixture(symbol); meta = self.call(module)[6]
                     proof = meta['foreignCall']['resultRep'] if declared else meta['rep']
                     proof[key] = value; self.reject(module)
                 for index in range(len(original.get('components', []))):
-                    for key, value in (('kind', 'unknown'), ('evaluated', False), ('primReps', ['IntRep']), ('vector', None)):
+                    for key, value in (('kind', 'unknown'), ('evaluated', False), ('primReps', ['Int8Rep']), ('vector', None)):
                         module = self.fixture(symbol); meta = self.call(module)[6]
                         proof = meta['foreignCall']['resultRep'] if declared else meta['rep']
                         proof['components'][index][key] = value; self.reject(module)
@@ -1372,7 +1420,24 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
             # The caller-supplied result proof is independently checked too.
             call = self.call(self.fixture(symbol))
             with self.assertRaises(ValueError):
-                core_original_foreign.validate(call[6], [a[2]['rep'] for a in call[2]], call[3], LONG)
+                core_original_foreign.validate(call[6], [a[2]['rep'] for a in call[2]], call[3], None)
+
+    def test_scalar_results_preserve_signedness_width_and_exact_any_carrier(self):
+        for symbol in ('getStackFieldszh', 'getWordzh', 'isArgGenBigRetFunTypezh',
+                       'getStackClosurezh', 'getUnderflowFrameNextChunkzh'):
+            original = self.call(self.fixture(symbol))[6]['rep']
+            for declared in (False, True):
+                for rep in ('IntRep', 'WordRep', 'Int32Rep', 'Word32Rep', 'Word64Rep',
+                            'BoxedRep (Just Lifted)', 'BoxedRep (Just Unlifted)', 'BoxedRep Nothing'):
+                    if original['primReps'] == [rep]: continue
+                    module = self.fixture(symbol); meta = self.call(module)[6]
+                    proof = meta['foreignCall']['resultRep'] if declared else meta['rep']
+                    proof['primReps'] = [rep]; self.reject(module)
+                if symbol == 'getStackClosurezh':
+                    for kind in ('data', 'closure', 'unknown'):
+                        module = self.fixture(symbol); meta = self.call(module)[6]
+                        proof = meta['foreignCall']['resultRep'] if declared else meta['rep']
+                        proof['kind'] = kind; self.reject(module)
 
     def test_head_must_remain_an_exact_unbound_foreign_variable(self):
         for symbol in self.symbols:
@@ -1442,12 +1507,9 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
                         ['lit', 'null-addr' if kind == 'address' else 'word', '0', metadata])
                     self.assertTrue(self.audit(module)['accepted'])
 
-    def test_aliases_and_all_remaining_stack_getters_stay_unsupported(self):
-        cold = ('getStackFieldszh', 'advanceStackFrameLocationzh', 'getStackClosurezh', 'getWordzh',
-                'getSmallBitmapzh', 'getLargeBitmapzh', 'getBCOLargeBitmapzh', 'getRetFunLargeBitmapzh',
-                'getRetFunSmallBitmapzh', 'getUnderflowFrameNextChunkzh', 'isArgGenBigRetFunTypezh',
-                'stg_decodeStackzh', 'stg_sendCloneStackMessagezh')
-        for symbol in (*cold, *(s + '2' for s in self.symbols), *('prefix' + s for s in self.symbols)):
+    def test_aliases_and_remote_capture_stay_unsupported(self):
+        for symbol in ('stg_decodeStackzh', 'stg_sendCloneStackMessagezh',
+                       *(s + '2' for s in self.symbols), *('prefix' + s for s in self.symbols)):
             self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
             self.assertNotIn(symbol, CAP['managedForeignCalls'])
             module = self.fixture('lookupIPE'); self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
