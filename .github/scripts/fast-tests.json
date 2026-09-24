@@ -12,8 +12,12 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
-      "junit": ["thc.runtime.AddressIdentityNativeTest"],
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
@@ -26,6 +30,7 @@
       "junit": [
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
+        "thc.runtime.CompiledThunkRetentionTest",
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.DoubleArrayTest",
         "thc.runtime.DoubleVectorMemoryProofTest",
@@ -65,6 +70,7 @@
       "junit": [
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
+        "thc.runtime.CompiledThunkRetentionTest",
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.DoubleArrayTest",
         "thc.runtime.DoubleVectorMemoryProofTest",
@@ -180,6 +186,26 @@
     }
   },
   "owners": {
+    "scripts/prepare-boxed-arrays.py": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/BoxedArrayAudit.hs": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
+      "python": []
+    },
+    "scripts/prepare-floating-audit.py": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/FloatingAudit.hs": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/FloatingAuditNative.hs": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "python": []
+    },
     "compiler/test-fixtures/OriginalStackAudit.hs": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "python": []
@@ -200,6 +226,15 @@
       "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest"],
       "python": []
     },
+    "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
+    },
+    "compiler/test-fixtures/BoxedArrayExtensionsNative.hs": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
+    },
+    "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
+    },
     "compiler/test-fixtures/AddressIdentityAudit.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -216,6 +251,14 @@
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
+    "compiler/test-fixtures/SmallArrayAudit.hs": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SmallArrayAuditNative.hs": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "python": []
+    },
     "scripts/prepare-address-identity.sh": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -230,6 +273,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
         "thc.runtime.IntArrayNativeTest",
         "thc.runtime.Int8ArrayNativeTest",
@@ -591,9 +635,11 @@
     "test/haskell-fixtures/Main.hs": {
       "junit": [
         "thc.runtime.CoreContinuationNativeTest",
+        "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.OriginalStackConsumerProofTest",
+        "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
         "thc.SignedNarrowPrimopsTest",
@@ -609,6 +655,10 @@
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/SmallArrayFixtures.hs": {
+      "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
     "src/test/kotlin/thc/NumericPrimopCoreEvidence.kt": {

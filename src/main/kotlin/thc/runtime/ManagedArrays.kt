@@ -27,10 +27,23 @@ internal object ManagedArray {
     /** Shallow, independent storage. Validate full-width values without adding
      * offset and count, so invalid overflowing ranges cannot wrap into bounds. */
     @JvmStatic fun slice(array: Array<Any?>, offset: Long, count: Long): Array<Any?> {
+        range(array, offset, count)
+        return array.copyOfRange(offset.toInt(), (offset + count).toInt())
+    }
+    private fun range(array: Array<Any?>, offset: Long, count: Long) {
         val size = array.size.toLong()
         if (offset < 0 || offset > size || count < 0 || count > size - offset)
             fault("Array# slice outside its backing storage")
-        return array.copyOfRange(offset.toInt(), (offset + count).toInt())
+    }
+    @JvmStatic fun size(array: Array<Any?>): Long = array.size.toLong()
+    /** Both ranges and immutable-source non-aliasing are checked before any write.
+     * System.arraycopy has memmove semantics and never enters boxed elements. */
+    @JvmStatic fun copy(source: Array<Any?>, sourceOffset: Long, destination: Array<Any?>,
+        destinationOffset: Long, count: Long, mutableSource: Boolean) {
+        range(source, sourceOffset, count)
+        range(destination, destinationOffset, count)
+        if (!mutableSource && source === destination) fault("copyArray# requires distinct arrays")
+        System.arraycopy(source, sourceOffset.toInt(), destination, destinationOffset.toInt(), count.toInt())
     }
     /** The managed collector requires no info-table transition; preserve storage identity. */
     @JvmStatic fun freeze(array: Array<Any?>): Array<Any?> = array
@@ -46,9 +59,15 @@ internal enum class ArrayOp(val primitive: String, private val arguments: List<S
     INDEX("indexArray#", listOf("array", "int"), listOf("element")),
     CLONE("cloneArray#", listOf("array", "int", "int"), listOf("array")),
     FREEZE_COPY("freezeArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
-    THAW("thawArray#", listOf("array", "int", "int", "state"), listOf("state", "array"));
+    THAW("thawArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
+    SIZE("sizeofArray#", listOf("array"), listOf("int")),
+    SIZE_MUTABLE("sizeofMutableArray#", listOf("array"), listOf("int")),
+    CLONE_MUTABLE("cloneMutableArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
+    COPY("copyArray#", listOf("array", "int", "array", "int", "int", "state"), emptyList()),
+    COPY_MUTABLE("copyMutableArray#", listOf("array", "int", "array", "int", "int", "state"), emptyList()),
+    UNSAFE_THAW("unsafeThawArray#", listOf("array", "state"), listOf("state", "array"));
 
-    val tuple: Boolean get() = result.isNotEmpty() && this != CLONE
+    val tuple: Boolean get() = result.isNotEmpty() && this !in setOf(CLONE, SIZE, SIZE_MUTABLE)
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, proof: CoreRepresentation) {
         fun matches(rep: CoreRepresentation, role: String): Boolean = !rep.isAggregate && !rep.isVector && when (role) {
             "state" -> rep.kind == CoreKind.VOID && rep.primReps == emptyList<String>()
@@ -61,22 +80,63 @@ internal enum class ArrayOp(val primitive: String, private val arguments: List<S
             throw RuntimeFault("Primitive arity mismatch: $primitive")
         if (flags != arguments.map { it == "element" } || actual.indices.any { !matches(actual[it], arguments[it]) })
             throw RuntimeFault("Array primitive argument representation mismatch: $primitive")
-        val valid = if (!tuple) matches(proof, if (this == CLONE) "array" else "state") else proof.isTuple && proof.kind == CoreKind.UNKNOWN &&
+        val valid = if (!tuple) matches(proof, result.singleOrNull() ?: "state") else proof.isTuple && proof.kind == CoreKind.UNKNOWN &&
             proof.components!!.size == result.size && result.indices.all { matches(proof.components[it], result[it]) } &&
             proof.primReps == proof.components.flatMap { it.primReps!! }
         if (!valid) throw RuntimeFault("Array primitive result representation mismatch: $primitive")
     }
-    companion object { fun named(name: String): ArrayOp? = entries.firstOrNull { it.primitive == name } }
+    companion object {
+        fun named(name: String): ArrayOp? = entries.firstOrNull { it.primitive == name }
+        /** Decoding must not erase stray aggregate/vector fields or coerce raw
+         * flags before the exact Array# contract sees them, including cold code. */
+        fun validateApplications(value: Any?) {
+            fun rawProof(value: Any?) {
+                val map = value as? Map<*, *> ?: fault("Missing Array# representation proof")
+                val tuple = map["aggregate"] == "unboxed-tuple"
+                val keys = setOf("kind", "primReps", "evaluated") + if (tuple) setOf("aggregate", "components") else emptySet()
+                if (map.keys != keys || map["evaluated"] !is Boolean)
+                    fault("Malformed Array# representation proof")
+                if (tuple) (map["components"] as? List<*>)?.forEach(::rawProof)
+                    ?: fault("Malformed Array# tuple proof")
+            }
+            when (value) {
+                is Map<*, *> -> value.values.forEach(::validateApplications)
+                is List<*> -> {
+                    val head = value.getOrNull(1) as? List<*>
+                    val operation = if (value.firstOrNull() == "app" && head?.firstOrNull() == "prim")
+                        (head.getOrNull(1) as? String)?.let(::named) else null
+                    if (operation != null) {
+                        val args = value.getOrNull(2) as? List<*> ?: fault("Malformed Array# arguments")
+                        val flags = value.getOrNull(3) as? List<*> ?: fault("Malformed Array# flags")
+                        if (value.size != 7 || flags.any { it !is Boolean }) fault("Malformed Array# application")
+                        val proofs = args.map { argument ->
+                            val expression = argument as? List<*> ?: fault("Malformed Array# argument")
+                            val rep = CoreRepresentations.metadata(expression)?.get("rep")
+                            rawProof(rep)
+                            CoreRepresentations.parse(rep)
+                        }
+                        val rep = (value[6] as? Map<*, *>)?.get("rep")
+                        rawProof(rep)
+                        operation.validate(proofs, flags, CoreRepresentations.parse(rep))
+                    }
+                    value.forEach(::validateApplications)
+                }
+            }
+        }
+    }
 }
 
 internal fun arrayExpression(operation: ArrayOp, proof: CoreRepresentation, operands: Array<Expr>): Expr = when (operation) {
     ArrayOp.NEW -> NewArrayExpression(operands[0], operands[1], operands[2])
     ArrayOp.READ -> ReadArrayExpression(operands[0], operands[1], operands[2])
     ArrayOp.WRITE -> WriteArrayExpression(operands[0], operands[1], operands[2], operands[3])
-    ArrayOp.FREEZE -> FreezeArrayExpression(operands[0], operands[1])
+    ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> FreezeArrayExpression(operands[0], operands[1])
     ArrayOp.INDEX -> IndexArrayExpression(operands[0], operands[1])
     ArrayOp.CLONE -> CloneArrayExpression(operands[0], operands[1], operands[2])
-    ArrayOp.FREEZE_COPY, ArrayOp.THAW -> CopyArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> CopyArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE -> SizeArrayExpression(operands[0])
+    ArrayOp.COPY, ArrayOp.COPY_MUTABLE -> TransferArrayExpression(operation == ArrayOp.COPY_MUTABLE,
+        operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
 }.proven(proof.copy(evaluated = true))
 
 private class NewArrayExpression(@field:Child private var size: Expr, @field:Child private var initial: Expr,
@@ -138,6 +198,25 @@ private class CloneArrayExpression(@field:Child private var array: Expr, @field:
         val start = offset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
         return ManagedArray.slice(storage, start, length)
+    }
+}
+private class SizeArrayExpression(@field:Child private var array: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Long = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = ManagedArray.size(ManagedArray.require(array.execute(frame)))
+}
+private class TransferArrayExpression(private val mutableSource: Boolean,
+    @field:Child private var source: Expr, @field:Child private var sourceOffset: Expr,
+    @field:Child private var destination: Expr, @field:Child private var destinationOffset: Expr,
+    @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val from = ManagedArray.require(source.execute(frame))
+        val fromOffset = sourceOffset.executeRequiredLong(frame)
+        val to = ManagedArray.require(destination.execute(frame))
+        val toOffset = destinationOffset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        requireVoidCarrier(state.execute(frame))
+        ManagedArray.copy(from, fromOffset, to, toOffset, length, mutableSource)
+        return Unit
     }
 }
 private class CopyArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,

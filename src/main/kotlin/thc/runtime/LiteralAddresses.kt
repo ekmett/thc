@@ -72,6 +72,22 @@ internal class ManagedAddress private constructor(
         fun clear() { entries.clear(); reap() }
     }
 
+    /** Only offsets within one allocation have a portable managed ordering.
+     * Comparing unrelated native pointer values would invent host addresses. */
+    fun compareWithinAllocation(other: ManagedAddress): Int {
+        if (this === NULL || other === NULL) {
+            if (this === other) return 0
+            fault("Ordered Addr# comparison requires the same managed allocation")
+        }
+        val shared = when {
+            owner != null -> owner === other.owner
+            literalBytes != null -> literalBytes === other.literalBytes
+            else -> mutableBytes != null && mutableBytes === other.mutableBytes
+        }
+        if (!shared) fault("Ordered Addr# comparison requires the same managed allocation")
+        return offset.compareTo(other.offset)
+    }
+
     /** Like pointer arithmetic within this allocation, including its one-past address. */
     fun plus(displacement: Long): ManagedAddress {
         if (this === NULL) {

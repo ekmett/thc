@@ -47,3 +47,23 @@ pointerArrayRoundtrip raw = runRW# (\s0 ->
                   *# eqAddr# indexedArray target) #)
     } } } } }) of { (# _, I# answer #) -> answer }
   } } })
+
+-- Pointer ordering is defined here only among offsets of this one pinned
+-- allocation (including one-past) and for null compared with itself.
+{-# OPAQUE pointerOrder #-}
+pointerOrder :: Int# -> Int#
+pointerOrder raw = runRW# (\s0 ->
+  case newPinnedByteArray# 16# s0 of { (# s1, mutable #) ->
+  case unsafeFreezeByteArray# mutable s1 of { (# s2, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s2 (\s3 ->
+    case plusAddr# base (andI# raw 7#) of { middle ->
+      (# s3, I# (ltAddr# base middle
+              +# leAddr# base middle *# 2#
+              +# gtAddr# middle base *# 4#
+              +# geAddr# middle base *# 8#
+              +# ltAddr# base (plusAddr# base 16#) *# 16#
+              +# leAddr# nullAddr# nullAddr# *# 32#
+              +# geAddr# nullAddr# nullAddr# *# 64#) #)
+    }) of { (# _, I# answer #) -> answer }
+  } } })

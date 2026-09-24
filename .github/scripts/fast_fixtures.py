@@ -23,15 +23,17 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "48e5bf49af5791bc101aba29ff5616f103a7481ffdd444f293650ddd307e2021"
+FULL_PREPARATION_PLAN = "dbaf59086dfdc70eff0a34e0f8318ffbcb68df5abae93ee06b8460bf14defbe9"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/core-continuation",
+    "build/original-stdio", "build/core-continuation", "build/small-arrays",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
     "build/core-continuation/core/CoreContinuationAudit.json", "build/core-continuation/audit.json",
+    "build/core-continuation/application-audit.json",
+    "build/core-continuation/nested-audit.json",
     "build/core-continuation/native-output.txt",
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
@@ -43,6 +45,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/pinned-pointer-cells/post/core/PinnedPointerCellsAudit.json",
     "build/managed-address-reads/manifest.json",
     "build/original-stdio/manifest.json",
+    "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
     # The SIMD smoke exporter consumes this generated Haskell fixture. Check
     # both Haskell outputs without hashing unrelated JVM code generation.

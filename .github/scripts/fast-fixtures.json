@@ -11,6 +11,34 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "boxed-array-extensions": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-array-extensions"]}],
+      "outputs": ["build/boxed-array-extensions"],
+      "sources": [
+        "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs",
+        "compiler/test-fixtures/BoxedArrayExtensionsNative.hs",
+        "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
+    "compiled-thunk-retention": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest", "thc.runtime.FloatingPrimitiveTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-boxed-arrays.py"]},
+        {"argv": ["python3", "scripts/prepare-floating-audit.py"]}
+      ],
+      "outputs": ["build/boxed-arrays", "build/floating"],
+      "sources": [
+        "scripts/prepare-boxed-arrays.py",
+        "scripts/prepare-floating-audit.py",
+        "compiler/test-fixtures/BoxedArrayAudit.hs",
+        "compiler/test-fixtures/FloatingAudit.hs",
+        "compiler/test-fixtures/FloatingAuditNative.hs"
+      ]
+    },
     "original-stack": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}],
@@ -72,6 +100,17 @@
         "test/haskell-fixtures/Main.hs",
         "compiler/test-fixtures/PinnedPointerCellsAudit.hs",
         "compiler/test-fixtures/PinnedPointerCellsNative.hs"
+      ]
+    },
+    "small-arrays": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "small-arrays"]}],
+      "outputs": ["build/small-arrays"],
+      "sources": [
+        "test/haskell-fixtures/SmallArrayFixtures.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/SmallArrayAudit.hs",
+        "compiler/test-fixtures/SmallArrayAuditNative.hs"
       ]
     },
     "synchronous-exceptions": {

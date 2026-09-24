@@ -157,6 +157,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        ArrayOp.validateApplications(bindings)
         CoreStackForeign.validateHeads(bindings)
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
@@ -614,6 +615,41 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         } }
     }
 
+    /** Private proof: only a directly yielding, exactly saturated scalar call is resumable. */
+    private fun checkpointedApplication(e: Emission, function: Expression, arguments: List<Expression>,
+                                        evaluatedArguments: BooleanArray) {
+        val b = e.builder
+        b.beginBlock()
+        val fn = b.createLocal("captured application function", "object")
+        val result = b.createLocal("captured application result", "object")
+        val suspended = b.createLocal("captured application suspension", "object")
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        b.beginTryCatch()
+        b.beginStoreLocal(result)
+        b.beginCaptureApplicationResult(arguments.size)
+        b.emitLoadLocal(fn)
+        b.beginApply(arguments.size, false, metrics, evaluatedArguments)
+        b.emitLoadLocal(fn)
+        arguments.forEach { it.emit(e) }
+        b.endApply()
+        b.endCaptureApplicationResult()
+        b.endStoreLocal()
+        b.beginBlock()
+        b.beginStoreLocal(suspended)
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+        b.endStoreLocal()
+        b.beginStoreLocal(result)
+        b.beginResumeApplication()
+        b.emitLoadLocal(suspended)
+        b.beginYield(); b.emitLoadLocal(suspended); b.endYield()
+        b.endResumeApplication()
+        b.endStoreLocal()
+        b.endBlock()
+        b.endTryCatch()
+        b.emitLoadLocal(result)
+        b.endBlock()
+    }
+
     private fun application(function: Expression, arguments: List<Expression>, scope: Scope, tail: Boolean): Expression {
         val context = scope.function
         val evaluatedArguments = arguments.map { it.proof.evaluated }.toBooleanArray()
@@ -635,6 +671,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
                     b.endApplyCompact()
                 }
+            } else if (checkpoint != null && !tail) {
+                checkpointedApplication(e, function, arguments, evaluatedArguments)
             } else if (!loop) {
                 b.beginApply(arguments.size, tail, metrics, evaluatedArguments)
                 requireClosure(function).emit(e)
@@ -1210,8 +1248,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         ArrayOp.NEW -> e.builder.beginNewArray(destination[0])
                         ArrayOp.READ -> e.builder.beginReadArray(destination[0])
-                        ArrayOp.FREEZE -> e.builder.beginFreezeArray(destination[0])
-                        ArrayOp.FREEZE_COPY, ArrayOp.THAW -> e.builder.beginCopyArraySlice(destination[0])
+                        ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.beginFreezeArray(destination[0])
+                        ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.beginCopyArraySlice(destination[0])
                         ArrayOp.INDEX -> e.builder.beginIndexArray(destination[0])
                         else -> error("Not a tuple array operation")
                     }
@@ -1219,15 +1257,64 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     when (operation) {
                         ArrayOp.NEW -> e.builder.endNewArray()
                         ArrayOp.READ -> e.builder.endReadArray()
-                        ArrayOp.FREEZE -> e.builder.endFreezeArray()
-                        ArrayOp.FREEZE_COPY, ArrayOp.THAW -> e.builder.endCopyArraySlice()
+                        ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> e.builder.endFreezeArray()
+                        ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> e.builder.endCopyArraySlice()
                         ArrayOp.INDEX -> e.builder.endIndexArray()
                         else -> error("Not a tuple array operation")
                     }
                 } else ProvenExpression(Expression { e ->
-                    if (operation == ArrayOp.CLONE) e.builder.beginCloneArray() else e.builder.beginWriteArray()
+                    when (operation) {
+                        ArrayOp.CLONE -> e.builder.beginCloneArray()
+                        ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE -> e.builder.beginSizeArray()
+                        ArrayOp.COPY, ArrayOp.COPY_MUTABLE -> e.builder.beginTransferArray(operation == ArrayOp.COPY_MUTABLE)
+                        else -> e.builder.beginWriteArray()
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == ArrayOp.CLONE) e.builder.endCloneArray() else e.builder.endWriteArray()
+                    when (operation) {
+                        ArrayOp.CLONE -> e.builder.endCloneArray()
+                        ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE -> e.builder.endSizeArray()
+                        ArrayOp.COPY, ArrayOp.COPY_MUTABLE -> e.builder.endTransferArray()
+                        else -> e.builder.endWriteArray()
+                    }
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && SmallArrayOp.named(fn[1] as String) != null) {
+                val operation = SmallArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        SmallArrayOp.NEW -> e.builder.beginNewSmallArray(destination[0])
+                        SmallArrayOp.READ -> e.builder.beginReadSmallArray(destination[0])
+                        SmallArrayOp.INDEX -> e.builder.beginIndexSmallArray(destination[0])
+                        SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.beginFreezeSmallArray(destination[0])
+                        SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeSmallMutableArray(destination[0])
+                        SmallArrayOp.CLONE_MUTABLE -> e.builder.beginCopySmallArraySlice(destination[0])
+                        else -> error("Not a tuple SmallArray operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        SmallArrayOp.NEW -> e.builder.endNewSmallArray()
+                        SmallArrayOp.READ -> e.builder.endReadSmallArray()
+                        SmallArrayOp.INDEX -> e.builder.endIndexSmallArray()
+                        SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.endFreezeSmallArray()
+                        SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeSmallMutableArray()
+                        SmallArrayOp.CLONE_MUTABLE -> e.builder.endCopySmallArraySlice()
+                        else -> error("Not a tuple SmallArray operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    when (operation) {
+                        SmallArrayOp.WRITE -> e.builder.beginWriteSmallArray()
+                        SmallArrayOp.CLONE -> e.builder.beginCloneSmallArray()
+                        SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.beginTransferSmallArray(operation == SmallArrayOp.COPY_MUTABLE)
+                        else -> e.builder.beginSizeSmallArray()
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        SmallArrayOp.WRITE -> e.builder.endWriteSmallArray()
+                        SmallArrayOp.CLONE -> e.builder.endCloneSmallArray()
+                        SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.endTransferSmallArray()
+                        else -> e.builder.endSizeSmallArray()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
@@ -2405,6 +2492,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "plusAddr#" -> "AddressPlus"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
+            "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
@@ -2466,6 +2554,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus(); "AddressIndexChar" -> b.beginAddressIndexChar()
                 "AddressEqual" -> b.beginAddressEqual(); "AddressNotEqual" -> b.beginAddressNotEqual()
+                "AddressOrder" -> b.beginAddressOrder(when (name) {
+                    "ltAddr#" -> ManagedAddressOrder.LT
+                    "leAddr#" -> ManagedAddressOrder.LE
+                    "gtAddr#" -> ManagedAddressOrder.GT
+                    else -> ManagedAddressOrder.GE
+                })
             }
             args.forEach { it.emit(e) }
             when (operation) {
@@ -2520,6 +2614,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.endNarrowWord()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
+                "AddressOrder" -> b.endAddressOrder()
             }
         })
     }

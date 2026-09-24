@@ -12,4 +12,5 @@ main = getContents >>= mapM_ answer . lines
   where
     answer text = case read text of
       I# raw -> putStrLn (text ++ "\t" ++ show (I# (Cells.pointerRoundtrip raw)) ++
-        "\t" ++ show (I# (Cells.pointerArrayRoundtrip raw)))
+        "\t" ++ show (I# (Cells.pointerArrayRoundtrip raw)) ++
+        "\t" ++ show (I# (Cells.pointerOrder raw)))

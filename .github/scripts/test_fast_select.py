@@ -575,7 +575,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives",
+        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "ManagedSmallArrays",
                           "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -624,7 +624,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(7, len(consumers))
+        self.assertEqual(8, len(consumers))
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
@@ -672,7 +672,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         floating = self.family("FloatingPrimitives")
         self.assertEqual(floating, self.family("RawBitCasts"))
         self.assertEqual({"thc.SumLayoutMetadataTest", *{"thc.runtime." + name for name in (
-            "BytecodeTypedTupleInputTest", "DoubleArrayNativeTest", "DoubleArrayTest",
+            "BytecodeTypedTupleInputTest", "CompiledThunkRetentionTest", "DoubleArrayNativeTest", "DoubleArrayTest",
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
             "FloatingPrimitiveTest", "FloatingTupleTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",

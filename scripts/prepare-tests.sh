@@ -34,12 +34,14 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" original-stack
+"$fixture_bin" boxed-array-extensions
 python3 scripts/prepare-bytearray.py
 python3 scripts/prepare-mutable-bytearrays.py
 python3 scripts/prepare-resize-bytearrays.py
 python3 scripts/prepare-mutable-bytearray-size.py
 python3 scripts/prepare-compare-byte-arrays.py
 python3 scripts/prepare-boxed-arrays.py
+"$fixture_bin" small-arrays
 python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py

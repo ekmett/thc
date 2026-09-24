@@ -971,7 +971,8 @@ class Audit:
                 array = self.cap.get('managedArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if array is not None:
                     def array_role(rep, role):
-                        if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                        if (not isinstance(rep, dict) or set(rep) != {'kind', 'primReps', 'evaluated'} or
+                                type(rep.get('evaluated')) is not bool):
                             return False
                         kind, reps = rep.get('kind'), rep.get('primReps')
                         if role == 'state':
@@ -982,13 +983,16 @@ class Audit:
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         return kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
                     expected = array['arguments']
-                    if (len(arguments) != len(expected) or flags != [r == 'element' for r in expected] or
+                    if (len(arguments) != len(expected) or any(type(flag) is not bool for flag in flags) or
+                            flags != [r == 'element' for r in expected] or
                             any(not array_role(self.expression_rep(a), r) for a, r in zip(arguments, expected))):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact Array arguments required')
                     result = array['result']
                     if isinstance(result, list):
                         fields = proof.get('components') if isinstance(proof, dict) else None
                         valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                                 set(proof) == {'kind', 'primReps', 'evaluated', 'aggregate', 'components'} and
+                                 type(proof.get('evaluated')) is bool and
                                  isinstance(fields, list) and len(fields) == len(result) and
                                  all(array_role(rep, role) for rep, role in zip(fields, result)) and
                                  proof.get('primReps') == [r for field in fields for r in field['primReps']])

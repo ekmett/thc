@@ -33,6 +33,24 @@ internal class CompareManagedAddress(@field:Child private var left: Expr,
     }
 }
 
+internal enum class ManagedAddressOrder {
+    LT, LE, GT, GE;
+
+    // Keep the constant operation visible to partial evaluation; an enum when
+    // introduces a mutable ordinal table on this hot path.
+    fun accepts(comparison: Int): Boolean =
+        if (this == LT) comparison < 0 else if (this == LE) comparison <= 0
+        else if (this == GT) comparison > 0 else comparison >= 0
+}
+
+internal class CompareOrderedManagedAddress(@field:Child private var left: Expr,
+    @field:Child private var right: Expr, private val order: ManagedAddressOrder) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long =
+        if (order.accepts(left.executeRequiredAddress(frame)
+                .compareWithinAllocation(right.executeRequiredAddress(frame)))) 1L else 0L
+}
+
 internal class GetCurrentCCS(@field:Child private var dummy: Expr,
     @field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
     init { representation = proof.copy(evaluated = true) }
