@@ -96,8 +96,11 @@ class WordCarryTest {
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val selected = rows.filter { it.name == name }
-                    val audit = Json.parse(File(root, "build/tuple-arithmetic/$stage-$name.audit.json").readText()) as Map<String, Any?>
+                    val audit = Json.parse(File(root, "build/tuple-arithmetic/$stage-audit.json").readText()) as Map<String, Any?>
                     assertEquals(true, audit["accepted"])
+                    assertTrue((audit["primitives"] as List<Map<String, Any?>>)
+                        .any { it["name"] == (if (name.endsWith("Call")) name.replace("Call", "C") else name) + "#" },
+                        "$stage/$name primitive audited")
                     if (name.endsWith("Call")) assertTrue((audit["reachableBindings"] as List<Map<String, Any?>>)
                         .any { it["id"] == "main:TupleArithmeticAudit." + name.replace("Call", "Result") })
                     val program = program(language, CoreModules.reachable(module(stage), name) + ("instrument" to true), backend)
