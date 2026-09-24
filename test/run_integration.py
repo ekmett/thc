@@ -57,6 +57,16 @@ def exercise(driver, runtime, thc_root, scratch):
             require(audit["accepted"] and audit["roots"] == ["main:Main.main"], audit)
             require({"newMutVar#", "writeMutVar#", "readMutVar#", "raise#"} <= {
                 item["name"] for item in audit["primitives"]}, audit)
+            exported = output / "thc-run/completed"
+            for module in ("Main", "Answer"):
+                core = json.loads((exported / "core" / (module + ".json")).read_text())
+                path = str(package / "app" / (module + ".hs"))
+                require(core["lowering"]["ticks"] == "source-notes-metadata" and core["sourceSpans"], core)
+                require(any(item["path"] == path and item["content"]
+                            for item in core["sourceFiles"]), core["sourceFiles"])
+                require((exported / "ghc" / (module + ".hi")).is_file(), exported)
+            for suffix in ("*.o", "*.dyn_o"):
+                require(not list((exported / "ghc").rglob(suffix)), exported)
             native = output / "build/completed/completed"
             require(native.is_file(), native)
             native_result = checked([native], cwd=package)

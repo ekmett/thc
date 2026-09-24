@@ -92,10 +92,14 @@ runPackage opts target = do
                    ["-X" ++ prettyShow extension | extension <- defaultExtensions info]
       cpp = if null (cppOptions info) then [] else "-cpp" : map ("-optP" ++) (cppOptions info)
       packages = concat [["-package-id", prettyShow unit] | (unit, _) <- componentPackageDeps clbi]
+      -- Cabal already built the native program. Writing simplified Core keeps
+      -- GHC's optimizer and plugin active under -fno-code, including source
+      -- notes, without sending source filenames through its assembler.
       exportArgs = ["-hide-all-packages", "-no-user-package-db", "-package-env", "-",
                     "-fplugin-opt=THC.Plugin:closure=main"] ++
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
-                   extensions ++ cpp ++ hcOptions GHC info ++ [source]
+                   extensions ++ cpp ++ hcOptions GHC info ++
+                   ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source]
   checked True (thcRoot </> "compiler/export.sh") exportArgs thcRoot environment
   files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory core
   let modules = [core </> file | file <- files, file /= "audit.json"]

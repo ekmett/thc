@@ -7,12 +7,13 @@ module Main where
 
 import GHC.Exts
 import GHC.IO (IO(..))
+import Answer (answerValue)
 
 -- The stateful checks make success depend on evaluating the real IO action.
 main :: IO ()
 main = IO $ \s0 ->
   case newMutVar# (I# 41#) s0 of { (# s1, ref #) ->
-  case writeMutVar# ref (I# 42#) s1 of { s2 ->
+  case writeMutVar# ref answerValue s1 of { s2 ->
   case readMutVar# ref s2 of { (# s3, boxed #) ->
   case boxed of { I# answer ->
   case answer ==# 42# of {
