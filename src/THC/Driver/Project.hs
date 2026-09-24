@@ -30,6 +30,7 @@ import System.IO (SeekMode(AbsoluteSeek), hClose, openTempFile, stderr)
 import qualified System.Posix.IO as Posix
 import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, waitForProcess)
 import THC.Driver.Cabal (PlanOptions(..))
+import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
 
@@ -161,12 +162,16 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
 wiredCString :: ExportContext -> FilePath -> IO Value
 wiredCString context thcRoot = do
   let sourceName = "compiler/pinned-ghc-internal/GHC/Internal/CString.hs" :: String
+      licenseName = "compiler/pinned-ghc-internal/LICENSE" :: String
       source = thcRoot </> sourceName
       unit = "ghc-internal" :: String
       name = "GHC.Internal.CString" :: String
       member = "core/GHC.Internal.CString.json" :: String
   requireFile source
+  requireFile (thcRoot </> licenseName)
+  cacheRoot <- coreCacheDirectory
   sourceHash <- digestFile source
+  licenseHash <- digestFile (thcRoot </> licenseName)
   pluginHash <- digestFile (contextPluginLibrary context)
   let inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
                      "unit" .= unit,
@@ -176,7 +181,8 @@ wiredCString context thcRoot = do
                      "component" .= object ["kind" .= ("pinned-wired-source" :: String),
                                              "module" .= name],
                      "nativeArtifacts" .= ([] :: [Value]),
-                     "sourceArtifacts" .= [object ["path" .= sourceName, "sha256" .= sourceHash]],
+                     "sourceArtifacts" .= [object ["path" .= sourceName, "sha256" .= sourceHash],
+                                           object ["path" .= licenseName, "sha256" .= licenseHash]],
                      "dependencies" .= ([] :: [Value])]
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
       exporter = object ["pluginUnit" .= contextPluginUnit context,
@@ -188,7 +194,7 @@ wiredCString context thcRoot = do
       exportKey = shaHex (BL.toStrict (encode ("thc-wired-cstring-v1" :: String, buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey, "exporter" .= exporter])
-      directory = contextCache context </> "core-bundles/v1" </>
+      directory = cacheRoot </> "core-bundles/v1" </>
                   (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context) </> exportKey
       destination = directory </> ("ghc-internal-" ++ buildKey ++ ".zip")
       buildDir = directory </> "source-export"
