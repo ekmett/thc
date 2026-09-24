@@ -181,7 +181,7 @@ class FastInputTests(unittest.TestCase):
         with patch.object(cache, "REQUIRED", ("build/core/CBVAudit.json",)):
             self.rejected_without_writes(self.bundle)
 
-    def test_original_list_records_absolute_paths_and_external_interfaces(self):
+    def test_installed_interfaces_use_the_toolchain_version_gate(self):
         interface = Path(self.tc["ghcLibdir"]) / "pkg/Foo.dyn_hi"
         interface.parent.mkdir(parents=True); interface.write_bytes(b"actual interface")
         self.manifest["installedShortInterface"] = {"path": str(interface), "sha256": cache.digest(interface)}
@@ -189,7 +189,12 @@ class FastInputTests(unittest.TestCase):
             "sha256": self.current["sources"]["scripts/prepare-tests.sh"], "url": "original/source"}]
         self.write_manifest(); manifest = self.pack(); self.remove_payload(manifest)
         interface.write_bytes(b"modified same package/version")
-        self.rejected_without_writes(self.bundle)
+        digest = cache.digest
+        def workspace_digest(path):
+            self.assertFalse(Path(path).is_relative_to(Path(self.tc["ghcLibdir"])))
+            return digest(path)
+        with patch.object(cache, "digest", side_effect=workspace_digest):
+            cache.restore(self.root, self.current, self.bundle)
 
     def test_conflicting_original_records_and_external_escape(self):
         self.manifest["sources"] = [{"path": "scripts/prepare-tests.sh", "sha256": "f" * 64}]

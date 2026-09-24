@@ -245,8 +245,7 @@ def main():
         guestCountPolicy='Same exact per-call guest-entry count with Truffle inlining enabled or disabled; no host bridge.',
         sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts],
         toolchain=dict(ghcVersion='9.14.1', host=platform.node(), machine=platform.machine(), system=platform.platform(),
-            ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
-            ghcBinarySha256=hashlib.sha256(Path(shutil.which(ghc) or ghc).resolve().read_bytes()).hexdigest()),
+            ghcInfo=subprocess.check_output([ghc, '--info'], text=True)),
         claim='Native/model comparison, exact Core metadata and strict static audits; no JVM or hardware SIMD claim.'
               if native_rows is not None else 'Pre-Tidy Core and independent integer model only; NO native/post-Tidy validation.',
         limitations=['Int# host inputs require a 64-bit machine; lane arithmetic wraps modulo 65536.',
