@@ -51,8 +51,16 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     READ_WORD("readWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD),
     READ_INT32("readInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT32),
     READ_INT("readIntOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT),
+    READ_WORD64("readWord64OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD64),
+    READ_INT64("readInt64OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT64),
     READ_ADDR("readAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     INDEX_ADDR_OFF("indexAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false),
+    INDEX_INT32("indexInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT32),
+    INDEX_WORD32("indexWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WORD32),
+    INDEX_INT("indexIntOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT),
+    INDEX_WORD("indexWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WORD),
+    INDEX_INT64("indexInt64OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT64),
+    INDEX_WORD64("indexWord64OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WORD64),
     INDEX_ADDR_ARRAY("indexAddrArray#", listOf(listOf("BoxedRep (Just Unlifted)"), listOf("IntRep")), false),
     READ_ADDR_ARRAY("readAddrArray#", listOf(listOf("BoxedRep (Just Unlifted)"), listOf("IntRep"), emptyList()), true),
     WRITE("writeWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Word8Rep"), emptyList()), false),
@@ -92,7 +100,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
             exact(result.components[0], emptyList()) && exact(result.components[1], payload) && result.primReps == payload
         else exact(result, if (this == CONTENTS || this == INDEX_ADDR_OFF || this == INDEX_ADDR_ARRAY)
-            listOf("AddrRep") else emptyList())
+            listOf("AddrRep") else addressRead?.let { listOf(it.payload) } ?: emptyList())
         if (!valid) throw RuntimeFault("Pinned memory result representation mismatch: $primitive")
     }
     companion object { fun named(name: String): PinnedMemoryOp? = entries.firstOrNull { it.primitive == name } }
@@ -111,6 +119,14 @@ internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryO
             index.executeRequiredLong(frame))
         else -> fault("Expected a pointer index primitive")
     }
+}
+
+internal class PinnedScalarIndexExpression(private val operation: ManagedAddressRead, proof: CoreRepresentation,
+    @field:Child private var base: Expr, @field:Child private var index: Expr) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = operation.read(
+        base.executeRequiredAddress(frame), index.executeRequiredLong(frame))
 }
 
 internal class PinnedPointerArrayWrite(proof: CoreRepresentation,
@@ -198,7 +214,8 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             PinnedMemoryOp.READ, PinnedMemoryOp.READ_INT8, PinnedMemoryOp.READ_CHAR,
             PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
             PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
-            PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> {
+            PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
+            PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 -> {
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))

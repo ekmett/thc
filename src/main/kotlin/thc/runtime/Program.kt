@@ -2007,6 +2007,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
                     PinnedPointerIndexExpression(operation, tupleProof,
                         compile(args[0], scope, false), compile(args[1], scope, false))
+                else if (!operation.tuple && operation.addressRead != null)
+                    PinnedScalarIndexExpression(operation.addressRead, tupleProof,
+                        compile(args[0], scope, false), compile(args[1], scope, false))
                 else if (operation == PinnedMemoryOp.WRITE_ADDR_ARRAY)
                     PinnedPointerArrayWrite(tupleProof, compile(args[0], scope, false),
                         compile(args[1], scope, false), compile(args[2], scope, false),

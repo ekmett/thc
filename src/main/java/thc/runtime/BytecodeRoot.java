@@ -593,6 +593,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
+    public static final class IndexManagedAddress {
+        @Specialization public static long read(ManagedAddressRead operation,
+                ManagedAddress address, long offset) {
+            return operation.read(address, offset);
+        }
+    }
+
+    @Operation
     public static final class WriteWord8OffAddr {
         @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
             ManagedByteArray.requireState(state);
