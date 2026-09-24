@@ -111,11 +111,13 @@ def complete_attempt(api, run, gate, current=True):
 
 
 def workflow_result(api, sha, gate, events=("push", "pull_request", "workflow_dispatch", "merge_group"),
-                    after_id=0):
+                    after_id=0, *, head_branch=None):
     workflow = api.call("GET", f"actions/workflows/{gate.workflow}")
     runs = [run for run in api.pages(f"actions/workflows/{gate.workflow}/runs?head_sha={sha}", "workflow_runs")
             if run["head_sha"] == sha and run["workflow_id"] == workflow["id"] and run["id"] > after_id
-            and run["event"] in events]
+            and run["event"] in events
+            and (head_branch is None or (run.get("head_branch") == head_branch
+                 and (run.get("head_repository") or {}).get("full_name") == api.repo))]
     if not runs:
         return "missing", None
     # An older-ID rerun can supersede a newer run. Any active exact-head run
@@ -351,13 +353,13 @@ def solo_retest_cutoff(api, sha):
 
 def mark_solo_retest(api, sha, candidate_sha):
     previous = solo_retest_marker(api, sha)
-    if previous is not None and previous[1] == candidate_sha:
-        return
     workflow = api.call("GET", "actions/workflows/fast.yml")
     runs = api.pages(f"actions/workflows/fast.yml/runs?head_sha={sha}", "workflow_runs")
     cutoff = max((run["id"] for run in runs if run["head_sha"] == sha
                   and run["workflow_id"] == workflow["id"]), default=0)
     cutoff = max(cutoff, previous[0] if previous else 0)
+    if previous is not None and previous == (cutoff, candidate_sha):
+        return
     api.call("POST", f"statuses/{sha}", {
         "context": REQUIRED_STATUS, "state": "pending",
         "target_url": f"https://github.com/{api.repo}/actions/workflows/fast.yml{RETEST_MARKER}{cutoff}-{candidate_sha}",
@@ -573,6 +575,65 @@ def fallback_to_solo(api, manifest):
     return True
 
 
+def defer_component_checks(api, candidate, manifest, combined_run, report):
+    """The verified combined run replaces still-active individual Fast runs.
+
+    Preserve a retest cutoff before cancellation. If the batch is abandoned,
+    normal reconciliation can start fresh solo checks instead of treating the
+    deliberate cancellation as a test failure or reusing an older green run.
+    No individual PR receives a successful status from this operation.
+    """
+    workflow = api.call("GET", "actions/workflows/fast.yml")
+    for part in manifest["components"]:
+        member = component_state(api, part, manifest["base"])
+        if member is None:
+            return
+        def matching(run):
+            return (run["workflow_id"] == workflow["id"]
+                    and run["head_sha"] == part["sha"]
+                    and run.get("head_branch") == member["head"]["ref"]
+                    and (run.get("head_repository") or {}).get("full_name") == api.repo
+                    and run["event"] in ("pull_request", "workflow_dispatch")
+                    and run["status"] in ("queued", "in_progress", "waiting", "pending"))
+        runs = api.pages(f"actions/workflows/fast.yml/runs?head_sha={part['sha']}", "workflow_runs")
+        for run in runs:
+            if not matching(run):
+                continue
+            fresh_run = api.call("GET", f"actions/runs/{run['id']}")
+            if (not matching(fresh_run) or fresh_run["id"] != run["id"]
+                    or fresh_run["run_attempt"] != run["run_attempt"]):
+                continue
+            fresh = api.call("GET", f"pulls/{candidate['number']}")
+            combined = api.call("GET", f"actions/runs/{combined_run['id']}")
+            if (fresh["state"] != "open" or candidate_manifest(fresh) != manifest
+                    or combined["status"] not in ("queued", "in_progress", "waiting", "pending")
+                    or combined.get("head_branch") != fresh["head"]["ref"]
+                    or (combined.get("head_repository") or {}).get("full_name") != api.repo
+                    or any(combined[key] != combined_run[key] for key in
+                           ("id", "workflow_id", "head_sha", "event", "run_attempt"))
+                    or api.call("GET", "branches/main")["commit"]["sha"] != manifest["base"]
+                    or candidate_ref(api, fresh["head"]["ref"]) != manifest["head"]
+                    or any(component_state(api, item, manifest["base"]) is None
+                           for item in manifest["components"])):
+                return
+            previous = solo_retest_marker(api, part["sha"])
+            if previous is None or previous[0] < run["id"]:
+                api.call("POST", f"statuses/{part['sha']}", {
+                    "context": REQUIRED_STATUS, "state": "pending",
+                    "target_url": (f"https://github.com/{api.repo}/actions/workflows/fast.yml"
+                                   f"{RETEST_MARKER}{run['id']}-{manifest['head']}"),
+                    "description": f"Individual Fast checks deferred to batch #{candidate['number']}"})
+            try:
+                api.call("POST", f"actions/runs/{run['id']}/cancel")
+                report(f"#{part['number']}: cancelled duplicate Fast run {run['id']}; "
+                       f"batch #{candidate['number']} tests the composition")
+            except HTTPError as error:
+                if error.code not in (403, 409):
+                    raise
+                error.close()
+                report(f"#{part['number']}: duplicate Fast cancellation refused (HTTP {error.code})")
+
+
 def reconcile_bulk(api, candidates, report):
     bot_prs = [pr for pr in candidates if (pr.get("user") or {}).get("login") == BOT_LOGIN
                and pr["head"]["ref"].startswith(BULK_PREFIX)]
@@ -586,8 +647,10 @@ def reconcile_bulk(api, candidates, report):
         expected = [part["sha"] for part in manifest["components"]]
         base = manifest["base"]
         sha = pr["head"]["sha"]
-        state, run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",))
-        swapping = state == "failure" and run["conclusion"] == "failure"
+        state, run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",),
+                                     head_branch=pr["head"]["ref"])
+        swapping = state == "failure" and (run["conclusion"] == "failure"
+                    or (run["conclusion"] in ("cancelled", "timed_out") and run["run_attempt"] >= 3))
         try:
             chain = bulk_chain(api, base, sha, expected)
         except (KeyError, ValueError):
@@ -604,6 +667,7 @@ def reconcile_bulk(api, candidates, report):
                 report(f"bulk #{pr['number']}: dispatched combined Fast checks")
             return True
         if state == "pending":
+            defer_component_checks(api, pr, manifest, run, report)
             report(f"bulk #{pr['number']}: combined Fast checks pending")
             return True
         if state == "failure":
@@ -622,6 +686,11 @@ def reconcile_bulk(api, candidates, report):
                         raise
                     error.close()
                     report(f"bulk #{pr['number']}: retry already pending or refused (HTTP {error.code})")
+            elif run["conclusion"] in ("cancelled", "timed_out"):
+                if fallback_to_solo(api, manifest):
+                    discard_candidate(api, pr, report, "combined retries exhausted; components moved to solo")
+                    return False
+                discard_candidate(api, pr, report, "component changed before solo fallback")
             else:
                 report(f"bulk #{pr['number']}: infrastructure result {run['conclusion']}; manual rerun needed")
             return True
@@ -630,7 +699,8 @@ def reconcile_bulk(api, candidates, report):
             report(f"bulk #{pr['number']}: full main Build health is {health}; promotion paused")
             return True
         fresh = api.call("GET", f"pulls/{pr['number']}")
-        final_state, final_run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",))
+        final_state, final_run = workflow_result(api, sha, FAST_GATE, ("workflow_dispatch",),
+                                                 head_branch=pr["head"]["ref"])
         if (fresh["head"]["sha"] != sha or fresh["mergeable_state"] not in ("clean", "unstable")
                 or api.call("GET", "branches/main")["commit"]["sha"] != base
                 or candidate_ref(api, pr["head"]["ref"]) != sha

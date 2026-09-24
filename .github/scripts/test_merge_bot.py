@@ -1198,6 +1198,11 @@ class BulkAPI(FastAPI):
             run = next(run for run in self.runs if run["id"] == int(path.split("/")[2]))
             run.update(run_attempt=run["run_attempt"] + 1, status="in_progress", conclusion=None)
             return None
+        if method == "POST" and path.startswith("actions/runs/") and path.endswith("/cancel"):
+            self.mutations.append((method, path, body))
+            run = next(run for run in self.runs if run["id"] == int(path.split("/")[2]))
+            run.update(status="completed", conclusion="cancelled")
+            return None
         if method == "PUT" and path == "pulls/3/merge":
             self.mutations.append((method, path, body))
             self.base = self.merged_sha
@@ -1216,6 +1221,7 @@ class BulkAPI(FastAPI):
     def finish_fast(self, conclusion="success"):
         candidate = self.prs[2]
         self.runs.append({**build(3), "workflow_id": 18, "event": "workflow_dispatch",
+                          "head_repository": {"full_name": self.repo},
                           "head_branch": candidate["head"]["ref"], "head_sha": candidate["head"]["sha"],
                           "conclusion": conclusion})
 
@@ -1225,6 +1231,180 @@ class BulkMergeTest(unittest.TestCase):
         messages = []
         reconcile(api, messages.append, lambda _: None)
         return messages
+
+    def pending_batch(self):
+        api = BulkAPI()
+        self.run_bot(api)
+        api.finish_fast()
+        api.runs[-1].update(status="queued", conclusion=None)
+        return api
+
+    def add_member_run(self, api, run_id=10, **changes):
+        run = {**build(run_id), "workflow_id": 18, "head_sha": api.first_sha,
+               "head_branch": "feature/first", "head_repository": {"full_name": api.repo},
+               "status": "queued", "conclusion": None, **changes}
+        api.runs.append(run)
+        return run
+
+    def test_pending_batch_replaces_individual_fast_without_green_status(self):
+        for status in ("queued", "in_progress", "waiting", "pending"):
+            api = self.pending_batch()
+            self.add_member_run(api, status=status)
+            self.run_bot(api)
+            self.assertIn(("POST", "actions/runs/10/cancel", None), api.actions)
+            self.assertEqual(solo_retest_cutoff(api, api.first_sha), 10)
+            self.assertFalse(any(item["sha"] == api.first_sha and item["state"] == "success"
+                                 for item in api.statuses))
+            marker = next(i for i, (_, path, body) in enumerate(api.mutations)
+                          if path == f"statuses/{api.first_sha}" and "solo-retest" in body["target_url"])
+            cancel = api.mutations.index(("POST", "actions/runs/10/cancel", None))
+            self.assertLess(marker, cancel)
+            self.assertEqual(api.runs[0]["status"], "queued")  # Combined run remains live.
+
+    def test_only_exact_member_fast_runs_are_cancelled(self):
+        for changes in ({"workflow_id": 17}, {"head_sha": "9" * 40},
+                        {"head_branch": "other"}, {"head_repository": {"full_name": "fork/thc"}},
+                        {"head_repository": None}, {"event": "push"}, {"event": "merge_group"},
+                        {"status": "completed", "conclusion": "failure"},
+                        {"status": "completed", "conclusion": "success"}):
+            with self.subTest(changes=changes):
+                api = self.pending_batch(); self.add_member_run(api, **changes)
+                self.run_bot(api)
+                self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+                self.assertIsNone(solo_retest_cutoff(api, api.first_sha))
+
+    def test_member_dispatch_can_be_replaced_but_missing_combined_run_cannot(self):
+        api = self.pending_batch(); self.add_member_run(api, event="workflow_dispatch")
+        self.run_bot(api)
+        self.assertIn(("POST", "actions/runs/10/cancel", None), api.actions)
+        api = BulkAPI(); self.add_member_run(api)
+        self.run_bot(api)
+        self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_run_completion_or_rerun_during_inspection_is_not_cancelled(self):
+        for changes in ({"status": "completed", "conclusion": "success"}, {"run_attempt": 2}):
+            api = self.pending_batch(); member = self.add_member_run(api)
+            original = api.call
+            def call(method, path, body=None):
+                if method == "GET" and path == "actions/runs/10":
+                    member.update(changes)
+                return original(method, path, body)
+            api.call = call
+            self.run_bot(api)
+            self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_changed_batch_or_member_before_cancellation_is_left_alone(self):
+        for mutation in (lambda a: setattr(a, "base", "9" * 40),
+                         lambda a: a.prs[0]["head"].update(sha="9" * 40),
+                         lambda a: a.prs[0].update(labels=[]),
+                         lambda a: a.prs[1].update(labels=[]),
+                         lambda a: a.prs[2].update(state="closed"),
+                         lambda a: a.runs[0].update(status="completed", conclusion="failure"),
+                         lambda a: a.runs[0].update(status="completed", conclusion="cancelled"),
+                         lambda a: a.runs[0].update(run_attempt=2),
+                         lambda a: a.refs.update({a.prs[2]["head"]["ref"]: "9" * 40})):
+            api = self.pending_batch(); self.add_member_run(api)
+            original = api.call
+            def call(method, path, body=None):
+                if method == "GET" and path == "actions/runs/10":
+                    mutation(api)
+                return original(method, path, body)
+            api.call = call
+            self.run_bot(api)
+            self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_late_duplicate_advances_cutoff_without_repeated_cancellation(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api); self.run_bot(api)
+        self.assertEqual(api.actions.count(("POST", "actions/runs/10/cancel", None)), 1)
+        self.add_member_run(api, run_id=12)
+        self.run_bot(api)
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 12)
+        self.assertIn(("POST", "actions/runs/12/cancel", None), api.actions)
+
+    def test_wrong_branch_or_repository_combined_run_cannot_cancel_or_merge(self):
+        for status, conclusion in (("queued", None), ("completed", "success")):
+            for changes in ({"head_branch": "feature/unrelated"},
+                            {"head_repository": {"full_name": "fork/thc"}},
+                            {"head_repository": None}):
+                api = self.pending_batch(); self.add_member_run(api)
+                api.runs[0].update(status=status, conclusion=conclusion, **changes)
+                self.run_bot(api)
+                self.assertFalse(any(path.endswith(("/cancel", "/merge")) for _, path, _ in api.actions))
+
+    def test_abandoned_batch_restarts_solo_after_deliberate_cancellation(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        api.prs[1]["labels"] = []
+        self.run_bot(api)  # Invalid candidate is discarded.
+        self.run_bot(api)  # Remaining member receives a fresh individual run.
+        self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+            api.actions)
+        self.assertFalse(any(path.endswith("/merge") for _, path, _ in api.actions))
+
+    def test_failed_batch_still_requires_fresh_solo_after_cancellation(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        api.runs[0].update(status="completed", conclusion="failure")
+        self.run_bot(api)
+        self.assertEqual([label["name"] for label in api.prs[0]["labels"]], ["auto-merge"])
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 10)
+        self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+            api.actions)
+
+    def test_exhausted_combined_retries_restore_fresh_solo_checks(self):
+        for conclusion in ("cancelled", "timed_out"):
+            api = self.pending_batch(); self.add_member_run(api)
+            self.run_bot(api)
+            api.runs[0].update(status="completed", conclusion=conclusion, run_attempt=3)
+            self.run_bot(api)
+            self.assertEqual(api.prs[2]["state"], "closed")
+            self.assertEqual([label["name"] for label in api.prs[0]["labels"]], ["auto-merge"])
+            self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+                "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+                api.actions)
+
+    def test_interrupted_exhausted_retry_fallback_finishes_label_swap(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        api.runs[0].update(status="completed", conclusion="timed_out", run_attempt=3)
+        api.call("POST", "issues/1/labels", {"labels": ["auto-merge"]})
+        self.run_bot(api)
+        self.assertEqual([label["name"] for label in api.prs[0]["labels"]], ["auto-merge"])
+        self.assertTrue(owner_authorized(api, 1))
+        self.assertEqual(api.prs[2]["state"], "closed")
+
+    def test_batch_failure_advances_deferred_cutoff_past_late_individual_green(self):
+        api = self.pending_batch(); self.add_member_run(api)
+        self.run_bot(api)
+        self.add_member_run(api, run_id=12, status="completed", conclusion="success")
+        api.runs[0].update(status="completed", conclusion="failure")
+        self.run_bot(api)
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 12)
+        self.assertFalse(any(path.endswith("/merge") for _, path, _ in api.actions))
+        self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
+            "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),
+            api.actions)
+
+    def test_finished_during_cancel_is_recoverable_and_unexpected_errors_surface(self):
+        for code in (403, 409, 503):
+            api = self.pending_batch(); self.add_member_run(api)
+            original = api.call
+            error = HTTPError("", code, "cancel", {}, None)
+            self.addCleanup(error.close)
+            def call(method, path, body=None):
+                if method == "POST" and path == "actions/runs/10/cancel":
+                    raise error
+                return original(method, path, body)
+            api.call = call
+            if code == 503:
+                with self.assertRaises(HTTPError): self.run_bot(api)
+            else:
+                messages = self.run_bot(api)
+                self.assertTrue(any("cancellation refused" in line for line in messages))
+            self.assertEqual(solo_retest_cutoff(api, api.first_sha), 10)
 
     def test_disjoint_bulk_heads_form_one_checked_candidate(self):
         api = BulkAPI()
