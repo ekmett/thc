@@ -55,8 +55,10 @@ The actual mask belongs to the executing thread. Observing one mask while
 compiling does not make it a constant for other invocations or resuming threads.
 
 Bytecode lowering currently uses conservative continuation cuts and dynamic
-mask checks, not this abstract interpretation. The first AST admission gate is
-a syntactic whitelist, not a general suspension-effect analysis.
+mask checks, not this abstract interpretation. The restricted AST gate
+classifies expressions as non-suspending, captured, or potentially suspending
+for the typed execution route requested by their parent. Unknown forms are
+rejected; this is not yet a general analysis of Core calls and handlers.
 
 The conservative suspension effect is independent of that mask. Unknown calls,
 forcing a lazy value, and callbacks that may change masking can suspend.
@@ -81,6 +83,10 @@ subset rejects strict entry marks until it has equivalent coverage.
 Admission must also match the execution route chosen by the parent. A saved
 `executeLong` suffix does not cover a generic or tuple-returning entry; the
 declared result convention must select the covered route before execution.
+Demanded MVar operands require an evaluated lexical carrier; an occurrence's
+claimed evaluatedness cannot conceal a force introduced by lowering. The
+restricted async AST entry also excludes aggregate formals and typed caller
+handoff loans until it can preserve their ownership across capture.
 
 ## Saved computation
 
