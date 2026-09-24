@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 280 | Implemented fixed numeric/character scalar forms. |
-| Partial | 261 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 950 | No declared lowering. |
+| Partial | 265 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 946 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -385,6 +385,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexFloatArrayAsFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexFloatX4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexInt16Array#` — arity 2 — Managed byte storage
+- [ ] `indexInt16OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexInt32Array#` — arity 2 — Managed byte storage
 - [ ] `indexInt32ArrayAsInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexInt32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -393,6 +394,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexIntArray#` — arity 2 — Managed byte storage
 - [ ] `indexSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexWord16Array#` — arity 2 — Managed byte storage
+- [ ] `indexWord16OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `indexWord32Array#` — arity 2 — Managed byte storage
 - [ ] `indexWord32ArrayAsWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexWord32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -488,6 +490,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readFloatArrayAsFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readFloatX4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt16Array#` — arity 3 — Managed byte storage
+- [ ] `readInt16OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt32Array#` — arity 3 — Managed byte storage
 - [ ] `readInt32ArrayAsInt32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt32OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -500,6 +503,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `readSmallArray#` — arity 3 — Managed lifted arrays
 - [ ] `readWord16Array#` — arity 3 — Managed byte storage
+- [ ] `readWord16OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord32Array#` — arity 3 — Managed byte storage
 - [ ] `readWord32ArrayAsWord32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord32OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -751,7 +755,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexInt16ArrayAsInt16X16#` — arity 2
 - [ ] `indexInt16ArrayAsInt16X32#` — arity 2
 - [ ] `indexInt16ArrayAsInt16X8#` — arity 2
-- [ ] `indexInt16OffAddr#` — arity 2
 - [ ] `indexInt16OffAddrAsInt16X16#` — arity 2
 - [ ] `indexInt16OffAddrAsInt16X32#` — arity 2
 - [ ] `indexInt16OffAddrAsInt16X8#` — arity 2
@@ -806,7 +809,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord16ArrayAsWord16X16#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X32#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X8#` — arity 2
-- [ ] `indexWord16OffAddr#` — arity 2
 - [ ] `indexWord16OffAddrAsWord16X16#` — arity 2
 - [ ] `indexWord16OffAddrAsWord16X32#` — arity 2
 - [ ] `indexWord16OffAddrAsWord16X8#` — arity 2
@@ -1141,7 +1143,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt16ArrayAsInt16X16#` — arity 3
 - [ ] `readInt16ArrayAsInt16X32#` — arity 3
 - [ ] `readInt16ArrayAsInt16X8#` — arity 3
-- [ ] `readInt16OffAddr#` — arity 3
 - [ ] `readInt16OffAddrAsInt16X16#` — arity 3
 - [ ] `readInt16OffAddrAsInt16X32#` — arity 3
 - [ ] `readInt16OffAddrAsInt16X8#` — arity 3
@@ -1196,7 +1197,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord16ArrayAsWord16X16#` — arity 3
 - [ ] `readWord16ArrayAsWord16X32#` — arity 3
 - [ ] `readWord16ArrayAsWord16X8#` — arity 3
-- [ ] `readWord16OffAddr#` — arity 3
 - [ ] `readWord16OffAddrAsWord16X16#` — arity 3
 - [ ] `readWord16OffAddrAsWord16X32#` — arity 3
 - [ ] `readWord16OffAddrAsWord16X8#` — arity 3

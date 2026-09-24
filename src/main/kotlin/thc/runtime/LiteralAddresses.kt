@@ -261,3 +261,10 @@ internal class IndexManagedByte(private val signed: Boolean, @field:Child privat
         return if (signed) byte.toByte().toLong() else byte
     }
 }
+
+internal class IndexManagedScalarAddress(private val operation: ManagedAddressRead,
+    @field:Child private var address: Expr, @field:Child private var element: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = operation.read(
+        address.executeRequiredAddress(frame), element.executeRequiredLong(frame))
+}
