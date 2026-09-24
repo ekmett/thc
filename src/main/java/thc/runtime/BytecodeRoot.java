@@ -1317,6 +1317,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Logical arity includes a PAP's remaining formals, not its physical prefix width. */
+    @Operation
+    public static final class ClosureArity {
+        @Specialization public static long read(Closure function) { return function.arity; }
+    }
+
     /** Checked reference identities give restored formals a concrete Graal stamp. */
     @Operation
     public static final class RequireData {

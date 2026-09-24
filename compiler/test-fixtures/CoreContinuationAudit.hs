@@ -50,6 +50,23 @@ uncaptured = delayed 7#
 applicationAnswer :: Int
 applicationAnswer = case delayed 7# of Box result -> I# (200# +# result)
 
+-- The first saturated call returns a function. Its separate checkpoint must
+-- resume before the saved second argument is applied, without rerunning either.
+{-# OPAQUE stagedFunction #-}
+stagedFunction :: Int# -> Int# -> Box
+stagedFunction input = case noDuplicate# realWorld# of { _ ->
+  case input ==# 7# of
+    1# -> \suffix -> Box (input +# suffix)
+    _  -> \suffix -> Box (input -# suffix) }
+
+{-# OPAQUE overapplicationAnswer #-}
+overapplicationAnswer :: Int# -> Int
+overapplicationAnswer input = case stagedFunction input 1# of Box result -> I# (200# +# result)
+
+{-# OPAQUE overapplicationThunk #-}
+overapplicationThunk :: Int
+overapplicationThunk = case overapplicationAnswer 7# of I# value -> I# (value +# 1#)
+
 -- The private checkpoint may suspend an original catch# IO action before it
 -- produces its unboxed tuple. The handler remains a genuine GHC Core handler.
 {-# OPAQUE catchActionAnswer #-}

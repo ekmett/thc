@@ -776,42 +776,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         } }
     }
 
-    /** Capture an exact callee after evaluating operands once, including compact and typed inputs. */
-    private fun checkpointedApplication(e: Emission, function: Expression, arguments: List<Expression>,
-                                        evaluatedArguments: BooleanArray, layout: ArgumentLayout?) {
+    /** One exact call or PAP step; a yielded callee is captured before any suffix runs. */
+    private fun checkpointedCall(e: Emission, fn: BytecodeLocal, values: List<BytecodeLocal>,
+                                 layout: ArgumentLayout?, evaluatedArguments: BooleanArray,
+                                 arity: Int, callerMask: BytecodeLocal) {
         val b = e.builder
         b.beginBlock()
-        val fn = b.createLocal("captured application function", "object")
-        val callerMask = b.createLocal("captured application caller mask", "object")
         val result = b.createLocal("captured application result", "object")
         val suspended = b.createLocal("captured application suspension", "object")
-        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
-        val values = if (layout?.requiresTyped == true) {
-            List(layout.physicalArity) { b.createLocal("captured typed input $it", null) }.also { slots ->
-                arguments.forEachIndexed { index, argument ->
-                    val offset = layout.offset(index)
-                    if (layout.isTuple(index)) argument.emitTuple(e, slots.subList(offset, layout.offset(index + 1)))
-                    else {
-                        b.beginStoreLocal(slots[offset]); argument.emit(e); b.endStoreLocal()
-                    }
-                }
-            }
-        } else {
-            arrayListOf<BytecodeLocal>().also { slots ->
-                arguments.forEachIndexed { index, argument ->
-                    if (layout?.isEmpty(index) == true) argument.emitTuple(e, emptyList())
-                    else slots += b.createLocal("captured application operand $index", null).also { local ->
-                        b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
-                    }
-                }
-            }
-        }
         val typedSource = if (layout?.requiresTyped == true)
             BytecodeInputSource(layout, values.map(LocalAccessor::constantOf).toTypedArray()) else null
-        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
         b.beginTryCatch()
         b.beginStoreLocal(result)
-        b.beginCaptureApplicationResult(arguments.size)
+        b.beginCaptureApplicationResult(arity)
         b.emitLoadLocal(fn)
         when {
             typedSource != null -> {
@@ -825,7 +802,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.endApplyCompact()
             }
             else -> {
-                b.beginApply(arguments.size, false, metrics, evaluatedArguments)
+                b.beginApply(arity, false, metrics, evaluatedArguments)
                 b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
                 b.endApply()
             }
@@ -855,6 +832,118 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endBlock()
         b.endTryCatch()
         b.emitLoadLocal(result)
+        b.endBlock()
+    }
+
+    /** A saved application can cross several exact call boundaries without replaying operands. */
+    private fun stagedOverapplication(e: Emission, fn: BytecodeLocal, values: List<BytecodeLocal>,
+                                      layout: ArgumentLayout?, evaluatedArguments: BooleanArray,
+                                      callerMask: BytecodeLocal, result: BytecodeLocal, count: Int) {
+        val b = e.builder
+        b.beginBlock()
+        val arity = b.createLocal("remaining closure arity", "primitive")
+        val stages = List(count) { b.createLabel() }
+        val complete = b.createLabel()
+        b.emitBranch(stages[0])
+        stages.forEachIndexed { start, stage ->
+            b.emitLabel(stage)
+            if (enableAsync) emitAsyncPoll(e)
+            // A zero-arity closure consumes no supplied arguments. Truffle DSL
+            // requires a structured loop for that genuine backward edge.
+            b.beginWhile()
+            b.beginMatchLiteral(0L)
+            b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity()
+            b.endMatchLiteral()
+            b.beginBlock()
+            if (enableAsync) emitAsyncPoll(e)
+            b.beginStoreLocal(result)
+            checkpointedCall(e, fn, emptyList(), null, booleanArrayOf(), 0, callerMask)
+            b.endStoreLocal()
+            b.beginStoreLocal(fn)
+            requireClosure(Expression { it.builder.emitLoadLocal(result) }).emit(e)
+            b.endStoreLocal()
+            b.endBlock()
+            b.endWhile()
+            b.beginStoreLocal(arity); b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity(); b.endStoreLocal()
+            val remaining = count - start
+            for (take in 1 until remaining) {
+                b.beginIfThen()
+                b.beginMatchLiteral(take.toLong()); b.emitLoadLocal(arity); b.endMatchLiteral()
+                b.beginBlock()
+                val from = ArgumentLayout.offset(layout, start)
+                val until = ArgumentLayout.offset(layout, start + take)
+                val input = layout?.let { ArgumentLayout.fromProofs((start until start + take).map(it::proof)) }
+                b.beginStoreLocal(result)
+                checkpointedCall(e, fn, values.subList(from, until), input,
+                    evaluatedArguments.copyOfRange(start, start + take), take, callerMask)
+                b.endStoreLocal()
+                // Only the demanded intermediate function is forced. A yielded force
+                // resumes from its saved result local, never from the original call.
+                b.beginStoreLocal(fn)
+                requireClosure(Expression { it.builder.emitLoadLocal(result) }).emit(e)
+                b.endStoreLocal()
+                b.emitBranch(stages[start + take])
+                b.endBlock()
+                b.endIfThen()
+            }
+            val from = ArgumentLayout.offset(layout, start)
+            val input = layout?.let { ArgumentLayout.fromProofs((start until count).map(it::proof)) }
+            b.beginStoreLocal(result)
+            checkpointedCall(e, fn, values.subList(from, values.size), input,
+                evaluatedArguments.copyOfRange(start, count), remaining, callerMask)
+            b.endStoreLocal()
+            b.emitBranch(complete)
+        }
+        b.emitLabel(complete)
+        b.emitLoadLocal(result)
+        b.endBlock()
+    }
+
+    /** Capture callees after evaluating operands once, including compact and typed inputs. */
+    private fun checkpointedApplication(e: Emission, function: Expression, arguments: List<Expression>,
+                                        evaluatedArguments: BooleanArray, layout: ArgumentLayout?) {
+        val b = e.builder
+        b.beginBlock()
+        val fn = b.createLocal("captured application function", "object")
+        val callerMask = b.createLocal("captured application caller mask", "object")
+        val result = b.createLocal("captured application result", "object")
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = if (layout?.requiresTyped == true) {
+            List(layout.physicalArity) { b.createLocal("captured typed input $it", null) }.also { slots ->
+                arguments.forEachIndexed { index, argument ->
+                    val offset = layout.offset(index)
+                    if (layout.isTuple(index)) argument.emitTuple(e, slots.subList(offset, layout.offset(index + 1)))
+                    else {
+                        b.beginStoreLocal(slots[offset]); argument.emit(e); b.endStoreLocal()
+                    }
+                }
+            }
+        } else {
+            arrayListOf<BytecodeLocal>().also { slots ->
+                arguments.forEachIndexed { index, argument ->
+                    if (layout?.isEmpty(index) == true) argument.emitTuple(e, emptyList())
+                    else slots += b.createLocal("captured application operand $index", null).also { local ->
+                        b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
+                    }
+                }
+            }
+        }
+        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
+        if (arguments.isEmpty()) {
+            checkpointedCall(e, fn, values, layout, evaluatedArguments, 0, callerMask)
+            b.endBlock()
+            return
+        }
+        b.beginConditional()
+        b.beginMatchLiteral(1L)
+        b.beginLessThan()
+        b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity()
+        b.emitLoadConstant(arguments.size.toLong())
+        b.endLessThan()
+        b.endMatchLiteral()
+        stagedOverapplication(e, fn, values, layout, evaluatedArguments, callerMask, result, arguments.size)
+        checkpointedCall(e, fn, values, layout, evaluatedArguments, arguments.size, callerMask)
+        b.endConditional()
         b.endBlock()
     }
 

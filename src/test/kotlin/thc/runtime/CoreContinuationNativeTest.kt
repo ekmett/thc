@@ -156,6 +156,59 @@ class CoreContinuationNativeTest {
         }
     }
 
+    @Test fun originalOverapplicationKeepsItsSavedSuffixAfterTheFirstCalleeYields() {
+        assertEquals("209", File(root, "build/core-continuation/native-output.txt").readLines()[14])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        val binding = (module["bindings"] as List<Map<String, Any?>>).single {
+            (it["id"] as String).endsWith(".overapplicationAnswer")
+        }
+        fun hasOverapplication(value: Any?): Boolean = when (value) {
+            is List<*> -> (value.firstOrNull() == "app" &&
+                ((value.getOrNull(1) as? List<*>)?.getOrNull(1) as? String)?.endsWith(".stagedFunction") == true &&
+                (value.getOrNull(2) as? List<*>)?.size == 2) || value.any(::hasOverapplication)
+            else -> false
+        }
+        assertTrue(hasOverapplication(binding["expr"]), "GHC must retain a two-argument call to the one-arity prefix")
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val linked = CoreModules.reachable(module, "overapplicationThunk", strictLink = true)
+                val driver = Driver()
+                for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val answer = driver.force(ordinary.entryValue("overapplicationThunk") as Thunk) as DataValue
+                    assertEquals(209L, answer.layout.readLong(answer, 0))
+                }
+                val checkpoint = BytecodeCheckpoint()
+                val program = BytecodeProgram(language, linked, checkpoint)
+                val parent = program.entryValue("overapplicationThunk") as Thunk
+                val stage = program.entryTarget("stagedFunction")
+                assertEquals(1, (program.entryValue("stagedFunction") as Closure).arity)
+                assertTrue(Calls.target(parent.target!!, arrayOf(0L)) is DataValue)
+                compile(parent.target!!)
+                checkpoint.armed = true
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                val caller = parent.value as ContinuationResult
+                val segment = (caller.result as CallSegmentSuspended).segment
+                var current = segment
+                val savedRoots = mutableListOf<BytecodeRoot>()
+                while (true) {
+                    val continuation = current.value as? ContinuationResult ?: break
+                    savedRoots += continuation.continuationRootNode.sourceRootNode as BytecodeRoot
+                    current = (continuation.result as? CallSegmentSuspended)?.segment ?: break
+                }
+                assertTrue(savedRoots.any { it.isSelf(stage) },
+                    "The saved suffix must retain the exact one-arity callee: $savedRoots")
+                assertEquals(1, checkpoint.visits.get())
+                val answer = driver.force(parent) as DataValue
+                assertEquals(209L, answer.layout.readLong(answer, 0))
+                assertEquals(1, checkpoint.visits.get(), "The first stage must not be called again on suffix resume")
+                assertEquals(2, segment.state)
+            }
+        }
+    }
+
     @Test fun compactAndTypedScalarCallsResumeTheirExactCalleeWithoutReplayingInputs() {
         val oracle = File(root, "build/core-continuation/native-output.txt").readLines()
         @Suppress("UNCHECKED_CAST")
@@ -535,7 +588,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -585,7 +638,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>

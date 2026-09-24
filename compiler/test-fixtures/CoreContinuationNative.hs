@@ -22,3 +22,4 @@ main = do
   print forceNonlocalAnswer
   print compactScalarAnswer
   print typedScalarAnswer
+  print overapplicationThunk
