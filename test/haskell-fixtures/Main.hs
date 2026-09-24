@@ -9,6 +9,7 @@ module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
 import OriginalStdioFixtures (prepareOriginalStdio)
+import SmallArrayFixtures (prepareSmallArrays)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -774,5 +775,6 @@ main = do
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
     ["pinned-pointer-cells"] -> preparePinnedPointers root
+    ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 260 | Implemented fixed numeric/character scalar forms. |
-| Partial | 225 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1006 | No declared lowering. |
+| Partial | 233 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 998 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -343,6 +343,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
+- [ ] `getSizeofSmallMutableArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexCharOffAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexDoubleArray#` — arity 2 — Managed byte storage
@@ -357,6 +358,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexInt32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexInt8Array#` — arity 2 — Managed byte storage
 - [ ] `indexIntArray#` — arity 2 — Managed byte storage
+- [ ] `indexSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexWord16Array#` — arity 2 — Managed byte storage
 - [ ] `indexWord32Array#` — arity 2 — Managed byte storage
 - [ ] `indexWord32ArrayAsWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -399,6 +401,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `newMVar#` — arity 1 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `newMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `newPinnedByteArray#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `newSmallArray#` — arity 3 — Managed lifted arrays
 - [ ] `noDuplicate#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -455,6 +458,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readIntOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `readMutVar#` — arity 2 — Managed lazy reference cells
+- [ ] `readSmallArray#` — arity 3 — Managed lifted arrays
 - [ ] `readWord16Array#` — arity 3 — Managed byte storage
 - [ ] `readWord32Array#` — arity 3 — Managed byte storage
 - [ ] `readWord32ArrayAsWord32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -469,6 +473,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `setByteArray#` — arity 5 — Managed byte storage
 - [ ] `sizeofByteArray#` — arity 1 — Managed byte storage
 - [ ] `sizeofMutableByteArray#` — arity 1 — Managed byte storage
+- [ ] `sizeofSmallArray#` — arity 1 — Managed lifted arrays
+- [ ] `sizeofSmallMutableArray#` — arity 1 — Managed lifted arrays
 - [ ] `subIntC#` — arity 2 — Exact tuple arithmetic
 - [ ] `subWordC#` — arity 2 — Exact tuple arithmetic
 - [ ] `tagToEnum#` — arity 1 — concrete-nullary-family
@@ -511,6 +517,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unsafeFreezeArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeFreezeByteArray#` — arity 2 — Managed byte storage
+- [ ] `unsafeFreezeSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeArray#` — arity 4 — Managed lifted arrays
 - [ ] `writeDoubleArray#` — arity 4 — Managed byte storage
@@ -526,6 +533,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt8Array#` — arity 4 — Managed byte storage
 - [ ] `writeIntArray#` — arity 4 — Managed byte storage
 - [ ] `writeMutVar#` — arity 3 — Managed lazy reference cells
+- [ ] `writeSmallArray#` — arity 4 — Managed lifted arrays
 - [ ] `writeWord16Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord32Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord32ArrayAsWord32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -685,7 +693,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `geAddr#` — arity 2
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
-- [ ] `getSizeofSmallMutableArray#` — arity 2
 - [ ] `getSpark#` — arity 1
 - [ ] `gtAddr#` — arity 2
 - [ ] `indexAddrArray#` — arity 2
@@ -765,7 +772,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexInt8X64Array#` — arity 2
 - [ ] `indexInt8X64OffAddr#` — arity 2
 - [ ] `indexIntOffAddr#` — arity 2
-- [ ] `indexSmallArray#` — arity 2
 - [ ] `indexStablePtrArray#` — arity 2
 - [ ] `indexStablePtrOffAddr#` — arity 2
 - [ ] `indexWideCharArray#` — arity 2
@@ -995,7 +1001,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateInt8X64#` — arity 1
 - [ ] `newBCO#` — arity 6
 - [ ] `newPromptTag#` — arity 1
-- [ ] `newSmallArray#` — arity 3
 - [ ] `newTVar#` — arity 2
 - [ ] `numSparks#` — arity 1
 - [ ] `packDoubleX8#` — arity 1
@@ -1165,7 +1170,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt8X32OffAddr#` — arity 3
 - [ ] `readInt8X64Array#` — arity 3
 - [ ] `readInt8X64OffAddr#` — arity 3
-- [ ] `readSmallArray#` — arity 3
 - [ ] `readStablePtrArray#` — arity 3
 - [ ] `readStablePtrOffAddr#` — arity 3
 - [ ] `readTVar#` — arity 2
@@ -1314,8 +1318,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `sinhFloat#` — arity 1
 - [ ] `sizeofArray#` — arity 1
 - [ ] `sizeofMutableArray#` — arity 1
-- [ ] `sizeofSmallArray#` — arity 1
-- [ ] `sizeofSmallMutableArray#` — arity 1
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
 - [ ] `tanDouble#` — arity 1
@@ -1370,7 +1372,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord64X8#` — arity 1
 - [ ] `unpackWord8X32#` — arity 1
 - [ ] `unpackWord8X64#` — arity 1
-- [ ] `unsafeFreezeSmallArray#` — arity 2
 - [ ] `unsafeThawArray#` — arity 2
 - [ ] `unsafeThawByteArray#` — arity 2
 - [ ] `unsafeThawSmallArray#` — arity 2
@@ -1459,7 +1460,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt8X64Array#` — arity 4
 - [ ] `writeInt8X64OffAddr#` — arity 4
 - [ ] `writeIntOffAddr#` — arity 4
-- [ ] `writeSmallArray#` — arity 4
 - [ ] `writeStablePtrArray#` — arity 4
 - [ ] `writeStablePtrOffAddr#` — arity 4
 - [ ] `writeTVar#` — arity 3

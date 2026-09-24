@@ -1668,6 +1668,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 arrayExpression(operation, tupleProof,
                     args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
+            } else if (fn[0] == "prim" && SmallArrayOp.named(fn[1] as String) != null) {
+                val operation = SmallArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                smallArrayExpression(operation, tupleProof,
+                    args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
             } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
