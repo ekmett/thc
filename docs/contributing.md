@@ -5,6 +5,23 @@ focused pull request against `main`. Explain the problem, the change and how you
 checked it. Keep issues about the work to do; PRs carry the implementation
 discussion and merge status.
 
+When adding a primop, update its existing entry in
+[`scripts/core-capabilities.json`](../scripts/core-capabilities.json) after both
+backends and the native checks pass. Then refresh the generated
+[primop checklist](primops.md):
+
+```sh
+python3 scripts/generate-scalar-signatures.py --write
+python3 scripts/primop-coverage.py --write-checklist
+python3 scripts/primop-coverage.py --check
+python3 scripts/test-primop-coverage.py
+```
+
+The scalar signature command needs the pinned GHC 9.14.1. The checklist is
+derived from the same contracts as the auditor; don't edit its checkboxes by
+hand. Partial support stays explicit, including local-only SIMD and managed
+address restrictions.
+
 `Fast checks` is the required PR workflow. It runs compiled smoke tests and
 checks for the changed components on Linux, in both handoff modes. Compiler,
 calling-convention and other broad changes run more tests. Cached toolchains,
