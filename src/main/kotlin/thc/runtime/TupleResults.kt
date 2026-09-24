@@ -6,6 +6,7 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.IndirectCallNode
@@ -243,6 +244,11 @@ internal class TupleBounce(private val destination: TupleDestination, private va
     fun execute(frame: VirtualFrame, initial: TailCall) {
         var next = initial
         while (true) {
+            try { TruffleSafepoint.poll(this) }
+            catch (failure: Throwable) {
+                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                throw failure
+            }
             val root = next.target.rootNode as? GuestRoot
             if (root == null || root.tupleResult?.matches(destination.shape) != true) {
                 next.input?.let { discardTypedInput(destination.shape.language, it) }
@@ -277,6 +283,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
         var function = initial
         var offset = 0
         while (true) {
+            TruffleSafepoint.poll(this)
             val remaining = argsSize - offset
             if (function.arity > remaining) fault("Tuple result application is under-saturated")
             val count = function.arity
