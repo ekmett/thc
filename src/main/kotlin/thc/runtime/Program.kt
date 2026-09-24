@@ -1357,6 +1357,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     in CoreVectors.operationsWord32 -> VectorWord32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
+            } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
+                val operation = MVarOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                operation.validateBindings(args.map(CoreRepresentations::expression), args.map {
+                    if (it[0] == "var") scope.locals[it[1]]?.proof ?: globalProofs[it[1]] else null
+                })
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.representation }, flags, tupleProof)
+                mVarExpression(operation, tupleProof, operands.toTypedArray())
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

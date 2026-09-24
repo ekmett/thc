@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 244 | Implemented fixed numeric/character scalar forms. |
-| Partial | 148 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1099 | No declared lowering. |
+| Partial | 156 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 1091 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -332,6 +332,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `indexWord8Array#` — arity 2 — Managed byte storage
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
+- [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -347,6 +348,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `newArray#` — arity 3 — Managed lifted arrays
 - [ ] `newByteArray#` — arity 2 — Managed byte storage
+- [ ] `newMVar#` — arity 1 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `newMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `packDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -368,6 +370,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `plusWord2#` — arity 2 — Exact tuple arithmetic
 - [ ] `plusWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `plusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `putMVar#` — arity 3 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -384,6 +387,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt32X4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt8Array#` — arity 3 — Managed byte storage
 - [ ] `readIntArray#` — arity 3 — Managed byte storage
+- [ ] `readMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `readMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `readWord16Array#` — arity 3 — Managed byte storage
 - [ ] `readWord32Array#` — arity 3 — Managed byte storage
@@ -399,6 +403,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `subIntC#` — arity 2 — Exact tuple arithmetic
 - [ ] `subWordC#` — arity 2 — Exact tuple arithmetic
 - [ ] `tagToEnum#` — arity 1 — concrete-nullary-family
+- [ ] `takeMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `thawArray#` — arity 4 — Managed lifted arrays
 - [ ] `timesDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -409,6 +414,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesWord2#` — arity 2 — Exact tuple arithmetic
 - [ ] `timesWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `tryPutMVar#` — arity 3 — Managed blocking cells; no guest scheduler or async exceptions
+- [ ] `tryReadMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
+- [ ] `tryTakeMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `unpackDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unpackInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -818,7 +826,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `isByteArrayPinned#` — arity 1
 - [ ] `isByteArrayWeaklyPinned#` — arity 1
 - [ ] `isCurrentThreadBound#` — arity 1
-- [ ] `isEmptyMVar#` — arity 2
 - [ ] `isMutableByteArrayPinned#` — arity 1
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
 - [ ] `keepAlive#` — arity 3
@@ -947,7 +954,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateInt8X64#` — arity 1
 - [ ] `newAlignedPinnedByteArray#` — arity 3
 - [ ] `newBCO#` — arity 6
-- [ ] `newMVar#` — arity 1
 - [ ] `newPinnedByteArray#` — arity 2
 - [ ] `newPromptTag#` — arity 1
 - [ ] `newSmallArray#` — arity 3
@@ -1025,7 +1031,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `prefetchValue2#` — arity 2
 - [ ] `prefetchValue3#` — arity 2
 - [ ] `prompt#` — arity 3
-- [ ] `putMVar#` — arity 3
 - [ ] `quotInt16X16#` — arity 2
 - [ ] `quotInt16X32#` — arity 2
 - [ ] `quotInt16X8#` — arity 2
@@ -1139,7 +1144,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt8X64Array#` — arity 3
 - [ ] `readInt8X64OffAddr#` — arity 3
 - [ ] `readIntOffAddr#` — arity 3
-- [ ] `readMVar#` — arity 2
 - [ ] `readSmallArray#` — arity 3
 - [ ] `readStablePtrArray#` — arity 3
 - [ ] `readStablePtrOffAddr#` — arity 3
@@ -1298,7 +1302,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `sizeofSmallMutableArray#` — arity 1
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
-- [ ] `takeMVar#` — arity 2
 - [ ] `tanDouble#` — arity 1
 - [ ] `tanFloat#` — arity 1
 - [ ] `tanhDouble#` — arity 1
@@ -1333,9 +1336,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `traceBinaryEvent#` — arity 3
 - [ ] `traceEvent#` — arity 2
 - [ ] `traceMarker#` — arity 2
-- [ ] `tryPutMVar#` — arity 3
-- [ ] `tryReadMVar#` — arity 2
-- [ ] `tryTakeMVar#` — arity 2
 - [ ] `uncheckedShiftLInt16#` — arity 2
 - [ ] `uncheckedShiftLInt32#` — arity 2
 - [ ] `uncheckedShiftLInt8#` — arity 2

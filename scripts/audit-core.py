@@ -923,6 +923,52 @@ class Audit:
                         valid = role_matches(proof, result)
                     if not valid:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact MutVar result required')
+                mvar = self.cap.get('managedMVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if mvar is not None:
+                    def mvar_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or 'vector' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'mvar':
+                            return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'flag':
+                            return kind == 'long' and reps == ['IntRep']
+                        return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (
+                            ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    expected = mvar['arguments']
+                    expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual]
+                    if (len(actual) != len(expected) or not isinstance(flags, list) or
+                            any(type(flag) is not bool for flag in flags) or flags != expected_flags or
+                            any(not mvar_role(rep, role) for rep, role in zip(actual, expected))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact MVar arguments required')
+                    # An occurrence cannot manufacture the MVar role from a
+                    # contradictory concrete local/global binding proof.
+                    for argument, rep, role in zip(arguments, actual, expected):
+                        stored = (bound.get(argument[1]) if argument[1] in bound else
+                                  self.bindings.get(argument[1], {}).get('rep')) if argument[0] == 'var' else None
+                        registers = stored.get('primReps') if isinstance(stored, dict) else None
+                        if registers == ['BoxedRep Nothing'] and isinstance(rep, dict) and rep.get('primReps') in (
+                                ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
+                            stored = dict(stored, primReps=rep['primReps'])
+                        if isinstance(registers, list) and (
+                                self.shape(stored) != self.shape(rep) or
+                                stored.get('kind') != 'unknown' and not mvar_role(stored, role)):
+                            self.issue('primitive-representation', owner, path,
+                                       function[1] + ': MVar argument contradicts its binding proof')
+                    result = mvar['result']
+                    if isinstance(result, list):
+                        fields = proof.get('components') if isinstance(proof, dict) else None
+                        valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                                 isinstance(fields, list) and len(fields) == len(result) and
+                                 all(mvar_role(rep, role) for rep, role in zip(fields, result)) and
+                                 proof.get('primReps') == [r for field in fields for r in field['primReps']])
+                    else:
+                        valid = mvar_role(proof, result)
+                    if not valid:
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact MVar result required')
                 target = bound.get(function[1]) if function[0] == 'var' else None
                 if isinstance(target, dict) and '_join_result' in target:
                     self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')

@@ -454,6 +454,14 @@
     "newMutVar#": 2,
     "readMutVar#": 2,
     "writeMutVar#": 3,
+    "newMVar#": 1,
+    "takeMVar#": 2,
+    "readMVar#": 2,
+    "putMVar#": 3,
+    "tryTakeMVar#": 2,
+    "tryReadMVar#": 2,
+    "tryPutMVar#": 3,
+    "isEmptyMVar#": 2,
     "readIntArray#": 3,
     "writeIntArray#": 4,
     "indexIntArray#": 2,
@@ -1649,6 +1657,88 @@
         "state"
       ],
       "result": "state"
+    }
+  },
+  "managedMVarPrimitives": {
+    "newMVar#": {
+      "arguments": [
+        "state"
+      ],
+      "result": [
+        "state",
+        "mvar"
+      ]
+    },
+    "takeMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "readMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "putMVar#": {
+      "arguments": [
+        "mvar",
+        "boxed",
+        "state"
+      ],
+      "result": "state"
+    },
+    "tryTakeMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag",
+        "boxed"
+      ]
+    },
+    "tryReadMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag",
+        "boxed"
+      ]
+    },
+    "tryPutMVar#": {
+      "arguments": [
+        "mvar",
+        "boxed",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag"
+      ]
+    },
+    "isEmptyMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag"
+      ]
     }
   },
   "managedArrayPrimitives": {
