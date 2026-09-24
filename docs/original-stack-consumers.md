@@ -12,7 +12,16 @@ share a public function's occurrence name.
 
 `StackFixtures.prepareOriginalStack` belongs to the existing Haskell
 `thc-fixtures` framework and uses `FixtureSupport` for process logging and
-artifact hashes. Its CLI registration is an integration responsibility.
+artifact hashes. Prepare it through the registered command:
+
+```sh
+cabal run exe:thc-fixtures --offline -- original-stack
+```
+
+Full test preparation invokes the same producer. Focused CI selects it for
+`OriginalStackConsumerProofTest`; receipts cover its pinned source inputs and
+all native artifacts. Gradle tracks both those sources and the produced files,
+but not the test-generated report.
 Preparation exports fresh pre/post consumer Core with the existing compiler
 workflow, runs the native driver, verifies the tracked portable proof resource,
 then publishes `build/original-stack/manifest.json`. No private export directory
