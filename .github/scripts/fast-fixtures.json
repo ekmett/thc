@@ -31,6 +31,16 @@
         "compiler/test-fixtures/ManagedAddressReadNative.hs"
       ]
     },
+    "pinned-pointer-cells": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "commands": [{"argv": ["sh", "scripts/prepare-pinned-pointer-cells.sh"]}],
+      "outputs": ["build/pinned-pointer-cells"],
+      "sources": [
+        "scripts/prepare-pinned-pointer-cells.sh",
+        "compiler/test-fixtures/PinnedPointerCellsAudit.hs",
+        "compiler/test-fixtures/PinnedPointerCellsNative.hs"
+      ]
+    },
     "synchronous-exceptions": {
       "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
       "commands": [

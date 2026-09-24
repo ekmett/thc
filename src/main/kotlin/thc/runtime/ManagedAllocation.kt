@@ -3,7 +3,7 @@
 
 package thc.runtime
 
-/** Prototype of the allocation owned by a ByteArray# and all of its Addr# views.
+/** Allocation owned by a pinned ByteArray# and all of its Addr# views.
  * Pointer cells retain managed references; their bytes are deliberately not
  * synthetic process addresses. Raw byte access to a live pointer cell faults.
  */
@@ -11,12 +11,33 @@ internal class ManagedAllocation private constructor(
     private val bytes: ByteArray, private val writable: Boolean, private val pointerBytes: Int
 ) {
     init { if (pointerBytes != 4 && pointerBytes != 8) fault("Unsupported target pointer width") }
-    // Ordinary byte arrays pay only for this nullable field, not a map.
+    // Pointer-free pinned arrays pay for the owner, not a per-cell map.
     private var pointers: MutableMap<Int, ManagedAddress>? = null
-    // Ordinary arrays need neither a map nor monitor traffic. Once an array
-    // holds a pointer, all later accesses use the owning monitor.
+    private var exposedToNative = false
+    // A raw array alias can outlive the call that obtained it. Never install
+    // pointer cells after handing one out, even on another guest thread.
+    private var exposedAsRawBytes = false
+    // Ordinary unpinned arrays never enter this owner. Pinned accesses use its
+    // monitor so pointer installation cannot race a scalar byte operation.
     @Volatile private var pointerCapable = false
     val size: Long get() = bytes.size.toLong()
+    val addressWidth: Int get() = pointerBytes
+    val isWritable: Boolean get() = writable
+
+    /** A raw alias is permitted only before pointer cells are installed; once
+     * returned it permanently rules out later pointer installation. */
+    @Synchronized fun rawBytesIfPointerFree(): ByteArray {
+        if (pointerCapable) fault("Pointer-bearing pinned array cannot be accessed as raw bytes")
+        exposedAsRawBytes = true
+        return bytes
+    }
+
+    /** Sulong holds a raw ByteBuffer view; it cannot track managed references. */
+    @Synchronized fun exposeToNative(): ByteArray {
+        if (pointerCapable) fault("Pointer-bearing pinned array cannot be passed to native bitcode")
+        exposedToNative = true
+        return bytes
+    }
 
     private fun cells(): MutableMap<Int, ManagedAddress> = pointers
         ?: mutableMapOf<Int, ManagedAddress>().also { pointers = it }
@@ -50,27 +71,23 @@ internal class ManagedAllocation private constructor(
         if (pointers?.isEmpty() == true) pointers = null
     }
 
-    fun readByte(offset: Long): Long {
+    @Synchronized fun readByte(offset: Long): Long {
         val start = range(offset, 1)
-        if (!pointerCapable) return bytes[start].toLong() and 255L
-        return synchronized(this) {
-            if (intersectsPointer(start, 1)) fault("Cannot expose managed pointer bits as a byte")
-            bytes[start].toLong() and 255L
-        }
+        if (pointerCapable && intersectsPointer(start, 1)) fault("Cannot expose managed pointer bits as a byte")
+        return bytes[start].toLong() and 255L
     }
 
-    fun writeByte(offset: Long, value: Long) {
+    @Synchronized fun writeByte(offset: Long, value: Long) {
         mutable()
         val start = range(offset, 1)
-        if (!pointerCapable) { bytes[start] = value.toByte(); return }
-        synchronized(this) {
-            invalidate(start, 1)
-            bytes[start] = value.toByte()
-        }
+        if (pointerCapable) invalidate(start, 1)
+        bytes[start] = value.toByte()
     }
 
-    @Synchronized fun writeAddress(offset: Long, value: ManagedAddress) {
+    @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
         mutable()
+        if (exposedToNative || exposedAsRawBytes)
+            fault("Cannot store a managed pointer in a raw-exposed array")
         val start = range(offset, pointerBytes.toLong())
         invalidate(start, pointerBytes)
         pointerCapable = true
@@ -78,31 +95,20 @@ internal class ManagedAllocation private constructor(
         cells()[start] = value
     }
 
-    @Synchronized fun readAddress(offset: Long): ManagedAddress {
+    @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
         val start = range(offset, pointerBytes.toLong())
         return pointers?.get(start) ?: fault("No managed pointer cell at this address")
     }
 
-    fun fill(offset: Long, count: Long, value: Long) {
+    @Synchronized fun fill(offset: Long, count: Long, value: Long) {
         mutable()
         val start = range(offset, count)
-        if (!pointerCapable) { bytes.fill(value.toByte(), start, start + count.toInt()); return }
-        synchronized(this) {
-            invalidate(start, count.toInt())
-            bytes.fill(value.toByte(), start, start + count.toInt())
-        }
+        if (pointerCapable) invalidate(start, count.toInt())
+        bytes.fill(value.toByte(), start, start + count.toInt())
     }
 
     /** Snapshot cells before memmove, including a copy within this allocation. */
     fun copyFrom(source: ManagedAllocation, sourceOffset: Long, destinationOffset: Long, count: Long) {
-        if (!source.pointerCapable && !pointerCapable) {
-            mutable()
-            if (pointerBytes != source.pointerBytes) fault("Cannot copy between different target pointer widths")
-            val from = source.range(sourceOffset, count)
-            val to = range(destinationOffset, count)
-            System.arraycopy(source.bytes, from, bytes, to, count.toInt())
-            return
-        }
         fun copyLocked() {
             mutable()
             if (pointerBytes != source.pointerBytes) fault("Cannot copy between different target pointer widths")
@@ -114,10 +120,12 @@ internal class ManagedAllocation private constructor(
             val copied = source.pointers?.filterKeys {
                 it >= from && it.toLong() + pointerBytes <= from.toLong() + width
             }?.mapKeys { (start, _) -> to + start - from } ?: emptyMap()
+            if (copied.isNotEmpty() && (exposedToNative || exposedAsRawBytes))
+                fault("Cannot copy managed pointers into a raw-exposed array")
+            if (copied.isNotEmpty()) pointerCapable = true
             System.arraycopy(source.bytes, from, bytes, to, width)
             invalidate(to, width)
             if (copied.isNotEmpty()) {
-                pointerCapable = true
                 cells().putAll(copied)
             }
         }

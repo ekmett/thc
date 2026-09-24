@@ -188,6 +188,18 @@
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
+    "compiler/test-fixtures/PinnedPointerCellsAudit.hs": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "python": []
+    },
+    "scripts/prepare-pinned-pointer-cells.sh": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "python": []
+    },
     "scripts/prepare-address-identity.sh": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
