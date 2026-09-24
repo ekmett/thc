@@ -25,16 +25,16 @@ class OriginalStackFormatterTest {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun hash(file: File) = hash(file.readBytes())
     private val sourceRoot = "compiler/pinned-ghc-internal/"
-    // Pin the complete path/hash catalog independently, without duplicating its 50 entries.
+    // Pin the complete path/hash catalog independently, without duplicating its 51 entries.
     // A changed exporter catalog cannot silently drop or repin a source in the fixture receipt.
     private val pinned by lazy {
         val text = contained("src/THC/Driver/Wired.hs", true).readText()
             .substringAfter("sourceHashes =").substringBefore("\ndata WiredArtifacts")
         val entries = Regex("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").findAll(text)
             .map { it.groupValues[1] to it.groupValues[2] }.toList()
-        require(entries.size == 50 && entries.map { it.first }.toSet().size == 50)
+        require(entries.size == 51 && entries.map { it.first }.toSet().size == 51)
         require(hash(entries.sortedBy { it.first }.joinToString("") { (path, digest) -> "$path\u0000$digest\n" }.toByteArray()) ==
-            "ed2e9430d434f6ed4ffa84cd5e5631be4520482fd949f7d0e47650f6e9c3fa4c")
+            "ced9014c4d14b3fcd866ecc5a75e8f999b1d020095272757a0a4b2d8f66173ce")
         entries.associate { (path, digest) -> sourceRoot + path to digest }
     }
     private val requiredInputs by lazy {
@@ -156,6 +156,30 @@ class OriginalStackFormatterTest {
         }
     }
 
+    @Test fun freshOriginalEnumWorkerResolvesClosureTypeErrorWithoutAlias() {
+        val receipt = manifest()
+        val path = sourceRoot + "GHC/Internal/Enum.hs"
+        assertEquals("e4dcf86915b01dcc732ed319fe02759858aea1534c68427826ba5f9c6908860f", hash(contained(path, true)))
+        val originals = receipt["originals"] as List<String>
+        val full = json(originals.single { it.endsWith("/GHC.Internal.Enum.json") })
+        val id = "ghc-internal:GHC.Internal.Enum.\$wtoEnumError"
+        val original = (full["bindings"] as List<Map<String, Any?>>).single { it["id"] == id }
+        assertEquals("\$wtoEnumError", original["name"])
+        val callerModule = json(originals.single { it.endsWith("/GHC.Internal.ClosureTypes.json") })
+        val caller = (callerModule["bindings"] as List<Map<String, Any?>>)
+            .single { it["id"] == "ghc-internal:GHC.Internal.ClosureTypes.\$wlvl" }
+        fun references(value: Any?): Int = when (value) {
+            is List<*> -> if (value.getOrNull(0) == "var" && value.getOrNull(1) == id) 1 else value.sumOf(::references)
+            is Map<*, *> -> value.values.sumOf(::references)
+            else -> 0
+        }
+        assertEquals(1, references(caller["expr"]), "Fresh original caller must resolve the exact Enum worker")
+        val linked = CoreModules.merge(listOf(full, callerModule))
+        assertEquals(original, (linked["bindings"] as List<Map<String, Any?>>).single { it["id"] == id })
+        // This proves source identity and resolution, not full admission of the
+        // worker's cold ErrorCall/Typeable/backtrace dependency graph.
+    }
+
     @Test fun freshOriginalUnsafeWorkerLinksWithoutAliasAndDefersItsAction() {
         val receipt = manifest()
         val full = json((receipt["originals"] as List<String>).single { it.endsWith("/GHC.Internal.IO.Unsafe.json") })
@@ -240,8 +264,8 @@ class OriginalStackFormatterTest {
         val value = manifest()
         val inputs = value["inputHashes"] as Map<String, String>
         val artifacts = value["artifactHashes"] as Map<String, String>
-        assertEquals(79, requiredInputs.size)
-        assertEquals(78, artifacts.size)
+        assertEquals(80, requiredInputs.size)
+        assertEquals(79, artifacts.size)
         for (path in requiredInputs)
             assertThrows(IllegalArgumentException::class.java, {
                 checked(value + ("inputHashes" to (inputs - path)))
