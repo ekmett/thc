@@ -7,12 +7,14 @@ import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.PolyglotException
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
+import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -21,15 +23,49 @@ import java.util.IdentityHashMap
 class SimdInt32ByteArrayTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/simd-int32x4-bytearray")
-    private fun withLanguage(inlining: Boolean, action: (Language) -> Unit) = Context.newBuilder("thc")
+    private fun context(inlining: Boolean) = Context.newBuilder("thc")
         .allowExperimentalOptions(true).option("compiler.Inlining", inlining.toString())
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000")
-        .build().use { context ->
-            context.initialize("thc"); context.enter()
-            try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
-            finally { context.leave() }
+        .build()
+    private fun withLanguage(inlining: Boolean, action: (Language) -> Unit) = context(inlining).use { context ->
+        context.initialize("thc"); context.enter()
+        try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
+        finally { context.leave() }
+    }
+    private fun validateMode(provenance: Map<String, Any?>, architecture: String = System.getProperty("os.arch")) {
+        val fields = listOf("stages", "modelRows", "modelByteOrder", "nativeRows", "nativeByteOrder", "modelMatched")
+        assertTrue(provenance.keys.containsAll(fields), "Missing explicit Int32X4 preparation mode fields")
+        fun rows(field: String) {
+            val count = provenance[field] as? Number
+            assertTrue(count != null && count.toLong() == 9666L && count.toDouble() == 9666.0, "$field must be exactly 9666")
         }
+        rows("modelRows")
+        assertEquals("little", provenance["modelByteOrder"], "Int32X4 model byte order")
+        // Use the executing host, not a producer architecture supplied by the manifest.
+        if (architecture.lowercase() in listOf("arm64", "aarch64")) {
+            assertEquals(listOf("pre"), provenance["stages"], "ARM64 export-only Core stages")
+            for (field in listOf("nativeRows", "nativeByteOrder", "modelMatched"))
+                assertNull(provenance[field], "ARM64 export-only $field must be explicitly null")
+        } else {
+            assertEquals(listOf("pre", "post"), provenance["stages"], "Native Core stages")
+            rows("nativeRows")
+            assertEquals("little", provenance["nativeByteOrder"], "Native byte order")
+            assertEquals(true, provenance["modelMatched"], "Native/model agreement")
+        }
+    }
+    private fun provenance(): Map<String, Any?> {
+        val provenance = Json.parse(File(directory, "provenance.json").readText()) as Map<String, Any?>
+        validateMode(provenance)
+        assertEquals(ByteOrder.LITTLE_ENDIAN, ByteOrder.nativeOrder(), "Int32X4 bounded corpus requires a little-endian host")
+        assertEquals(true, provenance["positiveAuditsAccepted"])
+        for (file in (provenance["sources"] as List<Map<String, String>>) + (provenance["artifacts"] as List<Map<String, String>>)) {
+            val hash = MessageDigest.getInstance("SHA-256").digest(File(root, file.getValue("path")).readBytes())
+                .joinToString("") { "%02x".format(it) }
+            assertEquals(file["sha256"], hash, "Stale Int32X4 memory source/artifact: ${file["path"]}")
+        }
+        return provenance
+    }
     private fun activeTargets(entry: RootCallTarget): List<RootCallTarget> {
         val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
         val targets = mutableListOf<RootCallTarget>()
@@ -51,8 +87,40 @@ class SimdInt32ByteArrayTest {
 
     @Test fun nativeMemoryCoreHasExactCompiledEntriesWithInlining() = nativeCore(true)
     @Test fun nativeMemoryCoreHasExactCompiledEntriesWithoutInlining() = nativeCore(false)
+    @Test fun preparationModeRejectsCorruptionAndNativeDowngrades() {
+        val native = mapOf<String, Any?>("stages" to listOf("pre", "post"), "modelRows" to 9666L,
+            "modelByteOrder" to "little", "nativeRows" to 9666L, "nativeByteOrder" to "little", "modelMatched" to true)
+        val exported = native + mapOf("stages" to listOf("pre"), "nativeRows" to null,
+            "nativeByteOrder" to null, "modelMatched" to null)
+        val nativeCorruptions = listOf(
+            "stages" to emptyList<String>(), "stages" to listOf("pre"), "stages" to listOf("post", "pre"),
+            "stages" to listOf("pre", "post", "post"), "nativeRows" to null, "nativeRows" to 9665L,
+            "nativeRows" to 9666.5, "nativeRows" to "9666", "nativeByteOrder" to null,
+            "nativeByteOrder" to "big", "modelMatched" to null, "modelMatched" to false)
+        val exportCorruptions = listOf("stages" to emptyList<String>(), "stages" to listOf("pre", "post"),
+            "stages" to listOf("pre", "pre"), "nativeRows" to 0L, "nativeRows" to 9666L,
+            "nativeByteOrder" to "little", "modelMatched" to true, "modelMatched" to false)
+        val commonCorruptions = listOf("modelRows" to 9665L, "modelRows" to 9666.5,
+            "modelRows" to "9666", "modelByteOrder" to "big")
+        for (architecture in listOf("amd64", "x86_64", "riscv64", "arm64", "aarch64")) {
+            val arm = architecture in listOf("arm64", "aarch64")
+            val accepted = if (arm) exported else native
+            validateMode(accepted, architecture)
+            assertThrows(AssertionError::class.java, { validateMode(if (arm) native else exported, architecture) },
+                "$architecture cannot silently change preparation modes")
+            for ((field, value) in commonCorruptions + if (arm) exportCorruptions else nativeCorruptions)
+                assertThrows(AssertionError::class.java, { validateMode(accepted + (field to value), architecture) },
+                    "$architecture/$field=$value")
+            for (field in accepted.keys)
+                assertThrows(AssertionError::class.java, { validateMode(accepted - field, architecture) },
+                    "$architecture/missing $field")
+        }
+        assertThrows(AssertionError::class.java) {
+            validateMode(exported + ("toolchain" to mapOf("architecture" to "aarch64")), "amd64")
+        }
+    }
     @Test fun genuineExportedVectorBoundariesRemainRejected() {
-        val provenance = Json.parse(File(directory, "provenance.json").readText()) as Map<String, Any?>
+        val provenance = provenance()
         for (stage in provenance["stages"] as List<String>) for (backend in listOf("ast", "bytecode")) withLanguage(true) { language ->
             val module = Json.parse(File(directory, "$stage-core/SimdInt32X4ByteArray.json").readText()) as Map<String, Any?>
             for (name in listOf("vectorArgument", "readTupleEscape", "readVectorEscape")) {
@@ -63,15 +131,40 @@ class SimdInt32ByteArrayTest {
             }
         }
     }
-    private fun nativeCore(inlining: Boolean) {
-        val provenance = Json.parse(File(directory, "provenance.json").readText()) as Map<String, Any?>
-        val stages = provenance["stages"] as List<String>
-        assertTrue("pre" in stages); assertEquals(true, provenance["positiveAuditsAccepted"])
-        for (file in (provenance["sources"] as List<Map<String, String>>) + (provenance["artifacts"] as List<Map<String, String>>)) {
-            val hash = MessageDigest.getInstance("SHA-256").digest(File(root, file.getValue("path")).readBytes())
-                .joinToString("") { "%02x".format(it) }
-            assertEquals(file["sha256"], hash, "Stale Int32X4 memory source/artifact: ${file["path"]}")
+    @Test fun publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() {
+        val provenance = provenance()
+        for (stage in provenance["stages"] as List<String>) for (backend in listOf("ast", "bytecode")) context(true).use { context ->
+            val module = Json.parse(File(directory, "$stage-core/SimdInt32X4ByteArray.json").readText()) as Map<String, Any?>
+            for (family in listOf("vector", "scalar")) for ((operation, arity) in listOf("Read" to 3, "Write" to 7)) {
+                val name = "$family${operation}Worker"
+                for (diagnostic in listOf(false, true)) {
+                    val label = "$stage/$backend/$name/diagnostic=$diagnostic"
+                    val request = Json.stringify(mapOf("entry" to name, "backend" to backend,
+                        "diagnosticUnsupported" to diagnostic, "modules" to listOf(module)))
+                    fun checkFault(error: PolyglotException) {
+                        val message = error.message.orEmpty()
+                        assertTrue(message.contains("unboxed-tuple (host result)"), "$label: $message")
+                        assertEquals(diagnostic, message.contains("Diagnostic unsupported path reached:"), label)
+                    }
+                    if (!diagnostic) {
+                        checkFault(assertThrows(PolyglotException::class.java, { context.eval("thc", request) }, label))
+                    } else {
+                        val entry = context.eval("thc", request)
+                        assertTrue(entry.canExecute(), label)
+                        // The deferred host-result fault must precede guest carrier checks,
+                        // host argument normalization, and even the host arity check.
+                        val arguments = listOf(Array<Any>(arity) { 0L },
+                            Array<Any>(arity) { if (it == 0) "invalid host argument" else 0L }, emptyArray<Any>())
+                        for (input in arguments)
+                            checkFault(assertThrows(PolyglotException::class.java, { entry.execute(*input) }, label))
+                    }
+                }
+            }
         }
+    }
+    private fun nativeCore(inlining: Boolean) {
+        val provenance = provenance()
+        val stages = provenance["stages"] as List<String>
         fun rows(filename: String): Map<Pair<String, List<Long>>, Long> {
             val lines = File(directory, filename).readLines()
             val result = lines.associate { row ->
