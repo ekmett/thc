@@ -104,7 +104,8 @@ class SqrtPrimitiveTest {
             } finally { context.leave() }
         }
     }
-    private val mathEntries = listOf("fabs", "exp", "expm1", "log", "log1p", "sin", "cos", "power")
+    private val mathEntries = listOf("fabs", "exp", "expm1", "log", "log1p", "sin", "cos", "tan",
+        "asin", "acos", "atan", "sinh", "cosh", "tanh", "power")
         .flatMap { listOf(it + "Float", it + "Double") }
 
     private fun mathCall(program: ExecutableProgram, entry: String, row: List<String>, label: String) {

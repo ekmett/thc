@@ -63,6 +63,62 @@ cosFloat x = cosFloat# x
 cosDouble :: Double# -> Double#
 cosDouble x = cosDouble# x
 
+{-# OPAQUE tanFloat #-}
+tanFloat :: Float# -> Float#
+tanFloat x = tanFloat# x
+
+{-# OPAQUE tanDouble #-}
+tanDouble :: Double# -> Double#
+tanDouble x = tanDouble# x
+
+{-# OPAQUE asinFloat #-}
+asinFloat :: Float# -> Float#
+asinFloat x = asinFloat# x
+
+{-# OPAQUE asinDouble #-}
+asinDouble :: Double# -> Double#
+asinDouble x = asinDouble# x
+
+{-# OPAQUE acosFloat #-}
+acosFloat :: Float# -> Float#
+acosFloat x = acosFloat# x
+
+{-# OPAQUE acosDouble #-}
+acosDouble :: Double# -> Double#
+acosDouble x = acosDouble# x
+
+{-# OPAQUE atanFloat #-}
+atanFloat :: Float# -> Float#
+atanFloat x = atanFloat# x
+
+{-# OPAQUE atanDouble #-}
+atanDouble :: Double# -> Double#
+atanDouble x = atanDouble# x
+
+{-# OPAQUE sinhFloat #-}
+sinhFloat :: Float# -> Float#
+sinhFloat x = sinhFloat# x
+
+{-# OPAQUE sinhDouble #-}
+sinhDouble :: Double# -> Double#
+sinhDouble x = sinhDouble# x
+
+{-# OPAQUE coshFloat #-}
+coshFloat :: Float# -> Float#
+coshFloat x = coshFloat# x
+
+{-# OPAQUE coshDouble #-}
+coshDouble :: Double# -> Double#
+coshDouble x = coshDouble# x
+
+{-# OPAQUE tanhFloat #-}
+tanhFloat :: Float# -> Float#
+tanhFloat x = tanhFloat# x
+
+{-# OPAQUE tanhDouble #-}
+tanhDouble :: Double# -> Double#
+tanhDouble x = tanhDouble# x
+
 {-# OPAQUE powerFloat #-}
 powerFloat :: Float# -> Float#
 powerFloat x = powerFloat# x x
