@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 name: Fast checks
 on:
   pull_request:
@@ -24,11 +27,15 @@ concurrency:
 
 jobs:
   automation:
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'thc-bulk/')
+    # GitHub can suppress the entire pull_request workflow for a commit tag.
+    # A title-only tag still starts the workflow, so skip its costly jobs here;
+    # trusted metadata reconciliation publishes required-tests.
+    if: github.event_name != 'pull_request' || (!startsWith(github.head_ref, 'thc-bulk/') && !contains(github.event.pull_request.title, '[ci skip]'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      runner: ${{ steps.trust.outputs.runner }}
+      runner: ${{ steps.route.outputs.runner }}
+      persistent: ${{ steps.route.outputs.persistent }}
       trusted: ${{ steps.trust.outputs.trusted }}
       revision: ${{ steps.revision.outputs.sha }}
     steps:
@@ -63,13 +70,13 @@ jobs:
                   trusted = ref == 'refs/heads/main'
               elif kind == 'workflow_dispatch':
                   trusted = ref.startswith('refs/heads/')
-          runner = ['self-hosted', 'Linux', 'X64', 'thc-fast'] if trusted else 'ubuntu-24.04'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
-              stream.write('runner=' + json.dumps(runner) + '\n')
               stream.write('trusted=' + str(trusted).lower() + '\n')
           PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The PR merge and its base/head parents are enough for the exact diff.
+          fetch-depth: 2
           persist-credentials: false
       - name: Check dispatched revision
         id: revision
@@ -77,8 +84,27 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
           checked_sha=$(git rev-parse HEAD)
+          test "$checked_sha" = "$GITHUB_SHA"
           test -z "$EXPECTED_SHA" || test "$checked_sha" = "$EXPECTED_SHA"
           echo "sha=$checked_sha" >> "$GITHUB_OUTPUT"
+      - name: Route exact CI-only PR diffs to hosted capacity
+        id: route
+        shell: bash
+        env:
+          TRUSTED_EVENT: ${{ steps.trust.outputs.trusted }}
+        run: |
+          if [ "$TRUSTED_EVENT" != true ]; then
+            runner='"ubuntu-24.04"'
+            persistent=false
+          elif python3 .github/scripts/fast_runner.py; then
+            runner='"ubuntu-24.04"'
+            persistent=false
+          else
+            runner='["self-hosted","Linux","X64","thc-fast"]'
+            persistent=true
+          fi
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+          echo "persistent=$persistent" >> "$GITHUB_OUTPUT"
       - name: Test automation and cache safety with assertions enabled and disabled
         run: |
           python3 -m unittest discover -s .github/scripts -p 'test_*.py'
@@ -99,7 +125,7 @@ jobs:
     runs-on: ${{ fromJSON(needs.automation.outputs.runner) }}
     timeout-minutes: 60
     env:
-      THC_GRADLE_USER_HOME: ${{ needs.automation.outputs.trusted == 'true' && '/home/ekmett/ai/thc-fast/cache/gradle' || format('{0}/.gradle-user-home', github.workspace) }}
+      THC_GRADLE_USER_HOME: ${{ needs.automation.outputs.persistent == 'true' && '/home/ekmett/ai/thc-fast/cache/gradle' || format('{0}/.gradle-user-home', github.workspace) }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
       FAST_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base_sha }}
       FAST_HEAD_SHA: ${{ github.sha }}
@@ -107,7 +133,7 @@ jobs:
       FAST_REPORT_DIR: build/fast/results/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Refuse foreign or unknown events on the persistent runner
-        if: needs.automation.outputs.trusted == 'true'
+        if: needs.automation.outputs.persistent == 'true'
         shell: bash
         run: |
           python3 - <<'PYCODE'
@@ -144,20 +170,20 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-          clean: ${{ needs.automation.outputs.trusted != 'true' }}
+          clean: ${{ needs.automation.outputs.persistent != 'true' }}
       - name: Start timing and verify the dispatched revision
         run: python3 .github/scripts/fast_ci.py start
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        if: needs.automation.outputs.trusted != 'true'
+        if: needs.automation.outputs.persistent != 'true'
         with:
           python-version: '3.13'
       - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
-        if: needs.automation.outputs.trusted != 'true'
+        if: needs.automation.outputs.persistent != 'true'
         with:
           ghc-version: '9.14.1'
           cabal-update: false
       - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
-        if: needs.automation.outputs.trusted != 'true'
+        if: needs.automation.outputs.persistent != 'true'
         with:
           version: '25.3.4.1'
           java-version: '25'
