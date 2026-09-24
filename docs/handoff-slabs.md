@@ -63,8 +63,8 @@ inherited by the forked test JVM.
 
 ```sh
 scripts/prepare-tests.sh
-scripts/gradle.sh --no-daemon test --rerun-tasks
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon test --rerun
+./gradlew --no-daemon test --rerun-tasks
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun
 ```
 
 No new benchmarks or rollout decision accompany this integration. The frozen

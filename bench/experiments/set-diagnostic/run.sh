@@ -4,7 +4,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 RUNTIME="${THC_RUNTIME_ROOT:-$ROOT}"
-if [[ -z "${JAVA_HOME:-}" ]]; then source "$ROOT/scripts/java-home.sh"; fi
+make --no-print-directory -s -C "$ROOT" check-java
 mkdir -p "$2/classes"
 OUT="$(cd "$2" && pwd)"
 CP="$OUT/classes:$RUNTIME/build/install/thc/lib/*"

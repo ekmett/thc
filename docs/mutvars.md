@@ -65,7 +65,7 @@ from zero through 32. The equality entries contribute 530 native rows.
 GHC=/path/to/ghc-9.14.1 GHC_PKG=/path/to/ghc-pkg \
   python3 scripts/prepare-mutvar.py
 python3 scripts/test-core-mutvars.py
-scripts/gradle.sh test --tests thc.runtime.MutVarTest
+./gradlew test --tests thc.runtime.MutVarTest
 ```
 
 Normal `prepare-tests.sh` and CI generate the same fixture and retain the
@@ -107,7 +107,7 @@ The original strict first-install diagnostic remains reproducible, including
 its unmodified inputs and assertions:
 
 ```sh
-THC_MUTVAR_REQUIRE_INITIAL_STABILITY=true scripts/gradle.sh test --rerun-tasks \
+THC_MUTVAR_REQUIRE_INITIAL_STABILITY=true ./gradlew test --rerun-tasks \
   --tests 'thc.runtime.MutVarTest.nativeSTRefWithInliningAndBoundedGraalSpeculationWarmup'
 ```
 

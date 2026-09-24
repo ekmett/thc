@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-. scripts/java-home.sh
+make --no-print-directory -s check-java
 [[ $# == 1 ]]
 OUT="$1"
 if [[ -e "$OUT" ]]; then echo 'Choose a new output directory.' >&2; exit 2; fi

@@ -10,7 +10,7 @@ license-files: LICENSE, LICENSE.txt
 author: Edward Kmett
 maintainer: Edward Kmett
 category: Development
-description: A Cabal-library-backed driver for building and running Haskell on Truffle/Graal.
+description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
   README.md
   docs/driver.md
@@ -33,6 +33,25 @@ flag development
   description: Treat compiler warnings as errors
   default: False
   manual: True
+
+library
+  hs-source-dirs: compiler
+  exposed-modules: THC.Plugin
+  other-modules:
+    THC.CBV
+    THC.Demands
+    THC.Sources
+    THC.Wired
+  build-depends:
+    base >= 4.22 && < 4.23,
+    bytestring >= 0.12.2 && < 0.13,
+    containers >= 0.8 && < 0.9,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    ghc == 9.14.1
+  default-language: Haskell2010
+  if flag(development)
+    ghc-options: -Werror
 
 executable thc
   main-is: Main.hs

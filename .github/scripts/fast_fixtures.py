@@ -37,10 +37,15 @@ NON_FIXTURE_BUILD_ROOTS = frozenset({
     "snapshot", "source-ghc", "test-results", "tmp",
 })
 COMMON_SOURCES = (
+    "thc.cabal",
+    "cabal.project",
+    "Setup.hs",
+    "Makefile",
     "compiler/THC/**/*.hs",
     "compiler/build.sh",
     "compiler/export.sh",
     "compiler/toolchain.sh",
+    "compiler/plugin.py",
     "scripts/audit-core.py",
     "scripts/core_*.py",
     "scripts/core-capabilities.json",

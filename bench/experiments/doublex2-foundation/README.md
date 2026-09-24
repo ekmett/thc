@@ -9,7 +9,7 @@ Compiled-entry counters are disabled here; `SimdDoubleVectorTest` independently
 requires exact per-input counts with instrumentation enabled.
 
 Prepare inputs with `python3 scripts/prepare-doublex2-audit.py` on a supported
-GHC native backend, then build `scripts/gradle.sh --no-daemon installDist` and run:
+GHC native backend, then build `./gradlew --no-daemon installDist` and run:
 
 ```sh
 bench/experiments/doublex2-foundation/run-runtime.sh build/doublex2-runtime

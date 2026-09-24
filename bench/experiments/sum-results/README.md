@@ -67,4 +67,4 @@ The runner rebuilds `installDist` from committed runtime sources, verifies nativ
 provenance, compiles the graph probe, captures real compiler graphs and audits
 them. It parses only the selected high/low phases while retaining full raw BGV/CFG.
 Use `--collect-only` with an existing output to recheck a capture without rerunning
-compiled guest calls. `THC_GRADLE_USER_HOME` may point at a trusted dependency cache.
+compiled guest calls. `GRADLE_USER_HOME` may point at a trusted dependency cache.

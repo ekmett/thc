@@ -125,7 +125,7 @@ jobs:
     runs-on: ${{ fromJSON(needs.automation.outputs.runner) }}
     timeout-minutes: 60
     env:
-      THC_GRADLE_USER_HOME: ${{ needs.automation.outputs.persistent == 'true' && '/home/ekmett/ai/thc-fast/cache/gradle' || format('{0}/.gradle-user-home', github.workspace) }}
+      GRADLE_USER_HOME: ${{ needs.automation.outputs.persistent == 'true' && '/home/ekmett/ai/thc-fast/cache/gradle' || format('{0}/.gradle-user-home', github.workspace) }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
       FAST_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base_sha }}
       FAST_HEAD_SHA: ${{ github.sha }}

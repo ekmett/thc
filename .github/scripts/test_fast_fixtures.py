@@ -135,6 +135,14 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(result["rebuilt"], ["alpha", "beta"])
         self.assertEqual(result["reused"], [])
 
+    def test_cabal_plugin_inputs_invalidate_selected_fixtures(self):
+        self.prepare("thc.AlphaTest")
+        for name in ("thc.cabal", "cabal.project", "Setup.hs", "Makefile", "compiler/plugin.py"):
+            with self.subTest(name=name):
+                self.calls.clear()
+                (self.root / name).write_text("changed plugin build input")
+                self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
+
     def test_unknown_or_full_selection_runs_complete_preparation(self):
         self.assertEqual(self.prepare("thc.UnknownTest"),
                          {"mode": "full", "rebuilt": ["full"], "reused": []})

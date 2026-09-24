@@ -29,7 +29,8 @@ class FastInputTests(unittest.TestCase):
         self.vendor = b"original GHC source\n"
         self.put("compiler/export-boot.py", "exception_sources = " + repr({
             "GHC/Internal/CString.hs": cache.sha(self.vendor)}) + "\n")
-        for name in (cache.SELF, *cache.RUNTIME_INPUTS, "scripts/prepare-tests.sh", "examples/coverage.json",
+        for name in (cache.SELF, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
+                     "scripts/prepare-tests.sh", "examples/coverage.json",
                      "src/main/resources/thc/scalar-primop-signatures.json"):
             self.put(name, "source: " + name)
         self.put("src/main/kotlin/thc/runtime/Program.kt", "unrelated runtime\n")
@@ -120,6 +121,13 @@ class FastInputTests(unittest.TestCase):
             before = cache.identity(self.root)
             self.put(name, "changed recorded runtime dependency")
             self.assertNotEqual(cache.cache_key(before), cache.cache_key(cache.identity(self.root)))
+
+    def test_cabal_plugin_configuration_changes_invalidate_core_fixtures(self):
+        for name in cache.COMPILER_BUILD_INPUTS:
+            with self.subTest(name=name):
+                before = cache.identity(self.root)
+                self.put(name, "changed plugin build configuration")
+                self.assertNotEqual(cache.cache_key(before), cache.cache_key(cache.identity(self.root)))
 
     def test_helper_tool_package_interface_jdk_platform_workspace_changes_miss(self):
         self.pack()
@@ -296,9 +304,13 @@ class FastInputTests(unittest.TestCase):
         pins = cache.vendor_pins(self.root)
         self.assertTrue(cache.allowed_payload("build/unsafe-equality/api/predicate", pins))
         self.assertTrue(cache.allowed_payload("build/aggregate-layout/pre-ghc/A.dyn_o", pins))
+        self.assertTrue(cache.allowed_payload("build/compiler/plugin.json", pins))
+        self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.dylib", pins))
+        self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.so", pins))
         for name in ("build/install/thc/lib/runtime.jar", "build/test-results/test/TEST.xml",
                      "build/reports/tests/index.html", "build/fast/native-inputs.tar.gz",
-                     "build/compiler/thc-core-plugin.conf", ".gradle/cache.bin"):
+                     "build/compiler/thc-core-plugin.conf", "build/compiler/package.conf.d/package.cache",
+                     "dist-newstyle/packagedb/ghc-9.14.1/package.cache", ".gradle/cache.bin"):
             self.assertFalse(cache.allowed_payload(name, pins), name)
 
     def test_original_native_executable_names_and_cstring_are_in_scope(self):

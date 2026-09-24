@@ -19,16 +19,26 @@ You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
 
-From the repository root, build the Core exporter, JVM runtime, and Cabal driver:
+From the repository root:
 
 ```sh
 export JAVA_HOME=/path/to/graalvm
 export PATH="$JAVA_HOME/bin:$PATH"
 
-cabal build thc
-compiler/build.sh
-scripts/gradle.sh installDist
+make
 ```
+
+This runs `./gradlew installDist` for the JVM runtime and `cabal build`
+for the Haskell library and driver. The `thc` library contains the GHC Core
+plugin; Cabal builds it alongside the `thc` executable. Both builds are
+incremental. `make runtime` and `make haskell` build either part separately.
+`make` keeps Gradle's cache in `.gradle-user-home`; set `GRADLE_USER_HOME` to
+share a cache across checkouts.
+
+Use `make test` for the test suite and `make clean` to remove build products.
+`make distclean` also removes the checkout's Gradle and Kotlin caches.
+`make run ARGS='--help'` builds and runs the driver; the equivalent Cabal command
+is `cabal run thc -- --help`.
 
 Then run the included Cabal executable through THC:
 

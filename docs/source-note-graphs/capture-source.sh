@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-. scripts/java-home.sh
+make --no-print-directory -s check-java
 if (( $# < 2 || $# > 4 )); then
   echo 'Usage: capture.sh ast|bytecode OUTPUT_DIR [true|false] [FROZEN_RUNTIME_DIR]' >&2
   exit 2

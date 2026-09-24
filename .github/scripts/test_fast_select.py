@@ -655,6 +655,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertFalse({"src/main/kotlin/thc/runtime/" + name + ".kt" for name in names} & self.families.keys())
         self.assertFalse(any(path.startswith(("compiler/", "src/main/java/")) for path in self.families))
 
+    def test_cabal_plugin_build_inputs_are_not_driver_only(self):
+        for name in ("thc.cabal", "cabal.project", "Setup.hs"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, self.families)
+                self.assertNotIn(name, self.policy["owners"])
+
 
 if __name__ == "__main__":
     unittest.main()

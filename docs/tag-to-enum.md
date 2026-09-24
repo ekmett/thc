@@ -20,8 +20,8 @@ Reproduce with the pinned GHC and Graal toolchains:
 compiler/build.sh
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/test-core-enums.py
-scripts/gradle.sh test --tests thc.runtime.TagToEnumTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh test --tests thc.runtime.TagToEnumTest --rerun
+./gradlew test --tests thc.runtime.TagToEnumTest
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.TagToEnumTest --rerun
 ```
 
 This removes one genuine `Typeable.sameTypeRep` frontier; it does not supply missing Typeable/unsafe-equality interface unfoldings, implement `dataToTag#`, or claim that the full original array ErrorCall path is executable.

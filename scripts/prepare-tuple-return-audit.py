@@ -167,10 +167,14 @@ def prepare():
         run(['compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
             dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'compiler/build.sh',
-               ROOT / 'compiler/export.sh', ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs'))]
+               ROOT / 'compiler/export.sh', ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs')),
+               ROOT / 'thc.cabal', ROOT / 'cabal.project']
     artifacts = [p for d in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
                  for p in sorted((OUT / d).rglob('*')) if p.is_file()]
-    artifacts += [OUT / 'oracle.tsv', *sorted((ROOT / 'build/compiler').glob('libHSthc-core-plugin-*'))]
+    plugin_manifest = ROOT / 'build/compiler/plugin.json'
+    plugin = json.loads(plugin_manifest.read_text())
+    check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
+    artifacts += [OUT / 'oracle.tsv', plugin_manifest, Path(plugin['sharedLibrary'])]
     return dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(), commands=commands,
                 toolchain=dict(ghc=record(Path(shutil.which(ghc) or ghc).resolve()), ghcPkg=record(Path(shutil.which(pkg) or pkg).resolve()),
                                ghcInfo=output([ghc, '--info']), libdir=output([ghc, '--print-libdir']),

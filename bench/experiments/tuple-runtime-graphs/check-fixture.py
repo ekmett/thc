@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 import hashlib,json,pathlib,subprocess,sys
 out,export_root=map(pathlib.Path,sys.argv[1:])
 here=pathlib.Path(__file__).resolve().parent
@@ -30,10 +33,17 @@ for name in ('mixed','lazyMixed'):
 rows=[line.split('\t') for line in (out/'oracle.tsv').read_text().splitlines()]
 assert len(rows)==55 and set(r[0] for r in rows)==set(expected)
 assert all(len(r)==4 for r in rows)
-files=[here/'TupleRuntimeGraph.hs',here/'TupleRuntimeGraphNative.hs',out/'core/TupleRuntimeGraph.json',out/'oracle.tsv',export_root/'compiler/Thc/Plugin.hs']
+plugin_manifest=export_root/'build/compiler/plugin.json'
+plugin=json.loads(plugin_manifest.read_text())
+assert plugin['schema']==1 and plugin['unitId']
+shared_library=pathlib.Path(plugin['sharedLibrary'])
+assert shared_library.is_file()
+files=[here/'TupleRuntimeGraph.hs',here/'TupleRuntimeGraphNative.hs',out/'core/TupleRuntimeGraph.json',out/'oracle.tsv',
+       *sorted((export_root/'compiler/THC').glob('*.hs')),
+       export_root/'thc.cabal',export_root/'cabal.project',plugin_manifest]
 manifest={'ghc':module['ghc'],'runtimeProof':False,'nativeRows':len(rows),
           'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
-          'exporterPluginLibrarySha256':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((export_root/'build/compiler').glob('libHSthc-core-plugin-*'))},
+          'exporterPluginLibrarySha256':{shared_library.name:hashlib.sha256(shared_library.read_bytes()).hexdigest()},
           'exporterCheckoutHeadAtInspection':subprocess.check_output(['git','-C',str(export_root),'rev-parse','HEAD'],text=True).strip()}
 (out/'fixture-evidence.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print('PASS real opaque tuple fixture: 55 native rows; retained calls and tuple component metadata')

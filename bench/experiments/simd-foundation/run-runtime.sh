@@ -9,7 +9,7 @@ case "$VECTOR" in
  int32x4) CORE_DIR="$ROOT/build/simd-int32x4"; MODULE=SimdInt32X4 ;;
  *) echo "Unsupported vector $VECTOR" >&2; exit 1 ;;
 esac
-if [[ -z "${JAVA_HOME:-}" ]]; then source "$ROOT/scripts/java-home.sh"; fi
+make --no-print-directory -s -C "$ROOT" check-java
 mkdir -p "$OUT/classes"
 OUT="$(cd "$OUT" && pwd)"
 CP="$OUT/classes:$ROOT/build/install/thc/lib/*"

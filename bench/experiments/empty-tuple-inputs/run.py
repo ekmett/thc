@@ -40,12 +40,12 @@ def main():
             assert hashlib.sha256(committed).hexdigest() == sha, 'Commit runtime source before capture: ' + path
         subprocess.run(['python3', ROOT / 'scripts/prepare-empty-tuple-input-audit.py', '--check-only'], cwd=ROOT, check=True)
         with (output / 'installDist.log').open('w') as log:
-            subprocess.run([ROOT / 'scripts/gradle.sh', '--no-daemon', 'installDist'], cwd=ROOT,
+            subprocess.run([ROOT / 'gradlew', '--no-daemon', 'installDist'], cwd=ROOT,
                            stdout=log, stderr=subprocess.STDOUT, check=True)
         assert sources() == before, 'Runtime source changed during build'
         java = Path(os.environ['JAVA_HOME'])
         tools = [HERE / f for f in ('run.py', 'run-one.py', 'summarize.py', 'EmptyInputGraphProbe.java')]
-        tools += [ROOT / 'tools/GraphInspect.java', ROOT / 'scripts/gradle.sh']
+        tools += [ROOT / 'tools/GraphInspect.java', ROOT / 'gradlew', ROOT / 'Makefile']
         inputs = tools + [java / 'release', *sorted((ROOT / 'build/install/thc/lib').glob('*.jar'))]
         launch = dict(runtimeSourceCommit=revision, runtimeSourceSha256=before,
                       inputSha256={str(p.resolve()): digest(p) for p in inputs},
