@@ -36,6 +36,7 @@ import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.Run (RunOptions(..))
 import THC.Driver.Zip (decodeZip, encodeZip)
+import THC.Driver.Wired (moduleSources, sourceHashes, exportPinnedCore)
 
 -- Cabal performs the project solve, preprocessing, host-tool/TH execution and
 -- native build. Its machine-readable plan and per-component build-info, rather
@@ -160,33 +161,33 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
         keys' = maybe keys (\item -> Map.insert (unitId unit) (bundleBuildKey item) keys) bundle
     pure (keys', acc ++ [object fields])) (Map.empty, []) ordered
   require (Map.notMember "ghc-internal" byId) "Cabal plan duplicates the wired ghc-internal unit"
-  cstring <- wiredCString context thcRoot
+  wired <- wiredGhcInternal context thcRoot
   let manifest = output </> "packages.json"
       entry = unitId selected ++ ":Main.main"
       audit = output </> "audit.json"
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-                               "units" .= (described ++ [cstring])])
+                               "units" .= (described ++ [wired])])
   runCommand True "python3" [thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
                              "--entry", entry, "--io-main", "--output", audit] thcRoot
   runCommand False runtime ["--run-io", '@' : manifest, entry] thcRoot
 
--- GHC's installed interface has no executable unfolding for unpackCString#.
--- Export its pinned original source as the wired ghc-internal unit, and share
--- the checked ZIP across projects instead of copying Core into each output.
-wiredCString :: ExportContext -> FilePath -> IO Value
-wiredCString context thcRoot = do
-  let sourceName = "compiler/pinned-ghc-internal/GHC/Internal/CString.hs" :: String
-      licenseName = "compiler/pinned-ghc-internal/LICENSE" :: String
-      source = thcRoot </> sourceName
+-- Installed ghc-internal interfaces omit executable unfoldings needed by
+-- ordinary fail/catch, Typeable, and CString. Re-export original pinned source
+-- under its wired unit. This supplies genuine Core; the strict audit still
+-- rejects unsupported RTS stack-snapshot operations until they are implemented.
+wiredGhcInternal :: ExportContext -> FilePath -> IO Value
+wiredGhcInternal context thcRoot = do
+  let pinned = thcRoot </> "compiler/pinned-ghc-internal"
       unit = "ghc-internal" :: String
-      name = "GHC.Internal.CString" :: String
-      member = "core/GHC.Internal.CString.json" :: String
-  requireFile source
-  requireFile (thcRoot </> licenseName)
-  cacheRoot <- coreCacheDirectory
-  sourceHash <- digestFile source
-  licenseHash <- digestFile (thcRoot </> licenseName)
+      names = map snd moduleSources
+      sourceArtifact (name, digest) = object
+        ["path" .= ("compiler/pinned-ghc-internal/" ++ name), "sha256" .= digest]
+  forM_ sourceHashes $ \(name, expected) -> do
+    let path = pinned </> name
+    requireFile path
+    actual <- digestFile path
+    require (actual == expected) ("pinned GHC 9.14.1 source changed: " ++ name)
   pluginHash <- digestFile (contextPluginLibrary context)
   let inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
                      "unit" .= unit,
@@ -194,62 +195,82 @@ wiredCString context thcRoot = do
                                            "abi" .= contextAbi context,
                                            "platform" .= contextPlatform context],
                      "component" .= object ["kind" .= ("pinned-wired-source" :: String),
-                                             "module" .= name],
+                                             "modules" .= names],
                      "nativeArtifacts" .= ([] :: [Value]),
-                     "sourceArtifacts" .= [object ["path" .= sourceName, "sha256" .= sourceHash],
-                                           object ["path" .= licenseName, "sha256" .= licenseHash]],
+                     "sourceArtifacts" .= map sourceArtifact sourceHashes,
                      "dependencies" .= ([] :: [Value])]
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
       exporter = object ["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
-                         "options" .= (["cstring", "post-tidy", "source-notes", "-g",
-                                        "-dynamic", "-dcore-lint"] :: [String])]
-      exportKey = shaHex (BL.toStrict (encode ("thc-wired-cstring-v1" :: String, buildKey, exporter)))
+                         "options" .= (["ghc-internal-source-closure-v1", "post-tidy",
+                                        "source-notes", "-g", "-dynamic", "-dcore-lint",
+                                        "-XNoPolyKinds"] :: [String])]
+      exportKey = shaHex (BL.toStrict (encode ("thc-wired-ghc-internal-v1" :: String,
+                                             buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey, "exporter" .= exporter])
-      directory = cacheRoot </> "core-bundles/v1" </>
-                  (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context) </> exportKey
+      directory = contextCache context </> "core-bundles/v1" </>
+                  (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++
+                   contextPlatform context) </> exportKey
       destination = directory </> ("ghc-internal-" ++ buildKey ++ ".zip")
-      buildDir = directory </> "source-export"
   createDirectoryIfMissing True directory
   bundle <- withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle destination unit buildKey exportKey buildInputs [name]
+    hit <- if cached then readBundle destination unit buildKey exportKey buildInputs (sort names)
            else pure Nothing
     case hit of
       Just value -> pure value
       Nothing -> do
         when cached (removeFile destination)
-        runCommand True "python3" [thcRoot </> "compiler/export-boot.py", "--frontier", "cstring",
-                                   "--build-dir", buildDir] thcRoot
-        let core = buildDir </> "core/GHC.Internal.CString.json"
-        artifact <- readJson core
-        foundUnit <- field artifact "unit"
-        foundName <- field artifact "module"
-        foundBoundary <- field artifact "boundary"
-        bindings <- field artifact "bindings" :: IO [Value]
-        bindingIds <- mapM (`field` "id") bindings :: IO [String]
-        require (foundUnit == unit && foundName == name && foundBoundary == boundary &&
-                 "ghc-internal:GHC.Internal.CString.unpackCString#" `elem` bindingIds)
-          "pinned CString export lacks the original wired binding"
-        bytes <- BS.readFile core
-        let modules = [object ["name" .= name, "boundary" .= boundary,
-                               "path" .= member, "sha256" .= shaHex bytes]]
-            inputsBytes = BL.toStrict (encode buildInputs)
-            inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
-                            "unit" .= unit, "buildKey" .= buildKey,
-                            "exportKey" .= exportKey, "modules" .= modules,
-                            "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String),
-                                                     "sha256" .= shaHex inputsBytes]]
-        archive <- either fail pure (encodeZip [("manifest.json", BL.toStrict (encode inner)),
-                                                ("inplace-manifest.json", inputsBytes), (member, bytes)])
-        atomicBytes destination (BL.toStrict archive)
-        pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey)
+        let stagingRoot = contextNative context </> "cache/thc/staging"
+        createDirectoryIfMissing True stagingRoot
+        (staging, handle) <- openTempFile stagingRoot "wired-export-"
+        hClose handle
+        removeFile staging
+        createDirectory staging
+        let cleanup = do exists <- doesDirectoryExist staging
+                         when exists (removePathForcibly staging)
+        (do
+          let packageTool = maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id
+                              (contextGhcPkg context)
+          requireFile packageTool
+          exportPinnedCore pinned (contextGhc context) packageTool
+                           (contextPluginLibrary context) (contextPluginUnit context) staging
+          members <- forM names $ \name -> do
+            let core = staging </> "core" </> (name ++ ".json")
+                member = "core/" ++ name ++ ".json"
+            artifact <- readJson core
+            foundUnit <- field artifact "unit"
+            foundName <- field artifact "module"
+            foundBoundary <- field artifact "boundary"
+            require (foundUnit == unit && foundName == name && foundBoundary == boundary)
+              ("pinned wired Core has wrong identity: " ++ name)
+            bytes <- BS.readFile core
+            pure (member, bytes)
+          let refs = [object ["name" .= name, "boundary" .= boundary,
+                              "path" .= ("core/" ++ name ++ ".json"),
+                              "sha256" .= shaHex bytes]
+                     | (name, (_, bytes)) <- zip names members]
+              inputsBytes = BL.toStrict (encode buildInputs)
+              inner = object ["format" .= ("thc-core-bundle" :: String),
+                              "schema" .= (1 :: Int), "unit" .= unit,
+                              "buildKey" .= buildKey, "exportKey" .= exportKey,
+                              "modules" .= refs,
+                              "buildInputs" .= object
+                                ["path" .= ("inplace-manifest.json" :: String),
+                                 "sha256" .= shaHex inputsBytes]]
+          archive <- either fail pure (encodeZip
+            (("manifest.json", BL.toStrict (encode inner)) :
+             ("inplace-manifest.json", inputsBytes) : members))
+          atomicBytes destination (BL.toStrict archive)
+          pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey))
+          `finally` cleanup
   pure (object ["id" .= unit, "depends" .= ([] :: [String]),
                 "modules" .= bundleModules bundle,
-                "bundle" .= object ["path" .= bundlePath bundle, "sha256" .= bundleHash bundle]])
+                "bundle" .= object ["path" .= bundlePath bundle,
+                                   "sha256" .= bundleHash bundle]])
 
 -- Cabal locks its own build tree; this also keeps the THC cache and the
 -- published package manifest coherent for concurrent runs of one project.
@@ -373,7 +394,9 @@ captureGlobalUnits context project requested missing = do
         store = staging </> "store"
         dist = staging </> "dist"
         capture = staging </> "capture"
-        arguments = ["--store-dir=" ++ store, "build", "all", "--offline",
+        -- Cabal's offline mode rejects Hackage sources in a fresh store even
+        -- when their tarballs are cached; use its normal source cache here.
+        arguments = ["--store-dir=" ++ store, "build", "all",
                      "--enable-build-info", "--project-file", "cabal.project",
                      "--builddir", dist, "--with-compiler", wrapper] ++
                     maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)

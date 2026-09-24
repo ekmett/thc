@@ -8,9 +8,9 @@ import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
 import Data.Aeson (Value, eitherDecode')
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf)
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
-                         doesFileExist, getModificationTime)
+                         doesFileExist, getModificationTime, listDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), splitDirectories, takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
@@ -21,7 +21,9 @@ tests env = TestList [projectTests env, cstringTests env]
 
 projectTests :: Env -> Test
 projectTests env = TestLabel "three-package project native versus THC run" $ TestCase $
-  withFixture env "test/fixtures/run-project" $ \project ->
+  -- GHC 9.14's Linux -g assembler cannot quote a double quote in .file paths.
+  -- Plan/run tests retain the quoted Unicode path coverage.
+  withFixtureNamed env "test/fixtures/run-project" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project
         output = base </> "output"
@@ -78,7 +80,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
 
 cstringTests :: Env -> Test
 cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ TestCase $
-  withFixture env "test/fixtures/run-cstring" $ \project ->
+  withFixtureNamed env "test/fixtures/run-cstring" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let output = takeDirectory project </> "output"
         invoke backend = run env (takeDirectory project) (Just backend) 240
@@ -100,7 +102,14 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
         ((== "ghc-internal:GHC.Internal.CString.unpackCString#") . string . (`field` "id"))
         (objects audit "reachableBindings")
       manifest <- readJson (output </> "packages.json")
-      assertEqual "wired source module" ["GHC.Internal.CString"] (moduleNames $ wired manifest)
+      let sourceModules = moduleNames $ wired manifest
+      assertBool "original CString source included" ("GHC.Internal.CString" `elem` sourceModules)
+      assertBool "original MonadFail source included"
+        ("GHC.Internal.Control.Monad.Fail" `elem` sourceModules)
+      assertBool "original exception backtrace source included"
+        ("GHC.Internal.Exception.Backtrace" `elem` sourceModules)
+      assertBool "original Typeable source included"
+        ("GHC.Internal.Data.Typeable.Internal" `elem` sourceModules)
       let bundle = string $ field (field (wired manifest) "bundle") "path"
       requireFile bundle
       plan <- readJson (output </> "native/cache/plan.json")
@@ -114,6 +123,32 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
     case bundles of
       [first, second] -> assertEqual "wired bundle reused across backends" first second
       _ -> fail "expected AST and bytecode CString bundle results"
+    let base = takeDirectory project
+        frontier = base </> "fail-frontier"
+        frontierOutput = base </> "fail-output"
+    copyTree (root env </> "test/fixtures/run-fail-frontier") frontier
+    frontierResult <- run env base Nothing 240
+      ["run", frontier, "--exe", "fail-frontier", "--thc-root", thcRoot env,
+       "--runtime", runtime env, "--dist-dir", frontierOutput]
+    assertFailure frontierResult
+    assertNoStdout frontierResult
+    frontierAudit <- readJson (frontierOutput </> "audit.json")
+    assertBool "fail remains outside the supported RTS stack frontier"
+      (not $ bool $ field frontierAudit "accepted")
+    let missing = map (string . (`field` "id")) (objects frontierAudit "missingGlobals")
+        missingName name = any (name `isInfixOf`) missing
+    assertBool "native stack cloning remains an explicit gap"
+      (missingName "stg_cloneMyStackzh")
+    assertBool "genuine MonadFail/Typeable definitions are supplied"
+      (not $ any missingName ["$fMonadFailIO_$cfail", "sameTypeRep", "mkTrCon"])
+    frontierPlan <- readJson (frontierOutput </> "native/cache/plan.json")
+    let entry = one ((== "exe:fail-frontier") . string . (`field` "component-name"))
+                    (objects frontierPlan "install-plan")
+    native <- runExe env frontier Nothing 60 (string $ field entry "bin-file") []
+    assertSuccess native
+    assertNoStdout native
+    staging <- listDirectory (frontierOutput </> "native/cache/thc/staging")
+    assertEqual "disposable export staging cleaned" [] staging
 
 withCache :: FilePath -> IO a -> IO a
 withCache path action = bracket acquire restore (const action)

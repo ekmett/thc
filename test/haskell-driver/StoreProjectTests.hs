@@ -14,7 +14,8 @@ import TestSupport
 
 tests :: Env -> Test
 tests env = TestLabel "source-built Cabal store Core" $ TestCase $
-  withFixture env "test/fixtures/run-store-project" $ \project ->
+  -- Post-Tidy export uses -g; its Linux assembler cannot quote double quotes in paths.
+  withFixtureNamed env "test/fixtures/run-store-project" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project
         source = base </> "dependency-source"

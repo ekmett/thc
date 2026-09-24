@@ -41,6 +41,7 @@ class SynchronousExceptionsNativeTest {
         for (stage in listOf("pre", "post")) {
             @Suppress("UNCHECKED_CAST")
             val paths = (manifest["stages"] as Map<String, List<String>>).getValue(stage)
+            @Suppress("UNCHECKED_CAST")
             val module = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
             for (backend in listOf("ast", "bytecode")) for (name in supported) {
                 val selected = cases.getValue(name).map { it[1].toLong() to it[2].toLong() }
