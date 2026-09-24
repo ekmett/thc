@@ -1,13 +1,31 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE LambdaCase #-}
 module THC.Plugin (plugin) where
 
 import GHC.Plugins
+import GHC.Hs (HsParsedModule(..), HsModule(..), HsDecl(..), GhcPs)
+import GHC.Hs.Decls (ForeignDecl(..), ForeignImport(..), CImportSpec(..))
+import GHC.Hs.Type (LHsSigType, HsSigType(..), HsType(..))
+import GHC.Parser.Annotation (getLocA)
+import GHC.Types.Error (mkPlainError, mkSimpleUnknownDiagnostic, singleMessage)
+import GHC.Utils.Error (mkPlainErrorMsgEnvelope)
+import GHC.Types.SourceError (throwErrors)
+import GHC.Driver.Errors.Types (GhcMessage(..))
+import GHC.Types.SourceText (SourceText(..))
+import GHC.Types.Name.Reader (RdrName(..))
+import GHC.Utils.Encoding.UTF8 (utf8DecodeByteString)
+import GHC.Builtin.Names (ioTyConName)
+import GHC.Builtin.Types (intTy, doubleTy, unitTy)
+import GHC.Tc.Types (TcGblEnv(..))
 import qualified THC.Sources as Sources
 import qualified THC.CBV as CBV
 import qualified THC.Demands as Demands
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
+import qualified GHC.Types.ForeignCall as Foreign
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
 import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
@@ -18,23 +36,139 @@ import GHC.StgToCmm.Closure (isSmallFamily)
 import GHC.Cmm.Utils (mAX_PTR_TAG)
 import qualified Data.ByteString as BS
 import Data.Char (ord)
-import Data.List (intercalate, nubBy, stripPrefix)
+import Data.List (intercalate, isPrefixOf, nubBy, stripPrefix)
 import qualified Data.List.NonEmpty as NE
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
 import Data.Maybe (mapMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 
 -- This plugin intentionally runs last in the ordinary Core pipeline, before
 -- Tidy. It exports executable trees, never parses a pretty-printed Core dump.
 plugin :: Plugin
 plugin = defaultPlugin
-  { installCoreToDos = \opts passes -> pure (if "post-tidy" `elem` opts then passes else passes ++ [CoreDoPluginPass "THC rich Core export" (exportModule opts)])
+  { parsedResultAction = rewriteJavaScriptImports
+  , typeCheckResultAction = validateJavaScriptTypes
+  , installCoreToDos = \opts passes -> pure (if "post-tidy" `elem` opts then passes else passes ++ [CoreDoPluginPass "THC rich Core export" (exportModule opts)])
   , latePlugin = exportLate
   , pluginRecompile = \_ -> pure ForceRecompile
   }
+
+-- GHC parses the JavaScript calling convention on native hosts, but rejects
+-- it during typechecking. Rewriting only this small IO/scalar subset here lets
+-- GHC generate its ordinary, typed FFI wrappers and state-token sequencing.
+-- The marker carries the original source as UTF-8 bytes; no process-local
+-- registry or native address masquerades as a JavaScript value.
+javascriptPrefix :: String
+javascriptPrefix = "thc_javascript_v1_"
+
+javascriptSymbol :: String -> String
+javascriptSymbol source = javascriptPrefix ++ concatMap hexByte (BS.unpack (bytesFS (mkFastString source)))
+  where
+    hexByte byte = let digits = "0123456789abcdef"
+                   in [digits !! fromIntegral (byte `div` 16), digits !! fromIntegral (byte `mod` 16)]
+
+javascriptSource :: String -> Maybe String
+javascriptSource symbol = do
+  encoded <- stripPrefix javascriptPrefix symbol
+  if odd (length encoded) then Nothing else do
+    bytes <- traverse hexPair (pairs encoded)
+    let encodedBytes = BS.pack bytes
+        source = utf8DecodeByteString encodedBytes
+    if bytesFS (mkFastString source) == encodedBytes then Just source else Nothing
+  where
+    pairs [] = []
+    pairs (a:b:rest) = [a,b] : pairs rest
+    pairs _ = []
+    digit c | c >= '0' && c <= '9' = Just (ord c - ord '0')
+            | c >= 'a' && c <= 'f' = Just (ord c - ord 'a' + 10)
+            | otherwise = Nothing
+    hexPair [a,b] = fromIntegral <$> ((+) <$> ((16 *) <$> digit a) <*> digit b)
+    hexPair _ = Nothing
+
+rewriteJavaScriptImports _ _ result = do
+  let parsed = parsedResultModule result
+      L moduleLoc hsModule = hpm_module parsed
+  decls <- traverse rewriteDecl (hsmodDecls hsModule)
+  pure result { parsedResultModule = parsed { hpm_module = L moduleLoc hsModule { hsmodDecls = decls } } }
+  where
+    rewriteDecl located@(L declLoc (ForD ext foreignDecl@ForeignImport { fd_fi = CImport importLoc conv safety header spec }))
+      | unLoc conv == Foreign.JavaScriptCallConv = do
+          let reject reason = throwErrors (singleMessage (mkPlainErrorMsgEnvelope
+                (getLocA located) (GhcUnknownMessage (mkSimpleUnknownDiagnostic
+                  (mkPlainError [] (text ("THC foreign import javascript: " ++ reason)))))))
+          if unLoc safety == Foreign.PlayInterruptible
+            then reject "interruptible imports and callbacks are unsupported"
+            else pure ()
+          if not (supportedJavaScriptType (fd_sig_ty foreignDecl))
+            then reject "expected Int/Double arguments and an IO Int, IO Double, or IO () result"
+            else pure ()
+          source <- case spec of
+            CFunction (Foreign.StaticTarget _ label Nothing True)
+              | let value = unpackFS label
+              , value /= "dynamic" && value /= "wrapper" -> pure value
+            _ -> reject "only a static JavaScript function source is supported (no dynamic/wrapper import)"
+          let symbol = mkFastString (javascriptSymbol source)
+              rewritten = CImport (L (getLoc importLoc) (SourceText symbol))
+                (fmap (const Foreign.CCallConv) conv) safety header
+                (CFunction (Foreign.StaticTarget NoSourceText symbol Nothing True))
+          pure (L declLoc (ForD ext foreignDecl { fd_fi = rewritten }))
+    rewriteDecl located@(L _ (ForD _ ForeignImport { fd_fi = CImport _ _ _ _ spec }))
+      | reservedTarget spec = throwErrors (singleMessage (mkPlainErrorMsgEnvelope
+          (getLocA located) (GhcUnknownMessage (mkSimpleUnknownDiagnostic
+            (mkPlainError [] (text "THC foreign import javascript: the thc_javascript_v1_ target prefix is reserved; use the javascript calling convention"))))))
+    rewriteDecl decl = pure decl
+    reservedTarget (CFunction (Foreign.StaticTarget _ label _ _)) = javascriptPrefix `isPrefixOf` unpackFS label
+    reservedTarget (CLabel label) = javascriptPrefix `isPrefixOf` unpackFS label
+    reservedTarget _ = False
+
+-- Deliberately narrow: the frontend does not guess a JavaScript conversion
+-- for Bool, Char, pointers, newtypes, callbacks, or a pure FFI declaration.
+supportedJavaScriptType :: LHsSigType GhcPs -> Bool
+supportedJavaScriptType (L _ HsSig { sig_body = body }) = go (unLoc body)
+  where
+    go (HsParTy _ inner) = go (unLoc inner)
+    go (HsFunTy _ _ argument result) = scalar (unLoc argument) && go (unLoc result)
+    go (HsAppTy _ io result) = named "IO" (unLoc io) && resultType (unLoc result)
+    go _ = False
+    scalar ty = named "Int" ty || named "Double" ty
+    resultType ty = scalar ty || case ty of
+      HsParTy _ inner -> resultType (unLoc inner)
+      HsTupleTy _ _ [] -> True
+      _ -> False
+    named expected (HsParTy _ inner) = named expected (unLoc inner)
+    named expected (HsTyVar _ _ name) = case unLoc name of
+      Unqual occ -> occNameString occ == expected
+      _ -> False
+    named _ _ = False
+
+-- The parsed spelling check above is only a useful early diagnostic. Here the
+-- resolved types must be the actual Prelude IO and scalar types: a local type
+-- synonym named IO must never turn an effectful JavaScript call into pure Core.
+validateJavaScriptTypes _ _ environment = do
+  mapM_ validate (tcg_fords environment)
+  pure environment
+  where
+    validate located@(L _ ForeignImport { fd_name = name, fd_fi = CImport _ _ _ _ spec })
+      | CFunction (Foreign.StaticTarget _ symbol _ True) <- spec
+      , Just _ <- javascriptSource (unpackFS symbol)
+      , not (resolvedJavaScriptType (varType (unLoc name))) =
+          throwErrors (singleMessage (mkPlainErrorMsgEnvelope
+            (getLocA located) (GhcUnknownMessage (mkSimpleUnknownDiagnostic
+              (mkPlainError [] (text "THC foreign import javascript: resolved type must use the canonical IO, Int, Double, and () types"))))))
+    validate _ = pure ()
+
+resolvedJavaScriptType :: Type -> Bool
+resolvedJavaScriptType ty =
+  let (arguments, result) = splitFunTys (expandTypeSynonyms ty)
+  in all (scalar . scaledThing) arguments && case splitTyConApp_maybe result of
+    Just (constructor, [value]) ->
+      tyConName constructor == ioTyConName && (scalar value || eqType value unitTy)
+    _ -> False
+  where
+    scalar value = eqType value intTy || eqType value doubleTy
 
 data J = O [(String,J)] | A [J] | S String | N Integer | B Bool | Z
 
@@ -57,6 +191,9 @@ num = N . toInteger
 data Ctx = Ctx
   { dynFlags :: DynFlags
   , modulePrefix :: String
+  -- Package artifacts qualify opaque source IDs by their GHC unit. Source
+  -- paths remain unchanged for display, but two packages may both have src/A.hs.
+  , sourceUnit :: Maybe String
   -- As in CorePrep, exclude every enclosing recursive group while traversing
   -- its RHSs: speculative calls can otherwise destroy guarded recursion.
   , recursiveIds :: VarSet
@@ -78,24 +215,28 @@ sourceFields d = case activeSources d of
 
 binderSource :: Ctx -> Var -> [(String,J)]
 binderSource d v = case (sourceTable d, Sources.binderNote v) of
-  (Just table, Just note) | Sources.hasNote table note -> [("source",S (Sources.noteKey note))]
+  (Just table, Just note) | Sources.hasNote table note -> [("source",S (sourceKey d (Sources.noteKey note)))]
   _ -> []
 
 underTick :: Ctx -> CoreTickish -> Ctx
 underTick d tick = case (sourceTable d, Sources.tickNote tick) of
   (Just table, Just note) | Sources.hasNote table note ->
-    d { activeSources = activeSources d ++ [Sources.noteKey note] }
+    d { activeSources = activeSources d ++ [sourceKey d (Sources.noteKey note)] }
   _ -> d
 
-sourceTableFields :: Maybe Sources.SourceTable -> [(String,J)]
-sourceTableFields Nothing = []
-sourceTableFields (Just table) =
-  [("sourceFiles",A [O [("id",S (Sources.sourceFileId file)),("path",S (Sources.sourceFilePath file)),
+sourceKey :: Ctx -> String -> String
+sourceKey d key = maybe key (\unit -> show (unit,key)) (sourceUnit d)
+
+sourceTableFields :: Ctx -> [(String,J)]
+sourceTableFields d = case sourceTable d of
+  Nothing -> []
+  Just table ->
+   [("sourceFiles",A [O [("id",S (sourceKey d (Sources.sourceFileId file))),("path",S (Sources.sourceFilePath file)),
                        ("content",maybe Z S (Sources.sourceFileContent file))] | file <- Sources.sourceFiles table])
-  ,("sourceSpans",A (map spanRecord (Sources.sourceSpans table)))]
+   ,("sourceSpans",A (map spanRecord (Sources.sourceSpans table)))]
   where
     spanRecord record = let Sources.Note span label = Sources.sourceSpanNote record in O
-      [("id",S (Sources.sourceSpanId record)),("file",S (Sources.sourceSpanFile record))
+      [("id",S (sourceKey d (Sources.sourceSpanId record))),("file",S (sourceKey d (Sources.sourceSpanFile record)))
       ,("startLine",num (srcSpanStartLine span)),("startColumn",num (srcSpanStartCol span))
       ,("endLine",num (srcSpanEndLine span)),("endColumn",num (srcSpanEndCol span))
       ,("charIndex",maybe Z num (Sources.sourceCharIndex record))
@@ -111,6 +252,20 @@ nameKey :: Name -> String
 nameKey n = case nameModule_maybe n of
   Just m -> unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m) ++ "." ++ occNameString (nameOccName n)
   Nothing -> occNameString (nameOccName n) ++ "_" ++ showSDocUnsafe (ppr (nameUnique n))
+
+-- Cabal can compile the same module name in several distinct units. Keep the
+-- historical flat layout for fixtures, but let package exports preserve the
+-- exact GHC unit ID in their path. Escaping is injective and cannot traverse
+-- out of the export root, even for an unusual unit ID.
+coreOutputPath :: [CommandLineOption] -> FilePath -> String -> String -> FilePath
+coreOutputPath opts dir unit modName
+  | "unit-qualified" `elem` opts = dir </> "units" </> ("u-" ++ concatMap escapeUnit unit) </> modName ++ ".json"
+  | otherwise = dir </> modName ++ ".json"
+  where
+    escapeUnit c
+      | asciiAlphaNum c || c `elem` ("-._" :: String) = [c]
+      | otherwise = '%' : showHex (ord c) ";"
+    asciiAlphaNum c = ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')
 
 varKey :: Ctx -> Var -> String
 varKey d v = case nameModule_maybe (varName v) of
@@ -373,6 +528,59 @@ withUnsafeEqualityCase (A xs) = case reverse xs of
   _ -> A (xs ++ [O [("unsafeEqualityCase",S "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg")]])
 withUnsafeEqualityCase node = node
 
+-- Preserve GHC's typed FCallId declaration at a direct application. The
+-- runtime still validates the exact v1 symbol, convention and machine shape;
+-- a similarly named Haskell function cannot acquire this metadata.
+foreignCallFields :: Ctx -> CoreExpr -> [CoreExpr] -> [(String,J)]
+foreignCallFields d f@(Var v) args
+  | canCertify d
+  , Just (Foreign.CCall (Foreign.CCallSpec target convention safety)) <- isFCallId_maybe v
+  , let (types,values) = span isTypeArg args
+  , not (any isTypeArg values)
+  , let instantiated = exprType (mkApps f types)
+  , null (fst (splitForAllTyVars instantiated))
+  , let (parameters,result) = splitFunTys instantiated
+  = [("foreignCall",O (
+      [("schema",num (1 :: Int)),("target",targetRecord target)
+      ,("convention",S (callConvention convention)),("safety",S (callSafety safety))
+      ,("arity",num (length parameters)),("suppliedArity",num (length values))
+      ,("argumentReps",A [typeRep (scaledThing parameter) False | parameter <- parameters])
+      ,("resultRep",typeRep result False)] ++ javascriptFields target convention safety))]
+  where
+    isTypeArg Type{} = True
+    isTypeArg _ = False
+    targetRecord (Foreign.StaticTarget _ symbol unit isFunction) = O
+      [("kind",S "static"),("symbol",S (unpackFS symbol))
+      ,("unit",maybe Z (S . unitString) unit),("isFunction",B isFunction)]
+    targetRecord Foreign.DynamicTarget = O [("kind",S "dynamic")]
+    callConvention Foreign.CCallConv = "ccall"
+    callConvention Foreign.CApiConv = "capi"
+    callConvention Foreign.StdCallConv = "stdcall"
+    callConvention Foreign.PrimCallConv = "prim"
+    callConvention Foreign.JavaScriptCallConv = "javascript"
+    callSafety Foreign.PlayRisky = "unsafe"
+    callSafety Foreign.PlaySafe = "safe"
+    callSafety Foreign.PlayInterruptible = "interruptible"
+    javascriptFields (Foreign.StaticTarget _ symbol _ True) Foreign.CCallConv safety
+      | safety `elem` [Foreign.PlaySafe, Foreign.PlayRisky]
+      , Just source <- javascriptSource (unpackFS symbol)
+      = [("intrinsic",S "javascript-v1"),("javascriptSource",S source)]
+    javascriptFields _ _ _ = []
+foreignCallFields _ _ _ = []
+
+-- Only the versioned Truffle intrinsics are link-resolved without a source
+-- definition. Every other foreign import stays in missingDefinitions.
+polyglotForeign :: Id -> Bool
+polyglotForeign v = case isFCallId_maybe v of
+  Just (Foreign.CCall (Foreign.CCallSpec
+    (Foreign.StaticTarget _ symbol _ True) Foreign.PrimCallConv Foreign.PlaySafe)) ->
+      unpackFS symbol `elem` ["thc_polyglot_v1_eval", "thc_polyglot_v1_read_member", "thc_polyglot_v1_execute_int"]
+  Just (Foreign.CCall (Foreign.CCallSpec
+    (Foreign.StaticTarget _ symbol _ True) Foreign.CCallConv safety)) ->
+      safety `elem` [Foreign.PlaySafe, Foreign.PlayRisky]
+      && case javascriptSource (unpackFS symbol) of Just _ -> True; Nothing -> False
+  _ -> False
+
 exprRaw :: Ctx -> CoreExpr -> J
 exprRaw d original = case original of
   Var v | Just p <- isPrimOpId_maybe v -> node [S "prim",S (occNameString (primOpOcc p))] []
@@ -390,7 +598,8 @@ exprRaw d original = case original of
                [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals)
                ,B (canCertify d && exprIsHNF a)
                ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]]
-                 ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]])
+                 ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]]
+                 ++ foreignCallFields d f args)
   l@Lam{} -> let (bs,body) = collectBinders l
                  vals = filter (not . isTyVar) bs
              in if null vals then withRep (exprRep d l) (expr d body)
@@ -519,7 +728,8 @@ exportModule :: [CommandLineOption] -> ModGuts -> CoreM ModGuts
 exportModule opts guts = do
   flags <- getDynFlags
   sources <- liftIO $ loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
-  let d = Ctx flags (unitString (moduleUnit (mg_module guts)) ++ ":" ++ moduleNameString (moduleName (mg_module guts))) emptyVarSet emptyVarSet True True sources []
+  let unit = unitString (moduleUnit (mg_module guts))
+      d = Ctx flags (unit ++ ":" ++ moduleNameString (moduleName (mg_module guts))) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True True sources []
       dir = case opts of [] -> "build/core"; x:_ -> x
       closureRoots = mapMaybe (stripPrefix "closure=") (drop 1 opts)
       modName = moduleNameString (moduleName (mg_module guts))
@@ -534,13 +744,14 @@ exportModule opts guts = do
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- mg_binds guts])
         , ("rules",S (pretty d (mg_rules guts)))
         , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
-        ] ++ sourceTableFields sources
+        ] ++ sourceTableFields d
   liftIO $ do
-    createDirectoryIfMissing True dir
-    writeFile (dir </> modName ++ ".json") (json result ++ "\n")
+    let path = coreOutputPath opts dir (unitString (moduleUnit (mg_module guts))) modName
+    createDirectoryIfMissing True (takeDirectory path)
+    writeFile path (json result ++ "\n")
     modifyIORef' sourceDefinitions ((d,binds):)
     let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
-    if null roots then pure () else exportInterfaceClosure dir d roots
+    if null roots then pure () else exportInterfaceClosure opts dir d roots
   pure guts
 
 -- Package rebuilding needs identities that agree with the newly emitted
@@ -553,7 +764,8 @@ exportLate hsc opts pair@(guts,_)
   | otherwise = do
       sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (cg_binds guts))
       let m = cg_module guts
-          d = Ctx (hsc_dflags hsc) (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)) emptyVarSet emptyVarSet True False sources []
+          unit = unitString (moduleUnit m)
+          d = Ctx (hsc_dflags hsc) (unit ++ ":" ++ moduleNameString (moduleName m)) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True False sources []
           dir = case opts of [] -> "build/core"; x:_ -> x
           modName = moduleNameString (moduleName m)
           binds = concatMap flattenBind (cg_binds guts)
@@ -564,12 +776,13 @@ exportLate hsc opts pair@(guts,_)
             , ("sourceCore",S (pretty d (cg_binds guts)))
             , ("bindings",A (concatMap (bindingGroup d) (cg_binds guts))), ("constructors",A (map (constructor d) cons))
             , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- cg_binds guts])
-            ] ++ sourceTableFields sources
-      createDirectoryIfMissing True dir
-      writeFile (dir </> modName ++ ".json") (json result ++ "\n")
+            ] ++ sourceTableFields d
+      let path = coreOutputPath opts dir (unitString (moduleUnit m)) modName
+      createDirectoryIfMissing True (takeDirectory path)
+      writeFile path (json result ++ "\n")
       modifyIORef' sourceDefinitions ((d,binds):)
       let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` mapMaybe (stripPrefix "closure=") opts]
-      if null roots then pure () else exportInterfaceClosure dir d roots
+      if null roots then pure () else exportInterfaceClosure opts dir d roots
       pure pair
 
 -- Source definitions from earlier modules of this same --make invocation let
@@ -579,8 +792,8 @@ exportLate hsc opts pair@(guts,_)
 sourceDefinitions :: IORef [(Ctx,[(Id,CoreExpr)])]
 sourceDefinitions = unsafePerformIO (newIORef [])
 
-exportInterfaceClosure :: FilePath -> Ctx -> [Id] -> IO ()
-exportInterfaceClosure dir rootCtx roots = do
+exportInterfaceClosure :: [CommandLineOption] -> FilePath -> Ctx -> [Id] -> IO ()
+exportInterfaceClosure opts dir rootCtx roots = do
   modules <- readIORef sourceDefinitions
   let sourceEnv = mkVarEnv [(v,(d,e)) | (d,bs) <- modules, (v,e) <- bs]
       -- exprFreeVars deliberately omits global IDs. Dependency discovery
@@ -614,6 +827,7 @@ exportInterfaceClosure dir rootCtx roots = do
         | v `elemVarSet` seen = walk seen todo found missing
         | Just _ <- isPrimOpId_maybe v = walk seen' todo found missing
         | Just _ <- isDataConWorkId_maybe v = walk seen' todo found missing
+        | polyglotForeign v = walk seen' todo found missing
         | Just (_,e) <- lookupVarEnv sourceEnv v = walk seen' (refs e ++ todo) found missing
         | Just e <- maybeUnfoldingTemplate (realIdUnfolding v) =
             let kind = case realIdUnfolding v of DFunUnfolding{} -> "interface-dfun-unfolding"; _ -> "interface-core-unfolding"
@@ -626,7 +840,8 @@ exportInterfaceClosure dir rootCtx roots = do
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]
   sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) [(v,e) | (_,v,e,_) <- imports]
-  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, activeSources = [] }) (v,e) of
+  let closureCtx = rootCtx { sourceTable = sources, sourceUnit = if "unit-qualified" `elem` opts then Just "dependency-closure" else Nothing }
+  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, sourceUnit = sourceUnit closureCtx, activeSources = [] }) (v,e) of
         O fields -> O (fields ++ [("origin",S kind),("originModule",S (modulePrefix d))])
         _ -> error "binding was not an object"
       cons = nubBy (\a b -> dataConName a == dataConName b) (concat [exprCons e | (_,_,e,_) <- imports])
@@ -638,6 +853,8 @@ exportInterfaceClosure dir rootCtx roots = do
         , ("groups",A [O [("recursive",B True),("ids",A [S (varKey d v) | (d,v,_,_) <- imports])]])
         , ("missingDefinitions",A [O [("id",S (varKey d v)),("type",S (pretty d (varType v))), ("reason",S "No executable interface unfolding; source export required")] | (d,v) <- missing])
         , ("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports]))
-        ] ++ sourceTableFields sources
-  writeFile (dir </> "THC.InterfaceClosure.json") (json result ++ "\n")
+        ] ++ sourceTableFields closureCtx
+  let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
+  createDirectoryIfMissing True (takeDirectory path)
+  writeFile path (json result ++ "\n")
   putStrLn ("THC interface closure: " ++ show (length imports) ++ " actual unfoldings, " ++ show (length missing) ++ " missing source definitions")

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Audit the syntactically reachable exported Core, without evaluating it.
 
 Every alternative and local RHS of each reachable global is checked. Lexical
@@ -10,6 +13,8 @@ import argparse
 from collections import deque
 import json
 import core_data_tags
+import core_md5_foreign
+import core_package_manifest
 from pathlib import Path
 import sys
 
@@ -22,6 +27,8 @@ from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case
 # The identical checked-in resource is packaged in the JVM runtime jar.
 SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
+POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
+    'src/main/resources/thc/polyglot-abi.json').read_text())
 
 
 class Audit:
@@ -34,6 +41,7 @@ class Audit:
         self.edges = []
         self.missing = {}
         self.primitives = {}
+        self.foreign_calls = []
         self.literals = {}
         self.used_constructors = {}
         self.reachable = []
@@ -102,6 +110,9 @@ class Audit:
                         if 'aggregate' not in component and (component.get('kind') == 'unknown' or
                                 any(r not in self.cap['aggregateFieldRepresentations'] for r in registers)):
                             self.issue('aggregate-representation', owner, path, aggregate + ': unsupported component')
+                        if ('aggregate' not in component and registers == ['AddrRep'] and
+                                (component.get('kind') != 'address' or component.get('evaluated') is not True)):
+                            self.issue('aggregate-representation', owner, path, aggregate + ': address needs an evaluated AddrRep carrier')
                 if rep.get('kind') != 'unknown' or rep.get('primReps') != physical:
                     self.issue('representation-proof', owner, path, 'Tuple components disagree with physical representations')
         kind, registers, evaluated = rep.get('kind'), rep.get('primReps'), rep.get('evaluated')
@@ -348,6 +359,23 @@ class Audit:
                 return formals[count:]
         return None
 
+    def known_function_signature(self, expression, seen=frozenset()):
+        """Resolve an exact continuation result through known lambda/global/PAP heads."""
+        if not isinstance(expression, list) or not expression:
+            return None
+        if expression[0] == 'lam':
+            metadata = expression[3] if len(expression) > 3 and isinstance(expression[3], dict) else {}
+            return [binder.get('rep') for binder in expression[1]], metadata.get('resultRep')
+        if expression[0] == 'var':
+            key = expression[1]
+            if key not in seen:
+                return self.known_function_signature(self.bindings.get(key, {}).get('expr'), seen | {key})
+        if expression[0] == 'app':
+            signature = self.known_function_signature(expression[1], seen)
+            if signature is not None and len(expression[2]) < len(signature[0]):
+                return signature[0][len(expression[2]):], signature[1]
+        return None
+
     @staticmethod
     def literal_rep(expr):
         # Signed/unsigned 8-, 16- and 32-bit literals retain exact identity.
@@ -485,6 +513,142 @@ class Audit:
                 stored = bound.get(argument[1]) if argument[1] in bound else self.bindings.get(argument[1], {}).get('rep')
                 check(expected, stored, f'arguments/{index}/binder')
         check(signature['result'], result, 'rep')
+
+    def polyglot_call(self, expr, bound, owner, path):
+        """Accept only closed MD5 or exact saturated polyglot FCallId applications."""
+        function, arguments = expr[1:3]
+        metadata = expr[6] if len(expr) > 6 and isinstance(expr[6], dict) else {}
+        call = metadata.get('foreignCall')
+        if call is None:
+            return False
+
+        target = call.get('target') if isinstance(call, dict) else None
+        symbol = target.get('symbol') if isinstance(target, dict) else None
+        if isinstance(symbol, str) and symbol in core_md5_foreign.OPERATIONS:
+            try:
+                core_md5_foreign.validate(metadata, [self.expression_rep(arg) for arg in arguments],
+                                          expr[3], self.expression_rep(expr))
+                head = self.expression_rep(function)
+                if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or
+                        not function[1] or function[1] in bound or function[1] in self.bindings or
+                        not isinstance(head, dict) or set(head) != {'kind', 'primReps', 'evaluated'} or
+                        head['kind'] != 'closure' or head['primReps'] != ['BoxedRep (Just Lifted)'] or
+                        head['evaluated'] is not True):
+                    raise ValueError('Unresolved declared foreign variable required')
+                if symbol not in self.cap.get('managedForeignCalls', []):
+                    raise ValueError('Managed MD5 foreign-call capability disabled')
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+            except ValueError as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
+
+        def reject(detail):
+            self.issue('foreign-call', owner, path, detail)
+            return False
+
+        if function[0] != 'var' or function[1] in bound or function[1] in self.bindings:
+            return reject('Foreign descriptor requires a direct external FCallId head')
+        if not isinstance(call, dict) or call.get('schema') != 1:
+            return reject('Missing GHC foreign-call schema 1 evidence')
+        target = call.get('target')
+        if not isinstance(target, dict) or target.get('kind') != 'static' or target.get('isFunction') is not True:
+            return reject('Requires a static function target')
+        symbol = target.get('symbol')
+        javascript_prefix = 'thc_javascript_v1_'
+        if ('intrinsic' in call or 'javascriptSource' in call or
+                isinstance(symbol, str) and symbol.startswith(javascript_prefix)):
+            if call.get('intrinsic') != 'javascript-v1' or not isinstance(call.get('javascriptSource'), str):
+                return reject('Missing exact javascript-v1 source evidence')
+            source = call['javascriptSource']
+            try:
+                encoded = source.encode('utf-8').hex()
+            except UnicodeEncodeError:
+                return reject('JavaScript source is not valid UTF-8')
+            if symbol != javascript_prefix + encoded:
+                return reject('JavaScript target does not encode the declared source')
+            if call.get('convention') != 'ccall' or call.get('safety') not in ('safe', 'unsafe'):
+                return reject('JavaScript import requires a synchronous ccall declaration')
+            declared = call.get('argumentReps')
+            if not isinstance(declared, list) or not declared or len(declared) != len(arguments):
+                return reject('JavaScript import lacks exact argument declarations')
+            def exact_js(rep, register):
+                if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                    return False
+                return (rep.get('kind') == {'IntRep': 'long', 'DoubleRep': 'double',
+                                            'State# RealWorld': 'void'}[register] and
+                        rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
+            register_names = [value.get('primReps') if isinstance(value, dict) else None for value in declared]
+            if (register_names[-1] != [] or any(value not in (["IntRep"], ["DoubleRep"])
+                                                 for value in register_names[:-1])):
+                return reject('JavaScript import requires Int/Double arguments followed by State#')
+            if (type(call.get('arity')) is not int or call['arity'] != len(declared) or
+                    type(call.get('suppliedArity')) is not int or call['suppliedArity'] != len(declared)):
+                return reject('JavaScript import must be exactly saturated')
+            for index, (argument, declared_rep) in enumerate(zip(arguments, declared)):
+                register = 'State# RealWorld' if index == len(declared) - 1 else declared_rep['primReps'][0]
+                if not exact_js(declared_rep, register) or not exact_js(self.effective_rep(argument, bound), register):
+                    return reject(f'JavaScript argument {index} lacks exact {register} proof')
+            if expr[3] != [False] * len(declared):
+                return reject('JavaScript FFI arguments must be unlifted')
+            result = call.get('resultRep')
+            actual_result = self.expression_rep(expr)
+            def exact_result(proof):
+                if not isinstance(proof, dict) or proof.get('aggregate') != 'unboxed-tuple' or proof.get('kind') != 'unknown':
+                    return None
+                components = proof.get('components')
+                if not isinstance(components, list) or len(components) not in (1, 2) or not exact_js(components[0], 'State# RealWorld'):
+                    return None
+                if len(components) == 1:
+                    return 'void' if proof.get('primReps') == [] else None
+                for register in ('IntRep', 'DoubleRep'):
+                    if exact_js(components[1], register) and proof.get('primReps') == [register]:
+                        return register
+                return None
+            output = exact_result(result)
+            if output is None or exact_result(actual_result) != output:
+                return reject('JavaScript result requires exact State# singleton or State#/Int#/Double# tuple')
+            self.foreign_calls.append(dict(symbol=symbol, javascriptSource=source,
+                                           result=output, owner=owner, path=path))
+            return True
+        spec = POLYGLOT_ABI['operations'].get(symbol)
+        if spec is None:
+            return reject('Unsupported foreign target ' + repr(symbol))
+        if call.get('convention') != POLYGLOT_ABI['convention'] or call.get('safety') != POLYGLOT_ABI['safety']:
+            return reject('GHC calling convention or safety differs from polyglot ABI')
+        declared = spec['arguments']
+        if (type(call.get('arity')) is not int or call['arity'] != len(declared) or
+                type(call.get('suppliedArity')) is not int or call['suppliedArity'] != len(declared) or
+                len(arguments) != len(declared)):
+            return reject('Foreign call must be exactly saturated at declared arity')
+        def exact(rep, register):
+            if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                return False
+            kinds = {'AddrRep': 'address', 'IntRep': 'long',
+                     'BoxedRep (Just Lifted)': 'object', 'State# RealWorld': 'void'}
+            return (rep.get('kind') == kinds[register] and
+                    rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
+        declared_reps = call.get('argumentReps')
+        if (not isinstance(declared_reps, list) or len(declared_reps) != len(declared) or
+                any(not exact(rep, register) for rep, register in zip(declared_reps, declared))):
+            return reject('GHC declared argument representations differ from polyglot ABI')
+        for index, (argument, register) in enumerate(zip(arguments, declared)):
+            actual = self.effective_rep(argument, bound)
+            if not exact(actual, register):
+                return reject(f'Argument {index} lacks exact {register} proof')
+        expected_lifted = [register == 'BoxedRep (Just Lifted)' for register in declared]
+        if expr[3] != expected_lifted:
+            return reject('Argument levity differs from GHC foreign signature')
+        result = call.get('resultRep')
+        components = result.get('components') if isinstance(result, dict) else None
+        wanted = spec['result']
+        if (not isinstance(components, list) or len(components) != len(wanted) or
+                result.get('aggregate') != 'unboxed-tuple' or result.get('kind') != 'unknown' or
+                any(not exact(rep, register) for rep, register in zip(components, wanted)) or
+                result.get('primReps') != [r for rep in components for r in rep['primReps']] or
+                self.shape(self.expression_rep(expr)) != self.shape(result)):
+            return reject('GHC declared State# tuple result differs from polyglot ABI')
+        self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+        return True
 
     def free_variables(self, expr):
         if not isinstance(expr, list) or not expr:
@@ -758,7 +922,35 @@ class Audit:
                         valid = array_role(proof, result)
                     if not valid:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact Array result required')
-                bytearray_primitive = self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if function[0] == 'prim' and function[1] == 'keepAlive#':
+                    def kept_reference(rep):
+                        return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
+                                rep.get('kind') in ('object', 'data', 'closure') and rep.get('primReps') in (
+                                    ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']))
+                    def state_rep(rep):
+                        return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
+                                rep.get('kind') == 'void' and rep.get('primReps') == [])
+                    actual = [self.expression_rep(a) for a in arguments]
+                    valid = (len(actual) == 3 and kept_reference(actual[0]) and state_rep(actual[1]) and
+                             kept_reference(actual[2]) and actual[2].get('kind') in ('object', 'closure') and
+                             actual[2].get('primReps') == ['BoxedRep (Just Lifted)'] and
+                             flags == [actual[0]['primReps'] == ['BoxedRep (Just Lifted)'], False, True])
+                    if not valid:
+                        self.issue('primitive-representation', owner, path, 'keepAlive#: exact reference, State and continuation required')
+                    if (not isinstance(proof, dict) or is_vector(proof) or
+                            ('aggregate' not in proof and (proof.get('primReps') is None or proof.get('kind') == 'unknown'))):
+                        self.issue('primitive-representation', owner, path, 'keepAlive#: exact supported result required')
+                    signature = self.known_function_signature(arguments[2]) if len(arguments) == 3 else None
+                    if signature is not None:
+                        formals, returned = signature
+                        if not formals or not state_rep(formals[0]):
+                            self.issue('primitive-representation', owner, path, 'keepAlive#: State continuation input required')
+                        elif len(formals) == 1:
+                            self.compare_shapes(proof, returned, owner, path + '/continuation-result', component=True)
+                        elif not kept_reference(proof) or proof.get('primReps') != ['BoxedRep (Just Lifted)']:
+                            self.issue('primitive-representation', owner, path, 'keepAlive#: partial continuation returns a lifted function')
+                bytearray_primitive = (self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) or
+                                       self.cap.get('managedPinnedMemoryPrimitives', {}).get(function[1])) if function[0] == 'prim' else None
                 if bytearray_primitive is not None:
                     def exact(actual, expected):
                         return (isinstance(actual, dict) and actual.get('kind') == expected['kind'] and
@@ -798,6 +990,52 @@ class Audit:
                         valid = role_matches(proof, result)
                     if not valid:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact MutVar result required')
+                mvar = self.cap.get('managedMVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if mvar is not None:
+                    def mvar_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or 'vector' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'mvar':
+                            return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'flag':
+                            return kind == 'long' and reps == ['IntRep']
+                        return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (
+                            ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    expected = mvar['arguments']
+                    expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual]
+                    if (len(actual) != len(expected) or not isinstance(flags, list) or
+                            any(type(flag) is not bool for flag in flags) or flags != expected_flags or
+                            any(not mvar_role(rep, role) for rep, role in zip(actual, expected))):
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact MVar arguments required')
+                    # An occurrence cannot manufacture the MVar role from a
+                    # contradictory concrete local/global binding proof.
+                    for argument, rep, role in zip(arguments, actual, expected):
+                        stored = (bound.get(argument[1]) if argument[1] in bound else
+                                  self.bindings.get(argument[1], {}).get('rep')) if argument[0] == 'var' else None
+                        registers = stored.get('primReps') if isinstance(stored, dict) else None
+                        if registers == ['BoxedRep Nothing'] and isinstance(rep, dict) and rep.get('primReps') in (
+                                ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
+                            stored = dict(stored, primReps=rep['primReps'])
+                        if isinstance(registers, list) and (
+                                self.shape(stored) != self.shape(rep) or
+                                stored.get('kind') != 'unknown' and not mvar_role(stored, role)):
+                            self.issue('primitive-representation', owner, path,
+                                       function[1] + ': MVar argument contradicts its binding proof')
+                    result = mvar['result']
+                    if isinstance(result, list):
+                        fields = proof.get('components') if isinstance(proof, dict) else None
+                        valid = (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
+                                 isinstance(fields, list) and len(fields) == len(result) and
+                                 all(mvar_role(rep, role) for rep, role in zip(fields, result)) and
+                                 proof.get('primReps') == [r for field in fields for r in field['primReps']])
+                    else:
+                        valid = mvar_role(proof, result)
+                    if not valid:
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact MVar result required')
                 target = bound.get(function[1]) if function[0] == 'var' else None
                 if isinstance(target, dict) and '_join_result' in target:
                     self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')
@@ -830,6 +1068,10 @@ class Audit:
                 if enum_application or data_tag:
                     self.expression_metadata(function, owner, path + '/function')
                     self.primitives.setdefault(function[1], []).append(dict(self.location(owner, path), arity=len(arguments)))
+                elif self.polyglot_call(expr, bound, owner, path):
+                    # The descriptor was emitted for this direct GHC FCallId,
+                    # and the runtime links this exact versioned symbol.
+                    self.expression_metadata(function, owner, path + '/function')
                 else:
                     self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
                 for index, argument in enumerate(arguments):
@@ -1002,15 +1244,22 @@ class Audit:
 
     def io_main_contract(self, key, expression, formals, result):
         """Only GHC's erased IO () state transformer may cross this host boundary."""
-        def state_binder(expr, seen=frozenset()):
+        def remaining_binders(expr, seen=frozenset()):
             if not isinstance(expr, list) or not expr:
                 return None
-            if expr[0] == 'lam' and len(expr) > 1 and isinstance(expr[1], list) and len(expr[1]) == 1:
-                return expr[1][0]
-            if expr[0] == 'var' and len(expr) > 1 and expr[1] not in seen:
-                return state_binder(self.bindings.get(expr[1], {}).get('expr'), seen | {expr[1]})
+            if expr[0] == 'lam' and len(expr) > 1 and isinstance(expr[1], list):
+                return expr[1]
+            if expr[0] == 'var' and len(expr) > 1 and isinstance(expr[1], str) and expr[1] not in seen:
+                return remaining_binders(self.bindings.get(expr[1], {}).get('expr'), seen | {expr[1]})
+            if expr[0] == 'app' and len(expr) > 2 and isinstance(expr[2], list):
+                original = remaining_binders(expr[1], seen)
+                # Drop logical operands, including zero-width ones, but never
+                # infer a returned function's signature after saturation.
+                if original is not None and len(expr[2]) < len(original):
+                    return original[len(expr[2]):]
             return None
-        binder = state_binder(expression)
+        remaining = remaining_binders(expression)
+        binder = remaining[0] if isinstance(remaining, list) and len(remaining) == 1 else None
         state = formals[0] if isinstance(formals, list) and len(formals) == 1 else None
         components = result.get('components') if isinstance(result, dict) and result.get('aggregate') == 'unboxed-tuple' else None
         state_result = components[0] if isinstance(components, list) and len(components) == 2 else None
@@ -1078,6 +1327,7 @@ class Audit:
                     runtimeExternals=[dict(id=key, uses=[edge for edge in self.edges if edge['dependency'] == key])
                                       for key in sorted((set(self.cap.get('externalBindings', [])) - self.bindings.keys()) & {edge['dependency'] for edge in self.edges})],
                     primitives=[dict(name=k, expectedArity=self.cap['primitives'].get(k), uses=v) for k, v in sorted(self.primitives.items())],
+                    foreignCalls=self.foreign_calls,
                     constructors=[dict(id=k, metadata=self.constructors.get(k), uses=v) for k, v in sorted(self.used_constructors.items())],
                     literals=[v for _, v in sorted(self.literals.items())], issues=self.issues,
                     limits=['All syntactically reachable branches and local RHSs are audited, including lazy error paths.',
@@ -1088,11 +1338,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('modules', nargs='*', help='Exported JSON modules, or directories containing exported *.json modules')
     parser.add_argument('--module-list', action='append', type=Path, default=[], help='Read an exact newline-delimited module manifest; relative paths are relative to the manifest')
+    parser.add_argument('--package-manifest', type=Path, help='Validate and audit an exact GHC-unit Core package manifest')
     parser.add_argument('--entry', action='append', required=True, help='Exact global id or unambiguous occurrence name; repeatable')
     parser.add_argument('--io-main', action='store_true', help='Validate the exact IO () host entry contract instead of the scalar host result')
     parser.add_argument('--capabilities', type=Path, default=Path(__file__).with_name('core-capabilities.json'))
     parser.add_argument('--output', type=Path, help='Write full JSON report here (otherwise stdout)')
     args = parser.parse_args()
+    if args.package_manifest and (args.modules or args.module_list):
+        parser.error('--package-manifest cannot be mixed with loose module paths')
     files = []
     for supplied in args.modules:
         path = Path(supplied)
@@ -1103,9 +1356,10 @@ def main():
                 if line.strip():
                     path = Path(line.strip())
                     files.append(path if path.is_absolute() else manifest.parent / path)
-        if not files:
+        if not files and not args.package_manifest:
             parser.error('Supply modules or --module-list')
-        modules = [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)]
+        modules = (core_package_manifest.load(args.package_manifest) if args.package_manifest else
+                   [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)])
         report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
     except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))

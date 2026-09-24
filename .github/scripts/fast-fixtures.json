@@ -3,9 +3,21 @@
   "fixtureFreeJunit": [
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
+    "thc.runtime.SimdFamiliesTest",
+    "thc.runtime.IoMainBoundaryTest",
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "io-main-pap": {
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-io-main-pap.py"]}],
+      "outputs": ["build/io-main-pap"],
+      "sources": [
+        "scripts/prepare-io-main-pap.py",
+        "compiler/test-fixtures/IoMainPapAudit.hs",
+        "compiler/test-fixtures/IoMainPapNative.hs"
+      ]
+    },
     "runtime-core-native": {
       "junit": [
         "thc.FastSmokeTest",
@@ -84,6 +96,90 @@
       "sources": [
         "scripts/prepare-bit-primops.py",
         "compiler/test-fixtures/BitPrimopsAudit.hs"
+      ]
+    },
+    "cbv-coercion": {
+      "junit": [
+        "thc.RealCoreEntryContractTest",
+        "thc.runtime.ScalarLexicalProofTest",
+        "thc.runtime.BoxedLexicalProofTest",
+        "thc.runtime.ScalarPrimitiveSignatureTest"
+      ],
+      "commands": [
+        {"argv": ["env", "THC_CORE_OUT=build/tuple-arithmetic/pre-core", "THC_GHC_OUT=build/tuple-arithmetic/pre-ghc", "compiler/export.sh", "compiler/test-fixtures/TupleArithmeticAudit.hs"]},
+        {"argv": ["env", "THC_CORE_OUT=build/explicit64-primops/core", "THC_GHC_OUT=build/explicit64-primops/ghc", "compiler/export.sh", "compiler/test-fixtures/Explicit64PrimopsAudit.hs"]},
+        {"argv": ["compiler/export.sh", "compiler/test-fixtures/CBVAudit.hs", "compiler/test-fixtures/CBVJoinAudit.hs", "compiler/test-fixtures/CBVCoercionAudit.hs", "compiler/test-fixtures/DemandAudit.hs"]},
+        {"argv": ["python3", "scripts/check-demand-metadata.py", "--ghc-api"]},
+        {"argv": ["env", "THC_CORE_OUT=build/cbv-post-core", "THC_GHC_OUT=build/cbv-post-ghc", "compiler/export.sh", "-fplugin-opt=THC.Plugin:post-tidy", "compiler/test-fixtures/CBVAudit.hs", "compiler/test-fixtures/CBVJoinAudit.hs", "compiler/test-fixtures/CBVCoercionAudit.hs"]},
+        {"argv": ["python3", "scripts/check-cbv-metadata.py"]}
+      ],
+      "outputs": [
+        "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json",
+        "build/explicit64-primops/core/Explicit64PrimopsAudit.json",
+        "build/core/CBVAudit.json",
+        "build/core/CBVJoinAudit.json",
+        "build/core/CBVCoercionAudit.json",
+        "build/core/DemandAudit.json",
+        "build/cbv-post-core/CBVAudit.json",
+        "build/cbv-post-core/CBVJoinAudit.json",
+        "build/cbv-post-core/CBVCoercionAudit.json"
+      ],
+      "sources": [
+        "compiler/test-fixtures/TupleArithmeticAudit.hs",
+        "compiler/test-fixtures/Explicit64PrimopsAudit.hs",
+        "compiler/test-fixtures/CBVAudit.hs",
+        "compiler/test-fixtures/CBVJoinAudit.hs",
+        "compiler/test-fixtures/CBVCoercionAudit.hs",
+        "compiler/test-fixtures/DemandAudit.hs",
+        "scripts/check-demand-metadata.py",
+        "scripts/check-cbv-metadata.py"
+      ]
+    },
+    "data-to-tag": {
+      "junit": ["thc.runtime.DataToTagTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-data-to-tag.py"]}],
+      "outputs": ["build/data-to-tag"],
+      "sources": ["scripts/prepare-data-to-tag.py", "compiler/test-fixtures/DataToTagAudit.hs"]
+    },
+    "mutable-bytearray-size": {
+      "junit": ["thc.runtime.MutableByteArraySizeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-mutable-bytearray-size.py"]}],
+      "outputs": ["build/mutable-bytearray-size"],
+      "sources": ["scripts/prepare-mutable-bytearray-size.py", "scripts/mutable_bytearray_size_model.py", "compiler/test-fixtures/MutableByteArraySizeAudit.hs"]
+    },
+    "int8-arrays": {
+      "junit": ["thc.runtime.Int8ArrayNativeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-int8-arrays.py"]}],
+      "outputs": ["build/int8-arrays"],
+      "sources": ["scripts/prepare-int8-arrays.py", "scripts/prepare-int16-arrays.py", "scripts/test-int8-array-model.py", "compiler/test-fixtures/Int8ArrayAudit.hs", "examples/THC/Unboxed8Arrays.hs"]
+    },
+    "int16-arrays": {
+      "junit": ["thc.runtime.Int16ArrayNativeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-int16-arrays.py"]}],
+      "outputs": ["build/int16-arrays"],
+      "sources": ["scripts/prepare-int16-arrays.py", "scripts/test-int16-array-model.py", "compiler/test-fixtures/Int16ArrayAudit.hs", "examples/THC/Unboxed16Arrays.hs"]
+    },
+    "int32-arrays": {
+      "junit": ["thc.runtime.Int32ArrayNativeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-int32-arrays.py"]}],
+      "outputs": ["build/int32-arrays"],
+      "sources": ["scripts/prepare-int32-arrays.py", "scripts/test-int32-array-model.py", "compiler/test-fixtures/Int32ArrayAudit.hs", "examples/THC/Unboxed32Arrays.hs"]
+    },
+    "simd-capability-smoke": {
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-simd-capability-smoke.py"]}
+      ],
+      "outputs": [
+        "build/simd-capability-smoke",
+        "build/generated/simd/fixtures/GeneratedSimdFamilies.hs"
+      ],
+      "sources": [
+        "scripts/prepare-simd-capability-smoke.py",
+        "scripts/prepare-simd-families.py",
+        "scripts/simd-families.json",
+        "scripts/generate-simd-families.py",
+        "scripts/simd_family_model.py"
       ]
     }
   }

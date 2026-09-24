@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Pinned Int32X4 multiply Core, integer-only lane oracle and optional native evidence."""
 import argparse
 from collections import Counter

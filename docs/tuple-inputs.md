@@ -10,8 +10,9 @@ execute in source order before a call or partial application is published.
 Boxed tuples remain DataValue references. An unlifted boxed datatype remains one
 reference. Neither is flattened. A lifted leaf inside an unboxed tuple stays lazy,
 including when the tuple parameter is strict or unused. Unknown layouts or levity,
-sums, vectors and addresses are excluded from this tuple-input slice. Aggregate
-captures, heap fields, ordinary let bindings and local-join arguments/captures are
+sums and vectors are excluded from this tuple-input slice. An exact evaluated
+`AddrRep` leaf carries only a checked `ManagedAddress`, never a native pointer.
+Aggregate captures, heap fields, ordinary let bindings and local-join arguments/captures are
 still rejected, as are aggregate parameters and results at the public host entry.
 Scalar-only and exact-empty-only calls retain their existing conventions.
 

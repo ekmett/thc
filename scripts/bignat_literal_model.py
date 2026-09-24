@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent integer arithmetic model of GHC's 64-bit BigNat constant bytes."""
 import sys
 VALUES = (0, 1, -1, (1<<63)-1, 1<<63, (1<<64)-1, 1<<64, (1<<64)+1,

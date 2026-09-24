@@ -1,10 +1,14 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Generate the real GHC inputs required by all JVM tests, from a fresh checkout.
 set -eu
 cd "$(dirname "$0")/.."
 python3 scripts/primop-coverage.py --check
 python3 scripts/generate-scalar-signatures.py
 compiler/build.sh
+python3 scripts/prepare-io-main-pap.py
 python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-sqrt-audit.py
@@ -37,6 +41,7 @@ python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
 python3 scripts/prepare-mutvar.py
+python3 scripts/prepare-managed-mvars.py
 python3 scripts/prepare-int-arrays.py
 python3 scripts/prepare-double-arrays.py
 python3 scripts/prepare-int32-arrays.py
@@ -59,6 +64,7 @@ case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-doublex2-audit.py --export-only ;;
   *) python3 scripts/prepare-doublex2-audit.py ;;
 esac
+python3 scripts/prepare-simd-capability-smoke.py
 python3 scripts/prepare-tuple-arithmetic.py
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc
 
 import org.graalvm.polyglot.Context
@@ -6,7 +9,7 @@ import org.graalvm.polyglot.Value
 /** One preference order for the command line, module requests and direct Core requests. */
 fun defaultBackend(): String = System.getProperty("thc.backend", System.getenv("THC_BACKEND") ?: "bytecode")
 
-fun executionContext(): Context = Context.newBuilder("thc")
+fun executionContext(): Context = Context.newBuilder("thc").allowNativeAccess(true)
     .allowExperimentalOptions(true)
     .option("engine.BackgroundCompilation", "false")
     .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))

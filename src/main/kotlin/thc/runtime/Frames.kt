@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives
@@ -53,6 +56,35 @@ internal class FrameLayout private constructor(
 
 /** Primitive locals widen monotonically when an object representation is needed. */
 internal object FrameAccess {
+    /** Claim an uninitialized descriptor slot without undoing another thread's
+     * widening to Object. A concurrent fast-path read can still observe an older
+     * kind; that activation's frame tag, not the shared descriptor, determines
+     * how its value is read. */
+    private fun primitiveKind(descriptor: FrameDescriptor, slot: Int, wanted: FrameSlotKind): Boolean {
+        val kind = descriptor.getSlotKind(slot)
+        if (kind == wanted) return true
+        if (kind != FrameSlotKind.Illegal) return false
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        return synchronized(descriptor) {
+            if (descriptor.getSlotKind(slot) == FrameSlotKind.Illegal) descriptor.setSlotKind(slot, wanted)
+            descriptor.getSlotKind(slot) == wanted
+        }
+    }
+
+    /** A reference is the only widening target; no primitive writer may
+     * replace it after this transition has been published. */
+    fun writeObject(frame: Frame, slot: Int, value: Any?) {
+        val descriptor = frame.frameDescriptor
+        if (descriptor.getSlotKind(slot) != FrameSlotKind.Object) {
+            CompilerDirectives.transferToInterpreterAndInvalidate()
+            synchronized(descriptor) {
+                if (descriptor.getSlotKind(slot) != FrameSlotKind.Object)
+                    descriptor.setSlotKind(slot, FrameSlotKind.Object)
+            }
+        }
+        frame.setObject(slot, value)
+    }
+
     fun read(frame: Frame, slot: Int): Any? = when {
         // Consult the live frame's tags, not the shared descriptor: another
         // activation may have widened the descriptor while this frame retains
@@ -68,71 +100,37 @@ internal object FrameAccess {
     /** Keep a primitive producer unboxed until this slot actually requires object storage. */
     fun writeLong(frame: Frame, slot: Int, value: Long) {
         val descriptor = frame.frameDescriptor
-        val kind = descriptor.getSlotKind(slot)
-        if (kind == FrameSlotKind.Long || kind == FrameSlotKind.Illegal) {
-            if (kind == FrameSlotKind.Illegal) {
-                CompilerDirectives.transferToInterpreterAndInvalidate()
-                descriptor.setSlotKind(slot, FrameSlotKind.Long)
-            }
+        if (primitiveKind(descriptor, slot, FrameSlotKind.Long)) {
             frame.setLong(slot, value)
         } else {
             // Another activation may already have widened the shared descriptor.
             // Follow it even when this frame still has an older primitive tag.
-            write(frame, slot, value)
+            writeObject(frame, slot, value)
         }
     }
 
     fun writeFloat(frame: Frame, slot: Int, value: Float) {
         val descriptor = frame.frameDescriptor
-        val kind = descriptor.getSlotKind(slot)
-        if (kind == FrameSlotKind.Float || kind == FrameSlotKind.Illegal) {
-            if (kind == FrameSlotKind.Illegal) {
-                CompilerDirectives.transferToInterpreterAndInvalidate()
-                descriptor.setSlotKind(slot, FrameSlotKind.Float)
-            }
+        if (primitiveKind(descriptor, slot, FrameSlotKind.Float)) {
             frame.setFloat(slot, value)
-        } else write(frame, slot, value)
+        } else writeObject(frame, slot, value)
     }
 
     fun writeDouble(frame: Frame, slot: Int, value: Double) {
         val descriptor = frame.frameDescriptor
-        val kind = descriptor.getSlotKind(slot)
-        if (kind == FrameSlotKind.Double || kind == FrameSlotKind.Illegal) {
-            if (kind == FrameSlotKind.Illegal) {
-                CompilerDirectives.transferToInterpreterAndInvalidate()
-                descriptor.setSlotKind(slot, FrameSlotKind.Double)
-            }
+        if (primitiveKind(descriptor, slot, FrameSlotKind.Double)) {
             frame.setDouble(slot, value)
-        } else write(frame, slot, value)
+        } else writeObject(frame, slot, value)
     }
 
     fun write(frame: Frame, slot: Int, value: Any?) {
-        val descriptor = frame.frameDescriptor
-        val kind = descriptor.getSlotKind(slot)
-        when {
-            value is Float && (kind == FrameSlotKind.Float || kind == FrameSlotKind.Illegal) -> writeFloat(frame, slot, value)
-            value is Double && (kind == FrameSlotKind.Double || kind == FrameSlotKind.Illegal) -> writeDouble(frame, slot, value)
-            value is Long && (kind == FrameSlotKind.Long || kind == FrameSlotKind.Illegal) -> {
-                if (kind == FrameSlotKind.Illegal) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate()
-                    descriptor.setSlotKind(slot, FrameSlotKind.Long)
-                }
-                frame.setLong(slot, value)
-            }
-            value is Boolean && (kind == FrameSlotKind.Boolean || kind == FrameSlotKind.Illegal) -> {
-                if (kind == FrameSlotKind.Illegal) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate()
-                    descriptor.setSlotKind(slot, FrameSlotKind.Boolean)
-                }
-                frame.setBoolean(slot, value)
-            }
-            else -> {
-                if (kind != FrameSlotKind.Object) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate()
-                    descriptor.setSlotKind(slot, FrameSlotKind.Object)
-                }
-                frame.setObject(slot, value)
-            }
+        when (value) {
+            is Float -> writeFloat(frame, slot, value)
+            is Double -> writeDouble(frame, slot, value)
+            is Long -> writeLong(frame, slot, value)
+            is Boolean -> if (primitiveKind(frame.frameDescriptor, slot, FrameSlotKind.Boolean))
+                frame.setBoolean(slot, value) else writeObject(frame, slot, value)
+            else -> writeObject(frame, slot, value)
         }
     }
 }

@@ -1,0 +1,20 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+plugins { id 'application' }
+repositories { mavenCentral() }
+dependencies {
+    implementation 'org.graalvm.polyglot:polyglot:25.3.4.1'
+    runtimeOnly 'org.graalvm.polyglot:llvm-community:25.3.4.1'
+}
+sourceSets.main.java.srcDirs = ['.']
+layout.buildDirectory = file('../../../build/sulong-cbits')
+application {
+    mainClass = 'SulongCbitsProbe'
+    applicationDefaultJvmArgs = ['--enable-native-access=ALL-UNNAMED']
+}
+tasks.named('run') {
+    def output = layout.buildDirectory.get().asFile
+    args new File(output, 'cbits.bc'), new File(output, 'native.tsv'),
+        providers.gradleProperty('probeMode').getOrElse('interpreted'), output
+}

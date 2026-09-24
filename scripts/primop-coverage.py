@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Inventory pinned GHC primops and generate the capability-derived checklist."""
 import argparse
 import ast
@@ -78,7 +81,8 @@ def classify(data, capability, scalars):
             for key, label in (('tuplePrimitives', 'Exact tuple arithmetic'),
                                ('managedByteArrayPrimitives', 'Managed byte storage'),
                                ('managedArrayPrimitives', 'Managed lifted arrays'),
-                               ('managedMutVarPrimitives', 'Managed lazy reference cells')):
+                               ('managedMutVarPrimitives', 'Managed lazy reference cells'),
+                               ('managedMVarPrimitives', 'Managed blocking cells; no guest scheduler or async exceptions')):
                 if name in capability.get(key, {}):
                     scope = label
                     break

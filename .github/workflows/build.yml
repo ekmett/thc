@@ -91,6 +91,14 @@ jobs:
         run: python3 scripts/primop-coverage.py --check
       - name: Build and test from source
         run: scripts/try.sh
+      - name: Check Haskell calls into JavaScript
+        run: |
+          python3 scripts/test-polyglot-audit.py
+          python3 -O scripts/test-polyglot-audit.py
+          scripts/polyglot-demo.sh
+          python3 compiler/test-javascript-ffi.py
+          scripts/javascript-demo.sh
+          ./gradlew polyglotTest
       - name: Build and exercise the Cabal driver
         shell: bash
         run: |
@@ -107,6 +115,8 @@ jobs:
             --runtime "$PWD/build/install/thc/bin/thc" \
             --thc-root "$PWD" \
             --scratch "$PWD/build/run-integration"
+      - name: Check registered cross-package Core on both compiled backends
+        run: python3 scripts/test-core-package-link.py
       - name: Preserve default test results
         if: always()
         shell: bash
@@ -179,6 +189,7 @@ jobs:
           python3 scripts/test-library-frontier.py
           python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
+          python3 scripts/test-simd-families.py
           python3 scripts/test-floatx4-model.py
           python3 scripts/test-doublex2-model.py
           python3 scripts/test-int16x8-model.py
@@ -217,6 +228,24 @@ jobs:
           python3 scripts/test-resize-bytearrays.py
           python3 scripts/test-mutable-bytearray-size.py
           python3 scripts/test-primop-coverage.py
+      - name: Check merged fixture and runtime recipes with and without assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in \
+            scripts/test-build-cbits.py \
+            scripts/test-core-managed-memory.py \
+            scripts/test-core-md5-foreign.py \
+            scripts/test-core-package-manifest.py \
+            scripts/test-managed-mvar-fixtures.py \
+            scripts/test-managed-mvars.py \
+            scripts/test-pinned-addresses.py \
+            scripts/test-prepare-managed-md5.py \
+            scripts/test-putstrln-export.py \
+            scripts/test-synchronous-exception-fixtures.py; do
+            python3 "$test"
+            python3 -O "$test"
+          done
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
       - name: Prepare fresh Map source and native oracle

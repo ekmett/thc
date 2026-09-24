@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE MagicHash, NoImplicitPrelude, UnboxedTuples, UnboxedSums #-}
 -- Negative coverage only: these are native GHC programs, not supported THC entries.
 -- OPAQUE keeps the producer/call boundaries present under the ordinary -O2 pipeline.

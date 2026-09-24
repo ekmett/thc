@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -48,4 +51,6 @@ public final class FloatX4 {
     public static FloatX4 add(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.add(b.vector)); }
     public static FloatX4 subtract(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.sub(b.vector)); }
     public static FloatX4 multiply(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.mul(b.vector)); }
+    public static FloatX4 negate(FloatX4 a) { return new FloatX4(a.vector.neg()); }
+    public static FloatX4 divide(FloatX4 a, FloatX4 b) { return new FloatX4(a.vector.div(b.vector)); }
 }

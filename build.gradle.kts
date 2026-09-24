@@ -1,18 +1,39 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 plugins {
     application
     kotlin("jvm") version "2.4.20"
     kotlin("kapt") version "2.4.20"
 }
 repositories { mavenCentral() }
+// The checked family table generates concrete primitive carriers and typed nodes.
+// BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
+// never rewritten by a build. Refresh them explicitly with the generator --write.
+val generateSimdFamilies = tasks.register<Exec>("generateSimdFamilies") {
+    inputs.files("scripts/generate-simd-families.py", "scripts/simd-families.json",
+        "src/main/java/thc/runtime/BytecodeRoot.java", "src/main/kotlin/thc/runtime/BytecodeProgram.kt")
+    outputs.dir(layout.buildDirectory.dir("generated/simd"))
+    commandLine("python3", "scripts/generate-simd-families.py", "--check")
+}
+sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
+kotlin.sourceSets.main { kotlin.srcDir(layout.buildDirectory.dir("generated/simd/kotlin")) }
+tasks.matching { it.name in setOf("compileKotlin", "compileJava", "kaptGenerateStubsKotlin") }.configureEach {
+    dependsOn(generateSimdFamilies)
+}
 val graalVersion = "25.3.4.1"
+// Additional languages are opt-in; the ordinary runtime stays language-neutral.
+val polyglotDemoRuntime by configurations.creating
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.graalvm.polyglot:polyglot:$graalVersion")
     implementation("org.graalvm.truffle:truffle-api:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
     kapt("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
 }
 kotlin {
     jvmToolchain(25)
@@ -39,6 +60,7 @@ tasks.withType<Test>().configureEach {
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
             "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
+            "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",
             "empty-join-input/**/*.json", "empty-join-input/*.tsv", "empty-join-input/native/**",
             "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
             "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
@@ -61,6 +83,7 @@ tasks.withType<Test>().configureEach {
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
+            "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/NativeScalarBitCast.hs", "scalar-bitcasts/native/**",
             "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",
             "bytearray/**/*.json", "bytearray/oracle.tsv", "bytearray/NativeByteArray.hs",
@@ -85,6 +108,8 @@ tasks.withType<Test>().configureEach {
             "int16-arrays/NativeInt16Array.hs", "int16-arrays/native/int16-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
+            "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**",
+            "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "generated/simd/fixtures/*.hs",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
@@ -106,10 +131,13 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
+        include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",
+            "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-scalar-bitcasts.py", "scalar_bitcast_model.py", "test-scalar-bitcasts.py", "prepare-tag-to-enum-audit.py", "prepare-unsafe-equality-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-narrow-literal-proofs.py", "test-narrow-literal-proofs.py", "prepare-bignat-literals.py", "bignat_literal_model.py", "test-bignat-literals.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutable-bytearray-size.py", "mutable_bytearray_size_model.py", "test-mutable-bytearray-size.py", "prepare-resize-bytearrays.py", "resize_bytearray_model.py", "test-resize-bytearrays.py", "prepare-mutable-bytearrays.py", "mutable_bytearray_model.py", "test-mutable-bytearray-model.py", "prepare-compare-byte-arrays.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
-            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
+            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-double-arrays.py", "test-double-array-model.py",
+            "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-int32-arrays.py", "test-int32-array-model.py",
             "prepare-float-word-arrays.py", "test-float-word-array-model.py",
             "prepare-int16-arrays.py", "test-int16-array-model.py",
@@ -136,7 +164,27 @@ tasks.withType<Test>().configureEach {
     testLogging { events("failed", "skipped", "passed") }
 }
 tasks.test {
-    useJUnitPlatform { excludeTags("jit-stability") }
+    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+}
+tasks.register<Test>("simdFamiliesExperimentTest") {
+    group = "verification"
+    description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("simd-families-experiment") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("SIMD evidence must be checked in a fresh test process") { true }
+}
+// Keep optional language tests outside the ordinary test inventory and classpath.
+val polyglotTests = sourceSets.create("polyglotTest")
+configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
+configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+kotlin.target.compilations.getByName("polyglotTest").associateWith(kotlin.target.compilations.getByName("main"))
+tasks.register<Test>("polyglotTest") {
+    group = "verification"
+    description = "Tests THC's optional interop boundary against GraalJS."
+    testClassesDirs = polyglotTests.output.classesDirs
+    classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
 }
 tasks.register<Test>("jitStabilityTest") {
     group = "verification"
@@ -155,5 +203,27 @@ tasks.register<JavaExec>("probe") {
     workingDir(projectDir)
 }
 
+tasks.register<JavaExec>("polyglotDemo") {
+    group = "application"
+    description = "Runs exported Haskell against GraalJS through THC.Polyglot."
+    classpath = sourceSets.main.get().runtimeClasspath + polyglotDemoRuntime
+    mainClass.set("thc.PolyglotDemoKt")
+    jvmArgs(application.applicationDefaultJvmArgs)
+    workingDir(projectDir)
+}
+
 // Vector intrinsics are isolated in Java; floating vectors retain fixed species.
 tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }
+
+// Compile the unchanged pinned GHC cbits for this host. The resulting bitcode
+// remains an optional execution path; no native pointer is exposed to Core.
+val compileCbits by tasks.registering(Exec::class) {
+    inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c",
+        "bench/experiments/pinned-addresses/reference/md5.c",
+        "bench/experiments/pinned-addresses/reference/md5.h")
+    outputs.dir(layout.buildDirectory.dir("generated/cbits"))
+    outputs.upToDateWhen { false }
+    commandLine("python3", "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
+tasks.processResources { dependsOn(compileCbits) }

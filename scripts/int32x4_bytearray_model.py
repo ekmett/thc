@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Integer/byte-only model of the six Int32X4 ByteArray operations.
 
 The retained native corpus is little-endian x86_64; byte order is explicit.

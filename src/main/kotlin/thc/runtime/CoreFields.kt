@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 /** Constructor worker metadata describes the representation after its CBV obligations. */
@@ -29,7 +32,7 @@ internal class CoreFields(info: Map<String, Any?>) {
         }.toTypedArray()
         // AddrRep has one managed carrier even in older exports lacking fieldTypes.
         // It must never become a generic reference property or a native pointer.
-        referenceTypes = Array(arity) { if (storage[it] == "AddrRep") LiteralAddress::class.java else null }
+        referenceTypes = Array(arity) { if (storage[it] == "AddrRep") ManagedAddress::class.java else null }
         for (index in storage.indices) if (storage[index] == "AddrRep") {
             if (info.containsKey("fieldLifted")) {
                 val lifted = info["fieldLifted"] as? List<*>

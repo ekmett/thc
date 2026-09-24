@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent byte-list semantics on the defined GHC mutable-copy domains."""
 ENTRIES = ('filledBytes', 'movedBytes', 'disjointBytes', 'copiedMutableBytes', 'copiedDisjointBytes', 'publicReplicate')
 REQUIRED = dict(filledBytes='setByteArray#', movedBytes='copyMutableByteArray#',

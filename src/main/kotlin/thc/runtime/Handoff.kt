@@ -1,9 +1,13 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ControlFlowException
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -77,18 +81,20 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         private val LONG_REPS = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
         // Scalar argument handoff still uses only Long/reference snapshots.
         internal fun supports(rep: String): Boolean = rep in LONG_REPS || rep.startsWith("BoxedRep ")
-        internal fun supportsResult(rep: String): Boolean = supports(rep) || rep == "FloatRep" || rep == "DoubleRep"
+        internal fun supportsResult(rep: String): Boolean = supports(rep) || rep in setOf("FloatRep", "DoubleRep", "AddrRep")
         internal fun fieldKind(rep: String): String = when {
             rep in LONG_REPS -> "long"
             rep == "FloatRep" -> "float"
             rep == "DoubleRep" -> "double"
+            // Addr# is an owned managed reference here, never a raw native word.
+            rep == "AddrRep" -> "reference"
             rep.startsWith("BoxedRep ") -> "reference"
             else -> fault("Unsupported handoff representation: $rep")
         }
     }
 }
 
-/** Owned by the language instance (EXCLUSIVE contexts), never a global loader cache. */
+/** Owned by Language.State so separate contexts never share mutable layout interning. */
 internal class HandoffLayouts(private val language: Language) {
     val enabled = java.lang.Boolean.getBoolean(HANDOFF_PROPERTY)
     private val layouts = HashMap<List<String>, HandoffLayout>()
@@ -241,6 +247,9 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
             val next = transfer
             val generation = next.arguments.generation
             try {
+                // A pending loan must remain inside the generation-checked
+                // cleanup when an asynchronous action arrives at this poll.
+                TruffleSafepoint.poll(this)
                 return invoke(state, next.arguments) { trampolineDispatch.call(next.target, EMPTY_HANDOFF_ARGUMENTS) }
             } catch (tail: HandoffTailCall) { transfer = tail }
             finally {

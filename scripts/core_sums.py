@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Exact binary sum result proofs; no width-only inference or payload coercions."""
 LIFTED = 'BoxedRep (Just Lifted)'
 UNLIFTED = 'BoxedRep (Just Unlifted)'

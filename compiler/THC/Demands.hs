@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 -- Caller-side evaluation permissions from GHC 9.14.1 demand signatures.
 -- These are neither entry calling-convention marks nor prior WHNF facts.
 module THC.Demands (callDemand) where

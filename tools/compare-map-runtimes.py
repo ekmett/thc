@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Compare two immutable THC runtime distributions against one native Map oracle.
 
 All nine timing processes run serially. Each engine occupies each run-order

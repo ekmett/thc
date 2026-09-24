@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -48,4 +51,6 @@ public final class DoubleX2 {
     public static DoubleX2 add(DoubleX2 a, DoubleX2 b) { return new DoubleX2(a.vector.add(b.vector)); }
     public static DoubleX2 subtract(DoubleX2 a, DoubleX2 b) { return new DoubleX2(a.vector.sub(b.vector)); }
     public static DoubleX2 multiply(DoubleX2 a, DoubleX2 b) { return new DoubleX2(a.vector.mul(b.vector)); }
+    public static DoubleX2 negate(DoubleX2 a) { return new DoubleX2(a.vector.neg()); }
+    public static DoubleX2 divide(DoubleX2 a, DoubleX2 b) { return new DoubleX2(a.vector.div(b.vector)); }
 }

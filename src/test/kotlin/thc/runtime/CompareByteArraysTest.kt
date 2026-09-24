@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
@@ -165,7 +168,7 @@ class CompareByteArraysTest {
                 }
                 assertEquals(0L, run(0, 0, 2, a))
                 for (row in invalidRanges) assertThrows(RuntimeFault::class.java) { run(row[0], row[1], row[2]) }
-                for (wrong in listOf(17L, Any(), arrayOf<Any>(1L), LiteralAddress.fromHex("00")))
+                for (wrong in listOf(17L, Any(), arrayOf<Any>(1L), ManagedAddress.fromHex("00")))
                     assertThrows(RuntimeFault::class.java) { run(0, 0, 0, wrong) }
                 released(language); assertEquals(1, run(0, 0, 2).compareTo(0))
             } finally { context.leave() }

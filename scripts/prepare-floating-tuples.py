@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Native Data.Complex/IEEE oracle and strict floating tuple result evidence."""
 import argparse
 from datetime import datetime, timezone

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives
@@ -5,10 +8,10 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.bytecode.BytecodeNode
 import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.VirtualFrame
-import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
 import thc.Language
+import java.util.concurrent.Callable
 
 /** Typed physical input fields, separate from both logical shapes and result storage. */
 internal class TypedInputLayout(val language: Language, val logical: ArgumentLayout, val hasEnvironment: Boolean) {
@@ -75,6 +78,7 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
             proof.isLong -> "IntRep"
             proof.isFloat -> "FloatRep"
             proof.isDouble -> "DoubleRep"
+            proof.kind == CoreKind.ADDRESS -> "AddrRep"
             else -> "BoxedRep (Just Lifted)"
         }
         fun create(language: Language, logical: ArgumentLayout?, hasEnvironment: Boolean): TypedInputLayout? =
@@ -170,11 +174,7 @@ internal class BytecodeInputSource(layout: ArgumentLayout,
 /** These slots are selected by an exact reference field in the call layout.
  * Keep this write independent of the generic scalar widening dispatch. */
 internal fun writeInputReference(frame: VirtualFrame, slot: Int, value: Any?) {
-    if (frame.frameDescriptor.getSlotKind(slot) != FrameSlotKind.Object) {
-        CompilerDirectives.transferToInterpreterAndInvalidate()
-        frame.frameDescriptor.setSlotKind(slot, FrameSlotKind.Object)
-    }
-    frame.setObject(slot, value)
+    FrameAccess.writeObject(frame, slot, value)
 }
 
 /** Copies between separately owned typed storage; logical compatibility is checked before this operation. */
@@ -295,19 +295,25 @@ private inline fun callTypedInput(frame: VirtualFrame, node: Node, function: Clo
  * aggregate completion before returning, so virtual results never merge in a PIC. */
 internal class InputDispatch(private val source: InputSource, private val count: Int, private val tail: Boolean,
     private val metrics: Metrics, private val destination: TupleDestination? = null, private val start: Int = 0) : Node() {
-    @Children private var direct = emptyArray<InputCallArm>()
+    @Children @Volatile private var direct = emptyArray<InputCallArm>()
     @Child private var generic = GenericInputCall(source, count, tail, metrics, destination, start)
     @CompilationFinal private var megamorphic = false
     @ExplodeLoop fun execute(frame: VirtualFrame, function: Closure, values: Array<Any?>? = null): Any? {
         for (arm in direct) if (arm.matches(function)) return arm.execute(frame, function, values)
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            if (direct.size < 3) {
-                val arm = insert(InputCallArm(source, count, tail, metrics, destination, start, function))
-                direct = direct + arm
+            val arm: InputCallArm? = atomic(Callable {
+                direct.firstOrNull { it.matches(function) } ?: if (megamorphic) null else if (direct.size < 3) {
+                    insert(InputCallArm(source, count, tail, metrics, destination, start, function))
+                        .also { direct = direct + it }
+                } else {
+                    megamorphic = true
+                    null
+                }
+            })
+            if (arm != null) {
                 return arm.execute(frame, function, values)
             }
-            megamorphic = true
         }
         return generic.execute(frame, function, values)
     }
@@ -510,7 +516,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
     private val tail: Boolean, private val metrics: Metrics, private val shape: TupleShape? = null) : Expr() {
     @Child private var function = Evaluate(function, metrics)
     @Child private var operands = AstInputOperands(arguments, frameLayout)
-    @Child private var dispatch: InputDispatch? = if (shape == null)
+    @Child @Volatile private var dispatch: InputDispatch? = if (shape == null)
         InputDispatch(operands.source, arguments.size, tail, metrics) else null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
@@ -526,14 +532,19 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
         val closure = function.executeRequiredClosure(frame)
         try {
             operands.evaluate(frame)
-            if (dispatch == null) {
+            val child = dispatch ?: run {
                 CompilerDirectives.transferToInterpreterAndInvalidate()
-                destinationSlots = slots; destinationOffset = offset
-                dispatch = insert(InputDispatch(operands.source, operands.layout.logicalArity, tail, metrics,
-                    AstTupleDestination(tuple, slots, offset)))
+                atomic(Callable {
+                    dispatch ?: insert(InputDispatch(operands.source, operands.layout.logicalArity, tail, metrics,
+                        AstTupleDestination(tuple, slots, offset))).also {
+                        destinationSlots = slots
+                        destinationOffset = offset
+                        dispatch = it
+                    }
+                })
             }
             check(destinationSlots === slots && destinationOffset == offset)
-            dispatch!!.execute(frame, closure)
+            child.execute(frame, closure)
             return null
         } finally { operands.source.clear(frame) }
     }

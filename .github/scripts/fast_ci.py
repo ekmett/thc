@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Execute fresh affected tests with reusable inputs and auditable phase timings.
 
 This driver never treats Gradle task history or restored test XML as a result.
@@ -43,6 +46,21 @@ def write_json(path, value):
 
 def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()
+
+
+def selection_base(root, requested, env):
+    if (env.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
+            or not env.get("GITHUB_REF", "").startswith("refs/heads/thc-bulk/")):
+        return requested
+    head = git(root, "rev-parse", "HEAD")
+    require(SHA.fullmatch(head), "Bulk candidate has no exact checked-out commit")
+    try:
+        bases = git(root, "merge-base", "--all", "HEAD", "refs/remotes/origin/main").splitlines()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError("Bulk candidate needs an available origin/main merge base") from error
+    require(len(bases) == 1 and SHA.fullmatch(bases[0]), "Bulk candidate has no unique origin/main merge base")
+    require(bases[0] != head, "Bulk candidate has no changes since origin/main")
+    return bases[0]
 
 
 class Recorder:
@@ -140,6 +158,22 @@ def gradle_command(selection):
     return argv
 
 
+def polyglot_command(selection):
+    optional = selection.get("polyglot")
+    require(isinstance(optional, dict) and type(optional.get("required")) is bool,
+            "Missing polyglot selection")
+    classes = optional.get("classes")
+    require(isinstance(classes, list)
+            and all(isinstance(name, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", name)
+                    for name in classes)
+            and len(set(classes)) == len(classes), "Invalid polyglot class inventory")
+    require(bool(classes) == optional["required"], "Polyglot selection has no exact classes")
+    if not optional["required"]:
+        return None
+    return ["./gradlew", "--daemon", "--max-workers=4", "--build-cache",
+            "--init-script", ".github/scripts/fast_ci.init.gradle", "polyglotTest", "--rerun"]
+
+
 def python_commands(selection, executable, automation_checked=False):
     for command in selection["python"]["commands"]:
         require(isinstance(command, list) and len(command) >= 2 and command[0] == "python3"
@@ -151,10 +185,11 @@ def python_commands(selection, executable, automation_checked=False):
         yield [executable, "-O", *command[1:]]
 
 
-def preserve_previous(root, destination):
+def preserve_previous(root, destination, task="test"):
     # Move only the exact test task output, not build/ or unrelated user data.
-    for source, suffix in ((root / "build/test-results/test", "xml"),
-                           (root / "build/reports/tests/test", "html")):
+    require(task in ("test", "polyglotTest"), "Unknown test task output")
+    for source, suffix in ((root / "build/test-results" / task, "xml"),
+                           (root / "build/reports/tests" / task, "html")):
         if source.exists() or source.is_symlink():
             require(source.is_dir() and not source.is_symlink(), f"Unexpected test output: {source}")
             target = destination / suffix
@@ -176,6 +211,20 @@ def run_mode(recorder, selection, mode):
     summary = validate_xml(directory / mode / "xml", selection["junit"]["classes"])
     require(code == 0, f"Gradle {mode} failed with exit {code}")
     write_json(directory / mode / "summary.json", summary)
+    return summary
+
+
+def run_polyglot(recorder, selection):
+    command = polyglot_command(selection)
+    if command is None:
+        return None
+    root, directory = recorder.root, recorder.directory
+    preserve_previous(root, directory / "prior-polyglot", "polyglotTest")
+    code, _ = recorder.command("polyglot-junit", command, allowed=tuple(range(-128, 256)))
+    preserve_previous(root, directory / "polyglot", "polyglotTest")
+    summary = validate_xml(directory / "polyglot/xml", selection["polyglot"]["classes"])
+    require(code == 0, f"Gradle polyglotTest failed with exit {code}")
+    write_json(directory / "polyglot/summary.json", summary)
     return summary
 
 
@@ -207,12 +256,15 @@ def identify(recorder, identity_path):
 
 
 def execute(recorder, base, head, identity_path):
+    selected_base = selection_base(recorder.root, base, os.environ)
     _, output = recorder.command("select", [sys.executable, ".github/scripts/fast_select.py",
-                                "--base", base, "--head", head], capture=True)
+                                "--base", selected_base, "--head", head], capture=True)
     selection = json.loads(output)
     write_json(recorder.directory / "selection.json", selection)
     gradle_command(selection)  # Fail closed before preparing or running anything.
+    polyglot = polyglot_command(selection)
     recorder.data["selection"] = {key: selection[key] for key in ("mode", "reasons")}
+    recorder.data.update(requestedBase=base, selectionBase=selected_base)
     # Check generated documentation against the actual pinned GHC API on hits
     # as well as misses. Keep this fresh report separate from cached provenance.
     recorder.command("primop-checklist", [sys.executable, "scripts/primop-coverage.py",
@@ -239,7 +291,18 @@ def execute(recorder, base, head, identity_path):
             failures.append(f"{mode}: {error}")
     if len(summaries) == 2 and summaries["default"]["cases"] != summaries["dense"]["cases"]:
         failures.append("Default and dense handoff executed different testcase sets")
-    recorder.data.update(testSummaries=summaries, failures=failures, passed=not failures)
+    polyglot_summary = None
+    if polyglot is not None:
+        try:
+            polyglot_summary = run_polyglot(recorder, selection)
+        except (RuntimeError, ValueError, ET.ParseError) as error:
+            failures.append(f"polyglot: {error}")
+        try:
+            recorder.command("javascript-demo", ["scripts/javascript-demo.sh"])
+        except RuntimeError as error:
+            failures.append(f"javascript-demo: {error}")
+    recorder.data.update(testSummaries=summaries, polyglotSummary=polyglot_summary,
+                         failures=failures, passed=not failures)
     recorder.save()
     require(not failures, "\n".join(failures))
 

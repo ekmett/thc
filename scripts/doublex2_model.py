@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent IEEE binary64 model using integer significands, never host FP arithmetic."""
 SIGN = 1 << 63
 INF = 0x7ff0000000000000

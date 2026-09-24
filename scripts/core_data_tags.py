@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Pinned GHC dataToTag family proof; no nominal information is guessed from pointers."""
 OPERATIONS = {'dataToTagSmall#', 'dataToTagLarge#'}
 

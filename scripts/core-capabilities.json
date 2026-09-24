@@ -2,9 +2,13 @@
   "name": "THC schema1 runtime capability contract",
   "reviewedAgainst": [
     "src/main/kotlin/thc/runtime/Program.kt",
-    "src/main/kotlin/thc/runtime/DataValues.kt"
+    "src/main/kotlin/thc/runtime/DataValues.kt",
+    "src/main/kotlin/thc/runtime/CoreVectors.kt",
+    "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+    "src/main/java/thc/runtime/BytecodeRoot.java"
   ],
   "externalBindings": [],
+  "managedForeignCalls": ["__hsbase_MD5Init", "__hsbase_MD5Update", "__hsbase_MD5Final"],
   "tagToEnum": "concrete-nullary-family",
   "literalKinds": [
     "bignat",
@@ -85,6 +89,7 @@
     "Word32Rep",
     "Int64Rep",
     "Word64Rep",
+    "AddrRep",
     "BoxedRep (Just Lifted)",
     "BoxedRep (Just Unlifted)"
   ],
@@ -435,6 +440,12 @@
     "readDoubleArrayAsDoubleX2#": 3,
     "writeDoubleX2Array#": 4,
     "writeDoubleArrayAsDoubleX2#": 4,
+    "newPinnedByteArray#": 2,
+    "newAlignedPinnedByteArray#": 3,
+    "byteArrayContents#": 1,
+    "readWord8OffAddr#": 3,
+    "writeWord8OffAddr#": 4,
+    "keepAlive#": 3,
     "newByteArray#": 2,
     "resizeMutableByteArray#": 3,
     "getSizeofMutableByteArray#": 2,
@@ -453,6 +464,14 @@
     "newMutVar#": 2,
     "readMutVar#": 2,
     "writeMutVar#": 3,
+    "newMVar#": 1,
+    "takeMVar#": 2,
+    "readMVar#": 2,
+    "putMVar#": 3,
+    "tryTakeMVar#": 2,
+    "tryReadMVar#": 2,
+    "tryPutMVar#": 3,
+    "isEmptyMVar#": 2,
     "readIntArray#": 3,
     "writeIntArray#": 4,
     "indexIntArray#": 2,
@@ -465,6 +484,53 @@
     "plusDoubleX2#": 2,
     "minusDoubleX2#": 2,
     "timesDoubleX2#": 2,
+    "packWord64X2#": 1,
+    "unpackWord64X2#": 1,
+    "broadcastWord64X2#": 1,
+    "plusWord64X2#": 2,
+    "minusWord64X2#": 2,
+    "timesWord64X2#": 2,
+    "packWord32X8#": 1,
+    "unpackWord32X8#": 1,
+    "broadcastWord32X8#": 1,
+    "plusWord32X8#": 2,
+    "minusWord32X8#": 2,
+    "timesWord32X8#": 2,
+    "packInt32X8#": 1,
+    "unpackInt32X8#": 1,
+    "broadcastInt32X8#": 1,
+    "plusInt32X8#": 2,
+    "minusInt32X8#": 2,
+    "timesInt32X8#": 2,
+    "negateInt32X8#": 1,
+    "packInt32X16#": 1,
+    "unpackInt32X16#": 1,
+    "broadcastInt32X16#": 1,
+    "plusInt32X16#": 2,
+    "minusInt32X16#": 2,
+    "timesInt32X16#": 2,
+    "negateInt32X16#": 1,
+    "timesInt64X2#": 2,
+    "negateFloatX4#": 1,
+    "divideFloatX4#": 2,
+    "negateDoubleX2#": 1,
+    "divideDoubleX2#": 2,
+    "packFloatX8#": 1,
+    "unpackFloatX8#": 1,
+    "broadcastFloatX8#": 1,
+    "plusFloatX8#": 2,
+    "minusFloatX8#": 2,
+    "timesFloatX8#": 2,
+    "negateFloatX8#": 1,
+    "divideFloatX8#": 2,
+    "packDoubleX4#": 1,
+    "unpackDoubleX4#": 1,
+    "broadcastDoubleX4#": 1,
+    "plusDoubleX4#": 2,
+    "minusDoubleX4#": 2,
+    "timesDoubleX4#": 2,
+    "negateDoubleX4#": 1,
+    "divideDoubleX4#": 2,
     "newArray#": 3,
     "readArray#": 3,
     "writeArray#": 4,
@@ -499,8 +565,8 @@
     "subWordC#": 2
   },
   "limitations": [
-    "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
-    "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors, addresses and unresolved leaves cannot appear in tuple inputs.",
+    "Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.",
+    "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.",
     "Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported."
   ],
   "aggregateInputs": [
@@ -516,6 +582,36 @@
     "unboxed-tuple"
   ],
   "vectorRepresentations": [
+    {
+      "lanes": 2,
+      "element": "Word64ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 8,
+      "element": "Word32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 8,
+      "element": "Int32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 16,
+      "element": "Int32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 8,
+      "element": "FloatElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 4,
+      "element": "DoubleElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
     {
       "lanes": 4,
       "element": "Word32ElemRep",
@@ -630,6 +726,165 @@
         "WordRep",
         "WordRep"
       ]
+    }
+  },
+  "managedPinnedMemoryPrimitives": {
+    "newPinnedByteArray#": {
+      "arguments": [
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "aggregate": "unboxed-tuple",
+        "primReps": [
+          "BoxedRep (Just Unlifted)"
+        ],
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "object",
+            "primReps": [
+              "BoxedRep (Just Unlifted)"
+            ]
+          }
+        ]
+      }
+    },
+    "newAlignedPinnedByteArray#": {
+      "arguments": [
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "aggregate": "unboxed-tuple",
+        "primReps": [
+          "BoxedRep (Just Unlifted)"
+        ],
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "object",
+            "primReps": [
+              "BoxedRep (Just Unlifted)"
+            ]
+          }
+        ]
+      }
+    },
+    "byteArrayContents#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      }
+    },
+    "readWord8OffAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "aggregate": "unboxed-tuple",
+        "primReps": [
+          "Word8Rep"
+        ],
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word8Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word8Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
     }
   },
   "managedByteArrayPrimitives": {
@@ -1648,6 +1903,88 @@
         "state"
       ],
       "result": "state"
+    }
+  },
+  "managedMVarPrimitives": {
+    "newMVar#": {
+      "arguments": [
+        "state"
+      ],
+      "result": [
+        "state",
+        "mvar"
+      ]
+    },
+    "takeMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "readMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "boxed"
+      ]
+    },
+    "putMVar#": {
+      "arguments": [
+        "mvar",
+        "boxed",
+        "state"
+      ],
+      "result": "state"
+    },
+    "tryTakeMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag",
+        "boxed"
+      ]
+    },
+    "tryReadMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag",
+        "boxed"
+      ]
+    },
+    "tryPutMVar#": {
+      "arguments": [
+        "mvar",
+        "boxed",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag"
+      ]
+    },
+    "isEmptyMVar#": {
+      "arguments": [
+        "mvar",
+        "state"
+      ],
+      "result": [
+        "state",
+        "flag"
+      ]
     }
   },
   "managedArrayPrimitives": {

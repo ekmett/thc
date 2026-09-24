@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Mutation tests for the gate, using synthetic parser data, never runtime evidence."""
 from collections import Counter
 import copy

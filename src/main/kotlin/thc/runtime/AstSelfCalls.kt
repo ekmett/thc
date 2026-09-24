@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives
@@ -7,6 +10,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ControlFlowException
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
+import java.util.concurrent.Callable
 
 /** A self transfer has already installed its next frame; it needs no packet or target. */
 internal object AstSelfCall : ControlFlowException()
@@ -68,15 +72,19 @@ internal class AstSelfLayout(
 /** Clones preserve GuestRoot.bodyIdentity, including cached positive/negative answers. */
 private class AstSelfTarget : Node() {
     private class CachedTarget(val target: RootCallTarget, val matches: Boolean)
-    @field:CompilationFinal(dimensions = 1) private var cached = emptyArray<CachedTarget>()
+    @field:CompilationFinal(dimensions = 1) @Volatile private var cached = emptyArray<CachedTarget>()
 
     @ExplodeLoop fun matches(target: RootCallTarget): Boolean {
         for (entry in cached) if (entry.target === target) return entry.matches
         val result = (rootNode as GuestRoot).isSelf(target)
         if (cached.size < 3) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            // Clones may share the old immutable array. Never mutate their cache.
-            cached = cached + CachedTarget(target, result)
+            atomic(Callable {
+                if (cached.none { it.target === target } && cached.size < 3) {
+                    // Clones may share the old immutable array. Never mutate their cache.
+                    cached = cached + CachedTarget(target, result)
+                }
+            })
         }
         return result
     }

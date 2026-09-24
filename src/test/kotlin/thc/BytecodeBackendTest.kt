@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc
 
 import org.graalvm.polyglot.Context
@@ -265,7 +268,7 @@ class BytecodeBackendTest {
         }
     }
 
-    @Test fun managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() {
+    @Test fun managedManagedAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() {
         val shifted = primitive("plusAddr#", listOf("lit", "string-bytes", "ff4100"), variable("input"))
         val body = primitive("indexCharOffAddr#", shifted, integer(0))
         executionContext().use { context ->

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
@@ -50,7 +53,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
                 else if (referenceKinds[i] == CoreKind.CLOSURE) FrameAccess.write(frame, target.slots[i],
                     frame.getObject(temporaries[i]) as? Closure ?: fault("Expected closure join argument"))
                 else if (referenceKinds[i] == CoreKind.ADDRESS) FrameAccess.write(frame, target.slots[i],
-                    frame.getObject(temporaries[i]) as? LiteralAddress ?: fault("Expected address join argument"))
+                    frame.getObject(temporaries[i]) as? ManagedAddress ?: fault("Expected address join argument"))
                 else FrameAccess.write(frame, target.slots[i], FrameAccess.read(frame, temporaries[i]))
             }
         }
@@ -65,7 +68,7 @@ internal class LocalJoinCall(private val target: LocalJoinTarget,
     override fun executeDouble(frame: VirtualFrame): Double = execute(frame)
     override fun executeClosure(frame: VirtualFrame): Closure = execute(frame)
     override fun executeDataValue(frame: VirtualFrame): DataValue = execute(frame)
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress = execute(frame)
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress = execute(frame)
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? = execute(frame)
 }
 
@@ -154,7 +157,7 @@ internal class LocalJoinRegion(group: Any, private val selector: Int, private va
         return if (representation.isDouble) frame.getDouble(result) else RuntimeTypesGen.expectDouble(FrameAccess.read(frame, result))
     }
     override fun executeDataValue(frame: VirtualFrame): DataValue { run(frame); return RuntimeTypesGen.expectDataValue(resultValue(frame)) }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress { run(frame); return RuntimeTypesGen.expectLiteralAddress(resultValue(frame)) }
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress { run(frame); return RuntimeTypesGen.expectManagedAddress(resultValue(frame)) }
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val shape = tuple ?: fault("Scalar join region cannot write a tuple")
         run(frame)

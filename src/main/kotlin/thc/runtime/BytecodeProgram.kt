@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
@@ -151,6 +154,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -373,7 +377,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             local.directDouble -> { b.beginToDouble(); value(); b.endToDouble() }
             reference == DataValue::class.java -> { b.beginRequireData(); value(); b.endRequireData() }
             reference == Closure::class.java -> { b.beginRequireClosure(); value(); b.endRequireClosure() }
-            reference == LiteralAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
+            reference == ManagedAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
             else -> value()
         }
         b.endStoreLocal()
@@ -459,14 +463,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "float" -> value.toFloat()
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
-        "string-bytes" -> LiteralAddress.fromHex(value)
+        "string-bytes" -> ManagedAddress.fromHex(value)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
         CoreRepresentation(when (value) {
             is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
-            is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+            is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
         }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
         val source = sources.expression(expr, scope.source)
@@ -836,7 +840,66 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
-            if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
+            val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            val javascript = CoreJavaScript.validate(expr, defined)
+            val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
+            val polyglot = if (javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (md5 != null) {
+                CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, _ ->
+                    when (md5) {
+                        Md5ForeignOp.INIT -> e.builder.beginMd5Init()
+                        Md5ForeignOp.UPDATE -> e.builder.beginMd5Update()
+                        Md5ForeignOp.FINAL -> e.builder.beginMd5Final()
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (md5) {
+                        Md5ForeignOp.INIT -> e.builder.endMd5Init()
+                        Md5ForeignOp.UPDATE -> e.builder.endMd5Update()
+                        Md5ForeignOp.FINAL -> e.builder.endMd5Final()
+                    }
+                }
+            } else if (javascript != null) {
+                val operands = args.map { argument(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val locals = operands.mapIndexed { index, operand ->
+                        val local = b.createLocal("JavaScript operand $index", null)
+                        b.beginStoreLocal(local)
+                        when (javascript.arguments.getOrNull(index)) {
+                            CoreKind.LONG -> { b.beginToLong(); operand.emit(e); b.endToLong() }
+                            CoreKind.DOUBLE -> { b.beginToDouble(); operand.emit(e); b.endToDouble() }
+                            else -> operand.emit(e)
+                        }
+                        b.endStoreLocal()
+                        LocalAccessor.constantOf(local)
+                    }
+                    val source = BytecodeJavaScriptArguments(javascript, locals.dropLast(1).toTypedArray(), locals.last())
+                    when (javascript.result) {
+                        CoreKind.LONG -> b.emitJavaScriptInt(source, destination.single())
+                        CoreKind.DOUBLE -> b.emitJavaScriptDouble(source, destination.single())
+                        CoreKind.VOID -> b.emitJavaScriptVoid(source)
+                        else -> throw RuntimeFault("Unsupported JavaScript result")
+                    }
+                }
+            } else if (polyglot != null) {
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                tupleExpression(tupleProof) { e, destination ->
+                    when (polyglot) {
+                        PolyglotOp.EVAL -> e.builder.beginPolyglotEval(destination[0])
+                        PolyglotOp.READ_MEMBER -> e.builder.beginPolyglotReadMember(destination[0])
+                        PolyglotOp.EXECUTE_INT -> e.builder.beginPolyglotExecuteInt(destination[0])
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (polyglot) {
+                        PolyglotOp.EVAL -> e.builder.endPolyglotEval()
+                        PolyglotOp.READ_MEMBER -> e.builder.endPolyglotReadMember()
+                        PolyglotOp.EXECUTE_INT -> e.builder.endPolyglotExecuteInt()
+                    }
+                }
+            } else if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
                 if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
                 val operand = compile(args[0], scope, false)
                 val ids = CoreEnums.validate(expr, operand.proof, constructors)
@@ -857,6 +920,36 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
+                val operation = MVarOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                operation.validateBindings(args.map(CoreRepresentations::expression), args.map {
+                    if (it[0] == "var") scope.locals[it[1]]?.proof ?: globalProofs[it[1]] else null
+                })
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.proof }, flags, tupleProof)
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        MVarOp.NEW -> e.builder.beginNewMVar(destination[0])
+                        MVarOp.TAKE, MVarOp.READ -> e.builder.beginReadMVar(destination[0], operation == MVarOp.TAKE)
+                        MVarOp.TRY_TAKE, MVarOp.TRY_READ ->
+                            e.builder.beginTryReadMVar(destination[0], destination[1], operation == MVarOp.TRY_TAKE)
+                        MVarOp.TRY_PUT -> e.builder.beginTryPutMVar(destination[0])
+                        MVarOp.IS_EMPTY -> e.builder.beginIsEmptyMVar(destination[0])
+                        else -> error("Not a tuple MVar operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        MVarOp.NEW -> e.builder.endNewMVar()
+                        MVarOp.TAKE, MVarOp.READ -> e.builder.endReadMVar()
+                        MVarOp.TRY_TAKE, MVarOp.TRY_READ -> e.builder.endTryReadMVar()
+                        MVarOp.TRY_PUT -> e.builder.endTryPutMVar()
+                        MVarOp.IS_EMPTY -> e.builder.endIsEmptyMVar()
+                        else -> error("Not a tuple MVar operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginPutMVar(); operands.forEach { it.emit(e) }; e.builder.endPutMVar()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -900,6 +993,47 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
+                CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
+                    args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
+                val kept = argument(args[0], scope, flags[0] as Boolean)
+                val state = compile(args[1], scope, false)
+                // Force the continuation only after validating State, inside the fence.
+                val function = argument(args[2], scope, true)
+                if (tupleProof.isAggregate) tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                    kept.emit(e); state.emit(e); function.emit(e)
+                    e.builder.endKeepAliveTuple()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginKeepAlive(metrics)
+                    kept.emit(e); state.emit(e); function.emit(e)
+                    e.builder.endKeepAlive()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
+                val operation = PinnedMemoryOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
+                        PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
+                        PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        else -> error("Scalar pinned memory operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
+                        PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
+                        PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        else -> error("Scalar pinned memory operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.beginByteArrayContents()
+                    else e.builder.beginWriteWord8OffAddr()
+                    operands.forEach { it.emit(e) }
+                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.endByteArrayContents()
+                    else e.builder.endWriteWord8OffAddr()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1034,7 +1168,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                             e.builder.beginDiscardVoid(); operand.emit(e); e.builder.endDiscardVoid()
                         }
                         else {
-                            e.builder.beginStoreLocal(destination[offset]); operand.emit(e); e.builder.endStoreLocal()
+                            e.builder.beginStoreLocal(destination[offset])
+                            if (component.kind == CoreKind.ADDRESS) e.builder.beginRequireAddress()
+                            operand.emit(e)
+                            if (component.kind == CoreKind.ADDRESS) e.builder.endRequireAddress()
+                            e.builder.endStoreLocal()
                         }
                     }
                     e.builder.endBlock()
@@ -1287,6 +1425,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in GeneratedVectors.operations -> generatedVectorPrimitive(name, operands)
         in CoreVectors.operationsWord32 -> vectorWord32Primitive(name, operands)
         in CoreVectors.operationsWord16 -> vectorWord16Primitive(name, operands)
         in CoreVectors.operationsWord8 -> vectorWord8Primitive(name, operands)
@@ -2029,6 +2168,230 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
         })
     }
+
+    // BEGIN GENERATED SIMD FAMILIES
+    private fun generatedVectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "packWord64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(2) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedWord64X2Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord64X2Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofWord64X2)
+        "unpackWord64X2#" -> tupleExpression(GeneratedVectors.unpackedWord64X2) { e, destination ->
+            e.builder.beginGeneratedWord64X2Unpack(destination[0], destination[1])
+            operands[0].emit(e)
+            e.builder.endGeneratedWord64X2Unpack()
+        }
+        "broadcastWord64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X2Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X2Broadcast()
+        }, GeneratedVectors.proofWord64X2)
+        "plusWord64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X2Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X2Plus()
+        }, GeneratedVectors.proofWord64X2)
+        "minusWord64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X2Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X2Minus()
+        }, GeneratedVectors.proofWord64X2)
+        "timesWord64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord64X2Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord64X2Times()
+        }, GeneratedVectors.proofWord64X2)
+        "packWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(8) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedWord32X8Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedWord32X8Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofWord32X8)
+        "unpackWord32X8#" -> tupleExpression(GeneratedVectors.unpackedWord32X8) { e, destination ->
+            e.builder.beginGeneratedWord32X8Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endGeneratedWord32X8Unpack()
+        }
+        "broadcastWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Broadcast()
+        }, GeneratedVectors.proofWord32X8)
+        "plusWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Plus(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Plus()
+        }, GeneratedVectors.proofWord32X8)
+        "minusWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Minus(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Minus()
+        }, GeneratedVectors.proofWord32X8)
+        "timesWord32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedWord32X8Times(); operands.forEach { it.emit(e) }; b.endGeneratedWord32X8Times()
+        }, GeneratedVectors.proofWord32X8)
+        "packInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(8) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedInt32X8Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedInt32X8Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofInt32X8)
+        "unpackInt32X8#" -> tupleExpression(GeneratedVectors.unpackedInt32X8) { e, destination ->
+            e.builder.beginGeneratedInt32X8Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endGeneratedInt32X8Unpack()
+        }
+        "broadcastInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X8Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Broadcast()
+        }, GeneratedVectors.proofInt32X8)
+        "plusInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X8Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Plus()
+        }, GeneratedVectors.proofInt32X8)
+        "minusInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X8Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Minus()
+        }, GeneratedVectors.proofInt32X8)
+        "timesInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X8Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Times()
+        }, GeneratedVectors.proofInt32X8)
+        "negateInt32X8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X8Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X8Negate()
+        }, GeneratedVectors.proofInt32X8)
+        "packInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(16) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedInt32X16Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedInt32X16Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofInt32X16)
+        "unpackInt32X16#" -> tupleExpression(GeneratedVectors.unpackedInt32X16) { e, destination ->
+            e.builder.beginGeneratedInt32X16Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7], destination[8], destination[9], destination[10], destination[11], destination[12], destination[13], destination[14], destination[15])
+            operands[0].emit(e)
+            e.builder.endGeneratedInt32X16Unpack()
+        }
+        "broadcastInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Broadcast()
+        }, GeneratedVectors.proofInt32X16)
+        "plusInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Plus(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Plus()
+        }, GeneratedVectors.proofInt32X16)
+        "minusInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Minus(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Minus()
+        }, GeneratedVectors.proofInt32X16)
+        "timesInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Times()
+        }, GeneratedVectors.proofInt32X16)
+        "negateInt32X16#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt32X16Negate(); operands.forEach { it.emit(e) }; b.endGeneratedInt32X16Negate()
+        }, GeneratedVectors.proofInt32X16)
+        "timesInt64X2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedInt64X2Times(); operands.forEach { it.emit(e) }; b.endGeneratedInt64X2Times()
+        }, GeneratedVectors.proofInt64X2)
+        "negateFloatX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX4Negate(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Negate()
+        }, GeneratedVectors.proofFloatX4)
+        "divideFloatX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX4Divide(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX4Divide()
+        }, GeneratedVectors.proofFloatX4)
+        "negateDoubleX2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX2Negate(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Negate()
+        }, GeneratedVectors.proofDoubleX2)
+        "divideDoubleX2#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX2Divide(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Divide()
+        }, GeneratedVectors.proofDoubleX2)
+        "packFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(8) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedFloatX8Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedFloatX8Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofFloatX8)
+        "unpackFloatX8#" -> tupleExpression(GeneratedVectors.unpackedFloatX8) { e, destination ->
+            e.builder.beginGeneratedFloatX8Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endGeneratedFloatX8Unpack()
+        }
+        "broadcastFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Broadcast()
+        }, GeneratedVectors.proofFloatX8)
+        "plusFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Plus(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Plus()
+        }, GeneratedVectors.proofFloatX8)
+        "minusFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Minus(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Minus()
+        }, GeneratedVectors.proofFloatX8)
+        "timesFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Times(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Times()
+        }, GeneratedVectors.proofFloatX8)
+        "negateFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Negate(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Negate()
+        }, GeneratedVectors.proofFloatX8)
+        "divideFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Divide(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Divide()
+        }, GeneratedVectors.proofFloatX8)
+        "packDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(4) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedDoubleX4Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedDoubleX4Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofDoubleX4)
+        "unpackDoubleX4#" -> tupleExpression(GeneratedVectors.unpackedDoubleX4) { e, destination ->
+            e.builder.beginGeneratedDoubleX4Unpack(destination[0], destination[1], destination[2], destination[3])
+            operands[0].emit(e)
+            e.builder.endGeneratedDoubleX4Unpack()
+        }
+        "broadcastDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Broadcast()
+        }, GeneratedVectors.proofDoubleX4)
+        "plusDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Plus(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Plus()
+        }, GeneratedVectors.proofDoubleX4)
+        "minusDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Minus(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Minus()
+        }, GeneratedVectors.proofDoubleX4)
+        "timesDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Times(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Times()
+        }, GeneratedVectors.proofDoubleX4)
+        "negateDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Negate(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Negate()
+        }, GeneratedVectors.proofDoubleX4)
+        "divideDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Divide(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Divide()
+        }, GeneratedVectors.proofDoubleX4)
+        else -> throw UnsupportedCore("Unsupported generated vector primitive $name")
+    }
+    // END GENERATED SIMD FAMILIES
 
     private fun dataLayout(id: String): DataLayout = dataLayouts.getOrPut(id) {
         val info = constructors[id] ?: throw RuntimeFault("Missing constructor metadata $id")

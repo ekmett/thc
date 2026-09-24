@@ -1,4 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Exact bounded vector proof checks shared by Core audit sites."""
+import json
+from pathlib import Path
+
 VECTOR_REP = {'kind': 'vector', 'primReps': ['VecRep 2 Int64ElemRep'], 'evaluated': True,
               'vector': {'lanes': 2, 'element': 'Int64ElemRep'}}
 LANE_REP = {'kind': 'long', 'primReps': ['Int64Rep'], 'evaluated': True}
@@ -119,6 +125,23 @@ OPERATIONS.update({
     'minusDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
     'timesDoubleX2#': ([VECTOR_DOUBLE_REP, VECTOR_DOUBLE_REP], VECTOR_DOUBLE_REP),
 })
+
+# The same pinned declarative table drives concrete JVM source generation. This
+# table describes exact signatures; core-capabilities still gates availability.
+GENERATED_SHAPES = []
+for family in json.loads((Path(__file__).with_name('simd-families.json')).read_text())['families']:
+    shape = dict(lanes=family['lanes'], element=family['element'])
+    vector = dict(kind='vector', evaluated=True, primReps=[f"VecRep {shape['lanes']} {shape['element']}"], vector=shape)
+    lane = dict(kind={'FloatRep': 'float', 'DoubleRep': 'double'}.get(family['laneRep'], 'long'),
+                evaluated=True, primReps=[family['laneRep']])
+    packed = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple',
+                  primReps=lane['primReps'] * family['lanes'], components=[lane] * family['lanes'])
+    if family['newCarrier']:
+        GENERATED_SHAPES.append(shape)
+    for operation in family['operations']:
+        arguments = [packed] if operation == 'pack' else [lane] if operation == 'broadcast' else [vector] * (2 if operation in ('plus', 'minus', 'times', 'divide') else 1)
+        OPERATIONS[operation + family['name'] + '#'] = (arguments, packed if operation == 'unpack' else vector)
+
 def is_vector(rep): return isinstance(rep, dict) and rep.get('kind') == 'vector'
 def signature_matches(expected, actual):
     """A primop signature requires concrete carriers, including every tuple lane."""
@@ -137,6 +160,6 @@ def proof_error(rep):
         return 'Invalid Core vector shape'
     if registers != [f"VecRep {shape['lanes']} {shape['element']}"]:
         return 'Vector shape disagrees with primitive representation'
-    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_WORD8_REP['vector'], VECTOR_WORD16_REP['vector'], VECTOR_WORD32_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
+    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_WORD8_REP['vector'], VECTOR_WORD16_REP['vector'], VECTOR_WORD32_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector'], *GENERATED_SHAPES):
         return 'Unsupported Core vector representation'
     return None

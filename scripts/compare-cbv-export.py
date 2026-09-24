@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Require a regenerated corpus to differ only by new CBV side metadata.
 
 Use two module-list text files in the same order. Existing representation,

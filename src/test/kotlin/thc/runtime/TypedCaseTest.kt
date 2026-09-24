@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
@@ -119,7 +122,7 @@ class TypedCaseTest {
     @Test fun defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() = each { _, _, p ->
         val value = call(p, "make", Long.MIN_VALUE)
         val function = p.entryValue("plus")
-        val literal = LiteralAddress.fromHex("41ff")
+        val literal = ManagedAddress.fromHex("41ff")
         repeat(30) {
             assertSame(value, call(p, "dataIdentity", value))
             assertSame(function, call(p, "functionIdentity", function))

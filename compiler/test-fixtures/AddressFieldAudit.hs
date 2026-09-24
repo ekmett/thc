@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE MagicHash, NoImplicitPrelude, UnboxedTuples #-}
 module AddressFieldAudit where
 import GHC.Exts
@@ -62,7 +65,7 @@ backwards :: Int# -> Int#
 backwards x = case keepPacket (Packet (plusAddr# "A\255\128\0B"# 4#) x bottom) of
   Packet p y _ -> ord# (indexCharOffAddr# p ((andI# x 3#) -# 4#)) +# y
 
--- This remains an explicit aggregate ABI frontier despite AddrRep heap fields.
+-- Keep the address in an unboxed return rather than a boxed constructor field.
 {-# OPAQUE addressTuple #-}
 addressTuple :: Int# -> (# Addr#, Int# #)
 addressTuple x = (# "A"#, x #)

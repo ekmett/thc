@@ -1,13 +1,18 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.IndirectCallNode
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
+import java.util.concurrent.Callable
 import thc.Language
 
 /** Erasure follows evaluation; malformed legacy values cannot masquerade as State#. */
@@ -34,7 +39,7 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             if (layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], layout.getLong(storage, index))
             else if (layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], layout.getFloat(storage, index))
             else if (layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], layout.getDouble(storage, index))
-            else FrameAccess.write(frame, slots[offset + index], layout.getObject(storage, index))
+            else FrameAccess.write(frame, slots[offset + index], checkedReference(index, layout.getObject(storage, index)))
         }
     }
     @ExplodeLoop private fun write(frame: VirtualFrame, slots: IntArray, storage: HandoffStorage) {
@@ -42,9 +47,13 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             if (layout.isLong(index)) layout.setLong(storage, index, frame.getLong(slots[index]))
             else if (layout.isFloat(index)) layout.setFloat(storage, index, frame.getFloat(slots[index]))
             else if (layout.isDouble(index)) layout.setDouble(storage, index, frame.getDouble(slots[index]))
-            else layout.setObject(storage, index, frame.getObject(slots[index]))
+            else layout.setObject(storage, index, checkedReference(index, frame.getObject(slots[index])))
         }
     }
+    fun checkedReference(index: Int, value: Any?): Any? =
+        if (leaves[index].kind == CoreKind.ADDRESS)
+            value as? ManagedAddress ?: fault("Expected a managed literal Addr# tuple field")
+        else value
     fun finish(frame: VirtualFrame, slots: IntArray): Any {
         if (inlineResult()) {
             val virtual = layout.create()
@@ -94,9 +103,11 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved fields")
             val fields = flatten(proof)
             if (fields.any { (it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE,
-                    CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
+                    CoreKind.ADDRESS, CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
                     it.primReps?.singleOrNull()?.let(HandoffLayout::supportsResult) != true })
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unsupported fields")
+            if (fields.any { it.kind == CoreKind.ADDRESS && !it.evaluated })
+                throw UnsupportedCore("Unsupported Core aggregate representation: AddrRep tuple field needs an evaluated carrier")
             val reps = fields.map { it.primReps!!.single() }
             if (proof.primReps != reps) throw RuntimeFault("Tuple components disagree with primitive representations")
         }
@@ -152,18 +163,21 @@ internal class AstTupleDestination(shape: TupleShape,
  * result before joining control flow, keeping virtual carriers out of PIC phis. */
 internal class TupleDispatch @JvmOverloads constructor(private val destination: TupleDestination, private val metrics: Metrics,
     private val argsSize: Int, private val tail: Boolean, private val inputLayout: ArgumentLayout? = null) : Node() {
-    @Children private var direct = emptyArray<DirectTupleCaller>()
+    @Children @Volatile private var direct = emptyArray<DirectTupleCaller>()
     @Child private var generic = GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout)
     @CompilationFinal private var megamorphic = false
-    @Child private var typed: InputDispatch? = null
+    @Child @Volatile private var typed: InputDispatch? = null
 
     @ExplodeLoop fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
         if ((function.target.rootNode as? GuestRoot)?.typedInput != null) {
-            if (typed == null) {
+            val child = typed ?: run {
                 CompilerDirectives.transferToInterpreterAndInvalidate()
-                typed = insert(InputDispatch(ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination))
+                atomic(Callable {
+                    typed ?: insert(InputDispatch(ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination))
+                        .also { typed = it }
+                })
             }
-            typed!!.execute(frame, function, arguments)
+            child.execute(frame, function, arguments)
             return
         }
         for (caller in direct) if (caller.matches(function)) {
@@ -172,13 +186,19 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
         }
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            if (direct.size < 3) {
-                val caller = insert(DirectTupleCaller(destination, metrics, argsSize, tail, function, inputLayout))
-                direct = direct + caller
+            val caller: DirectTupleCaller? = atomic(Callable {
+                direct.firstOrNull { it.matches(function) } ?: if (megamorphic) null else if (direct.size < 3) {
+                    insert(DirectTupleCaller(destination, metrics, argsSize, tail, function, inputLayout))
+                        .also { direct = direct + it }
+                } else {
+                    megamorphic = true
+                    null
+                }
+            })
+            if (caller != null) {
                 caller.execute(frame, function, arguments)
                 return
             }
-            megamorphic = true
         }
         generic.execute(frame, function, arguments)
     }
@@ -240,6 +260,11 @@ internal class TupleBounce(private val destination: TupleDestination, private va
     fun execute(frame: VirtualFrame, initial: TailCall) {
         var next = initial
         while (true) {
+            try { TruffleSafepoint.poll(this) }
+            catch (failure: Throwable) {
+                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                throw failure
+            }
             val root = next.target.rootNode as? GuestRoot
             if (root == null || root.tupleResult?.matches(destination.shape) != true) {
                 next.input?.let { discardTypedInput(destination.shape.language, it) }
@@ -274,6 +299,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
         var function = initial
         var offset = 0
         while (true) {
+            TruffleSafepoint.poll(this)
             val remaining = argsSize - offset
             if (function.arity > remaining) fault("Tuple result application is under-saturated")
             val count = function.arity
@@ -320,7 +346,7 @@ internal class TupleLocalRead(private val shape: TupleShape,
             if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(sources[index]))
             else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], frame.getFloat(sources[index]))
             else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], frame.getDouble(sources[index]))
-            else FrameAccess.write(frame, slots[offset + index], frame.getObject(sources[index]))
+            else FrameAccess.write(frame, slots[offset + index], shape.checkedReference(index, frame.getObject(sources[index])))
         }
         return null
     }
@@ -337,6 +363,7 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
             else if (component.isFloat) FrameAccess.writeFloat(frame, slots[target], fields[index].executeRequiredFloat(frame))
             else if (component.isDouble) FrameAccess.writeDouble(frame, slots[target], fields[index].executeRequiredDouble(frame))
             else if (component.kind == CoreKind.VOID) requireVoidCarrier(fields[index].execute(frame))
+            else if (component.kind == CoreKind.ADDRESS) FrameAccess.write(frame, slots[target], fields[index].executeRequiredAddress(frame))
             else FrameAccess.write(frame, slots[target], fields[index].execute(frame))
         }
         return null
@@ -346,7 +373,7 @@ internal class TupleApplication(private val language: Language, private val shap
     function: Expr, @field:Children private var arguments: Array<Expr>, private val tail: Boolean, private val metrics: Metrics) : Expr() {
     @Child private var function = Evaluate(function, metrics)
     private val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.representation })
-    @Child private var dispatch: TupleDispatch? = null
+    @Child @Volatile private var dispatch: TupleDispatch? = null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
     init { representation = shape.proof.copy(evaluated = true) }
@@ -358,14 +385,19 @@ internal class TupleApplication(private val language: Language, private val shap
             if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
             else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame)
         }
-        if (dispatch == null) {
+        val child = dispatch ?: run {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            destinationSlots = slots
-            destinationOffset = offset
-            dispatch = insert(TupleDispatch(AstTupleDestination(shape, slots, offset), metrics, arguments.size, tail, inputLayout))
+            atomic(Callable {
+                dispatch ?: insert(TupleDispatch(AstTupleDestination(shape, slots, offset), metrics, arguments.size, tail, inputLayout))
+                    .also {
+                        destinationSlots = slots
+                        destinationOffset = offset
+                        dispatch = it
+                    }
+            })
         }
         check(destinationSlots === slots && destinationOffset == offset)
-        dispatch!!.execute(frame, function, values)
+        child.execute(frame, function, values)
         return null
     }
 }
@@ -380,7 +412,7 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
     override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return body.executeDataValue(frame) }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return body.executeAddress(frame) }
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepare(frame); return body.executeAddress(frame) }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? { prepare(frame); return body.executeTuple(frame, slots, offset) }
 }
 
@@ -392,7 +424,7 @@ internal class BytecodeTupleSlots(shape: TupleShape,
             if (shape.layout.isLong(index)) shape.layout.setLong(output, index, slots[index].getLong(node, frame))
             else if (shape.layout.isFloat(index)) shape.layout.setFloat(output, index, slots[index].getFloat(node, frame))
             else if (shape.layout.isDouble(index)) shape.layout.setDouble(output, index, slots[index].getDouble(node, frame))
-            else shape.layout.setObject(output, index, slots[index].getObject(node, frame))
+            else shape.layout.setObject(output, index, shape.checkedReference(index, slots[index].getObject(node, frame)))
         }
     }
     fun finish(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode): Any {
@@ -412,7 +444,7 @@ internal class BytecodeTupleSlots(shape: TupleShape,
             if (shape.layout.isLong(index)) slots[index].setLong(node, frame, shape.layout.getLong(receiver, index))
             else if (shape.layout.isFloat(index)) slots[index].setFloat(node, frame, shape.layout.getFloat(receiver, index))
             else if (shape.layout.isDouble(index)) slots[index].setDouble(node, frame, shape.layout.getDouble(receiver, index))
-            else slots[index].setObject(node, frame, shape.layout.getObject(receiver, index))
+            else slots[index].setObject(node, frame, shape.checkedReference(index, shape.layout.getObject(receiver, index)))
         }
     }
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {

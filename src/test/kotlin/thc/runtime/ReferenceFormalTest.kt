@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
@@ -95,8 +98,8 @@ class ReferenceFormalTest {
         val right = call(p, "box", -7_000_000_003L)
         val f = call(p, "add", 1_001L)
         val g = call(p, "add", 2_002L)
-        val addressA = LiteralAddress.fromHex("41")
-        val addressB = LiteralAddress.fromHex("ff")
+        val addressA = ManagedAddress.fromHex("41")
+        val addressB = ManagedAddress.fromHex("ff")
         fun check(name: String, n: Long) {
             val swapped = n % 2 != 0L
             val x = if (swapped) -7_000_000_003L else 3_000_000_017L
@@ -120,7 +123,7 @@ class ReferenceFormalTest {
     @Test fun checkedReferenceEntryRejectsNullButDoesNotStrictifyLazyData() = eachBackend(fixtures()) { backend, p ->
         val boxed = call(p, "box", Long.MAX_VALUE)
         val fn = call(p, "add", 3_000_000_017L)
-        val literal = LiteralAddress.fromHex("ff")
+        val literal = ManagedAddress.fromHex("ff")
         for ((name, value) in listOf("strictData" to boxed, "strictClosure" to fn, "strictAddress" to literal)) {
             repeat(30) { assertEquals(7L, call(p, name, value, 0L), backend) }
             compile(p.entryTarget(name))

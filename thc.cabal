@@ -19,6 +19,7 @@ extra-source-files:
   test/run_project_integration.py
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
+  test/fixtures/run-pure/app/Answer.hs
   test/fixtures/run-project/cabal.project
   test/fixtures/run-project/dep-data/dep-data.cabal
   test/fixtures/run-project/dep-data/src/Answer.hs
@@ -57,7 +58,8 @@ library
     containers >= 0.8 && < 0.9,
     directory >= 1.3.10 && < 1.4,
     filepath >= 1.5.4 && < 1.6,
-    ghc == 9.14.1
+    ghc == 9.14.1,
+    ghc-boot == 9.14.1
   default-language: Haskell2010
   if flag(development)
     ghc-options: -Werror

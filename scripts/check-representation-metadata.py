@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Check representation and lexical WHNF proofs in actual GHC 9.14.1 Core."""
 import json
 from pathlib import Path

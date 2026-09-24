@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Conservative fast-CI selection, not a replacement for the canonical Build.
 
 The runner must honor mode=full, run both handoff modes, and verify fresh JUnit
@@ -21,6 +24,24 @@ POLICY = ".github/scripts/fast-tests.json"
 CAPABILITIES = "scripts/core-capabilities.json"
 PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
 BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
+POLYGLOT_TEST_ROOT = "src/polyglotTest/"
+POLYGLOT_EXACT_INPUTS = {
+    "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "gradlew",
+    "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
+    "Makefile", "thc.cabal", "cabal.project", "Setup.hs", "compiler/plugin.py",
+    "compiler/toolchain.sh", "scripts/audit-core.py",
+    "scripts/polyglot-demo.sh", "scripts/javascript-demo.sh",
+    "compiler/build.sh", "compiler/export.sh", "compiler/test-javascript-ffi.py",
+    "src/main/kotlin/thc/Language.kt", "src/main/kotlin/thc/Json.kt",
+    "src/main/kotlin/thc/PolyglotDemo.kt",
+    "src/main/java/thc/runtime/Calls.java", "src/main/java/thc/runtime/BytecodeRoot.java",
+    "src/main/java/thc/runtime/RuntimeTypes.java",
+    "src/main/resources/thc/polyglot-abi.json",
+}
+POLYGLOT_INPUT_PREFIXES = (
+    POLYGLOT_TEST_ROOT, "compiler/THC/", "examples/THC/Polyglot",
+    "examples/THC/JavaScript", "src/main/kotlin/thc/runtime/",
+)
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"
 DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+([A-Za-z_]\w*)")
@@ -125,6 +146,17 @@ def python_test(path):
 
 def junit_source(path):
     return path.startswith("src/test/") and path.endswith((".kt", ".java"))
+
+
+def polyglot_junit_source(path):
+    return path.startswith(POLYGLOT_TEST_ROOT) and path.endswith((".kt", ".java"))
+
+
+def polyglot_input(path, leaf_sources):
+    # The common Core loader/lowering can affect JavaScript even when the
+    # normal test selector widens. Reviewed scalar/SIMD leaf files cannot.
+    return path in POLYGLOT_EXACT_INPUTS or (
+        path not in leaf_sources and path.startswith(POLYGLOT_INPUT_PREFIXES))
 
 
 def code_only(source):
@@ -422,9 +454,11 @@ def select(repo, base_ref, head_ref):
     inventory_commit = head or checkout
     records, files, texts, infos = [], {}, {}, {}
     inventory_complete = True
+    polyglot_inventory_complete = True
     if inventory_commit:
         files = tree(repo, inventory_commit)
-    inventory_paths = [path for path in files if junit_source(path) or path in (SCRIPT, POLICY)]
+    inventory_paths = [path for path in files if junit_source(path) or polyglot_junit_source(path)
+                       or path in (SCRIPT, POLICY)]
     blobs = batch_blobs(repo, [files[path][2] for path in inventory_paths
                                if files[path][0] in ("100644", "100755") and files[path][1] == "blob"])
     def text(path):
@@ -437,19 +471,32 @@ def select(repo, base_ref, head_ref):
                 raw = git(repo, "cat-file", "blob", oid)
             texts[path] = raw.decode("utf-8")
         return texts[path]
-    classes = {}
+    classes, polyglot_classes = {}, {}
     python_files = sorted(path for path in files if python_test(path))
     for path in sorted(files):
         if junit_source(path):
             try:
                 infos[path] = junit_info(text(path))
                 for name in infos[path][0]:
-                    if name in classes:
+                    if name in classes or name in polyglot_classes:
                         raise SelectionError("duplicate JUnit class")
                     classes[name] = path
             except (SelectionError, UnicodeError):
                 widen("unresolved-junit-inventory", path)
                 inventory_complete = False
+        elif polyglot_junit_source(path):
+            try:
+                names, unsafe, _ = junit_info(text(path))
+                if unsafe or not names:
+                    raise SelectionError("unresolved optional JUnit source")
+                for name in names:
+                    if name in classes or name in polyglot_classes:
+                        raise SelectionError("duplicate optional JUnit class")
+                    polyglot_classes[name] = path
+            except (SelectionError, UnicodeError):
+                widen("unresolved-polyglot-inventory", path)
+                inventory_complete = False
+                polyglot_inventory_complete = False
     if not classes:
         widen("empty-junit-inventory")
     if not python_files:
@@ -510,6 +557,7 @@ def select(repo, base_ref, head_ref):
     selected_junit = set(policy["smoke"]["junit"] if policy else [])
     selected_python = set(policy["smoke"]["python"] if policy else [])
     affected_junit, affected_python = set(), set()
+    additive_primop_paths = set()
     for record in records:
         if record["status"] not in ("A", "M"):
             for path in record["paths"]:
@@ -550,6 +598,8 @@ def select(repo, base_ref, head_ref):
                         if any(other != path and re.search(r"\b" + re.escape(short) + r"\b", other_info[2])
                                for other, other_info in infos.items()):
                             widen("test-class-used-as-helper", path)
+            elif polyglot_junit_source(path):
+                pass  # Its complete committed inventory runs in the optional JS lane.
             elif python_test(path):
                 affected_python.add(path)
                 try:
@@ -573,6 +623,7 @@ def select(repo, base_ref, head_ref):
                     if not families:
                         widen("shared-primop-registry-change", path)
                     else:
+                        additive_primop_paths.add(path)
                         for family in families:
                             group = policy["primopFamilies"][family]
                             affected_junit.update(group["junit"])
@@ -585,6 +636,14 @@ def select(repo, base_ref, head_ref):
                 widen("unmapped-source-or-configuration", path)
     selected_junit.update(affected_junit)
     selected_python.update(affected_python)
+    changed_paths = {path for record in records for path in record["paths"]}
+    uncertain_diff = (base is None or head is None or head != checkout
+                      or any(reason["code"] == "base-not-ancestor" for reason in reasons))
+    polyglot_required = any(path not in additive_primop_paths
+                            and polyglot_input(path, policy["leafSources"] if policy else {})
+                            for path in changed_paths) or (bool(polyglot_classes) and uncertain_diff)
+    if polyglot_required and not polyglot_classes:
+        widen("empty-polyglot-inventory")
     mode = "full" if reasons else "narrow"
     if mode == "full":
         selected_junit = set(classes)
@@ -595,19 +654,24 @@ def select(repo, base_ref, head_ref):
     # Validate current files too: a missing/symlinked test must never produce a
     # runnable success plan, even when the committed object still exists.
     selected_paths = set(selected_python) | {classes[name] for name in selected_junit}
+    if polyglot_required:
+        selected_paths.update(polyglot_classes.values())
     existing = all((repo / path).is_file() and not (repo / path).is_symlink() for path in selected_paths)
     if not existing:
         widen("selected-test-file-missing-or-symlinked")
         mode = "full"
-    return dict(schema=1, mode=mode, runnable=bool(selected_junit and selected_python and existing),
+    return dict(schema=1, mode=mode,
+                runnable=bool(selected_junit and selected_python and existing
+                              and (not polyglot_required or (polyglot_classes and polyglot_inventory_complete))),
                 base=base, head=head, requestedBase=base_ref, requestedHead=head_ref,
                 inventoryCommit=inventory_commit, inventoryComplete=inventory_complete,
-                changedPaths=sorted({path for record in records for path in record["paths"]}),
+                changedPaths=sorted(changed_paths),
                 changes=records, reasons=sorted(reasons, key=lambda r: (r["code"], r.get("path", ""))),
                 policySha256=policy_hash,
                 affected=dict(junit=sorted(affected_junit), python=sorted(affected_python)),
                 junit=dict(patterns=["*"] if mode == "full" else sorted(selected_junit),
                            classes=sorted(selected_junit), sourceFiles=sorted({classes[name] for name in selected_junit}), count=len(selected_junit)),
+                polyglot=dict(required=polyglot_required, classes=sorted(polyglot_classes) if polyglot_required else []),
                 python=dict(commands=[["python3", path] for path in sorted(selected_python)],
                             files=sorted(selected_python), count=len(selected_python)))
 

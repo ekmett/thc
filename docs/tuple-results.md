@@ -4,6 +4,9 @@ Both execution backends support exact unboxed tuple results from functions with
 scalar/reference inputs or [typed tuple inputs](tuple-inputs.md). This includes empty and singleton
 tuples, nested tuples, concrete Long/Float/Double fields, lazy lifted references, boxed unlifted reference fields,
 non-tail calls, tail forwarding, scalar PAP prefixes and overapplication.
+An exact evaluated `AddrRep` leaf uses a checked `ManagedAddress` reference
+field, with carrier checks on construction, copy and consumption. This does
+not admit native pointers or address-bearing unboxed sums.
 Saturated [tuple arithmetic primitives](tuple-arithmetic.md) write directly to
 typed local destinations without using the function-return carrier.
 

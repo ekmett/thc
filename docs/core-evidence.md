@@ -89,23 +89,27 @@ Constructor metadata also carries `fieldTypes`, aligned with `fieldReps`, `stric
 
 An evaluated data field can be a final Java `DataValue` field, and an evaluated function field can be a final `Closure` field. A lazy field of either Haskell type still uses `Object`, because it can contain a thunk. A strict polymorphic field also stays `Object`: WHNF alone does not identify its carrier. Thus `Map`'s strict left and right children can have concrete reference fields while its polymorphic key and value retain their general representation. The existing primitive size field stays `long`.
 
-A constructor `AddrRep` field uses a final `LiteralAddress` property, including
+A constructor `AddrRep` field uses a final `ManagedAddress` property, including
 older records that retain `fieldReps` but omit `fieldTypes`. Retained exact field
 types must identify an evaluated, unlifted address. Allocation rejects numeric,
-null and foreign carriers; the supported value is an immutable managed GHC string
-literal plus a checked offset, never a native pointer. Lazy neighboring fields
-remain untouched. Heap-field capabilities are separate from aggregate-leaf
-capabilities, so this does not enable address-containing tuple or sum results.
+null and foreign carriers. Literal addresses retain immutable GHC string bytes;
+mutable addresses retain the original managed byte-array backing. Both use checked
+offsets and remain distinct from native pointers. Lazy neighboring fields
+remain untouched. An exact evaluated `AddrRep` leaf is also accepted in an
+unboxed tuple. Its physical result and typed-input field is a managed reference;
+tuple construction and consumption reject null, numeric, and foreign carriers.
+Unboxed sums and native pointers remain outside this capability.
 
 [AddressFieldAudit.hs](../compiler/test-fixtures/AddressFieldAudit.hs) and
 [its preparation](../scripts/prepare-address-fields.py) retain opaque constructor
 calls, cases, returned records and captured addresses before and after Tidy.
-Two hundred native rows agree with an independent bounded byte-index model,
+Two hundred twenty-five native rows agree with an independent bounded byte-index model,
 including high bytes, embedded/final NUL and negative offsets within the literal.
 Natural optimized examples are separate; GHC eta-expands the source constructor
 partial application, while a synthetic runtime control checks the actual PAP.
 Both backends check each compiled row's guest entry and host/original/active
 target validity with inlining enabled and disabled. Address aggregate frontiers
+now include an opaque `(# Addr#, Int# #)` producer and consumer; address sums
 remain rejected. This removes the `TrNameS` field obstacle in the genuine
 `arrEleBottom` source chain; its Typeable/unsafe-equality globals and `tagToEnum#`
 frontier still prevent strict acceptance.
@@ -118,7 +122,7 @@ Shared carrier classes retain an explicit layout field and comparison; Truffle's
 array strategy can share one class between shapes.
 
 The same reference proof is restored at function entry and after self, ancestor
-and local-join transfers. A checked `DataValue`, `Closure` or `LiteralAddress`
+and local-join transfers. A checked `DataValue`, `Closure` or `ManagedAddress`
 cast gives Graal a concrete reference type before the value reaches its local
 slot. This matters when the value arrived through the generic call packet. The
 cast permits generated subclasses and rejects null; it does not assert an exact

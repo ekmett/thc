@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Export exact GHC tuple arithmetic, compare native fields with unbounded integer math."""
 import argparse
 import ast

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
@@ -66,7 +69,7 @@ class ReferenceCaptureTest {
         val constructor = DataLayout(language, "Box", "Box", arrayOf("IntRep"))
         val boxed = constructor.create(arrayOf(3_000_000_017L))
         val function = Closure(null, arity = 1, target = target)
-        val literal = LiteralAddress.fromHex("41ff")
+        val literal = ManagedAddress.fromHex("41ff")
         val thunk = Thunk(target, null)
         val cell = RecCell()
         val values = arrayOf<Any?>(boxed, function, literal, Long.MIN_VALUE, thunk, cell)
@@ -74,7 +77,7 @@ class ReferenceCaptureTest {
         // the exact reference proof supersedes that adaptive representation.
         val captures = CaptureLayout(language, booleanArrayOf(true, true, false, true, false, false),
             booleanArrayOf(false, false, false, true, false, false),
-            arrayOf(DataValue::class.java, Closure::class.java, LiteralAddress::class.java, null, null, null))
+            arrayOf(DataValue::class.java, Closure::class.java, ManagedAddress::class.java, null, null, null))
         val layout = FrameLayout()
         val slots = IntArray(values.size) { layout.bind("capture$it") }
         val descriptor = layout.build()
@@ -91,7 +94,7 @@ class ReferenceCaptureTest {
                     assertSame(values[index], FrameAccess.read(restored, slots[index]))
                 }
             }
-            assertEquals(255L, (environment.getObject(2) as LiteralAddress).indexChar(1))
+            assertEquals(255L, (environment.getObject(2) as ManagedAddress).indexChar(1))
             assertFalse(cell.initialized)
             assertEquals(0, thunk.state)
         }
@@ -101,7 +104,7 @@ class ReferenceCaptureTest {
         }
     }
 
-    @Test fun compiledEscapedClosuresKeepDataFunctionsAndLiteralAddressesPrecise() {
+    @Test fun compiledEscapedClosuresKeepDataFunctionsAndManagedAddressesPrecise() {
         val add = lambda(listOf(parameter("extra")), primitive("+#", variable("input"), variable("extra")))
         val body = primitive("+#", unbox(variable("tree")), primitive("+#",
             apply(variable("add"), listOf(variable("index"))),

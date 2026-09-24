@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Compare executable Core after lexical alpha renaming, ignoring source/debug text.
 
 Accept module JSON, a directory of modules, or a modules.txt manifest. Runtime

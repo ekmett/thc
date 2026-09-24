@@ -1,8 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.CallTarget
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.dsl.Bind
 import com.oracle.truffle.api.dsl.Cached
@@ -20,6 +24,7 @@ import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RepeatingNode
 import com.oracle.truffle.api.profiles.BranchProfile
 import com.oracle.truffle.api.profiles.InlinedConditionProfile
+import java.util.concurrent.Callable
 
 /* Adapted from Cadenza's dispatch.kt, tail_calls.kt and data/Closure.kt.
  * Keep the actual DSL specialization structure, closure/PAP convention and
@@ -150,13 +155,16 @@ internal abstract class Dispatch(
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1)
     var evaluatedArguments: BooleanArray = booleanArrayOf()
     @JvmField @CompilerDirectives.CompilationFinal var argumentLayout: ArgumentLayout? = null
-    @Child private var typed: InputDispatch? = null
+    @Child @Volatile private var typed: InputDispatch? = null
     private fun typed(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any? {
-        if (typed == null) {
+        val child = typed ?: run {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            typed = insert(InputDispatch(ScalarArrayInputSource(argumentLayout), argsSize, tailCall, metrics))
+            atomic(Callable {
+                typed ?: insert(InputDispatch(ScalarArrayInputSource(argumentLayout), argsSize, tailCall, metrics))
+                    .also { typed = it }
+            })
         }
-        return typed!!.execute(frame, function, arguments)
+        return child.execute(frame, function, arguments)
     }
     abstract fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any?
 
@@ -258,6 +266,7 @@ internal abstract class GenericDispatch : Node() {
             var function = initial
             var offset = 0
             while (true) {
+                TruffleSafepoint.poll(node)
                 val remaining = logicalCount - offset
                 val physicalOffset = ArgumentLayout.offset(layout, offset)
                 ArgumentLayout.validate(function, layout, offset, minOf(function.arity, remaining))

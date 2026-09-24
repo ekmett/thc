@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Coverage reports must not silently accept a false capability declaration."""
 import importlib.util
 import copy
@@ -67,6 +70,15 @@ class PrimopChecklistTest(unittest.TestCase):
         self.assertEqual('partial', rows['packInt64X2#']['status'])
         self.assertEqual('Managed literal addresses only', rows['plusAddr#']['scope'])
         self.assertEqual('supported', rows['+#']['status'])
+
+    def test_managed_mvars_remain_partial_without_claiming_a_guest_scheduler(self):
+        cap = dict(primitives={'newMVar#': 1}, managedMVarPrimitives={
+            'newMVar#': dict(arguments=['state'], result=['state', 'mvar'])})
+        data = coverage.report([('newMVar#', '1', 'State# s -> (# State# s, MVar# s a #)')], cap['primitives'])
+        scalars = dict(schema=1, ghc='9.14.1', targetWordSize=64, primitives={})
+        row = coverage.classify(data, cap, scalars)['primitives'][0]
+        self.assertEqual('partial', row['status'])
+        self.assertEqual('Managed blocking cells; no guest scheduler or async exceptions', row['scope'])
 
     def test_unadvertised_is_missing_and_new_advertisements_default_to_partial(self):
         cap = copy.deepcopy(self.capability)

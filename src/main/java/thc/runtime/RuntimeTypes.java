@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime;
 
 import com.oracle.truffle.api.dsl.TypeCast;
@@ -17,7 +20,7 @@ import kotlin.Unit;
         boolean.class,
         Closure.class,
         DataValue.class,
-        LiteralAddress.class,
+        ManagedAddress.class,
         Thunk.class,
         Unit.class
 })

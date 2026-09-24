@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE CPP, MagicHash, NoImplicitPrelude, ScopedTypeVariables, TypeApplications, UnboxedTuples #-}
 {-# OPTIONS_GHC -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion -fno-full-laziness #-}
 -- Ordinary strict calls exercise caller demand without requesting an entry ABI.

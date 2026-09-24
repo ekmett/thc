@@ -53,6 +53,7 @@ class FastSelectionTest(unittest.TestCase):
             "src/test/kotlin/example/SmokeTest.kt": kotlin("SmokeTest"),
             "src/test/kotlin/example/LeafTest.kt": kotlin("LeafTest"),
             "src/test/kotlin/example/OtherTest.kt": kotlin("OtherTest"),
+            "src/polyglotTest/kotlin/example/PolyglotTest.kt": kotlin("PolyglotTest"),
             "src/main/kotlin/Leaf.kt": "package example\nfun leaf() = 1\n",
             "src/main/kotlin/Critical.kt": "package example\nclass Critical\n",
             "scripts/test-smoke.py": PYTHON_TEST,
@@ -93,6 +94,7 @@ class FastSelectionTest(unittest.TestCase):
 
     def test_no_diff_and_documentation_keep_nonempty_smoke(self):
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertEqual({"required": False, "classes": []}, self.plan()["polyglot"])
         self.write("README.md", "New documentation\n")
         head = self.commit()
         result = self.plan()
@@ -103,6 +105,38 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["README.md"], result["changedPaths"])
         self.assertRegex(result["policySha256"], "^[0-9a-f]{64}$")
         self.assertEqual(result, self.plan())
+
+    def test_polyglot_changes_select_actual_optional_class_without_all_regular_tests(self):
+        path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
+        self.write(path, kotlin("PolyglotTest", "@Test fun changed() {}"))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual({"required": True, "classes": ["example.PolyglotTest"]}, result["polyglot"])
+        self.assertEqual(["example.SmokeTest"], result["junit"]["classes"])
+
+    def test_shared_core_and_frontend_changes_require_polyglot_but_leaf_does_not(self):
+        for path in ("src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+                     "compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
+                     "scripts/audit-core.py", "build.gradle.kts", "Makefile",
+                     "compiler/plugin.py", "gradlew", "gradle/wrapper/gradle-wrapper.properties"):
+            with self.subTest(path=path):
+                self.write(path, "changed\n")
+                self.commit()
+                self.assertTrue(self.plan()["polyglot"]["required"])
+                self.base = self.git("rev-parse", "HEAD")
+        self.write("src/main/kotlin/Leaf.kt", "package example\nfun leaf() = 2\n")
+        self.commit()
+        self.assertFalse(self.plan()["polyglot"]["required"])
+
+    def test_missing_optional_class_cannot_pass_a_required_lane(self):
+        path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
+        self.git("rm", path)
+        self.commit()
+        result = self.plan()
+        self.assertTrue(result["polyglot"]["required"])
+        self.assertFalse(result["runnable"])
+        self.assertIn("empty-polyglot-inventory", {reason["code"] for reason in result["reasons"]})
 
     def test_changed_test_is_never_removed_for_smoke_budget(self):
         self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", "@Test fun expensiveNativeCampaign() {}"))
@@ -212,9 +246,11 @@ private val text = "class FakeString { @Test }"
         self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffL\n    else ->'))
         self.commit()
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertFalse(self.plan()["polyglot"]["required"])
         self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffffL\n    else ->'))
         self.commit()
         self.full("shared-primop-registry-change")
+        self.assertTrue(self.plan()["polyglot"]["required"])
 
     def test_new_primitive_dispatch_arms_are_scoped_but_existing_arm_edits_widen(self):
         path = select.PROGRAM
@@ -228,6 +264,7 @@ private val text = "class FakeString { @Test }"
         self.write(path, after)
         self.commit()
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertFalse(self.plan()["polyglot"]["required"])
         self.write(path, after.replace('"plusInt#" -> x + y', '"plusInt#" -> x - y'))
         self.commit()
         self.full("shared-primop-registry-change")
@@ -243,6 +280,7 @@ private val text = "class FakeString { @Test }"
         self.write(path, after)
         self.commit()
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertFalse(self.plan()["polyglot"]["required"])
         self.write(path, after.replace('"PopulationCountWidth"\n    else', '"NewUnreviewedOperation"\n    else'))
         self.commit()
         self.full("shared-primop-registry-change")
@@ -471,6 +509,46 @@ private val text = "class FakeString { @Test }"
                 self.assertEqual(sorted(group["python"]), result["affected"]["python"])
                 previous = current
 
+    def test_warning_only_fixture_changes_select_pr80_consumers(self):
+        policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        self.write(select.POLICY, json.dumps(policy))
+        groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
+                  *policy["primopFamilies"].values(), *policy["automation"].values()]
+        for name in {name for group in groups for name in group["junit"]}:
+            package, short = name.rsplit(".", 1)
+            self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
+                       kotlin(short).replace("package example", "package " + package))
+        for path in {path for group in groups for path in group["python"]}:
+            self.write(path, PYTHON_TEST)
+        for path in policy["leafSources"]:
+            self.write(path, "// synthetic production source\n")
+        changed = ["compiler/test-fixtures/CBVCoercionAudit.hs",
+                   "compiler/test-fixtures/DataToTagAudit.hs",
+                   "compiler/test-fixtures/MutableByteArraySizeAudit.hs",
+                   "examples/THC/Unboxed8Arrays.hs",
+                   "examples/THC/Unboxed16Arrays.hs",
+                   "examples/THC/Unboxed32Arrays.hs"]
+        for path in changed:
+            self.write(path, "fixture before\n")
+        base = self.commit()
+        for path in changed:
+            self.write(path, "fixture after\n")
+        self.commit()
+        result = self.plan(base=base)
+        self.assertEqual("narrow", result["mode"], result["reasons"])
+        self.assertEqual([], result["reasons"])
+        self.assertEqual(sorted(changed), result["changedPaths"])
+        expected = {"thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest",
+                    "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest",
+                    "thc.runtime.DataToTagTest", "thc.runtime.MutableByteArraySizeTest",
+                    "thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest",
+                    "thc.runtime.Int32ArrayNativeTest"}
+        self.assertEqual(sorted(expected), result["affected"]["junit"])
+        self.assertEqual(12, result["junit"]["count"])  # Nine affected + three smoke.
+        self.assertEqual(sorted({"scripts/test-core-data-tags.py", "scripts/test-mutable-bytearray-size.py",
+                                 "scripts/test-int8-array-model.py", "scripts/test-int16-array-model.py",
+                                 "scripts/test-int32-array-model.py"}), result["affected"]["python"])
+
 
 class PrimitiveFamilyPolicyTest(unittest.TestCase):
     @classmethod
@@ -505,16 +583,24 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         owners = self.policy["owners"]
         native_only = {"examples/NativeOracle.hs", "examples/THC/MapWorkload.hs",
                        "scripts/native-oracle.sh"}
+        source_groups = {}
+        for group in fixture["groups"].values():
+            for path in group["sources"]:
+                source_groups.setdefault(path, set()).update(group["junit"])
         for name, group in fixture["groups"].items():
             for path in group["sources"]:
                 with self.subTest(group=name, path=path):
+                    self.assertTrue((self.root / path).is_file(), path)
+                    if path not in owners:
+                        # A transitive source without a narrow owner still widens
+                        # to the complete suite when changed.
+                        continue
                     actual = set(owners[path]["junit"])
+                    self.assertTrue(actual & set(group["junit"]))
+                    self.assertLessEqual(actual, source_groups[path])
                     if path in native_only:
                         self.assertEqual("runtime-core-native", name)
                         self.assertLessEqual({"thc.RuntimeTest", "thc.BytecodeBackendTest"}, actual)
-                        self.assertLessEqual(actual, set(group["junit"]))
-                    else:
-                        self.assertEqual(set(group["junit"]), actual)
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))

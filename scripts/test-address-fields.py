@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Heap AddrRep support must not broaden aggregate result capabilities."""
 import copy
 import importlib.util
@@ -27,10 +30,9 @@ def fixture(typed=True):
 def report(module): return audit.Audit([('fixture',module)],CAP).run(['entry'])
 
 class AddressFields(unittest.TestCase):
-    def test_heap_capability_is_separate_from_aggregate_leaf_capability(self):
+    def test_address_capability_covers_heap_and_tuple_leaves(self):
         self.assertIn('AddrRep',CAP['fieldRepresentations'])
-        self.assertNotIn('AddrRep',CAP['aggregateFieldRepresentations'])
-        self.assertEqual(set(CAP['fieldRepresentations'])-set(CAP['aggregateFieldRepresentations']),{'AddrRep'})
+        self.assertIn('AddrRep',CAP['aggregateFieldRepresentations'])
 
     def test_typed_and_legacy_address_fields_are_accepted(self):
         for typed in (False,True):
@@ -45,11 +47,15 @@ class AddressFields(unittest.TestCase):
             module=fixture();module['constructors'][0]['fieldTypes']=[bad]
             self.assertIn('constructor-field-representation',{i['code'] for i in report(module)['issues']})
 
-    def test_address_tuple_and_nested_tuple_are_still_rejected(self):
+    def test_exact_evaluated_address_tuple_and_nested_tuple_are_accepted(self):
         tuple_rep=dict(kind='unknown',aggregate='unboxed-tuple',components=[ADDRESS],primReps=['AddrRep'],evaluated=True)
         for rep in (tuple_rep,dict(tuple_rep,components=[tuple_rep])):
             instance=audit.Audit([],CAP);instance.representation(rep,None,'/rep')
-            self.assertIn('aggregate-representation',{i['code'] for i in instance.issues})
+            self.assertEqual([],instance.issues)
+        for bad in (dict(ADDRESS,evaluated=False),dict(ADDRESS,kind='unknown'),LONG):
+            rep=dict(tuple_rep,components=[bad])
+            instance=audit.Audit([],CAP);instance.representation(rep,None,'/rep')
+            self.assertTrue(instance.issues)
 
     def test_address_sum_is_still_rejected(self):
         instance=audit.Audit([],CAP)

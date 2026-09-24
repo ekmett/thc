@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Fresh native/model/Core evidence for six bounded Int32X4 ByteArray intrinsics."""
 import argparse
 from collections import Counter

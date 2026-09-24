@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
@@ -151,7 +154,7 @@ internal abstract class Expr : Node() {
     open fun executeDataValue(frame: VirtualFrame): DataValue = RuntimeTypesGen.expectDataValue(execute(frame))
 
     @Throws(UnexpectedResultException::class)
-    open fun executeAddress(frame: VirtualFrame): LiteralAddress = RuntimeTypesGen.expectLiteralAddress(execute(frame))
+    open fun executeAddress(frame: VirtualFrame): ManagedAddress = RuntimeTypesGen.expectManagedAddress(execute(frame))
 
     /** Primitive consumers reject an unexpected value; forwarding nodes preserve it. */
     fun executeRequiredLong(frame: VirtualFrame): Long = try { executeLong(frame) }
@@ -163,13 +166,13 @@ internal abstract class Expr : Node() {
     fun executeRequiredDataValue(frame: VirtualFrame): DataValue = try { executeDataValue(frame) }
     catch (_: UnexpectedResultException) { fault("Expected constructor value") }
 
-    fun executeRequiredAddress(frame: VirtualFrame): LiteralAddress = try { executeAddress(frame) }
+    fun executeRequiredAddress(frame: VirtualFrame): ManagedAddress = try { executeAddress(frame) }
     catch (_: UnexpectedResultException) { fault("Expected a managed literal Addr#") }
 }
 private class Literal(private val value: Any?) : Expr() {
     init { representation = CoreRepresentation(when (value) {
         is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
-        is LiteralAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
+        is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
     }, evaluated = true) }
     override fun execute(frame: VirtualFrame) = value
     override fun executeLong(frame: VirtualFrame) = RuntimeTypesGen.expectLong(value)
@@ -199,9 +202,9 @@ internal class LocalRead(private val slot: Int, private val cell: Boolean = true
         if (!cell && representation.evaluated && representation.kind == CoreKind.CLOSURE)
             RuntimeTypesGen.expectClosure(frame.getObject(slot)) else super.executeClosure(frame)
 
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress =
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress =
         if (!cell && representation.evaluated && representation.kind == CoreKind.ADDRESS)
-            RuntimeTypesGen.expectLiteralAddress(frame.getObject(slot)) else super.executeAddress(frame)
+            RuntimeTypesGen.expectManagedAddress(frame.getObject(slot)) else super.executeAddress(frame)
 
     /** Recursive captures retain their cell identity until the whole group is published. */
     fun writeForced(frame: VirtualFrame, original: Thunk, result: Any?) {
@@ -344,15 +347,15 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         }
     }
     @CompilationFinal private var genericAddress = false
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress {
         if (value.representation.evaluated || value.representation.isLong) return value.executeAddress(frame)
-        if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectLiteralAddress(forceResult(frame, value.execute(frame)))
+        if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectManagedAddress(forceResult(frame, value.execute(frame)))
         return try { value.executeAddress(frame) }
         catch (unexpected: UnexpectedResultException) {
             // The exception already invalidated compiled code. Widen once, and
             // force its saved result without evaluating the child a second time.
             genericAddress = true
-            RuntimeTypesGen.expectLiteralAddress(forceResult(frame, unexpected.result))
+            RuntimeTypesGen.expectManagedAddress(forceResult(frame, unexpected.result))
         }
     }
 }
@@ -426,7 +429,7 @@ private class Let(@field:CompilationFinal(dimensions = 1) private val slots: Int
         initialize(frame)
         return body.executeDataValue(frame)
     }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress {
         initialize(frame)
         return body.executeAddress(frame)
     }
@@ -574,7 +577,7 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         return (fallback ?: fault("Non-exhaustive Core case")).body.executeDataValue(frame)
     }
 
-    @ExplodeLoop override fun executeAddress(frame: VirtualFrame): LiteralAddress {
+    @ExplodeLoop override fun executeAddress(frame: VirtualFrame): ManagedAddress {
         prepare(frame)
         var fallback: Alternative? = null
         for (alt in alternatives) {
@@ -626,7 +629,7 @@ private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alte
     override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return alternatives.last().body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return alternatives.last().body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return alternatives.last().body.executeDataValue(frame) }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
 }
 private class Construct(private val layout: DataLayout,
                         @field:Children private var fields: Array<Expr>) : Expr() {
@@ -1074,6 +1077,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
+        CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -1244,7 +1248,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "float" -> value.toFloat()
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
-        "string-bytes" -> LiteralAddress.fromHex(value)
+        "string-bytes" -> ManagedAddress.fromHex(value)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -1300,7 +1304,22 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
-            if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
+            val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            val javascript = CoreJavaScript.validate(expr, defined)
+            val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
+            val polyglot = if (javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (md5 != null) {
+                CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                Md5ForeignExpression(md5, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (javascript != null) {
+                JavaScriptExpression(javascript, args.map { argument(it, scope, false) }.toTypedArray())
+                    .proven(tupleProof.copy(evaluated = true))
+            } else if (polyglot != null) {
+                PolyglotExpression(polyglot, args.mapIndexed { index, value ->
+                    argument(value, scope, flags[index] as Boolean)
+                }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
                 if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
                 val operand = compile(args[0], scope, false)
                 val ids = CoreEnums.validate(expr, operand.representation, constructors)
@@ -1316,6 +1335,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreVectors.validateFlags(flags)
                 val operands = args.map { compile(it, scope, false) }.toTypedArray()
                 when (name) {
+                    in GeneratedVectors.operations -> GeneratedVectors.expression(name, operands) { count ->
+                        IntArray(count) { scope.layout.bind("<vector lane $it>") }
+                    }
                     "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })
                     "unpackInt64X2#" -> VectorUnpack(operands[0])
                     "packInt32X4#" -> Vector32Pack(operands[0], IntArray(4) { scope.layout.bind("<vector lane $it>") })
@@ -1344,6 +1366,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     in CoreVectors.operationsWord32 -> VectorWord32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
+            } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
+                val operation = MVarOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                operation.validateBindings(args.map(CoreRepresentations::expression), args.map {
+                    if (it[0] == "var") scope.locals[it[1]]?.proof ?: globalProofs[it[1]] else null
+                })
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.representation }, flags, tupleProof)
+                mVarExpression(operation, tupleProof, operands.toTypedArray())
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1358,6 +1389,21 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+            } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
+                CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
+                    args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
+                val kept = argument(args[0], scope, flags[0] as Boolean)
+                val state = compile(args[1], scope, false)
+                val function = compile(args[2], scope, false)
+                val stateArgument = arrayOf<Expr>(Literal(Unit))
+                val action = if (tupleProof.isAggregate) TupleApplication(language as thc.Language,
+                    TupleShape(tupleProof, language), function, stateArgument, false, metrics)
+                else Application(function, stateArgument, false, metrics)
+                KeepAliveExpression(kept, state, action, tupleProof)
+            } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
+                val operation = PinnedMemoryOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1703,7 +1749,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         "plusAddr#", "indexCharOffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
-            if (name == "plusAddr#") PlusLiteralAddress(args[0], args[1]) else IndexLiteralChar(args[0], args[1])
+            if (name == "plusAddr#") PlusManagedAddress(args[0], args[1]) else IndexLiteralChar(args[0], args[1])
         }
         else -> Primitive(name, args)
     }

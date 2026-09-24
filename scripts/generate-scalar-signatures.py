@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Generate/check the shared scalar proof contract using GHC 9.14.1 type APIs."""
 import argparse
 import ast

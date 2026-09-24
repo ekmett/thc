@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Synthetic reader mutations only: these tests are not guest/compiler evidence."""
 from collections import Counter
 import copy
