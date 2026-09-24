@@ -22,7 +22,8 @@ def mathematical(name,x):
 def rows():return [(n,x,mathematical(n,x)) for n in ENTRIES+FRONTIERS for x in inputs()]
 def verify(text):
     actual=[(n,int(x),int(y)) for n,x,y in (line.split('\t') for line in text.splitlines())]
-    assert actual==rows(),'Native/model mismatch, missing, duplicate or reordered array-slice rows'
+    if actual!=rows():
+        raise AssertionError('Native/model mismatch, missing, duplicate or reordered array-slice rows')
     return actual
 def main():
     OUT.mkdir(parents=True,exist_ok=True);(OUT/'manifest.json').unlink(missing_ok=True)

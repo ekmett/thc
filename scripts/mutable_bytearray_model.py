@@ -50,5 +50,6 @@ def rows(): return [(name,x,code,mathematical(name,x,code)) for name in ENTRIES 
 
 def verify(text):
     actual=[(name,int(x),int(code),int(value)) for name,x,code,value in (line.split('\t') for line in text.splitlines())]
-    assert actual==rows(),'Mutable ByteArray native/model mismatch or incomplete/reordered rows'
+    if actual!=rows():
+        raise AssertionError('Mutable ByteArray native/model mismatch or incomplete/reordered rows')
     return actual
