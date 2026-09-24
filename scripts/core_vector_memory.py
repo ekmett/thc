@@ -90,7 +90,7 @@ def read_case(expr, constructors):
     metadata = expr[4]
     require(isinstance(metadata, dict), 'case metadata')
     binder = metadata.get('binder')
-    require(isinstance(binder, dict) and binder.get('id') == whole and binder.get('lifted') is False and
+    require(isinstance(binder, dict) and binder.get('id') == whole and binder.get('lifted') is False and binder.get('coercion') is False and
             'joinValueArity' not in binder, 'whole-tuple binder identity/levity')
     read_result(binder.get('rep'), True)
     alternatives = expr[3]
@@ -107,7 +107,7 @@ def read_case(expr, constructors):
     records = alternative[4].get('binders') if isinstance(alternative[4], dict) else None
     require(isinstance(records, list) and len(records) == 2, 'ordered pattern metadata')
     for identity, wanted, record in zip(ids, [STATE, VECTOR32_REP], records):
-        require(isinstance(record, dict) and record.get('id') == identity and record.get('lifted') is False and
+        require(isinstance(record, dict) and record.get('id') == identity and record.get('lifted') is False and record.get('coercion') is False and
                 'joinValueArity' not in record and exact(wanted, record.get('rep')) and
                 record['rep']['evaluated'] is True, 'pattern binder representation')
     body = alternative[3]

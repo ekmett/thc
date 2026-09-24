@@ -87,7 +87,7 @@ internal object CoreVectorMemory {
         val whole = expr.getOrNull(2) as? String ?: throw RuntimeFault("Missing local vector read case binder")
         val metadata = expr.getOrNull(4) as? Map<*, *> ?: throw RuntimeFault("Missing local vector read metadata")
         val binder = metadata["binder"] as? Map<*, *> ?: throw RuntimeFault("Missing local vector read binder metadata")
-        requireProof(binder["id"] == whole && binder["lifted"] == false && "joinValueArity" !in binder,
+        requireProof(binder["id"] == whole && binder["lifted"] == false && binder["coercion"] == false && "joinValueArity" !in binder,
             "whole-tuple binder identity/levity")
         readResult(binder["rep"], true)
         val alternatives = expr.getOrNull(3) as? List<*> ?: throw RuntimeFault("Missing local vector read alternatives")
@@ -103,7 +103,7 @@ internal object CoreVectorMemory {
         requireProof(records?.size == 2, "missing ordered pattern metadata")
         listOf(stateProof, CoreVectors.proof32).forEachIndexed { i, expected ->
             val record = records!![i] as? Map<*, *> ?: throw RuntimeFault("Invalid local vector read pattern metadata")
-            requireProof(record["id"] == ids[i] && record["lifted"] == false && "joinValueArity" !in record &&
+            requireProof(record["id"] == ids[i] && record["lifted"] == false && record["coercion"] == false && "joinValueArity" !in record &&
                 exact(expected, CoreRepresentations.parse(record["rep"])) &&
                 (record["rep"] as? Map<*, *>)?.get("evaluated") == true, "pattern binder representation")
         }

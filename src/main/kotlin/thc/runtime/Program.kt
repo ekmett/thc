@@ -1037,8 +1037,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
         if (!diagnosticUnsupported) {
-            CoreRepresentations.validateAggregates(bindings)
-            CoreInputCalls.validate(bindings)
+            CoreRepresentations.validateAggregates(bindings, constructors)
+            CoreInputCalls.validate(bindings, constructors)
         }
         val scope = Scope(FrameLayout())
         val initializers = bindings.map { binding ->
@@ -1292,6 +1292,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 arrayExpression(operation, tupleProof,
                     args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
+            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
+                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1373,6 +1377,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         "case" -> {
+            CoreVectorMemory.readCase(expr, constructors)?.let { compileVectorReadCase(it, scope, tail) } ?: run {
             val scrutineeExpr = expr[1] as List<Any?>
             val scrutinee = compile(scrutineeExpr, scope, false)
             val local = scope.child()
@@ -1423,6 +1428,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CaseCategory.GENERIC -> Case(scrutinee, binder, alternatives, metrics)
             }
             }
+            }
         }
         "con" -> {
             val id = expr[1] as String; val arity = (expr[2] as Number).toInt()
@@ -1440,6 +1446,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         "prim" -> throw UnsupportedCore("Unsaturated primitive ${expr[1]}")
         else -> throw UnsupportedCore("Unsupported Core node ${expr[0]}")
+    }
+    private fun compileVectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expr {
+        val local = scope.child()
+        local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
+        val vector = local.bind(read.vectorBinder, false, CoreVectors.proof32)
+        val operands = read.arguments.map { compile(it, scope, false) }.toTypedArray()
+        val value = VectorByteArrayExpression(read.operation, operands).located(currentSource)
+        val body = compile(read.body, local, tail)
+        // The whole tuple binder is deliberately absent from local scope.
+        // Store the vector only after all operand/State checks and the load finish.
+        return Let(intArrayOf(vector.slot), arrayOf(value), booleanArrayOf(false), body, false)
     }
     private fun compileTupleCase(expr: List<Any?>, scrutinee: Expr, proof: CoreRepresentation, local: Scope, tail: Boolean): Expr {
         val shape = TupleShape(proof, language as thc.Language)

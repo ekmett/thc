@@ -22,7 +22,7 @@ def var(identity, proof):
 
 
 def binder(identity, proof):
-    return dict(id=identity, lifted=False, rep=copy.deepcopy(proof))
+    return dict(id=identity, lifted=False, coercion=False, rep=copy.deepcopy(proof))
 
 
 def call(name, args, proof):
@@ -89,6 +89,15 @@ class VectorMemoryProofTest(unittest.TestCase):
             self.assertTrue(body[4]['binder']['rep']['evaluated'])
             self.assertIsNotNone(proof_error(app[6]['rep']))
             self.assertIsNotNone(read_case(body, {c['id']: c for c in module['constructors']}))
+
+    def test_read_binders_are_values_not_coercions(self):
+        for name in READS:
+            for site in range(3):
+                for value in (True, None, 0, 'false'):
+                    module, _, body = fixture(name)
+                    record = body[4]['binder'] if site == 0 else body[3][0][4]['binders'][site - 1]
+                    record['coercion'] = value
+                    self.assertFalse(check(module)['accepted'], (name, site, value))
 
     def test_read_aggregate_mutations_on_both_exact_sites(self):
         mutations = [
