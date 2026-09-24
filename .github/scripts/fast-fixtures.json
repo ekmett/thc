@@ -146,7 +146,13 @@
       "junit": ["thc.runtime.MutableByteArraySizeTest"],
       "commands": [{"argv": ["python3", "scripts/prepare-mutable-bytearray-size.py"]}],
       "outputs": ["build/mutable-bytearray-size"],
-      "sources": ["scripts/prepare-mutable-bytearray-size.py", "scripts/mutable_bytearray_size_model.py", "compiler/test-fixtures/MutableByteArraySizeAudit.hs"]
+      "sources": ["scripts/prepare-mutable-bytearray-size.py", "scripts/primop-coverage.py", "compiler/test-fixtures/MutableByteArraySizeAudit.hs", "compiler/test-fixtures/MutableByteArraySizeNative.hs", "compiler/test-fixtures/ByteArrayFixtureInputs.hs"]
+    },
+    "resize-bytearrays": {
+      "junit": ["thc.runtime.ResizeByteArrayTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-resize-bytearrays.py"]}],
+      "outputs": ["build/resize-bytearrays"],
+      "sources": ["scripts/prepare-resize-bytearrays.py", "scripts/primop-coverage.py", "compiler/test-fixtures/ResizeByteArrayAudit.hs", "compiler/test-fixtures/ResizeByteArrayNative.hs", "compiler/test-fixtures/ByteArrayFixtureInputs.hs"]
     },
     "int8-arrays": {
       "junit": ["thc.runtime.Int8ArrayNativeTest"],

@@ -559,7 +559,7 @@ private val text = "class FakeString { @Test }"
                     "thc.runtime.Int32ArrayNativeTest"}
         self.assertEqual(sorted(expected), result["affected"]["junit"])
         self.assertEqual(12, result["junit"]["count"])  # Nine affected + three smoke.
-        self.assertEqual(sorted({"scripts/test-core-data-tags.py", "scripts/test-mutable-bytearray-size.py",
+        self.assertEqual(sorted({"scripts/test-core-data-tags.py", "scripts/test-core-bytearrays.py",
                                  "scripts/test-int8-array-model.py", "scripts/test-int16-array-model.py",
                                  "scripts/test-int32-array-model.py"}), result["affected"]["python"])
 

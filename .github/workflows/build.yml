@@ -218,8 +218,6 @@ jobs:
           python3 scripts/test-short-bytes-slices-model.py
           python3 scripts/test-array-slice-model.py
           python3 scripts/test-mutable-bytearray-model.py
-          python3 scripts/test-resize-bytearrays.py
-          python3 scripts/test-mutable-bytearray-size.py
           python3 scripts/test-primop-coverage.py
       - name: Check merged fixture and runtime recipes with and without assertions
         shell: bash
@@ -278,13 +276,11 @@ jobs:
             build/mutable-bytearray-size/manifest.json
             build/mutable-bytearray-size/*.tsv
             build/mutable-bytearray-size/*.audit.json
-            build/mutable-bytearray-size/NativeMutableByteArraySize.hs
             build/mutable-bytearray-size/*-core/
             build/mutable-bytearray-size/native/mutable-bytearray-size-oracle
             build/resize-bytearrays/manifest.json
             build/resize-bytearrays/*.tsv
             build/resize-bytearrays/*.audit.json
-            build/resize-bytearrays/NativeResizeByteArrays.hs
             build/resize-bytearrays/*-core/
             build/resize-bytearrays/native/resize-bytearrays-oracle
             build/mutable-bytearrays/manifest.json
