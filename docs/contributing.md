@@ -1,26 +1,27 @@
 # Development
 
-Use a branch and a focused pull request against `main`. Put the change, validation
-results and remaining limitations in the PR description. Use separate issues for
-separate tasks; PRs carry the implementation discussion and merge status.
+Use a descriptive branch name, such as `pinned-arrays` or `fast-ci`, and a
+focused pull request against `main`. Explain the problem, the change and how you
+checked it. Keep issues about the work to do; PRs carry the implementation
+discussion and merge status.
 
-`Build` runs the full test suite, native oracles, both execution backends, the
-dense handoff control, library checks, and the explicit Map/Set frontiers. It
-also checks the merge automation. Native library inputs are freshly prepared in
-both build jobs, then eight parallel jobs cover both platforms, backends and
-handoff modes using the same platform's verified runtime and oracle artifacts.
-A trusted workflow requires both build jobs, all eight named library jobs and
-`automation` exactly once in the latest Build run and attempt, and publishes the
-`required-tests` commit status required by `main`, including for administrators.
-This explicit status also covers bot-dispatched builds, whose workflow job checks
-are not always eligible for GitHub PR requirements. A failed,
-skipped or missing required check does not pass the bot's gate.
-Library artifacts are bound to the checkout SHA/tree, workspace path, platform,
-pinned JDK and exact workflow run/attempt. The original source/native provenance
-and manifest bytes are preserved; consumer jobs do not install GHC or execute
-native oracle binaries. A failed-job-only rerun cannot reuse an earlier attempt's
-artifacts: choose **Re-run all jobs**. Artifact transfer and execution occur only
-in the read-only Build workflow, never in the privileged merge bot.
+`Fast checks` is the required PR workflow. It runs compiled smoke tests and
+checks for the changed components on Linux, in both handoff modes. Compiler,
+calling-convention and other broad changes run more tests. Cached toolchains,
+compilation outputs and verified native/Core inputs save setup work; the selected
+tests still execute on every run.
+
+`Build` runs the full suite on main after merges: native comparisons, both
+backends, both handoff modes and library checks on Linux and macOS. A failed full
+build stops further automatic merges until a successful build containing the fix.
+A full build that is still running does not hold up an otherwise ready PR.
+
+The merge bot runs code from `main`. It checks the required workflow's exact
+commit and current attempt, then publishes the `required-tests` status enforced
+by branch protection. Missing, skipped or failed required jobs do not pass.
+The full Build matrix retains both platform build jobs, eight library jobs and
+its automation checks. Library artifacts belong to one platform and run attempt;
+use **Re-run all jobs** when repeating that workflow.
 
 After all its checks pass, the bot may attempt a protected merge for GitHub's
 `clean` or `unstable` state; GitHub can still refuse it.
@@ -50,7 +51,7 @@ rate-limit response also waits for a later run. A rejected update never causes
 the bot to dispatch or merge the stale head. Updated commits still need the
 normal required checks.
 
-The bot runs after completed builds, queue-label changes and merges, with a
+The bot runs when checks change, after queue-label changes and merges, with a
 scheduled reconciliation for missed events. Its Actions summary records what it
 did. `Merge bot` can also be dispatched manually. It needs only the built-in
 Actions token: no personal token, external service or signing key.
