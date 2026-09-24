@@ -4,6 +4,9 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -106,18 +109,28 @@ class Explicit64ArrayTest {
                     }
                     rows.forEach { check(it, 0..3) }
                     assertTrue(function.invokeMember("compile").asBoolean(), stage + "/" + backend)
-                    assertEquals(true, program.hostEntryTarget(2).javaClass
-                        .getMethod("isValidLastTier").invoke(program.hostEntryTarget(2)))
-                    for (row in rows.asReversed()) {
+                    val host = program.hostEntryTarget(2)
+                    val original = program.entryTarget(entry)
+                    val guestCall = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
+                        .single { it.callTarget === original }
+                    val active = guestCall.currentCallTarget as RootCallTarget
+                    fun valid(target: RootCallTarget) =
+                        target.javaClass.getMethod("isValidLastTier").invoke(target) == true
+                    assertTrue(valid(host), stage + "/" + backend + " host installed")
+                    assertTrue(valid(active), stage + "/" + backend + " active guest installed")
+                    for (row in rows.asReversed()) for (selector in 3 downTo 0) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        check(row, 3 downTo 0)
-                        var after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        if (after == before) {
-                            assertTrue(function.invokeMember("compile").asBoolean())
-                            check(row, 3 downTo 0)
-                            after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        }
-                        assertTrue(after > before, stage + "/" + backend + ": " + before + "->" + after)
+                        assertEquals(row.results[selector], function.execute(row.bits, selector).asLong(),
+                            stage + "/" + backend + "/" + selector)
+                        val after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        // The public entry and the retained runRW# lambda each enter compiled code.
+                        assertEquals(before + 2, after,
+                            stage + "/" + backend + "/" + selector + " must enter both compiled roots")
+                        assertTrue(valid(host), stage + "/" + backend + " host remains installed")
+                        assertTrue(valid(active), stage + "/" + backend + " active guest remains installed")
+                        assertSame(active, guestCall.currentCallTarget,
+                            stage + "/" + backend + " active guest remains the call target")
+                        assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     }
                 } finally { context.leave() }
             }
