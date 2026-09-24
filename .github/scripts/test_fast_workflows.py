@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Exercise the workflow's runner-routing and persistent-runner guards."""
 
 import json
@@ -27,7 +30,8 @@ def embedded_python(delimiter):
 class FastWorkflowGuardsTest(unittest.TestCase):
     def test_candidate_pr_does_not_duplicate_or_cancel_dispatch(self):
         workflow = WORKFLOW.read_text()
-        self.assertIn("if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'thc-bulk/')", workflow)
+        self.assertIn("!startsWith(github.head_ref, 'thc-bulk/')", workflow)
+        self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", workflow)
         self.assertIn("&& 'candidate-pr' || 'gate'", workflow)
 
     def check_case(self, kind, ref, event, trusted):
@@ -44,11 +48,20 @@ class FastWorkflowGuardsTest(unittest.TestCase):
             self.assertEqual(route.returncode, 0, route.stderr)
             outputs = dict(line.split("=", 1) for line in output_path.read_text().splitlines())
             self.assertEqual(outputs["trusted"], str(trusted).lower())
-            self.assertEqual(json.loads(outputs["runner"]),
-                             ["self-hosted", "Linux", "X64", "thc-fast"] if trusted else "ubuntu-24.04")
+            self.assertNotIn("runner", outputs)  # Checkout diff chooses this later.
             guard = subprocess.run([sys.executable, "-c", embedded_python("PYCODE")],
                                    env=env, text=True, capture_output=True)
             self.assertEqual(guard.returncode == 0, trusted, guard.stderr)
+
+    def test_hosted_ci_only_still_runs_the_full_fast_contract(self):
+        workflow = WORKFLOW.read_text()
+        self.assertIn("runner: ${{ steps.route.outputs.runner }}", workflow)
+        self.assertIn("persistent: ${{ steps.route.outputs.persistent }}", workflow)
+        self.assertIn("python3 .github/scripts/fast_runner.py", workflow)
+        self.assertIn('if [ "$TRUSTED_EVENT" != true ]; then', workflow)
+        self.assertEqual(workflow.count("if: needs.automation.outputs.persistent != 'true'"), 3)
+        self.assertIn("Run fresh smoke plus affected tests", workflow)
+        self.assertIn("needs: automation", workflow)
 
     def test_same_repository_pr_uses_persistent_runner(self):
         self.check_case("pull_request", "refs/pull/42/merge", {
