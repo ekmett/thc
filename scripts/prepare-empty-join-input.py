@@ -67,6 +67,19 @@ def verify():
         assert any(p['rep']['kind'] == 'void' for j in joins['effectCase'] for p in j['parameters']), 'Scalar State control erased'
         assert any(j['result'].get('aggregate') == 'unboxed-tuple' for j in joins['tupleResult'])
         assert any(v == ['prim', 'writeWord8Array#'] or isinstance(v, list) and v[:2] == ['prim', 'writeWord8Array#'] for v in walk(module))
+        # These calls must remain actual join operands, not merely earlier case scrutinees.
+        for owner, producer in [('effectCase', 'effectEmpty'), ('throwCase', 'checkedEmpty')]:
+            ids = {j['id'] for j in joins[owner]}
+            calls = [v for v in walk(bindings[owner]['expr']) if isinstance(v, list) and v[:1] == ['app']
+                     and v[1][0] == 'var' and v[1][1] in ids]
+            assert len(calls) == 1 and calls[0][3][0] is False
+            actual = calls[0][2][0]
+            assert actual[:1] == ['app'] and actual[1][:2] == ['var', bindings[producer]['id']]
+            assert auditor.Audit.is_empty_tuple(auditor.Audit.expression_rep(actual))
+        run_rw = [v for v in walk(bindings['effectCase']['expr']) if isinstance(v, list)
+                  and v[:1] == ['app'] and v[1][0] == 'lam']
+        assert len(run_rw) == 1 and len(run_rw[0][1][1]) == 1 and len(run_rw[0][2]) == 1
+        assert run_rw[0][1][1][0]['rep']['kind'] == 'void', 'Expected one retained State lambda guest entry'
         lazy = [p['rep'] for j in joins['tupleResult'] for p in j['parameters'] if p['rep']['kind'] == 'data']
         assert lazy and all(p['evaluated'] is False for p in lazy), 'Lifted neighbor must remain lazy'
         report = auditor.Audit([(stage, module)], cap).run(sorted({name for name, _ in expected}))

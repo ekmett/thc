@@ -676,7 +676,6 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val b = e.builder
             val region = e.joins[target.region] ?: throw RuntimeFault("Local join escapes its owning activation")
             b.beginBlock()
-            b.emitJoinTransfer(metrics)
             // Saving all operands first is required for swaps and mutually recursive joins.
             val temporaries = arguments.mapIndexed { index, argument ->
                 if (target.locals[index] == null) {
@@ -691,6 +690,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             target.locals.forEachIndexed { index, local ->
                 if (local != null) restoreArgument(e, local) { b.emitLoadLocal(temporaries[index]!!) }
             }
+            // A failed operand is not a transfer. Count only after all parallel moves succeed.
+            b.emitJoinTransfer(metrics)
             if (target.index > region.emittedIndex) {
                 b.emitBranch(region.labels[target.index])
             } else {

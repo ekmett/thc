@@ -81,9 +81,10 @@ class EmptyJoinInputTest {
         }
         val rows=File(root,"build/empty-join-input/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(58,rows.values.sumOf { it.size });assertEquals(9,rows.size)
-        // Each retained OPAQUE helper occurs once; local join transfers are not guest entries.
+        // Each retained OPAQUE helper occurs once; effectCase also invokes its retained runRW lambda.
+        // Preparation proves that lambda and the effectful actuals survive in both stages. Local joins are not guest entries.
         val entries=mapOf("branchCase" to 1L,"swapCase" to 2L,"swapDepth" to 1L,"mutualCase" to 2L,
-            "mutualDepth" to 1L,"nestedCase" to 1L,"lazyCase" to 2L,"effectCase" to 2L,"throwCase" to 3L)
+            "mutualDepth" to 1L,"nestedCase" to 1L,"lazyCase" to 2L,"effectCase" to 3L,"throwCase" to 3L)
         for(stage in listOf("pre","post"))for((name,cases) in rows)for(backend in listOf("ast","bytecode"))context(inlining).use { context->
             context.initialize("thc");context.enter()
             try {
@@ -206,10 +207,12 @@ class EmptyJoinInputTest {
             context.initialize("thc");context.enter()
             try {
                 val language=TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val p=program(language,CoreModules.reachable(module(stage),"throwCase"),backend)
+                val p=program(language,CoreModules.reachable(module(stage),"throwCase")+("instrument" to true),backend)
                 fun call(x: Long)=Calls.target(p.hostEntryTarget(1),arrayOf(p.entryValue("throwCase"),arrayOf(x)))
-                assertEquals(108L,call(7));assertThrows(GuestException::class.java) { call(-1) };released(language)
-                assertEquals(108L,call(7));released(language)
+                assertEquals(108L,call(7));assertEquals(1L,p.diagnostics()["localJoinTransfers"])
+                assertThrows(GuestException::class.java) { call(-1) };released(language)
+                assertEquals(1L,p.diagnostics()["localJoinTransfers"],"Throwing operand must not count a transfer")
+                assertEquals(108L,call(7));released(language);assertEquals(2L,p.diagnostics()["localJoinTransfers"])
             } finally { context.leave() }
         }
     }
