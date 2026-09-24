@@ -3,6 +3,8 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+
 /** Allocation owned by a pinned ByteArray# and all of its Addr# views.
  * Pointer cells retain managed references; their bytes are deliberately not
  * synthetic process addresses. Raw byte access to a live pointer cell faults.
@@ -179,6 +181,15 @@ internal class ManagedAllocation private constructor(
         mutable()
         if (newSize < 0 || newSize > Int.MAX_VALUE.toLong()) fault("Managed allocation size outside JVM domain")
         if (newSize == size) return this
+        // Ordinary pinned byte arrays still use the typed, pointer-free copy.
+        // Keep pointer-map collection code out of partial evaluation even when
+        // another byte-array branch is the one exercised by a compiled guest.
+        if (!pointerCapable) return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes)
+        return resizeWithPointerCells(newSize)
+    }
+
+    @TruffleBoundary
+    private fun resizeWithPointerCells(newSize: Long): ManagedAllocation {
         if (newSize < size) pointers?.keys?.forEach { start ->
             if (start < newSize && start.toLong() + pointerBytes > newSize)
                 fault("Cannot truncate a managed pointer cell")

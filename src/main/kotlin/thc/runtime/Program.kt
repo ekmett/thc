@@ -113,7 +113,11 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     val monitor = java.lang.Object()
 }
 /** A cold, one-shot call continuation. Unlike a thunk update, its answer may itself be lazy. */
-internal class CallSegment(continuation: ContinuationResult) {
+internal class CallSegment @JvmOverloads constructor(
+    continuation: ContinuationResult,
+    var logicalMask: MaskingState = MaskingState.UNMASKED,
+    val callerMask: MaskingState = MaskingState.UNMASKED
+) {
     @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
     var value: Any? = continuation
     var owner: Thread? = null
@@ -131,7 +135,11 @@ internal class ThunkSuspended(val thunk: Thunk) :
 internal class CapturedCallSuspension(val segment: CallSegment) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call suspension", null, 0, null)
-internal class CallSegmentSuspended(val segment: CallSegment) :
+internal class CallSegmentSuspended @JvmOverloads constructor(
+    val segment: CallSegment,
+    /** Logical mask before a caller parked to its root-entry mask for Yield. */
+    val parkedActiveMask: MaskingState? = null
+) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call segment suspension", null, 0, null)
 /** Cold caller-segment input distinguishes a child result from its guest failure. */
@@ -448,6 +456,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                 4 -> fault("Interrupted call segment has no resumable continuation")
             }
             var continuation: ContinuationResult? = null
+            var resumeMask = MaskingState.UNMASKED
             var claimedHere = false
             try {
                 val claim = synchronized(segment.monitor) {
@@ -456,6 +465,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                             (observed == null && suspendedChild(segment.value as? ContinuationResult) != null)) 3 else {
                             continuation = segment.value as? ContinuationResult
                                 ?: fault("Suspended call segment has no bytecode continuation")
+                            resumeMask = segment.logicalMask
                             segment.value = null // Consume the one-shot continuation under ownership.
                             segment.owner = Thread.currentThread()
                             segment.state = 1
@@ -467,7 +477,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                     }
                 }
                 when (claim) {
-                    0 -> return evaluateCallSegment(segment, continuation!!, resumeValue)
+                    0 -> return evaluateCallSegment(segment, continuation!!, resumeMask, resumeValue)
                     1 -> awaitCallOwner(segment)
                     2 -> fault("Blackhole: cyclic call segment entered while evaluating")
                     3 -> return Retry
@@ -479,26 +489,24 @@ internal class Force(private val metrics: Metrics) : Node() {
         }
     }
 
-    private fun evaluateCallSegment(segment: CallSegment, continuation: ContinuationResult, resumeValue: Any?): Any? {
+    private fun evaluateCallSegment(segment: CallSegment, continuation: ContinuationResult,
+                                    resumeMask: MaskingState, resumeValue: Any?): Any? {
+        val carrierAmbient = SynchronousMasking.current(this)
         try {
-            val ambient = SynchronousMasking.current(this)
-            if (ambient != MaskingState.UNMASKED)
-                throw IllegalStateException("Masked call segment resume has no logical mask segment")
-            var maskAtReturn = ambient
-            val result = try {
-                val answer = try { continuation.continueWith(resumeValue) }
+            SynchronousMasking.set(this, resumeMask)
+            val result = try { continuation.continueWith(resumeValue) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
-                maskAtReturn = SynchronousMasking.current(this)
-                answer
-            } finally { SynchronousMasking.set(this, ambient) }
             if (result is ContinuationResult) {
-                if (maskAtReturn != MaskingState.UNMASKED)
-                    throw IllegalStateException("Masked call segment yield has no logical mask segment")
                 if (result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
-                publishCallContinuation(segment, result)
+                val parkedMask = (result.result as? CallSegmentSuspended)?.parkedActiveMask
+                if (parkedMask != null && SynchronousMasking.current(this) != segment.callerMask)
+                    throw IllegalStateException("Parked call segment did not restore its caller mask")
+                publishCallContinuation(segment, result, parkedMask ?: SynchronousMasking.current(this))
                 throw CallSegmentSuspended(segment)
             }
+            if (SynchronousMasking.current(this) != segment.callerMask)
+                throw IllegalStateException("Completed call segment did not restore its caller mask")
             synchronized(segment.monitor) {
                 segment.value = result // A call may return an unforced thunk; never enter it here.
                 segment.owner = null
@@ -516,6 +524,10 @@ internal class Force(private val metrics: Metrics) : Node() {
             suspendCallOwned(segment)
             throw e
         } catch (e: GuestException) {
+            if (SynchronousMasking.current(this) != segment.callerMask) {
+                suspendCallOwned(segment)
+                throw IllegalStateException("Failed call segment did not restore its caller mask", e)
+            }
             publishCallFailure(segment, MemoizedGuestFailure(e.payload, e.location ?: this))
             throw e
         } catch (e: RuntimeFault) {
@@ -524,15 +536,17 @@ internal class Force(private val metrics: Metrics) : Node() {
         } catch (e: Throwable) {
             suspendCallOwned(segment)
             throw e
-        }
+        } finally { SynchronousMasking.set(this, carrierAmbient) }
     }
 
-    private fun publishCallContinuation(segment: CallSegment, continuation: ContinuationResult) {
+    private fun publishCallContinuation(segment: CallSegment, continuation: ContinuationResult,
+                                        logicalMask: MaskingState) {
         val safepoint = TruffleSafepoint.getCurrent()
         val previous = safepoint.setAllowSideEffects(false)
         try {
             synchronized(segment.monitor) {
                 segment.value = continuation
+                segment.logicalMask = logicalMask
                 segment.owner = null
                 segment.state = 5
                 segment.monitor.notifyAll()

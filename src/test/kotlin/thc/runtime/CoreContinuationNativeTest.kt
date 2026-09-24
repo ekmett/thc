@@ -109,7 +109,7 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test fun applicationRejectsUnownedNestedRootAndActiveMask() {
+    @Test fun applicationRejectsUnownedNestedRootAndPreservesMaskedCarrier() {
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -129,12 +129,15 @@ class CoreContinuationNativeTest {
                 assertEquals(4, nested.state, "An unowned nested root cannot be replayed")
 
                 val (_, masked) = checked("applicationAnswer")
-                SynchronousMasking.set(masked.target!!.rootNode, MaskingState.MASKED_INTERRUPTIBLE)
+                val maskNode = masked.target!!.rootNode
+                SynchronousMasking.set(maskNode, MaskingState.MASKED_INTERRUPTIBLE)
                 try {
-                    val unsupported = assertThrows(IllegalStateException::class.java) { driver.force(masked) }
-                    assertTrue(unsupported.message!!.contains("Masked application continuation"))
-                    assertEquals(4, masked.state, "Masked suspension remains fail-closed")
-                } finally { SynchronousMasking.set(masked.target!!.rootNode, MaskingState.UNMASKED) }
+                    assertSame(masked, assertThrows(ThunkSuspended::class.java) { driver.force(masked) }.thunk)
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                    val answer = driver.force(masked) as DataValue
+                    assertEquals(208L, answer.layout.readLong(answer, 0))
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                } finally { SynchronousMasking.set(maskNode, MaskingState.UNMASKED) }
 
                 val (_, malformed) = checked("applicationAnswer")
                 assertThrows(ThunkSuspended::class.java) { driver.force(malformed) }
@@ -172,7 +175,8 @@ class CoreContinuationNativeTest {
                 val continuation = Calls.target(callee, arrayOf(0L)) as ContinuationResult
                 val function = Closure(null, NO_PAP_ARGUMENTS, 0, callee)
                 val call = assertThrows(CapturedCallSuspension::class.java) {
-                    BytecodeRoot.CaptureApplicationResult.capture(0, function, continuation, Driver())
+                    BytecodeRoot.CaptureApplicationResult.capture(0, function, continuation,
+                        MaskingState.UNMASKED, Driver())
                 }.segment
                 assertEquals(5, call.state)
                 assertEquals(1, checkpoint.visits.get())
@@ -307,7 +311,7 @@ class CoreContinuationNativeTest {
         }
     }
 
-    @Test fun repeatedCallYieldUnderActiveMaskFailsClosed() {
+    @Test fun repeatedCallYieldRetainsActiveMaskAndRejectsUnrestoredCompletion() {
         executionContext().use { context ->
             context.initialize("thc")
             val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
@@ -327,8 +331,11 @@ class CoreContinuationNativeTest {
             val driver = entered(context) { Driver() }
             entered(context) {
                 assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(MaskingState.MASKED_INTERRUPTIBLE, segment.logicalMask)
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
                 val unsupported = assertThrows(IllegalStateException::class.java) { driver.force(parent) }
-                assertTrue(unsupported.message!!.contains("Masked call segment yield"))
+                assertTrue(unsupported.message!!.contains("did not restore its caller mask"))
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
             }
             assertEquals(4, segment.state)
