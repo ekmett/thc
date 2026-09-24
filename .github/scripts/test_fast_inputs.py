@@ -20,7 +20,9 @@ class FastInputTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name) / "workspace"
+        # macOS exposes /var through a symlink; production receives resolved paths.
+        self.temp_root = Path(self.temp.name).resolve()
+        self.root = self.temp_root / "workspace"
         self.root.mkdir()
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         self.vendor_name = "vendor/ghc-9.14.1/GHC/Internal/CString.hs"
@@ -32,9 +34,9 @@ class FastInputTests(unittest.TestCase):
             self.put(name, "source: " + name)
         self.put("src/main/kotlin/thc/runtime/Program.kt", "unrelated runtime\n")
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
-        self.tc = {"ghcLibdir": str(Path(self.temp.name) / "toolchain/lib"),
+        self.tc = {"ghcLibdir": str(self.temp_root / "toolchain/lib"),
                    "version": "9.14.1", "installedAbiSha256": "a" * 64,
-                   "javaRelease": {"path": str(Path(self.temp.name) / "jdk/release"), "sha256": "b" * 64}}
+                   "javaRelease": {"path": str(self.temp_root / "jdk/release"), "sha256": "b" * 64}}
         self.tool_patch = patch.object(cache, "toolchain", side_effect=lambda root: copy.deepcopy(self.tc))
         self.tool_patch.start(); self.addCleanup(self.tool_patch.stop)
         self.required_patch = patch.object(cache, "REQUIRED", ("build/bytearray/manifest.json",))
@@ -47,7 +49,7 @@ class FastInputTests(unittest.TestCase):
                                          self.vendor_name: cache.sha(self.vendor)},
                          "artifactHashes": {"build/bytearray/oracle.tsv": cache.digest(self.root / "build/bytearray/oracle.tsv")}}
         self.write_manifest()
-        self.bundle = Path(self.temp.name) / "bundle.tar.gz"
+        self.bundle = self.temp_root / "bundle.tar.gz"
 
     def put(self, name, content):
         p = self.root / name
@@ -68,7 +70,7 @@ class FastInputTests(unittest.TestCase):
         with tarfile.open(self.bundle, "r:gz") as archive:
             entries = [(m, archive.extractfile(m).read()) for m in archive]
         entries = mutate(entries)
-        changed = Path(self.temp.name) / "changed.tar.gz"
+        changed = self.temp_root / "changed.tar.gz"
         with tarfile.open(changed, "w:gz") as archive:
             for member, data in entries:
                 member.size = len(data)
@@ -94,6 +96,13 @@ class FastInputTests(unittest.TestCase):
         p = self.root / "build/bytearray/oracle.tsv"; before = p.stat().st_mtime_ns
         cache.restore(self.root, self.current, self.bundle)
         self.assertEqual(before, p.stat().st_mtime_ns)
+
+    def test_noncanonical_workspace_alias_is_still_rejected(self):
+        alias = self.temp_root / "workspace-alias"
+        alias.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(cache.CacheMiss, "Symlink/noncanonical destination"):
+            cache.identity(alias)
+        self.assertEqual(self.current, cache.identity(self.root))
 
     def test_authoritative_inputs_cannot_be_omitted_by_producer(self):
         self.manifest["inputHashes"] = {}
@@ -154,9 +163,12 @@ class FastInputTests(unittest.TestCase):
 
     def test_old_cbv_payload_cannot_satisfy_renamed_required_core(self):
         self.put("build/core/CbvAudit.json", json.dumps({"module": "CbvAudit", "bindings": []}))
+        manifest = self.pack(); self.remove_payload(manifest)
+        self.assertIn("build/core/CbvAudit.json", manifest["payload"])
+        self.assertNotIn("build/core/CBVAudit.json", manifest["payload"])
+        # Archive names remain exact even on a case-insensitive host filesystem.
         with patch.object(cache, "REQUIRED", ("build/core/CBVAudit.json",)):
-            with self.assertRaises(cache.CacheMiss): self.pack()
-        self.assertFalse(self.bundle.exists())
+            self.rejected_without_writes(self.bundle)
 
     def test_original_list_records_absolute_paths_and_external_interfaces(self):
         interface = Path(self.tc["ghcLibdir"]) / "pkg/Foo.dyn_hi"
@@ -211,7 +223,7 @@ class FastInputTests(unittest.TestCase):
     def test_symlink_destination_and_conflicting_file_preserved(self):
         manifest = self.pack(); self.remove_payload(manifest)
         target = self.root / "build/bytearray/oracle.tsv"
-        target.symlink_to(Path(self.temp.name) / "missing-target")
+        target.symlink_to(self.temp_root / "missing-target")
         with self.assertRaises(cache.CacheMiss): cache.restore(self.root, self.current, self.bundle)
         self.assertTrue(target.is_symlink()); target.unlink()
         self.put("build/bytearray/oracle.tsv", "existing different evidence")
@@ -220,7 +232,7 @@ class FastInputTests(unittest.TestCase):
     def test_parent_symlink_and_non_directory_conflict(self):
         manifest = self.pack(); self.remove_payload(manifest)
         directory = self.root / "build/bytearray"; directory.rmdir()
-        outside = Path(self.temp.name) / "outside"; outside.mkdir()
+        outside = self.temp_root / "outside"; outside.mkdir()
         directory.symlink_to(outside, target_is_directory=True)
         with self.assertRaises(cache.CacheMiss): cache.restore(self.root, self.current, self.bundle)
         self.assertEqual([], list(outside.iterdir())); directory.unlink()
@@ -244,7 +256,7 @@ class FastInputTests(unittest.TestCase):
         self.rejected_without_writes(self.rewrite(mutate))
 
     def test_cli_key_stdout_and_restore_miss_status(self):
-        output = Path(self.temp.name) / "identity.json"
+        output = self.temp_root / "identity.json"
         stdout, stderr = io.StringIO(), io.StringIO()
         with patch("sys.stdout", stdout), patch("sys.stderr", stderr):
             self.assertEqual(0, cache.main(["key", "--root", str(self.root), "--output", str(output)]))
@@ -269,8 +281,8 @@ class FastInputTests(unittest.TestCase):
         self.assertIn("build/map/boot-core", cache.CORE_DIRS)
 
     def test_legacy_launcher_digest_and_explicit_binary_digest_are_distinct(self):
-        launcher = Path(self.temp.name)/"launcher"; launcher.write_bytes(b"launcher script")
-        binary = Path(self.temp.name)/"binary"; binary.write_bytes(b"actual ELF")
+        launcher = self.temp_root/"launcher"; launcher.write_bytes(b"launcher script")
+        binary = self.temp_root/"binary"; binary.write_bytes(b"actual ELF")
         tc = {"ghcLauncher": {"path": str(launcher)}}
         legacy = {"ghcVersion": "9.14.1", "ghcInfo": "info", "ghcBinarySha256": cache.digest(launcher)}
         self.assertEqual([(str(launcher), cache.digest(launcher))], list(cache.hashes_in(legacy, tc)))
