@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 244 | Implemented fixed numeric/character scalar forms. |
-| Partial | 220 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1027 | No declared lowering. |
+| Partial | 223 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 1024 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -322,7 +322,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `divideDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `divideFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `eqAddr#` — arity 2 — Managed literal addresses only
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
+- [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
@@ -364,6 +366,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `neAddr#` — arity 2 — Managed literal addresses only
 - [ ] `negateDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -615,7 +618,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `delay#` — arity 2
 - [ ] `divideDoubleX8#` — arity 2
 - [ ] `divideFloatX16#` — arity 2
-- [ ] `eqAddr#` — arity 2
 - [ ] `eqStablePtr#` — arity 2
 - [ ] `expDouble#` — arity 1
 - [ ] `expFloat#` — arity 1
@@ -674,7 +676,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `geAddr#` — arity 2
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
-- [ ] `getCurrentCCS#` — arity 2
 - [ ] `getSizeofSmallMutableArray#` — arity 2
 - [ ] `getSpark#` — arity 1
 - [ ] `gtAddr#` — arity 2
@@ -979,7 +980,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `narrow16Word#` — arity 1
 - [ ] `narrow32Word#` — arity 1
 - [ ] `narrow8Word#` — arity 1
-- [ ] `neAddr#` — arity 2
 - [ ] `negateDoubleX8#` — arity 1
 - [ ] `negateFloatX16#` — arity 1
 - [ ] `negateInt16X16#` — arity 1
