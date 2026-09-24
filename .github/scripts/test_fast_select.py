@@ -189,13 +189,22 @@ private val text = "class FakeString { @Test }"
                      kotlin("OtherTest") + "\nfun String.extensionHelper() = this\n",
                      kotlin("OtherTest", "@Test fun test() {}\nfun helper() = 1"),
                      kotlin("OtherTest", "@Test fun test() = 1\nfun helper() = 1"),
+                     kotlin("OtherTest", "@Test fun test() {}\nprivate fun local() {}; fun shared() = 1"),
+                     kotlin("OtherTest", "private fun local() { @Test fun inner() {} }; fun shared() = 1\n@Test fun test() {}"),
                      kotlin("OtherTest") + "\nfun <T> shared(value: T) = value\n",
                      kotlin("OtherTest") + "\nfun `shared helper`() = 1\n",
+                     kotlin("OtherTest") + "\nprivate val local = 1; fun shared() = 1\n",
                      kotlin("OtherTest", "companion object { fun helper() = 1 }\n@Test fun test() {}")):
             with self.subTest(code=code):
                 self.write(path, code)
                 self.commit()
                 self.full()
+
+    def test_java_tests_select_their_class_but_widen_unknown_helper_grammar(self):
+        self.write("src/test/java/example/JavaTest.java", "package example;\npublic class JavaTest { @Test public void test() {} public static void helper() {} }\n")
+        self.commit()
+        result = self.full("non-kotlin-test-source")
+        self.assertIn("example.JavaTest", result["affected"]["junit"])
 
     def test_class_reused_as_helper_widens(self):
         self.write("src/test/kotlin/example/ConsumerTest.kt", kotlin("ConsumerTest", "@Test fun reads() { OtherTest() }"))

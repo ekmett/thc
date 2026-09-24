@@ -186,6 +186,11 @@ def junit_info(source):
         unsafe.append("backtick-test-declaration")
     # Public top-level helpers (including extension/context helpers) and public
     # non-test members may be consumed by other tests. Never silently omit them.
+    def private_at(index):
+        # Anchor to the declaration, not its physical line: a preceding private
+        # declaration on that same line must not hide a public shared helper.
+        return re.search(r"\bprivate(?:\s+(?:inline|tailrec|suspend|operator|infix|const|lateinit|data|sealed|open|abstract|inner|enum|actual|expect|external|override|final))*\s*$",
+                         code[max(0, index - 256):index]) is not None
     test_starts = {item.start() for item, _, _ in ranges}
     declaration_starts = {item.start() for item in declarations}
     for item in re.finditer(r"\b(?:class|object|interface|fun|val|var|typealias)\b", code):
@@ -193,17 +198,15 @@ def junit_info(source):
             unsafe.append("unresolved-test-declaration")
     for item in declarations:
         if depths[item.start()] == 0 and item.start() not in test_starts:
-            prefix = code[code.rfind("\n", 0, item.start()) + 1:item.start()]
-            if not re.search(r"\bprivate\b", prefix):
+            if not private_at(item.start()):
                 unsafe.append("shared-test-helper")
     for _, start, end in ranges:
         previous = start + 1
         for item in declarations:
             if not start < item.start() < end or depths[item.start()] != 1:
                 continue
-            prefix = code[previous:item.start()]
-            line = code[code.rfind("\n", 0, item.start()) + 1:item.start()]
-            if not re.search(r"\bprivate\b", line) and not (
+            prefix = "".join(code[i] if depths[i] == 1 else " " for i in range(previous, item.start()))
+            if not private_at(item.start()) and not (
                     item[1] == "fun" and re.search(TEST_ANNOTATION + "|" + LIFECYCLE, prefix)):
                 unsafe.append("shared-test-member")
             previous = item.end()
@@ -336,6 +339,8 @@ def select(repo, base_ref, head_ref):
             if path in (SCRIPT, POLICY, ".github/scripts/test_fast_select.py"):
                 widen("selection-policy-changed", path)
             elif junit_source(path):
+                if path.endswith(".java"):
+                    widen("non-kotlin-test-source", path)
                 info = infos.get(path)
                 if not info or not info[0]:
                     widen("test-helper-or-unresolved-class", path)
