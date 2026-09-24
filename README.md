@@ -14,7 +14,7 @@ that information around long enough to use it.
 
 ## Build and run
 
-You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`),
+You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`), **cabal-install 3.16**,
 **GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
 point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
 directory. The Gradle wrapper downloads its dependencies on the first build.
@@ -25,27 +25,23 @@ From the repository root, build the Core exporter, JVM runtime, and Cabal driver
 export JAVA_HOME=/path/to/graalvm
 export PATH="$JAVA_HOME/bin:$PATH"
 
+cabal build thc
 compiler/build.sh
 scripts/gradle.sh installDist
-(
-  cd driver
-  runghc Setup.hs configure --builddir=../build/driver-package \
-    --package-db=clear --package-db=global
-  runghc Setup.hs build --builddir=../build/driver-package
-)
 ```
 
 Then run the included Cabal executable through THC:
 
 ```sh
-build/driver-package/build/thc/thc run driver/test/fixtures/run-pure \
+cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
   --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
 This example checks a mutable reference and returns `()` without printing.
 For your own package, pass its directory or `.cabal` file and its executable
 name to `thc run`. The command builds with Cabal, exports GHC Core, and executes
-an accepted `Main.main :: IO ()` in THC. The [driver guide](driver/README.md)
+an accepted `Main.main :: IO ()` in THC. Use `cabal run thc -- --help` for the
+command-line options. The [driver guide](docs/driver.md)
 has the options and integration check.
 
 This is a first slice of IO support: `main = putStrLn "hello"` still fails the
@@ -136,7 +132,10 @@ separate run.
 
 * [`compiler/`](compiler/README.md) exports executable Core from GHC, with
   representation and evaluation information.
-* [`src/`](src/) contains the Truffle runtime and its tests.
+* [`thc.cabal`](thc.cabal), [`app/`](app/) and [`src/THC/`](src/THC/) build the
+  command-line driver; [`test/`](test/) contains its Cabal fixtures and checks.
+* [`src/main/`](src/main/) and [`src/test/`](src/test/) contain the Truffle
+  runtime and its tests.
 * [`examples/`](examples/) contains Haskell programs and the native oracle.
 * [`scripts/`](scripts/) contains build, audit, benchmark and graph drivers.
 * [The documentation index](docs/README.md) groups coverage and design reports;
