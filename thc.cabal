@@ -184,7 +184,9 @@ test-suite driver-tests
 -- Produce real GHC Core and native oracle inputs for JVM semantic tests.
 executable thc-fixtures
   main-is: Main.hs
-  other-modules: AggregateFixtures
+  other-modules:
+    AggregateFixtures
+    FixtureSupport
   hs-source-dirs: test/haskell-fixtures
   build-depends:
     base >= 4.22 && < 4.23,
