@@ -63,6 +63,7 @@ case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-doublex2-audit.py --export-only ;;
   *) python3 scripts/prepare-doublex2-audit.py ;;
 esac
+python3 scripts/prepare-simd-capability-smoke.py
 python3 scripts/prepare-tuple-arithmetic.py
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;

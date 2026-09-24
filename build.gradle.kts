@@ -106,7 +106,8 @@ tasks.withType<Test>().configureEach {
             "int16-arrays/NativeInt16Array.hs", "int16-arrays/native/int16-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
-            "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**", "generated/simd/fixtures/*.hs",
+            "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**",
+            "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "generated/simd/fixtures/*.hs",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
@@ -128,7 +129,8 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
-        include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py", "simd_family_model.py", "test-simd-families.py")
+        include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",
+            "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-scalar-bitcasts.py", "scalar_bitcast_model.py", "test-scalar-bitcasts.py", "prepare-tag-to-enum-audit.py", "prepare-unsafe-equality-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-narrow-literal-proofs.py", "test-narrow-literal-proofs.py", "prepare-bignat-literals.py", "bignat_literal_model.py", "test-bignat-literals.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutable-bytearray-size.py", "mutable_bytearray_size_model.py", "test-mutable-bytearray-size.py", "prepare-resize-bytearrays.py", "resize_bytearray_model.py", "test-resize-bytearrays.py", "prepare-mutable-bytearrays.py", "mutable_bytearray_model.py", "test-mutable-bytearray-model.py", "prepare-compare-byte-arrays.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",

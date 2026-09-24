@@ -187,6 +187,7 @@ jobs:
           python3 scripts/test-library-frontier.py
           python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
+          python3 scripts/test-simd-families.py
           python3 scripts/test-floatx4-model.py
           python3 scripts/test-doublex2-model.py
           python3 scripts/test-int16x8-model.py

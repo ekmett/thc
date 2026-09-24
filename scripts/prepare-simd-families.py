@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Prepare the bounded generated SIMD experiment; repository capability stays unchanged.
+"""Prepare the large generated SIMD edge corpus against canonical local capability.
 
 Use --export-only for pre-Tidy Core and model on hosts without native GHC SIMD
 code generation. A full run requires an x86 GHC9.14.1 host able to execute the
@@ -53,7 +53,7 @@ def structure(module, audits, primitives):
     calls = {}
     for name, family, operation in entries():
         report = audits[name]
-        check(report['accepted'] and not report['missingGlobals'] and not report['issues'], f'{name}: strict experimental audit failed: {report["issues"][:3]}')
+        check(report['accepted'] and not report['missingGlobals'] and not report['issues'], f'{name}: strict local SIMD audit failed: {report["issues"][:3]}')
         identities = {b['id']: b['name'] for b in module['bindings']}
         reachable = {identities[b['id']] for b in report['reachableBindings']}
         observer = {'FloatRep': 'bitsFloat', 'DoubleRep': 'bitsDouble'}.get(family['laneRep'])
@@ -106,11 +106,11 @@ def main():
     generator = load_script('simd_families_generator', ROOT / 'scripts/generate-simd-families.py')
     contracts = generator.contracts(generator.families())
     (OUT / 'contracts.json').write_text(json.dumps(contracts, indent=2) + '\n')
-    # This explicitly labelled profile permits the experiment's strict audits;
-    # it is not the repository's advertised support declaration.
     capabilities = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
-    capabilities['primitives'].update({name: contract['arity'] for name, contract in contracts.items()})
-    (OUT / 'experimental-capabilities.json').write_text(json.dumps(capabilities, indent=2) + '\n')
+    check({name: capabilities['primitives'].get(name) for name in contracts} ==
+          {name: contract['arity'] for name, contract in contracts.items()},
+          'Canonical local SIMD capability differs from the pinned contracts')
+    (OUT / 'capabilities.json').write_text(json.dumps(capabilities, indent=2) + '\n')
     expected = list(rows())
     expected_text = ''.join('\t'.join(map(str, row)) + '\n' for row in expected)
     requests = ''.join('\t'.join(map(str, row[:-1])) + '\n' for row in expected)
@@ -119,7 +119,7 @@ def main():
     run(['compiler/build.sh'])
     auditor = load_script('simd_families_auditor', ROOT / 'scripts/audit-core.py')
     stages = ['pre'] if args.export_only else ['pre', 'post']
-    artifacts = [OUT / name for name in ('contracts.json', 'experimental-capabilities.json', 'expected.tsv', 'inputs.tsv')]
+    artifacts = [OUT / name for name in ('contracts.json', 'capabilities.json', 'expected.tsv', 'inputs.tsv')]
     structures = {}
     for stage in stages:
         module_path = OUT / f'{stage}-core/GeneratedSimdFamilies.json'
@@ -154,7 +154,7 @@ def main():
     sources += [ROOT / 'compiler' / name for name in ('build.sh', 'export.sh', 'toolchain.sh')]
     sources += sorted(GENERATED.glob('*.hs'))
     sources += [ROOT / 'src/main/resources/thc/scalar-primop-signatures.json']
-    manifest = dict(schema=1, scope=f'{len(contracts)} experimental local SIMD operations; no vector ABI or advertised capability change',
+    manifest = dict(schema=1, scope=f'{len(contracts)} canonical local SIMD operations; no vector ABI or hardware-SIMD guarantee',
                     stages=stages, modelRows=len(expected), nativeRows=native_rows,
                     structures=structures, entries=[dict(name=n, lanes=f['lanes'], operation=o) for n, f, o in entries()],
                     inputs=[record(p) for p in sources], artifacts=[record(p) for p in artifacts], commands=commands,
@@ -163,7 +163,7 @@ def main():
                         installedArtifactsHashed=False,
                         machine=platform.machine(), system=platform.platform()))
     (OUT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    print(f'SIMD families: {len(expected)} model rows, {native_rows} native rows, {len(stages)*len(entries())} strict experimental audits')
+    print(f'SIMD families: {len(expected)} model rows, {native_rows} native rows, {len(stages)*len(entries())} strict local audits')
 
 
 if __name__ == '__main__':
