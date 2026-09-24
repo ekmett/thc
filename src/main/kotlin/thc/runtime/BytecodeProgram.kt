@@ -155,6 +155,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
 
     init {
         CoreStackForeign.validateHeads(bindings)
+        CoreOriginalStdio.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
@@ -850,12 +851,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val stackClone = CoreStackForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags)
+            val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val javascript = if (!stackClone && managedFile == null) CoreJavaScript.validate(expr, defined) else null
+            val javascript = if (!stackClone && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (!stackClone && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            val polyglot = if (!stackClone && originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val state = args.single()
@@ -867,6 +870,18 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     e.builder.beginCloneMyStack(destination.single())
                     operand.emit(e)
                     e.builder.endCloneMyStack()
+                }
+            } else if (originalStdio != null) {
+                CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val result = destination.single()
+                    if (originalStdio == OriginalStdioOp.ERRNO) b.beginOriginalStdioErrno(result)
+                    else b.beginOriginalStdioWrite(result)
+                    operands.forEach { it.emit(e) }
+                    if (originalStdio == OriginalStdioOp.ERRNO) b.endOriginalStdioErrno()
+                    else b.endOriginalStdioWrite()
                 }
             } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
