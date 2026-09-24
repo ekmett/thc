@@ -106,7 +106,7 @@ class PinnedAddressTest {
     }
     @Test fun allocationChecksFullWidthSizeAndPowerOfTwoAlignment() {
         for (size in listOf(0L, 1L, 16L, 129L)) for (alignment in listOf(1L, 2L, 8L, 64L, 1L shl 40, 1L shl 62))
-            assertEquals(size.toInt(), PinnedMemory.allocate(size, alignment).size)
+            assertEquals(size, PinnedMemory.allocate(size, alignment).size)
         for (size in listOf(Long.MIN_VALUE, -1L, Int.MAX_VALUE.toLong() + 1, 1L shl 32, Long.MAX_VALUE))
             assertThrows(RuntimeFault::class.java) { PinnedMemory.allocate(size, 8) }
         for (alignment in listOf(Long.MIN_VALUE, -1L, 0L, 3L, 7L, Long.MAX_VALUE))
@@ -136,7 +136,7 @@ class PinnedAddressTest {
             else {
                 run()
                 when (operation) {
-                    PinnedMemoryOp.NEW, PinnedMemoryOp.NEW_ALIGNED -> assertEquals(2, (FrameAccess.read(frame, 0) as ByteArray).size)
+                    PinnedMemoryOp.NEW, PinnedMemoryOp.NEW_ALIGNED -> assertEquals(2L, (FrameAccess.read(frame, 0) as ManagedAllocation).size)
                     PinnedMemoryOp.READ -> assertEquals(22L, FrameAccess.read(frame, 0))
                     else -> assertArrayEquals(byteArrayOf(11, -1), array)
                 }

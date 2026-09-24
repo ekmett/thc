@@ -141,7 +141,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
             val entry = descriptor(fd)
             if (!entry.readable) fail(4, "THC file descriptor is not readable: $fd")
             if (count == 0L) 0L else {
-                val bytes = address.cbitsBacking()
+                val bytes = address.rawBacking()
                 val offset = address.cbitsOffset().toInt()
                 val n = entry.input?.read(bytes, offset, count.toInt())
                     ?: entry.channel!!.read(ByteBuffer.wrap(bytes, offset, count.toInt()))
@@ -156,7 +156,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
             val entry = descriptor(fd)
             if (!entry.writable) fail(4, "THC file descriptor is not writable: $fd")
             if (count == 0L) 0L else {
-                val bytes = address.cbitsBacking()
+                val bytes = address.rawBacking()
                 val offset = address.cbitsOffset().toInt()
                 if (entry.output != null) {
                     entry.output.write(bytes, offset, count.toInt())

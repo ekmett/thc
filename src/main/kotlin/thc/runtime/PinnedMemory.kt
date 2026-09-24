@@ -4,15 +4,16 @@
 package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
+import java.lang.foreign.ValueLayout
 
 /** Managed allocation addresses, not physical JVM heap or native process pointers. */
 internal object PinnedMemory {
-    @JvmStatic fun allocate(size: Long, alignment: Long): ByteArray {
+    @JvmStatic fun allocate(size: Long, alignment: Long): ManagedAllocation {
         // A managed allocation's base is aligned in its own address space. No
         // address-to-integer/native-pointer operation is provided by this slice.
         if (alignment <= 0 || alignment and (alignment - 1) != 0L)
             fault("Pinned ByteArray# alignment must be a positive power of two")
-        return ManagedByteArray.allocate(size)
+        return ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt())
     }
 }
 
@@ -26,7 +27,9 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     READ_WORD("readWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD),
     READ_INT32("readInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT32),
     READ_INT("readIntOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT),
-    WRITE("writeWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Word8Rep"), emptyList()), false);
+    READ_ADDR("readAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
+    WRITE("writeWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Word8Rep"), emptyList()), false),
+    WRITE_ADDR("writeAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("AddrRep"), emptyList()), false);
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         fun exact(proof: CoreRepresentation, reps: List<String>): Boolean = !proof.isAggregate && !proof.isVector &&
@@ -39,8 +42,12 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
         if (actual.size != arguments.size || flags != List(arguments.size) { false } ||
             actual.indices.any { !exact(actual[it], arguments[it]) })
             throw RuntimeFault("Pinned memory argument representation mismatch: $primitive")
-        val payload = addressRead?.let { listOf(it.payload) }
-            ?: if (this == READ) listOf("Word8Rep") else listOf("BoxedRep (Just Unlifted)")
+        val payload = when {
+            addressRead != null -> listOf(addressRead.payload)
+            this == READ_ADDR -> listOf("AddrRep")
+            this == READ -> listOf("Word8Rep")
+            else -> listOf("BoxedRep (Just Unlifted)")
+        }
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
             exact(result.components[0], emptyList()) && exact(result.components[1], payload) && result.primReps == payload
         else exact(result, if (this == CONTENTS) listOf("AddrRep") else emptyList())
@@ -53,7 +60,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
     @field:Children private var operands: Array<Expr>) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any = when (operation) {
-        PinnedMemoryOp.CONTENTS -> ManagedAddress.fromByteArray(ManagedByteArray.require(operands[0].execute(frame)))
+        PinnedMemoryOp.CONTENTS -> ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
         PinnedMemoryOp.WRITE -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
@@ -62,11 +69,19 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             address.writeWord8(offset, value)
             Unit
         }
+        PinnedMemoryOp.WRITE_ADDR -> {
+            val address = operands[0].executeRequiredAddress(frame)
+            val offset = operands[1].executeRequiredLong(frame)
+            val value = operands[2].executeRequiredAddress(frame)
+            ManagedByteArray.requireState(operands[3].execute(frame))
+            address.writeAddressElementIndex(offset, value)
+            Unit
+        }
         else -> fault("Pinned memory tuple operation requires a destination")
     }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress =
         if (operation == PinnedMemoryOp.CONTENTS)
-            ManagedAddress.fromByteArray(ManagedByteArray.require(operands[0].execute(frame)))
+            ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
         else super.executeAddress(frame)
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         when (operation) {
@@ -83,6 +98,12 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 ManagedByteArray.requireState(operands[2].execute(frame))
                 val value = operation.addressRead?.read(address, index) ?: address.readWord8(index)
                 FrameAccess.writeLong(frame, slots[offset], value)
+            }
+            PinnedMemoryOp.READ_ADDR -> {
+                val address = operands[0].executeRequiredAddress(frame)
+                val index = operands[1].executeRequiredLong(frame)
+                ManagedByteArray.requireState(operands[2].execute(frame))
+                FrameAccess.write(frame, slots[offset], address.readAddressElementIndex(index))
             }
             else -> fault("Pinned memory scalar operation has no tuple destination")
         }

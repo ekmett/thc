@@ -89,6 +89,7 @@ tasks.withType<Test>().configureEach {
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "managed-md5-native/**",
             "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**",
+            "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/NativeScalarBitCast.hs", "scalar-bitcasts/native/**",
             "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",

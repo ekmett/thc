@@ -352,8 +352,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void allocate(VirtualFrame frame, LocalAccessor destination,
                 long size, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            byte[] bytes = PinnedMemory.allocate(size, 1L);
-            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, bytes);
+            ManagedAllocation allocation = PinnedMemory.allocate(size, 1L);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, allocation);
         }
     }
 
@@ -363,15 +363,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void allocate(VirtualFrame frame, LocalAccessor destination,
                 long size, long alignment, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            byte[] bytes = PinnedMemory.allocate(size, alignment);
-            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, bytes);
+            ManagedAllocation allocation = PinnedMemory.allocate(size, alignment);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, allocation);
         }
     }
 
     @Operation
     public static final class ByteArrayContents {
         @Specialization public static ManagedAddress address(Object array) {
-            return ManagedAddress.Companion.fromByteArray(ManagedByteArray.require(array));
+            return ManagedAddress.Companion.fromGuestByteArray(array);
         }
     }
 
@@ -383,6 +383,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             long value = address.readWord8(offset);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadAddrOffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                address.readAddressElementIndex(offset));
         }
     }
 
@@ -404,6 +415,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeWord8(offset, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
+    public static final class WriteAddrOffAddr {
+        @Specialization public static Object write(ManagedAddress address, long offset,
+                ManagedAddress value, Object state) {
+            ManagedByteArray.requireState(state);
+            address.writeAddressElementIndex(offset, value);
             return kotlin.Unit.INSTANCE;
         }
     }
@@ -1311,9 +1332,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ResizeByteArray {
         @Specialization public static void resize(VirtualFrame frame, LocalAccessor destination,
                 Object value, long size, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
+            Object array = value;
             ManagedByteArray.requireState(state);
-            byte[] result = ManagedByteArray.resize(array, size);
+            Object result = ManagedByteArray.resizeGuest(array, size);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1322,34 +1343,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class FreezeByteArray {
         @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
                 Object value, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
+            Object array = value;
             ManagedByteArray.requireState(state);
-            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedByteArray.freeze(array));
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, ManagedByteArray.freezeGuest(array));
         }
     }
     @Operation public static final class WriteByteArray {
         @Specialization public static Object write(Object value, long offset, long byteValue, Object state) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            ManagedByteArray.write(array, offset, byteValue);
+            ManagedByteArray.writeGuest(value, offset, byteValue);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation public static final class CopyByteArray {
         @Specialization public static Object copy(Object source, long sourceOffset, Object destination,
                 long destinationOffset, long count, Object state) {
-            byte[] from = ManagedByteArray.require(source);
-            byte[] to = ManagedByteArray.require(destination);
             ManagedByteArray.requireState(state);
-            ManagedByteArray.copy(from, sourceOffset, to, destinationOffset, count);
+            ManagedByteArray.copyGuest(source, sourceOffset, destination, destinationOffset, count, false, false);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation public static final class SetByteArray {
         @Specialization public static Object set(Object value, long offset, long count, long byteValue, Object state) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            ManagedByteArray.fill(array, offset, count, byteValue);
+            ManagedByteArray.fillGuest(value, offset, count, byteValue);
             return kotlin.Unit.INSTANCE;
         }
     }
@@ -1358,18 +1375,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class CopyMutableByteArray {
         @Specialization public static Object copy(boolean nonOverlapping, Object source, long sourceOffset,
                 Object destination, long destinationOffset, long count, Object state) {
-            byte[] from = ManagedByteArray.require(source);
-            byte[] to = ManagedByteArray.require(destination);
             ManagedByteArray.requireState(state);
-            ManagedByteArray.copyMutable(from, sourceOffset, to, destinationOffset, count, nonOverlapping);
+            ManagedByteArray.copyGuest(source, sourceOffset, destination, destinationOffset, count, true, nonOverlapping);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation public static final class CompareByteArrays {
         @Specialization public static long compare(Object first, long firstOffset, Object second,
                 long secondOffset, long count) {
-            return ManagedByteArray.compare(ManagedByteArray.require(first), firstOffset,
-                ManagedByteArray.require(second), secondOffset, count);
+            return ManagedByteArray.compareGuest(first, firstOffset, second, secondOffset, count);
         }
     }
     @Operation
@@ -1377,14 +1391,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class GetSizeMutableByteArray {
         @Specialization public static void size(VirtualFrame frame, LocalAccessor destination,
                 Object value, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            long result = ManagedByteArray.size(array);
+            long result = ManagedByteArray.sizeGuest(value);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
     @Operation public static final class SizeByteArray {
-        @Specialization public static long size(Object value) { return ManagedByteArray.size(ManagedByteArray.require(value)); }
+        @Specialization public static long size(Object value) { return ManagedByteArray.sizeGuest(value); }
     }
     @Operation
     @ConstantOperand(type = boolean.class, name = "unsigned")
@@ -1392,28 +1405,26 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadByteArray {
         @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            long result = unsigned ? ManagedByteArray.read(array, index) : ManagedByteArray.readSigned(array, index);
+            long result = ManagedByteArray.readGuest(value, index, unsigned);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
     @Operation public static final class IndexSignedByteArray {
         @Specialization public static long index(Object value, long offset) {
-            return ManagedByteArray.readSigned(ManagedByteArray.require(value), offset);
+            return ManagedByteArray.readGuest(value, offset, false);
         }
     }
     @Operation public static final class IndexByteArray {
-        @Specialization public static long index(Object value, long offset) { return ManagedByteArray.read(ManagedByteArray.require(value), offset); }
+        @Specialization public static long index(Object value, long offset) { return ManagedByteArray.readGuest(value, offset, true); }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadIntArray {
         @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            long result = ManagedIntArray.read(array, index);
+            long result = ManagedByteArray.readIntGuest(value, index);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1511,15 +1522,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class WriteIntArray {
         @Specialization public static Object write(Object value, long index, long integer, Object state) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            ManagedIntArray.write(array, index, integer);
+            ManagedByteArray.writeIntGuest(value, index, integer);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation public static final class IndexIntArray {
         @Specialization public static long index(Object value, long index) {
-            return ManagedIntArray.read(ManagedByteArray.require(value), index);
+            return ManagedByteArray.readIntGuest(value, index);
         }
     }
     @Operation
@@ -1527,23 +1537,21 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadDoubleArray {
         @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            double result = ManagedDoubleArray.read(array, index);
+            double result = ManagedByteArray.readDoubleGuest(value, index);
             destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
     @Operation public static final class WriteDoubleArray {
         @Specialization public static Object write(Object value, long index, double number, Object state) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            ManagedDoubleArray.write(array, index, number);
+            ManagedByteArray.writeDoubleGuest(value, index, number);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation public static final class IndexDoubleArray {
         @Specialization public static double index(Object value, long index) {
-            return ManagedDoubleArray.read(ManagedByteArray.require(value), index);
+            return ManagedByteArray.readDoubleGuest(value, index);
         }
     }
 
@@ -1552,23 +1560,21 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadFloatArray {
         @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            float result = ManagedFloatArray.read(array, index);
+            float result = ManagedByteArray.readFloatGuest(value, index);
             destination.setFloat(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
     @Operation public static final class WriteFloatArray {
         @Specialization public static Object write(Object value, long index, float number, Object state) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            ManagedFloatArray.write(array, index, number);
+            ManagedByteArray.writeFloatGuest(value, index, number);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation public static final class IndexFloatArray {
         @Specialization public static float index(Object value, long index) {
-            return ManagedFloatArray.read(ManagedByteArray.require(value), index);
+            return ManagedByteArray.readFloatGuest(value, index);
         }
     }
 
@@ -1578,25 +1584,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadInt16Array {
         @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            long result = unsigned ? ManagedInt16Array.readUnsigned(array, index) : ManagedInt16Array.readSigned(array, index);
+            long result = ManagedByteArray.readInt16Guest(value, index, unsigned);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
     @Operation public static final class WriteInt16Array {
         @Specialization public static Object write(Object value, long index, long integer, Object state) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            ManagedInt16Array.write(array, index, integer);
+            ManagedByteArray.writeInt16Guest(value, index, integer);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "unsigned")
     public static final class IndexInt16Array {
         @Specialization public static long index(boolean unsigned, Object value, long index) {
-            byte[] array = ManagedByteArray.require(value);
-            return unsigned ? ManagedInt16Array.readUnsigned(array, index) : ManagedInt16Array.readSigned(array, index);
+            return ManagedByteArray.readInt16Guest(value, index, unsigned);
         }
     }
 
@@ -1606,25 +1609,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ReadInt32Array {
         @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            long result = unsigned ? ManagedInt32Array.readUnsigned(array, index) : ManagedInt32Array.readSigned(array, index);
+            long result = ManagedByteArray.readInt32Guest(value, index, unsigned);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
     @Operation public static final class WriteInt32Array {
         @Specialization public static Object write(Object value, long index, long integer, Object state) {
-            byte[] array = ManagedByteArray.require(value);
             ManagedByteArray.requireState(state);
-            ManagedInt32Array.write(array, index, integer);
+            ManagedByteArray.writeInt32Guest(value, index, integer);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "unsigned")
     public static final class IndexInt32Array {
         @Specialization public static long index(boolean unsigned, Object value, long index) {
-            byte[] array = ManagedByteArray.require(value);
-            return unsigned ? ManagedInt32Array.readUnsigned(array, index) : ManagedInt32Array.readSigned(array, index);
+            return ManagedByteArray.readInt32Guest(value, index, unsigned);
         }
     }
 

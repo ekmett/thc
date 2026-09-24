@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 
 /** The primitive JVM byte[] itself is the one unlifted guest reference. No
  * wrapper or per-byte boxing. Its mutable elements are never CompilationFinal.
@@ -65,11 +66,123 @@ internal object ManagedByteArray {
     }
     /** Unsafe freeze changes the static type, not the array or its identity. */
     @JvmStatic fun freeze(bytes: ByteArray): ByteArray = bytes
+    @JvmStatic fun freezeGuest(value: Any?): Any = when (value) {
+        is ManagedAllocation -> value
+        is ByteArray -> value
+        else -> fault("Expected a managed ByteArray#")
+    }
+    @JvmStatic fun resizeGuest(value: Any?, size: Long): Any = when (value) {
+        is ManagedAllocation -> value.resized(size)
+        is ByteArray -> resize(value, size)
+        else -> fault("Expected a managed ByteArray#")
+    }
+    @JvmStatic fun sizeGuest(value: Any?): Long = when (value) {
+        is ManagedAllocation -> value.size
+        is ByteArray -> size(value)
+        else -> fault("Expected a managed ByteArray#")
+    }
+    @JvmStatic fun writeGuest(value: Any?, offset: Long, byteValue: Long) = when (value) {
+        is ManagedAllocation -> value.writeByte(offset, byteValue)
+        else -> write(require(value), offset, byteValue)
+    }
+    @JvmStatic fun readGuest(value: Any?, offset: Long, unsigned: Boolean): Long {
+        val byte = if (value is ManagedAllocation) value.readByte(offset) else read(require(value), offset)
+        return if (unsigned) byte else byte.toByte().toLong()
+    }
+    @JvmStatic fun readIntGuest(value: Any?, index: Long): Long =
+        if (value is ManagedAllocation) value.accessElement(index, 8, false) { ManagedIntArray.read(it, index) }
+        else ManagedIntArray.read(require(value), index)
+    @JvmStatic fun writeIntGuest(value: Any?, index: Long, integer: Long) =
+        if (value is ManagedAllocation) value.accessElement(index, 8, true) { ManagedIntArray.write(it, index, integer) }
+        else ManagedIntArray.write(require(value), index, integer)
+    @JvmStatic fun readDoubleGuest(value: Any?, index: Long): Double =
+        if (value is ManagedAllocation) value.accessElement(index, 8, false) { ManagedDoubleArray.read(it, index) }
+        else ManagedDoubleArray.read(require(value), index)
+    @JvmStatic fun writeDoubleGuest(value: Any?, index: Long, number: Double) =
+        if (value is ManagedAllocation) value.accessElement(index, 8, true) { ManagedDoubleArray.write(it, index, number) }
+        else ManagedDoubleArray.write(require(value), index, number)
+    @JvmStatic fun readFloatGuest(value: Any?, index: Long): Float =
+        if (value is ManagedAllocation) value.accessElement(index, 4, false) { ManagedFloatArray.read(it, index) }
+        else ManagedFloatArray.read(require(value), index)
+    @JvmStatic fun writeFloatGuest(value: Any?, index: Long, number: Float) =
+        if (value is ManagedAllocation) value.accessElement(index, 4, true) { ManagedFloatArray.write(it, index, number) }
+        else ManagedFloatArray.write(require(value), index, number)
+    @JvmStatic fun readInt16Guest(value: Any?, index: Long, unsigned: Boolean): Long =
+        if (value is ManagedAllocation) value.accessElement(index, 2, false) {
+            if (unsigned) ManagedInt16Array.readUnsigned(it, index) else ManagedInt16Array.readSigned(it, index)
+        } else if (unsigned) ManagedInt16Array.readUnsigned(require(value), index)
+        else ManagedInt16Array.readSigned(require(value), index)
+    @JvmStatic fun writeInt16Guest(value: Any?, index: Long, integer: Long) =
+        if (value is ManagedAllocation) value.accessElement(index, 2, true) { ManagedInt16Array.write(it, index, integer) }
+        else ManagedInt16Array.write(require(value), index, integer)
+    @JvmStatic fun readInt32Guest(value: Any?, index: Long, unsigned: Boolean): Long =
+        if (value is ManagedAllocation) value.accessElement(index, 4, false) {
+            if (unsigned) ManagedInt32Array.readUnsigned(it, index) else ManagedInt32Array.readSigned(it, index)
+        } else if (unsigned) ManagedInt32Array.readUnsigned(require(value), index)
+        else ManagedInt32Array.readSigned(require(value), index)
+    @JvmStatic fun writeInt32Guest(value: Any?, index: Long, integer: Long) =
+        if (value is ManagedAllocation) value.accessElement(index, 4, true) { ManagedInt32Array.write(it, index, integer) }
+        else ManagedInt32Array.write(require(value), index, integer)
+    @JvmStatic fun fillGuest(value: Any?, offset: Long, count: Long, byteValue: Long) = when (value) {
+        is ManagedAllocation -> value.fill(offset, count, byteValue)
+        else -> fill(require(value), offset, count, byteValue)
+    }
+    @JvmStatic fun copyGuest(source: Any?, sourceOffset: Long, destination: Any?,
+        destinationOffset: Long, count: Long, mutable: Boolean, nonOverlapping: Boolean = false) {
+        if (source is ByteArray && destination is ByteArray) {
+            if (mutable) copyMutable(source, sourceOffset, destination, destinationOffset, count, nonOverlapping)
+            else copy(source, sourceOffset, destination, destinationOffset, count)
+            return
+        }
+        copyPinned(source, sourceOffset, destination, destinationOffset, count, mutable, nonOverlapping)
+    }
+    @TruffleBoundary
+    private fun copyPinned(source: Any?, sourceOffset: Long, destination: Any?,
+        destinationOffset: Long, count: Long, mutable: Boolean, nonOverlapping: Boolean) {
+        val fromSize = sizeGuest(source)
+        val toSize = sizeGuest(destination)
+        fun contained(size: Long, offset: Long) = offset >= 0 && offset <= size &&
+            count >= 0 && count <= size - offset
+        if (!contained(fromSize, sourceOffset) || !contained(toSize, destinationOffset))
+            fault("ByteArray# copy range outside its backing storage")
+        if (!mutable && source === destination) fault("copyByteArray# requires distinct source and destination arrays")
+        if (nonOverlapping && source === destination && count > 0 &&
+            sourceOffset < destinationOffset + count && destinationOffset < sourceOffset + count)
+            fault("copyMutableByteArrayNonOverlapping# requires disjoint regions")
+        when {
+            source is ManagedAllocation && destination is ManagedAllocation ->
+                destination.copyFrom(source, sourceOffset, destinationOffset, count)
+            source is ManagedAllocation -> {
+                val bytes = source.copyBytesOut(sourceOffset, count)
+                System.arraycopy(bytes, 0, require(destination), destinationOffset.toInt(), count.toInt())
+            }
+            destination is ManagedAllocation ->
+                destination.copyBytesIn(require(source), sourceOffset.toInt(), destinationOffset, count)
+            else -> fault("Expected a managed ByteArray#")
+        }
+    }
+    @JvmStatic fun compareGuest(first: Any?, firstOffset: Long, second: Any?, secondOffset: Long,
+        count: Long): Long {
+        if (first is ByteArray && second is ByteArray)
+            return compare(first, firstOffset, second, secondOffset, count)
+        fun segment(value: Any?, offset: Long): ByteArray {
+            val length = sizeGuest(value)
+            if (offset < 0 || offset > length || count < 0 || count > length - offset)
+                fault("ByteArray# comparison range outside its backing storage")
+            return if (value is ManagedAllocation) value.copyBytesOut(offset, count)
+            else require(value).copyOfRange(offset.toInt(), (offset + count).toInt())
+        }
+        return java.util.Arrays.compareUnsigned(segment(first, firstOffset), segment(second, secondOffset)).toLong()
+    }
     @JvmStatic fun allocate(size: Long): ByteArray {
         if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("ByteArray# size outside the managed allocation domain")
         return ByteArray(size.toInt())
     }
-    @JvmStatic fun require(value: Any?): ByteArray = value as? ByteArray ?: fault("Expected a managed ByteArray#")
+    @JvmStatic fun require(value: Any?): ByteArray = when (value) {
+        is ByteArray -> value
+        is ManagedAllocation -> value.rawBytesIfPointerFree()
+        else -> fault("Expected a managed ByteArray#")
+    }
     @JvmStatic fun requireState(value: Any?) = requireVoidCarrier(value)
 }
 
@@ -213,10 +326,10 @@ private class ResizeByteArrayExpression(@field:Child private var array: Expr,
     @field:Child private var size: Expr, @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val count = size.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], ManagedByteArray.resize(bytes, count))
+        FrameAccess.write(frame, slots[offset], ManagedByteArray.resizeGuest(bytes, count))
         return null
     }
 }
@@ -225,9 +338,9 @@ private class FreezeByteArrayExpression(@field:Child private var array: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], ManagedByteArray.freeze(bytes))
+        FrameAccess.write(frame, slots[offset], ManagedByteArray.freezeGuest(bytes))
         return null
     }
 }
@@ -235,11 +348,11 @@ private class WriteByteArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val offset = index.executeRequiredLong(frame)
         val byte = value.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedByteArray.write(bytes, offset, byte)
+        ManagedByteArray.writeGuest(bytes, offset, byte)
         return Unit
     }
 }
@@ -248,23 +361,23 @@ private class GetSizeMutableByteArrayExpression(@field:Child private var array: 
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        FrameAccess.writeLong(frame, slots[offset], ManagedByteArray.size(bytes))
+        FrameAccess.writeLong(frame, slots[offset], ManagedByteArray.sizeGuest(bytes))
         return null
     }
 }
 private class SizeByteArrayExpression(@field:Child private var array: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long = ManagedByteArray.size(ManagedByteArray.require(array.execute(frame)))
+    override fun executeLong(frame: VirtualFrame): Long = ManagedByteArray.sizeGuest(array.execute(frame))
 }
 private class IndexByteArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val offset = index.executeRequiredLong(frame)
-        return ManagedByteArray.read(bytes, offset)
+        return ManagedByteArray.readGuest(bytes, offset, true)
     }
 }
 
@@ -272,10 +385,10 @@ private class ReadIntArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        FrameAccess.writeLong(frame, slots[offset], ManagedIntArray.read(bytes, element))
+        FrameAccess.writeLong(frame, slots[offset], ManagedByteArray.readIntGuest(bytes, element))
         return null
     }
 }
@@ -283,11 +396,11 @@ private class WriteIntArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         val integer = value.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedIntArray.write(bytes, element, integer)
+        ManagedByteArray.writeIntGuest(bytes, element, integer)
         return Unit
     }
 }
@@ -295,9 +408,9 @@ private class IndexIntArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        return ManagedIntArray.read(bytes, element)
+        return ManagedByteArray.readIntGuest(bytes, element)
     }
 }
 
@@ -305,10 +418,10 @@ private class ReadDoubleArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        FrameAccess.writeDouble(frame, slots[offset], ManagedDoubleArray.read(bytes, element))
+        FrameAccess.writeDouble(frame, slots[offset], ManagedByteArray.readDoubleGuest(bytes, element))
         return null
     }
 }
@@ -316,11 +429,11 @@ private class WriteDoubleArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         val number = value.executeRequiredDouble(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedDoubleArray.write(bytes, element, number)
+        ManagedByteArray.writeDoubleGuest(bytes, element, number)
         return Unit
     }
 }
@@ -328,9 +441,9 @@ private class IndexDoubleArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeDouble(frame)
     override fun executeDouble(frame: VirtualFrame): Double {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        return ManagedDoubleArray.read(bytes, element)
+        return ManagedByteArray.readDoubleGuest(bytes, element)
     }
 }
 
@@ -338,10 +451,10 @@ private class ReadFloatArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        FrameAccess.writeFloat(frame, slots[offset], ManagedFloatArray.read(bytes, element))
+        FrameAccess.writeFloat(frame, slots[offset], ManagedByteArray.readFloatGuest(bytes, element))
         return null
     }
 }
@@ -349,11 +462,11 @@ private class WriteFloatArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         val number = value.executeRequiredFloat(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedFloatArray.write(bytes, element, number)
+        ManagedByteArray.writeFloatGuest(bytes, element, number)
         return Unit
     }
 }
@@ -361,9 +474,9 @@ private class IndexFloatArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeFloat(frame)
     override fun executeFloat(frame: VirtualFrame): Float {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        return ManagedFloatArray.read(bytes, element)
+        return ManagedByteArray.readFloatGuest(bytes, element)
     }
 }
 
@@ -372,10 +485,10 @@ private class ReadInt16ArrayExpression(private val unsigned: Boolean,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        val value = if (unsigned) ManagedInt16Array.readUnsigned(bytes, element) else ManagedInt16Array.readSigned(bytes, element)
+        val value = ManagedByteArray.readInt16Guest(bytes, element, unsigned)
         FrameAccess.writeLong(frame, slots[offset], value)
         return null
     }
@@ -384,11 +497,11 @@ private class WriteInt16ArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         val integer = value.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedInt16Array.write(bytes, element, integer)
+        ManagedByteArray.writeInt16Guest(bytes, element, integer)
         return Unit
     }
 }
@@ -396,9 +509,9 @@ private class IndexInt16ArrayExpression(private val unsigned: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        return if (unsigned) ManagedInt16Array.readUnsigned(bytes, element) else ManagedInt16Array.readSigned(bytes, element)
+        return ManagedByteArray.readInt16Guest(bytes, element, unsigned)
     }
 }
 
@@ -407,10 +520,10 @@ private class ReadInt32ArrayExpression(private val unsigned: Boolean,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        val value = if (unsigned) ManagedInt32Array.readUnsigned(bytes, element) else ManagedInt32Array.readSigned(bytes, element)
+        val value = ManagedByteArray.readInt32Guest(bytes, element, unsigned)
         FrameAccess.writeLong(frame, slots[offset], value)
         return null
     }
@@ -419,11 +532,11 @@ private class WriteInt32ArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         val integer = value.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedInt32Array.write(bytes, element, integer)
+        ManagedByteArray.writeInt32Guest(bytes, element, integer)
         return Unit
     }
 }
@@ -431,9 +544,9 @@ private class IndexInt32ArrayExpression(private val unsigned: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        return if (unsigned) ManagedInt32Array.readUnsigned(bytes, element) else ManagedInt32Array.readSigned(bytes, element)
+        return ManagedByteArray.readInt32Guest(bytes, element, unsigned)
     }
 }
 
@@ -442,13 +555,13 @@ private class CopyByteArrayExpression(@field:Child private var source: Expr,
     @field:Child private var destinationOffset: Expr, @field:Child private var count: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val from = ManagedByteArray.require(source.execute(frame))
+        val from = source.execute(frame)
         val fromOffset = sourceOffset.executeRequiredLong(frame)
-        val to = ManagedByteArray.require(destination.execute(frame))
+        val to = destination.execute(frame)
         val toOffset = destinationOffset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedByteArray.copy(from, fromOffset, to, toOffset, length)
+        ManagedByteArray.copyGuest(from, fromOffset, to, toOffset, length, false)
         return Unit
     }
 }
@@ -458,12 +571,12 @@ private class CompareByteArraysExpression(@field:Child private var first: Expr,
     @field:Child private var secondOffset: Expr, @field:Child private var count: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val left = ManagedByteArray.require(first.execute(frame))
+        val left = first.execute(frame)
         val from = firstOffset.executeRequiredLong(frame)
-        val right = ManagedByteArray.require(second.execute(frame))
+        val right = second.execute(frame)
         val to = secondOffset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
-        return ManagedByteArray.compare(left, from, right, to, length)
+        return ManagedByteArray.compareGuest(left, from, right, to, length)
     }
 }
 
@@ -472,10 +585,10 @@ private class ReadByteArrayExpression(private val unsigned: Boolean,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        val value = if (unsigned) ManagedByteArray.read(bytes, element) else ManagedByteArray.readSigned(bytes, element)
+        val value = ManagedByteArray.readGuest(bytes, element, unsigned)
         FrameAccess.writeLong(frame, slots[offset], value)
         return null
     }
@@ -484,21 +597,21 @@ private class IndexSignedByteArrayExpression(@field:Child private var array: Exp
     @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        return ManagedByteArray.readSigned(bytes, element)
+        return ManagedByteArray.readGuest(bytes, element, false)
     }
 }
 
 private class SetByteArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
     @field:Child private var count: Expr, @field:Child private var value: Expr, @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val bytes = ManagedByteArray.require(array.execute(frame))
+        val bytes = array.execute(frame)
         val start = offset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
         val byte = value.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedByteArray.fill(bytes, start, length, byte)
+        ManagedByteArray.fillGuest(bytes, start, length, byte)
         return Unit
     }
 }
@@ -507,13 +620,13 @@ private class CopyMutableByteArrayExpression(private val nonOverlapping: Boolean
     @field:Child private var destination: Expr, @field:Child private var destinationOffset: Expr,
     @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
-        val from = ManagedByteArray.require(source.execute(frame))
+        val from = source.execute(frame)
         val start = sourceOffset.executeRequiredLong(frame)
-        val to = ManagedByteArray.require(destination.execute(frame))
+        val to = destination.execute(frame)
         val target = destinationOffset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        ManagedByteArray.copyMutable(from, start, to, target, length, nonOverlapping)
+        ManagedByteArray.copyGuest(from, start, to, target, length, true, nonOverlapping)
         return Unit
     }
 }

@@ -1171,6 +1171,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
                         PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(destination[0])
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT ->
                             e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
@@ -1181,16 +1182,23 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
                         PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
                     }
                 } else ProvenExpression(Expression { e ->
-                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.beginByteArrayContents()
-                    else e.builder.beginWriteWord8OffAddr()
+                    when (operation) {
+                        PinnedMemoryOp.CONTENTS -> e.builder.beginByteArrayContents()
+                        PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
+                        else -> e.builder.beginWriteWord8OffAddr()
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.endByteArrayContents()
-                    else e.builder.endWriteWord8OffAddr()
+                    when (operation) {
+                        PinnedMemoryOp.CONTENTS -> e.builder.endByteArrayContents()
+                        PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
+                        else -> e.builder.endWriteWord8OffAddr()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!

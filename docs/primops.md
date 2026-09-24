@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 244 | Implemented fixed numeric/character scalar forms. |
-| Partial | 223 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1024 | No declared lowering. |
+| Partial | 225 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 1022 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -421,6 +421,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
 - [ ] `readDoubleArray#` — arity 3 — Managed byte storage
 - [ ] `readDoubleArrayAsDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -494,6 +495,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unsafeFreezeArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeFreezeByteArray#` — arity 2 — Managed byte storage
+- [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeArray#` — arity 4 — Managed lifted arrays
 - [ ] `writeDoubleArray#` — arity 4 — Managed byte storage
 - [ ] `writeDoubleArrayAsDoubleX2#` — arity 4 — Specialized lowering; see capability and coverage limits
@@ -1087,7 +1089,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `raiseOverflow#` — arity 1
 - [ ] `raiseUnderflow#` — arity 1
 - [ ] `readAddrArray#` — arity 3
-- [ ] `readAddrOffAddr#` — arity 3
 - [ ] `readCharArray#` — arity 3
 - [ ] `readCharOffAddr#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
@@ -1382,7 +1383,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `word32ToInt32#` — arity 1
 - [ ] `word8ToInt8#` — arity 1
 - [ ] `writeAddrArray#` — arity 4
-- [ ] `writeAddrOffAddr#` — arity 4
 - [ ] `writeCharArray#` — arity 4
 - [ ] `writeCharOffAddr#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4

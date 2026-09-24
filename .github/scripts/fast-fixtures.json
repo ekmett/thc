@@ -43,6 +43,16 @@
         "compiler/test-fixtures/ManagedAddressReadNative.hs"
       ]
     },
+    "pinned-pointer-cells": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "pinned-pointer-cells"]}],
+      "outputs": ["build/pinned-pointer-cells"],
+      "sources": [
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/PinnedPointerCellsAudit.hs",
+        "compiler/test-fixtures/PinnedPointerCellsNative.hs"
+      ]
+    },
     "synchronous-exceptions": {
       "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
       "commands": [

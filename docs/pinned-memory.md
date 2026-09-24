@@ -1,7 +1,8 @@
 # Managed pinned memory and bounded MD5 calls
 
 This slice supports `newPinnedByteArray#`, `newAlignedPinnedByteArray#`,
-`byteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#` and `keepAlive#`
+`byteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
+`readAddrOffAddr#`, `writeAddrOffAddr#` and `keepAlive#`
 in both backends. Byte loads/stores retain GHC 9.14.1's exact `Word8Rep`, not
 `WordRep`. Existing address arithmetic and character loads work on either
 immutable literal bytes or mutable byte-array backing.
@@ -11,6 +12,27 @@ unsafe-frozen byte arrays observe the same storage. Immutable literals retain
 their trailing NUL and cannot be written. Full-width bounds are checked before
 narrowing or effects. One-past addresses are valid only for empty ranges.
 Mutable contents are never compilation-final.
+
+Pinned `ByteArray#` values have one allocation owner shared by frozen values
+and every address alias. An owner stores managed `Addr#` references in sparse
+pointer cells; OffAddr pointer offsets count pointer-sized elements, while the
+owner's lookup/write API uses byte offsets. A pointer cell's bytes are not a
+fabricated host address: raw reads and partial overwrites reject before any
+change. Complete byte copies between pinned owners preserve references, and
+complete fills invalidate them. A Sulong buffer view and managed pointer cells
+cannot coexist in one allocation because raw C writes cannot track references.
+Handing out a raw byte-array alias likewise prevents later pointer-cell writes.
+Ordinary unpinned byte arrays remain raw `byte[]`; each pinned allocation adds
+one owner object and creates its cell map only on the first pointer write.
+Pinned owner accesses synchronize to order pointer-cell changes. Ordinary
+unpinned arrays retain their direct byte-array fast path. Concurrent raw writes
+to one guest array remain outside this narrow contract.
+Scalar byte-array reads and writes inspect only their touched range, so a
+disjoint numeric field remains usable beside a pointer cell. Vector operations
+on a pinned array still require a raw view and therefore cannot mix with
+pointer cells in that allocation.
+An aligned full-width numeric overwrite releases the replaced pointer;
+partial overlap fails before changing bytes or references.
 
 Pinning and power-of-two alignment are logical properties of managed storage,
 not physical JVM heap pinning or native process pointers. There is no address
@@ -34,6 +56,14 @@ then checks compiled mutable reads, bounds/overflow, State-before-read order,
 failure-before-publication and malformed loader proofs. Native inputs are
 aligned live allocations; adversarial out-of-bounds inputs are managed-only
 tests. These reads do not enable arbitrary native pointer dereferences.
+
+`cabal run exe:thc-fixtures -- pinned-pointer-cells` exports the genuine
+`newPinnedByteArray#`/freeze/contents/`keepAlive#` sequence at both Core stages,
+with strict representation audits and seven native oracle inputs.
+`PinnedPointerCellsTest` checks the same rows interpreted and explicitly
+compiled on AST and bytecode. It also checks an interior pointer cell and a
+separate numeric field; this does not turn arbitrary C pointer memory into
+managed addresses.
 
 `keepAlive#` preserves a lifted kept reference without forcing it, validates
 State before the action, and invokes the continuation non-tail with exactly
