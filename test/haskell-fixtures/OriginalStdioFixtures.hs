@@ -15,10 +15,15 @@ import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import FixtureSupport
+import Foreign.C.Types (CInt, CLong)
+import Foreign.Ptr (Ptr, nullPtr)
+import Foreign.Storable (sizeOf)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile, renameFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
+import qualified System.Info as Host
+import Text.Read (readMaybe)
 
 entries :: [String]
 entries = ["originalWrite", "originalSafeWrite", "originalWriteErrno", "originalSafeWriteErrno"]
@@ -54,10 +59,19 @@ prepareOriginalStdio root options = do
     let previous = output </> "previous-manifests"
     createDirectoryIfMissing True previous
     renameFile manifest (previous </> digest ++ ".json")
+  -- Native execution domain, not a second semantic/foreign-proof checker.
+  unless (Host.os `elem` ["linux","darwin"] && sizeOf (0 :: CInt) == 4 &&
+          sizeOf (0 :: CLong) == 8 && sizeOf (nullPtr :: Ptr ()) == 8) $
+    die "Original stdio native preparation requires a Linux/macOS LP64 host"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- execute "ghc-version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "Original stdio requires pinned GHC 9.14.1")
   info <- execute "ghc-info" [] ghc ["--info"]
+  case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String,String)] of
+    Just target | Just host <- lookup "Host platform" target,
+                  not (null host), lookup "Target platform" target == Just host,
+                  lookup "target word size" target == Just "8" -> pure ()
+    _ -> die "Original stdio native preparation rejects cross-compiling or non-64-bit GHC"
   (observations,nativeCommands,nativeArtifacts) <- if exportOnly then pure ([],[],[]) else do
     let native = directory </> "native"
         binary = native </> "original-stdio-oracle"
