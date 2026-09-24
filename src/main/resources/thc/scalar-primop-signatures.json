@@ -794,12 +794,33 @@
       ],
       "result": "Int16Rep"
     },
+    "indexInt32OffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Int32Rep"
+    },
+    "indexInt64OffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Int64Rep"
+    },
     "indexInt8OffAddr#": {
       "arguments": [
         "AddrRep",
         "IntRep"
       ],
       "result": "Int8Rep"
+    },
+    "indexIntOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
     },
     "indexWord16OffAddr#": {
       "arguments": [
@@ -808,12 +829,33 @@
       ],
       "result": "Word16Rep"
     },
+    "indexWord32OffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Word32Rep"
+    },
+    "indexWord64OffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Word64Rep"
+    },
     "indexWord8OffAddr#": {
       "arguments": [
         "AddrRep",
         "IntRep"
       ],
       "result": "Word8Rep"
+    },
+    "indexWordOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
     },
     "int16ToInt#": {
       "arguments": [

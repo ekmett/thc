@@ -22,4 +22,6 @@ main = getContents >>= mapM_ answer . lines
         "\t" ++ show (I# (Cells.mutableContentsRoundtrip raw)) ++
         "\t" ++ show (I# (Cells.touchLazyPayload raw)) ++
         "\t" ++ intercalate "," [show (I# (Cells.wideStoreByte raw selector)) |
-          I# selector <- [0..39]])
+          I# selector <- [0..39]] ++
+        "\t" ++ intercalate "," [show (I# (Cells.wideReadSelector raw selector)) |
+          I# selector <- [0..7]])

@@ -1421,7 +1421,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(destination[0])
                         PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
-                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT ->
+                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
+                        PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 ->
                             e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
                         else -> error("Scalar pinned memory operation")
                     }
@@ -1435,7 +1436,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.endReadAddrArray()
                         PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
-                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> e.builder.endReadManagedAddress()
+                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
+                        PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
                     }
                 } else ProvenExpression(Expression { e ->
@@ -1449,6 +1451,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.beginWriteNativeScalarOffAddr(8)
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.beginIndexAddrOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.beginIndexAddrArray()
+                        PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32,
+                        PinnedMemoryOp.INDEX_INT, PinnedMemoryOp.INDEX_WORD,
+                        PinnedMemoryOp.INDEX_INT64, PinnedMemoryOp.INDEX_WORD64 ->
+                            e.builder.beginIndexManagedAddress(operation.addressRead!!)
                         else -> e.builder.beginWriteWord8OffAddr()
                     }
                     operands.forEach { it.emit(e) }
@@ -1462,6 +1468,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.endWriteNativeScalarOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.endIndexAddrOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.endIndexAddrArray()
+                        PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32,
+                        PinnedMemoryOp.INDEX_INT, PinnedMemoryOp.INDEX_WORD,
+                        PinnedMemoryOp.INDEX_INT64, PinnedMemoryOp.INDEX_WORD64 -> e.builder.endIndexManagedAddress()
                         else -> e.builder.endWriteWord8OffAddr()
                     }
                 }, tupleProof.copy(evaluated = true))
