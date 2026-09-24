@@ -48,9 +48,9 @@ frames with primitive operands, two callers sharing a child, repeated yields,
 concurrent readers, and guest failure through three callers.
 
 This remains a cooperative test-only proof, not `throwTo` support. It does not
-deliver asynchronous exceptions, capture arbitrary safepoint PCs, or restore
-Haskell handler and mask state. An uncaptured caller still fails closed rather
-than replaying effects. Production Core lowering is yield-disabled.
+deliver asynchronous exceptions or capture arbitrary safepoint PCs. An
+uncaptured caller still fails closed rather than replaying effects. Production
+Core lowering is yield-disabled.
 
 The production bytecode lowering of synchronous `catch#` and masking actions
 now exposes the protected action, handler, and mask restoration as DSL
@@ -60,3 +60,22 @@ the carrier host thread's ambient mask while saving the logical active and
 prior masks in the continuation, then re-enter that active mask on resumption.
 Ordinary final exit restores the lexical prior mask. The current host-thread
 `ThreadLocal` mask alone cannot express that cross-thread handoff.
+
+`MaskContinuationProofTest` now exercises that boundary with a test-only DSL
+root using the production mask and guest-failure operations. Two nested masks
+and a guest catch surround a shared suspending child. The captured frame keeps
+the primitive operand and the logical active and prior masks. A cold park
+operation restores the original carrier's ambient mask before `Yield` returns;
+the resumed bytecode re-enters the saved active mask before consuming the
+child's answer. `Force` restores the resumer carrier's own ambient mask in a
+`finally` around `ContinuationResult.continueWith`, even when it differs from
+the original carrier's. The test checks normal completion, a caught guest
+failure under the handler mask, cross-thread resume, and no original-body
+replay, with an explicitly compiled initial caller entry. A separate uncaptured
+caller confirms that a Haskell catch rethrows the internal suspension signal,
+restores its mask, and fails closed without invoking the handler.
+
+This proof names the outermost prior mask explicitly. Production suspension
+would need to enumerate every active mask and handler segment to find that
+carrier boundary, save each logical scope, and reinstate them in order. The
+test does not enable production `Yield`, async delivery, or general `throwTo`.

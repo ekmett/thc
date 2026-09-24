@@ -411,7 +411,14 @@ internal class Force(private val metrics: Metrics) : Node() {
             }
             val result = try {
                 if (continuation == null) calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment)
-                else continuation.continueWith(resumeValue)
+                else {
+                    // A captured logical computation may move to another host
+                    // thread. Its bytecode reinstalls the saved logical mask;
+                    // the carrier's ambient mask must survive this cold resume.
+                    val ambient = SynchronousMasking.current(this)
+                    try { continuation.continueWith(resumeValue) }
+                    finally { SynchronousMasking.set(this, ambient) }
+                }
             }
             catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             if (result is ContinuationResult) {
