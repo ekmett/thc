@@ -89,9 +89,13 @@ def check_module(module, auditor, capabilities):
     for name in [*EXPECTED, '__hsbase_MD5Init']:
         report = auditor.Audit([('ForeignCallAudit.json', module)], capabilities).run([name])
         if name in EXPECTED:
+            issues = [('aggregate-boundary', 'unboxed-tuple host result')]
+            if EXPECTED[name]['target'].get('symbol') in ('__hsbase_MD5Init', '__hsbase_MD5Update', '__hsbase_MD5Final'):
+                # These genuine declarations belong to main, not ghc-internal:
+                # the closed MD5 adapter must reject them, never relabel them.
+                issues.append(('foreign-call-representation', 'Invalid MD5 foreign call: static ghc-internal function target'))
             require(not report['accepted'] and len(report['missingGlobals']) == 1
-                    and [(i['code'], i['detail']) for i in report['issues']]
-                    == [('aggregate-boundary', 'unboxed-tuple host result')], 'Foreign frontier changed: '+name)
+                    and [(i['code'], i['detail']) for i in report['issues']] == issues, 'Foreign frontier changed: '+name)
         else:
             require(report['accepted'] and not report['missingGlobals'] and not report['issues'], 'Ordinary same-name Haskell control changed')
     return found
