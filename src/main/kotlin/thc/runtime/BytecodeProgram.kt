@@ -912,6 +912,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.beginCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
+                        ByteArrayOp.SET -> e.builder.beginSetByteArray()
+                        ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING ->
+                            e.builder.beginCopyMutableByteArray(operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING)
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
@@ -934,6 +937,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.endCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.endCopyByteArray()
+                        ByteArrayOp.SET -> e.builder.endSetByteArray()
+                        ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> e.builder.endCopyMutableByteArray()
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()

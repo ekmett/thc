@@ -764,6 +764,26 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return kotlin.Unit.INSTANCE;
         }
     }
+    @Operation public static final class SetByteArray {
+        @Specialization public static Object set(Object value, long offset, long count, long byteValue, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            ManagedByteArray.fill(array, offset, count, byteValue);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "nonOverlapping")
+    public static final class CopyMutableByteArray {
+        @Specialization public static Object copy(boolean nonOverlapping, Object source, long sourceOffset,
+                Object destination, long destinationOffset, long count, Object state) {
+            byte[] from = ManagedByteArray.require(source);
+            byte[] to = ManagedByteArray.require(destination);
+            ManagedByteArray.requireState(state);
+            ManagedByteArray.copyMutable(from, sourceOffset, to, destinationOffset, count, nonOverlapping);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
     @Operation public static final class CompareByteArrays {
         @Specialization public static long compare(Object first, long firstOffset, Object second,
                 long secondOffset, long count) {

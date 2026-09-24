@@ -168,6 +168,7 @@ jobs:
           python3 scripts/test-int8-array-model.py
           python3 scripts/test-show-int-model.py
           python3 scripts/test-array-slice-model.py
+          python3 scripts/test-mutable-bytearray-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -204,6 +205,12 @@ jobs:
             build/tuple-input/
             build/sqrt/
             build/tag-to-enum/
+            build/mutable-bytearrays/manifest.json
+            build/mutable-bytearrays/*.tsv
+            build/mutable-bytearrays/*.audit.json
+            build/mutable-bytearrays/NativeMutableByteArrays.hs
+            build/mutable-bytearrays/*-core/
+            build/mutable-bytearrays/native/mutable-bytearrays-oracle
             build/array-slices/manifest.json
             build/array-slices/*.tsv
             build/array-slices/*.audit.json

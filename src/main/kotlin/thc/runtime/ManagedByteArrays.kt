@@ -24,6 +24,25 @@ internal object ManagedByteArray {
             fault("ByteArray# copy range outside its backing storage")
         System.arraycopy(source, sourceOffset.toInt(), destination, destinationOffset.toInt(), count.toInt())
     }
+    /** Mutable copy has memmove semantics. The separate non-overlapping primop
+     * allows one backing array only when the two contained regions are disjoint. */
+    @JvmStatic fun copyMutable(source: ByteArray, sourceOffset: Long, destination: ByteArray,
+        destinationOffset: Long, count: Long, nonOverlapping: Boolean) {
+        fun contained(size: Long, offset: Long) = offset >= 0 && offset <= size && count >= 0 && count <= size - offset
+        if (!contained(source.size.toLong(), sourceOffset) || !contained(destination.size.toLong(), destinationOffset))
+            fault("ByteArray# copy range outside its backing storage")
+        if (nonOverlapping && source === destination && count > 0 &&
+            sourceOffset < destinationOffset + count && destinationOffset < sourceOffset + count)
+            fault("copyMutableByteArrayNonOverlapping# requires disjoint regions")
+        System.arraycopy(source, sourceOffset.toInt(), destination, destinationOffset.toInt(), count.toInt())
+    }
+    /** GHC lowers the fill to memset: only the low eight bits of Int# are stored. */
+    @JvmStatic fun fill(bytes: ByteArray, offset: Long, count: Long, value: Long) {
+        val size = bytes.size.toLong()
+        if (offset < 0 || offset > size || count < 0 || count > size - offset)
+            fault("ByteArray# fill range outside its backing storage")
+        java.util.Arrays.fill(bytes, offset.toInt(), (offset + count).toInt(), value.toByte())
+    }
     /** GHC promises only the sign of the unsigned lexicographic comparison.
      * Validate both full-width ranges before narrowing; aliases are harmless. */
     @JvmStatic fun compare(first: ByteArray, firstOffset: Long, second: ByteArray, secondOffset: Long, count: Long): Long {
@@ -50,6 +69,11 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     NEW("newByteArray#", listOf(listOf("IntRep"), emptyList()), true),
     WRITE("writeWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word8Rep"), emptyList())),
     COPY("copyByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
+        listOf("IntRep"), listOf("IntRep"), emptyList())),
+    SET("setByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("IntRep"), listOf("IntRep"), emptyList())),
+    COPY_MUTABLE("copyMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
+        listOf("IntRep"), listOf("IntRep"), emptyList())),
+    COPY_MUTABLE_NON_OVERLAPPING("copyMutableByteArrayNonOverlapping#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
         listOf("IntRep"), listOf("IntRep"), emptyList())),
     COMPARE("compareByteArrays#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
         listOf("IntRep"), listOf("IntRep"))),
@@ -87,7 +111,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         if (actual.size != arguments.size) throw RuntimeFault("Primitive arity mismatch: $primitive")
-        fun scalar(proof: CoreRepresentation, registers: List<String>): Boolean = !proof.isTuple &&
+        fun scalar(proof: CoreRepresentation, registers: List<String>): Boolean = !proof.isAggregate &&
             proof.primReps == registers && proof.kind == when (registers.singleOrNull()) {
                 null -> CoreKind.VOID; BYTE_ARRAY_REP -> CoreKind.OBJECT
                 "DoubleRep" -> CoreKind.DOUBLE; "FloatRep" -> CoreKind.FLOAT; else -> CoreKind.LONG
@@ -105,7 +129,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY -> emptyList()
+            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
             SIZE, INDEX_INT, COMPARE -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
             INDEX_INT16 -> listOf("Int16Rep"); INDEX_WORD16 -> listOf("Word16Rep")
@@ -126,6 +150,9 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
+        ByteArrayOp.SET -> SetByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
+        ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> CopyMutableByteArrayExpression(
+            operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING, operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.COMPARE -> CompareByteArraysExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
         ByteArrayOp.SIZE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
@@ -421,5 +448,33 @@ private class IndexSignedByteArrayExpression(@field:Child private var array: Exp
         val bytes = ManagedByteArray.require(array.execute(frame))
         val element = index.executeRequiredLong(frame)
         return ManagedByteArray.readSigned(bytes, element)
+    }
+}
+
+private class SetByteArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
+    @field:Child private var count: Expr, @field:Child private var value: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val start = offset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        val byte = value.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedByteArray.fill(bytes, start, length, byte)
+        return Unit
+    }
+}
+private class CopyMutableByteArrayExpression(private val nonOverlapping: Boolean,
+    @field:Child private var source: Expr, @field:Child private var sourceOffset: Expr,
+    @field:Child private var destination: Expr, @field:Child private var destinationOffset: Expr,
+    @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val from = ManagedByteArray.require(source.execute(frame))
+        val start = sourceOffset.executeRequiredLong(frame)
+        val to = ManagedByteArray.require(destination.execute(frame))
+        val target = destinationOffset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        ManagedByteArray.copyMutable(from, start, to, target, length, nonOverlapping)
+        return Unit
     }
 }
