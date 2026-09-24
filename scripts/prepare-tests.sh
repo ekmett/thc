@@ -12,6 +12,7 @@ python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-unsafe-equality-audit.py
 python3 scripts/prepare-show-int.py
+python3 scripts/prepare-show-word-list.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/check-sum-layout.py --prepare
 python3 scripts/prepare-sum-result-audit.py
