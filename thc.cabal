@@ -55,6 +55,7 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/IO/Handle/Types.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Unsafe.hs
   compiler/pinned-ghc-internal/GHC/Internal/Ix.hs
   compiler/pinned-ghc-internal/GHC/Internal/List.hs
   compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot
