@@ -14,6 +14,11 @@ description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/G
 extra-source-files:
   README.md
   docs/driver.md
+  compiler/pinned-ghc-internal/GHC/Internal/CString.hs
+  compiler/pinned-ghc-internal/LICENSE
+  test/fixtures/run-cstring/cabal.project
+  test/fixtures/run-cstring/run-cstring.cabal
+  test/fixtures/run-cstring/app/Main.hs
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
   test/fixtures/run-pure/app/Answer.hs
