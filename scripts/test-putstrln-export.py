@@ -16,7 +16,7 @@ class RecipeTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
 
     def test_source_options_preserve_algorithm_and_lines(self):
         source = "{-# OPTIONS_GHC -O2 -fno-warn-name-shadowing #-}\nf x = x\n"

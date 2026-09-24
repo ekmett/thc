@@ -396,6 +396,30 @@
         "thc.SignedNarrowPrimopsTest"
       ],
       "python": []
+    },
+    "compiler/putstrln/Main.hs": {
+      "junit": [],
+      "python": [
+        "scripts/test-putstrln-export.py"
+      ]
+    },
+    "scripts/putstrln_export.py": {
+      "junit": [],
+      "python": [
+        "scripts/test-putstrln-export.py"
+      ]
+    },
+    "scripts/putstrln_hsc.py": {
+      "junit": [],
+      "python": [
+        "scripts/test-putstrln-export.py"
+      ]
+    },
+    "scripts/putstrln_inventory.py": {
+      "junit": [],
+      "python": [
+        "scripts/test-putstrln-export.py"
+      ]
     }
   },
   "automation": {
