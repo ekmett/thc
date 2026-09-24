@@ -425,6 +425,8 @@
     "timesFloatX4#": 2,
     "newByteArray#": 2,
     "resizeMutableByteArray#": 3,
+    "getSizeofMutableByteArray#": 2,
+    "sizeofMutableByteArray#": 1,
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
@@ -609,6 +611,23 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "getSizeofMutableByteArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["IntRep"],
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "sizeofMutableByteArray#": {
+      "arguments": [{ "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
     "resizeMutableByteArray#": {
       "arguments": [
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },

@@ -10,7 +10,7 @@ Negative Integers use GHC's `IN` constructor around a nonnegative magnitude. `IP
 
 Malformed decimal and contradictory representation proofs are rejected. GHC Core lint forbids BigNat literal alternatives (`litIsLifted LitNumBigNat`), so both loaders and the auditor reject those explicitly; reference identity is never substituted for a BigNat pattern.
 
-Integer/Natural addition remains a strict frontier. Both stages retain the exact GMP foreign identities and mutable-size/shrink/carry primitive issues; Integer addition also retains `raiseUnderflow`. The source export does not provide foreign implementations or shrink semantics. Multiplication, quotient, general arbitrary-precision arithmetic, and exception/Typeable dependencies are outside this slice.
+Integer/Natural addition remains a strict frontier. Both stages accept the mutable-size queries while retaining the exact shrink/carry primitive issues: eight for Integer addition and six for Natural addition. Their six and three missing identities remain unchanged, including the GMP foreign calls and Integer addition’s `raiseUnderflow`. The source export does not provide foreign implementations or shrink semantics. Multiplication, quotient, general arbitrary-precision arithmetic, and exception/Typeable dependencies are outside this slice.
 
 Reproduce the fresh preparation and focused controls with the pinned GHC/JDK toolchain:
 

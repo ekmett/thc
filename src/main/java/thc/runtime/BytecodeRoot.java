@@ -802,6 +802,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedByteArray.require(second), secondOffset, count);
         }
     }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class GetSizeMutableByteArray {
+        @Specialization public static void size(VirtualFrame frame, LocalAccessor destination,
+                Object value, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = ManagedByteArray.size(array);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
     @Operation public static final class SizeByteArray {
         @Specialization public static long size(Object value) { return ManagedByteArray.size(ManagedByteArray.require(value)); }
     }
