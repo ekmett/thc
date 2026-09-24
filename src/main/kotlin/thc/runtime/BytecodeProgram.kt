@@ -905,6 +905,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
                     when (operation) {
                         ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
+                        ByteArrayOp.RESIZE -> e.builder.beginResizeByteArray(destination[0])
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
@@ -920,6 +921,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         ByteArrayOp.NEW -> e.builder.endNewByteArray()
+                        ByteArrayOp.RESIZE -> e.builder.endResizeByteArray()
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()

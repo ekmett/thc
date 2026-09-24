@@ -180,6 +180,7 @@ jobs:
           python3 scripts/test-short-bytes-slices-model.py
           python3 scripts/test-array-slice-model.py
           python3 scripts/test-mutable-bytearray-model.py
+          python3 scripts/test-resize-bytearrays.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -217,6 +218,12 @@ jobs:
             build/tuple-input/
             build/sqrt/
             build/tag-to-enum/
+            build/resize-bytearrays/manifest.json
+            build/resize-bytearrays/*.tsv
+            build/resize-bytearrays/*.audit.json
+            build/resize-bytearrays/NativeResizeByteArrays.hs
+            build/resize-bytearrays/*-core/
+            build/resize-bytearrays/native/resize-bytearrays-oracle
             build/mutable-bytearrays/manifest.json
             build/mutable-bytearrays/*.tsv
             build/mutable-bytearrays/*.audit.json
