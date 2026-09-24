@@ -77,3 +77,54 @@ sharedAnswer =
         0# -> case readMutVar# cell state2 of
           (# _, value #) -> case value of Box result -> I# (100# +# mask +# result)
         _ -> I# 0#
+
+-- A saturated ordinary call returns nested typed tuple fields. The caller
+-- has a checkpoint before the call and work after all fields are projected.
+{-# OPAQUE tupleDelayed #-}
+tupleDelayed :: Int# -> Box -> State# RealWorld -> (# State# RealWorld, Int#, (# State# RealWorld, Box #) #)
+tupleDelayed input box s0 =
+  case noDuplicate# s0 of { s1 ->
+    case noDuplicate# s1 of { s2 -> (# s2, input +# 1#, (# s2, box #) #) } }
+
+{-# OPAQUE tupleApplicationAnswer #-}
+tupleApplicationAnswer :: Int
+tupleApplicationAnswer =
+  case noDuplicate# realWorld# of { s0 ->
+    case tupleDelayed 6# (Box 7#) s0 of
+      (# _, left, (# _, Box right #) #) -> I# (100# +# left +# right) }
+
+{-# OPAQUE tupleApplicationFailure #-}
+tupleApplicationFailure :: Int
+tupleApplicationFailure =
+  case tupleDelayed 6# (Box 7#) realWorld# of
+    (# _, left, (# _, Box right #) #) ->
+      case left ==# 7# of
+        1# -> raise# (Box 9#)
+        _  -> I# (100# +# left +# right)
+
+-- A zero-width tuple argument selects the compact argument transport while
+-- the result retains the same nested two-field physical tuple shape.
+{-# OPAQUE tupleDelayedCompact #-}
+tupleDelayedCompact :: (# #) -> Int# -> Box -> State# RealWorld -> (# State# RealWorld, Int#, (# State# RealWorld, Box #) #)
+tupleDelayedCompact _ input box s0 =
+  case noDuplicate# s0 of { s1 -> (# s1, input +# 1#, (# s1, box #) #) }
+
+{-# OPAQUE tupleCompactAnswer #-}
+tupleCompactAnswer :: Int
+tupleCompactAnswer =
+  case tupleDelayedCompact (# #) 6# (Box 7#) realWorld# of
+    (# _, left, (# _, Box right #) #) -> I# (100# +# left +# right)
+
+{-# OPAQUE tupleDelayedRaise #-}
+tupleDelayedRaise :: Int# -> Box -> State# RealWorld -> (# State# RealWorld, Int#, (# State# RealWorld, Box #) #)
+tupleDelayedRaise input box s0 =
+  case noDuplicate# s0 of { s1 ->
+    case input ==# 0# of
+      1# -> raise# (Box 9#)
+      _  -> (# s1, input +# 1#, (# s1, box #) #) }
+
+{-# OPAQUE tupleRaiseAnswer #-}
+tupleRaiseAnswer :: Int
+tupleRaiseAnswer =
+  case tupleDelayedRaise 0# (Box 7#) realWorld# of
+    (# _, left, (# _, Box right #) #) -> I# (100# +# left +# right)

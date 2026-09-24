@@ -1375,6 +1375,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] == "touch#") {
+                CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
+                    CoreRepresentations.metadata(expr)?.get("rep"))
+                val lowered = argument(args[0], scope, flags[0] as Boolean)
+                // A newly delayed lifted expression has an untyped thunk carrier.
+                // Its body was checked by lowering; refine without asserting WHNF
+                // or permitting an incompatible known stored representation.
+                val kept = ProvenExpression(lowered,
+                    lowered.proof.refine(CoreRepresentations.expression(args[0]).copy(evaluated = false)))
+                val state = compile(args[1], scope, false)
+                CoreTouch.validate(listOf(kept.proof, state.proof), flags, tupleProof)
+                ProvenExpression(Expression { e ->
+                    e.builder.beginTouch()
+                    kept.emit(e); state.emit(e)
+                    e.builder.endTouch()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
                 CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
                     args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
@@ -1453,7 +1469,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
-                        PinnedMemoryOp.CONTENTS -> e.builder.beginByteArrayContents()
+                        PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.beginByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr()
@@ -1470,7 +1486,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                     operands.forEach { it.emit(e) }
                     when (operation) {
-                        PinnedMemoryOp.CONTENTS -> e.builder.endByteArrayContents()
+                        PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.endByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.endWriteWord16OffAddr()
@@ -1841,6 +1857,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.beginStoreLocal(b.createLocal("typed tuple call", null))
                     typedArguments(e, function, arguments, inputLayout, false, tupleSlots(shape, destination))
                     b.endStoreLocal()
+                } else if (checkpoint != null) {
+                    checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination)
                 } else if (inputLayout == null) {
                     b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
                     requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endApplyTuple()
@@ -1873,6 +1891,57 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.endBlock()
             }
         }
+    }
+
+    /** The private tuple call edge captures only an exact yielded callee; normal return writes typed slots. */
+    private fun checkpointedTupleApplication(e: Emission, shape: TupleShape, function: Expression,
+                                             arguments: List<Expression>, inputLayout: ArgumentLayout?,
+                                             destination: List<BytecodeLocal>) {
+        val b = e.builder
+        val slots = tupleSlots(shape, destination)
+        b.beginBlock()
+        val fn = b.createLocal("captured tuple function", "object")
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = arrayListOf<BytecodeLocal>()
+        arguments.forEachIndexed { index, argument ->
+            if (inputLayout?.isEmpty(index) == true) argument.emitTuple(e, emptyList())
+            else values += b.createLocal("captured tuple operand $index", null).also { local ->
+                b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
+            }
+        }
+        val callerMask = b.createLocal("captured tuple caller mask", "object")
+        val suspended = b.createLocal("captured tuple suspension", "object")
+        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginTryCatch()
+        if (inputLayout == null) {
+            b.beginApplyTupleCheckpoint(slots, arguments.size, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endApplyTupleCheckpoint()
+        } else {
+            b.beginApplyCompactTupleCheckpoint(slots, inputLayout, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endApplyCompactTupleCheckpoint()
+        }
+        b.beginBlock()
+        b.beginStoreLocal(suspended)
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+        b.endStoreLocal()
+        b.beginResumeTupleApplication(slots)
+        b.emitLoadLocal(suspended)
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkCallMask()
+        b.emitLoadLocal(suspended)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.emitLoadLocal(callerMask)
+        b.endParkCallMask()
+        b.endYield()
+        b.emitLoadLocal(callerMask)
+        b.endReenterCallMask()
+        b.endResumeTupleApplication()
+        b.endBlock()
+        b.endTryCatch()
+        b.endBlock()
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
@@ -2302,6 +2371,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     })
     private fun floatingPrimitive(name: String, args: List<Expression>): Expression? {
         val operation = when (name) {
+            "fmaddFloat#" -> "FloatFMAdd"
+            "fmsubFloat#" -> "FloatFMSub"
+            "fnmaddFloat#" -> "FloatFNMAdd"
+            "fnmsubFloat#" -> "FloatFNMSub"
+            "fmaddDouble#" -> "DoubleFMAdd"
+            "fmsubDouble#" -> "DoubleFMSub"
+            "fnmaddDouble#" -> "DoubleFNMAdd"
+            "fnmsubDouble#" -> "DoubleFNMSub"
             "plusFloat#" -> "FloatAdd"
             "minusFloat#" -> "FloatSubtract"
             "timesFloat#" -> "FloatMultiply"
@@ -2371,8 +2448,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             else -> return null
         }
         val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "WordToFloat", "IntToDouble", "WordToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
-        if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
+        val fused = operation in setOf("FloatFMAdd", "FloatFMSub", "FloatFNMAdd", "FloatFNMSub",
+            "DoubleFMAdd", "DoubleFMSub", "DoubleFNMAdd", "DoubleFNMSub")
+        if (args.size != if (fused) 3 else if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
+            "FloatFMAdd", "FloatFMSub", "FloatFNMAdd", "FloatFNMSub" -> CoreKind.FLOAT
+            "DoubleFMAdd", "DoubleFMSub", "DoubleFNMAdd", "DoubleFNMSub" -> CoreKind.DOUBLE
             "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "WordToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
             "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "WordToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
@@ -2380,6 +2461,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         return ProvenExpression(Expression { e ->
             val b = e.builder
             when (operation) {
+                "FloatFMAdd" -> b.beginFloatFMAdd()
+                "FloatFMSub" -> b.beginFloatFMSub()
+                "FloatFNMAdd" -> b.beginFloatFNMAdd()
+                "FloatFNMSub" -> b.beginFloatFNMSub()
+                "DoubleFMAdd" -> b.beginDoubleFMAdd()
+                "DoubleFMSub" -> b.beginDoubleFMSub()
+                "DoubleFNMAdd" -> b.beginDoubleFNMAdd()
+                "DoubleFNMSub" -> b.beginDoubleFNMSub()
                 "FloatAdd" -> b.beginFloatAdd()
                 "FloatSubtract" -> b.beginFloatSubtract()
                 "FloatMultiply" -> b.beginFloatMultiply()
@@ -2449,6 +2538,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             args.forEach { it.emit(e) }
             when (operation) {
+                "FloatFMAdd" -> b.endFloatFMAdd()
+                "FloatFMSub" -> b.endFloatFMSub()
+                "FloatFNMAdd" -> b.endFloatFNMAdd()
+                "FloatFNMSub" -> b.endFloatFNMSub()
+                "DoubleFMAdd" -> b.endDoubleFMAdd()
+                "DoubleFMSub" -> b.endDoubleFMSub()
+                "DoubleFNMAdd" -> b.endDoubleFNMAdd()
+                "DoubleFNMSub" -> b.endDoubleFNMSub()
                 "FloatAdd" -> b.endFloatAdd()
                 "FloatSubtract" -> b.endFloatSubtract()
                 "FloatMultiply" -> b.endFloatMultiply()

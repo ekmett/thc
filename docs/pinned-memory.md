@@ -1,8 +1,8 @@
 # Managed pinned memory and bounded MD5 calls
 
 This slice supports `newPinnedByteArray#`, `newAlignedPinnedByteArray#`,
-`byteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
-`readAddrOffAddr#`, `writeAddrOffAddr#` and `keepAlive#`
+`byteArrayContents#`, `mutableByteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
+`readAddrOffAddr#`, `writeAddrOffAddr#`, `keepAlive#` and `touch#`
 in both backends. Byte loads/stores retain GHC 9.14.1's exact `Word8Rep`, not
 `WordRep`. Existing address arithmetic and character loads work on either
 immutable literal bytes or mutable byte-array backing.
@@ -12,6 +12,13 @@ unsafe-frozen byte arrays observe the same storage. Immutable literals retain
 their trailing NUL and cannot be written. Full-width bounds are checked before
 narrowing or effects. One-past addresses are valid only for empty ranges.
 Mutable contents are never compilation-final.
+
+`mutableByteArrayContents#` returns a managed address directly from a mutable
+array without copying or first freezing it. It requires an exact unlifted object
+operand and an `AddrRep` result, with no State argument or tuple result. Both
+contents operations preserve the same backing allocation and offset identity;
+addresses keep that storage alive and retain pointer-cell protections. This is
+stable managed address access, not a physical JVM address or native heap pin.
 
 Pinned `ByteArray#` values have one allocation owner shared by frozen values
 and every address alias. An owner stores managed `Addr#` references in sparse
@@ -71,6 +78,26 @@ one logical State argument. A Java reachability fence follows actual return or
 throw. Scalar results follow the existing call-root WHNF convention; tuple
 components retain their own evaluatedness. Existing tuple and binary-sum result
 ABIs are reused, without extending aggregate inputs, captures or vector ABIs.
+
+`touch#` preserves an exact lifted or unlifted reference until its State-thread
+position, without entering a lifted thunk. It validates the State carrier before
+issuing a Java reachability fence and returns bare State, not a singleton tuple.
+Raw operand/result proofs and levity flags are checked before lowering; known
+stored or intrinsic representations cannot be disguised by occurrence metadata.
+This does not add weak pointers, finalizers or asynchronous exception semantics.
+
+The existing `pinned-pointer-cells` native fixture exercises mutable contents
+without a freeze, bidirectional array/address writes and an unlifted touch. A
+separate root touches a lifted bottom without entering it. The combined fixture
+keeps the pointer, byte and halfword observations: eleven inputs, nine roots and
+ten TSV columns including the input. Genuine pre/post Core applications retain
+their exact levity, operand and bare-State result proofs; malformed mutations
+are rejected by both loaders. New compiled checks cover both backends with
+inlining enabled and disabled, including active `runRW#` lambdas and split
+callees. They require valid targets on the first and every installed invocation,
+without post-installation settling or recompilation. Managed-only checks cover
+escaped-address lifetime, pointer-cell protection and invalid offsets; native
+tests never execute invalid pointer operations.
 
 ## Three closed foreign contracts
 

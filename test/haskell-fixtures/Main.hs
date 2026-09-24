@@ -10,6 +10,7 @@ module Main (main) where
 import AggregateFixtures (prepareAggregate)
 import WordFloatingFixtures (prepareWordFloating)
 import FloatingAddressFixtures (prepareFloatingAddress)
+import FusedFloatingFixtures (prepareFusedFloating)
 import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
@@ -786,11 +787,14 @@ preparePinnedPointers root = do
         "-fplugin-opt=THC.Plugin:closure=halfwordReadRoundtrip",
         "-fplugin-opt=THC.Plugin:closure=halfwordWriteRoundtrip",
         "-fplugin-opt=THC.Plugin:closure=wideStoreByte",
+        "-fplugin-opt=THC.Plugin:closure=mutableContentsRoundtrip",
+        "-fplugin-opt=THC.Plugin:closure=touchLazyPayload",
         "-fplugin-opt=THC.Plugin:closure=wideReadSelector", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
       "--entry", "pointerArrayRoundtrip", "--entry", "pointerOrder", "--entry", "char8Roundtrip",
       "--entry", "byte8Roundtrip", "--entry", "halfwordReadRoundtrip", "--entry", "halfwordWriteRoundtrip",
-      "--entry", "wideStoreByte", "--entry", "wideReadSelector",
+      "--entry", "wideStoreByte", "--entry", "mutableContentsRoundtrip", "--entry", "touchLazyPayload",
+      "--entry", "wideReadSelector",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
@@ -808,7 +812,7 @@ preparePinnedPointers root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= version,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "pinned-pointer-cells: 13 native rows, nine strict pre/post Core roots"
+  putStrLn "pinned-pointer-cells: 13 native rows, eleven strict pre/post Core roots"
 
 main :: IO ()
 main = do
@@ -822,6 +826,7 @@ main = do
   unless handled $ case args of
     ["word-floating"] -> prepareWordFloating root
     ["floating-address"] -> prepareFloatingAddress root
+    ["fused-floating"] -> prepareFusedFloating root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root
@@ -835,4 +840,4 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|floating-address|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

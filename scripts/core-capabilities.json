@@ -207,6 +207,14 @@
     "int2Double#": 1,
     "word2Float#": 1,
     "word2Double#": 1,
+    "fmaddFloat#": 3,
+    "fmsubFloat#": 3,
+    "fnmaddFloat#": 3,
+    "fnmsubFloat#": 3,
+    "fmaddDouble#": 3,
+    "fmsubDouble#": 3,
+    "fnmaddDouble#": 3,
+    "fnmsubDouble#": 3,
     "float2Int#": 1,
     "double2Int#": 1,
     "float2Double#": 1,
@@ -504,6 +512,7 @@
     "newPinnedByteArray#": 2,
     "newAlignedPinnedByteArray#": 3,
     "byteArrayContents#": 1,
+    "mutableByteArrayContents#": 1,
     "readWord8OffAddr#": 3,
     "readInt8OffAddr#": 3,
     "readWord16OffAddr#": 3,
@@ -545,6 +554,7 @@
     "writeAddrOffAddr#": 4,
     "writeAddrArray#": 4,
     "keepAlive#": 3,
+    "touch#": 2,
     "newByteArray#": 2,
     "resizeMutableByteArray#": 3,
     "getSizeofMutableByteArray#": 2,
@@ -967,6 +977,12 @@
           "AddrRep"
         ]
       }
+    },
+    "mutableByteArrayContents#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]}
+      ],
+      "result": {"kind": "address", "primReps": ["AddrRep"]}
     },
     "readWord32OffAddr#": {
       "arguments": [

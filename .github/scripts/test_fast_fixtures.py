@@ -306,21 +306,25 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
 
-    def test_word_floating_has_focused_and_full_preparation(self):
+    def test_word_and_fused_floating_have_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
-        group = manifest["groups"]["word-floating"]
-        self.assertEqual("word-floating", owners["thc.runtime.WordFloatingTest"])
-        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}], group["commands"])
-        self.assertEqual(["build/word-floating"], group["outputs"])
-        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" word-floating', (project / "scripts/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
-        self.assertIn("build/word-floating", fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn("build/word-floating/manifest.json", fast_fixtures.FULL_REQUIRED)
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
-        self.assertIn("thc.runtime.WordFloatingTest",
-                      policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"])
+        for name, junit in (("word-floating", "thc.runtime.WordFloatingTest"),
+                            ("fused-floating", "thc.runtime.FusedFloatingTest")):
+            with self.subTest(name=name):
+                group = manifest["groups"][name]
+                self.assertEqual(name, owners[junit])
+                self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", name]}], group["commands"])
+                self.assertEqual(["build/" + name], group["outputs"])
+                self.assertTrue(all((project / source).is_file() for source in group["sources"]))
+                self.assertIn('"$fixture_bin" ' + name, (project / "scripts/prepare-tests.sh").read_text().splitlines())
+                self.assertIn("build/" + name, fast_fixtures.FULL_OUTPUT_ROOTS)
+                self.assertIn("build/" + name + "/manifest.json", fast_fixtures.FULL_REQUIRED)
+                self.assertIn("build/" + name + "/", (project / ".github/workflows/build.yml").read_text())
+                self.assertIn(name + "/**/*.json", (project / "build.gradle.kts").read_text())
+                self.assertIn(junit, policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"])
 
     def test_floating_address_fixture_is_selected_and_receipted(self):
         project = Path(__file__).resolve().parents[2]

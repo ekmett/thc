@@ -42,6 +42,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     NEW("newPinnedByteArray#", listOf(listOf("IntRep"), emptyList()), true),
     NEW_ALIGNED("newAlignedPinnedByteArray#", listOf(listOf("IntRep"), listOf("IntRep"), emptyList()), true),
     CONTENTS("byteArrayContents#", listOf(listOf("BoxedRep (Just Unlifted)")), false),
+    MUTABLE_CONTENTS("mutableByteArrayContents#", listOf(listOf("BoxedRep (Just Unlifted)")), false),
     READ("readWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     READ_INT8("readInt8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     READ_CHAR("readCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
@@ -99,7 +100,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
         }
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
             exact(result.components[0], emptyList()) && exact(result.components[1], payload) && result.primReps == payload
-        else exact(result, if (this == CONTENTS || this == INDEX_ADDR_OFF || this == INDEX_ADDR_ARRAY)
+        else exact(result, if (this == CONTENTS || this == MUTABLE_CONTENTS || this == INDEX_ADDR_OFF || this == INDEX_ADDR_ARRAY)
             listOf("AddrRep") else addressRead?.let { listOf(it.payload) } ?: emptyList())
         if (!valid) throw RuntimeFault("Pinned memory result representation mismatch: $primitive")
     }
@@ -119,6 +120,16 @@ internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryO
             index.executeRequiredLong(frame))
         else -> fault("Expected a pointer index primitive")
     }
+}
+
+/** Both contents primops share storage semantics and a direct adopted child.
+ * Do not pass the virtual frame through an array-selected operand or enum arm. */
+internal class PinnedByteArrayContents(proof: CoreRepresentation,
+    @field:Child private var array: Expr) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): ManagedAddress = executeAddress(frame)
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress =
+        ManagedAddress.fromGuestByteArray(array.execute(frame))
 }
 
 internal class PinnedScalarIndexExpression(private val operation: ManagedAddressRead, proof: CoreRepresentation,
@@ -161,7 +172,8 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
     @field:Children private var operands: Array<Expr>) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any = when {
-        operation == PinnedMemoryOp.CONTENTS -> ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
+        operation == PinnedMemoryOp.CONTENTS || operation == PinnedMemoryOp.MUTABLE_CONTENTS ->
+            ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
         operation == PinnedMemoryOp.WRITE || operation == PinnedMemoryOp.WRITE_INT8 ||
             operation == PinnedMemoryOp.WRITE_CHAR -> {
             val address = operands[0].executeRequiredAddress(frame)
@@ -201,7 +213,8 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
         else -> fault("Pinned memory tuple operation requires a destination")
     }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress =
-        if (operation == PinnedMemoryOp.CONTENTS) ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
+        if (operation == PinnedMemoryOp.CONTENTS || operation == PinnedMemoryOp.MUTABLE_CONTENTS)
+            ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
         else super.executeAddress(frame)
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         when (operation) {

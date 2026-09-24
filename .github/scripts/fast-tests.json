@@ -33,6 +33,7 @@
     "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
       "junit": [
         "thc.runtime.FloatingAddressTest",
+        "thc.runtime.FusedFloatingTest",
         "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
@@ -74,6 +75,7 @@
     },
     "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": {
       "junit": [
+        "thc.runtime.FusedFloatingTest",
         "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
@@ -214,11 +216,11 @@
       "python": []
     },
     "compiler/test-fixtures/FloatingAudit.hs": {
-      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest", "thc.runtime.FusedFloatingTest"],
       "python": []
     },
     "compiler/test-fixtures/FloatingAuditNative.hs": {
-      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest", "thc.runtime.FusedFloatingTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStackAudit.hs": {

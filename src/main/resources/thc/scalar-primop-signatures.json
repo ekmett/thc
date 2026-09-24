@@ -541,6 +541,70 @@
       ],
       "result": "IntRep"
     },
+    "fmaddDouble#": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "fmaddFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "fmsubDouble#": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "fmsubFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "fnmaddDouble#": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "fnmaddFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "fnmsubDouble#": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "fnmsubFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "geAddr#": {
       "arguments": [
         "AddrRep",
