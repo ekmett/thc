@@ -213,11 +213,11 @@ class Language : TruffleLanguage<Language.State>() {
     class State(val env: Env, language: Language) {
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
-        internal val files = thc.runtime.ManagedFiles(env)
-        internal val stdio = thc.runtime.ManagedStdio(files)
-        internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
+        internal val files = thc.runtime.ManagedFiles(env, threads)
+        internal val stdio = thc.runtime.ManagedStdio(files)
+        internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.

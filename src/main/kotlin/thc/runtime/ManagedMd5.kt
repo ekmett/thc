@@ -13,6 +13,13 @@ internal object ManagedMd5 {
     private const val INPUT = 24L
     private const val CONTEXT_ALIGNMENT = 4L
 
+    private inline fun <T> foreign(action: () -> T): T {
+        val threads = thc.Language.currentState().threads
+        val previous = threads.enterForeign()
+        try { return action() }
+        finally { threads.leaveForeign(previous) }
+    }
+
     private fun requireContext(context: ManagedAddress) {
         context.requireRange(0, CONTEXT_SIZE, true)
         // GHC's MD5Context has C alignment 4. The Sulong buffer is byte
@@ -24,7 +31,7 @@ internal object ManagedMd5 {
     @TruffleBoundary
     fun init(context: ManagedAddress) {
         requireContext(context)
-        thc.Language.currentState().cbits().init(context)
+        foreign { thc.Language.currentState().cbits().init(context) }
     }
 
     @TruffleBoundary
@@ -47,7 +54,7 @@ internal object ManagedMd5 {
             destination = INPUT
             chunk = minOf(64L, length - source)
         }
-        thc.Language.currentState().cbits().update(context, input, length.toInt())
+        foreign { thc.Language.currentState().cbits().update(context, input, length.toInt()) }
     }
 
     @TruffleBoundary
@@ -57,7 +64,7 @@ internal object ManagedMd5 {
         // C copies only ctx->buf into digest, then clears the entire context.
         // Output overlapping other context bytes is defined and cleared too.
         if (context.overlaps(0, 16, output, 0, 16)) fault("MD5Final overlapping memcpy regions")
-        thc.Language.currentState().cbits().finish(output, context)
+        foreign { thc.Language.currentState().cbits().finish(output, context) }
     }
 
     private fun readWord(address: ManagedAddress, offset: Long): Int {

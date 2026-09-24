@@ -16,6 +16,14 @@ internal class GuestThreads internal constructor(
     private val maskingState: ThreadLocal<MaskingState>,
     private val wake: (Thread) -> Unit
 ) {
+    /** This is execution permission, not the observable Haskell masking state. */
+    internal enum class DeliveryPermission { NONE, GUEST, FOREIGN }
+
+    private class DeliveryState {
+        var permission = DeliveryPermission.NONE
+        val guestPrevious = ArrayDeque<DeliveryPermission>()
+    }
+
     constructor(env: TruffleLanguage.Env, maskingState: ThreadLocal<MaskingState>) : this(
         maskingState,
         { target ->
@@ -35,7 +43,52 @@ internal class GuestThreads internal constructor(
 
     private val threads = HashMap<Long, GuestThread>()
     private val currentSlot = ThreadLocal<GuestThread?>()
+    private val delivery = ThreadLocal<DeliveryState?>()
     private var closed = false
+
+    private fun deliveryState(): DeliveryState = delivery.get() ?: DeliveryState().also { delivery.set(it) }
+
+    /** A foreign call may run before a guest thread has registered with this context. */
+    @TruffleBoundary fun enterForeign(): DeliveryPermission {
+        val state = deliveryState()
+        val previous = state.permission
+        state.permission = DeliveryPermission.FOREIGN
+        foreignExtents.set((foreignExtents.get() ?: 0) + 1)
+        return previous
+    }
+
+    @TruffleBoundary fun leaveForeign(previous: DeliveryPermission) {
+        val state = delivery.get() ?: error("Foreign execution has no delivery state")
+        check(state.permission == DeliveryPermission.FOREIGN) { "Foreign execution exited across a guest entry" }
+        val depth = foreignExtents.get() ?: error("Foreign execution has no Java-thread origin")
+        check(depth > 0)
+        if (depth == 1) foreignExtents.remove() else foreignExtents.set(depth - 1)
+        state.permission = previous
+        if (previous == DeliveryPermission.NONE && state.guestPrevious.isEmpty()) delivery.remove()
+    }
+
+    private fun enterGuestPermission() {
+        val state = deliveryState()
+        state.guestPrevious.addLast(state.permission)
+        state.permission = DeliveryPermission.GUEST
+    }
+
+    private fun leaveGuestPermission() {
+        val state = delivery.get() ?: error("Guest entry has no delivery state")
+        check(state.permission == DeliveryPermission.GUEST && state.guestPrevious.isNotEmpty()) {
+            "Guest entry exited across foreign execution"
+        }
+        state.permission = state.guestPrevious.removeLast()
+        if (state.permission == DeliveryPermission.NONE && state.guestPrevious.isEmpty()) delivery.remove()
+    }
+
+    /** An uncaught callback cannot carry its opaque foreign caller as a guest continuation. */
+    internal fun inForeignCallback(): Boolean {
+        val state = delivery.get() ?: return false
+        // Another THC context may own the opaque Java frame. This process-wide
+        // thread-local tags origin only; it never grants delivery in this context.
+        return state.permission == DeliveryPermission.GUEST && (foreignExtents.get() ?: 0) > 0
+    }
 
     @TruffleBoundary @Synchronized fun enterCurrent(inheritedMask: MaskingState? = null): Long {
         check(!closed) { "Guest context has closed" }
@@ -47,6 +100,7 @@ internal class GuestThreads internal constructor(
         val slot = prior ?: GuestThread(current).also { threads[id] = it }
         slot.entries++
         currentSlot.set(slot)
+        enterGuestPermission()
         return id
     }
 
@@ -86,6 +140,7 @@ internal class GuestThreads internal constructor(
     fun poll(node: Node, interruptible: Boolean = false): AsyncRequest? {
         val slot = currentSlot.get() ?: return null
         if (!slot.pending) return null
+        if (delivery.get()?.permission != DeliveryPermission.GUEST) return null
         return claim(slot, node, interruptible)
     }
 
@@ -97,6 +152,7 @@ internal class GuestThreads internal constructor(
         if (closed) return null
         val current = Thread.currentThread()
         if (target.thread !== current || threads[current.threadId()] !== target ||
+            delivery.get()?.permission != DeliveryPermission.GUEST ||
             target.claimed != null || target.queue.isEmpty()) return null
         val request = target.queue.first()
         val allowed = request.forceSelf || when (maskingState.get()) {
@@ -114,6 +170,7 @@ internal class GuestThreads internal constructor(
 
     /** Called by the target in the same finally block that ends its guest action. */
     @TruffleBoundary fun leaveCurrent() {
+        leaveGuestPermission()
         val finished = synchronized(this) {
             val current = Thread.currentThread()
             val target = threads[current.threadId()]
@@ -199,6 +256,8 @@ internal class GuestThreads internal constructor(
     }
 
     companion object {
+        private val foreignExtents = ThreadLocal<Int?>()
+
         /** Java-callable poll for bytecode roots; it never delivers from a wake action. */
         @JvmStatic fun pollCurrent(node: Node, interruptible: Boolean): AsyncRequest? =
             Language.currentState(node).threads.poll(node, interruptible)
@@ -222,6 +281,8 @@ internal class AsyncRequest internal constructor(
         internal set
     /** Set by the bytecode poll before crossing into the mailbox boundary. */
     @JvmField @Volatile var compiledCapture = false
+
+    internal fun inForeignCallback(): Boolean = owner.inForeignCallback()
 
     internal fun transition(next: AsyncRequestState) = synchronized(monitor) {
         state = next

@@ -81,6 +81,13 @@ internal class PolyglotAccess : Node() {
     @Child private var functions = InteropLibrary.getFactory().createDispatched(3)
     @Child private var numbers = InteropLibrary.getFactory().createDispatched(3)
 
+    private inline fun <T> foreign(action: () -> T): T {
+        val threads = Language.currentState(this).threads
+        val previous = threads.enterForeign()
+        try { return action() }
+        finally { threads.leaveForeign(previous) }
+    }
+
     @TruffleBoundary
     private fun parse(language: ManagedAddress, source: ManagedAddress, name: ManagedAddress) =
         Language.currentState(this).env.parsePublic(Source.newBuilder(language.utf8(), source.utf8(), name.utf8()).build())
@@ -88,8 +95,10 @@ internal class PolyglotAccess : Node() {
     fun eval(language: ManagedAddress, source: ManagedAddress, name: ManagedAddress, state: Any?): ForeignValue {
         requireVoidCarrier(state)
         val owner = Language.currentState(this)
-        val value = evalCall.call(parse(language, source, name))
-        return ForeignValue(owner, value ?: fault("Foreign evaluation returned a host null"))
+        return foreign {
+            val value = evalCall.call(parse(language, source, name))
+            ForeignValue(owner, value ?: fault("Foreign evaluation returned a host null"))
+        }
     }
 
     private fun receiver(frame: VirtualFrame, value: Any?): Any {
@@ -101,9 +110,10 @@ internal class PolyglotAccess : Node() {
     fun readMember(frame: VirtualFrame, value: Any?, name: ManagedAddress, state: Any?): ForeignValue {
         requireVoidCarrier(state)
         val receiver = receiver(frame, value)
-        return try {
-            ForeignValue(Language.currentState(this), members.readMember(receiver, name.utf8()))
-        } catch (error: InteropException) { interopFailure("readMember", error) }
+        return foreign {
+            try { ForeignValue(Language.currentState(this), members.readMember(receiver, name.utf8())) }
+            catch (error: InteropException) { interopFailure("readMember", error) }
+        }
     }
 
     fun executeInt(frame: VirtualFrame, value: Any?, argument: Long, state: Any?): Long {
@@ -113,11 +123,13 @@ internal class PolyglotAccess : Node() {
         // Number. A separate BigInt conversion is needed for all 64-bit inputs.
         if (argument !in -9_007_199_254_740_991L..9_007_199_254_740_991L)
             fault("Polyglot executeInt input exceeds the exact Number integer range")
-        return try {
-            val answer = functions.execute(receiver, argument)
-            if (!numbers.fitsInLong(answer)) fault("Polyglot executeInt result is not an exact Int#")
-            numbers.asLong(answer)
-        } catch (error: InteropException) { interopFailure("executeInt", error) }
+        return foreign {
+            try {
+                val answer = functions.execute(receiver, argument)
+                if (!numbers.fitsInLong(answer)) fault("Polyglot executeInt result is not an exact Int#")
+                numbers.asLong(answer)
+            } catch (error: InteropException) { interopFailure("executeInt", error) }
+        }
     }
 
     @TruffleBoundary

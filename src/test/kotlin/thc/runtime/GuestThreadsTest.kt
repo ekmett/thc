@@ -114,6 +114,112 @@ class GuestThreadsTest {
         assertEquals(MaskingState.UNMASKED, masks.get())
     }
 
+    @Test fun foreignCallDefersDeliveryButNestedGuestCallbackUsesTheSameThreadAndMask() {
+        val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val threads = GuestThreads(masks) { }
+        val id = threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
+        val original = Thread.currentThread()
+        try {
+            val submitted = AtomicReference<AsyncRequest>()
+            val sender = Thread { submitted.set(threads.send(id, "external")) }
+            sender.start(); sender.join(5000)
+            assertFalse(sender.isAlive)
+            val external = submitted.get()
+            val prior = threads.enterForeign()
+            try {
+                assertNull(threads.poll(node, true), "An opaque Java frame cannot own a guest continuation")
+                assertEquals(id, threads.enterCurrent(), "A callback keeps the Java ThreadId#")
+                try {
+                    assertSame(original, Thread.currentThread())
+                    assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, masks.get())
+                    assertNull(threads.poll(node, true), "The callback keeps the Haskell mask")
+                    masks.set(MaskingState.UNMASKED)
+                    val nestedForeign = threads.enterForeign()
+                    try { assertNull(threads.poll(node), "Nested Java execution has no guest cut") }
+                    finally { threads.leaveForeign(nestedForeign) }
+                    assertSame(external, threads.poll(node), "The callback has its own guest delivery cut")
+                    external.acknowledge()
+                } finally { threads.leaveCurrent() }
+                assertNull(threads.poll(node), "Callback exit restores foreign execution")
+                val self = threads.send(id, "self")
+                assertNull(threads.poll(node), "Even self throwTo cannot claim inside opaque Java")
+                assertEquals(id, threads.enterCurrent())
+                try {
+                    masks.set(MaskingState.MASKED_UNINTERRUPTIBLE)
+                    assertSame(self, threads.poll(node), "Self throwTo bypasses the Haskell mask at a guest cut")
+                    self.acknowledge()
+                } finally { threads.leaveCurrent() }
+            } finally { threads.leaveForeign(prior) }
+            assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, masks.get())
+            assertNull(threads.poll(node))
+            assertEquals(AsyncRequestState.ACKNOWLEDGED, external.state)
+        } finally { threads.leaveCurrent() }
+    }
+
+    @Test fun foreignScopeBeforeRegistrationAndExceptionalCallbackExitRestorePermission() {
+        val threads = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        val prior = threads.enterForeign()
+        try {
+            assertNull(threads.poll(node))
+            assertThrows(RuntimeFault::class.java) { threads.currentId() }
+            val id = threads.enterCurrent()
+            val request = threads.send(id, Any())
+            try {
+                val failure = assertThrows(ForeignCallbackAsyncFailure::class.java) {
+                    try { AsyncContinuations.uncaught(threads.poll(node)!!, node) }
+                    finally { threads.leaveCurrent() }
+                }
+                assertSame(request.payload, failure.payload)
+                assertSame(request.payload, (failure.cause as GuestException).payload)
+                assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                assertNull(threads.poll(node))
+            } finally {
+                // The callback's exception is a foreign-visible failure, not a saved Java frame.
+                assertEquals(AsyncRequestState.TARGET_FINISHED, threads.send(id, Unit).state)
+            }
+        } finally { threads.leaveForeign(prior) }
+        val id = threads.enterCurrent()
+        try {
+            val request = threads.send(id, "new guest entry")
+            assertSame(request, threads.poll(node))
+            request.acknowledge()
+        } finally { threads.leaveCurrent() }
+    }
+
+    @Test fun foreignOriginCrossesContextsWithoutSharingTheirMailboxesOrMasks() {
+        val outerMask = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val innerMask = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val outer = GuestThreads(outerMask) { }
+        val inner = GuestThreads(innerMask) { }
+        outer.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
+        try {
+            val previous = outer.enterForeign()
+            try {
+                val id = inner.enterCurrent()
+                try {
+                    assertEquals(Thread.currentThread().threadId(), id)
+                    assertEquals(MaskingState.UNMASKED, innerMask.get())
+                    assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, outerMask.get())
+                    val payload = Any()
+                    val request = inner.send(id, payload)
+                    val failure = assertThrows(ForeignCallbackAsyncFailure::class.java) {
+                        AsyncContinuations.uncaught(inner.poll(node)!!, node)
+                    }
+                    assertSame(payload, failure.payload)
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                    assertNull(outer.poll(node), "The callback cannot claim another context's mailbox")
+                } finally { inner.leaveCurrent() }
+            } finally { outer.leaveForeign(previous) }
+        } finally { outer.leaveCurrent() }
+        // A later top-level entry has no foreign ancestor and retains its ordinary API.
+        val id = inner.enterCurrent()
+        try {
+            val request = inner.send(id, Any())
+            assertThrows(GuestException::class.java) { AsyncContinuations.uncaught(inner.poll(node)!!, node) }
+            assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+        } finally { inner.leaveCurrent() }
+    }
+
     @Test fun exactUnliftedThreadIdAndLazyKillPayloadContract() {
         val state = CoreRepresentation(CoreKind.VOID, true, true, emptyList())
         val thread = CoreRepresentation(CoreKind.OBJECT, true, true, listOf("BoxedRep (Just Unlifted)"))

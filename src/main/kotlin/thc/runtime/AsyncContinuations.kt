@@ -17,6 +17,11 @@ internal class AsyncDelivery(val request: AsyncRequest, node: Node) :
 internal class AsyncBlocked(val request: AsyncRequest, node: Node) :
     AbstractTruffleException("Asynchronous interruption before blocking operation committed", null, 0, node)
 
+/** A callback's uncaught async delivery is foreign-visible, but its opaque Java caller
+ * has no saved guest continuation and must not become a memoized guest failure. */
+internal class ForeignCallbackAsyncFailure(val payload: Any?, guest: GuestException, node: Node) :
+    AbstractTruffleException("Uncaught asynchronous guest callback", guest, 0, node)
+
 /** A trampoline has discarded every caller suffix and reached this exact tail target. */
 internal class TailYield(val continuation: ContinuationResult, val target: RootCallTarget) {
     init {
@@ -56,8 +61,11 @@ internal object AsyncContinuations {
         check(request.target === Thread.currentThread() && request.state == AsyncRequestState.CLAIMED) {
             "Uncaught async request left its target or was already settled"
         }
+        val foreignCallback = request.inForeignCallback()
         request.acknowledge()
-        throw GuestException(request.payload, node)
+        val guest = GuestException(request.payload, node)
+        if (foreignCallback) throw ForeignCallbackAsyncFailure(request.payload, guest, node)
+        throw guest
     }
 
     @JvmStatic fun publicResult(result: Any?, node: Node): Any? {

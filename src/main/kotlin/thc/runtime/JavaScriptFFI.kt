@@ -122,6 +122,14 @@ internal class JavaScriptAccess(private val declaration: JavaScriptImport) : Nod
     @Child private var calls = InteropLibrary.getFactory().createDispatched(3)
     @Child private var numbers = InteropLibrary.getFactory().createDispatched(3)
 
+    /** Only the foreign call is opaque; a reentrant THC public entry opens its own guest cut. */
+    private inline fun <T> foreign(action: () -> T): T {
+        val threads = Language.currentState(this).threads
+        val previous = threads.enterForeign()
+        try { return action() }
+        finally { threads.leaveForeign(previous) }
+    }
+
     private fun function(): Any {
         val owner = Language.currentState(this)
         val entry = cached
@@ -158,17 +166,17 @@ internal class JavaScriptAccess(private val declaration: JavaScriptImport) : Nod
         catch (error: InteropException) { failure(error) }
     }
 
-    fun executeLong(arguments: Array<Any?>, state: Any?): Long {
+    fun executeLong(arguments: Array<Any?>, state: Any?): Long = foreign {
         val value = execute(arguments, state)
         if (!numbers.fitsInLong(value)) fault("JavaScript import result is not an exact Int#")
-        return numbers.asLong(value)
+        numbers.asLong(value)
     }
-    fun executeDouble(arguments: Array<Any?>, state: Any?): Double {
+    fun executeDouble(arguments: Array<Any?>, state: Any?): Double = foreign {
         val value = execute(arguments, state)
         if (!numbers.fitsInDouble(value)) fault("JavaScript import result is not a Double#")
-        return numbers.asDouble(value)
+        numbers.asDouble(value)
     }
-    fun executeVoid(arguments: Array<Any?>, state: Any?) { execute(arguments, state) }
+    fun executeVoid(arguments: Array<Any?>, state: Any?) { foreign { execute(arguments, state) } }
     @TruffleBoundary private fun failure(error: InteropException): Nothing =
         throw RuntimeFault("JavaScript import: ${error.message}")
 }

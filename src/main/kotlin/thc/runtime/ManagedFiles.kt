@@ -22,7 +22,7 @@ import java.nio.file.StandardOpenOption
  * claims belong to one THC context. Only regular files and the embedding's
  * three streams are supported. Calls are synchronous: this is not a scheduler,
  * readiness service, or an implementation of interruptible foreign calls. */
-internal class ManagedFiles(private val env: TruffleLanguage.Env) {
+internal class ManagedFiles(private val env: TruffleLanguage.Env, private val threads: GuestThreads) {
     private data class FileIdentity(val device: Long, val inode: Long)
     private class Descriptor(
         val input: InputStream? = null,
@@ -73,26 +73,33 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
         }
     }
 
-    private inline fun result(action: () -> Long): Long = try {
-        action()
-    } catch (error: FileFailure) {
-        failure.set(Failure(error.kind, error.message ?: "File operation failed")); -1L
-    } catch (error: NoSuchFileException) {
-        failure.set(Failure(1, error.message ?: "File does not exist")); -1L
-    } catch (error: NotDirectoryException) {
-        failure.set(Failure(1, error.message ?: "A path component is not a directory")); -1L
-    } catch (error: AccessDeniedException) {
-        failure.set(Failure(2, error.message ?: "File access denied")); -1L
-    } catch (error: SecurityException) {
-        failure.set(Failure(2, error.message ?: "File access denied by the embedding context")); -1L
-    } catch (error: FileAlreadyExistsException) {
-        failure.set(Failure(3, error.message ?: "File already exists")); -1L
-    } catch (error: InvalidPathException) {
-        failure.set(Failure(5, error.message ?: "Invalid file path")); -1L
-    } catch (error: UnsupportedOperationException) {
-        failure.set(Failure(7, error.message ?: "File operation is not supported")); -1L
-    } catch (error: IOException) {
-        failure.set(Failure(6, error.message ?: "File operation failed")); -1L
+    private inline fun result(action: () -> Long): Long {
+        // Embedding streams and TruffleFile providers are opaque Java calls.
+        // A reentrant guest entry opens its own cut; completion never polls here.
+        val previous = threads.enterForeign()
+        return try {
+            action()
+        } catch (error: FileFailure) {
+            failure.set(Failure(error.kind, error.message ?: "File operation failed")); -1L
+        } catch (error: NoSuchFileException) {
+            failure.set(Failure(1, error.message ?: "File does not exist")); -1L
+        } catch (error: NotDirectoryException) {
+            failure.set(Failure(1, error.message ?: "A path component is not a directory")); -1L
+        } catch (error: AccessDeniedException) {
+            failure.set(Failure(2, error.message ?: "File access denied")); -1L
+        } catch (error: SecurityException) {
+            failure.set(Failure(2, error.message ?: "File access denied by the embedding context")); -1L
+        } catch (error: FileAlreadyExistsException) {
+            failure.set(Failure(3, error.message ?: "File already exists")); -1L
+        } catch (error: InvalidPathException) {
+            failure.set(Failure(5, error.message ?: "Invalid file path")); -1L
+        } catch (error: UnsupportedOperationException) {
+            failure.set(Failure(7, error.message ?: "File operation is not supported")); -1L
+        } catch (error: IOException) {
+            failure.set(Failure(6, error.message ?: "File operation failed")); -1L
+        } finally {
+            threads.leaveForeign(previous)
+        }
     }
 
     /** Read0/Write1/Append2/ReadWrite3. Write truncates only after the context's
@@ -227,12 +234,18 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env) {
         val entries = descriptors.values.toList()
         descriptors.clear()
         var failed: Throwable? = null
-        for (entry in entries) try {
-            entry.channel?.close()
-            entry.output?.flush()
-        } catch (error: Throwable) {
-            if (failed == null) failed = error else if (failed !== error) failed.addSuppressed(error)
-        }
+        // Context teardown may invoke an embedding stream after this context's
+        // guest registry has closed. A callback into another context remains
+        // under an opaque Java frame and must retain that async origin.
+        val previous = threads.enterForeign()
+        try {
+            for (entry in entries) try {
+                entry.channel?.close()
+                entry.output?.flush()
+            } catch (error: Throwable) {
+                if (failed == null) failed = error else if (failed !== error) failed.addSuppressed(error)
+            }
+        } finally { threads.leaveForeign(previous) }
         failure.remove()
         if (failed is IOException)
             throw RuntimeFault("THC file disposal failed: ${failed.message}").also { it.initCause(failed) }

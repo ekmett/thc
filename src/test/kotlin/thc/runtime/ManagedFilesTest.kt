@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.nodes.Node
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.io.FileSystem
 import org.graalvm.polyglot.io.IOAccess
@@ -19,6 +20,8 @@ import java.nio.file.LinkOption
 import java.nio.file.OpenOption
 import java.nio.file.Path
 import java.nio.file.attribute.FileAttribute
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /** Managed service contract tests, not a claim of ordinary GHC Handle execution. */
 class ManagedFilesTest {
@@ -69,6 +72,70 @@ class ManagedFilesTest {
         } }
         assertFalse(input.closed); assertFalse(output.closed); assertFalse(errors.closed)
         // Polyglot itself may flush the embedding streams again on Context.close.
+    }
+
+    @Test fun embeddingStreamCallDefersDeliveryUntilAnExplicitGuestCallback() {
+        val node = object : Node() {}
+        lateinit var threads: GuestThreads
+        var id = -1L
+        lateinit var request: AsyncRequest
+        val output = object : ByteArrayOutputStream() {
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                assertNull(threads.poll(node), "Embedding stream code is foreign execution")
+                assertEquals(id, threads.enterCurrent())
+                try {
+                    assertSame(request, threads.poll(node), "Reentrant guest entry has its own cut")
+                    request.acknowledge()
+                } finally { threads.leaveCurrent() }
+                assertNull(threads.poll(node), "Stream execution resumes as foreign")
+                super.write(bytes, offset, length)
+            }
+        }
+        builder().out(output).build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val state = Language.currentState()
+                threads = state.threads
+                id = threads.enterCurrent()
+                try {
+                    request = threads.send(id, "stream callback")
+                    assertEquals(3L, state.files.write(1, bytes("abc"), 3))
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                    assertEquals("abc", output.toString(Charsets.UTF_8))
+                    val after = threads.send(id, "after stream")
+                    assertSame(after, threads.poll(node))
+                    after.acknowledge()
+                } finally { threads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun teardownFlushRetainsForeignOriginForAnotherContextCallback() {
+        val node = object : Node() {}
+        val other = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        val armed = AtomicBoolean()
+        val observed = AtomicReference<ForeignCallbackAsyncFailure>()
+        val output = object : ByteArrayOutputStream() {
+            override fun flush() {
+                if (armed.compareAndSet(true, false)) {
+                    val id = other.enterCurrent()
+                    try {
+                        val request = other.send(id, "teardown callback")
+                        val failure = assertThrows(ForeignCallbackAsyncFailure::class.java) {
+                            AsyncContinuations.uncaught(other.poll(node)!!, node)
+                        }
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                        observed.set(failure)
+                    } finally { other.leaveCurrent() }
+                }
+                super.flush()
+            }
+        }
+        val context = builder().out(output).build()
+        context.initialize("thc")
+        armed.set(true)
+        context.close()
+        assertEquals("teardown callback", observed.get().payload)
     }
 
     @Test fun realFileRoundTripSupportsOffsetsUnicodeNamesEofAndNonReusedDescriptors() {
