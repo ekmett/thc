@@ -131,7 +131,10 @@ class PinnedPointerCellsTest {
         assertEquals(0xffffffffL, ManagedAddressRead.WORD32.read(derived, -2))
         assertEquals(0x123456789abcdefL, ManagedAddressRead.INT64.read(derived, 2))
         assertEquals(0x123456789abcdefL, ManagedAddressRead.WORD64.read(derived, 2))
-        for (operation in listOf(ManagedAddressRead.INT32, ManagedAddressRead.WORD64))
+        assertEquals(0x123456789abcdefL, ManagedAddressRead.INT64.read(base.plus(48), -1))
+        for (operation in listOf(ManagedAddressRead.INT32, ManagedAddressRead.WORD32,
+            ManagedAddressRead.INT, ManagedAddressRead.WORD,
+            ManagedAddressRead.INT64, ManagedAddressRead.WORD64))
             for (index in listOf(Long.MIN_VALUE, Long.MAX_VALUE))
                 assertThrows(RuntimeFault::class.java) { operation.read(derived, index) }
         val target = base.plus(56)
@@ -295,10 +298,7 @@ class PinnedPointerCellsTest {
                         }
                         assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     }
-                    // Profile the compact values before compiling the inner State#
-                    // lambda; replay every native row, including both wide values,
-                    // against the explicitly compiled call target below.
-                    rows.filter { it.input in Int.MIN_VALUE..Int.MAX_VALUE }.forEach { checkWide(it, 0..39) }
+                    rows.forEach { checkWide(it, 0..39) }
                     assertTrue(function.invokeMember("compile").asBoolean(), "$stage/$backend/$entry compilation")
                     valid(program.hostEntryTarget(2), "$stage/$backend/$entry host target after compilation")
                     for (row in rows.asReversed()) {
@@ -324,7 +324,7 @@ class PinnedPointerCellsTest {
                                 "$stage/$backend/$readEntry/${row.input}/$selector")
                         assertEquals(0L, (readProgram.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     }
-                    rows.filter { it.input in Int.MIN_VALUE..Int.MAX_VALUE }.forEach { checkRead(it, 0..7) }
+                    rows.forEach { checkRead(it, 0..7) }
                     assertTrue(readFunction.invokeMember("compile").asBoolean(), "$stage/$backend/$readEntry compilation")
                     valid(readProgram.hostEntryTarget(2), "$stage/$backend/$readEntry host target after compilation")
                     for (row in rows.asReversed()) {
