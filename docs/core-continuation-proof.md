@@ -148,3 +148,14 @@ local tags; wrong-child and malformed resumes fail closed. The ordinary
 `checkpoint == null` `ForceValue` operation is unchanged. A selector function
 that returns a lazy argument still enters it to satisfy the runtime's WHNF
 call-result convention; that deeper call is not admitted by this edge.
+
+The private original `catch#` cut can now carry a context-owned request bound
+to the exact parked parent and child continuations. Cancellation wins only
+while the request is pending; claiming the parent commits it, and the sender
+is acknowledged only when the saved original handler extracts the async-origin
+payload. A host unwind before that extraction fails the request and leaves
+the parent fail-closed; context disposal wakes pending senders. The request
+is independent of the host carrier, so another thread may perform the cut.
+This is still a private proof API: there is no guest task scheduler, safepoint
+submission, production checkpoint, or `throwTo` admission. At most one request
+per captured parent is admitted until the earlier request terminates.
