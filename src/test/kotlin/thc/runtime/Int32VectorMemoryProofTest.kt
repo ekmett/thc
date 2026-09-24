@@ -15,6 +15,7 @@ import thc.Language
 import java.nio.ByteOrder
 
 class Int32VectorMemoryProofTest {
+    private val operations = VectorByteArrayOp.entries.filterNot { it.unsigned }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to if (rep == null) emptyList<String>() else listOf(rep), "evaluated" to true)
     private val state = scalar("void", null)
@@ -125,9 +126,9 @@ class Int32VectorMemoryProofTest {
     @Test fun allSixExactContractsExecuteOnBothBackendsInBothLoadModes() {
         assertEquals(setOf("indexInt32X4Array#", "indexInt32ArrayAsInt32X4#", "readInt32X4Array#",
             "readInt32ArrayAsInt32X4#", "writeInt32X4Array#", "writeInt32ArrayAsInt32X4#"),
-            VectorByteArrayOp.entries.map { it.primitive }.toSet())
+            operations.map { it.primitive }.toSet())
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
-            for (operation in VectorByteArrayOp.entries) {
+            for (operation in operations) {
                 val p = program(language, backend, fixture(operation), diagnostic)
                 for (index in if (operation.scalarOffset) 0L..3L else 0L..1L) {
                     val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
@@ -148,7 +149,7 @@ class Int32VectorMemoryProofTest {
     }
     @Test fun allOperationsRejectWrongArgumentsFlagsArityAndResultProofs() {
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
-            for (operation in VectorByteArrayOp.entries) {
+            for (operation in operations) {
                 val mutations = listOf("array-levity", "index-signedness", "lexical-array", "lexical-index", "partial", "over", "result") +
                     if (operation.isRead || operation.isWrite) listOf("state") else emptyList()
                 for (mutation in mutations) {
@@ -183,7 +184,7 @@ class Int32VectorMemoryProofTest {
             "pattern-state", "pattern-unsigned", "whole-levity", "pattern-levity", "whole-coercion", "pattern-coercion",
             "missing-whole-coercion", "missing-pattern-coercion", "whole-id", "whole-unevaluated", "pattern-unevaluated", "outer-result")
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
-            for (operation in VectorByteArrayOp.entries.filter { it.isRead }) for (mutation in mutations) {
+            for (operation in operations.filter { it.isRead }) for (mutation in mutations) {
                 val f = fixture(operation); val alternative = list(list(f.body[3])[0])
                 val whole = map(map(f.body[4])["binder"]); val records = list(map(alternative[4])["binders"])
                 val result = map(map(f.app[6])["rep"])
@@ -221,7 +222,7 @@ class Int32VectorMemoryProofTest {
 
     @Test fun stateExpressionsRunBeforeReadOrWriteAndFailurePrecedesVectorBounds() {
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
-            for (operation in VectorByteArrayOp.entries.filter { !it.isIndex }) for (failure in listOf(false, true)) {
+            for (operation in operations.filter { !it.isIndex }) for (failure in listOf(false, true)) {
                 val f = fixture(operation)
                 val stride = if (operation.scalarOffset) 4L else 16L
                 val effectIndex = if (failure) literal(Long.MAX_VALUE) else call("*#", listOf(variable("offset", integer), literal(stride)), integer)
@@ -239,7 +240,7 @@ class Int32VectorMemoryProofTest {
                 }
                 assertArrayEquals(expectedBytes, bytes); released(language)
             }
-            for (operation in VectorByteArrayOp.entries.filter { !it.isIndex }) {
+            for (operation in operations.filter { !it.isIndex }) {
                 val p = program(language, backend, fixture(operation), diagnostic)
                 for (index in listOf(0L, Long.MIN_VALUE, Long.MAX_VALUE)) {
                     val bytes = ByteArray(40) { 37 }; val before = bytes.copyOf()
@@ -258,7 +259,7 @@ class Int32VectorMemoryProofTest {
 
     @Test fun installedGuestBoundsFailuresDeoptimizeWithoutEffectsAndRecover() {
         var transitions = 0
-        for (backend in listOf("ast", "bytecode")) for (operation in VectorByteArrayOp.entries) {
+        for (backend in listOf("ast", "bytecode")) for (operation in operations) {
             val stride = if (operation.scalarOffset) 4 else 16
             val invalid = listOf(0 to 0L, 15 to 0L, 40 to -1L, 40 to Long.MIN_VALUE, 40 to Long.MAX_VALUE,
                 40 to (1L shl 32), 40 to (Int.MAX_VALUE.toLong() + 1), 40 to ((40L - 16) / stride + 1))
@@ -325,7 +326,7 @@ class Int32VectorMemoryProofTest {
 
     @Test fun directAstOperandsPreserveStateOrderAndDoNotPublishFailedLoads() {
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
-        for (operation in VectorByteArrayOp.entries.filter { !it.isIndex }) {
+        for (operation in operations.filter { !it.isIndex }) {
             val bytes = ByteArray(32) { 53 }; val before = bytes.copyOf(); val events = mutableListOf<String>()
             val failure = RuntimeFault("state marker")
             fun operand(name: String, action: () -> Any?) = object : Expr() {

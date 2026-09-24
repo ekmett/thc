@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import unittest
 
-from core_vector_memory import ARRAY, INDEX, STATE, OPERATIONS, READS, INDICES, WRITES, read_case, validate_direct
+from core_vector_memory import ARRAY, INDEX, STATE, SIGNED_OPERATIONS as OPERATIONS, SIGNED_READS as READS, SIGNED_INDICES as INDICES, SIGNED_WRITES as WRITES, read_case, validate_direct
 from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, TUPLE32_REP, LANE32_REP, proof_error
 
 ROOT = Path(__file__).resolve().parent

@@ -1,22 +1,35 @@
-"""Exact local Int32X4 ByteArray intrinsics; no vector aggregate transport.
+"""Exact local Int32X4/Word32X4 ByteArray intrinsics; no vector aggregate transport.
 
 The pinned exporter places its sole physical vector annotation on the logical
 State/vector tuple too. Only an immediate, exactly checked read case accepts it.
 """
-from core_vectors import VECTOR32_REP, signature_matches
+from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, signature_matches
 
 STATE = dict(kind='void', primReps=[], evaluated=True)
 ARRAY = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
 INDEX = dict(kind='long', primReps=['IntRep'], evaluated=True)
-READS = {'readInt32X4Array#', 'readInt32ArrayAsInt32X4#'}
-INDICES = {'indexInt32X4Array#', 'indexInt32ArrayAsInt32X4#'}
-WRITES = {'writeInt32X4Array#', 'writeInt32ArrayAsInt32X4#'}
+SIGNED_READS = {'readInt32X4Array#', 'readInt32ArrayAsInt32X4#'}
+SIGNED_INDICES = {'indexInt32X4Array#', 'indexInt32ArrayAsInt32X4#'}
+SIGNED_WRITES = {'writeInt32X4Array#', 'writeInt32ArrayAsInt32X4#'}
+SIGNED_OPERATIONS = SIGNED_READS | SIGNED_INDICES | SIGNED_WRITES
+UNSIGNED_READS = {'readWord32X4Array#', 'readWord32ArrayAsWord32X4#'}
+UNSIGNED_INDICES = {'indexWord32X4Array#', 'indexWord32ArrayAsWord32X4#'}
+UNSIGNED_WRITES = {'writeWord32X4Array#', 'writeWord32ArrayAsWord32X4#'}
+UNSIGNED_OPERATIONS = UNSIGNED_READS | UNSIGNED_INDICES | UNSIGNED_WRITES
+READS = SIGNED_READS | UNSIGNED_READS
+INDICES = SIGNED_INDICES | UNSIGNED_INDICES
+WRITES = SIGNED_WRITES | UNSIGNED_WRITES
 OPERATIONS = READS | INDICES | WRITES
 
 
 def require(condition, detail):
     if not condition:
         raise ValueError('Invalid local vector memory intrinsic: ' + detail)
+
+
+def vector_proof(name):
+    require(name in OPERATIONS, 'unknown memory operation')
+    return VECTOR_WORD32_REP if name in UNSIGNED_OPERATIONS else VECTOR32_REP
 
 
 def representation(expr):
@@ -34,7 +47,8 @@ def exact(expected, actual):
 
 
 def validate_arguments(name, arguments, flags):
-    expected = [ARRAY, INDEX] + ([STATE] if name in READS else [VECTOR32_REP, STATE] if name in WRITES else [])
+    vector = vector_proof(name)
+    expected = [ARRAY, INDEX] + ([STATE] if name in READS else [vector, STATE] if name in WRITES else [])
     require(isinstance(arguments, list) and len(arguments) == len(expected), 'argument arity')
     require(isinstance(flags, list) and len(flags) == len(expected) and all(f is False for f in flags), 'unlifted flags')
     for argument, wanted in zip(arguments, expected):
@@ -45,20 +59,20 @@ def validate_arguments(name, arguments, flags):
 def validate_direct(name, arguments, flags, result):
     require(name in INDICES | WRITES, 'read requires an immediate exact case')
     validate_arguments(name, arguments, flags)
-    require(exact(STATE if name in WRITES else VECTOR32_REP, result), 'result representation')
+    require(exact(STATE if name in WRITES else vector_proof(name), result), 'result representation')
 
 
-def read_result(proof, binder=False):
+def read_result(proof, vector, binder=False):
     require(isinstance(proof, dict), 'missing read result proof')
     shape = proof.get('vector')
     require(isinstance(shape, dict) and type(shape.get('lanes')) is int and
-            shape == VECTOR32_REP['vector'], 'aggregate vector annotation')
+            shape == vector['vector'], 'aggregate vector annotation')
     require(proof.get('kind') == 'unknown' and proof.get('aggregate') == 'unboxed-tuple' and
-            proof.get('primReps') == VECTOR32_REP['primReps'] and
+            proof.get('primReps') == vector['primReps'] and
             type(proof.get('evaluated')) is bool and (not binder or proof['evaluated']), 'read result shape')
     fields = proof.get('components')
     require(isinstance(fields, list) and len(fields) == 2 and
-            exact(STATE, fields[0]) and exact(VECTOR32_REP, fields[1]), 'read result components')
+            exact(STATE, fields[0]) and exact(vector, fields[1]), 'read result components')
 
 
 def term_uses(value, identity):
@@ -84,7 +98,8 @@ def read_case(expr, constructors):
     require(len(app) > 6 and len(expr) > 4, 'missing application/case fields')
     name = function[1]
     validate_arguments(name, app[2], app[3])
-    read_result(representation(app))
+    vector = vector_proof(name)
+    read_result(representation(app), vector)
     whole = expr[2]
     require(isinstance(whole, str), 'case binder id')
     metadata = expr[4]
@@ -92,7 +107,7 @@ def read_case(expr, constructors):
     binder = metadata.get('binder')
     require(isinstance(binder, dict) and binder.get('id') == whole and binder.get('lifted') is False and binder.get('coercion') is False and
             'joinValueArity' not in binder, 'whole-tuple binder identity/levity')
-    read_result(binder.get('rep'), True)
+    read_result(binder.get('rep'), vector, True)
     alternatives = expr[3]
     require(isinstance(alternatives, list) and len(alternatives) == 1, 'requires one tuple alternative')
     alternative = alternatives[0]
@@ -106,7 +121,7 @@ def read_case(expr, constructors):
             len(set(ids)) == 2 and whole not in ids, 'pattern binder identities')
     records = alternative[4].get('binders') if isinstance(alternative[4], dict) else None
     require(isinstance(records, list) and len(records) == 2, 'ordered pattern metadata')
-    for identity, wanted, record in zip(ids, [STATE, VECTOR32_REP], records):
+    for identity, wanted, record in zip(ids, [STATE, vector], records):
         require(isinstance(record, dict) and record.get('id') == identity and record.get('lifted') is False and record.get('coercion') is False and
                 'joinValueArity' not in record and exact(wanted, record.get('rep')) and
                 record['rep']['evaluated'] is True, 'pattern binder representation')
