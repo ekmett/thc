@@ -74,6 +74,9 @@ failure under the handler mask, cross-thread resume, and no original-body
 replay, with an explicitly compiled initial caller entry. A separate uncaptured
 caller confirms that a Haskell catch rethrows the internal suspension signal,
 restores its mask, and fails closed without invoking the handler.
+The cold carrier-mask guard also encloses any resumed `TailCall` trampoline:
+a tail target still observes the logical active mask, and only completion of
+that chain restores the resumer carrier's prior ambient mask.
 
 This proof names the outermost prior mask explicitly. Production suspension
 would need to enumerate every active mask and handler segment to find that

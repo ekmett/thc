@@ -209,6 +209,21 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
         }
     }
 
+    public static final class TailProbe {
+        public final RootCallTarget target;
+        public volatile boolean armed;
+        public TailProbe(RootCallTarget target) { this.target = target; }
+    }
+
+    @Operation
+    @ConstantOperand(type = TailProbe.class, name = "probe")
+    public static final class TailAfterResume {
+        @Specialization public static Object run(TailProbe probe, Object answer) {
+            if (!probe.armed) return answer;
+            throw new TailCall(probe.target, new Object[]{0L}, null);
+        }
+    }
+
     public static RootCallTarget target(Language language, AtomicInteger effects,
                                         AtomicInteger compiledEffects, Gate gate, Object marker) {
         return ThunkYieldProofRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
@@ -269,6 +284,12 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     /** Nested mask and real guest catch scopes around a shared suspending child. */
     public static RootCallTarget maskedCaller(Language language, AtomicReference<Thunk> child, AtomicInteger effects,
             AtomicInteger compiledEffects, MaskingState outer, MaskingState inner, MaskProbe probe) {
+        return maskedCaller(language, child, effects, compiledEffects, outer, inner, probe, null);
+    }
+
+    public static RootCallTarget maskedCaller(Language language, AtomicReference<Thunk> child, AtomicInteger effects,
+            AtomicInteger compiledEffects, MaskingState outer, MaskingState inner, MaskProbe probe,
+            TailProbe tailProbe) {
         RootCallTarget childForceTarget = new ChildForceRoot().getCallTarget();
         return ThunkYieldProofRootGen.create(language, BytecodeConfig.DEFAULT, b -> {
             b.beginRoot();
@@ -293,6 +314,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
             });
             b.beginTryCatch();
             b.beginStoreLocal(answer);
+            if (tailProbe != null) b.beginTailAfterResume(tailProbe);
             b.beginAddNumber();
             b.emitLoadConstant(100L);
             b.beginBlock();
@@ -316,6 +338,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
             b.emitLoadLocal(childResult);
             b.endBlock();
             b.endAddNumber();
+            if (tailProbe != null) b.endTailAfterResume();
             b.endStoreLocal();
             b.beginBlock();
             b.beginStoreLocal(payload);

@@ -409,18 +409,20 @@ internal class Force(private val metrics: Metrics) : Node() {
                 val target = thunk.target ?: fault("Unevaluated thunk has no body")
                 metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name)
             }
-            val result = try {
-                if (continuation == null) calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment)
-                else {
-                    // A captured logical computation may move to another host
-                    // thread. Its bytecode reinstalls the saved logical mask;
-                    // the carrier's ambient mask must survive this cold resume.
-                    val ambient = SynchronousMasking.current(this)
+            val result = if (continuation == null) {
+                try { calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment) }
+                catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+            } else {
+                // A captured logical computation may move to another host
+                // thread. Its bytecode reinstalls the saved logical mask;
+                // the carrier's ambient mask must survive the entire resumed
+                // chain, including a tail-call trampoline.
+                val ambient = SynchronousMasking.current(this)
+                try {
                     try { continuation.continueWith(resumeValue) }
-                    finally { SynchronousMasking.set(this, ambient) }
-                }
+                    catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+                } finally { SynchronousMasking.set(this, ambient) }
             }
-            catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             if (result is ContinuationResult) {
                 val expectedRoot = continuation?.continuationRootNode?.sourceRootNode
                     ?: thunk.target?.rootNode

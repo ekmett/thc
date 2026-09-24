@@ -195,4 +195,72 @@ class MaskContinuationProofTest {
             assertEquals(1, effects.get())
         }
     }
+
+    @Test fun resumedTailTrampolineKeepsLogicalMaskUntilChainCompletes() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val effects = AtomicInteger()
+            val compiledEffects = AtomicInteger()
+            val childEffects = AtomicInteger()
+            val observedTailMask = AtomicReference<MaskingState>()
+            val probe = ThunkYieldProofRoot.MaskProbe()
+            val (selectedChild, tailTarget) = entered(context) {
+                val warm = Thunk(object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any = ThunkYieldProofRoot.Answer(42L, this)
+                }.callTarget, null)
+                val tail = object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any {
+                        val mask = SynchronousMasking.current(this)
+                        observedTailMask.set(mask)
+                        return mask.tag
+                    }
+                }.callTarget
+                AtomicReference(warm) to tail
+            }
+            val tailProbe = ThunkYieldProofRoot.TailProbe(tailTarget)
+            val target = entered(context) {
+                ThunkYieldProofRoot.maskedCaller(language, selectedChild, effects, compiledEffects,
+                    MaskingState.MASKED_INTERRUPTIBLE, MaskingState.MASKED_UNINTERRUPTIBLE,
+                    probe, tailProbe)
+            }
+            entered(context) {
+                repeat(8) { assertEquals(142L, driver.force(Thunk(target, null))) }
+                compile(target)
+            }
+            val effectsBefore = effects.get()
+            val compiledBefore = compiledEffects.get()
+            val child = entered(context) {
+                Thunk(ThunkYieldProofRoot.target(language, childEffects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), Any()), null)
+            }
+            selectedChild.set(child)
+            tailProbe.armed = true
+            val caller = Thunk(target, null)
+            entered(context) {
+                assertSame(caller, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+            }
+            assertTrue(compiledEffects.get() > compiledBefore)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val result = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        assertSame(caller, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                        val answer = driver.force(caller) as Long
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                        answer
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(1L, result.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, observedTailMask.get(),
+                "The tail target still belongs to the resumed logical mask scope")
+            assertEquals(effectsBefore + 1, effects.get())
+            assertEquals(1, childEffects.get())
+            assertEquals(2, caller.state)
+        }
+    }
 }
