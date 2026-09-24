@@ -118,7 +118,15 @@ object CoreModules {
                     visit(expr[2] as List<Any?>, bound + ids)
                 }
                 "app" -> {
-                    visit(expr[1] as List<Any?>, bound)
+                    val function = expr[1] as List<Any?>
+                    // FCallIds name foreign declarations, not Haskell globals.
+                    // Lowering validates the complete ABI and rejects unsupported
+                    // targets. Defined heads and all operands still participate
+                    // in linking; metadata cannot hide their dependencies.
+                    val foreignHead = CoreRepresentations.metadata(expr)?.get("foreignCall") is Map<*, *> &&
+                        function.firstOrNull() == "var" && function.getOrNull(1) is String &&
+                        function[1] !in bound && function[1] !in byId
+                    if (!foreignHead) visit(function, bound)
                     (expr[2] as List<List<Any?>>).forEach { visit(it, bound) }
                 }
                 "let" -> {

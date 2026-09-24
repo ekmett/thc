@@ -11,6 +11,9 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import java.nio.file.Files
 import java.security.MessageDigest
+import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.PolyglotException
+import thc.runtime.ManagedFileFixtures
 
 class CoreLinkerTest {
     @TempDir lateinit var temporary: Path
@@ -100,6 +103,60 @@ class CoreLinkerTest {
             CoreModules.reachable(missingConstructor, "dep:App.entry", strictLink = true)
         }
         assertTrue(constructorError.message!!.contains("dep:Lib.C"))
+    }
+
+    @Test fun foreignDeclarationsDoNotHideArgumentOrDefinedHeadDependencies() {
+        fun call(argument: String) = listOf("app", variable("foreign"), listOf(variable(argument)),
+            listOf(false), false, false, mapOf("foreignCall" to emptyMap<String, Any?>()))
+        fun link(expression: List<Any?>, vararg extra: Map<String, Any?>): Map<String, Any?> =
+            CoreModules.reachable(mapOf("bindings" to listOf(binding("root", expression), *extra)), "root", true)
+        val linked = link(call("dependency"), binding("dependency", variable("transitive")), binding("transitive", literal()))
+        assertEquals(3, (linked["bindings"] as List<*>).size)
+        assertTrue(assertThrows(IllegalArgumentException::class.java) { link(call("missing-argument")) }
+            .message!!.contains("missing-argument"))
+        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+            link(call("dependency"), binding("dependency", literal()), binding("foreign", variable("missing-body")))
+        }.message!!.contains("missing-body"))
+        assertTrue(assertThrows(IllegalArgumentException::class.java) { link(variable("foreign")) }
+            .message!!.contains("foreign"))
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun strictRequestsReachForeignAdaptersWithoutBypassingTheirProofs() {
+        fun request(backend: String, mutate: (MutableList<Any?>) -> Unit = {}): String {
+            val module = ManagedFileFixtures.module(listOf("error_kind")) { call ->
+                call[2] = listOf(listOf("void", mapOf("rep" to ManagedFileFixtures.scalar(null))))
+                mutate(call)
+            }
+            val binding = (module["bindings"] as List<Map<String, Any?>>).single()
+            val lambda = (binding["expr"] as List<Any?>).toMutableList().also {
+                it[1] = listOf(mapOf("id" to "ignored", "name" to "ignored", "lifted" to false,
+                    "rep" to ManagedFileFixtures.scalar("IntRep")))
+            }
+            val exported = module + mapOf("schema" to 1, "ghc" to "9.14.1",
+                "bindings" to listOf(binding + ("expr" to lambda)))
+            return Json.stringify(mapOf("modules" to listOf(exported), "entry" to "error_kind",
+                "backend" to backend, "strictLink" to true))
+        }
+        for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                val function = context.eval("thc", request(backend))
+                assertEquals(0L, function.execute(1L).asLong())
+                assertTrue(function.invokeMember("compile").asBoolean())
+                assertEquals(0L, function.execute(2L).asLong())
+                for (invalid in listOf<(MutableList<Any?>) -> Unit>(
+                    { call ->
+                        val descriptor = (call[6] as Map<String, Any?>)["foreignCall"] as MutableMap<String, Any?>
+                        descriptor["safety"] = "unsafe"
+                    },
+                    { call ->
+                        val descriptor = (call[6] as Map<String, Any?>)["foreignCall"] as MutableMap<String, Any?>
+                        (descriptor["target"] as MutableMap<String, Any?>)["symbol"] = "unimplemented_foreign_target"
+                    },
+                    { call -> (call[6] as MutableMap<String, Any?>).remove("foreignCall") }
+                )) assertThrows(PolyglotException::class.java) { context.eval("thc", request(backend, invalid)) }
+            }
     }
 
     @Test fun packageManifestLinksSameModuleNameInDistinctUnitsAndRejectsTampering() {
