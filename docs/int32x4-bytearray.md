@@ -26,6 +26,9 @@ vector binder. The original whole-tuple binder cannot be used or transported.
 The producer and whole-binder aggregate annotations are validated at those two
 structural sites only; shared or equal metadata elsewhere gains no exception.
 Both pattern binders and the whole binder must be unlifted non-coercion values.
+Vector lane counts at both exceptional raw annotation sites, their vector
+components/pattern, and the tuple constructor arity must be JSON integers;
+floating-point, Boolean and string counts are rejected before normalization.
 Generic tuple validation, result handoff storage and vector function/join/
 capture/constructor boundaries are not broadened. Addr and foreign memory remain
 unsupported. State is evaluated and checked before memory or local publication.
@@ -66,7 +69,10 @@ state lambda. The eight helper wrappers additionally call one retained OPAQUE
 worker. Across pre/post Core, AST/bytecode and inlining on/off, strict validation
 requires 77,328 compiled calls and 229,536 guest entries per handoff mode. It
 checks active target identities, last-tier validity and exact entry counters
-after every row, with no settling or retry calls. Ordinary read/write workers
+after every row, with no settling or retry calls. The current native test uses
+the ordinary automatic-compilation trigger. Only the separate cold-failure
+transition control disables automatic compilation to preserve its interpreted
+host bridge. Ordinary read/write workers
 return only the existing `(# State#, Int# #)` residual-call representation;
 these tuple results remain rejected at the host entry boundary.
 
@@ -103,6 +109,9 @@ Each transition uses forty fixed interpreted warm calls and one requested guest
 compile, with an interpreted host bridge. Its high test-only compilation-trigger
 threshold prevents automatic compilation; it is not a compiler graph-budget
 increase or a production runtime setting change.
+These historical source-matched captures retain the earlier native-test trigger
+setting. The later integer-proof and default-trigger follow-up does not relabel
+those results; its validation must be recorded separately.
 Both full configurations include that regression. Their exact test identity sets
 match; the earlier 498- and 500-test checkpoints remain separately archived.
 

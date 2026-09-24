@@ -96,9 +96,10 @@ class Int32VectorMemoryProofTest {
                     mutableMapOf("rep" to copy(closure), "resultRep" to copy(integer))))))
         return Fixture(module, app, body, parameters)
     }
-    private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
+    private fun withLanguage(coldTransition: Boolean = false, action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-        .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000")
+        .option("engine.CompilationFailureAction", "Throw")
+        .apply { if (coldTransition) option("engine.SingleTierCompilationThreshold", "10000000") }
         .build().use { context ->
             context.initialize("thc"); context.enter()
             try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) } finally { context.leave() }
@@ -217,6 +218,30 @@ class Int32VectorMemoryProofTest {
                 }
                 reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/$mutation")
             }
+            for (operation in operations.filter { it.isRead }) {
+                for (site in listOf("producer", "whole", "producer-component", "whole-component", "pattern")) {
+                    for (count in listOf<Any?>(4.0, 4.5, true, "4", null)) {
+                        val f = fixture(operation)
+                        val producer = map(map(f.app[6])["rep"])
+                        val whole = map(map(map(f.body[4])["binder"])["rep"])
+                        val alternative = list(list(f.body[3])[0])
+                        val shape = when (site) {
+                            "producer" -> producer
+                            "whole" -> whole
+                            "producer-component" -> map(list(producer["components"])[1])
+                            "whole-component" -> map(list(whole["components"])[1])
+                            else -> map(map(list(map(alternative[4])["binders"])[1])["rep"])
+                        }
+                        map(shape["vector"])["lanes"] = count
+                        reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/$site/lanes=$count")
+                    }
+                }
+                for (arity in listOf<Any?>(2.0, 2.5, true, "2", null)) {
+                    val f = fixture(operation)
+                    map(list(f.module["constructors"])[0])["arity"] = arity
+                    reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/arity=$arity")
+                }
+            }
         }
     }
 
@@ -263,7 +288,7 @@ class Int32VectorMemoryProofTest {
             val stride = if (operation.scalarOffset) 4 else 16
             val invalid = listOf(0 to 0L, 15 to 0L, 40 to -1L, 40 to Long.MIN_VALUE, 40 to Long.MAX_VALUE,
                 40 to (1L shl 32), 40 to (Int.MAX_VALUE.toLong() + 1), 40 to ((40L - 16) / stride + 1))
-            for ((size, index) in invalid) withLanguage { language ->
+            for ((size, index) in invalid) withLanguage(coldTransition = true) { language ->
                 val label = "$backend/${operation.primitive}/size=$size/index=$index"
                 val p = program(language, backend, fixture(operation), false)
                 val host = p.hostEntryTarget(3)
