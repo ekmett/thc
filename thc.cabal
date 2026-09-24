@@ -64,6 +64,8 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Types.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Failure.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF8.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs-boot
