@@ -544,15 +544,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         else LocalExpression(local, resolve)
     private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.copy(evaluated = true))
     /** Async callees demand their own CBV formals at a captured bytecode cut.
-     * The caller has already transferred PAP prefixes and typed input fields. */
+     * The caller has already transferred PAP prefixes and typed input fields.
+     * Recheck the declared carrier only after the resumable force completes. */
     private fun emitEntryStrictDemands(e: Emission, context: FunctionContext) {
-        val b = e.builder
         context.arguments.forEachIndexed { index, local ->
             if (!context.entryStrict[index] || local == null || local.primitive || local.proof.isAggregate) return@forEachIndexed
             val raw = ProvenExpression(read(local), local.proof.copy(evaluated = false))
-            b.beginStoreLocal(b.createLocal("strict entry result $index", null))
-            force(raw).emit(e)
-            b.endStoreLocal()
+            restoreArgument(e, local) { force(raw).emit(e) }
         }
     }
     private fun force(value: Expression): Expression {
@@ -797,7 +795,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }
         val offset = if (context.captureLayout == null) 1 else 2
         context.arguments.forEachIndexed { index, local -> if (local != null) {
-            restoreArgument(e, local) {
+            restoreArgument(e, local, enableAsync && context.entryStrict[index]) {
                 b.beginTailArgument(ArgumentLayout.offset(context.inputLayout, index) + offset)
                 b.emitLoadLocal(transfer); b.endTailArgument()
             }
