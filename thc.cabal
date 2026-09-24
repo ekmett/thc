@@ -14,8 +14,45 @@ description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/G
 extra-source-files:
   README.md
   docs/driver.md
+  compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Base.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs
   compiler/pinned-ghc-internal/GHC/Internal/CString.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Control/Monad/Fail.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Data/Maybe.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Data/OldList.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Data/Typeable/Internal.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Enum.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Err.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Exception.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Exception.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Exception/Backtrace.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Exception/Backtrace.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Exception/Context.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Exception/Type.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Exception/Type.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Fingerprint.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Fingerprint.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/IO.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/IO/Handle/Types.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Ix.hs
+  compiler/pinned-ghc-internal/GHC/Internal/List.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Real.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Show.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Stack.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Stack.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Stack/Types.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Types.hs
   compiler/pinned-ghc-internal/LICENSE
+  compiler/pinned-ghc-internal/include/WordSize.h
+  test/fixtures/run-fail-frontier/cabal.project
+  test/fixtures/run-fail-frontier/fail-frontier.cabal
+  test/fixtures/run-fail-frontier/app/Main.hs
   test/fixtures/run-cstring/cabal.project
   test/fixtures/run-cstring/run-cstring.cabal
   test/fixtures/run-cstring/app/Main.hs
@@ -82,6 +119,7 @@ executable thc
     THC.Driver.Project
     THC.Driver.Run
     THC.Driver.Zip
+    THC.Driver.Wired
   build-depends:
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
