@@ -1,6 +1,6 @@
 # Signed narrow scalar primops
 
-Both runtimes execute these 42 scalar operations, for `N = 8, 16, 32`:
+Both runtimes execute these 48 scalar operations, for `N = 8, 16, 32`:
 
 | Operations | Primops |
 | --- | --- |
@@ -8,6 +8,7 @@ Both runtimes execute these 42 scalar operations, for `N = 8, 16, 32`:
 | Signed division | `quotIntN#`, `remIntN#` |
 | Equality and signed order | `eqIntN#`, `neIntN#`, `ltIntN#`, `leIntN#`, `gtIntN#`, `geIntN#` |
 | Same-width signed/unsigned casts | `intNToWordN#`, `wordNToIntN#` |
+| Defined-range shifts | `uncheckedShiftLIntN#`, `uncheckedShiftRAIntN#` |
 
 The audit uses the actual pinned GHC 9.14.1
 [primop definitions](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/Builtin/primops.txt.pp#L277)
@@ -21,19 +22,24 @@ remainders have the dividend's sign when nonzero.
 The casts preserve the low N bits. `intNToWordN#` zero-extends the result,
 while `wordNToIntN#` sign-extends it; both keep the exact GHC `IntNRep` and
 `WordNRep` input and output contracts even though THC stores each in a Long.
+The signed shifts normalize the input to N bits; left shift truncates and
+sign-extends the result, while arithmetic right shift propagates the sign bit.
+Their `Int#` count must be between zero and N minus one, as required by GHC's
+unchecked shift contract.
 
 The numeric oracle excludes zero divisors **after narrowing** and the
 `minBound / -1` overflow pair for both quotient and remainder. This slice does
 not promise a portable result or exception protocol for those inputs. It does
-not add narrow shifts, tuple-producing operations,
+not add logical narrow right shifts, tuple-producing operations,
 or new aggregate argument/capture support.
 
 `SignedNarrowPrimopsAudit.hs` contains dynamic wrappers around the actual primops.
 The Haskell `thc-fixtures` executable exports Core and compiles a native GHC driver with
-Core/STG lint enabled. The 74,576 oracle rows include signed endpoints, zero,
+Core/STG lint enabled. The 94,032 oracle rows include signed endpoints, zero,
 equal and adjacent operands, every bit boundary and its neighbors, overflow
 products, both signs of quotient/remainder, all `Word8#` values for its signed cast,
-and 64-bit host values that truncate on entry. Negation covers every `Int8#` value.
+and 64-bit host values that truncate on entry. Negation covers every `Int8#` value;
+the new shifts cover every valid count and every `Int8#` value.
 A SHA-256 manifest covers source,
 compiler/exporter inputs, exported modules, and the native oracle.
 
@@ -42,7 +48,7 @@ compiler/exporter inputs, exported modules, and the native oracle.
 after explicit compilation. After compilation it requires exactly one compiled
 guest entry per row, with zero unsupported traps and blackholes. Separate direct
 primitive-result controls omit `intNToInt#`: a final conversion cannot conceal a
-noncanonical arithmetic result. All 42 names reject both too few and too many
+noncanonical arithmetic result. All 48 names reject both too few and too many
 arguments during strict and diagnostic loading. The six casts also reject
 contradictory argument and result register metadata in both loading modes.
 

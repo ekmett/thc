@@ -21,6 +21,8 @@ class SignedNarrowPrimopsTest {
 
     private fun mathematical(name: String, width: Int, left: Long, right: Long): Long {
         return when {
+            name.startsWith("uncheckedShiftRA") -> ScalarPrimopModel.scalar("shiftRA", width, false, left, right)
+            name.startsWith("uncheckedShiftL") -> ScalarPrimopModel.scalar("shiftL", width, false, left, right)
             name.startsWith("int") && "ToWord" in name -> ScalarPrimopModel.scalar("identity", width, true, left, right)
             name.startsWith("word") && "ToInt" in name -> ScalarPrimopModel.scalar("identity", width, false, left, right)
             else -> ScalarPrimopModel.scalar(name.substringBefore("Int"), width, false, left, right)
@@ -38,7 +40,7 @@ class SignedNarrowPrimopsTest {
         val manifest = manifest()
         verifyHashes(manifest)
         val entries = manifest["entries"] as List<Map<String, Any?>>
-        assertEquals(42, entries.size)
+        assertEquals(48, entries.size)
         assertEquals("signedNarrowDispatch", manifest["compositeEntry"])
         assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
         val modules = (manifest["modules"] as List<String>).map {
@@ -51,8 +53,10 @@ class SignedNarrowPrimopsTest {
             val operation = name.substringBefore("Int")
             val rep = "Int${(entry["width"] as Number).toInt()}Rep"
             val wordRep = "Word${(entry["width"] as Number).toInt()}Rep"
-            val arguments = List((entry["arity"] as Number).toInt()) {
-                if (name.startsWith("word") && "ToInt" in name) wordRep else rep
+            val arguments = List((entry["arity"] as Number).toInt()) { index ->
+                if (name.startsWith("word") && "ToInt" in name) wordRep
+                else if (name.startsWith("uncheckedShift") && index == 1) "IntRep"
+                else rep
             }
             val result = when {
                 name.startsWith("int") && "ToWord" in name -> wordRep
@@ -105,7 +109,8 @@ class SignedNarrowPrimopsTest {
 
     private fun rawModule(primitive: String, width: Int, supplied: Int): Map<String, Any?> {
         val parameters = List(supplied) { mapOf("id" to "x$it", "name" to "x$it", "lifted" to false,
-            "type" to if (primitive.startsWith("word") && "ToInt" in primitive) "Word$width#" else "Int$width#",
+            "type" to if (primitive.startsWith("word") && "ToInt" in primitive) "Word$width#"
+                else if (primitive.startsWith("uncheckedShift") && it == 1) "Int#" else "Int$width#",
             "coercion" to false) }
         val body = listOf("app", listOf("prim", primitive), List(supplied) { listOf("var", "x$it") }, List(supplied) { false })
         return mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SignedNarrowCarrierControl",
@@ -158,7 +163,8 @@ class SignedNarrowPrimopsTest {
             val arity = (entry["arity"] as Number).toInt()
             val minimum = -(1L shl (width - 1)); val maximum = -minimum - 1
             val values = listOf(minimum, minimum + 1, -3L, -1L, 0L, 1L, 3L, maximum - 1, maximum)
-            val pairs = if (arity == 1) values.map { it to 0L } else
+            val pairs = if (arity == 1) values.map { it to 0L } else if (name.startsWith("uncheckedShift"))
+                values.flatMap { x -> (0 until width).map { shift -> x to shift.toLong() } } else
                 values.flatMap { x -> values.map { y -> x to y } }.filter { (x, y) ->
                     !name.startsWith("quot") && !name.startsWith("rem") || y != 0L && (x != minimum || y != -1L)
                 }
