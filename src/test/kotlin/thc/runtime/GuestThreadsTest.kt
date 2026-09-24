@@ -101,7 +101,12 @@ class GuestThreadsTest {
         assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, masks.get())
         assertEquals(id, threads.enterCurrent(MaskingState.UNMASKED))
         threads.leaveCurrent()
-        val request = threads.send(id, "nested")
+        val submitted = AtomicReference<AsyncRequest>()
+        val sender = Thread { submitted.set(threads.send(id, "nested")) }
+        sender.start()
+        sender.join(5000)
+        assertFalse(sender.isAlive)
+        val request = submitted.get()
         assertEquals(AsyncRequestState.PENDING, request.state)
         assertNull(threads.poll(node, true))
         threads.leaveCurrent()
@@ -133,5 +138,19 @@ class GuestThreadsTest {
             CoreGuestThreads.validate("fork#", listOf(action, state), listOf(true, false),
                 result.copy(components = listOf(state, lifted)))
         }
+    }
+
+    @Test fun selfThrowClaimsImmediatelyEvenUnderUninterruptibleMask() {
+        val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val threads = GuestThreads(masks) { error("Self throw needs no cross-thread wake") }
+        val id = threads.enterCurrent()
+        try {
+            for (mask in MaskingState.entries) {
+                masks.set(mask)
+                val request = threads.send(id, mask)
+                assertSame(request, threads.poll(node), "Native GHC delivers self throwTo under $mask")
+                request.acknowledge()
+            }
+        } finally { threads.leaveCurrent() }
     }
 }
