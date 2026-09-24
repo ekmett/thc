@@ -12,14 +12,6 @@ delayed :: Int# -> Box
 delayed input = runRW# (\state ->
   case noDuplicate# state of _ -> Box (input +# 1#))
 
-{-# OPAQUE answer #-}
-answer :: Int# -> Int#
-answer input =
-  let earlier = input +# 100#
-      value = delayed input
-  in case value of Box result -> earlier +# result
-
-{-# OPAQUE sharedAnswer #-}
 {-# OPAQUE checkpointValue #-}
 checkpointValue :: Box
 checkpointValue = case noDuplicate# realWorld# of _ -> Box 8#
@@ -29,6 +21,7 @@ checkpointValue = case noDuplicate# realWorld# of _ -> Box 8#
 uncaptured :: Box
 uncaptured = delayed 7#
 
+{-# OPAQUE sharedAnswer #-}
 sharedAnswer :: Int
 sharedAnswer =
   case newMutVar# checkpointValue realWorld# of
