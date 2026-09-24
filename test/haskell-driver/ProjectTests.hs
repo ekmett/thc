@@ -8,7 +8,7 @@ import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
 import Data.Aeson (Value, eitherDecode')
 import qualified Data.ByteString.Lazy as BL
-import Data.List (isInfixOf, isPrefixOf)
+import Data.List (isInfixOf, isPrefixOf, sort)
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
                          doesFileExist, getModificationTime, listDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
@@ -128,8 +128,12 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
          number (field layout "infoProvEntInfoOffset") &&
          number (field layout "infoProvEntProvOffset") <
          number (field layout "infoProvEntBytes"))
-      assertEqual "six original hsc sources preprocessed"
-        6 (length generated)
+      assertEqual "exact original hsc sources preprocessed"
+        (sort ["GHC/Internal/Heap/Constants.hsc", "GHC/Internal/Heap/InfoTable/Types.hsc",
+               "GHC/Internal/Heap/InfoTable.hsc", "GHC/Internal/Stack/Constants.hsc",
+               "GHC/Internal/InfoProv/Types.hsc", "GHC/Internal/Stack/CCS.hsc",
+               "GHC/Internal/ExecutionStack/Internal.hsc"])
+        (sort [string (field source "path") | source <- generated])
       assertEqual "generated-source receipts match"
         generated (objects inputs "generatedSources")
       plan <- readJson (output </> "native/cache/plan.json")

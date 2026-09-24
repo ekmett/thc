@@ -126,6 +126,10 @@ and field bounds, and carries the installed GHC tables-next-to-code choice into
 one immutable target-layout record for either
 backend. Bundles without the receipt have no target layout; stack/IPE operations
 must reject that absence instead of assuming offsets from a particular host.
+Generated-source receipts must name exactly the current seven original HSC
+sources, including `Heap/InfoTable/Types.hsc`, with unique paths and well-formed
+SHA-256 values. The index and hashed build-input receipts must agree; the old
+six-source inventory, missing or additional paths, and duplicates are rejected.
 
 `driver-tests` is an ordinary Cabal HUnit test suite. Cabal builds the driver
 first, then the tests copy fixtures into isolated temporary directories outside
