@@ -347,7 +347,14 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
         }
         val threads = Language.currentState(dispatch).threads
         threads.enterCurrent()
-        try { return dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)) }
+        try {
+            return thc.runtime.AsyncContinuations.publicResult(
+                dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)), dispatch)
+        } catch (suspended: thc.runtime.ThunkSuspended) {
+            thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+        } catch (suspended: thc.runtime.CallSegmentSuspended) {
+            thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+        }
         finally { threads.leaveCurrent() }
     }
     @ExportMessage fun hasMembers() = true
@@ -373,6 +380,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             val threads = Language.currentState(dispatch).threads
             threads.enterCurrent()
             try { dispatch.execute(ioTarget, arrayOf(guestEntry)) }
+            catch (suspended: thc.runtime.ThunkSuspended) {
+                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+            } catch (suspended: thc.runtime.CallSegmentSuspended) {
+                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+            }
             finally { threads.leaveCurrent() }
             return true
         }

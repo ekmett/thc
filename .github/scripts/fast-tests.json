@@ -356,6 +356,18 @@
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
     },
+    "compiler/test-fixtures/UncaughtSelfAudit.hs": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/UncaughtSelfNative.hs": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/UncaughtSelfFixtures.hs": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
@@ -752,6 +764,7 @@
     "test/haskell-fixtures/Main.hs": {
       "junit": [
         "thc.runtime.ThreadAsyncNativeTest",
+        "thc.runtime.UncaughtSelfNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",
         "thc.runtime.Explicit64ArrayTest",

@@ -154,6 +154,25 @@ class GuestThreadsTest {
         } finally { threads.leaveCurrent() }
     }
 
+    @Test fun uncaughtPublicBoundaryRetainsExactPayloadAndAcknowledgesOnlyThisTarget() {
+        val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val threads = GuestThreads(masks) { error("Self throw needs no cross-thread wake") }
+        val id = threads.enterCurrent()
+        try {
+            val payload = Any()
+            val request = threads.send(id, payload)
+            assertSame(request, threads.poll(node))
+            val failure = assertThrows(GuestException::class.java) {
+                AsyncContinuations.uncaught(request, node)
+            }
+            assertSame(payload, failure.payload)
+            assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+            assertThrows(IllegalStateException::class.java) {
+                AsyncContinuations.uncaught(request, node)
+            }
+        } finally { threads.leaveCurrent() }
+    }
+
     @Test fun interruptedSenderPausesOnlyUnclaimedOutboundAndResumesSameToken() {
         val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
         val wakes = AtomicInteger()

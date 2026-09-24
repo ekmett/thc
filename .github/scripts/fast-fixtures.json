@@ -337,6 +337,19 @@
         "thc.cabal"
       ]
     },
+    "uncaught-self": {
+      "junit": ["thc.runtime.UncaughtSelfNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "uncaught-self"]}],
+      "outputs": ["build/uncaught-self"],
+      "sources": [
+        "test/haskell-fixtures/UncaughtSelfFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/UncaughtSelfAudit.hs",
+        "compiler/test-fixtures/UncaughtSelfNative.hs",
+        "thc.cabal"
+      ]
+    },
     "io-main-pap": {
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "commands": [{"argv": ["python3", "scripts/prepare-io-main-pap.py"]}],

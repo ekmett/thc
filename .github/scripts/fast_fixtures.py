@@ -23,11 +23,11 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "be0529f89468422684e730c7cef65fe059e0b2e85c8f0de7ce619a6b4a3de547"
+FULL_PREPARATION_PLAN = "55d3613b93ddad3667c2c883a4711d1611a9cfdabd84837449cd59bfb0acb27a"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/core-continuation", "build/live-async", "build/thread-async", "build/small-arrays", "build/floating-address",
+    "build/original-stdio", "build/core-continuation", "build/live-async", "build/thread-async", "build/uncaught-self", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
     "build/explicit64-arrays",
 })
@@ -62,6 +62,9 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/thread-async/pre/forkAndThrow-audit.json", "build/thread-async/post/forkAndThrow-audit.json",
     "build/thread-async/pre/killUncaught-audit.json", "build/thread-async/post/killUncaught-audit.json",
     "build/thread-async/pre/selfThrow-audit.json", "build/thread-async/post/selfThrow-audit.json",
+    "build/uncaught-self/manifest.json", "build/uncaught-self/native/oracle",
+    "build/uncaught-self/pre/core/UncaughtSelfAudit.json", "build/uncaught-self/post/core/UncaughtSelfAudit.json",
+    "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",
