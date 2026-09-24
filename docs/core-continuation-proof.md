@@ -24,17 +24,23 @@ root and malformed continuation inputs fail closed.
 The application proof captures only an exactly saturated scalar call whose
 continuation belongs to the directly invoked callee root, including a cloned
 target with the same body identity. A cold call segment lets the existing
-worklist resume the callee before feeding its WHNF to the caller. An unrelated
+worklist resume the callee before feeding its result to the caller. An unrelated
 nested root and an active mask fail closed; overapplication, aggregate calls,
 and tail transfers remain outside this seam. No call packet is added to the
 ordinary path.
 
-The synthetic call segment uses the thunk update protocol, so its resumed
-result must be WHNF. A callee continuation returning a lazy `Thunk` is outside
-this prototype: the segment faults without forcing that thunk or replaying the
-call. Pending aggregate results and operand handoff ownership are likewise
-uncaptured; only the scalar result already on this direct call edge is fed to
-its caller.
+The cold call segment is separate from a Haskell thunk update. Its resumed
+application result can be a lazy `Thunk`: the captured caller receives that
+same object without entering it, and a later demand may force it. Ordinary
+thunk updates still require WHNF. Pending aggregate results and operand
+handoff ownership are uncaptured; only the scalar result already on this
+direct call edge is fed to its caller.
+
+Only a yielded call allocates a segment. Its continuation is claimed once,
+published with a wakeup for competing readers, and retained across repeated
+yields. Guest failure data is memoized without sharing a mutable Truffle
+exception trace; an unsupported host unwind closes the segment without
+replaying its prefix. Active masking still fails closed at capture.
 
 These are two boundaries enabled only by the private test control. Other
 force, tuple, mask, and handler edges do not yet capture caller segments.
