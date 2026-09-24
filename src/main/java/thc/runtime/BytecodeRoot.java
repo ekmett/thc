@@ -418,6 +418,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class CloneMyStack {
+        @Specialization public static void capture(VirtualFrame frame, LocalAccessor destination,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            // The current operation's frame is required, not a caller FrameInstance.
+            ManagedStackSnapshot snapshot = ManagedStackSnapshot.capture(node, frame);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, snapshot);
+        }
+    }
+
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class FileRead {
