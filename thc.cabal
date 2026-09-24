@@ -212,6 +212,7 @@ executable thc-fixtures
     AggregateFixtures
     ContinuationFixtures
     LiveAsyncFixtures
+    ThreadAsyncFixtures
     FixtureSupport
     WordFloatingFixtures
     FloatingAddressFixtures
