@@ -89,3 +89,18 @@ selfThrow token =
     case killThread# tid (Box 7#) s1 of { s2 -> (# s2, Box 99# #) } })
     (\_ s -> (# s, Box (-1#) #)) realWorld# of
       (# _, Box result #) -> token +# result
+
+-- An outer uninterruptible mask cannot justify omitting the action's
+-- continuation cut: its callee unmasks and delivers to this same thread.
+{-# OPAQUE maskedUnmaskSelf #-}
+maskedUnmaskSelf :: Int# -> Int#
+maskedUnmaskSelf token =
+  case catch# (\s0 ->
+    case maskUninterruptible# (\s1 ->
+      unmaskAsyncExceptions# (\s2 ->
+        case myThreadId# s2 of { (# s3, tid #) ->
+        case killThread# tid (Box 7#) s3 of { s4 -> (# s4, Box 99# #) } }) s1) s0 of
+      (# s5, value #) -> (# s5, value #))
+    (\_ s -> (# s, Box (-1#) #)) realWorld# of
+      (# s6, Box result #) -> case getMaskingState# s6 of
+        (# _, outside #) -> token +# result +# 100# *# outside

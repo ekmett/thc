@@ -26,7 +26,7 @@ class ThreadAsyncNativeTest {
                 assertEquals(expected, bytes.joinToString("") { "%02x".format(it) }, "Stale $path")
             }
         assertEquals(listOf("43", "44"), File(root, "build/thread-async/oracle.txt").readLines())
-        assertEquals(listOf("5", "-1"), File(root, "build/thread-async/extra-oracle.txt").readLines())
+        assertEquals(listOf("5", "-1", "-1"), File(root, "build/thread-async/extra-oracle.txt").readLines())
         assertEquals(listOf("52", "53"), File(root, "build/thread-async/lazy-oracle.txt").readLines())
     }
 
@@ -60,6 +60,8 @@ class ThreadAsyncNativeTest {
     @Test fun publicForkAndThrowResumeTheSharedThunk() = exercise("forkAndThrow", listOf(43, 44))
     @Test fun uncaughtChildDeliveryReleasesTheSender() = exercise("killUncaught", listOf(5, 6))
     @Test fun selfDirectedThrowEntersTheOriginalHandler() = exercise("selfThrow", listOf(-1, 0))
+    @Test fun outerUninterruptibleMaskStillCapturesCalleeThatUnmasksAndSelfThrows() =
+        exercise("maskedUnmaskSelf", listOf(-1, 0))
     @Test fun forkedChildOwnsAndResumesTheSharedLazyActionHead() =
         exercise("lazyFork", listOf(52, 53), "LazyForkAudit")
 }

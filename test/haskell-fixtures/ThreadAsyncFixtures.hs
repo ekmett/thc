@@ -26,7 +26,7 @@ prepareThreadAsync root = do
       driver = "compiler/test-fixtures/ThreadAsyncNative.hs"
       lazySource = "compiler/test-fixtures/LazyForkAudit.hs"
       lazyDriver = "compiler/test-fixtures/LazyForkNative.hs"
-      entries = ["forkAndThrow", "killUncaught", "selfThrow"]
+      entries = ["forkAndThrow", "killUncaught", "selfThrow", "maskedUnmaskSelf"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -75,7 +75,7 @@ prepareThreadAsync root = do
   writeFile (output </> "oracle.txt") actual
   extras <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
     ["extras", "+RTS", "-N2", "-RTS"] ""
-  unless (extras == "5\n-1\n") (die "Public thread uncaught/self delivery oracle disagreed")
+  unless (extras == "5\n-1\n-1\n") (die "Public thread uncaught/self delivery oracle disagreed")
   writeFile (output </> "extra-oracle.txt") extras
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
     "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
@@ -100,7 +100,7 @@ prepareThreadAsync root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entry" .= ("forkAndThrow" :: String), "entries" .= entries, "stages" .= stages,
-    "native" .= ([43, 44] :: [Int]), "extraNative" .= ([5, -1] :: [Int]),
+    "native" .= ([43, 44] :: [Int]), "extraNative" .= ([5, -1, -1] :: [Int]),
     "lazyNative" .= ([52, 53] :: [Int]),
     "inputHashes" .= sourceHashes,
     "artifactHashes" .= artifactHashes, "installedArtifactsHashed" .= False]
@@ -120,6 +120,8 @@ supportedThreadContract entry (Object report) = hasPublicThreadPrimitives && cas
               "forkAndThrow" -> ["fork#", "myThreadId#", "killThread#", "catch#"]
               "killUncaught" -> ["fork#", "myThreadId#", "killThread#"]
               "selfThrow" -> ["myThreadId#", "killThread#", "catch#"]
+              "maskedUnmaskSelf" -> ["myThreadId#", "killThread#", "catch#",
+                "maskUninterruptible#", "unmaskAsyncExceptions#", "getMaskingState#"]
               "lazyFork" -> ["fork#", "killThread#"]
               _ -> []
         in not (null required) && all ((`elem` names) . Just . String) required &&

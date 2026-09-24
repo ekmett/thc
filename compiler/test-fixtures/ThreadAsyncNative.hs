@@ -22,7 +22,8 @@ main = do
     ["extras"] -> do
       uncaught <- evaluate (I# (Audit.killUncaught 0#))
       self <- evaluate (I# (Audit.selfThrow 0#))
-      case (uncaught, self) of
-        (5, -1) -> putStr "5\n-1\n"
+      masked <- evaluate (I# (Audit.maskedUnmaskSelf 0#))
+      case (uncaught, self, masked) of
+        (5, -1, -1) -> putStr "5\n-1\n-1\n"
         other -> error ("public thread extra delivery failed: " ++ show other)
     _ -> error "Usage: ThreadAsyncNative [extras]"
