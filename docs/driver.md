@@ -105,8 +105,14 @@ or no-code-only package builds. Project flags belong in `cabal.project`; the
 independent `plan-package` and explicit `.cabal` path keep their existing scope.
 Source-built store packages require a Cabal source hash and a successful Core
 capture; unsupported build modes fail before producing an incomplete manifest.
-Already-installed GHC/base units remain dependency identities, not claimed Core
-exports.
+Selected `ghc-internal` definitions come from exact, unmodified GHC 9.14.1
+sources pinned under `compiler/pinned-ghc-internal`. The driver compiles them
+against installed dynamic interfaces in disposable staging under Cabal's build
+directory, then caches their post-Tidy Core in one checked ZIP under the OS
+cache. Other installed GHC/base units remain dependency identities without
+claimed Core exports. This supplies the actual `MonadFail IO`, `IOException`,
+Typeable and backtrace definitions, while the strict audit still rejects a
+real `catch (fail ...)` entry on unsupported RTS stack-snapshot operations.
 
 `driver-tests` is an ordinary Cabal HUnit test suite. Cabal builds the driver
 first, then the tests copy fixtures into isolated temporary directories outside
