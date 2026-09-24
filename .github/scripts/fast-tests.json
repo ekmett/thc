@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "smoke": {
     "junit": [
       "thc.BytecodeBackendTest",
@@ -17,7 +17,9 @@
   },
   "leafSources": {
     "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
-      "junit": ["thc.runtime.BitPrimopsTest"],
+      "junit": [
+        "thc.runtime.BitPrimopsTest"
+      ],
       "python": []
     },
     "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
@@ -152,6 +154,280 @@
         "scripts/test-doublex2-model.py",
         "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py"
+      ]
+    }
+  },
+  "primopFamilies": {
+    "explicit64-primops": {
+      "junit": [
+        "thc.runtime.Explicit64PrimopsTest"
+      ],
+      "python": []
+    },
+    "integer-primops": {
+      "junit": [
+        "thc.IntegerPrimopsTest"
+      ],
+      "python": []
+    },
+    "signed-narrow-primops": {
+      "junit": [
+        "thc.SignedNarrowPrimopsTest"
+      ],
+      "python": []
+    },
+    "bit-primops": {
+      "junit": [
+        "thc.runtime.BitPrimopsTest"
+      ],
+      "python": []
+    }
+  },
+  "owners": {
+    "compiler/test-fixtures/BitPrimopsAudit.hs": {
+      "junit": [
+        "thc.runtime.BitPrimopsTest"
+      ],
+      "python": []
+    },
+    "compiler/test-fixtures/Explicit64PrimopsAudit.hs": {
+      "junit": [
+        "thc.runtime.Explicit64PrimopsTest"
+      ],
+      "python": []
+    },
+    "compiler/test-fixtures/IntegerPrimopsAudit.hs": {
+      "junit": [
+        "thc.IntegerPrimopsTest"
+      ],
+      "python": []
+    },
+    "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs": {
+      "junit": [
+        "thc.SignedNarrowPrimopsTest"
+      ],
+      "python": []
+    },
+    "compiler/test-fixtures/TupleInputAudit.hs": {
+      "junit": [
+        "thc.runtime.TupleInputNativeTest"
+      ],
+      "python": []
+    },
+    "compiler/test-fixtures/TupleInputAuditNative.hs": {
+      "junit": [
+        "thc.runtime.TupleInputNativeTest"
+      ],
+      "python": []
+    },
+    "examples/NativeOracle.hs": {
+      "junit": [
+        "thc.RuntimeTest",
+        "thc.BytecodeBackendTest"
+      ],
+      "python": []
+    },
+    "examples/THC/Fixtures.hs": {
+      "junit": [
+        "thc.RuntimeTest",
+        "thc.BytecodeBackendTest"
+      ],
+      "python": []
+    },
+    "scripts/native-oracle.sh": {
+      "junit": [
+        "thc.RuntimeTest",
+        "thc.BytecodeBackendTest"
+      ],
+      "python": []
+    },
+    "scripts/prepare-bit-primops.py": {
+      "junit": [
+        "thc.runtime.BitPrimopsTest"
+      ],
+      "python": []
+    },
+    "scripts/prepare-explicit64-primops.py": {
+      "junit": [
+        "thc.runtime.Explicit64PrimopsTest"
+      ],
+      "python": []
+    },
+    "scripts/prepare-integer-primops.py": {
+      "junit": [
+        "thc.IntegerPrimopsTest"
+      ],
+      "python": []
+    },
+    "scripts/prepare-signed-narrow-primops.py": {
+      "junit": [
+        "thc.SignedNarrowPrimopsTest"
+      ],
+      "python": []
+    },
+    "scripts/prepare-tuple-input-audit.py": {
+      "junit": [
+        "thc.runtime.TupleInputNativeTest"
+      ],
+      "python": []
+    },
+    "src/test/kotlin/thc/PrimopTestContext.kt": {
+      "junit": [
+        "thc.runtime.BitPrimopsTest",
+        "thc.IntegerPrimopsTest",
+        "thc.SignedNarrowPrimopsTest"
+      ],
+      "python": []
+    }
+  },
+  "automation": {
+    ".github/scripts/fast-fixtures.json": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/fast-tests.json": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/fast_ci.init.gradle": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/fast_ci.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/fast_inputs.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/fast_select.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/library_bundle.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_library_bundle.py"
+      ]
+    },
+    ".github/scripts/merge_bot.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_merge_bot.py"
+      ]
+    },
+    ".github/scripts/test_fast_ci.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/test_fast_inputs.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/test_fast_select.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/scripts/test_library_bundle.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_library_bundle.py"
+      ]
+    },
+    ".github/scripts/test_merge_bot.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_merge_bot.py"
+      ]
+    },
+    ".github/workflows/build.yml": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/workflows/fast.yml": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/workflows/jit-stability.yml": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
+      ]
+    },
+    ".github/workflows/merge.yml": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py",
+        ".github/scripts/test_merge_bot.py"
+      ]
+    },
+    ".github/workflows/performance.yml": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_select.py",
+        ".github/scripts/test_fast_ci.py",
+        ".github/scripts/test_fast_inputs.py"
       ]
     }
   }

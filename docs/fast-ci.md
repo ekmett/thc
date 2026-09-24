@@ -2,9 +2,9 @@
 
 `Fast checks` adds two checks, `automation` and `fast-check`. The ordinary warm
 PR target is 2–3 minutes, not a claim that the full test suite takes that long.
-Compiler, ABI, build-system, unknown-source and shared-helper changes run the full
-JVM and Python test inventory. A changed slow test is never dropped to meet a
-budget. Both default and dense handoff modes run in either lane.
+Compiler, ABI, build-system, unknown-source and unmapped shared-helper changes run
+the full JVM and Python test inventory. A changed slow test is never dropped to
+meet a budget. Both default and dense handoff modes run in either lane.
 
 The initial compiled smoke suite is:
 
@@ -17,11 +17,17 @@ The initial compiled smoke suite is:
 The selector always includes those tests, adds every changed test and reviewed
 source-to-test dependencies, and widens when it cannot prove a smaller set is
 sufficient. Reviewed mappings cover bit operations, scalar floating/raw-bit casts,
-and the grouped integer/floating vector implementations, including their native,
-memory, storage and proof consumers. Shared scalar dispatch, vector-memory proof
-and representation code still widen. New dependencies must be reviewed in
-`.github/scripts/fast-tests.json`; there is no force-narrow option. A missing base,
-rename, deletion, dirty checkout or ambiguous helper cannot silently narrow tests.
+grouped integer/floating vectors, and six native fixture families, including their
+preparers and independent oracle tests. The primop test context selects its three
+consumers. New primitive entries in `core-capabilities.json` and whole new narrow
+mask arms in `Program.kt` select their native family only when the existing content
+is unchanged; whole new arity/execution dispatch arms for those families are
+handled the same way. Other shared dispatch, vector-memory proof and representation edits
+still widen. Fast-check automation edits select smoke plus control tests; merge and
+library scripts also select their own Python tests. New dependencies must be
+reviewed in `.github/scripts/fast-tests.json`; there is no force-narrow option.
+A missing base, rename, deletion, dirty checkout or ambiguous helper cannot
+silently narrow tests. The ordinary `Build` runs the full suite after merge.
 
 ## What is cached
 
