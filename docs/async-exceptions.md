@@ -34,6 +34,15 @@ thunk's memoized result. A later force continues the work instead of replaying
 the body or throwing that exception again. Synchronous exceptions still follow
 the ordinary memoization rules.
 
+Strict entry arguments are forced in the callee's bytecode frame, including
+arguments supplied earlier by a partial application. A suspension therefore
+preserves the call as well as the argument being forced. Return values are
+checked against their declared runtime representation after resumption.
+
+Calls through `keepAlive#` retain the protected reference in the saved caller
+frame until the continuation returns or throws. Truffle may clone a compiled
+call target; clones of the same body retain continuation identity.
+
 Blocking MVar operations are cancelled only before their transfer commits.
 Their operands are saved before the cut, so resumption retries the uncommitted
 operation. Interrupting a blackhole waiter does not alter the thunk owned by

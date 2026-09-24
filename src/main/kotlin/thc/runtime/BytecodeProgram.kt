@@ -1007,7 +1007,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.beginBlock()
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
             } else null
-            if (resumable) {
+            if (resumable && !loop) {
                 checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail)
             } else if (inputLayout?.requiresTyped == true) {
                 typedArguments(e, function, arguments, inputLayout, tail)
@@ -1079,10 +1079,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 // Unreachable value satisfies the expression shape of Conditional's then branch.
                 b.emitLoadConstant(Unit)
                 b.endBlock()
-                b.beginApply(arguments.size, true, metrics, evaluatedArguments)
-                b.emitLoadLocal(fn)
-                args.forEach { b.emitLoadLocal(it) }
-                b.endApply()
+                if (resumable) {
+                    val savedFunction = ProvenExpression(Expression { it.builder.emitLoadLocal(fn) },
+                        function.proof.copy(evaluated = true))
+                    val savedArguments = args.mapIndexed { index, local ->
+                        ProvenExpression(Expression { it.builder.emitLoadLocal(local) }, arguments[index].proof)
+                    }
+                    checkpointedApplication(e, savedFunction, savedArguments, evaluatedArguments, null, true)
+                } else {
+                    b.beginApply(arguments.size, true, metrics, evaluatedArguments)
+                    b.emitLoadLocal(fn)
+                    args.forEach { b.emitLoadLocal(it) }
+                    b.endApply()
+                }
                 b.endConditional()
                 b.endBlock()
             }
@@ -1908,7 +1917,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         if (destination != null) {
                             checkpointedTupleApplication(e, TupleShape(tupleProof, language), function,
                                 listOf(stateArgument), null, destination)
-                        } else checkpointedApplication(e, function, listOf(stateArgument), booleanArrayOf(true), null)
+                        } else checkpointedApplication(e, function, listOf(stateArgument), booleanArrayOf(true), null, false)
                     } else {
                         if (destination != null) b.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
                         else b.beginKeepAlive(metrics)
