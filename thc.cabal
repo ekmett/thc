@@ -16,8 +16,15 @@ extra-source-files:
   docs/driver.md
   test/test_driver.py
   test/run_integration.py
+  test/run_project_integration.py
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
+  test/fixtures/run-project/cabal.project
+  test/fixtures/run-project/dep-data/dep-data.cabal
+  test/fixtures/run-project/dep-data/src/Answer.hs
+  test/fixtures/run-project/app-run/app-run.cabal
+  test/fixtures/run-project/app-run/src/Bridge.hs
+  test/fixtures/run-project/app-run/app/Main.hs
   test/fixtures/tiny/tiny-fixture.cabal
   test/fixtures/tiny/words/Words.hs
   test/fixtures/tiny/src/Greeting.hs
@@ -59,14 +66,19 @@ executable thc
   other-modules:
     THC.Driver.Cabal
     THC.Driver.Json
+    THC.Driver.Project
     THC.Driver.Run
   build-depends:
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
+    aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
+    containers >= 0.8 && < 0.9,
+    cryptohash-sha256 >= 0.11 && < 0.12,
     directory >= 1.3.10 && < 1.4,
     filepath >= 1.5.4 && < 1.6,
-    process >= 1.6.26 && < 1.7
+    process >= 1.6.26 && < 1.7,
+    unix >= 2.8 && < 2.9
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)
