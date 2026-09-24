@@ -18,6 +18,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalStackAudit.hs
   compiler/test-fixtures/OriginalStackAuditNative.hs
   compiler/test-fixtures/OriginalStackProof.json
+  compiler/test-fixtures/OriginalStackFormatter.hs
+  compiler/test-fixtures/OriginalStackFormatterNative.hs
   README.md
   docs/driver.md
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
@@ -193,11 +195,13 @@ executable thc-fixtures
     AggregateFixtures
     ContinuationFixtures
     FixtureSupport
+    WordFloatingFixtures
     OriginalStdioFixtures
     SmallArrayFixtures
     StackFixtures
+    THC.Driver.Wired
     BoxedArrayExtensionsFixtures
-  hs-source-dirs: test/haskell-fixtures
+  hs-source-dirs: test/haskell-fixtures, src
   build-depends:
     base >= 4.22 && < 4.23,
     thc,

@@ -976,14 +976,33 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginOriginalStackInfo(layout)
                     operands.single().emit(e)
                     e.builder.endOriginalStackInfo()
+                }, tupleProof.copy(evaluated = true)) else if (stackInfo == OriginalStackInfoOp.STACK_FIELDS)
+                    ProvenExpression(Expression { e ->
+                        e.builder.beginOriginalStackFields(layout)
+                        operands.single().emit(e)
+                        e.builder.endOriginalStackFields()
+                    }, tupleProof.copy(evaluated = true))
+                else if (!stackInfo.tupleResult) ProvenExpression(Expression { e ->
+                    e.builder.beginOriginalStackIncompatibleGetter(layout, stackInfo)
+                    operands.forEach { it.emit(e) }
+                    e.builder.endOriginalStackIncompatibleGetter()
                 }, tupleProof.copy(evaluated = true)) else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     if (stackInfo == OriginalStackInfoOp.FRAME_INFO)
                         b.beginOriginalStackFrameInfo(layout, destination[0], destination[1])
-                    else b.beginOriginalStackLookupIpe(layout, destination.single())
+                    else if (stackInfo == OriginalStackInfoOp.SMALL_BITMAP)
+                        b.beginOriginalStackSmallBitmap(layout, destination[0], destination[1])
+                    else if (stackInfo == OriginalStackInfoOp.ADVANCE)
+                        b.beginOriginalStackAdvance(layout, destination[0], destination[1], destination[2])
+                    else if (stackInfo == OriginalStackInfoOp.LOOKUP_IPE)
+                        b.beginOriginalStackLookupIpe(layout, destination.single())
+                    else b.beginOriginalStackIncompatibleTupleGetter(layout, stackInfo)
                     operands.forEach { it.emit(e) }
                     if (stackInfo == OriginalStackInfoOp.FRAME_INFO) b.endOriginalStackFrameInfo()
-                    else b.endOriginalStackLookupIpe()
+                    else if (stackInfo == OriginalStackInfoOp.SMALL_BITMAP) b.endOriginalStackSmallBitmap()
+                    else if (stackInfo == OriginalStackInfoOp.ADVANCE) b.endOriginalStackAdvance()
+                    else if (stackInfo == OriginalStackInfoOp.LOOKUP_IPE) b.endOriginalStackLookupIpe()
+                    else b.endOriginalStackIncompatibleTupleGetter()
                 }
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2293,17 +2312,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "castWord64ToDouble#" -> "CastWord64ToDouble"
             "int2Float#" -> "IntToFloat"
             "int2Double#" -> "IntToDouble"
+            "word2Float#" -> "WordToFloat"
+            "word2Double#" -> "WordToDouble"
             "float2Int#" -> "FloatToInt"
             "double2Int#" -> "DoubleToInt"
             "float2Double#" -> "FloatToDouble"
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
+        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "WordToFloat", "IntToDouble", "WordToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "WordToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "WordToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -2369,6 +2390,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CastWord64ToDouble" -> b.beginCastWord64ToDouble()
                 "IntToFloat" -> b.beginIntToFloat()
                 "IntToDouble" -> b.beginIntToDouble()
+                "WordToFloat" -> b.beginWordToFloat()
+                "WordToDouble" -> b.beginWordToDouble()
                 "FloatToInt" -> b.beginFloatToInt()
                 "DoubleToInt" -> b.beginDoubleToInt()
                 "FloatToDouble" -> b.beginFloatToDouble()
@@ -2436,6 +2459,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CastWord64ToDouble" -> b.endCastWord64ToDouble()
                 "IntToFloat" -> b.endIntToFloat()
                 "IntToDouble" -> b.endIntToDouble()
+                "WordToFloat" -> b.endWordToFloat()
+                "WordToDouble" -> b.endWordToDouble()
                 "FloatToInt" -> b.endFloatToInt()
                 "DoubleToInt" -> b.endDoubleToInt()
                 "FloatToDouble" -> b.endFloatToDouble()
@@ -2456,6 +2481,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> "CountTrailingZerosWidth"
             "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> "ByteSwapWidth"
             "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> "BitReverseWidth"
+            "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#" -> "BitDepositWidth"
+            "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> "BitExtractWidth"
 
             "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
             "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
@@ -2587,6 +2614,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CountTrailingZerosWidth" -> b.beginCountTrailingZerosWidth(bitShift)
                 "ByteSwapWidth" -> b.beginByteSwapWidth(bitShift)
                 "BitReverseWidth" -> b.beginBitReverseWidth(bitShift)
+                "BitDepositWidth" -> b.beginBitDepositWidth(bitShift)
+                "BitExtractWidth" -> b.beginBitExtractWidth(bitShift)
                 "CountLeadingZeros" -> b.beginCountLeadingZeros()
                 "CountTrailingZeros" -> b.beginCountTrailingZeros(); "PopulationCount" -> b.beginPopulationCount()
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
@@ -2650,6 +2679,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CountTrailingZerosWidth" -> b.endCountTrailingZerosWidth()
                 "ByteSwapWidth" -> b.endByteSwapWidth()
                 "BitReverseWidth" -> b.endBitReverseWidth()
+                "BitDepositWidth" -> b.endBitDepositWidth()
+                "BitExtractWidth" -> b.endBitExtractWidth()
                 "CountLeadingZeros" -> b.endCountLeadingZeros()
                 "CountTrailingZeros" -> b.endCountTrailingZeros(); "PopulationCount" -> b.endPopulationCount()
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()

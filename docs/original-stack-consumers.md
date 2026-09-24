@@ -87,7 +87,10 @@ Corruption tests cover missing/duplicate occurrences, altered declarations/flags
 broken reference chains, forged freshness/source provenance, missing required
 inputs, symlink escapes and malformed native output.
 
-No stack-layout image, IPE registry, pointer-cell transport, annotation protocol,
-runtime fallback or high-level source adapter is implemented here. Full original
-Decode execution still requires truthful implementations for every reachable
-operation and the missing source dependencies recorded in the report.
+This structural fixture does not implement an annotation protocol, runtime
+fallback or high-level source adapter. The separate managed diagnostic service
+now supplies info-table images, IPE lookup and bounded zero-payload frame
+traversal; see [managed stack snapshots](managed-stack-snapshots.md). Full original
+Decode execution still requires an executable coherent dependency closure and
+proof that its reachable operations respect that diagnostic boundary. This
+report must not be presented as successful decoder or formatter execution.

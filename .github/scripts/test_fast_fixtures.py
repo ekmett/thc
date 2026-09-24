@@ -18,6 +18,133 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_formatter_focused_full_gradle_and_upload_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-stack-formatter']
+        self.assertEqual('original-stack-formatter', owners['thc.runtime.OriginalStackFormatterTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'original-stack-formatter']}], group['commands'])
+        self.assertEqual(['build/original-stack-formatter'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" original-stack-formatter',
+                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/original-stack-formatter', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('build/original-stack-formatter/manifest.json', fast_fixtures.FULL_REQUIRED)
+        gradle = (project / 'build.gradle.kts').read_text()
+        for pattern in ('original-stack-formatter/manifest.json',
+                        'original-stack-formatter/run-*/originals/core/*.json',
+                        'original-stack-formatter/run-*/originals/generated/**/*.hs',
+                        'original-stack-formatter/run-*/originals/generated.json',
+                        'original-stack-formatter/run-*/originals/target-layout.json',
+                        'original-stack-formatter/run-*/native/formatter',
+                        'src/THC/Driver/Wired.hs', 'compiler/target-layout.c',
+                        'compiler/pinned-ghc-internal', '**/*.hs-boot', '**/*.hsc', 'include/WordSize.h'):
+            self.assertIn('"' + pattern + '"', gradle)
+        self.assertIn('build/original-stack-formatter/', (project / '.github/workflows/build.yml').read_text())
+        sources = fast_fixtures._source_hashes(project, group)
+        _, pins = fast_fixtures.fast_inputs.wired_catalog(project)
+        self.assertLessEqual({'compiler/pinned-ghc-internal/' + name for name in pins}, sources.keys())
+        self.assertIn(fast_fixtures.fast_inputs.WIRED_SOURCE, sources)
+
+    def formatter_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        group = fast_fixtures._manifest(project)[0]['groups']['original-stack-formatter']
+        self.manifest['groups']['original-stack-formatter'] = group
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        for name in group['sources']:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((project / name).read_bytes())
+        _, pins = fast_fixtures.fast_inputs.wired_catalog(self.root)
+        for name in pins:
+            path = self.root / 'compiler/pinned-ghc-internal' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('pinned source\n')
+        def run(name, argv, stdout=None):
+            self.fake_run(name, argv, stdout)
+            if argv != group['commands'][0]['argv']:
+                return
+            base = self.root / group['outputs'][0]
+            attempt = 1
+            while (base / f'run-{attempt}').exists():
+                attempt += 1
+            directory = base / f'run-{attempt}'
+            artifacts = {}
+            for name in fast_fixtures.fast_inputs.original_stack_formatter_files(self.root):
+                path = directory / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
+                artifacts[path.relative_to(self.root).as_posix()] = fast_fixtures._digest(path)
+            overlay = directory / 'originals/interfaces'
+            overlay.mkdir()
+            (overlay / 'Installed.dyn_hi').symlink_to(self.root / 'fixtures/alpha.hs')
+            (base / 'manifest.json').write_text(json.dumps({'artifactHashes': artifacts}))
+        def prepare():
+            return fast_fixtures.prepare(self.root, self.selection(*group['junit']), run, self.toolchain)
+        return group, prepare
+
+    def test_formatter_receipt_reuses_only_current_artifacts_and_all_catalog_sources(self):
+        group, prepare = self.formatter_preparation()
+        self.assertEqual(['original-stack-formatter'], prepare()['rebuilt'])
+        self.calls.clear()
+        self.assertEqual(['original-stack-formatter'], prepare()['reused'])
+        self.assertEqual([], self.calls)
+        outputs = fast_fixtures._output_hashes(self.root, group)
+        self.assertEqual(78, len(outputs))
+        self.assertFalse(any('interfaces/' in path for path in outputs))
+        # Includes the production exporter, all pinned source kinds and the
+        # target-layout C probe, without a second hand-maintained source list.
+        for name in (*group['sources'],
+                     'compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc',
+                     'compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot',
+                     'compiler/pinned-ghc-internal/include/WordSize.h',
+                     'compiler/pinned-ghc-internal/LICENSE'):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.write_bytes(path.read_bytes() + b'\n-- changed\n')
+                self.assertEqual(['original-stack-formatter'], prepare()['rebuilt'])
+                self.assertEqual(['original-stack-formatter'], prepare()['reused'])
+        # Failed/old attempts are deliberately not success-receipt dependencies.
+        (self.root / 'build/original-stack-formatter/run-1/logs/native-observations.stdout').write_text('old')
+        self.calls.clear()
+        self.assertEqual(['original-stack-formatter'], prepare()['reused'])
+        self.assertEqual([], self.calls)
+
+    def test_formatter_receipts_reject_mutation_missing_symlink_and_unknown_artifacts(self):
+        group, prepare = self.formatter_preparation()
+        prepare()
+        manifest_path = self.root / 'build/original-stack-formatter/manifest.json'
+        for change in ('bytes', 'missing', 'symlink', 'unknown', 'attempt-zero'):
+            with self.subTest(change=change):
+                manifest = json.loads(manifest_path.read_text())
+                name = next(name for name in manifest['artifactHashes'] if name.endswith('/native/formatter'))
+                path = self.root / name
+                if change == 'bytes':
+                    path.write_bytes(b'tampered')
+                elif change == 'missing':
+                    path.unlink()
+                elif change == 'symlink':
+                    path.unlink()
+                    path.symlink_to(self.root / 'fixtures/alpha.hs')
+                else:
+                    replacement = name.replace('/native/formatter', '/logs/unknown.stdout') if change == 'unknown' \
+                        else name.replace(name.split('/')[2], 'run-0')
+                    manifest['artifactHashes'][replacement] = manifest['artifactHashes'].pop(name)
+                    manifest_path.write_text(json.dumps(manifest))
+                self.assertEqual(['original-stack-formatter'], prepare()['rebuilt'])
+                self.assertEqual(['original-stack-formatter'], prepare()['reused'])
+        with mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])), \
+             mock.patch.object(fast_fixtures, 'FULL_REQUIRED', frozenset({manifest_path.relative_to(self.root).as_posix()})):
+            full = fast_fixtures._full_output_hashes(self.root)
+            self.assertEqual(fast_fixtures._output_hashes(self.root, group).keys(), full.keys())
+            current = next(name for name in full if name.endswith('/logs/native-observations.stdout'))
+            (self.root / current).write_bytes(b'tampered')
+            with self.assertRaisesRegex(RuntimeError, 'Stale formatter artifact'):
+                fast_fixtures._full_output_hashes(self.root)
+
     def test_boxed_array_extensions_focused_full_and_gradle_inputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -34,7 +161,7 @@ class FixturePreparationTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         for pattern in fast_fixtures.COMMON_SOURCES:
             name = pattern.replace("**/*.hs", "Plugin.hs").replace("*.py", "core_vectors.py")
             path = self.root / name
@@ -177,6 +304,22 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
+
+    def test_word_floating_has_focused_and_full_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["word-floating"]
+        self.assertEqual("word-floating", owners["thc.runtime.WordFloatingTest"])
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "word-floating"]}], group["commands"])
+        self.assertEqual(["build/word-floating"], group["outputs"])
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn('"$fixture_bin" word-floating', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn("build/word-floating", fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn("build/word-floating/manifest.json", fast_fixtures.FULL_REQUIRED)
+        policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
+        self.assertIn("thc.runtime.WordFloatingTest",
+                      policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"])
 
     def test_original_stack_has_portable_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]

@@ -29,6 +29,7 @@ SCHEMA = 1
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 SELF = ".github/scripts/fast_inputs.py"
 COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
+WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
@@ -37,8 +38,8 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
-narrow-literal-proofs original-stack original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
-show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic""".split()
+narrow-literal-proofs original-stack original-stack-formatter original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
+show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
@@ -119,7 +120,8 @@ def original_stack_artifact(name):
 
 def native_executable(name):
     return name in NATIVE_EXECUTABLES or (
-        original_stack_artifact(name) and name.endswith("/native/original-stack-native"))
+        original_stack_artifact(name) and name.endswith("/native/original-stack-native")) or (
+        original_stack_formatter_artifact(name) and name.endswith("/native/formatter"))
 
 
 class CacheMiss(RuntimeError):
@@ -187,6 +189,85 @@ def file_path(root, name):
     return path
 
 
+def wired_catalog(root):
+    """Read the production exporter's literal catalog; never execute Haskell.
+
+    These three lists deliberately use only ordinary string/tuple literals. A
+    different declaration shape fails closed until the cache reader is reviewed.
+    """
+    source = file_path(root, WIRED_SOURCE).read_text()
+    def table(name):
+        matches = re.findall(r"^" + name + r"\s*=\s*\n(\s*\[.*?^\s*\])", source, re.M | re.S)
+        require(len(matches) == 1, "Missing/ambiguous Wired catalog: " + name)
+        try:
+            value = ast.literal_eval(matches[0].strip())
+        except (ValueError, SyntaxError) as error:
+            raise CacheMiss("Nonliteral Wired catalog: " + name) from error
+        require(isinstance(value, list) and bool(value), "Empty Wired catalog: " + name)
+        return value
+    def pairs(name):
+        value = table(name)
+        require(all(isinstance(row, tuple) and len(row) == 2 and
+                    all(isinstance(part, str) for part in row) for row in value), "Invalid Wired pairs")
+        require(len({row[0] for row in value}) == len(value), "Duplicate Wired source")
+        return dict(value)
+    modules, hashes = pairs("moduleSources"), pairs("sourceHashes")
+    boot = table("bootSources")
+    require(all(isinstance(path, str) and relative(path).endswith(".hs-boot") for path in boot)
+            and len(set(boot)) == len(boot), "Invalid Wired boot sources")
+    for path, module in modules.items():
+        require(PurePosixPath(relative(path)).suffix in (".hs", ".hsc") and
+                module == str(PurePosixPath(path).with_suffix("")).replace("/", ".") and
+                re.fullmatch(r"[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*", module),
+                "Invalid Wired module source")
+    require(set(modules) | set(boot) <= hashes.keys(), "Unpinned Wired source")
+    for path, digest in hashes.items():
+        relative(path)
+        require(HEX.fullmatch(digest) is not None, "Invalid Wired source pin")
+    return modules, hashes
+
+
+def original_stack_formatter_files(root=None):
+    # Reuse the exporter's authoritative module names and HSC sources instead
+    # of maintaining another manually synchronized list of 37 modules.
+    root = Path(__file__).resolve().parents[2] if root is None else root
+    modules, _ = wired_catalog(root)
+    return frozenset((
+        "native/formatter", "originals/generated.json", "originals/target-layout.json",
+        *(f"originals/core/{module}.json" for module in modules.values()),
+        *("originals/generated/" + str(PurePosixPath(path).with_suffix(".hs"))
+          for path in modules if path.endswith(".hsc")),
+        *(f"{stage}-core/OriginalStackFormatter.json" for stage in ("pre", "post")),
+        *(f"{stage}-audit.json" for stage in ("pre", "post")),
+        *(f"logs/{label}.{suffix}"
+          for label in ("ghc-version", "plugin-build", "original-source-export", "pre-export",
+                        "post-export", "native-compile", "native-observations", "pre-audit", "post-audit")
+          for suffix in ("stdout", "stderr", "command.json")),
+    ))
+
+
+def original_stack_formatter_artifact(name):
+    match = re.fullmatch(r"build/original-stack-formatter/run-[1-9][0-9]*/(.+)", name)
+    return match is not None and match.group(1) in original_stack_formatter_files()
+
+
+def formatter_artifact_hashes(root, manifest):
+    """One complete reviewed attempt, excluding overlays and previous attempts."""
+    require(isinstance(manifest, dict), "Invalid formatter manifest")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and bool(artifacts), "Missing formatter artifact hashes")
+    attempts = set()
+    for name, digest in artifacts.items():
+        match = re.fullmatch(r"(build/original-stack-formatter/run-[1-9][0-9]*)/(.+)", relative(name))
+        require(match is not None and isinstance(digest, str) and HEX.fullmatch(digest),
+                "Invalid formatter artifact")
+        attempts.add(match.group(1))
+    require(len(attempts) == 1, "Mixed formatter attempts")
+    expected = {next(iter(attempts)) + "/" + name for name in original_stack_formatter_files(root)}
+    require(set(artifacts) == expected, "Incomplete/unreviewed formatter artifacts")
+    return artifacts
+
+
 def command(argv, root):
     return subprocess.check_output(list(map(str, argv)), cwd=root, text=True).strip()
 
@@ -240,7 +321,7 @@ def toolchain(root):
 def identity(root):
     tracked = tracked_files(root)
     sources = {name for name in tracked if name.startswith(("compiler/", "scripts/", "examples/", "src/main/resources/", "test/haskell-fixtures/"))}
-    sources.update((SELF, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS))
+    sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS))
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
     require("scripts/prepare-tests.sh" in sources and "compiler/export-boot.py" in sources
             and "examples/coverage.json" in sources, "Incomplete authoritative source set")
@@ -298,6 +379,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_OUTPUTS
     if parts[1] == "original-stack":
         return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
+    if parts[1] == "original-stack-formatter":
+        return name == "build/original-stack-formatter/manifest.json" or original_stack_formatter_artifact(name)
     if parts[1] == "boxed-array-extensions":
         return name == "build/boxed-array-extensions/manifest.json" or boxed_array_extension_artifact(name)
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
@@ -386,6 +469,8 @@ def inventory(root, current, read, core_files, verified=None):
         if not name.endswith(".json"):
             continue
         doc = json.loads(data)
+        if name == "build/original-stack-formatter/manifest.json":
+            formatter_artifact_hashes(root, doc)
         # Core is data, not a provenance map: representation payloads must not be
         # interpreted as filesystem paths. All other preparation JSON is scanned.
         if isinstance(doc, dict) and "bindings" in doc and "module" in doc:

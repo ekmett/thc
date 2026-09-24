@@ -21,6 +21,115 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def formatter_fixture(self):
+        project = Path(__file__).resolve().parents[2]
+        self.put(cache.WIRED_SOURCE, (project / cache.WIRED_SOURCE).read_bytes())
+        self.current = cache.identity(self.root)
+        manifest_path = 'build/original-stack-formatter/manifest.json'
+        attempt = 'build/original-stack-formatter/run-3/'
+        artifacts = {attempt + name for name in cache.original_stack_formatter_files(self.root)}
+        for name in artifacts:
+            self.put(name, b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
+        (self.root / (attempt + 'native/formatter')).chmod(0o755)
+        manifest = {'schema': 1, 'inputHashes': {
+            **self.manifest['inputHashes'], cache.WIRED_SOURCE: self.current['sources'][cache.WIRED_SOURCE]},
+            'artifactHashes': {name: cache.digest(self.root / name) for name in sorted(artifacts)}}
+        self.put(manifest_path, json.dumps(manifest))
+        return manifest_path, attempt, artifacts, manifest
+
+    def test_formatter_catalog_and_exact_artifact_admission(self):
+        project = Path(__file__).resolve().parents[2]
+        modules, pins = cache.wired_catalog(project)
+        self.assertEqual((37, 49), (len(modules), len(pins)))
+        for name, expected in pins.items():
+            self.assertEqual(expected, cache.digest(project / 'compiler/pinned-ghc-internal' / name), name)
+        files = cache.original_stack_formatter_files(project)
+        self.assertEqual(77, len(files))
+        self.assertIn('build/original-stack-formatter/manifest.json', DECLARED_REQUIRED)
+        for attempt in ('run-1', 'run-42'):
+            for suffix in files:
+                name = f'build/original-stack-formatter/{attempt}/{suffix}'
+                self.assertTrue(cache.allowed_payload(name, {}), name)
+                if suffix == 'native/formatter':
+                    self.assertEqual(0o755, cache.safe_mode(0o755, name))
+                else:
+                    with self.assertRaises(cache.CacheMiss):
+                        cache.safe_mode(0o755, name)
+        for suffix in ('run-0/native/formatter', 'run-01/native/formatter',
+                       'run-1/previous-manifest.json', 'run-1/native/Main.o',
+                       'run-1/native/other-formatter', 'run-1/logs/unknown.stdout',
+                       'run-1/pre-core/THC.InterfaceClosure.json',
+                       'run-1/originals/core/Extra.json', 'run-1/originals/generated/Extra.hs',
+                       'run-1/originals/interfaces/GHC/Internal/Base.hi'):
+            self.assertFalse(cache.allowed_payload('build/original-stack-formatter/' + suffix, {}), suffix)
+        with self.assertRaises(cache.CacheMiss):
+            cache.allowed_payload('build/original-stack-formatter/run-1/../native/formatter', {})
+
+    def test_formatter_round_trip_preserves_bytes_mode_and_complete_attempt(self):
+        manifest_path, attempt, artifacts, original = self.formatter_fixture()
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, manifest_path)):
+            manifest = self.pack()
+            self.assertTrue(artifacts <= manifest['payload'].keys())
+            self.remove_payload(manifest)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, json.loads((self.root / manifest_path).read_text()))
+            self.assertEqual(b'\x00\x80\xff\n', (self.root / (attempt + 'logs/native-observations.stdout')).read_bytes())
+            self.assertEqual(0o755, (self.root / (attempt + 'native/formatter')).stat().st_mode & 0o7777)
+            self.remove_payload(manifest)
+            for missing in ('logs/pre-audit.command.json', 'native/formatter',
+                            'originals/generated/GHC/Internal/InfoProv/Types.hs'):
+                with self.subTest(missing=missing):
+                    changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                        if member.name != 'files/' + attempt + missing])
+                    self.rejected_without_writes(changed)
+            changed = self.rewrite(lambda entries: [(member, data + b'tampered' if member.name ==
+                'files/' + attempt + 'logs/native-observations.stdout' else data) for member, data in entries])
+            self.rejected_without_writes(changed)
+
+    def test_formatter_rejects_unreviewed_mixed_or_missing_artifact_sets(self):
+        _, attempt, _, original = self.formatter_fixture()
+        for source, target in (
+                ('logs/ghc-version.stdout', None),
+                ('logs/ghc-version.stdout', 'build/original-stack-formatter/run-3/logs/unknown.stdout'),
+                ('native/formatter', 'build/original-stack-formatter/run-0/native/formatter'),
+                ('native/formatter', 'build/original-stack-formatter/run-4/native/formatter'),
+                ('native/formatter', 'build/original-stack-formatter/run-3/../native/formatter')):
+            doc = copy.deepcopy(original)
+            value = doc['artifactHashes'].pop(attempt + source)
+            if target is not None:
+                doc['artifactHashes'][target] = value
+            with self.subTest(target=target), self.assertRaises(cache.CacheMiss):
+                cache.formatter_artifact_hashes(self.root, doc)
+
+    def test_formatter_referenced_symlink_and_wired_source_drift_rejected(self):
+        manifest_path, attempt, _, _ = self.formatter_fixture()
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, manifest_path)):
+            native = self.root / (attempt + 'native/formatter')
+            target = self.temp_root / 'formatter'
+            native.rename(target)
+            native.symlink_to(target)
+            with self.assertRaises(cache.CacheMiss):
+                self.pack()
+            native.unlink()
+            target.rename(native)
+            with (self.root / cache.WIRED_SOURCE).open('a') as stream:
+                stream.write('\n-- changed producer\n')
+            self.assertNotEqual(cache.cache_key(self.current), cache.cache_key(cache.identity(self.root)))
+            self.current = cache.identity(self.root)
+            with self.assertRaisesRegex(cache.CacheMiss, 'Stale or unkeyed tracked source'):
+                self.pack()
+
+    def test_formatter_catalog_fails_closed_on_nonliteral_or_unpinned_sources(self):
+        self.formatter_fixture()
+        path = self.root / cache.WIRED_SOURCE
+        source = path.read_text()
+        for changed in (source.replace('moduleSources =', 'moduleSources = undefined\n--'),
+                        source.replace('sourceHashes =', 'missingHashes ='),
+                        source.replace('GHC/Internal/Arr.hs', '../GHC/Internal/Arr.hs')):
+            path.write_text(changed)
+            with self.assertRaises(cache.CacheMiss):
+                cache.wired_catalog(self.root)
+
     def test_original_stack_cache_accepts_only_reviewed_attempt_artifacts(self):
         self.assertIn("build/original-stack/manifest.json", DECLARED_REQUIRED)
         for attempt in ("run-1", "run-42"):
@@ -85,7 +194,7 @@ class FastInputTests(unittest.TestCase):
         self.vendor = b"original GHC source\n"
         self.put("compiler/export-boot.py", "exception_sources = " + repr({
             "GHC/Internal/CString.hs": cache.sha(self.vendor)}) + "\n")
-        for name in (cache.SELF, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
+        for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
                      "scripts/prepare-tests.sh", "examples/coverage.json",
                      "src/main/resources/thc/scalar-primop-signatures.json"):
             self.put(name, "source: " + name)
@@ -379,6 +488,14 @@ class FastInputTests(unittest.TestCase):
         for name in ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"):
             self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}", pins))
         self.assertIn("build/map/boot-core", cache.CORE_DIRS)
+
+    def test_word_floating_manifest_and_semantic_payload_are_cache_inputs(self):
+        self.assertIn("build/word-floating/manifest.json", DECLARED_REQUIRED)
+        for name in ("oracle.tsv", "pre-audit.json", "post-audit.json",
+                     "pre-core/WordFloatingAudit.json", "post-core/WordFloatingAudit.json"):
+            self.assertTrue(cache.allowed_payload("build/word-floating/" + name, {}), name)
+        for name in ("test-results/results.json", "classes/Main.class", "unreviewed.sh"):
+            self.assertFalse(cache.allowed_payload("build/word-floating/" + name, {}), name)
 
     def test_original_stdio_inventory_is_exact_and_manifest_is_required(self):
         # setUp replaces REQUIRED for the small archive tests.

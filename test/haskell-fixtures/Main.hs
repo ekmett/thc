@@ -8,10 +8,11 @@
 module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
+import WordFloatingFixtures (prepareWordFloating)
 import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
+import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import SmallArrayFixtures (prepareSmallArrays)
-import StackFixtures (prepareOriginalStack)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
@@ -95,7 +96,8 @@ entries Bit = zipWith makeBit [0 ..] choices
           argument = if width == 64 then "Word64Rep" else "WordRep"
           result = if width == 64 && op `elem` ["byteSwap", "bitReverse"] then "Word64Rep" else "WordRep"
       in makeEntry index name (Just primitive) actualWidth 1 op [argument] result True
-entries IntegerWord = zipWith makeWord [0 ..] choices
+entries IntegerWord = zipWith makeWord [0 ..] choices ++
+  zipWith makeDeposit [length choices ..] [(op, width) | op <- ["pdep", "pext"], width <- [8,16,32,64,0]]
   where
     choices = [(op, 64) | op <- ["quot", "rem", "gt", "ge"]] ++
       [(op, width) | op <- ["quot", "rem", "eq", "ne", "gt", "ge", "and", "or", "xor", "not", "uncheckedShiftL", "uncheckedShiftRL"], width <- [8,16,32]]
@@ -104,6 +106,11 @@ entries IntegerWord = zipWith makeWord [0 ..] choices
           primitive = op ++ "Word" ++ (if width == 64 then "" else show width) ++ "#"
           arity = if op == "not" then 1 else 2
       in makeEntry index name (Just primitive) width arity op (replicate arity "WordRep") "WordRep" True
+    makeDeposit index (op, width) =
+      let suffix = if width == 0 then "" else show width
+          rep = if width == 64 then "Word64Rep" else "WordRep"
+      in makeEntry index (op ++ "Word" ++ suffix) (Just (op ++ suffix ++ "#"))
+           (if width == 0 then 64 else width) 2 op [rep,rep] rep True
 entries SignedNarrow = zipWith makeSigned [0 ..]
   [(op, width) | op <- ["negate", "plus", "sub", "times", "quot", "rem", "eq", "ne", "lt", "le", "gt", "ge"], width <- [8,16,32]] ++
   zipWith makeCast [36 ..] [(direction, width) | width <- [8,16,32], direction <- ["intToWord", "wordToInt"]] ++
@@ -221,6 +228,8 @@ operands :: Family -> Entry -> [(Integer,Integer)]
 operands Bit e = [(x,0) | x <- bitOperands (entryWidth e)]
 operands IntegerWord e
   | entryArity e == 1 = [(signed64 x,0) | x <- if width == 8 then [0 .. 255] else values]
+  | entryOperation e `elem` ["pdep", "pext"] =
+      [(signed64 x, signed64 y) | x <- depositValues, y <- depositMasks]
   | "unchecked" `isPrefixOf` entryOperation e =
       [(signed64 x, shift) | x <- if width == 8 then [0 .. 255] else values,
        shift <- [0 .. toInteger width - 1]]
@@ -228,6 +237,14 @@ operands IntegerWord e
                  y /= 0 || entryOperation e `notElem` ["quot", "rem"]]
   where
     width = entryWidth e
+    depositBits = Set.toAscList $ Set.fromList $ filter (< 64) [0,1,2,width `div` 2,width - 2,width - 1,63]
+    depositValues = Set.toAscList $ Set.fromList $
+      [0,1,2,3,pow2 width - 1,0x5555555555555555,0xaaaaaaaaaaaaaaaa,pow2 63] ++
+      [pow2 bit | bit <- depositBits]
+    depositMasks = Set.toAscList $ Set.fromList $
+      [0,1,2,3,pow2 width - 1,0x5555555555555555,0xaaaaaaaaaaaaaaaa,pow2 63] ++
+      [pow2 bit | bit <- depositBits] ++
+      [pow2 bit - 1 | bit <- depositBits, bit > 0]
     values = samples width
     anchors = [0,1,2,3,pow2 (width - 1) - 1,pow2 (width - 1),
                pow2 (width - 1) + 1,pow2 width - 2,pow2 width - 1]
@@ -796,8 +813,11 @@ main = do
     [name] -> prepareAggregate root name
     _ -> pure False
   unless handled $ case args of
+    ["word-floating"] -> prepareWordFloating root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
+    ["original-stack-formatter"] -> prepareOriginalStackFormatter root
+    ["original-stack-source-export", directory] -> exportOriginalStackSource root directory
     ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
@@ -807,4 +827,4 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

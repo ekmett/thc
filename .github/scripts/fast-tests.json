@@ -28,6 +28,7 @@
     },
     "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
       "junit": [
+        "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
         "thc.runtime.CompiledThunkRetentionTest",
@@ -68,6 +69,7 @@
     },
     "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": {
       "junit": [
+        "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
         "thc.runtime.CompiledThunkRetentionTest",
@@ -186,6 +188,14 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/OriginalStackFormatter.hs": {
+      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalStackFormatterNative.hs": {
+      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "python": []
+    },
     "scripts/prepare-boxed-arrays.py": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
       "python": []
@@ -215,15 +225,15 @@
       "python": []
     },
     "compiler/test-fixtures/OriginalStackProof.json": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest"],
       "python": []
     },
     "test/haskell-fixtures/StackFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
     "src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt": {
-      "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest"],
+      "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest", "thc.runtime.OriginalStackDecoderCallTest"],
       "python": []
     },
     "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs": {
@@ -634,6 +644,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",

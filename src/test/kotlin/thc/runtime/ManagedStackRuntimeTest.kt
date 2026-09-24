@@ -202,6 +202,106 @@ class ManagedStackRuntimeTest {
             assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.frameInfo(snapshot, offset, layout) }
     }
 
+    @Test fun virtualZeroSlackFramesExposeEmptyBitmapAndExactTerminalTraversal(): Unit = context { language ->
+        val snapshot = capture(language); val layout = layout()
+        assertEquals(2L, ManagedStackRuntime.stackFields(snapshot, layout))
+        for (offset in snapshot.frames.indices) {
+            val bitmap = ManagedStackRuntime.smallBitmap(snapshot, offset.toLong(), layout)
+            assertEquals(0L, bitmap.bitmap)
+            assertEquals(0L, bitmap.size)
+            val next = ManagedStackRuntime.advance(snapshot, offset.toLong(), layout)
+            if (offset + 1 < snapshot.frames.size) {
+                assertSame(snapshot, next.snapshot)
+                assertEquals(offset + 1L, next.wordOffset)
+                assertEquals(1L, next.hasNext)
+            } else {
+                assertNull(next.snapshot)
+                assertEquals(0L, next.wordOffset)
+                assertEquals(0L, next.hasNext)
+                assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.stackFields(next.snapshot, layout) }
+            }
+        }
+        for (offset in listOf(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE)) {
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.smallBitmap(snapshot, offset, layout) }
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.advance(snapshot, offset, layout) }
+        }
+        val changed = layout(abi = "other-stack-geometry")
+        assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.stackFields(snapshot, changed) }
+    }
+
+    @Test fun nativePayloadAndOtherFrameKindGettersNeverInventDiagnosticContents() = context { language ->
+        val snapshot = capture(language); val layout = layout()
+        val operations = listOf(OriginalStackInfoOp.WORD, OriginalStackInfoOp.CLOSURE,
+            OriginalStackInfoOp.LARGE_BITMAP, OriginalStackInfoOp.BCO_LARGE_BITMAP,
+            OriginalStackInfoOp.RET_FUN_LARGE_BITMAP, OriginalStackInfoOp.RET_FUN_SMALL_BITMAP,
+            OriginalStackInfoOp.RET_FUN_BIG, OriginalStackInfoOp.UNDERFLOW)
+        for (operation in operations) {
+            val error = assertThrows(RuntimeFault::class.java) {
+                ManagedStackRuntime.incompatibleGetter(operation, snapshot, 0, layout)
+            }
+            assertTrue(error.message.orEmpty().contains(operation.symbol))
+            assertTrue(error.message.orEmpty().contains("managed diagnostic RET_SMALL"))
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.incompatibleGetter(operation, snapshot, -1, layout) }
+        }
+    }
+
+    @Test fun speculativeScalarGetterInterfacesPreserveValueAndEvaluateOperandOnce(): Unit = context { language ->
+        val snapshot = capture(language); val layout = layout()
+        val frame = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameLayout().build())
+        var evaluations = 0
+        fun operand() = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any { evaluations++; return snapshot }
+        }
+        val info = OriginalStackInfoExpression(OriginalStackInfoOp.STACK_INFO, layout, arrayOf(operand()),
+            CoreRepresentation(CoreKind.ADDRESS, evaluated = true))
+        val expectedAddress = ManagedStackRuntime.stackInfo(snapshot, layout)
+        val addressMiss = assertThrows(com.oracle.truffle.api.nodes.UnexpectedResultException::class.java) {
+            info.executeLong(frame)
+        }
+        assertSame(expectedAddress, addressMiss.result)
+        assertEquals(1, evaluations)
+        val fields = OriginalStackInfoExpression(OriginalStackInfoOp.STACK_FIELDS, layout, arrayOf(operand()),
+            CoreRepresentation(CoreKind.LONG, evaluated = true))
+        val longMiss = assertThrows(com.oracle.truffle.api.nodes.UnexpectedResultException::class.java) {
+            fields.executeAddress(frame)
+        }
+        assertEquals(2L, longMiss.result)
+        assertEquals(2, evaluations)
+    }
+
+    @Test fun boundNullUnliftedLocalsRemainDistinctFromUnknownOrUnpublishedBindings() {
+        val layout = FrameLayout()
+        val slot = layout.bind("nullable-snapshot")
+        val frame = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
+        FrameAccess.writeObject(frame, slot, null)
+        val unlifted = CoreRepresentation(CoreKind.OBJECT, evaluated = true, primReps = listOf("BoxedRep (Just Unlifted)"))
+        assertNull(LocalRead(slot, cell = false).proven(unlifted).execute(frame))
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot, cell = false).execute(frame) }
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot, cell = false).proven(unlifted.copy(evaluated = false)).execute(frame) }
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot).proven(unlifted).execute(frame) }
+        assertThrows(RuntimeFault::class.java) {
+            LocalRead(slot, cell = false).proven(unlifted.copy(primReps = listOf("BoxedRep (Just Lifted)"))).execute(frame)
+        }
+        val recursive = RecCell()
+        FrameAccess.writeObject(frame, slot, recursive)
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot).proven(unlifted).execute(frame) }
+        recursive.value = null
+        recursive.initialized = true
+        assertNull(LocalRead(slot).proven(unlifted).execute(frame))
+    }
+
+    @Test fun newGettersEnforceSnapshotContextAndRegistryLifetime() {
+        val layout = layout()
+        val snapshot = context { capture(it) }
+        context { _ ->
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.stackFields(snapshot, layout) }
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.smallBitmap(snapshot, 0, layout) }
+            assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.advance(snapshot, 0, layout) }
+            for (invalid in listOf(null, 0L, "snapshot"))
+                assertThrows(RuntimeFault::class.java) { ManagedStackRuntime.stackFields(invalid, layout) }
+        }
+    }
+
     @Test fun ipeUsesAbsoluteFieldBytesWithinDestinationViewAndKeepsImmutableStringsAlive() {
         val layout = layout(); val storage = ManagedAllocation.mutable(110, 8)
         val destination = ManagedAddress.fromAllocation(storage).plus(7)

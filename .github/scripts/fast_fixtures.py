@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "dbaf59086dfdc70eff0a34e0f8318ffbcb68df5abae93ee06b8460bf14defbe9"
+FULL_PREPARATION_PLAN = "bc209ede6c918679035867871eb41e066de921c48e787a8d94d9e0235f1e2cf5"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -135,7 +135,13 @@ def _manifest(root):
 
 def _source_hashes(root, group):
     files = set()
-    for pattern in (*COMMON_SOURCES, *group["sources"]):
+    pinned = []
+    if fast_inputs.WIRED_SOURCE in group["sources"]:
+        # This explicit producer dependency brings its complete pinned source
+        # catalog, including HSC, boot files, header and license, into the key.
+        _, hashes = fast_inputs.wired_catalog(root)
+        pinned = ["compiler/pinned-ghc-internal/" + path for path in hashes]
+    for pattern in (*COMMON_SOURCES, *group["sources"], *pinned):
         _relative(pattern)
         matches = list(root.glob(pattern))
         if not matches:
@@ -158,6 +164,8 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/original-stack-formatter"]:
+        return _formatter_output_hashes(root)
     files = set()
     for output in group["outputs"]:
         path = root / _relative(output)
@@ -179,6 +187,22 @@ def _output_hashes(root, group):
     if not files:
         raise FileNotFoundError("Fixture outputs contain no files")
     return {str(path): _digest(root / path) for path in sorted(files)}
+
+
+def _formatter_output_hashes(root):
+    # The source exporter creates a symlink overlay of installed interfaces.
+    # Only the manifest's exact reviewed artifacts are reusable fixture data.
+    name = "build/original-stack-formatter/manifest.json"
+    path = fast_inputs.file_path(root, name)
+    manifest = json.loads(path.read_text())
+    expected = fast_inputs.formatter_artifact_hashes(root, manifest)
+    result = {name: _digest(path)}
+    for artifact, recorded in sorted(expected.items()):
+        actual = _digest(fast_inputs.file_path(root, artifact))
+        if actual != recorded:
+            raise RuntimeError("Stale formatter artifact: " + artifact)
+        result[artifact] = actual
+    return result
 
 
 def _write_stamp(path, stamp):
@@ -239,6 +263,9 @@ def _full_output_hashes(root):
             continue
         if path.is_symlink() or not path.is_dir():
             raise RuntimeError(f"Unexpected full fixture root: {name}")
+        if name == "build/original-stack-formatter":
+            files.update(_formatter_output_hashes(root))
+            continue
         for member in path.rglob("*"):
             # GHC's output directories can contain links to installed package
             # interfaces. They are not fixture inputs and are never followed.
@@ -318,7 +345,7 @@ def prepare(root, selection, run, toolchain):
                 stamp = json.loads(stamp_path.read_text())
                 reusable = (isinstance(stamp, dict) and stamp.get("schema") == 1 and
                             stamp.get("key") == key and stamp.get("outputs") == _output_hashes(root, group))
-            except (FileNotFoundError, ValueError, OSError):
+            except (FileNotFoundError, ValueError, OSError, RuntimeError):
                 reusable = False
             state.append((group_id, group, key, stamp_path, reusable))
         return state

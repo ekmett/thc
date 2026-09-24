@@ -34,6 +34,9 @@ class FastSelectionTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.repo = Path(self.temporary.name)
         self.git("init", "-q")
+        # No background Git process should outlive this temporary repository.
+        self.git("config", "maintenance.auto", "false")
+        self.git("config", "gc.auto", "0")
         smoke = dict(junit=["example.SmokeTest"], python=["scripts/test-smoke.py"])
         affected = dict(junit=["example.OtherTest"], python=["scripts/test-other.py"])
         self.policy = dict(schema=2, smoke=smoke,
@@ -628,14 +631,15 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
-    def test_stack_info_layout_helper_selects_both_consumers(self):
+    def test_stack_info_layout_helper_selects_all_consumers(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt"]
         consumers = set()
         for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
             source = path.read_text()
             if "StackInfoTestLayout" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest"}, consumers)
+        self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest",
+                          "thc.runtime.OriginalStackDecoderCallTest"}, consumers)
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
@@ -675,7 +679,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "BytecodeTypedTupleInputTest", "CompiledThunkRetentionTest", "DoubleArrayNativeTest", "DoubleArrayTest",
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
-            "FloatingPrimitiveTest", "FloatingTupleTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
+            "FloatingPrimitiveTest", "FloatingTupleTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
             "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SqrtPrimitiveTest",
             "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))

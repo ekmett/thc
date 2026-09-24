@@ -169,6 +169,46 @@ uncheckedShiftRLWord16 x y = word2Int# (word16ToWord# (uncheckedShiftRLWord16# (
 uncheckedShiftRLWord32 :: Int# -> Int# -> Int#
 uncheckedShiftRLWord32 x y = word2Int# (word32ToWord# (uncheckedShiftRLWord32# (wordToWord32# (int2Word# x)) y))
 
+{-# NOINLINE pdepWord8 #-}
+pdepWord8 :: Int# -> Int# -> Int#
+pdepWord8 x y = word2Int# (pdep8# (int2Word# x) (int2Word# y))
+
+{-# NOINLINE pdepWord16 #-}
+pdepWord16 :: Int# -> Int# -> Int#
+pdepWord16 x y = word2Int# (pdep16# (int2Word# x) (int2Word# y))
+
+{-# NOINLINE pdepWord32 #-}
+pdepWord32 :: Int# -> Int# -> Int#
+pdepWord32 x y = word2Int# (pdep32# (int2Word# x) (int2Word# y))
+
+{-# NOINLINE pdepWord64 #-}
+pdepWord64 :: Int# -> Int# -> Int#
+pdepWord64 x y = word2Int# (word64ToWord# (pdep64# (wordToWord64# (int2Word# x)) (wordToWord64# (int2Word# y))))
+
+{-# NOINLINE pdepWord #-}
+pdepWord :: Int# -> Int# -> Int#
+pdepWord x y = word2Int# (pdep# (int2Word# x) (int2Word# y))
+
+{-# NOINLINE pextWord8 #-}
+pextWord8 :: Int# -> Int# -> Int#
+pextWord8 x y = word2Int# (pext8# (int2Word# x) (int2Word# y))
+
+{-# NOINLINE pextWord16 #-}
+pextWord16 :: Int# -> Int# -> Int#
+pextWord16 x y = word2Int# (pext16# (int2Word# x) (int2Word# y))
+
+{-# NOINLINE pextWord32 #-}
+pextWord32 :: Int# -> Int# -> Int#
+pextWord32 x y = word2Int# (pext32# (int2Word# x) (int2Word# y))
+
+{-# NOINLINE pextWord64 #-}
+pextWord64 :: Int# -> Int# -> Int#
+pextWord64 x y = word2Int# (word64ToWord# (pext64# (wordToWord64# (int2Word# x)) (wordToWord64# (int2Word# y))))
+
+{-# NOINLINE pextWord #-}
+pextWord :: Int# -> Int# -> Int#
+pextWord x y = word2Int# (pext# (int2Word# x) (int2Word# y))
+
 -- One dynamic entry covers every primitive branch in each guest backend.
 -- Wrappers remain exported for their individual native and Core audits.
 {-# OPAQUE composite #-}
@@ -214,4 +254,14 @@ composite selector x y = case selector of
   37# -> word2Int# (word8ToWord# (uncheckedShiftRLWord8# (wordToWord8# (int2Word# x)) y))
   38# -> word2Int# (word16ToWord# (uncheckedShiftRLWord16# (wordToWord16# (int2Word# x)) y))
   39# -> word2Int# (word32ToWord# (uncheckedShiftRLWord32# (wordToWord32# (int2Word# x)) y))
+  40# -> word2Int# (pdep8# (int2Word# x) (int2Word# y))
+  41# -> word2Int# (pdep16# (int2Word# x) (int2Word# y))
+  42# -> word2Int# (pdep32# (int2Word# x) (int2Word# y))
+  43# -> word2Int# (word64ToWord# (pdep64# (wordToWord64# (int2Word# x)) (wordToWord64# (int2Word# y))))
+  44# -> word2Int# (pdep# (int2Word# x) (int2Word# y))
+  45# -> word2Int# (pext8# (int2Word# x) (int2Word# y))
+  46# -> word2Int# (pext16# (int2Word# x) (int2Word# y))
+  47# -> word2Int# (pext32# (int2Word# x) (int2Word# y))
+  48# -> word2Int# (word64ToWord# (pext64# (wordToWord64# (int2Word# x)) (wordToWord64# (int2Word# y))))
+  49# -> word2Int# (pext# (int2Word# x) (int2Word# y))
   _ -> 0#

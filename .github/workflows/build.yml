@@ -263,6 +263,7 @@ jobs:
             build/floating/core/
             build/floating/checks.json
             build/floating/oracle.tsv
+            build/word-floating/
             build/floating-tuple/
             build/empty-tuple-input/
             build/empty-join-input/
@@ -350,6 +351,7 @@ jobs:
             build/mutvar/*/core/*.json
             build/boxed-arrays/
             build/boxed-array-extensions/
+            build/original-stack-formatter/
             build/address-fields/
             build/data-to-tag/
             build/scalar-bitcasts/

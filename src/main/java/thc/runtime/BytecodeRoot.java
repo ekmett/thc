@@ -646,6 +646,66 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = TargetLayout.class, name = "layout")
+    public static final class OriginalStackFields {
+        @Specialization public static long apply(TargetLayout layout, Object snapshot) {
+            return ManagedStackRuntime.stackFields(snapshot, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = LocalAccessor.class, name = "bitmap")
+    @ConstantOperand(type = LocalAccessor.class, name = "size")
+    public static final class OriginalStackSmallBitmap {
+        @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
+                LocalAccessor bitmap, LocalAccessor size, Object snapshot, long offset,
+                @Bind("$node") Node node) {
+            ManagedStackBitmap result = ManagedStackRuntime.smallBitmap(snapshot, offset, layout);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            bitmap.setLong(bytecode, frame, result.getBitmap());
+            size.setLong(bytecode, frame, result.getSize());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = LocalAccessor.class, name = "nextSnapshot")
+    @ConstantOperand(type = LocalAccessor.class, name = "nextOffset")
+    @ConstantOperand(type = LocalAccessor.class, name = "hasNext")
+    public static final class OriginalStackAdvance {
+        @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
+                LocalAccessor nextSnapshot, LocalAccessor nextOffset, LocalAccessor hasNext,
+                Object snapshot, long offset, @Bind("$node") Node node) {
+            ManagedStackAdvance result = ManagedStackRuntime.advance(snapshot, offset, layout);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            nextSnapshot.setObject(bytecode, frame, result.getSnapshot());
+            nextOffset.setLong(bytecode, frame, result.getWordOffset());
+            hasNext.setLong(bytecode, frame, result.getHasNext());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = OriginalStackInfoOp.class, name = "operation")
+    public static final class OriginalStackIncompatibleGetter {
+        @Specialization public static Object apply(TargetLayout layout, OriginalStackInfoOp operation,
+                Object snapshot, long offset) {
+            return ManagedStackRuntime.incompatibleGetter(operation, snapshot, offset, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = OriginalStackInfoOp.class, name = "operation")
+    public static final class OriginalStackIncompatibleTupleGetter {
+        @Specialization public static void apply(TargetLayout layout, OriginalStackInfoOp operation,
+                Object snapshot, long offset) {
+            ManagedStackRuntime.incompatibleGetter(operation, snapshot, offset, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalStackLookupIpe {
         @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
@@ -2454,6 +2514,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ByteSwapWidth { @Specialization public static long apply(int shift, long x) { return Long.reverseBytes(x) >>> shift; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class BitReverseWidth { @Specialization public static long apply(int shift, long x) { return Long.reverse(x) >>> shift; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class BitDepositWidth { @Specialization public static long apply(int shift, long x, long mask) {
+        long widthMask = -1L >>> shift;
+        return Long.expand(x & widthMask, mask & widthMask) & widthMask;
+    } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class BitExtractWidth { @Specialization public static long apply(int shift, long x, long mask) {
+        long widthMask = -1L >>> shift;
+        return Long.compress(x & widthMask, mask & widthMask) & widthMask;
+    } }
     @Operation public static final class ShiftLeft { @Specialization public static long apply(long x, long y) { return x << (int) y; } }
     @Operation public static final class ShiftRight { @Specialization public static long apply(long x, long y) { return x >> (int) y; } }
     @Operation public static final class ShiftRightUnsigned { @Specialization public static long apply(long x, long y) { return x >>> (int) y; } }
@@ -2591,6 +2661,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class CastWord64ToDouble { @Specialization public static double apply(long value) { return RawBitCasts.word64ToDouble(value); } }
     @Operation public static final class IntToFloat { @Specialization public static float apply(long x) { return (float) x; } }
     @Operation public static final class IntToDouble { @Specialization public static double apply(long x) { return (double) x; } }
+    @Operation public static final class WordToFloat { @Specialization public static float apply(long x) { return WordFloatingConversions.toFloat(x); } }
+    @Operation public static final class WordToDouble { @Specialization public static double apply(long x) { return WordFloatingConversions.toDouble(x); } }
     @Operation public static final class FloatToInt { @Specialization public static long apply(float x) { return (long) x; } }
     @Operation public static final class DoubleToInt { @Specialization public static long apply(double x) { return (long) x; } }
     @Operation public static final class FloatToDouble { @Specialization public static double apply(float x) { return (double) x; } }
