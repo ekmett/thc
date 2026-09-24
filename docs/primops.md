@@ -358,7 +358,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
 - [ ] `indexAddrArray#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexAddrOffAddr#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `indexAddrOffAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexCharOffAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexDoubleArray#` — arity 2 — Managed byte storage

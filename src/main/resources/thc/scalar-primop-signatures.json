@@ -695,6 +695,13 @@
       ],
       "result": "IntRep"
     },
+    "indexAddrOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "AddrRep"
+    },
     "indexCharOffAddr#": {
       "arguments": [
         "AddrRep",
