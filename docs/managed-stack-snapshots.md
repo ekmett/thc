@@ -128,5 +128,29 @@ transactional-copy rules. `OriginalStackInfoCallTest` places unchanged original
 call excerpts in explicitly synthetic scalar-result consumers, exercising AST
 and bytecode entries before and immediately after compilation, with inlining
 enabled and disabled. This is protocol execution, not execution of the complete
-original decoder or formatter. Remaining payload/bitmap/advance getters and
-remote capture are still unsupported.
+original decoder or formatter. Remote capture is still unsupported.
+
+## Diagnostic frame traversal
+
+The remaining original getter declarations are checked with the same exact raw
+contracts, including the lifted `Any` result of `getStackClosurezh`, the Word32
+result of `getStackFieldszh`, and all three ordered components of
+`advanceStackFrameLocationzh`. Recognition and lowering do not by themselves
+admit these calls through the capability auditor or prove complete Decode.
+
+The managed image has no unused stack capacity: it is a zero-slack sequence of
+one-word, zero-payload `RET_SMALL` records. `getStackFieldszh` reports that virtual
+capacity; it does not estimate the native stack's allocated capacity.
+`getSmallBitmapzh` returns bitmap zero and payload size zero. Advancing a valid
+nonterminal word offset returns the same snapshot, the next offset and one.
+Advancing the final frame returns a null snapshot carrier, zero offset and zero,
+matching the terminal convention of the original `Stack.cmm`; the null carrier
+is not a valid input snapshot. Bounds, context ownership, immutable target layout
+and one-word nonprofiling header geometry are checked before returning results.
+
+The eight payload/large-bitmap/BCO/RET_FUN/underflow getters have exact protocol
+boundaries but reject these incompatible managed frames. No heap closure, raw
+pointer word, native bitmap, chunk link or native frame kind is fabricated.
+These restrictions are a diagnostic representation boundary, not native stack
+introspection or resumable `AP_STACK` support. Complete unchanged decoder and
+formatter execution remains a separate proof requirement.

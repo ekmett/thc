@@ -545,6 +545,66 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = TargetLayout.class, name = "layout")
+    public static final class OriginalStackFields {
+        @Specialization public static long apply(TargetLayout layout, Object snapshot) {
+            return ManagedStackRuntime.stackFields(snapshot, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = LocalAccessor.class, name = "bitmap")
+    @ConstantOperand(type = LocalAccessor.class, name = "size")
+    public static final class OriginalStackSmallBitmap {
+        @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
+                LocalAccessor bitmap, LocalAccessor size, Object snapshot, long offset,
+                @Bind("$node") Node node) {
+            ManagedStackBitmap result = ManagedStackRuntime.smallBitmap(snapshot, offset, layout);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            bitmap.setLong(bytecode, frame, result.getBitmap());
+            size.setLong(bytecode, frame, result.getSize());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = LocalAccessor.class, name = "nextSnapshot")
+    @ConstantOperand(type = LocalAccessor.class, name = "nextOffset")
+    @ConstantOperand(type = LocalAccessor.class, name = "hasNext")
+    public static final class OriginalStackAdvance {
+        @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
+                LocalAccessor nextSnapshot, LocalAccessor nextOffset, LocalAccessor hasNext,
+                Object snapshot, long offset, @Bind("$node") Node node) {
+            ManagedStackAdvance result = ManagedStackRuntime.advance(snapshot, offset, layout);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            nextSnapshot.setObject(bytecode, frame, result.getSnapshot());
+            nextOffset.setLong(bytecode, frame, result.getWordOffset());
+            hasNext.setLong(bytecode, frame, result.getHasNext());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = OriginalStackInfoOp.class, name = "operation")
+    public static final class OriginalStackIncompatibleGetter {
+        @Specialization public static Object apply(TargetLayout layout, OriginalStackInfoOp operation,
+                Object snapshot, long offset) {
+            return ManagedStackRuntime.incompatibleGetter(operation, snapshot, offset, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = OriginalStackInfoOp.class, name = "operation")
+    public static final class OriginalStackIncompatibleTupleGetter {
+        @Specialization public static void apply(TargetLayout layout, OriginalStackInfoOp operation,
+                Object snapshot, long offset) {
+            ManagedStackRuntime.incompatibleGetter(operation, snapshot, offset, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalStackLookupIpe {
         @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
