@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.TruffleStackTrace
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
@@ -70,7 +71,10 @@ class CallerContinuationProofTest {
             assertEquals(5, child.state)
             assertEquals(5, caller.state)
             val callerSegment = caller.value as ContinuationResult
-            assertSame(child, (callerSegment.result as ThunkSuspended).thunk)
+            val internalSignal = callerSegment.result as ThunkSuspended
+            assertSame(child, internalSignal.thunk)
+            assertEquals(0, internalSignal.stackTraceElementLimit)
+            assertTrue(TruffleStackTrace.getStackTrace(internalSignal).isEmpty())
             val frame = callerSegment.frame
             assertTrue((0 until frame.frameDescriptor.numberOfSlots).any {
                 frame.isLong(it) && frame.getLong(it) == 100L

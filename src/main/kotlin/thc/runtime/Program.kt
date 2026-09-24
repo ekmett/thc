@@ -119,7 +119,8 @@ private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
 internal class ThunkSuspended(val thunk: Thunk) :
-    com.oracle.truffle.api.exception.AbstractTruffleException("Internal bytecode thunk suspension")
+    com.oracle.truffle.api.exception.AbstractTruffleException(
+        "Internal bytecode thunk suspension", null, 0, null)
 /** Cold caller-segment input distinguishes a child result from its guest failure. */
 internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
