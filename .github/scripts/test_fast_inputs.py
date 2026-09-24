@@ -21,6 +21,21 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_original_stack_cache_accepts_only_reviewed_attempt_artifacts(self):
+        self.assertIn("build/original-stack/manifest.json", DECLARED_REQUIRED)
+        for attempt in ("run-1", "run-42"):
+            for suffix in cache.ORIGINAL_STACK_FILES:
+                name = f"build/original-stack/{attempt}/{suffix}"
+                self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.native_executable(
+                f"build/original-stack/{attempt}/native/original-stack-native"))
+        for name in ("proof.json", "run-0/logs/ghc-version.stdout",
+                     "run-01/logs/ghc-version.stdout", "run-1/previous-manifest.json",
+                     "run-1/logs/unknown.stdout", "run-1/pre-core/Extra.json",
+                     "run-1/native/OriginalStackAudit.o", "run-1/native/other-oracle",
+                     "run-1/logs/native-invariants.sh", "run-1/retained/Decode.json"):
+            self.assertFalse(cache.allowed_payload("build/original-stack/" + name, {}), name)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -367,6 +382,32 @@ class FastInputTests(unittest.TestCase):
             self.remove_payload(manifest)
             changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                                                     if member.name != "files/build/original-stdio/logs/native-000.stdout"])
+            self.rejected_without_writes(changed)
+
+    def test_original_stack_attempt_round_trip_keeps_logs_and_native_mode(self):
+        manifest_path = "build/original-stack/manifest.json"
+        attempt = "build/original-stack/run-3/"
+        binary = attempt + "native/original-stack-native"
+        artifacts = {attempt + name for name in cache.ORIGINAL_STACK_FILES}
+        for name in artifacts:
+            self.put(name, b"{}\n" if name.endswith(".json") else b"\x00\x80\xff\n")
+        (self.root / binary).chmod(0o755)
+        original = json.dumps({"schema": 1, "installedArtifactsHashed": False,
+            "inputHashes": self.manifest["inputHashes"],
+            "artifactHashes": {name: cache.digest(self.root / name) for name in sorted(artifacts)}})
+        self.put(manifest_path, original)
+        with patch.object(cache, "REQUIRED", (*cache.REQUIRED, manifest_path)):
+            manifest = self.pack()
+            self.assertTrue(artifacts <= manifest["payload"].keys())
+            self.remove_payload(manifest)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / manifest_path).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            for name in artifacts:
+                self.assertEqual(manifest["payload"][name], cache.digest(self.root / name), name)
+            self.remove_payload(manifest)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != "files/" + attempt + "logs/native-invariants.stdout"])
             self.rejected_without_writes(changed)
 
     def test_original_stdio_forged_unreviewed_artifact_is_rejected(self):

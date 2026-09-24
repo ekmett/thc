@@ -180,6 +180,22 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/OriginalStackAudit.hs": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalStackAuditNative.hs": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalStackProof.json": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/StackFixtures.hs": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
     "compiler/test-fixtures/AddressIdentityAudit.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -562,6 +578,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
         "thc.SignedNarrowPrimopsTest",

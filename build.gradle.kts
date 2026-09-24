@@ -88,6 +88,7 @@ tasks.withType<Test>().configureEach {
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "managed-md5-native/**",
+            "original-stack/manifest.json", "original-stack/run-*/**",
             "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/NativeScalarBitCast.hs", "scalar-bitcasts/native/**",
@@ -135,6 +136,10 @@ tasks.withType<Test>().configureEach {
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
+    inputs.file("compiler/test-fixtures/OriginalStackProof.json")
+    inputs.files("thc.cabal", "compiler/pinned-ghc-internal/LICENSE",
+        "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
+        "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc")
     inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
