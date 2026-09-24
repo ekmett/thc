@@ -98,6 +98,108 @@ def tuple_join_fixture(zero=False):
     return module, join
 
 
+def io_main_fixture(prefix=2):
+    """Exact IO state worker; main retains its original state formal through a PAP."""
+    state = dict(kind='void', primReps=[], evaluated=True)
+    unit = dict(REFERENCE, evaluated=True)
+    result = tuple_rep(state, unit)
+    unit_id = 'ghc-internal:GHC.Internal.Tuple.()'
+    parameters = [dict(id=f'x{i}', type='Int#', lifted=False, rep=LONG) for i in range(prefix)]
+    parameters += [dict(id='state', type='State# RealWorld', lifted=False, rep=state)]
+    body = ['app', ['con', 'StateUnit', 2, dict(rep=CLOSURE)],
+            [['void', dict(rep=state)], ['con', unit_id, 0, dict(rep=unit)]],
+            [False, True], True, True, dict(rep=result)]
+    worker = dict(bind('worker', ['lam', parameters, body, dict(rep=CLOSURE, resultRep=result)]), rep=CLOSURE)
+    expression = [*var('worker'), dict(rep=CLOSURE)]
+    if prefix:
+        expression = ['app', expression, [[*lit(i), dict(rep=LONG)] for i in range(prefix)],
+                      [False] * prefix, False, False, dict(rep=CLOSURE)]
+    root = dict(bind('root', expression), type='IO ()', rep=CLOSURE)
+    constructors = [dict(id='StateUnit', kind='unboxed-tuple', arity=2,
+                         fieldReps=[None, None], strictFields=[False, False], fieldLifted=[None, None]),
+                    dict(id=unit_id, kind='boxed', arity=0, fieldReps=[], strictFields=[], fieldLifted=[])]
+    return dict(schema=1, ghc='9.14.1', bindings=[root, worker], constructors=constructors)
+
+
+class IoMainAuditTest(unittest.TestCase):
+    def audit(self, module):
+        return audit_core.Audit([('io-main.json', module)], CAP).run(['root'], io_main=True)
+
+    def rejects_boundary(self, module):
+        report = self.audit(module)
+        self.assertFalse(report['accepted'])
+        self.assertIn('io-main-boundary', {issue['code'] for issue in report['issues']}, report)
+
+    def test_exact_state_formal_survives_direct_alias_and_pap_prefixes(self):
+        for prefix in (0, 1, 3):
+            with self.subTest(prefix=prefix):
+                module = io_main_fixture(prefix)
+                report = self.audit(module)
+                self.assertTrue(report['accepted'], report)
+                # Outer aliases must preserve the remaining binder too.
+                action = copy.deepcopy(module['bindings'][0])
+                action.update(id='action', name='action')
+                module['bindings'].append(action)
+                module['bindings'][0]['expr'] = [*var('action'), dict(rep=CLOSURE)]
+                self.assertTrue(self.audit(module)['accepted'])
+
+    def test_nested_pap_and_alias_prefixes_count_logical_zero_width_arguments(self):
+        module = io_main_fixture()
+        state = dict(kind='void', primReps=[], evaluated=True)
+        worker = module['bindings'][1]
+        worker['expr'][1][0].update(type='State# OtherWorld', rep=state)
+        main = module['bindings'][0]
+        first = ['app', [*var('worker'), dict(rep=CLOSURE)], [['void', dict(rep=state)]],
+                 [False], False, False, dict(rep=CLOSURE)]
+        module['bindings'].append(dict(bind('partial', first), rep=CLOSURE))
+        main['expr'][1] = [*var('partial'), dict(rep=CLOSURE)]
+        main['expr'][2] = main['expr'][2][1:]
+        main['expr'][3] = [False]
+        self.assertTrue(self.audit(module)['accepted'])
+
+    def test_void_width_does_not_establish_realworld_state_identity(self):
+        for spelling in (None, '(# #)', 'State# s', 'Coercion#', 'Int#'):
+            with self.subTest(type=spelling):
+                module = io_main_fixture()
+                formal = module['bindings'][1]['expr'][1][-1]
+                if spelling is None:
+                    del formal['type']
+                else:
+                    formal['type'] = spelling
+                self.rejects_boundary(module)
+        module = io_main_fixture()
+        module['bindings'][1]['expr'][1][-1]['rep'] = tuple_rep()
+        self.rejects_boundary(module)
+
+    def test_saturation_extra_formals_unknown_targets_and_alias_cycles_reject(self):
+        for count in (0, 1, 3, 4):
+            with self.subTest(supplied=count):
+                module = io_main_fixture()
+                expression = module['bindings'][0]['expr']
+                expression[2] = [[*lit(i), dict(rep=LONG)] for i in range(count)]
+                expression[3] = [False] * count
+                self.rejects_boundary(module)
+        module = io_main_fixture()
+        module['bindings'][0]['expr'][1] = [*var('unknown'), dict(rep=CLOSURE)]
+        self.rejects_boundary(module)
+        module = io_main_fixture()
+        module['bindings'][1]['expr'] = [*var('root'), dict(rep=CLOSURE)]
+        self.rejects_boundary(module)
+
+    def test_pap_keeps_exact_input_result_and_declared_main_checks(self):
+        mutations = [lambda m: m['bindings'][0].update(type='IO Int'),
+                     lambda m: m['bindings'][1]['expr'][1][-1].update(rep=LONG),
+                     lambda m: m['bindings'][1]['expr'][3].update(resultRep=REFERENCE),
+                     lambda m: m['bindings'][1]['expr'][3].update(resultRep=tuple_rep(REFERENCE)),
+                     lambda m: m['bindings'][1]['expr'][3].update(resultRep=tuple_rep(LONG, REFERENCE)),
+                     lambda m: m['bindings'][1]['expr'][3].update(resultRep=tuple_rep(dict(kind='void', primReps=[], evaluated=True), LONG))]
+        for index, mutate in enumerate(mutations):
+            with self.subTest(mutation=index):
+                module = io_main_fixture()
+                mutate(module)
+                self.rejects_boundary(module)
+
+
 class AuditTest(unittest.TestCase):
     def test_scalar_primitive_signatures_reject_consistent_forgery_and_hidden_binder_proofs(self):
         for primitive, expected, result in [('plusInt64#', 'Int64Rep', 'Int64Rep'),
