@@ -1,0 +1,51 @@
+# Generated SIMD families
+
+This is the first bounded generator experiment. The repository capability table
+does not yet advertise its 25 new operations. Passing a model-only experiment is
+not a native GHC validation result.
+
+The declarative table is `scripts/simd-families.json`. It currently describes
+local pack, unpack, broadcast and arithmetic for Word64X2, Int32X8 and Int32X16,
+plus Int64X2 multiplication and FloatX4/DoubleX2 negation and division. Existing
+carrier class names and memory operations remain unchanged. Vector arguments,
+returns, captures, heap fields and join boundaries remain unsupported.
+
+The generator emits three concrete carriers with final primitive fields, typed
+AST nodes and exact proof checks under `build/generated/simd`. Each arithmetic
+method uses a fixed Vector API species. Two marked regions in the existing
+bytecode loader/root contain concrete operation calls and specializations;
+normal builds check these regions without rewriting source files.
+
+Refresh the checked regions and validate the pinned GHC machine contracts:
+
+```sh
+python3 scripts/generate-simd-families.py --write --verify-ghc
+python3 scripts/test-simd-families.py
+```
+
+The GHC check uses `primOpSig`, `typePrimRep_maybe` and the tuple TyCon API on the
+selected fixed signatures. It compares exact vector/lane PrimReps and logical
+tuple positions, rather than interpreting printed Haskell types. Unsupported
+runtime-polymorphic signatures are never passed to a partial placement API.
+
+Prepare the genuine scalar-entry fixture without native code generation:
+
+```sh
+python3 scripts/prepare-simd-families.py --export-only
+```
+
+This produces pre-Tidy Core, 38,658 independent model rows and an explicitly
+experimental audit profile. Integer arithmetic uses mathematical modular
+arithmetic. Floating division uses rational arithmetic with ties-to-even
+rounding; arithmetic NaNs are normalized, while all other result bits, including
+signed zeros and subnormals, are compared exactly. Every selected lane is
+observed separately. OPAQUE workers provide real residual scalar calls without
+introducing a vector calling convention.
+
+A full native preparation omits `--export-only` on a suitable GHC9.14.1 x86 host.
+Target flags may be passed explicitly as `--ghc-option=...`; the manifest records
+them, toolchain identity, generated sources, exact inputs, oracle and exported
+Core. The native JVM gates require both pre/post Core and byte-identical
+native/model TSVs. Early wider-shape gates use the prepared model and are named
+separately. Both preserve exact guest-entry, actual-target identity/validity and
+input/result-pool cleanup checks.

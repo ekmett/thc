@@ -26,7 +26,7 @@ internal data class CoreVector(val lanes: Int, val element: String) {
                 throw RuntimeFault("Invalid Core vector shape")
             val vector = CoreVector(lanes.toInt(), element)
             if (reps != listOf("VecRep ${vector.lanes} $element")) throw RuntimeFault("Vector shape disagrees with primitive representation")
-            if (vector != INT64X2 && vector != INT32X4 && vector != INT16X8 && vector != INT8X16 && vector != WORD8X16 && vector != WORD16X8 && vector != WORD32X4 && vector != FLOATX4 && vector != DOUBLEX2) throw UnsupportedCore("Unsupported Core vector representation: $vector")
+            if (vector != INT64X2 && vector != INT32X4 && vector != INT16X8 && vector != INT8X16 && vector != WORD8X16 && vector != WORD16X8 && vector != WORD32X4 && vector != FLOATX4 && vector != DOUBLEX2 && !GeneratedVectors.supports(vector)) throw UnsupportedCore("Unsupported Core vector representation: $vector")
             return vector
         }
     }
@@ -68,7 +68,7 @@ internal object CoreVectors {
     val unpackedDouble = CoreRepresentation(CoreKind.UNKNOWN, true, true, List(2) { "DoubleRep" }, List(2) { laneDouble })
     val operationsDouble = setOf("packDoubleX2#", "unpackDoubleX2#", "broadcastDoubleX2#", "plusDoubleX2#", "minusDoubleX2#", "timesDoubleX2#")
     val operations32 = setOf("packInt32X4#", "unpackInt32X4#", "broadcastInt32X4#", "plusInt32X4#", "minusInt32X4#", "negateInt32X4#", "timesInt32X4#")
-    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsWord32 + operationsFloat + operationsDouble
+    val operations = setOf("packInt64X2#", "unpackInt64X2#", "broadcastInt64X2#", "plusInt64X2#", "minusInt64X2#", "negateInt64X2#") + operations32 + operations16 + operations8 + operationsWord8 + operationsWord16 + operationsWord32 + operationsFloat + operationsDouble + GeneratedVectors.operations
     fun requireVariableProof(binding: CoreRepresentation?, occurrence: CoreRepresentation) {
         if (occurrence.isVector && binding?.vector != occurrence.vector)
             throw RuntimeFault("Vector occurrence lacks a matching lexical binder proof")
@@ -85,6 +85,7 @@ internal object CoreVectors {
             TupleShape.compatible(expected, actual) && (expected.components == null ||
                 expected.components.indices.all { exact(expected.components[it], actual.components!![it]) })
     fun validate(name: String, arguments: List<CoreRepresentation>, result: CoreRepresentation) {
+        if (name in GeneratedVectors.operations) return GeneratedVectors.validate(name, arguments, result)
         val expected = when (name) {
             "packInt64X2#" -> listOf(unpacked)
             "unpackInt64X2#", "negateInt64X2#" -> listOf(proof)
@@ -124,11 +125,6 @@ internal object CoreVectors {
             "plusFloatX4#", "minusFloatX4#", "timesFloatX4#" -> listOf(proofFloat, proofFloat)
             else -> throw UnsupportedCore("Unsupported vector primitive $name")
         }
-        if (arguments.size != expected.size) throw RuntimeFault("Vector primitive arity mismatch: $name")
-        arguments.indices.forEach { i ->
-            if (!exact(expected[i], arguments[i]))
-                throw RuntimeFault("Vector primitive argument representation mismatch: $name argument $i")
-        }
         val expectedResult = when (name) {
             "unpackInt64X2#" -> unpacked
             "unpackInt32X4#" -> unpacked32
@@ -148,6 +144,15 @@ internal object CoreVectors {
             in operationsFloat -> proofFloat
             in operations32 -> proof32
             else -> proof
+        }
+        validateSignature(name, arguments, result, expected, expectedResult)
+    }
+    fun validateSignature(name: String, arguments: List<CoreRepresentation>, result: CoreRepresentation,
+                          expected: List<CoreRepresentation>, expectedResult: CoreRepresentation) {
+        if (arguments.size != expected.size) throw RuntimeFault("Vector primitive arity mismatch: $name")
+        arguments.indices.forEach { i ->
+            if (!exact(expected[i], arguments[i]))
+                throw RuntimeFault("Vector primitive argument representation mismatch: $name argument $i")
         }
         if (!exact(expectedResult, result))
             throw RuntimeFault("Vector primitive result representation mismatch: $name")
