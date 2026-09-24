@@ -13,3 +13,4 @@ gradlew.bat whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 
 docs/bytecode-graphs/** -whitespace linguist-generated=true
 bench/experiments/int32x4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true
+bench/experiments/word32x4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true

@@ -27,12 +27,15 @@ bash bench/experiments/word32x4-bytearray/run-runtime.sh build/word32x4-bytearra
 Reserve the shared build/runtime resource gate around that entire command. The
 runner does not build or generate native inputs. An existing output directory
 is rejected. Every command, log and status is retained, and any failure stops
-the run. There is no retry, settling call, altered compiler limit or relaxed
+the run. There is no retry, settling call, raised compiler graph budget or relaxed
 compiled-entry condition: forty interpreted corpus passes, one explicit compile
 of the actual active guest target, then two complete checked passes. Before and
 after every measured call, that exact target must remain active and valid in
 the last tier. Instrumented semantic tests separately check compiled counters;
 these uninstrumented graphs do not claim a counter measurement.
+The graph-only context suppresses automatic compilation so that exactly one
+explicitly requested guest target is captured; this is not a production option
+or a graph-budget change. Main native correctness tests use ordinary triggers.
 
 There are 36 cases per selected root: each of four lanes visits nine unsigned
 boundaries, all safe vector/scalar offsets are covered, and other lanes carry

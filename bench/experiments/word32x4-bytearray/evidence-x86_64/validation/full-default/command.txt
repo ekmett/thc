@@ -1,0 +1,1 @@
+scripts/gradle.sh --offline --no-daemon --max-workers=4 test 

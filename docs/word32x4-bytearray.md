@@ -45,8 +45,8 @@ The independent unsigned model explicitly assembles bytes and reduces integers;
 it does not call the runtime SIMD helpers. The genuine GHC fixture covers all six
 operations, all safe offsets in 64 bytes, aliases and loaded snapshots, high-bit
 values and every byte after each store. No mutable access follows unsafeFreeze.
-Native evidence is scoped to 64-bit little-endian x86; big-endian portability is
-implemented and modeled, not established by a native run here.
+Native evidence is scoped to 64-bit little-endian x86. Big-endian conversion is
+implemented but has not been executed here.
 
 The scalar host roots use Int# seeds, then `int2Word#` and `wordToWord32#`.
 Observation uses `word32ToWord#` followed by `word2Int#`; weighted checksums fit
@@ -83,7 +83,7 @@ Core/model inputs without claiming native execution. Per-run provenance and
 command/status logs are retained; earlier snapshots do not independently retain
 every shared artifact overwritten by later preparation modes.
 
-## Validation status
+## Verified checkpoint
 
 The isolated native preparation passed full, export-only and full modes on the
 first attempt: 9,666 native/model rows agree, nineteen source and seven artifact
@@ -92,8 +92,43 @@ normally and under `-O`. The graph reader's thirty-five offline tests include
 actual signed-load graphs rejected specifically for incorrect widening.
 These reader controls are not unsigned compiler evidence.
 
-Integrated JVM validation and new unsigned packed graph captures are pending.
-The signed `540fdb7` evidence remains frozen and is not relabeled as unsigned
-coverage. Its later integer-proof/test-trigger follow-up has a separately
-retained first compilation failure caused by the Context.Builder apply overload;
-the explicit-builder source correction does not change runtime policy.
+Final runtime `340560523065c2091cd029695180c3341a408cc2` passes 515 tests in each
+default/dense configuration, with 106 suites, identical method identities and
+zero failures, errors or skips. Fourteen focused unsigned tests and three
+targeted parser regressions pass as well. The shared canonical parser rejects
+floating vector lane counts before normalization across all nine supported
+families, while preserving genuine Int/Long counts and JSON roundtrips. Raw
+exceptional read annotations remain checked at their structural sites.
+
+The first direct-memory regression run exposed signed and unsigned indexing
+accepting malformed `lanes=4.0` metadata. Both exact failures are preserved.
+An initial scoped guard passed 515 tests in each mode; the final checkpoint
+imports the parent's shared parser correction and removes that temporary guard.
+Both full checkpoints, their commands, XML reports and native inputs retain
+separate provenance. No valid GHC-generated Core semantics were changed by this
+metadata correction.
+
+All sixteen new pre/post × AST/bytecode × four-root graph captures pass on their
+first check, with no reader correction or guest replay. They retain eight packed
+loads with 32 exact unsigned extensions, eight packed stores with 32 exact lane
+inputs, and sixteen physical XMM `VMOVDQU32` caller-array accesses. The 1,152
+installed-target comparisons check fresh storage, every byte and identical store
+results. The separate instrumented suites check 77,328 compiled calls and
+229,536 guest entries per mode. No private vector/carrier/payload allocation
+survives these selected compiled paths; public result boxes and caller arrays
+remain intentional. This is not a throughput or globally allocation-free claim.
+
+The graph campaign freezes and rehashes 75 runtime/harness sources, eleven
+installed JARs and four JDK files. The nineteen-source native-input inventory
+is narrower and does not include CoreVectors.kt; it is not represented as full
+runtime provenance. All prepared Python checks pass normally and under `-O`
+without skips: 65 auditor, 23 generic vector, 14 signed and 15 unsigned memory
+proof, ten signed and eleven unsigned byte-model, nine byte-array, four coverage
+and 35 reader tests.
+
+The [compact x86 evidence](../bench/experiments/word32x4-bytearray/evidence-x86_64/README.md)
+retains the original failures and both passing JVM checkpoints, current native
+inputs and all selected graph/LIR records. Compression preserves original
+hash-covered bytes. Signed `540fdb7` evidence remains frozen and is not relabeled
+as unsigned coverage. Its separately recorded parser/test follow-ups retain their
+own first compilation failure and corrected 14/15-test validations.
