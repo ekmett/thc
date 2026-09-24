@@ -25,16 +25,16 @@ class OriginalStackFormatterTest {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun hash(file: File) = hash(file.readBytes())
     private val sourceRoot = "compiler/pinned-ghc-internal/"
-    // Pin the complete path/hash catalog independently, without duplicating its 68 entries.
+    // Pin the complete path/hash catalog independently, without duplicating its 70 entries.
     // A changed exporter catalog cannot silently drop or repin a source in the fixture receipt.
     private val pinned by lazy {
         val text = contained("src/THC/Driver/Wired.hs", true).readText()
             .substringAfter("sourceHashes =").substringBefore("\ndata WiredArtifacts")
         val entries = Regex("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").findAll(text)
             .map { it.groupValues[1] to it.groupValues[2] }.toList()
-        require(entries.size == 68 && entries.map { it.first }.toSet().size == 68)
+        require(entries.size == 70 && entries.map { it.first }.toSet().size == 70)
         require(hash(entries.sortedBy { it.first }.joinToString("") { (path, digest) -> "$path\u0000$digest\n" }.toByteArray()) ==
-            "8eec12fbae7d0c9621170062cba8f77cfcac5d4f055b576171141c343b30db4e")
+            "e49b897efc3f06fd3967f4ddd700298c4949fd8918a0142eabad54abc5ba454e")
         entries.associate { (path, digest) -> sourceRoot + path to digest }
     }
     private val requiredInputs by lazy {
@@ -368,6 +368,48 @@ class OriginalStackFormatterTest {
         // of the dictionary's general BigNat/backend/error dependency closure.
     }
 
+    @Test fun freshOriginalClassesAndNumResolveExactIntegerCallerReferences() {
+        val paths = manifest()["originals"] as List<String>
+        val modules = listOf("Classes", "Num", "Bignum.Integer", "Real").associateWith { name ->
+            json(paths.single { it.endsWith("/GHC.Internal.$name.json") })
+        }
+        val bindings = (CoreModules.merge(modules.values.toList())["bindings"] as List<Map<String, Any?>>)
+            .associateBy { it["id"] as String }
+        val cases = listOf(
+            Triple("Classes", "compareInt#", "Bignum.Integer.integerCompare"),
+            Triple("Num", "\$fNumInteger", "Real.\$fRealInteger"))
+        for ((module, name, callerName) in cases) {
+            val id = "ghc-internal:GHC.Internal.$module.$name"
+            val original = (modules.getValue(module)["bindings"] as List<Map<String, Any?>>)
+                .single { it["id"] == id }
+            assertEquals(name, original["name"])
+            assertEquals(original, bindings.getValue(id), "Merge must preserve the actual original binding")
+            fun references(value: Any?): Int = when (value) {
+                is List<*> -> if (value.getOrNull(0) == "var" && value.getOrNull(1) == id) 1 else value.sumOf(::references)
+                is Map<*, *> -> value.values.sumOf(::references)
+                else -> 0
+            }
+            val caller = bindings.getValue("ghc-internal:GHC.Internal.$callerName")
+            assertEquals(1, references(caller["expr"]), "Fresh original $callerName must still reference $id")
+        }
+        val comparison = bindings.getValue("ghc-internal:GHC.Internal.Classes.compareInt#")["expr"] as List<*>
+        assertEquals("lam", comparison[0])
+        val formals = comparison[1] as List<Map<String, Any?>>
+        assertEquals(2, formals.size)
+        for (formal in formals) {
+            assertEquals(false, formal["lifted"])
+            assertEquals(mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true), formal["rep"])
+        }
+        val dictionary = bindings.getValue("ghc-internal:GHC.Internal.Num.\$fNumInteger")
+        assertEquals(mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true), dictionary["rep"])
+        val construction = dictionary["expr"] as List<*>
+        assertEquals("app", construction[0])
+        assertEquals(listOf("con", "ghc-internal:GHC.Internal.Num.C:Num"), (construction[1] as List<*>).take(2))
+        assertEquals(7, (construction[2] as List<*>).size)
+        // These exact source bodies and references are available; this does not
+        // admit the full Integer dictionary, BigNat backend or original error closure.
+    }
+
     @Test fun freshOriginalUnsafeWorkerLinksWithoutAliasAndDefersItsAction() {
         val receipt = manifest()
         val full = json((receipt["originals"] as List<String>).single { it.endsWith("/GHC.Internal.IO.Unsafe.json") })
@@ -452,8 +494,8 @@ class OriginalStackFormatterTest {
         val value = manifest()
         val inputs = value["inputHashes"] as Map<String, String>
         val artifacts = value["artifactHashes"] as Map<String, String>
-        assertEquals(97, requiredInputs.size)
-        assertEquals(93, artifacts.size)
+        assertEquals(99, requiredInputs.size)
+        assertEquals(95, artifacts.size)
         for (path in requiredInputs)
             assertThrows(IllegalArgumentException::class.java, {
                 checked(value + ("inputHashes" to (inputs - path)))

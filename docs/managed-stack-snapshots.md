@@ -232,6 +232,21 @@ through module merging. These modules use the existing private installed-interfa
 overlay for `IO.Buffer`, `Char`, and `Num`; their implementations are not added.
 No new boot interface or target-layout receipt is needed. This is source
 availability, not execution or admission of the buffer-recovery/error closure.
-In particular, the original error probe's unsaturated mask in `IO.bracket1`
-remains a strict/dynamic boundary; this source slice does not rewrite its call
-or change the backtrace, libdw, masking, or exception policies.
+At that encoding-source checkpoint, the original error probe still stopped at
+unsaturated masks in `IO.bracket1`. The separate mask-function exporter fix in
+PR #206 now saturates those calls; it resolves that export-shape problem, not
+full bracket or error-path execution. The encoding source addition itself did
+not change the backtrace, libdw, masking, or exception policies.
+
+The overlay also restores unchanged `GHC.Internal.Classes` and `GHC.Internal.Num`
+from the same pinned revision. Classes is compiled after Types and before
+Bignum.Integer; Num follows Base using the existing Num boot interface. No
+additional boot or source dependency is added. Fresh export retains exactly one
+`Classes.compareInt#` reference in original `Bignum.Integer.integerCompare` and
+one `Num.$fNumInteger` reference in original `Real.$fRealInteger`. The proof
+checks the comparison's two unlifted Int# parameters, the original seven-field
+Num dictionary constructor, and preservation of both exact exported bodies
+through module merging. Installed Magic/Tuple and compatibility Integer/Natural
+interfaces still supply omitted modules. This proves source availability, not
+general Integer, BigNat/backend, error, or library execution; no runtime,
+primitive, masking, libdw, or admission policy is changed by this source slice.
