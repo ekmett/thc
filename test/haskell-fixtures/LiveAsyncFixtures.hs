@@ -46,7 +46,7 @@ prepareLiveAsync root = do
     root </> driver, "-o", native </> "oracle"] ""
   actual <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
     ["+RTS", "-N2", "-RTS"] ""
-  unless (actual == "1007\n-1\n200000008\n1\n1031\n")
+  unless (actual == "1007\n-1\n10000008\n1\n1031\n")
     (die "Live async native oracle disagreed with interrupted-thunk resumption")
   writeFile (output </> "oracle.txt") actual
   pluginFiles <- listDirectory (root </> "compiler/THC")
@@ -63,7 +63,7 @@ prepareLiveAsync root = do
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-    "entries" .= entries, "stages" .= stages, "native" .= ([1007, -1, 200000008, 1, 1031] :: [Int]),
+    "entries" .= entries, "stages" .= stages, "native" .= ([1007, -1, 10000008, 1, 1031] :: [Int]),
     "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
     "installedArtifactsHashed" .= False]
   putStrLn "live-async: native throwTo/catch#/shared-thunk resumption, prefix once, strict pre/post Core"

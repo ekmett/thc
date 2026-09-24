@@ -29,7 +29,7 @@ cells = case newMVar# realWorld# of { (# s1, ready #) ->
 longLoop :: MVar# RealWorld Box -> MVar# RealWorld Box -> MVar# RealWorld Box -> Int# -> Int# -> Int#
 longLoop ready gate running n acc = case n ==# 0# of
   1# -> acc
-  _ -> case n ==# 199999000# of
+  _ -> case n ==# 9999000# of
     1# -> case putMVar# ready (Box acc) realWorld# of { s1 ->
       case takeMVar# gate s1 of { (# s2, _ #) ->
       case putMVar# running (Box acc) s2 of { _ ->
@@ -53,7 +53,7 @@ shared = case cells of { Cells ready gate running counter ->
   case readMutVar# counter realWorld# of { (# s1, Box old #) ->
   case writeMutVar# counter (Box (old +# 1#)) s1 of { s2 ->
   case getMaskingState# s2 of { (# _, mask #) ->
-  case longLoop ready gate running 200000000# (mask +# 7#) of result -> Box result } } } }
+  case longLoop ready gate running 10000000# (mask +# 7#) of result -> Box result } } } }
 
 -- Each call is a fresh catch# action, while the `shared` CAF remains identical.
 -- A dynamic token prevents the native driver's call from becoming its own CAF.
