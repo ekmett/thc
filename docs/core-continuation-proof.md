@@ -3,6 +3,9 @@
 
 # Core bytecode continuation proof
 
+This document records the private checkpoint experiments. The production path
+and its native checks are described in [Asynchronous exceptions](async-exceptions.md).
+
 `CoreContinuationAudit.hs` exports ordinary GHC Core. Native GHC, THC AST,
 and THC bytecode return 108 for the local-force example and 208 for a
 non-tail application with work after its call. A private in-process test control arms a
@@ -15,8 +18,8 @@ publishes the parent once. The test verifies that the checkpoint runs once,
 the caller retains a primitive Long frame slot, and the initial caller enters
 an explicitly compiled target.
 
-Yield generation is enabled on the Bytecode DSL root, but ordinary Core emits
-no Yield instruction. The generated cached interpreter calls `frame.materialize()`
+The original experiment enabled Yield only at its private checkpoint. The
+generated cached interpreter calls `frame.materialize()`
 inside `handleYield` only; the normal path does not capture a continuation.
 The resumed segment may run cold. A separate direct call through an uncaptured
 root and malformed continuation inputs fail closed.
