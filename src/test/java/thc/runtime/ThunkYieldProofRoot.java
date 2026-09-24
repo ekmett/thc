@@ -72,6 +72,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     public static final class Finish {
         @Specialization public static Answer run(long number, Object marker) {
             if (marker instanceof GuestException failure) throw failure;
+            if (marker instanceof AsyncThunkUnwind delivery) throw delivery;
             return new Answer(number, marker);
         }
     }
@@ -145,19 +146,19 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     @Operation
     @ConstantOperand(type = MaskingState.class, name = "target")
     public static final class EnterLogicalMask {
-        @Specialization public static MaskingState run(MaskingState target, @Bind("$node") Node node) {
+        @Specialization public static MaskingState run(MaskingState target, @Bind Node node) {
             return BytecodeRoot.EnterMask.enter(target, node);
         }
     }
 
     @Operation public static final class RestoreLogicalMask {
-        @Specialization public static void run(MaskingState prior, @Bind("$node") Node node) {
+        @Specialization public static void run(MaskingState prior, @Bind Node node) {
             BytecodeRoot.RestoreMask.restore(prior, node);
         }
     }
 
     @Operation public static final class EnterExceptionHandler {
-        @Specialization public static MaskingState run(@Bind("$node") Node node) {
+        @Specialization public static MaskingState run(@Bind Node node) {
             return BytecodeRoot.EnterHandlerMask.enter(node);
         }
     }
@@ -182,7 +183,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     public static final class ParkLogicalMask {
         @Specialization public static ThunkSuspended run(MaskProbe probe,
                 ThunkSuspended suspension, MaskingState ambient, MaskingState active,
-                @Bind("$node") Node node) {
+                @Bind Node node) {
             MaskingState current = SynchronousMasking.current(node);
             if (current != active) throw new AssertionError("Lost logical mask before suspension");
             probe.parked.set(current);
@@ -197,7 +198,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     @ConstantOperand(type = MaskProbe.class, name = "probe")
     public static final class ReenterLogicalMask {
         @Specialization public static Object run(MaskProbe probe,
-                Object resumed, MaskingState active, @Bind("$node") Node node) {
+                Object resumed, MaskingState active, @Bind Node node) {
             BytecodeRoot.EnterMask.enter(active, node);
             probe.reentered.set(SynchronousMasking.current(node));
             return resumed;
@@ -207,7 +208,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     @Operation
     @ConstantOperand(type = MaskProbe.class, name = "probe")
     public static final class ObserveHandler {
-        @Specialization public static void run(MaskProbe probe, Object failure, @Bind("$node") Node node) {
+        @Specialization public static void run(MaskProbe probe, Object failure, @Bind Node node) {
             probe.handlerMask.set(SynchronousMasking.current(node));
             probe.handlerPayload.set(failure);
         }
@@ -216,7 +217,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     @Operation
     @ConstantOperand(type = MaskProbe.class, name = "probe")
     public static final class AfterInnerMask {
-        @Specialization public static void run(MaskProbe probe, @Bind("$node") Node node) {
+        @Specialization public static void run(MaskProbe probe, @Bind Node node) {
             probe.afterInner.set(SynchronousMasking.current(node));
         }
     }
@@ -224,7 +225,7 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     @Operation
     @ConstantOperand(type = MaskProbe.class, name = "probe")
     public static final class AfterOuterMask {
-        @Specialization public static void run(MaskProbe probe, @Bind("$node") Node node) {
+        @Specialization public static void run(MaskProbe probe, @Bind Node node) {
             probe.afterOuter.set(SynchronousMasking.current(node));
         }
     }

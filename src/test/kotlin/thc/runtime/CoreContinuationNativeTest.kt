@@ -401,7 +401,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208"), File(root, "build/core-continuation/native-output.txt").readLines())
+        assertEquals(listOf("108", "208", "42", "77"), File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -446,6 +446,132 @@ class CoreContinuationNativeTest {
                 assertEquals(1, checkpoint.visits.get(), "Resume must not re-enter the checkpoint")
                 assertEquals(2, thunk.state)
             } finally { context.leave() }
+        }
+    }
+
+    @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
+        assertEquals(listOf("108", "208", "42", "77"),
+            File(root, "build/core-continuation/native-output.txt").readLines())
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            fun number(value: Any?): Long = (value as DataValue).layout.readLong(value, 0)
+            for ((name, expected, visits) in listOf(
+                Triple("catchActionAnswer", 42L, 2), Triple("catchActionFailure", 77L, 1))) {
+                val linked = CoreModules.reachable(module, name)
+                entered(context) {
+                    for (program in listOf(Program(language, linked), BytecodeProgram(language, linked)))
+                        assertEquals(expected, number(driver.force(program.entryValue(name) as Thunk)), "$name ordinary")
+                }
+                val checkpoint = BytecodeCheckpoint()
+                val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+                val thunk = entered(context) { program.entryValue(name) as Thunk }
+                val target = thunk.target!!
+                entered(context) {
+                    assertEquals(expected, number(Calls.target(target, arrayOf(0L))))
+                    compile(target)
+                    assertEquals(expected, number(Calls.target(target, arrayOf(0L))))
+                    assertTrue(checkpoint.compiledVisits.get() > 0,
+                        "The ordinary catch action entered its installed bytecode root")
+                    checkpoint.armed = true
+                    val compiledBefore = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        assertSame(thunk, assertThrows(ThunkSuspended::class.java) { driver.force(thunk) }.thunk)
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver),
+                            "The initial carrier keeps its ambient mask after the action yields")
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                    assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > compiledBefore,
+                        "The suspending catch action entered installed guest code")
+                    assertEquals(0, language.handoffState.get().results.depth, "No pooled result escapes first yield")
+                }
+                val continuation = thunk.value as ContinuationResult
+                val segment = (continuation.result as CallSegmentSuspended).segment
+                val tuple = requireNotNull(segment.tupleShape)
+                assertEquals(listOf(CoreKind.VOID, CoreKind.DATA), tuple.proof.components!!.map { it.kind },
+                    "GHC catch# retains its recursive State# and lifted Box tuple proof")
+                assertEquals(1, tuple.width, "The erased State# has no physical carrier slot")
+                val observer = entered(context) { Thunk(callSegmentCaller(language, segment), null) }
+                entered(context) {
+                    assertSame(observer, assertThrows(ThunkSuspended::class.java) { driver.force(observer) }.thunk)
+                }
+                Executors.newSingleThreadExecutor().use { pool ->
+                    val result = pool.submit<Unit> { entered(context) {
+                        SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                        try {
+                            repeat(visits - 1) {
+                                assertSame(observer, assertThrows(ThunkSuspended::class.java) { driver.force(observer) }.thunk)
+                                assertEquals(0, language.handoffState.get().results.depth, "No pooled result escapes repeated yield")
+                            }
+                            if (name == "catchActionFailure")
+                                assertThrows(GuestException::class.java) { driver.force(observer) }
+                            else assertTrue(driver.force(observer) is HandoffStorage)
+                            assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver),
+                                "The resumer keeps its ambient mask after success or guest failure")
+                            assertEquals(0, language.handoffState.get().results.depth, "Result slab released on resume")
+                        } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                    } }
+                    result.get(5, TimeUnit.SECONDS)
+                }
+                entered(context) {
+                    if (name == "catchActionAnswer") {
+                        assertTrue(segment.value is HandoffStorage, "Published tuple must own its fields, not a thread-local completion token")
+                        assertNotSame(TupleComplete, segment.value)
+                    }
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        assertEquals(expected, number(driver.force(thunk)), "$name parent on another carrier")
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver),
+                            "The catch caller restores its original carrier mask")
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                    assertEquals(0, language.handoffState.get().results.depth)
+                    assertEquals(0, language.handoffState.get().results.retainedReferences())
+                }
+                assertEquals(visits, checkpoint.visits.get(), "The action prefix must not replay")
+                assertEquals(if (name == "catchActionFailure") 3 else 2, segment.state)
+                assertEquals(2, thunk.state)
+            }
+        }
+    }
+
+    @Test fun asyncMarkerDuringTupleSegmentResumeFailsClosedWithoutReplayingOrLeaking() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val effects = AtomicInteger()
+            val marker = AsyncThunkUnwind(Any())
+            val tuple = entered(context) { TupleShape(CoreRepresentation(CoreKind.UNKNOWN, true, true,
+                listOf("BoxedRep (Just Lifted)"), listOf(
+                    CoreRepresentation(CoreKind.VOID, true, true, emptyList()),
+                    CoreRepresentation(CoreKind.DATA, true, true, listOf("BoxedRep (Just Lifted)"))
+                )), language) }
+            val (segment, parent) = entered(context) {
+                val target = ThunkYieldProofRoot.target(language, effects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), marker)
+                val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
+                    tupleShape = tuple)
+                segment to Thunk(callSegmentCaller(language, segment), null)
+            }
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                try {
+                    assertSame(marker, assertThrows(AsyncThunkUnwind::class.java) { driver.force(parent) })
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver),
+                        "The host carrier retains its ambient mask after unsupported async unwind")
+                } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                assertEquals(0, language.handoffState.get().results.depth)
+                assertEquals(0, language.handoffState.get().results.retainedReferences())
+                assertThrows(RuntimeFault::class.java) { driver.force(parent) }
+            }
+            assertEquals(4, segment.state, "Async origin must not become a memoized guest failure")
+            assertEquals(5, parent.state, "The parked parent retains its captured frame but cannot replay the closed child")
+            assertEquals(1, effects.get(), "An unsupported unwind must never replay the prefix")
         }
     }
 
@@ -503,6 +629,14 @@ class CoreContinuationNativeTest {
                 val callAnswer = Calls.target(normalCall.hostEntryTarget(0),
                     arrayOf(normalCall.entryValue("applicationAnswer"))) as DataValue
                 assertEquals(208L, callAnswer.layout.readLong(callAnswer, 0))
+                for ((name, expected) in listOf("catchActionAnswer" to 42L, "catchActionFailure" to 77L)) {
+                    val action = BytecodeProgram(language, CoreModules.reachable(module, name))
+                    val dump = action.bytecodeDump()
+                    assertFalse(dump.contains("yield"), "$name ordinary bytecode has no Yield")
+                    assertFalse(dump.contains("InvokeIOActionCheckpoint"), "$name ordinary bytecode has no private checkpoint")
+                    val caught = Calls.target(action.hostEntryTarget(0), arrayOf(action.entryValue(name))) as DataValue
+                    assertEquals(expected, caught.layout.readLong(caught, 0))
+                }
             } finally { context.leave() }
         }
     }

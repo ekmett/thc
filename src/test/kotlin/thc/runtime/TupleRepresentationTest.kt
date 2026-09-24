@@ -76,6 +76,15 @@ class TupleRepresentationTest {
         source.consume(frame, fresh, intArrayOf(slot), 0)
         assertSame(marker, frame.getObject(slot))
         assertEquals(0, language.handoffState.get().results.depth)
+        val completion = source.finish(frame, intArrayOf(slot))
+        val owned = ownedTupleResult(completion, source)
+        assertSame(marker, source.layout.getObject(owned, 0))
+        assertEquals(0, language.handoffState.get().results.depth)
+        assertEquals(0, language.handoffState.get().results.retainedReferences())
+        val malformed = source.finish(frame, intArrayOf(slot))
+        assertThrows(IllegalStateException::class.java) { ownedTupleResult(malformed, wrong) }
+        assertEquals(0, language.handoffState.get().results.depth)
+        assertEquals(0, language.handoffState.get().results.retainedReferences())
     }
     @Test fun forcingAConsumedLazyFieldCanBlackholeWithoutRetainingTheOutputLoan() = withLanguage { language ->
         for (backend in listOf("ast", "bytecode")) {

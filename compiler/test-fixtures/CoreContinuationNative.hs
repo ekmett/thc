@@ -10,3 +10,5 @@ main :: IO ()
 main = do
   print sharedAnswer
   print applicationAnswer
+  print catchActionAnswer
+  print catchActionFailure

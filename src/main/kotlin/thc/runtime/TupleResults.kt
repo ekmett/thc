@@ -463,3 +463,40 @@ internal class BytecodeTupleSlots(shape: TupleShape,
         }
     }
 }
+
+/** The private checkpoint path intercepts a yielded IO action before tuple consumption. */
+internal class ContinuationTupleDestination(private val destination: BytecodeTupleSlots) :
+    TupleDestination(destination.shape) {
+    override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
+        if (result is com.oracle.truffle.api.bytecode.ContinuationResult)
+            throw TupleCallYield(result)
+        destination.consume(frame, node, result)
+    }
+}
+
+internal class TupleCallYield(val continuation: com.oracle.truffle.api.bytecode.ContinuationResult) :
+    com.oracle.truffle.api.exception.AbstractTruffleException("Internal tuple call suspension", null, 0, null)
+
+/** A completion token names a thread-local slab; copy and release it before cross-thread publication. */
+internal fun ownedTupleResult(result: Any?, shape: TupleShape): HandoffStorage {
+    val pool = shape.language.handoffState.get().results
+    val pooled = result === TupleComplete
+    val source = if (pooled) pool.completed() else result as? HandoffStorage
+        ?: fault("Invalid completed tuple result carrier")
+    try {
+        check(source.layout === shape.layout)
+        val owned = shape.layout.create()
+        for (index in 0 until shape.width) {
+            when {
+                shape.layout.isLong(index) -> shape.layout.setLong(owned, index, shape.layout.getLong(source, index))
+                shape.layout.isFloat(index) -> shape.layout.setFloat(owned, index, shape.layout.getFloat(source, index))
+                shape.layout.isDouble(index) -> shape.layout.setDouble(owned, index, shape.layout.getDouble(source, index))
+                else -> shape.layout.setObject(owned, index,
+                    shape.checkedReference(index, shape.layout.getObject(source, index)))
+            }
+        }
+        return owned
+    } finally {
+        if (pooled) pool.releaseChecked(source, shape.layout)
+    }
+}

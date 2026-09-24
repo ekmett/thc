@@ -116,7 +116,8 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
 internal class CallSegment @JvmOverloads constructor(
     continuation: ContinuationResult,
     var logicalMask: MaskingState = MaskingState.UNMASKED,
-    val callerMask: MaskingState = MaskingState.UNMASKED
+    val callerMask: MaskingState = MaskingState.UNMASKED,
+    val tupleShape: TupleShape? = null
 ) {
     @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
     var value: Any? = continuation
@@ -530,13 +531,14 @@ internal class Force(private val metrics: Metrics) : Node() {
             }
             if (SynchronousMasking.current(this) != segment.callerMask)
                 throw IllegalStateException("Completed call segment did not restore its caller mask")
+            val answer = segment.tupleShape?.let { ownedTupleResult(result, it) } ?: result
             synchronized(segment.monitor) {
-                segment.value = result // A call may return an unforced thunk; never enter it here.
+                segment.value = answer // A scalar call may return an unforced thunk; never enter it here.
                 segment.owner = null
                 segment.state = 2
                 segment.monitor.notifyAll()
             }
-            return result
+            return answer
         } catch (e: CallSegmentSuspended) {
             if (e.segment !== segment) suspendCallOwned(segment)
             throw e
