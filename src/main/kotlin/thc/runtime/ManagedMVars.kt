@@ -63,12 +63,12 @@ internal enum class MVarOp(val primitive: String, private val arguments: List<St
     }
 }
 
-internal fun mVarExpression(operation: MVarOp, proof: CoreRepresentation, operands: Array<Expr>): Expr =
+internal fun mVarExpression(operation: MVarOp, proof: CoreRepresentation, operands: Array<Expr>, async: Boolean = false): Expr =
     when (operation) {
         MVarOp.NEW -> NewMVarExpression(operands[0])
-        MVarOp.TAKE, MVarOp.READ -> ReadMVarExpression(operands[0], operands[1], operation == MVarOp.TAKE)
+        MVarOp.TAKE, MVarOp.READ -> ReadMVarExpression(operands[0], operands[1], operation == MVarOp.TAKE, async)
         MVarOp.TRY_TAKE, MVarOp.TRY_READ -> TryReadMVarExpression(operands[0], operands[1], operation == MVarOp.TRY_TAKE)
-        MVarOp.PUT -> PutMVarExpression(operands[0], operands[1], operands[2])
+        MVarOp.PUT -> PutMVarExpression(operands[0], operands[1], operands[2], async)
         MVarOp.TRY_PUT -> TryPutMVarExpression(operands[0], operands[1], operands[2])
         MVarOp.IS_EMPTY -> IsEmptyMVarExpression(operands[0], operands[1])
     }.proven(proof.copy(evaluated = true))
@@ -86,11 +86,26 @@ private class NewMVarExpression(@field:Child private var state: Expr) : MVarTupl
 }
 
 private class ReadMVarExpression(@field:Child private var cell: Expr,
-    @field:Child private var state: Expr, private val remove: Boolean) : MVarTupleExpression() {
+    @field:Child private var state: Expr, private val remove: Boolean, private val async: Boolean) : MVarTupleExpression() {
+    private class Resume(private val node: ReadMVarExpression, private val reference: ManagedMVar,
+                         private val slots: IntArray, private val offset: Int) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input !== Unit) fault("Invalid AST MVar read resume value")
+            val value = try { if (node.remove) reference.take(node, true) else reference.read(node, true) }
+            catch (blocked: AsyncBlocked) {
+                throw AstCapture(blocked.request, SynchronousMasking.current(node)).append(this)
+            }
+            FrameAccess.write(frame, slots[offset], value)
+            return null
+        }
+    }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val reference = ManagedMVar.require(cell.execute(frame))
         requireVoidCarrier(state.execute(frame))
-        val value = if (remove) reference.take(this) else reference.read(this)
+        val value = try { if (remove) reference.take(this, async) else reference.read(this, async) }
+        catch (blocked: AsyncBlocked) {
+            throw AstCapture(blocked.request, SynchronousMasking.current(this)).append(Resume(this, reference, slots, offset))
+        }
         FrameAccess.write(frame, slots[offset], value)
         return null
     }
@@ -111,12 +126,26 @@ private class TryReadMVarExpression(@field:Child private var cell: Expr,
 }
 
 private class PutMVarExpression(@field:Child private var cell: Expr,
-    @field:Child private var value: Expr, @field:Child private var state: Expr) : Expr() {
+    @field:Child private var value: Expr, @field:Child private var state: Expr, private val async: Boolean) : Expr() {
+    private class Resume(private val node: PutMVarExpression, private val reference: ManagedMVar,
+                         private val stored: Any?) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input !== Unit) fault("Invalid AST MVar put resume value")
+            try { reference.put(stored, node, true) }
+            catch (blocked: AsyncBlocked) {
+                throw AstCapture(blocked.request, SynchronousMasking.current(node)).append(this)
+            }
+            return Unit
+        }
+    }
     override fun execute(frame: VirtualFrame): Any {
         val reference = ManagedMVar.require(cell.execute(frame))
         val stored = value.execute(frame)
         requireVoidCarrier(state.execute(frame))
-        reference.put(stored, this)
+        try { reference.put(stored, this, async) }
+        catch (blocked: AsyncBlocked) {
+            throw AstCapture(blocked.request, SynchronousMasking.current(this)).append(Resume(this, reference, stored))
+        }
         return Unit
     }
 }

@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.AstContinuationTest",
     "thc.runtime.GuestThreadsTest",
     "thc.runtime.BytecodeTypedTupleInputTest",
     "thc.runtime.DoubleArrayTest",
