@@ -1394,9 +1394,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 CallSegmentSuspended suspended, PrivateIOUnwind delivery) {
             CallSegment segment = suspended.getSegment();
             if (delivery.getAction() != segment || !segment.getCaughtIOAction() ||
-                    segment.getTupleShape() != destination.getShape() ||
-                    segment.getState() != 5 || !(segment.getValue() instanceof ContinuationResult))
-                throw new IllegalStateException("Async delivery requires the exact parked catch# action");
+                    segment.getTupleShape() != destination.getShape())
+                throw new IllegalStateException("Async delivery requires the exact captured catch# action");
             throw new CapturedAsyncDelivery(delivery.getPayload());
         }
         @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {

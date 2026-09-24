@@ -130,7 +130,7 @@ internal class CallSegment @JvmOverloads constructor(
 private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 /** Async delivery must carry its origin separately from its guest payload. */
 internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
-/** Cold claim token for one exact original catch# action, never supplied by Core. */
+/** Cold committed cut for one exact original catch# action, never supplied by Core. */
 internal class PrivateIOUnwind(val action: CallSegment, val payload: Any?) :
     RuntimeException("Private captured IO-handler unwind", null, false, false)
 /** Private origin tag; only checkpointed catch# may unwrap it for its handler. */
@@ -378,14 +378,14 @@ internal class Force(private val metrics: Metrics) : Node() {
         }
     }
 
-    /** Private test cut at a captured original catch# frame; its action remains shared and parked. */
+    /** Private test cut at a captured original catch# frame; its action remains shared. */
     @CompilerDirectives.TruffleBoundary
-    internal fun deliverAtCapturedIOHandler(original: Any, child: CallSegment, payload: Any?): Any? {
+    internal fun deliverAtCapturedIOHandler(original: Any, child: CallSegment, payload: Any?,
+                                            afterClaim: (() -> Unit)? = null): Any? {
         fun exact(saved: ContinuationResult?): Boolean =
             saved != null && saved.continuationRootNode.sourceRootNode is BytecodeRoot &&
-                (saved.result as? CallSegmentSuspended)?.segment === child &&
-                child.caughtIOAction && child.tupleShape != null && child.state == 5 &&
-                child.value is ContinuationResult
+            (saved.result as? CallSegmentSuspended)?.segment === child &&
+                child.caughtIOAction && child.tupleShape != null
         return when (original) {
             is Thunk -> {
                 var claimed = false
@@ -400,6 +400,9 @@ internal class Force(private val metrics: Metrics) : Node() {
                         claimed = true
                         checkNotNull(saved)
                     }
+                    // The captured parent commits this cut. An independent observer may
+                    // complete the shared child before its handler continuation runs.
+                    afterClaim?.invoke()
                     evaluateOwned(original, continuation, PrivateIOUnwind(child, payload))
                 } catch (failure: Throwable) {
                     if (claimed) suspendOwned(original)
@@ -421,6 +424,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                         claimed = true
                         checkNotNull(saved)
                     }
+                    afterClaim?.invoke()
                     evaluateCallSegment(original, continuation, mask, PrivateIOUnwind(child, payload))
                 } catch (failure: Throwable) {
                     if (claimed) suspendCallOwned(original)

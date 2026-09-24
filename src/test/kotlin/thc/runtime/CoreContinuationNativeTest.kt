@@ -39,8 +39,8 @@ class CoreContinuationNativeTest {
         @Child private var force = Force(Metrics(true))
         override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
         fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
-        fun deliver(boundary: Any, child: CallSegment, payload: Any?): Any? =
-            force.deliverAtCapturedIOHandler(boundary, child, payload)
+        fun deliver(boundary: Any, child: CallSegment, payload: Any?, afterClaim: (() -> Unit)? = null): Any? =
+            force.deliverAtCapturedIOHandler(boundary, child, payload, afterClaim)
     }
 
     private fun <T> entered(context: Context, action: () -> T): T {
@@ -643,6 +643,48 @@ class CoreContinuationNativeTest {
             }
             assertEquals(2, child.state)
             assertEquals(2, checkpoint.visits.get(), "The action's two checkpoints execute once each")
+        }
+    }
+
+    @Test fun committedCatchCutSurvivesIndependentChildCompletionBeforeHandlerResume() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            val parent = entered(context) { program.entryValue("catchActionAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            val observer = entered(context) { Thunk(callSegmentCaller(language, child), null) }
+            Executors.newSingleThreadExecutor().use { deliveryPool ->
+                val delivered = deliveryPool.submit<Long> { entered(context) {
+                    val answer = driver.deliver(parent, child, payload) {
+                        assertEquals(1, parent.state, "The parent cut is committed before the observer runs")
+                        Executors.newSingleThreadExecutor().use { observerPool ->
+                            val finished = observerPool.submit<Unit> { entered(context) {
+                                repeat(2) {
+                                    assertSame(observer, assertThrows(ThunkSuspended::class.java) { driver.force(observer) }.thunk)
+                                }
+                                assertTrue(driver.force(observer) is HandoffStorage)
+                                assertEquals(0, language.handoffState.get().results.depth)
+                            } }
+                            finished.get(5, TimeUnit.SECONDS)
+                        }
+                        assertEquals(2, child.state, "The shared child completed before handler continuation")
+                    } as DataValue
+                    answer.layout.readLong(answer, 0)
+                } }
+                assertEquals(107L, delivered.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(2, parent.state)
+            assertEquals(2, child.state)
+            assertEquals(2, checkpoint.visits.get(), "The shared action prefix is never replayed")
         }
     }
 
