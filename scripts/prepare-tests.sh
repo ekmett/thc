@@ -47,7 +47,7 @@ python3 scripts/prepare-mutvar.py
 python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py
-sh scripts/prepare-core-continuation.sh
+"$fixture_bin" core-continuation
 python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 python3 scripts/prepare-pinned-addresses.py

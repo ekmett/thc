@@ -158,7 +158,6 @@ tasks.withType<Test>().configureEach {
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
-            "prepare-core-continuation.sh",
             "prepare-managed-md5.py", "prepare-pinned-addresses.py",
             "prepare-int16x8-audit.py", "int16x8_model.py", "test-int16x8-model.py",
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",

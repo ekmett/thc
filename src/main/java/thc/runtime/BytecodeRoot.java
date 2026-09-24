@@ -326,17 +326,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = boolean.class, name = "cell")
     public static final class ResumeForcedLocal {
         @Specialization public static Object resume(VirtualFrame frame, LocalAccessor local, boolean cell,
-                ChildResume resumed, @Bind("$node") Node node) {
+                ThunkSuspended suspended, ChildResume resumed, @Bind("$node") Node node) {
             if (resumed.getFailure() != null) throw resumed.getFailure();
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             Object binding = local.getObject(bytecode, frame);
-            Object original = cell ? ReadCellIfNeeded.read(binding) : binding;
-            if (!(original instanceof Thunk thunk) || thunk.getState() != 2 || thunk.getValue() != resumed.getValue())
+            Thunk thunk = suspended.getThunk();
+            if (thunk.getState() != 2 || thunk.getValue() != resumed.getValue())
                 throw new IllegalStateException("Forced-local continuation lost its child update");
-            ForceLocal.publish(frame, local, cell, binding, original, resumed.getValue(), node);
+            if (cell) {
+                if (!(binding instanceof RecCell recursive))
+                    throw new IllegalStateException("Forced-local continuation lost its recursive cell");
+                synchronized (recursive) {
+                    Object current = ReadCellIfNeeded.read(recursive);
+                    if (current != thunk && current != resumed.getValue())
+                        throw new IllegalStateException("Forced-local continuation lost its child update");
+                    ForceLocal.publish(frame, local, true, binding, thunk, resumed.getValue(), node);
+                }
+            } else {
+                if (binding != thunk && binding != resumed.getValue())
+                    throw new IllegalStateException("Forced-local continuation lost its child update");
+                ForceLocal.publish(frame, local, false, binding, thunk, resumed.getValue(), node);
+            }
             return resumed.getValue();
         }
-        @Fallback public static Object malformed(LocalAccessor local, boolean cell, Object resumed) {
+        @Fallback public static Object malformed(LocalAccessor local, boolean cell, Object suspended, Object resumed) {
             throw new IllegalStateException("Forced-local continuation requires ChildResume");
         }
     }

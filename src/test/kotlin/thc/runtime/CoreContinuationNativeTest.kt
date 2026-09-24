@@ -6,6 +6,7 @@ package thc.runtime
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.BytecodeRootNode
+import com.oracle.truffle.api.bytecode.BytecodeConfig
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameSlotKind
 import org.junit.jupiter.api.Assertions.*
@@ -15,6 +16,9 @@ import thc.CoreModules
 import thc.Json
 import thc.executionContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.RootNode
 
 /** A real GHC Core thunk and local demand, with a private deterministic test checkpoint. */
 class CoreContinuationNativeTest {
@@ -23,6 +27,69 @@ class CoreContinuationNativeTest {
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+    }
+
+    private class Driver : RootNode(null) {
+        @Child private var force = Force(Metrics(true))
+        override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
+        fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
+    }
+
+    @Test fun forwardedRecursiveCellStillResumesItsCapturedChild() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val effects = AtomicInteger()
+                val child = Thunk(ThunkYieldProofRoot.target(language, effects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), Any()), null)
+                val cell = RecCell().also { it.value = child; it.initialized = true }
+                val metrics = Metrics(true)
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    val local = b.createLocal("recursive binding", "object")
+                    val result = b.createLocal("forced result", "object")
+                    val suspended = b.createLocal("suspended child", "object")
+                    b.beginBlock()
+                    b.beginStoreLocal(local); b.emitLoadConstant(cell); b.endStoreLocal()
+                    b.beginReturn()
+                    b.beginBlock()
+                    b.beginTryCatch()
+                    b.beginStoreLocal(result)
+                    b.beginForceLocal(metrics, local, true); b.emitLoadLocal(local); b.endForceLocal()
+                    b.endStoreLocal()
+                    b.beginBlock()
+                    b.beginStoreLocal(suspended)
+                    b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly()
+                    b.endStoreLocal()
+                    b.beginStoreLocal(result)
+                    b.beginResumeForcedLocal(local, true)
+                    b.emitLoadLocal(suspended)
+                    b.beginYield(); b.emitLoadLocal(suspended); b.endYield()
+                    b.endResumeForcedLocal()
+                    b.endStoreLocal()
+                    b.endBlock()
+                    b.endTryCatch()
+                    b.emitLoadLocal(result)
+                    b.endBlock()
+                    b.endReturn()
+                    b.endBlock()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val caller = Thunk(target, null)
+                val driver = Driver()
+                assertSame(caller, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
+                assertSame(child, cell.value)
+                assertThrows(ThunkSuspended::class.java) { driver.force(child) }
+                val answer = driver.force(child)
+                updateForcedCell(cell, child, answer) // A second force publishes through the shared RecCell.
+                assertSame(answer, cell.value)
+                assertSame(answer, driver.force(caller))
+                assertEquals(2, caller.state)
+                assertEquals(1, effects.get(), "The child's pre-yield effect must not replay")
+            } finally { context.leave() }
+        }
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {

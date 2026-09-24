@@ -89,10 +89,13 @@
     },
     "core-continuation": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
-      "commands": [{"argv": ["sh", "scripts/prepare-core-continuation.sh"]}],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "core-continuation"]}],
       "outputs": ["build/core-continuation"],
       "sources": [
-        "scripts/prepare-core-continuation.sh",
+        "test/haskell-fixtures/ContinuationFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
         "compiler/test-fixtures/CoreContinuationAudit.hs",
         "compiler/test-fixtures/CoreContinuationNative.hs"
       ]
