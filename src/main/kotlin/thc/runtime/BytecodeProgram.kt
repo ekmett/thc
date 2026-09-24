@@ -941,6 +941,47 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorByteArray(operation, args.map { compile(it, scope, false) })
+            } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
+                CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
+                    args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
+                val kept = argument(args[0], scope, flags[0] as Boolean)
+                val state = compile(args[1], scope, false)
+                // Force the continuation only after validating State, inside the fence.
+                val function = argument(args[2], scope, true)
+                if (tupleProof.isAggregate) tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                    kept.emit(e); state.emit(e); function.emit(e)
+                    e.builder.endKeepAliveTuple()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginKeepAlive(metrics)
+                    kept.emit(e); state.emit(e); function.emit(e)
+                    e.builder.endKeepAlive()
+                }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
+                val operation = PinnedMemoryOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
+                        PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
+                        PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        else -> error("Scalar pinned memory operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
+                        PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
+                        PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        else -> error("Scalar pinned memory operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.beginByteArrayContents()
+                    else e.builder.beginWriteWord8OffAddr()
+                    operands.forEach { it.emit(e) }
+                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.endByteArrayContents()
+                    else e.builder.endWriteWord8OffAddr()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

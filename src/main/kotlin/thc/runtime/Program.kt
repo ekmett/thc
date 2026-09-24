@@ -1368,6 +1368,21 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+            } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
+                CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
+                    args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
+                val kept = argument(args[0], scope, flags[0] as Boolean)
+                val state = compile(args[1], scope, false)
+                val function = compile(args[2], scope, false)
+                val stateArgument = arrayOf<Expr>(Literal(Unit))
+                val action = if (tupleProof.isAggregate) TupleApplication(language as thc.Language,
+                    TupleShape(tupleProof, language), function, stateArgument, false, metrics)
+                else Application(function, stateArgument, false, metrics)
+                KeepAliveExpression(kept, state, action, tupleProof)
+            } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
+                val operation = PinnedMemoryOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
