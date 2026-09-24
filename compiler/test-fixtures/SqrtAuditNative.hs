@@ -17,11 +17,17 @@ main = do
     floatMath =
       [("fabsFloat", fabsFloat), ("expFloat", expFloat), ("expm1Float", expm1Float)
       ,("logFloat", logFloat), ("log1pFloat", log1pFloat), ("sinFloat", sinFloat)
-      ,("cosFloat", cosFloat), ("powerFloat", powerFloat)]
+      ,("cosFloat", cosFloat), ("tanFloat", tanFloat)
+      ,("asinFloat", asinFloat), ("acosFloat", acosFloat), ("atanFloat", atanFloat)
+      ,("sinhFloat", sinhFloat), ("coshFloat", coshFloat), ("tanhFloat", tanhFloat)
+      ,("powerFloat", powerFloat)]
     doubleMath =
       [("fabsDouble", fabsDouble), ("expDouble", expDouble), ("expm1Double", expm1Double)
       ,("logDouble", logDouble), ("log1pDouble", log1pDouble), ("sinDouble", sinDouble)
-      ,("cosDouble", cosDouble), ("powerDouble", powerDouble)]
+      ,("cosDouble", cosDouble), ("tanDouble", tanDouble)
+      ,("asinDouble", asinDouble), ("acosDouble", acosDouble), ("atanDouble", atanDouble)
+      ,("sinhDouble", sinhDouble), ("coshDouble", coshDouble), ("tanhDouble", tanhDouble)
+      ,("powerDouble", powerDouble)]
     run ["sqrtFloat", bits] = case castWord32ToFloat (read bits) of
       F# x -> putStrLn ("sqrtFloat\t" ++ bits ++ "\t" ++ show (castFloatToWord32 (F# (sqrtFloat x))))
     run ["sqrtDouble", bits] = case castWord64ToDouble (read bits) of

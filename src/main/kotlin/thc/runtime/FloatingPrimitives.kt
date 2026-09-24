@@ -51,6 +51,20 @@ private const val DOUBLE_LOG1P = 40
 private const val DOUBLE_SIN = 41
 private const val DOUBLE_COS = 42
 private const val DOUBLE_POWER = 43
+private const val FLOAT_TAN = 44
+private const val FLOAT_ASIN = 45
+private const val FLOAT_ACOS = 46
+private const val FLOAT_ATAN = 47
+private const val FLOAT_SINH = 48
+private const val FLOAT_COSH = 49
+private const val FLOAT_TANH = 50
+private const val DOUBLE_TAN = 51
+private const val DOUBLE_ASIN = 52
+private const val DOUBLE_ACOS = 53
+private const val DOUBLE_ATAN = 54
+private const val DOUBLE_SINH = 55
+private const val DOUBLE_COSH = 56
+private const val DOUBLE_TANH = 57
 
 private val floatingOperations = mapOf(
     "plusFloat#" to FLOAT_ADD, "minusFloat#" to FLOAT_SUB, "timesFloat#" to FLOAT_MUL,
@@ -67,7 +81,21 @@ private val floatingOperations = mapOf(
     "cosFloat#" to FLOAT_COS, "powerFloat#" to FLOAT_POWER,
     "fabsDouble#" to DOUBLE_ABS, "expDouble#" to DOUBLE_EXP, "expm1Double#" to DOUBLE_EXPM1,
     "logDouble#" to DOUBLE_LOG, "log1pDouble#" to DOUBLE_LOG1P, "sinDouble#" to DOUBLE_SIN,
-    "cosDouble#" to DOUBLE_COS, "**##" to DOUBLE_POWER)
+    "cosDouble#" to DOUBLE_COS, "**##" to DOUBLE_POWER,
+    "tanFloat#" to FLOAT_TAN,
+    "asinFloat#" to FLOAT_ASIN,
+    "acosFloat#" to FLOAT_ACOS,
+    "atanFloat#" to FLOAT_ATAN,
+    "sinhFloat#" to FLOAT_SINH,
+    "coshFloat#" to FLOAT_COSH,
+    "tanhFloat#" to FLOAT_TANH,
+    "tanDouble#" to DOUBLE_TAN,
+    "asinDouble#" to DOUBLE_ASIN,
+    "acosDouble#" to DOUBLE_ACOS,
+    "atanDouble#" to DOUBLE_ATAN,
+    "sinhDouble#" to DOUBLE_SINH,
+    "coshDouble#" to DOUBLE_COSH,
+    "tanhDouble#" to DOUBLE_TANH)
 
 /** JVM float operations round each result to binary32; no implicit numeric widening. */
 internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
@@ -79,10 +107,12 @@ internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
     val kind = when (name) {
         "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
         "int2Float#", "double2Float#", "fabsFloat#", "expFloat#", "expm1Float#",
-        "logFloat#", "log1pFloat#", "sinFloat#", "cosFloat#", "powerFloat#" -> CoreKind.FLOAT
+        "logFloat#", "log1pFloat#", "sinFloat#", "cosFloat#", "powerFloat#",
+        "tanFloat#", "asinFloat#", "acosFloat#", "atanFloat#", "sinhFloat#", "coshFloat#", "tanhFloat#" -> CoreKind.FLOAT
         "+##", "-##", "*##", "/##", "negateDouble#", "int2Double#", "float2Double#",
         "fabsDouble#", "expDouble#", "expm1Double#", "logDouble#", "log1pDouble#",
-        "sinDouble#", "cosDouble#", "**##" -> CoreKind.DOUBLE
+        "sinDouble#", "cosDouble#", "**##",
+        "tanDouble#", "asinDouble#", "acosDouble#", "atanDouble#", "sinhDouble#", "coshDouble#", "tanhDouble#" -> CoreKind.DOUBLE
         "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
         "==##", "/=##", "<##", "<=##", ">##", ">=##", "float2Int#", "double2Int#" -> CoreKind.LONG
         else -> return null
@@ -90,7 +120,8 @@ internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
     val unary = name in setOf("negateFloat#", "negateDouble#", "int2Float#", "int2Double#",
         "float2Int#", "double2Int#", "float2Double#", "double2Float#",
         "fabsFloat#", "expFloat#", "expm1Float#", "logFloat#", "log1pFloat#", "sinFloat#", "cosFloat#",
-        "fabsDouble#", "expDouble#", "expm1Double#", "logDouble#", "log1pDouble#", "sinDouble#", "cosDouble#")
+        "fabsDouble#", "expDouble#", "expm1Double#", "logDouble#", "log1pDouble#", "sinDouble#", "cosDouble#",
+        "tanFloat#", "asinFloat#", "acosFloat#", "atanFloat#", "sinhFloat#", "coshFloat#", "tanhFloat#", "tanDouble#", "asinDouble#", "acosDouble#", "atanDouble#", "sinhDouble#", "coshDouble#", "tanhDouble#")
     if (arguments.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
     return FloatingPrimitive(floatingOperations.getValue(name), arguments, kind)
 }
@@ -129,6 +160,13 @@ private class FloatingPrimitive(private val operation: Int,
             FLOAT_LOG1P -> return Math.log1p(x.toDouble()).toFloat()
             FLOAT_SIN -> return Math.sin(x.toDouble()).toFloat()
             FLOAT_COS -> return Math.cos(x.toDouble()).toFloat()
+            FLOAT_TAN -> return Math.tan(x.toDouble()).toFloat()
+            FLOAT_ASIN -> return Math.asin(x.toDouble()).toFloat()
+            FLOAT_ACOS -> return Math.acos(x.toDouble()).toFloat()
+            FLOAT_ATAN -> return Math.atan(x.toDouble()).toFloat()
+            FLOAT_SINH -> return Math.sinh(x.toDouble()).toFloat()
+            FLOAT_COSH -> return Math.cosh(x.toDouble()).toFloat()
+            FLOAT_TANH -> return Math.tanh(x.toDouble()).toFloat()
         }
         val y = arguments[1].executeRequiredFloat(frame)
         return when (operation) {
@@ -154,6 +192,13 @@ private class FloatingPrimitive(private val operation: Int,
             DOUBLE_LOG1P -> return Math.log1p(x)
             DOUBLE_SIN -> return Math.sin(x)
             DOUBLE_COS -> return Math.cos(x)
+            DOUBLE_TAN -> return Math.tan(x)
+            DOUBLE_ASIN -> return Math.asin(x)
+            DOUBLE_ACOS -> return Math.acos(x)
+            DOUBLE_ATAN -> return Math.atan(x)
+            DOUBLE_SINH -> return Math.sinh(x)
+            DOUBLE_COSH -> return Math.cosh(x)
+            DOUBLE_TANH -> return Math.tanh(x)
         }
         val y = arguments[1].executeRequiredDouble(frame)
         return when (operation) {

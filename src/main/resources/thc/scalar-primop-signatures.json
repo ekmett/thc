@@ -144,6 +144,18 @@
       ],
       "result": "IntRep"
     },
+    "acosDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "acosFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "and#": {
       "arguments": [
         "WordRep",
@@ -185,6 +197,30 @@
         "Word8Rep"
       ],
       "result": "Word8Rep"
+    },
+    "asinDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "asinFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "atanDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "atanFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "bitReverse#": {
       "arguments": [
@@ -307,6 +343,18 @@
       "result": "DoubleRep"
     },
     "cosFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "coshDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "coshFloat#": {
       "arguments": [
         "FloatRep"
       ],
@@ -1412,6 +1460,18 @@
       ],
       "result": "FloatRep"
     },
+    "sinhDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "sinhFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "sqrtDouble#": {
       "arguments": [
         "DoubleRep"
@@ -1479,6 +1539,30 @@
         "Word8Rep"
       ],
       "result": "Word8Rep"
+    },
+    "tanDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "tanFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "tanhDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "tanhFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "timesFloat#": {
       "arguments": [

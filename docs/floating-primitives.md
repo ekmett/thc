@@ -2,13 +2,14 @@
 
 THC supports a bounded scalar `Float#`/`Double#` foundation in both the AST and
 bytecode backends. It includes floating literals, primitive locals, constructor
-fields and closure captures, scalar arguments/results, and 50 primops:
+fields and closure captures, scalar arguments/results, and 64 primops:
 
 | Family | Float# | Double# |
 | --- | --- | --- |
 | Arithmetic | `plusFloat#`, `minusFloat#`, `timesFloat#`, `divideFloat#`, `negateFloat#` | `+##`, `-##`, `*##`, `/##`, `negateDouble#` |
 | Square root | `sqrtFloat#` | `sqrtDouble#` |
 | Scalar math | `fabsFloat#`, `expFloat#`, `expm1Float#`, `logFloat#`, `log1pFloat#`, `sinFloat#`, `cosFloat#`, `powerFloat#` | `fabsDouble#`, `expDouble#`, `expm1Double#`, `logDouble#`, `log1pDouble#`, `sinDouble#`, `cosDouble#`, `**##` |
+| Trigonometric and hyperbolic | `tanFloat#`, `asinFloat#`, `acosFloat#`, `atanFloat#`, `sinhFloat#`, `coshFloat#`, `tanhFloat#` | `tanDouble#`, `asinDouble#`, `acosDouble#`, `atanDouble#`, `sinhDouble#`, `coshDouble#`, `tanhDouble#` |
 | Comparisons | `eqFloat#`, `neFloat#`, `ltFloat#`, `leFloat#`, `gtFloat#`, `geFloat#` | `==##`, `/=##`, `<##`, `<=##`, `>##`, `>=##` |
 | Int conversion | `int2Float#`, `float2Int#` | `int2Double#`, `double2Int#` |
 | Precision conversion | `double2Float#` | `float2Double#` |
@@ -81,9 +82,11 @@ perfect squares, and deterministic random finite inputs. An independent exact
 rational model finds adjacent output values and compares their squared midpoint,
 checking nearest-even rounding without calling a floating square-root function.
 The suite checks 288 exact bit results, 104 NaN classifications and 26 scalar
-consumer results. Another 208 native rows exercise the 16 scalar math primops
+consumer results. Another 402 native rows exercise the 30 scalar math primops
 through typed `Float#`/`Double#` wrappers. Arithmetic NaN payloads and signs
-are not specified.
+are not specified. Inverse trigonometric rows include inputs outside [-1, 1]
+for NaN classification; hyperbolic rows include infinities and values near
+Float and Double overflow.
 
 Scalar math uses JVM `Math` operations and rounds each Float result to
 binary32. Native GHC is the differential oracle, not a claim of bit-exact

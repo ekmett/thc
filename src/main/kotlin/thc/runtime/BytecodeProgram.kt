@@ -2031,6 +2031,13 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "sinFloat#" -> "FloatSin"
             "cosFloat#" -> "FloatCos"
             "powerFloat#" -> "FloatPower"
+            "tanFloat#" -> "FloatTan"
+            "asinFloat#" -> "FloatAsin"
+            "acosFloat#" -> "FloatAcos"
+            "atanFloat#" -> "FloatAtan"
+            "sinhFloat#" -> "FloatSinh"
+            "coshFloat#" -> "FloatCosh"
+            "tanhFloat#" -> "FloatTanh"
             "eqFloat#" -> "FloatEqual"
             "neFloat#" -> "FloatNotEqual"
             "ltFloat#" -> "FloatLess"
@@ -2051,6 +2058,13 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "sinDouble#" -> "DoubleSin"
             "cosDouble#" -> "DoubleCos"
             "**##" -> "DoublePower"
+            "tanDouble#" -> "DoubleTan"
+            "asinDouble#" -> "DoubleAsin"
+            "acosDouble#" -> "DoubleAcos"
+            "atanDouble#" -> "DoubleAtan"
+            "sinhDouble#" -> "DoubleSinh"
+            "coshDouble#" -> "DoubleCosh"
+            "tanhDouble#" -> "DoubleTanh"
             "==##" -> "DoubleEqual"
             "/=##" -> "DoubleNotEqual"
             "<##" -> "DoubleLess"
@@ -2069,11 +2083,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos")
+        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -2101,6 +2115,20 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleSin" -> b.beginDoubleSin()
                 "DoubleCos" -> b.beginDoubleCos()
                 "DoublePower" -> b.beginDoublePower()
+                "FloatTan" -> b.beginFloatTan()
+                "FloatAsin" -> b.beginFloatAsin()
+                "FloatAcos" -> b.beginFloatAcos()
+                "FloatAtan" -> b.beginFloatAtan()
+                "FloatSinh" -> b.beginFloatSinh()
+                "FloatCosh" -> b.beginFloatCosh()
+                "FloatTanh" -> b.beginFloatTanh()
+                "DoubleTan" -> b.beginDoubleTan()
+                "DoubleAsin" -> b.beginDoubleAsin()
+                "DoubleAcos" -> b.beginDoubleAcos()
+                "DoubleAtan" -> b.beginDoubleAtan()
+                "DoubleSinh" -> b.beginDoubleSinh()
+                "DoubleCosh" -> b.beginDoubleCosh()
+                "DoubleTanh" -> b.beginDoubleTanh()
                 "FloatEqual" -> b.beginFloatEqual()
                 "FloatNotEqual" -> b.beginFloatNotEqual()
                 "FloatLess" -> b.beginFloatLess()
@@ -2154,6 +2182,20 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleSin" -> b.endDoubleSin()
                 "DoubleCos" -> b.endDoubleCos()
                 "DoublePower" -> b.endDoublePower()
+                "FloatTan" -> b.endFloatTan()
+                "FloatAsin" -> b.endFloatAsin()
+                "FloatAcos" -> b.endFloatAcos()
+                "FloatAtan" -> b.endFloatAtan()
+                "FloatSinh" -> b.endFloatSinh()
+                "FloatCosh" -> b.endFloatCosh()
+                "FloatTanh" -> b.endFloatTanh()
+                "DoubleTan" -> b.endDoubleTan()
+                "DoubleAsin" -> b.endDoubleAsin()
+                "DoubleAcos" -> b.endDoubleAcos()
+                "DoubleAtan" -> b.endDoubleAtan()
+                "DoubleSinh" -> b.endDoubleSinh()
+                "DoubleCosh" -> b.endDoubleCosh()
+                "DoubleTanh" -> b.endDoubleTanh()
                 "FloatEqual" -> b.endFloatEqual()
                 "FloatNotEqual" -> b.endFloatNotEqual()
                 "FloatLess" -> b.endFloatLess()
