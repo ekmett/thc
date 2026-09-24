@@ -1032,7 +1032,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Closure function, @Variadic Object[] arguments, @Bind Node node,
                 @Cached(value = "create(destination, arity, metrics)", neverDefault = true) TupleDispatch dispatch) {
             MaskingState callerMask = SynchronousMasking.current(node);
-            try { dispatch.execute(frame, function, arguments); }
+            try {
+                dispatch.execute(frame, function, arguments);
+                if (SynchronousMasking.current(node) != callerMask) {
+                    SynchronousMasking.set(node, callerMask);
+                    throw new IllegalStateException("Completed tuple application did not restore its caller mask");
+                }
+            }
             catch (TupleCallYield yielded) { throw captureTupleCall(function, arity, destination, yielded, node, callerMask); }
         }
         public static TupleDispatch create(BytecodeTupleSlots destination, int arity, Metrics metrics) {
@@ -1109,7 +1115,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ArgumentLayout layout, Metrics metrics, Closure function, @Variadic Object[] arguments, @Bind Node node,
                 @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
             MaskingState callerMask = SynchronousMasking.current(node);
-            try { dispatch.execute(frame, function, arguments); }
+            try {
+                dispatch.execute(frame, function, arguments);
+                if (SynchronousMasking.current(node) != callerMask) {
+                    SynchronousMasking.set(node, callerMask);
+                    throw new IllegalStateException("Completed compact tuple application did not restore its caller mask");
+                }
+            }
             catch (TupleCallYield yielded) {
                 throw captureTupleCall(function, layout.getLogicalArity(), destination, yielded, node, callerMask);
             }
