@@ -98,7 +98,7 @@ class Int32VectorMemoryProofTest {
     private fun withLanguage(coldTransition: Boolean = false, action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw")
-        .apply { if (coldTransition) option("engine.SingleTierCompilationThreshold", "10000000") }
+        .also { builder -> if (coldTransition) builder.option("engine.SingleTierCompilationThreshold", "10000000") }
         .build().use { context ->
             context.initialize("thc"); context.enter()
             try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) } finally { context.leave() }
