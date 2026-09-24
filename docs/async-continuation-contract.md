@@ -9,9 +9,9 @@ interruptibly, or throw to itself. A masked caller still owes its unfinished
 work to a suspended callee.
 
 This contract separates those obligations. The bytecode implementation already
-checks ownership, masks and saved call boundaries. AST admission and nested
-foreign-entry enforcement are being implemented against the same contract;
-the existence of a resumable root alone does not establish either property.
+checks ownership, masks and saved call boundaries. A restricted internal AST
+subset now checks admission; nested foreign-entry enforcement is in progress.
+The existence of a resumable root alone does not establish either property.
 
 ## Delivery
 
@@ -147,7 +147,15 @@ Its nested uninterruptible-mask/unmask/self-throw case verifies that the origina
 handler receives the exception and that the outer mask is restored, interpreted
 and compiled, before and after Tidy.
 
-The AST coverage gate and nested foreign callback checks must land before these
-paths are advertised as admitted. In particular, tests must reject a missing
-caller capture even when its mask disables local delivery, and distinguish
-successful interruption inside a callback from unsupported capture across Java.
+`AstContinuationTest` exercises the internal admitted direct-MVar root after
+explicit compilation, checks that the blocked entry ran compiled, and resumes
+it on another Java thread. Its tuple is copied out of the producer's handoff
+pool. Separate owned-thunk tests interrupt twice without replaying the prefix,
+and keep an uninterruptibly masked caller's unfinished work when its child
+unmasks. Construction rejects unsupported parent expressions and strict-entry
+forcing. This is a small synthetic Core proof: public AST async entry remains
+disabled until calls, cases, masks and handlers have complete coverage.
+
+Nested foreign callback checks must land before those paths are advertised as
+admitted. They must distinguish successful interruption inside a callback from
+unsupported capture across Java.
