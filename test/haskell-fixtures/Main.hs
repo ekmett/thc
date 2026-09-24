@@ -9,12 +9,10 @@ module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
 import Control.Monad (forM, forM_, unless, when)
-import qualified Crypto.Hash.SHA256 as SHA256
-import Data.Aeson (Value (..), decodeStrict', object, (.=), encode)
+import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, isSuffixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -23,13 +21,11 @@ import Data.Word (Word8, Word16)
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (Ptr, castPtr)
 import Foreign.Storable (peek, poke)
-import Numeric (showHex)
+import FixtureSupport (run, runWithTimeout, writeJson, hashes, splitTab, readInteger)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, listDirectory, removeFile)
-import System.Environment (getArgs, getEnvironment, lookupEnv)
-import System.Exit (ExitCode (..), die)
+import System.Environment (getArgs, lookupEnv)
+import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
-import System.Process (CreateProcess (..), proc, readCreateProcessWithExitCode)
-import System.Timeout (timeout)
 
 data Family = Bit | IntegerWord | SignedNarrow | Explicit64 deriving (Eq, Show)
 
@@ -309,39 +305,6 @@ hostWrapper e =
     output "Word64Rep" x = "word2Int# (word64ToWord# (" ++ x ++ "))"
     output rep _ = error ("Unsupported output rep: " ++ rep)
 
-run :: FilePath -> [(String,String)] -> FilePath -> [String] -> String -> IO String
-run = runWithTimeout Nothing
-
-runWithTimeout :: Maybe Int -> FilePath -> [(String,String)] -> FilePath -> [String] -> String -> IO String
-runWithTimeout limit root overrides program args input = do
-  environment <- getEnvironment
-  let updated = foldr (uncurry replace) environment overrides
-      replace key value rest = (key,value) : filter ((/= key) . fst) rest
-      command = (proc program args) {cwd = Just root, env = Just updated}
-  let execute = readCreateProcessWithExitCode command input
-  completed <- maybe (Just <$> execute) (\micros -> timeout micros execute) limit
-  -- readCreateProcessWithExitCode brackets the child; the timeout exception
-  -- terminates and reaps it before we report the failure.
-  (code,stdout,stderr) <- maybe (die (program ++ " timed out")) pure completed
-  case code of
-    ExitSuccess -> pure stdout
-    ExitFailure n -> die (unlines [program ++ " failed (" ++ show n ++ ")",
-                             unwords args, stdout, stderr])
-
-writeJson :: FilePath -> Value -> IO ()
-writeJson path value = BL.writeFile path (encode value <> "\n")
-
-hashFile :: FilePath -> IO String
-hashFile path = do
-  digest <- SHA256.hash <$> BS.readFile path
-  pure $ concatMap hexByte (BS.unpack digest)
-  where hexByte byte = let digits = showHex byte "" in replicate (2 - length digits) '0' ++ digits
-
-hashes :: FilePath -> [FilePath] -> IO (Map.Map String String)
-hashes root paths = Map.fromList <$> forM paths (\path -> do
-  digest <- hashFile (root </> path)
-  pure (path,digest))
-
 relativeCore :: Family -> String -> [FilePath]
 relativeCore family stage =
   let dir = "build" </> familyName family </> stage
@@ -352,7 +315,7 @@ inputPaths :: FilePath -> Family -> IO [FilePath]
 inputPaths root family = do
   plugin <- listDirectory (root </> "compiler/THC")
   let source = "compiler/test-fixtures" </> fixtureModule family ++ ".hs"
-  pure $ sort $ [source, "thc.cabal", "test/haskell-fixtures/Main.hs",
+  pure $ sort $ [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
     ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
 
@@ -443,16 +406,6 @@ prepare root family = do
   putStrLn (familyName family ++ ": " ++ show (length es) ++ " entries, " ++
             show (length parsed) ++ " native rows, " ++ show (length stageArtifacts) ++
             " GHC Core export stage" ++ (if length stageArtifacts == 1 then "" else "s"))
-
-splitTab :: String -> [String]
-splitTab text = case break (== '\t') text of
-  (piece,[]) -> [piece]
-  (piece,_:rest) -> piece : splitTab rest
-
-readInteger :: String -> Maybe Integer
-readInteger text = case reads text of
-  [(number,"")] -> Just number
-  _ -> Nothing
 
 data ArrayGroup = ArrayGroup
   { arraySource :: FilePath
@@ -718,7 +671,7 @@ prepareArray root spec = do
     writeFile (root </> literalOracle) literalActual
     pure [literalOracle]
   plugin <- listDirectory (root </> "compiler/THC")
-  let sources = sort $ ["thc.cabal", "test/haskell-fixtures/Main.hs", "compiler/build.sh",
+  let sources = sort $ ["thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "compiler/build.sh",
         "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
         map arraySource groups ++ ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
       artifacts = concatMap snd stages ++ [driver,binary,oracle] ++ literalArtifacts
