@@ -563,7 +563,7 @@ class AuditTest(unittest.TestCase):
                        [['lit', 'word' if scalar['primReps'] == ['WordRep'] else 'int', '1', dict(rep=scalar)]] * 2,
                        [False, False], False, False, dict(rep=proof)]
             self.assertTrue(run_tuple(module)['accepted'], name)
-            for mutation in ('nested', 'scalar', 'unknown', 'wrong-register', 'unknown-argument', 'lifted', 'partial', 'overapplied'):
+            for mutation in ('nested', 'scalar', 'unknown', 'wrong-register', 'unknown-argument', 'lifted', 'partial', 'overapplied', 'missing-result', 'extra-result'):
                 changed = copy.deepcopy(module)
                 bad = changed['bindings'][0]['expr'][2][1]
                 if mutation == 'nested':
@@ -580,6 +580,11 @@ class AuditTest(unittest.TestCase):
                     bad[3][0] = True
                 elif mutation == 'partial':
                     bad[2].pop(); bad[3].pop()
+                elif mutation == 'missing-result':
+                    bad[6]['rep']['components'].pop(); bad[6]['rep']['primReps'].pop()
+                elif mutation == 'extra-result':
+                    bad[6]['rep']['components'].append(copy.deepcopy(scalar))
+                    bad[6]['rep']['primReps'].extend(scalar['primReps'])
                 else:
                     bad[2].append(copy.deepcopy(bad[2][0])); bad[3].append(False)
                 report = run_tuple(changed)

@@ -44,12 +44,16 @@ internal fun word64Literal(value: String): Long {
     return number.toLong()
 }
 
-/** GHC 9.14.1 machine-width tuple primops; each operation writes two scalar locals. */
-internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: String, val secondRep: String = scalarRep) {
+/** GHC 9.14.1 machine-width tuple primops writing exact scalar destinations. */
+internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: String,
+    val secondRep: String = scalarRep, val resultArity: Int = 2) {
     QUOT_REM_INT("quotRemInt#", "IntRep"), QUOT_REM_WORD("quotRemWord#", "WordRep"),
     ADD_INT_C("addIntC#", "IntRep"), SUB_INT_C("subIntC#", "IntRep"),
     ADD_WORD_C("addWordC#", "WordRep", "IntRep"), SUB_WORD_C("subWordC#", "WordRep", "IntRep"),
-    PLUS_WORD_2("plusWord2#", "WordRep"), TIMES_WORD_2("timesWord2#", "WordRep");
+    PLUS_WORD_2("plusWord2#", "WordRep"), TIMES_WORD_2("timesWord2#", "WordRep"),
+    TIMES_INT_2("timesInt2#", "IntRep", resultArity = 3);
+
+    private val resultReps = listOf(scalarRep, secondRep) + if (resultArity == 3) listOf(scalarRep) else emptyList()
 
     private fun divisionDomain(left: Long, right: Long) {
         if (right == 0L || this == QUOT_REM_INT && left == Long.MIN_VALUE && right == -1L)
@@ -62,6 +66,7 @@ internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: Stri
         SUB_INT_C, SUB_WORD_C -> left - right
         PLUS_WORD_2 -> if (java.lang.Long.compareUnsigned(left + right, left) < 0) 1L else 0L
         TIMES_WORD_2 -> Math.unsignedMultiplyHigh(left, right)
+        TIMES_INT_2 -> if (Math.multiplyHigh(left, right) == ((left * right) shr 63)) 0L else 1L
     }
     fun second(left: Long, right: Long): Long = when (this) {
         QUOT_REM_INT -> { divisionDomain(left, right); left % right }
@@ -72,14 +77,19 @@ internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: Stri
         SUB_WORD_C -> if (java.lang.Long.compareUnsigned(left, right) < 0) 1L else 0L
         PLUS_WORD_2 -> left + right
         TIMES_WORD_2 -> left * right
+        TIMES_INT_2 -> Math.multiplyHigh(left, right)
+    }
+    fun third(left: Long, right: Long): Long {
+        check(this == TIMES_INT_2)
+        return left * right
     }
     fun validate(arguments: List<CoreRepresentation>, lifted: List<*>, result: CoreRepresentation) {
         if (arguments.size != 2) throw RuntimeFault("Primitive arity mismatch: $primitive")
         fun scalar(rep: CoreRepresentation, expected: String): Boolean = !rep.isAggregate && rep.kind == CoreKind.LONG && rep.primReps == listOf(expected)
         if (lifted != listOf(false, false) || arguments.any { !scalar(it, scalarRep) })
             throw RuntimeFault("Tuple primitive argument representation mismatch: $primitive")
-        if (!result.isTuple || result.components!!.size != 2 || !scalar(result.components[0], scalarRep) || !scalar(result.components[1], secondRep) ||
-            result.primReps != listOf(scalarRep, secondRep))
+        if (!result.isTuple || result.components!!.size != resultArity ||
+            result.components.indices.any { !scalar(result.components[it], resultReps[it]) } || result.primReps != resultReps)
             throw RuntimeFault("Tuple primitive result representation mismatch: $primitive")
     }
     companion object {
@@ -96,8 +106,10 @@ internal class TupleArithmeticExpression(private val operation: TupleArithmeticO
         val y = right.executeRequiredLong(frame)
         val first = operation.first(x, y)
         val second = operation.second(x, y)
+        val third = if (operation.resultArity == 3) operation.third(x, y) else 0L
         FrameAccess.writeLong(frame, slots[offset], first)
         FrameAccess.writeLong(frame, slots[offset + 1], second)
+        if (operation.resultArity == 3) FrameAccess.writeLong(frame, slots[offset + 2], third)
         return null
     }
 }
