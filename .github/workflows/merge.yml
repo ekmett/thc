@@ -5,7 +5,7 @@ on:
     branches: [main]
     types: [labeled, unlabeled, ready_for_review, reopened, closed]
   workflow_run:
-    workflows: [Build]
+    workflows: [Build, Fast checks]
     types: [requested, in_progress, completed]
   push:
     branches: [main]
@@ -35,7 +35,7 @@ jobs:
           ref: main
           persist-credentials: false
           sparse-checkout: .github/scripts
-      - name: Publish verified Build result
+      - name: Publish verified PR-gate result
         if: github.event_name == 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}

@@ -2,7 +2,14 @@ import copy
 import unittest
 from urllib.error import HTTPError
 
-from merge_bot import ACTIONS_APP, CHECKS, REQUIRED_STATUS, build_result, owner_authorized, publish_run, reconcile
+from merge_bot import (ACTIONS_APP, CHECKS, REQUIRED_STATUS, BUILD_GATE, FAST_GATE, PR_GATE,
+                       build_result, main_build_health, owner_authorized,
+                       publish_run as publish_selected_run, reconcile, workflow_result)
+
+
+def publish_run(api, run_id):
+    # Existing regressions explicitly retain the transition's Build/11 policy.
+    return publish_selected_run(api, run_id, BUILD_GATE)
 
 
 def pull(number=1):
@@ -103,7 +110,7 @@ class FakeAPI:
 class MergeBotTest(unittest.TestCase):
     def run_bot(self, api):
         messages = []
-        reconcile(api, messages.append, lambda _: None)
+        reconcile(api, messages.append, lambda _: None, BUILD_GATE)
         return messages
 
     def test_green_exact_head_merges(self):
@@ -562,6 +569,277 @@ class MergeBotTest(unittest.TestCase):
         self.assertEqual(len(messages), 2)
         self.assertTrue(messages[1].startswith("#2:"))
         self.assertEqual(api.actions, [])
+
+def main_build(run_id=100, sha="base", conclusion="success", event="push", minute=1):
+    return {**build(run_id), "head_sha": sha, "head_branch": "main",
+            "head_repository": {"full_name": "ekmett/thc"}, "event": event,
+            "conclusion": conclusion, "updated_at": f"2026-09-23T00:{minute:02}:00Z"}
+
+
+class FastAPI(FakeAPI):
+    def __init__(self):
+        super().__init__()
+        self.runs[0]["workflow_id"] = 18
+        self.jobs = [{"name": n, "status": "completed", "conclusion": "success"}
+                     for n in sorted(FAST_GATE.checks)]
+        self.full_runs = [main_build()]
+        self.full_jobs = jobs()
+        self.prior_attempts = {}
+        self.comparisons = {}
+        self.after_merge = lambda: None
+        self.on_full_jobs = lambda: None
+        self.on_main_runs = lambda: None
+        self.dispatch_error = None
+        self.reads = []
+
+    def call(self, method, path, body=None):
+        if method == "GET":
+            self.reads.append(path)
+            if path == "actions/workflows/fast.yml":
+                return {"id": 18}
+            if path in self.comparisons:
+                return self.comparisons[path]
+            if path.startswith("actions/runs/"):
+                parts = path.split("/")
+                run_id = int(parts[2])
+                if len(parts) == 5 and parts[3] == "attempts":
+                    return copy.deepcopy(self.prior_attempts[(run_id, int(parts[4]))])
+                if any(r["id"] == run_id for r in self.full_runs):
+                    return copy.deepcopy(next(r for r in self.full_runs if r["id"] == run_id))
+        if method == "PUT" and path.endswith("/merge"):
+            result = super().call(method, path, body)
+            result["sha"] = "merged"
+            self.after_merge()
+            return result
+        if method == "POST" and path == "actions/workflows/build.yml/dispatches" and self.dispatch_error:
+            self.mutations.append((method, path, body))
+            raise self.dispatch_error
+        return super().call(method, path, body)
+
+    def pages(self, path, key=None):
+        if path == "actions/workflows/build.yml/runs?branch=main":
+            self.on_main_runs()
+            return copy.deepcopy(self.full_runs)
+        if path.startswith("actions/workflows/fast.yml/runs?"):
+            return copy.deepcopy(self.runs)
+        if path.endswith("/jobs") and int(path.split("/")[2]) >= 100:
+            self.on_full_jobs()
+            return copy.deepcopy(self.full_jobs)
+        return super().pages(path, key)
+
+
+class FastGateTest(unittest.TestCase):
+    def run_bot(self, api):
+        messages = []
+        reconcile(api, messages.append, lambda _: None)
+        return messages
+
+    def assert_no_merge(self, api):
+        self.assertFalse(any(path.endswith("/merge") for _, path, _ in api.actions))
+
+    def test_trusted_policy_changes_only_pr_gate(self):
+        self.assertEqual(PR_GATE, FAST_GATE)
+        self.assertEqual(FAST_GATE.workflow, "fast.yml")
+        self.assertEqual(FAST_GATE.checks, {"automation", "fast-check"})
+        self.assertEqual(len(BUILD_GATE.checks), 11)
+        api = FastAPI()
+        self.run_bot(api)
+        self.assertEqual(api.actions, [
+            ("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"}),
+            ("POST", "actions/workflows/build.yml/dispatches", {"ref": "main", "inputs": {"expected_sha": "merged"}})])
+        self.assertIn("Fast checks", api.statuses[0]["description"])
+        self.assertNotIn("head", api.actions[-1][2]["inputs"]["expected_sha"])
+
+    def test_fast_names_attempt_and_source_are_exact(self):
+        mutations = [lambda a: a.jobs.pop(), lambda a: a.jobs.append(copy.deepcopy(a.jobs[0])),
+                     lambda a: a.jobs[0].update(conclusion="skipped"),
+                     lambda a: a.jobs[0].update(conclusion="failure"),
+                     lambda a: a.jobs[0].update(status="in_progress"),
+                     lambda a: a.runs[0].update(conclusion="cancelled"),
+                     lambda a: a.runs[0].update(workflow_id=17),
+                     lambda a: a.runs[0].update(head_sha="wrong"),
+                     lambda a: a.runs[0].update(event="workflow_run")]
+        for mutation in mutations:
+            api = FastAPI(); mutation(api); self.run_bot(api); self.assert_no_merge(api)
+        api = FastAPI()
+        api.before_jobs_read = lambda: api.runs[0].update(run_attempt=2, status="in_progress")
+        self.run_bot(api); self.assert_no_merge(api)
+        self.assertEqual(api.statuses[0]["state"], "pending")
+
+    def test_old_build_green_is_retired_on_unlabelled_fork_without_fast(self):
+        api = FastAPI(); api.runs = []; api.pr["labels"] = []
+        api.pr["head"]["repo"]["full_name"] = "outsider/thc"
+        api.statuses = [{"context": REQUIRED_STATUS, "state": "success", "target_url": "old-build",
+                         "creator": {"login": "github-actions[bot]"}}]
+        self.run_bot(api)
+        self.assertEqual(api.statuses[0]["state"], "pending")
+        self.assertTrue(api.statuses[0]["target_url"].endswith("fast.yml"))
+        self.assertEqual(api.actions, [])
+
+    def test_build_event_cannot_publish_a_fast_green(self):
+        api = FastAPI(); publish_selected_run(api, 100)
+        self.assertEqual(api.mutations, [])
+        publish_selected_run(api, 1)
+        self.assertEqual(api.statuses[0]["state"], "success")
+
+    def test_bot_authored_branch_update_dispatches_fast_exact_new_head(self):
+        api = FastAPI(); api.behind = 1; self.run_bot(api)
+        self.assertEqual(api.actions, [("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"}),
+            ("POST", "actions/workflows/fast.yml/dispatches", {"ref": "codex/change", "inputs": {"expected_sha": "updated"}})])
+        self.assertEqual(api.statuses[0]["state"], "pending")
+
+    def test_fast_preserves_owner_head_base_and_final_attempt_checks(self):
+        mutations = [lambda a: a.events[0]["actor"].update(login="collaborator"),
+                     lambda a: a.pr.update(labels=[]), lambda a: a.pr["head"].update(sha="new"),
+                     lambda a: setattr(a, "base", "new"),
+                     lambda a: a.runs[0].update(run_attempt=2, status="in_progress")]
+        for mutation in mutations:
+            api = FastAPI(); api.before_pr_read = lambda n: mutation(api) if n == 2 else None
+            self.run_bot(api); self.assert_no_merge(api)
+
+    def test_pending_new_full_build_does_not_reintroduce_serial_gate(self):
+        api = FastAPI()
+        pending = main_build(101, "new-main", minute=2)
+        pending.update(status="in_progress", conclusion=None)
+        api.full_runs.append(pending)
+        self.run_bot(api)
+        self.assertTrue(any(path.endswith("/merge") for _, path, _ in api.actions))
+        self.assertNotIn("actions/runs/101/attempts/1/jobs", api.reads)
+
+    def test_failed_cancelled_or_incomplete_full_build_blocks_automatic_merge(self):
+        for conclusion in ("failure", "cancelled", "timed_out", "skipped", "neutral", "action_required"):
+            api = FastAPI(); api.full_runs.append(main_build(101, conclusion=conclusion, minute=2))
+            messages = self.run_bot(api); self.assert_no_merge(api)
+            self.assertIn("automatic merges paused", messages[-1])
+            # PR Fast status remains truthful; this is an auto-merge veto.
+            self.assertEqual(api.statuses[0]["state"], "success")
+        for change in (lambda a: a.full_jobs.pop(),
+                       lambda a: a.full_jobs.append(copy.deepcopy(a.full_jobs[0])),
+                       lambda a: a.full_jobs[0].update(conclusion="skipped")):
+            api = FastAPI(); change(api); self.run_bot(api); self.assert_no_merge(api)
+
+    def test_pending_rerun_cannot_hide_previous_main_failure(self):
+        api = FastAPI(); prior = main_build(101, conclusion="failure", minute=2)
+        api.prior_attempts[(101, 1)] = prior
+        api.full_runs.append({**prior, "run_attempt": 2, "status": "in_progress", "conclusion": None})
+        self.run_bot(api); self.assert_no_merge(api)
+
+    def test_pending_rerun_of_success_does_not_hold_green_fast(self):
+        api = FastAPI(); prior = copy.deepcopy(api.full_runs[0])
+        api.prior_attempts[(100, 1)] = prior
+        api.full_runs[0].update(run_attempt=2, status="in_progress", conclusion=None)
+        self.run_bot(api)
+        self.assertTrue(any(path.endswith("/merge") for _, path, _ in api.actions))
+
+    def test_rerun_history_wrong_source_or_attempt_fails_closed(self):
+        for mutation in (lambda p: p.update(head_sha="other"), lambda p: p.update(run_attempt=2),
+                         lambda p: p.update(workflow_id=18), lambda p: p.update(status="in_progress")):
+            api = FastAPI(); prior = copy.deepcopy(api.full_runs[0]); mutation(prior)
+            api.prior_attempts[(100, 1)] = prior
+            api.full_runs[0].update(run_attempt=2, status="in_progress", conclusion=None)
+            with self.assertRaisesRegex(RuntimeError, "previous full Build"):
+                self.run_bot(api)
+            self.assert_no_merge(api)
+
+    def test_later_verified_descendant_main_success_clears_failure(self):
+        api = FastAPI(); api.full_runs[0]["conclusion"] = "failure"
+        api.full_runs.append(main_build(101, "fixed", event="workflow_dispatch", minute=2))
+        api.comparisons["compare/base...fixed"] = {"status": "ahead"}
+        self.assertEqual(main_build_health(api)[0], "success")
+        api.comparisons["compare/base...fixed"] = {"status": "behind"}
+        self.assertEqual(main_build_health(api)[0], "failure")
+
+    def test_old_commit_rerun_success_cannot_clear_newer_main_failure(self):
+        api = FastAPI(); api.full_runs[0].update(run_attempt=2, updated_at="2026-09-23T00:03:00Z")
+        api.full_runs.append(main_build(101, "broken", conclusion="failure", minute=2))
+        api.comparisons["compare/broken...base"] = {"status": "behind"}
+        self.assertEqual(main_build_health(api)[0], "failure")
+
+    def test_pr_fork_wrong_workflow_and_nonmain_full_results_do_not_clear_failure(self):
+        for mutation in (lambda r: r.update(event="pull_request"), lambda r: r.update(workflow_id=18),
+                         lambda r: r.update(head_branch="feature"),
+                         lambda r: r.update(head_repository={"full_name": "fork/thc"})):
+            api = FastAPI(); api.full_runs[0]["conclusion"] = "failure"
+            unrelated = main_build(101, minute=2); mutation(unrelated); api.full_runs.append(unrelated)
+            self.assertEqual(main_build_health(api)[0], "failure")
+
+    def test_full_failure_completed_during_health_check_prevents_merge(self):
+        api = FastAPI()
+        def fail():
+            if len(api.full_runs) == 1:
+                api.full_runs.append(main_build(101, conclusion="failure", minute=2))
+        api.on_full_jobs = fail
+        messages = self.run_bot(api); self.assert_no_merge(api)
+        self.assertIn("health is changed", messages[-1])
+
+    def test_full_failure_during_final_pr_or_fast_reads_prevents_merge(self):
+        for phase in ("pr", "fast"):
+            with self.subTest(phase=phase):
+                api = FastAPI()
+                def fail():
+                    if len(api.full_runs) == 1:
+                        api.full_runs.append(main_build(101, conclusion="failure", minute=2))
+                if phase == "pr":
+                    api.before_pr_read = lambda n: fail() if n == 2 else None
+                else:
+                    api.on_full_jobs = lambda: setattr(api, "before_jobs_read", fail)
+                messages = self.run_bot(api); self.assert_no_merge(api)
+                self.assertIn("full main Build changed before merging", messages[-1])
+
+    def test_pending_full_start_during_final_reads_does_not_block_merge(self):
+        api = FastAPI()
+        pending = main_build(101, "new-main", minute=2)
+        pending.update(status="in_progress", conclusion=None)
+        api.before_pr_read = lambda n: api.full_runs.append(pending) if n == 2 else None
+        self.run_bot(api)
+        self.assertTrue(any(path.endswith("/merge") for _, path, _ in api.actions))
+
+    def test_consent_revoked_during_full_health_read_is_rechecked_before_merge(self):
+        api = FastAPI(); api.on_full_jobs = lambda: api.pr.update(labels=[])
+        self.run_bot(api); self.assert_no_merge(api)
+
+    def test_fast_attempt_changed_after_full_health_pass_prevents_merge(self):
+        api = FastAPI()
+        api.on_full_jobs = lambda: api.runs[0].update(run_attempt=2, status="in_progress", conclusion=None)
+        messages = self.run_bot(api); self.assert_no_merge(api)
+        self.assertEqual(api.statuses[0]["state"], "pending")
+        self.assertIn("Fast checks changed before merging", messages[-1])
+
+    def test_main_advanced_during_health_check_prevents_merge(self):
+        api = FastAPI(); api.on_full_jobs = lambda: setattr(api, "base", "new")
+        messages = self.run_bot(api); self.assert_no_merge(api)
+        self.assertIn("main advanced", messages[-1])
+
+    def test_main_advanced_after_merge_does_not_dispatch_wrong_merge_sha(self):
+        api = FastAPI(); api.after_merge = lambda: setattr(api, "base", "maintainer-push")
+        messages = self.run_bot(api)
+        self.assertEqual(api.actions, [("PUT", "pulls/1/merge", {"sha": "head", "merge_method": "squash"})])
+        self.assertIn("newer push owns full Build", messages[-1])
+
+    def test_missing_main_baseline_starts_full_work_without_pretending_success(self):
+        api = FastAPI(); api.full_runs = []
+        messages = self.run_bot(api); self.assert_no_merge(api)
+        self.assertEqual(api.actions, [("POST", "actions/workflows/build.yml/dispatches",
+                                      {"ref": "main", "inputs": {"expected_sha": "base"}})])
+        self.assertIn("health is missing", messages[-1])
+
+    def test_lost_postmerge_dispatch_is_recovered_without_rerunning_existing_failures(self):
+        api = FastAPI(); api.dispatch_error = HTTPError("", 503, "unavailable", {}, None)
+        self.addCleanup(api.dispatch_error.close)
+        with self.assertRaises(HTTPError): self.run_bot(api)
+        self.assertEqual(api.base, "merged")
+        api.prs = []; api.dispatch_error = None
+        self.run_bot(api)
+        self.assertEqual(api.actions[-1], ("POST", "actions/workflows/build.yml/dispatches",
+                                          {"ref": "main", "inputs": {"expected_sha": "merged"}}))
+        count = len(api.actions)
+        api.full_runs.append(main_build(101, "merged", conclusion="failure", minute=2))
+        self.run_bot(api); self.assertEqual(len(api.actions), count)
+
+    def test_active_full_run_prevents_duplicate_dispatch_even_without_a_baseline(self):
+        api = FastAPI(); api.prs = []
+        api.full_runs[0].update(status="queued", conclusion=None)
+        self.run_bot(api); self.assertEqual(api.actions, [])
 
 
 if __name__ == "__main__":
