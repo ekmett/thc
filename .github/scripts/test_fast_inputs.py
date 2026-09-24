@@ -17,6 +17,7 @@ from unittest.mock import patch
 SPEC = importlib.util.spec_from_file_location("fast_inputs", Path(__file__).with_name("fast_inputs.py"))
 cache = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cache)
+DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
@@ -326,6 +327,55 @@ class FastInputTests(unittest.TestCase):
         for name in ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"):
             self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}", pins))
         self.assertIn("build/map/boot-core", cache.CORE_DIRS)
+
+    def test_original_stdio_inventory_is_exact_and_manifest_is_required(self):
+        # setUp replaces REQUIRED for the small archive tests.
+        self.assertIn("build/original-stdio/manifest.json", DECLARED_REQUIRED)
+        self.assertIn("original-stdio", cache.MANIFEST_DIRS)
+        self.assertIn("original-stdio", cache.BUILD_DIRS)
+        self.assertEqual(609, len(cache.ORIGINAL_STDIO_OUTPUTS))
+        for name in cache.ORIGINAL_STDIO_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(name, {}), name)
+        self.assertIn("build/original-stdio/native/original-stdio-oracle", cache.NATIVE_EXECUTABLES)
+        for name in ("other.json", "unknown.stdout", "logs/extra.stdout", "logs/native-144.stdout",
+                     "logs/native-000.sh", "logs/pre-export.stdout.extra", "results/144.txt", "results/00.txt",
+                     "native/other-oracle", "pre/ghc/OriginalStdioAudit.o", "post/core/Unreviewed.json",
+                     "test-results/pass.json", "reports/pass.json", "previous-manifests/stale.json"):
+            self.assertFalse(cache.allowed_payload("build/original-stdio/" + name, {}), name)
+        self.assertFalse(cache.allowed_payload("build/bytearray/logs/pre-export.stdout", {}))
+
+    def test_original_stdio_archive_round_trip_preserves_complete_artifact_inventory(self):
+        manifest_path = "build/original-stdio/manifest.json"
+        binary = "build/original-stdio/native/original-stdio-oracle"
+        artifacts = cache.ORIGINAL_STDIO_OUTPUTS - {manifest_path}
+        for name in artifacts:
+            self.put(name, b"{}\n" if name.endswith(".json") else b"\x00\x80\xff\n")
+        (self.root / binary).chmod(0o755)
+        original = json.dumps({"schema": 1, "installedArtifactsHashed": False,
+            "inputHashes": self.manifest["inputHashes"],
+            "artifactHashes": {name: cache.digest(self.root / name) for name in sorted(artifacts)}})
+        self.put(manifest_path, original)
+        with patch.object(cache, "REQUIRED", (*cache.REQUIRED, manifest_path)):
+            manifest = self.pack()
+            self.assertTrue(cache.ORIGINAL_STDIO_OUTPUTS <= manifest["payload"].keys())
+            self.remove_payload(manifest)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / manifest_path).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            for name in cache.ORIGINAL_STDIO_OUTPUTS:
+                self.assertEqual(manifest["payload"][name], cache.digest(self.root / name), name)
+            self.remove_payload(manifest)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                                                    if member.name != "files/build/original-stdio/logs/native-000.stdout"])
+            self.rejected_without_writes(changed)
+
+    def test_original_stdio_forged_unreviewed_artifact_is_rejected(self):
+        unknown = "build/original-stdio/logs/unreviewed.stdout"
+        self.put(unknown, "not part of the reviewed preparation plan")
+        self.manifest["artifactHashes"][unknown] = cache.digest(self.root / unknown)
+        self.write_manifest()
+        with self.assertRaisesRegex(cache.CacheMiss, "Unknown/tracked payload"):
+            self.pack()
 
     def test_legacy_launcher_digest_and_explicit_binary_digest_are_distinct(self):
         launcher = self.temp_root/"launcher"; launcher.write_bytes(b"launcher script")

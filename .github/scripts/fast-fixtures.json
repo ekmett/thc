@@ -11,6 +11,18 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-stdio": {
+      "junit": ["thc.runtime.OriginalStdioNativeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-original-stdio.py", "--require-supported"]}],
+      "outputs": ["build/original-stdio"],
+      "sources": [
+        "compiler/test-fixtures/OriginalStdioAudit.hs",
+        "compiler/test-fixtures/OriginalStdioAuditNative.hs",
+        "scripts/prepare-original-stdio.py",
+        "scripts/original_stdio_model.py",
+        "scripts/test-original-stdio-fixtures.py"
+      ]
+    },
     "address-identity": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "commands": [{"argv": ["scripts/prepare-address-identity.sh"]}],

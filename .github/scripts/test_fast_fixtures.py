@@ -165,6 +165,57 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
 
+    def test_original_stdio_has_strict_focused_and_full_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["original-stdio"]
+        command = ["python3", "scripts/prepare-original-stdio.py", "--require-supported"]
+        self.assertEqual("original-stdio", owners["thc.runtime.OriginalStdioNativeTest"])
+        self.assertEqual([{"argv": command}], group["commands"])
+        self.assertEqual(["build/original-stdio"], group["outputs"])
+        self.assertEqual({"compiler/test-fixtures/OriginalStdioAudit.hs",
+                          "compiler/test-fixtures/OriginalStdioAuditNative.hs",
+                          "scripts/prepare-original-stdio.py", "scripts/original_stdio_model.py",
+                          "scripts/test-original-stdio-fixtures.py"}, set(group["sources"]))
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn(" ".join(command), (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn("build/original-stdio", fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn("build/original-stdio/manifest.json", fast_fixtures.FULL_REQUIRED)
+
+    def test_original_stdio_selected_receipt_covers_model_checker_and_all_outputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, _ = fast_fixtures._manifest(project)
+        group = manifest["groups"]["original-stdio"]
+        self.manifest["groups"]["original-stdio"] = group
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        for name in group["sources"]:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("original fixture source\n")
+        prepared = []
+        def run(name, argv, stdout=None):
+            self.fake_run(name, argv, stdout)
+            if argv == group["commands"][0]["argv"]:
+                prepared.append(name)
+                directory = self.root / "build/original-stdio"
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / "manifest.json").write_text("{}\n")
+                (directory / "oracle.json").write_text("[]\n")
+        def prepare():
+            return fast_fixtures.prepare(self.root, self.selection("thc.runtime.OriginalStdioNativeTest"), run, self.toolchain)
+        self.assertEqual(["original-stdio"], prepare()["rebuilt"])
+        self.assertEqual(["original-stdio"], prepare()["reused"])
+        for name in group["sources"]:
+            (self.root / name).write_text("changed fixture source\n")
+            self.assertEqual(["original-stdio"], prepare()["rebuilt"], name)
+        (self.root / "build/original-stdio/oracle.json").write_text("tampered output\n")
+        self.assertEqual(["original-stdio"], prepare()["rebuilt"])
+        (self.root / "build/original-stdio/manifest.json").unlink()
+        self.assertEqual(["original-stdio"], prepare()["rebuilt"])
+        self.assertEqual(8, len(prepared))
+        self.assertNotIn("fixtures-full", [name for name, _, _ in self.calls])
+
     def test_pr80_affected_classes_have_focused_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -248,6 +299,26 @@ class FullFixtureReceiptTest(unittest.TestCase):
         self.assertEqual(self.prepare("thc.UnknownTest"),
                          {"mode": "full", "rebuilt": [], "reused": ["full"]})
         self.assertEqual(self.prepared, 1)
+
+    def test_full_original_stdio_receipt_requires_manifest_and_all_output_bytes(self):
+        def run(name, argv, stdout=None):
+            self.fake_run(name, argv, stdout)
+            directory = self.root / "build/original-stdio"
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "manifest.json").write_text("{}\n")
+            (directory / "oracle.json").write_text("[]\n")
+        def prepare():
+            return fast_fixtures.prepare(self.root, self.selection("thc.UnknownTest"), run, self.toolchain)
+        with mock.patch.object(fast_fixtures, "FULL_OUTPUT_ROOTS", fast_fixtures.FULL_OUTPUT_ROOTS | {"build/original-stdio"}), \
+             mock.patch.object(fast_fixtures, "FULL_REQUIRED", fast_fixtures.FULL_REQUIRED | {"build/original-stdio/manifest.json"}):
+            self.assertEqual(["full"], prepare()["rebuilt"])
+            self.assertEqual(["full"], prepare()["reused"])
+            (self.root / "build/original-stdio/manifest.json").unlink()
+            self.assertEqual(["full"], prepare()["rebuilt"])
+            (self.root / "build/original-stdio/oracle.json").write_text("tampered output\n")
+            self.assertEqual(["full"], prepare()["rebuilt"])
+            self.assertEqual(["full"], prepare()["reused"])
+        self.assertEqual(3, self.prepared)
 
     def test_jvm_generated_sources_do_not_invalidate_full_fixture_receipt(self):
         self.prepare("thc.UnknownTest")

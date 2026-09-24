@@ -37,7 +37,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
-narrow-literal-proofs resize-bytearrays scalar-bitcasts short-bytes-slices
+narrow-literal-proofs original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input
@@ -78,8 +78,24 @@ MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
 NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
+    "build/original-stdio/native/original-stdio-oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
+# The original stdio manifest fingerprints its commands, raw streams and numeric
+# results as well as the semantic Core/oracle data. Admit only the reviewed 144
+# cases and two export stages, not a general log/text/executable suffix rule.
+ORIGINAL_STDIO_OUTPUTS = frozenset("build/original-stdio/" + name for name in (
+    "manifest.json", "expected.json", "oracle.json", "native/original-stdio-oracle",
+    *(f"results/{index}.txt" for index in range(144)),
+    *(f"logs/{label}.{suffix}"
+      for label in ("ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
+                    *(f"native-{index:03}" for index in range(144)))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post")
+      for name in ("core/OriginalStdioAudit.json", "core/THC.InterfaceClosure.json", "proofs.json",
+                   "originalWrite.audit.json", "originalSafeWrite.audit.json",
+                   "originalWriteErrno.audit.json", "originalSafeWriteErrno.audit.json")),
+))
 
 
 class CacheMiss(RuntimeError):
@@ -235,6 +251,8 @@ def allowed_payload(name, pins):
     if parts[1] == "compiler":
         return len(parts) == 3 and (parts[2] == "plugin.json" or
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
+    if parts[1] == "original-stdio":
+        return name in ORIGINAL_STDIO_OUTPUTS
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
         return False
     # Fixture inputs and recorded native objects only, not arbitrary executable
