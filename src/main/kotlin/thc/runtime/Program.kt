@@ -1686,7 +1686,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
+                if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
+                    PinnedPointerIndexExpression(operation, tupleProof,
+                        compile(args[0], scope, false), compile(args[1], scope, false))
+                else if (operation == PinnedMemoryOp.WRITE_ADDR_ARRAY)
+                    PinnedPointerArrayWrite(tupleProof, compile(args[0], scope, false),
+                        compile(args[1], scope, false), compile(args[2], scope, false),
+                        compile(args[3], scope, false))
+                else if (operation == PinnedMemoryOp.READ_ADDR_ARRAY)
+                    PinnedPointerArrayRead(tupleProof, compile(args[0], scope, false),
+                        compile(args[1], scope, false), compile(args[2], scope, false))
+                else PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

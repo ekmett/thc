@@ -1172,6 +1172,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
                         PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(destination[0])
+                        PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(destination[0])
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT ->
                             e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
@@ -1183,6 +1184,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
                         PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
                         PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
+                        PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.endReadAddrArray()
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
@@ -1191,12 +1193,18 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         PinnedMemoryOp.CONTENTS -> e.builder.beginByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
+                        PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray()
+                        PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.beginIndexAddrOffAddr()
+                        PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.beginIndexAddrArray()
                         else -> e.builder.beginWriteWord8OffAddr()
                     }
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         PinnedMemoryOp.CONTENTS -> e.builder.endByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
+                        PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
+                        PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.endIndexAddrOffAddr()
+                        PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.endIndexAddrArray()
                         else -> e.builder.endWriteWord8OffAddr()
                     }
                 }, tupleProof.copy(evaluated = true))

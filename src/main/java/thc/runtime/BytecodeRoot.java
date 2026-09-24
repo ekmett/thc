@@ -398,6 +398,31 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class IndexAddrOffAddr {
+        @Specialization public static ManagedAddress read(ManagedAddress address, long index) {
+            return address.readAddressElementIndex(index);
+        }
+    }
+
+    @Operation
+    public static final class IndexAddrArray {
+        @Specialization public static ManagedAddress read(Object array, long index) {
+            return PinnedMemory.readAddressArray(array, index);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadAddrArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object array, long index, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                PinnedMemory.readAddressArray(array, index));
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadManagedAddress {
@@ -425,6 +450,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeAddressElementIndex(offset, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
+    public static final class WriteAddrArray {
+        @Specialization public static Object write(Object array, long index,
+                ManagedAddress value, Object state) {
+            ManagedByteArray.requireState(state);
+            PinnedMemory.writeAddressArray(array, index, value);
             return kotlin.Unit.INSTANCE;
         }
     }

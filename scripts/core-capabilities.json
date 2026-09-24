@@ -469,8 +469,12 @@
     "readInt32OffAddr#": 3,
     "readIntOffAddr#": 3,
     "readAddrOffAddr#": 3,
+    "indexAddrOffAddr#": 2,
+    "indexAddrArray#": 2,
+    "readAddrArray#": 3,
     "writeWord8OffAddr#": 4,
     "writeAddrOffAddr#": 4,
+    "writeAddrArray#": 4,
     "keepAlive#": 3,
     "newByteArray#": 2,
     "resizeMutableByteArray#": 3,
@@ -982,9 +986,46 @@
         ]
       }
     },
+    "indexAddrOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "address", "primReps": ["AddrRep"]}
+    },
+    "indexAddrArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "address", "primReps": ["AddrRep"]}
+    },
+    "readAddrArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["AddrRep"],
+        "components": [
+          {"kind": "void", "primReps": []},
+          {"kind": "address", "primReps": ["AddrRep"]}
+        ]
+      }
+    },
     "writeAddrOffAddr#": {
       "arguments": [
         {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeAddrArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
         {"kind": "long", "primReps": ["IntRep"]},
         {"kind": "address", "primReps": ["AddrRep"]},
         {"kind": "void", "primReps": []}
