@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""Validated native/Core fixture cache, never a cache of JVM test outcomes.
+
+Only trusted-main workflows may publish these bundles. Hashes establish integrity
+and freshness, not producer authenticity. Original preparation provenance is
+copied verbatim. Workspace paths intentionally participate in the key.
+"""
+import argparse
+import ast
+import hashlib
+import io
+import json
+import os
+from pathlib import Path, PurePosixPath
+import platform
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tarfile
+
+SCHEMA = 1
+HEX = re.compile(r"[0-9a-f]{64}\Z")
+SELF = ".github/scripts/fast_inputs.py"
+# These are the runtime files actually fingerprinted by prepare-tests.sh's
+# preparers. An additional recorded runtime source fails closed until reviewed.
+RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/CoreVectorMemory.kt",
+                  "src/main/java/thc/runtime/DoubleX2.java")
+MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
+boxed-arrays bytearray compare-byte-arrays data-to-tag double-arrays
+explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
+int8-arrays integer-primops mutable-bytearray-size mutable-bytearrays mutvar
+narrow-literal-proofs resize-bytearrays scalar-bitcasts short-bytes-slices
+show-int show-word-list signed-narrow-primops tuple-arithmetic""".split()
+PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
+floating-tuple sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input
+tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
+simd-doublex2 simd-int16x8 simd-int8x16 simd-word8x16 simd-word16x8 simd-word32x4
+simd-int32x4-multiply simd-int32x4-bytearray simd-word32x4-bytearray
+simd-floatx4-bytearray simd-doublex2-bytearray""".split()
+CHECK_DIRS = """aggregate-layout empty-join-input empty-tuple-input floating-tuple
+sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input tuple-join
+tuple-return unsafe-equality""".split()
+CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
+             "build/cbv-post-core", "build/source-core", "build/map/core")
+REQUIRED = tuple(sorted({
+    *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
+    *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
+    *(f"build/{d}/checks.json" for d in CHECK_DIRS),
+    "build/floating/checks.json", "build/primop-coverage.json",
+    "build/scalar-signatures/provenance.json", "build/aggregate-frontier.json",
+    "build/aggregate-native/oracle.tsv", "build/native/oracle.tsv",
+    "build/map/boot-provenance.json", "build/corpus/corpus.json",
+    "build/core/THC.Prim.json", "build/core/THC.Fixtures.json",
+    "build/aggregate-core/AggregateFrontier.json",
+    "build/aggregate-post-core/AggregateFrontier.json",
+    "build/map/core/GHC.InterfaceClosure.json",
+    *(f"build/core/{n}.json" for n in ("StrictFields", "SpeculationAudit",
+      "RepresentationAudit", "SourceNotes", "CbvAudit", "CbvJoinAudit",
+      "CbvCoercionAudit", "ConstructorFieldAudit", "DemandAudit")),
+    *(f"build/cbv-post-core/{n}.json" for n in ("CbvAudit", "CbvJoinAudit", "CbvCoercionAudit")),
+    "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
+}))
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["floating", "corpus",
+    "scalar-signatures", "aggregate-native", "native", "map"] +
+    [PurePosixPath(p).name for p in CORE_DIRS])
+MAX_FILES = 30000
+MAX_FILE_BYTES = 256 * 1024 * 1024
+MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
+MAX_MANIFEST_BYTES = 16 * 1024 * 1024
+
+
+class CacheMiss(RuntimeError):
+    """Unavailable, stale or invalid cache; fresh preparation is required."""
+
+
+def require(condition, message):
+    if not condition:
+        raise CacheMiss(message)
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def digest_stream(stream):
+    h = hashlib.sha256()
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        h.update(block)
+    return h.hexdigest()
+
+
+def digest(path):
+    require(path.is_file(), "Missing regular input: " + str(path))
+    with path.open("rb") as stream:
+        return digest_stream(stream)
+
+
+def relative(name):
+    require(isinstance(name, str) and bool(name), "Invalid path type")
+    require(not name.startswith("/") and "\\" not in name and "\0" not in name
+            and all(p not in ("", ".", "..") for p in name.split("/")), "Unsafe path: " + name)
+    require(not re.match(r"^[A-Za-z]:", name), "Drive-qualified path: " + name)
+    return name
+
+
+def file_path(root, name):
+    path = root / relative(name)
+    require(path.resolve() == path, "Symlink/noncanonical destination: " + name)
+    # resolve() does not reveal a dangling leaf symlink whose target is itself.
+    require(not path.is_symlink(), "Symlink file: " + name)
+    return path
+
+
+def command(argv, root):
+    return subprocess.check_output(list(map(str, argv)), cwd=root, text=True).strip()
+
+
+def tracked_files(root):
+    return set(command(["git", "ls-files", "-z"], root).split("\0")) - {""}
+
+
+def tool(name, root):
+    path = Path(shutil.which(name) or name).resolve()
+    require(path.is_file(), "Missing tool: " + name)
+    return {"path": str(path), "sha256": digest(path)}
+
+
+def toolchain(root):
+    ghc = tool(os.environ.get("GHC", "ghc"), root)
+    pkg = tool(os.environ.get("GHC_PKG", "ghc-pkg"), root)
+    require(command([ghc["path"], "--numeric-version"], root) == "9.14.1", "Requires GHC9.14.1")
+    require(command([pkg["path"], "--version"], root) == "GHC package manager version 9.14.1",
+            "Requires ghc-pkg9.14.1")
+    info = command([ghc["path"], "--info"], root)
+    settings = dict(ast.literal_eval(info))
+    libdir = Path(command([ghc["path"], "--print-libdir"], root)).resolve()
+    require(libdir.is_dir() and len(libdir.parts) > 3, "Unsafe GHC libdir")
+    actual = libdir.parent / "bin/ghc-9.14.1"
+    cc_command = shlex.split(settings["C compiler command"])
+    require(bool(cc_command), "Missing GHC C compiler")
+    cc = tool(cc_command[0], root)
+    java_home = os.environ.get("JAVA_HOME")
+    require(bool(java_home), "JAVA_HOME must identify pinned Graal/JDK")
+    release = Path(java_home).resolve() / "release"
+    result = {"ghcLauncher": ghc, "ghcBinary": {"path": str(actual), "sha256": digest(actual)},
+        "ghcPkg": pkg, "ghcInfo": info, "ghcLibdir": str(libdir),
+        "packageDumpSha256": sha(command([pkg["path"], "dump", "--global"], root).encode()),
+        "settingsSha256": digest(libdir / "settings"), "cc": cc,
+        "ccVersion": command([cc["path"], *cc_command[1:], "--version"], root),
+        "python": tool(sys.executable, root), "pythonVersion": sys.version,
+        "javaRelease": {"path": str(release), "sha256": digest(release)}}
+    # Same package IDs do not prove identical unfoldings or linked native code.
+    # Bind the installed interfaces, headers and libraries, not just --version.
+    installed = {}
+    memo = {}
+    for path in sorted(libdir.rglob("*")):
+        if path.is_file() and (path.suffix in (".hi", ".dyn_hi", ".h", ".a", ".so", ".dylib")
+                               or ".so." in path.name):
+            resolved = path.resolve()
+            if resolved not in memo:
+                memo[resolved] = digest(resolved)
+            installed[path.relative_to(libdir).as_posix()] = memo[resolved]
+    require(bool(installed), "Installed GHC ABI files missing")
+    result["installedAbiSha256"] = sha(canonical(installed))
+    # Explicit preparation-affecting overrides cannot silently share a key.
+    result["environment"] = {k: v for k, v in sorted(os.environ.items())
+        if k.startswith(("THC_", "GHC_")) or k in
+        ("GHCRTS", "GHC", "CC", "CFLAGS", "CPATH", "LIBRARY_PATH", "LD_LIBRARY_PATH", "LANG", "LC_ALL")}
+    return result
+
+
+def identity(root):
+    tracked = tracked_files(root)
+    sources = {name for name in tracked if name.startswith(("compiler/", "scripts/", "examples/", "src/main/resources/"))}
+    sources.update((SELF, *RUNTIME_INPUTS))
+    require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
+    require("scripts/prepare-tests.sh" in sources and "compiler/export-boot.py" in sources
+            and "examples/coverage.json" in sources, "Incomplete authoritative source set")
+    return {"schema": SCHEMA, "workspace": str(root),
+        "platform": {"system": platform.system(), "machine": platform.machine(),
+                     "byteOrder": sys.byteorder, "libc": list(platform.libc_ver())},
+        "sources": {name: digest(file_path(root, name)) for name in sorted(sources)},
+        "toolchain": toolchain(root)}
+
+
+def cache_key(value):
+    return "thc-fast-inputs-v" + str(SCHEMA) + "-" + sha(canonical(value))
+
+
+def vendor_pins(root):
+    """Read the original exporter's literal pin tables without executing it."""
+    tables, result = {}, {}
+    tree = ast.parse(file_path(root, "compiler/export-boot.py").read_text())
+    for statement in tree.body:
+        if not (isinstance(statement, ast.Assign) and len(statement.targets) == 1
+                and isinstance(statement.targets[0], ast.Name)
+                and statement.targets[0].id.endswith("_sources") and isinstance(statement.value, ast.Dict)):
+            continue
+        table = {}
+        for key, node in zip(statement.value.keys, statement.value.values):
+            name = ast.literal_eval(key)
+            if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+                value = tables[node.value.id][ast.literal_eval(node.slice)]
+            else:
+                value = ast.literal_eval(node)
+            require(isinstance(value, str) and HEX.fullmatch(value), "Invalid authoritative vendor pin")
+            full = "vendor/ghc-9.14.1/" + relative(name)
+            require(full not in result or result[full] == value, "Conflicting authoritative vendor pin")
+            table[name] = value
+            result[full] = value
+        tables[statement.targets[0].id] = table
+    require(bool(result), "No authoritative GHC source pins")
+    return result
+
+
+def allowed_payload(name, pins):
+    parts = PurePosixPath(relative(name)).parts
+    if name in pins:
+        return True
+    if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
+        return True
+    if name == "build/unsafe-equality/api/predicate":
+        return True
+    if len(parts) < 3 or parts[0] != "build":
+        return False
+    if parts[1] == "compiler":
+        return len(parts) == 3 and bool(re.fullmatch(r"libHSthc-core-plugin-[\w.-]+\.(so|dylib)", parts[2]))
+    if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
+        return False
+    # Fixture inputs and recorded native objects only, not arbitrary executable
+    # scripts, JARs, Gradle state or JUnit status. Native executables are data here.
+    suffix = PurePosixPath(name).suffix
+    return suffix in (".json", ".tsv", ".hs", ".hi", ".o", ".dyn_hi", ".dyn_o") or (
+        not suffix and ("oracle" in parts[-1] or parts[-1] == "aggregate-frontier"))
+
+
+def hashes_in(value):
+    """All fingerprint spellings used by current original preparation manifests."""
+    if isinstance(value, dict):
+        if "path" in value and "sha256" in value:
+            yield value["path"], value["sha256"]
+        for stem in ("ghcBinary", "ghcLauncher"):
+            if stem + "Path" in value or stem + "Sha256" in value:
+                yield value.get(stem + "Path"), value.get(stem + "Sha256")
+        for key, child in value.items():
+            if key in ("inputHashes", "artifactHashes") or (key == "inputs" and isinstance(child, dict)
+                    and child and all(isinstance(v, str) and HEX.fullmatch(v) for v in child.values())):
+                require(isinstance(child, dict), "Invalid original hash map")
+                yield from child.items()
+            else:
+                yield from hashes_in(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from hashes_in(child)
+
+
+def original_name(root, value):
+    require(isinstance(value, str), "Original fingerprint path is not a string")
+    path = Path(value)
+    if not path.is_absolute():
+        return relative(value), False
+    require(str(path) == value and ".." not in path.parts, "Noncanonical original path")
+    try:
+        return relative(path.relative_to(root).as_posix()), False
+    except ValueError:
+        return value, True
+
+
+def external_allowed(name, current):
+    path = Path(name)
+    tc = current["toolchain"]
+    explicit = {v["path"] for v in tc.values() if isinstance(v, dict) and "path" in v}
+    return name in explicit or path.is_relative_to(Path(tc["ghcLibdir"]).parent)
+
+
+def inventory(root, current, read, core_files):
+    """Derive inventory independently from preserved original manifests."""
+    tracked, pins = tracked_files(root), vendor_pins(root)
+    for name in core_files:
+        p = PurePosixPath(relative(name))
+        require(str(p.parent) in CORE_DIRS and p.suffix == ".json", "Unknown extra Core file: " + name)
+    pending = list(dict.fromkeys((*REQUIRED, *core_files)))
+    payload, external, expected, visited = {}, {}, {}, set()
+    while pending:
+        name = pending.pop()
+        if name in visited:
+            continue
+        visited.add(name)
+        require(name not in tracked and allowed_payload(name, pins), "Unknown/tracked payload: " + name)
+        data = read(name)
+        require(len(data) <= MAX_FILE_BYTES, "Oversized payload: " + name)
+        actual = sha(data)
+        require(name not in expected or expected[name] == actual, "Stale original artifact: " + name)
+        require(name not in pins or pins[name] == actual, "Vendor source differs from authoritative pin: " + name)
+        payload[name] = actual
+        if not name.endswith(".json"):
+            continue
+        doc = json.loads(data)
+        # Core is data, not a provenance map: representation payloads must not be
+        # interpreted as filesystem paths. All other preparation JSON is scanned.
+        if isinstance(doc, dict) and "bindings" in doc and "module" in doc:
+            continue
+        for raw, recorded in hashes_in(doc):
+            require(isinstance(recorded, str) and HEX.fullmatch(recorded), "Invalid original fingerprint")
+            target, outside = original_name(root, raw)
+            if outside:
+                require(external_allowed(target, current), "Unknown external fingerprint: " + target)
+                require(target not in external or external[target] == recorded, "Conflicting external fingerprint")
+                require(digest(Path(target)) == recorded, "Stale installed/tool fingerprint: " + target)
+                external[target] = recorded
+            elif target in tracked:
+                require(current["sources"].get(target) == recorded,
+                        "Stale or unkeyed tracked source fingerprint: " + target)
+            else:
+                require(target not in expected or expected[target] == recorded, "Conflicting original fingerprint: " + target)
+                expected[target] = recorded
+                if target in payload:
+                    require(payload[target] == recorded, "Conflicting already-read artifact: " + target)
+                else:
+                    pending.append(target)
+    require(len(payload) <= MAX_FILES, "Too many fixture files")
+    return payload, external
+
+
+def pack(root, current, output):
+    require(not output.exists() and not output.is_symlink(), "Bundle already exists; preserve the prior attempt")
+    core = sorted(p.relative_to(root).as_posix() for d in CORE_DIRS
+                  for p in file_path(root, d).glob("*.json"))
+    def read(name):
+        path = file_path(root, name)
+        require(path.is_file(), "Missing prepared input: " + name)
+        return path.read_bytes()
+    payload, external = inventory(root, current, read, core)
+    require(sum(file_path(root, n).stat().st_size for n in payload) <= MAX_TOTAL_BYTES, "Fixture bundle too large")
+    manifest = {"schema": SCHEMA, "identity": current, "key": cache_key(current),
+                "coreFiles": core, "payload": payload, "external": external}
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("xb") as stream, tarfile.open(fileobj=stream, mode="w:gz", compresslevel=3) as archive:
+        raw = canonical(manifest)
+        info = tarfile.TarInfo("bundle.json"); info.size = len(raw)
+        archive.addfile(info, io.BytesIO(raw))
+        for name in sorted(payload):
+            path = file_path(root, name)
+            require(digest(path) == payload[name], "Input changed during pack: " + name)
+            archive.add(path, arcname="files/" + name, recursive=False)
+    print(f"PACKED {len(payload)} native/Core input files; no JVM outcomes", file=sys.stderr)
+    return manifest
+
+
+def restore(root, current, source):
+    require(source.is_file() and not source.is_symlink(), "Bundle missing or linked")
+    with tarfile.open(source, "r:gz") as archive:
+        members, total = [], 0
+        for member in archive:
+            require(member.isfile() and not member.issparse() and 0 <= member.size <= MAX_FILE_BYTES,
+                    "Linked/sparse/nonregular/oversized archive member")
+            total += member.size
+            require(total <= MAX_TOTAL_BYTES and len(members) < MAX_FILES + 1, "Archive expansion too large")
+            members.append(member)
+        names = [m.name for m in members]
+        require(len(names) == len(set(names)), "Duplicate archive member")
+        require(all(m.isfile() and not m.issparse() and 0 <= m.size <= MAX_FILE_BYTES for m in members),
+                "Linked/sparse/nonregular/oversized archive member")
+        require(sum(m.size for m in members) <= MAX_TOTAL_BYTES, "Archive expansion too large")
+        for name in names:
+            relative(name)
+        require("bundle.json" in names and archive.getmember("bundle.json").size <= MAX_MANIFEST_BYTES,
+                "Missing/oversized bundle manifest")
+        manifest = json.load(archive.extractfile("bundle.json"))
+        require(manifest.get("schema") == SCHEMA and manifest.get("identity") == current
+                and manifest.get("key") == cache_key(current), "Source/toolchain/platform/workspace identity mismatch")
+        payload = manifest.get("payload")
+        require(isinstance(payload, dict) and payload, "Missing payload inventory")
+        require(set(names) == {"bundle.json", *("files/" + relative(n) for n in payload)},
+                "Unknown/missing archive member")
+        require(all(not any(str(p) in payload for p in PurePosixPath(n).parents) for n in payload),
+                "Conflicting file/directory payload paths")
+        tracked, pins = tracked_files(root), vendor_pins(root)
+        # Every path, destination and byte digest is checked before any writes.
+        for name, expected in payload.items():
+            require(name not in tracked and allowed_payload(name, pins), "Unknown/tracked archive payload: " + name)
+            require(isinstance(expected, str) and HEX.fullmatch(expected), "Invalid payload fingerprint")
+            path = file_path(root, name)
+            for parent in path.parents:
+                if parent == root:
+                    break
+                require(not parent.exists() or parent.is_dir(), "Non-directory destination parent")
+            if path.exists():
+                require(path.is_file() and digest(path) == expected, "Conflicting existing file: " + name)
+            with archive.extractfile("files/" + name) as stream:
+                require(digest_stream(stream) == expected, "Corrupt payload: " + name)
+        def read(name):
+            require(name in payload, "Missing original dependency: " + name)
+            return archive.extractfile("files/" + name).read()
+        actual, external = inventory(root, current, read, manifest.get("coreFiles", []))
+        require(actual == payload and external == manifest.get("external"), "Original provenance inventory mismatch")
+        for name in sorted(payload):
+            path = file_path(root, name)
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with archive.extractfile("files/" + name) as src, path.open("xb") as dst:
+                    shutil.copyfileobj(src, dst, 1024 * 1024)
+    print(f"HIT {cache_key(current)}: verified {len(payload)} fixture files; tests must run", file=sys.stderr)
+    return manifest
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    for name in ("key", "pack", "restore"):
+        p = commands.add_parser(name)
+        p.add_argument("--root", type=Path, default=Path.cwd())
+        if name == "key":
+            p.add_argument("--output", type=Path, required=True)
+        else:
+            p.add_argument("--identity", type=Path, required=True)
+            p.add_argument("--bundle", type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        root = args.root.resolve()
+        current = identity(root)  # Never trust identity supplied by a producer.
+        if args.command == "key":
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            with args.output.open("x") as stream:
+                json.dump(current, stream, sort_keys=True, indent=2); stream.write("\n")
+            print(cache_key(current))
+        else:
+            require(json.loads(args.identity.read_bytes()) == current, "Current identity changed since key step")
+            if args.command == "pack":
+                pack(root, current, args.bundle)
+            else:
+                restore(root, current, args.bundle)
+        return 0
+    except (CacheMiss, json.JSONDecodeError, tarfile.TarError, EOFError) as error:
+        print("MISS: " + str(error), file=sys.stderr)
+        return 1
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as error:
+        print("ERROR: " + str(error), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
