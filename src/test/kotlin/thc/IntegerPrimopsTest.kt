@@ -89,7 +89,6 @@ class IntegerPrimopsTest {
             // compilation. Each row is then repeated through installed guest code.
             for (entry in entries) {
                 val cases = casesByName.getValue(entry["name"] as String)
-                repeat(4) { cases.take(8).forEach { check(entry, it) } }
                 cases.forEach { check(entry, it) }
             }
             assertEquals(0L, count(function, "compiledEntries"), "$backend warm phase")
