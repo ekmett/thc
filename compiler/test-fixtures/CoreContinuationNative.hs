@@ -19,3 +19,4 @@ main = do
   print maskedCheckpointAnswer
   print unmaskedCheckpointAnswer
   print uninterruptibleCheckpointAnswer
+  print forceNonlocalAnswer

@@ -135,3 +135,16 @@ private run begins `unmaskAsyncExceptions#` with a masked caller and observes
 the masked state restored after cross-thread completion. The
 checkpoint-null path still invokes the original action operation directly;
 general async delivery remains disabled.
+
+A private nonlocal `ForceValue` edge now saves its already-evaluated operand in
+a typed-profiled bytecode local before entering a child thunk. A yielded child
+is resumed only when its identity matches that saved operand; the completed
+answer or guest failure then flows through the existing cold worklist. A
+genuine GHC global application is demanded by a separate case after a parent
+checkpoint. Its non-tail callee yields twice, and another host carrier
+finishes the same global without replaying the parent's prefix or either
+child checkpoint. Numeric Long, Float, and Double results retain primitive
+local tags; wrong-child and malformed resumes fail closed. The ordinary
+`checkpoint == null` `ForceValue` operation is unchanged. A selector function
+that returns a lazy argument still enters it to satisfy the runtime's WHNF
+call-result convention; that deeper call is not admitted by this edge.
