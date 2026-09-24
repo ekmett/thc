@@ -107,22 +107,7 @@ jobs:
           set -euo pipefail
           cabal build exe:thc --offline -fdevelopment
           cabal run thc --offline -fdevelopment -- --help
-          driver="$(cabal list-bin exe:thc --offline -fdevelopment)"
-          test -x "$driver"
-          mkdir -p build/driver-tests build/run-integration
-          python3 test/test_driver.py --driver "$driver" --scratch "$PWD/build/driver-tests"
-          python3 -O test/test_driver.py --driver "$driver" --scratch "$PWD/build/driver-tests"
-          python3 test/run_integration.py \
-            --driver "$driver" \
-            --runtime "$PWD/build/install/thc/bin/thc" \
-            --thc-root "$PWD" \
-            --scratch "$PWD/build/run-integration"
-          mkdir -p build/project-run-integration
-          python3 test/run_project_integration.py \
-            --driver "$driver" \
-            --runtime "$PWD/build/install/thc/bin/thc" \
-            --thc-root "$PWD" \
-            --scratch "$PWD/build/project-run-integration"
+          cabal test driver-tests -fdevelopment --test-show-details=direct
       - name: Check registered cross-package Core on both compiled backends
         run: python3 scripts/test-core-package-link.py
       - name: Preserve default test results

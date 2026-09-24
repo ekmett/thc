@@ -31,8 +31,16 @@ class FastRunnerTest(unittest.TestCase):
             f'<testsuite name="{name}" {attributes}>{body}</testsuite>')
 
     def selection(self, mode="narrow"):
-        return {"mode": mode, "runnable": True, "polyglot": {"required": False, "classes": []}, "junit": {
+        return {"mode": mode, "runnable": True, "haskell": {"suites": [], "count": 0},
+                "polyglot": {"required": False, "classes": []}, "junit": {
             "classes": ["example.Test"], "patterns": ["*"] if mode == "full" else ["example.Test"]}}
+
+    def test_haskell_suite_is_selected_exactly(self):
+        self.assertEqual([], ci.haskell_suites(self.selection()))
+        self.assertEqual(["driver-tests"], ci.haskell_suites(self.selection() |
+                         {"haskell": {"suites": ["driver-tests"], "count": 1}}))
+        with self.assertRaisesRegex(RuntimeError, "Haskell"):
+            ci.haskell_suites(self.selection() | {"haskell": {"suites": ["other"], "count": 1}})
 
     def test_exact_fresh_suite_and_cases(self):
         self.suite()
@@ -275,6 +283,22 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual(recorder.data["nativeInputs"]["reused"], ["smoke"])
         self.assertEqual((recorder.data["requestedBase"], recorder.data["selectionBase"]), ("HEAD", "b" * 40))
         self.assertTrue(recorder.data["passed"])
+
+    def test_selected_haskell_suite_builds_runtime_and_runs_after_fixtures(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": []},
+                                        "haskell": {"suites": ["driver-tests"], "count": 1}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection))] + [(0, "")] * 4) as commands, \
+                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                patch.object(ci, "run_mode", return_value={"cases": []}):
+            ci.execute(recorder, "HEAD", "HEAD", identity_path)
+        self.assertEqual([call.args[0] for call in commands.call_args_list[2:]],
+                         ["driver-plugin", "driver-launcher", "driver-tests"])
+        self.assertEqual(["cabal", "test", "driver-tests", "-fdevelopment", "--test-show-details=direct"],
+                         commands.call_args_list[4].args[1])
 
     def test_required_polyglot_lane_runs_real_demo_after_normal_tests(self):
         selection = self.selection() | {"reasons": [], "python": {"commands": []},

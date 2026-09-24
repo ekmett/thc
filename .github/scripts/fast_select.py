@@ -25,6 +25,7 @@ CAPABILITIES = "scripts/core-capabilities.json"
 PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
 BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
+HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "gradlew",
     "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
@@ -524,14 +525,19 @@ def select(repo, base_ref, head_ref):
             raise SelectionError("invalid ownership map")
         for group in [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
                       *policy["primopFamilies"].values(), *policy["automation"].values()]:
-            if not isinstance(group, dict) or set(group) != {"junit", "python"}:
+            if not isinstance(group, dict) or set(group) not in ({"junit", "python"}, {"junit", "python", "haskell"}):
                 raise SelectionError("invalid test group")
             for key, available in (("junit", classes), ("python", python_files)):
                 values = group[key]
                 if not isinstance(values, list) or any(not isinstance(v, str) or v not in available for v in values) or len(values) != len(set(values)):
                     raise SelectionError("nonexistent or duplicate selected test")
             if not group["junit"] and not group["python"]:
-                raise SelectionError("empty test group")
+                if not group.get("haskell"):
+                    raise SelectionError("empty test group")
+            haskell = group.get("haskell", [])
+            if not isinstance(haskell, list) or len(haskell) != len(set(haskell)) or any(
+                    name not in HASKELL_TESTS for name in haskell):
+                raise SelectionError("invalid Haskell test suite")
         if not policy["smoke"]["junit"] or not policy["smoke"]["python"]:
             raise SelectionError("empty smoke")
         if any(path not in files or not path.startswith("src/main/") for path in policy["leafSources"]):
@@ -556,7 +562,8 @@ def select(repo, base_ref, head_ref):
         widen("dirty-checkout")
     selected_junit = set(policy["smoke"]["junit"] if policy else [])
     selected_python = set(policy["smoke"]["python"] if policy else [])
-    affected_junit, affected_python = set(), set()
+    selected_haskell = set(policy["smoke"].get("haskell", []) if policy else [])
+    affected_junit, affected_python, affected_haskell = set(), set(), set()
     additive_primop_paths = set()
     for record in records:
         if record["status"] not in ("A", "M"):
@@ -572,10 +579,12 @@ def select(repo, base_ref, head_ref):
                 group = policy["automation"][path]
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
+                affected_haskell.update(group.get("haskell", []))
             elif policy and path in policy["owners"]:
                 group = policy["owners"][path]
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
+                affected_haskell.update(group.get("haskell", []))
             elif junit_source(path):
                 if path.endswith(".java"):
                     widen("non-kotlin-test-source", path)
@@ -614,6 +623,7 @@ def select(repo, base_ref, head_ref):
                 group = policy["leafSources"][path]
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
+                affected_haskell.update(group.get("haskell", []))
             elif policy and base and record["status"] == "M" and path in (CAPABILITIES, PROGRAM, BYTECODE_PROGRAM):
                 try:
                     before = git(repo, "show", base + ":" + path).decode("utf-8")
@@ -628,6 +638,7 @@ def select(repo, base_ref, head_ref):
                             group = policy["primopFamilies"][family]
                             affected_junit.update(group["junit"])
                             affected_python.update(group["python"])
+                            affected_haskell.update(group.get("haskell", []))
                 except (SelectionError, UnicodeError, ValueError, TypeError):
                     widen("shared-primop-registry-change", path)
             elif path.endswith(".md") and (path.startswith("docs/") or "/" not in path):
@@ -636,6 +647,7 @@ def select(repo, base_ref, head_ref):
                 widen("unmapped-source-or-configuration", path)
     selected_junit.update(affected_junit)
     selected_python.update(affected_python)
+    selected_haskell.update(affected_haskell)
     changed_paths = {path for record in records for path in record["paths"]}
     uncertain_diff = (base is None or head is None or head != checkout
                       or any(reason["code"] == "base-not-ancestor" for reason in reasons))
@@ -648,12 +660,14 @@ def select(repo, base_ref, head_ref):
     if mode == "full":
         selected_junit = set(classes)
         selected_python = set(python_files)
+        selected_haskell = set(HASKELL_TESTS)
     if not selected_junit or not selected_python:
         widen("empty-selection")
         mode = "full"
     # Validate current files too: a missing/symlinked test must never produce a
     # runnable success plan, even when the committed object still exists.
     selected_paths = set(selected_python) | {classes[name] for name in selected_junit}
+    selected_paths.update(HASKELL_TESTS[name] for name in selected_haskell)
     if polyglot_required:
         selected_paths.update(polyglot_classes.values())
     existing = all((repo / path).is_file() and not (repo / path).is_symlink() for path in selected_paths)
@@ -668,12 +682,14 @@ def select(repo, base_ref, head_ref):
                 changedPaths=sorted(changed_paths),
                 changes=records, reasons=sorted(reasons, key=lambda r: (r["code"], r.get("path", ""))),
                 policySha256=policy_hash,
-                affected=dict(junit=sorted(affected_junit), python=sorted(affected_python)),
+                affected=dict(junit=sorted(affected_junit), python=sorted(affected_python),
+                              haskell=sorted(affected_haskell)),
                 junit=dict(patterns=["*"] if mode == "full" else sorted(selected_junit),
                            classes=sorted(selected_junit), sourceFiles=sorted({classes[name] for name in selected_junit}), count=len(selected_junit)),
                 polyglot=dict(required=polyglot_required, classes=sorted(polyglot_classes) if polyglot_required else []),
                 python=dict(commands=[["python3", path] for path in sorted(selected_python)],
-                            files=sorted(selected_python), count=len(selected_python)))
+                            files=sorted(selected_python), count=len(selected_python)),
+                haskell=dict(suites=sorted(selected_haskell), count=len(selected_haskell)))
 
 
 def main():

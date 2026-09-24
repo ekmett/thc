@@ -29,10 +29,6 @@ cabal build
 cabal run thc -- --help
 cabal run thc -- plan-package test/fixtures/tiny/tiny-fixture.cabal \
   --dist-dir "$PWD/build/tiny-plan" --enable-tests --enable-benchmarks
-
-python3 test/test_driver.py \
-  --driver "$(cabal list-bin exe:thc)" \
-  --scratch "$PWD/build/driver-tests"
 ```
 
 The same Cabal build produces the `thc` library containing `THC.Plugin` and the
@@ -44,11 +40,7 @@ export JAVA_HOME=/path/to/graalvm-jdk-25
 make
 cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
   --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
-
-python3 test/run_integration.py \
-  --driver "$(cabal list-bin exe:thc)" \
-  --runtime "$PWD/build/install/thc/bin/thc" \
-  --thc-root "$PWD" --scratch "$PWD/build/run-integration"
+cabal test driver-tests --test-show-details=direct
 ```
 
 `run` requires a real Cabal executable and its `Main.main :: IO ()`. It builds
@@ -76,11 +68,6 @@ name or a package-qualified `PACKAGE:exe:NAME` selector:
 cabal run thc -- run test/fixtures/run-project \
   --exe app-run:exe:completed --thc-root "$PWD" \
   --dist-dir "$PWD/build/run-project"
-
-python3 test/run_project_integration.py \
-  --driver "$(cabal list-bin exe:thc)" \
-  --runtime "$PWD/build/install/thc/bin/thc" \
-  --thc-root "$PWD" --scratch "$PWD/build/project-run-integration"
 ```
 
 The project path requires cabal-install 3.16 and GHC 9.14.1. Cabal performs the
@@ -100,23 +87,13 @@ including ordinary `putStrLn`; this path does not claim general Hackage, C FFI
 or no-code-only package builds. Project flags belong in `cabal.project`; the
 independent `plan-package` and explicit `.cabal` path keep their existing scope.
 
-The Python test entrypoint also works without a prebuilt driver:
-
-```sh
-python3 test/test_driver.py
-python3 -O test/test_driver.py
-```
-
-Run these from the repository root (or use an absolute script path from any
-directory). Each invocation creates a fresh isolated directory beneath
-`build/driver-test-bootstrap/`, compiles the ordinary Cabal `Setup.hs`, and uses
-it to configure/build the driver before running the same integration tests.
-It checks GHC/ghc-pkg **9.14.1** and the bundled global Cabal/Cabal-syntax
-**3.16.0.0**, honors `GHC` and `GHC_PKG` executable overrides, and excludes user
-package databases and ambient GHC package environments. The fixture uses the
-same selected compiler and compiled Setup executable. There is no download,
-project solver, source mutation or nested resource gate; CI/the caller owns the
-enclosing build lease. `unittest` assertions remain active under Python `-O`.
+`driver-tests` is an ordinary Cabal HUnit test suite. Cabal builds the driver
+first, then the tests copy fixtures into isolated temporary directories outside
+this repository's `cabal.project`. Set `THC_TEST_RUNTIME` and
+`THC_TEST_THC_ROOT` to use an existing JVM launcher and compiler artifacts from
+another checkout for the single-package case. The project case builds the plugin
+from a private source-only root, then checks its new manifest. Command output is
+retained in `build/driver-haskell-tests`.
 
 The printed evidence directory retains the fresh driver build, `commands.jsonl`
 (commands, working directories, stdout/stderr, exit statuses and timeout errors),
@@ -223,7 +200,7 @@ Additional cases exercise missing dependencies, unknown flags, disabled
 components, ambiguous/malformed/missing packages, project boundaries, custom
 Setup rejection, unsupported test interfaces and relative output paths. These
 are native Cabal planning checks; their test build is an independent oracle.
-`run_integration.py` separately checks THC IO execution on both backends and
+The same suite checks THC IO execution on both backends and
 requires unsupported console IO to fail before launch.
 
 Future work should expand the tested project and runtime dependency closure,

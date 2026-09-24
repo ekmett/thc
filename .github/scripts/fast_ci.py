@@ -185,6 +185,17 @@ def python_commands(selection, executable, automation_checked=False):
         yield [executable, "-O", *command[1:]]
 
 
+def haskell_suites(selection):
+    selected = selection.get("haskell")
+    require(isinstance(selected, dict) and isinstance(selected.get("suites"), list)
+            and selected.get("count") == len(selected["suites"]),
+            "Invalid Haskell test selection")
+    suites = selected["suites"]
+    require(isinstance(suites, list) and suites in ([], ["driver-tests"]),
+            "Unknown or duplicate Haskell test suite")
+    return suites
+
+
 def preserve_previous(root, destination, task="test"):
     # Move only the exact test task output, not build/ or unrelated user data.
     require(task in ("test", "polyglotTest"), "Unknown test task output")
@@ -263,6 +274,7 @@ def execute(recorder, base, head, identity_path):
     write_json(recorder.directory / "selection.json", selection)
     gradle_command(selection)  # Fail closed before preparing or running anything.
     polyglot = polyglot_command(selection)
+    selected_haskell = haskell_suites(selection)
     recorder.data["selection"] = {key: selection[key] for key in ("mode", "reasons")}
     recorder.data.update(requestedBase=base, selectionBase=selected_base)
     # Check generated documentation against the actual pinned GHC API on hits
@@ -275,6 +287,14 @@ def execute(recorder, base, head, identity_path):
     recorder.data["nativeInputs"] = inputs
     recorder.save()
     failures = []
+    if selected_haskell:
+        try:
+            recorder.command("driver-plugin", ["compiler/build.sh"])
+            recorder.command("driver-launcher", ["./gradlew", "installDist"])
+            recorder.command("driver-tests", ["cabal", "test", "driver-tests", "-fdevelopment",
+                                              "--test-show-details=direct"])
+        except RuntimeError as error:
+            failures.append("driver-tests: " + str(error))
     automation_sha = os.environ.get("FAST_AUTOMATION_SHA", "")
     automation_checked = bool(SHA.fullmatch(automation_sha)) and automation_sha == git(recorder.root, "rev-parse", "HEAD")
     recorder.data["automationReused"] = automation_sha if automation_checked else None

@@ -194,87 +194,68 @@
     },
     "app/Main.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Cabal.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Json.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Run.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
-    },
-    "test/test_driver.py": {
-      "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/tiny-fixture.cabal": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/words/Words.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/src/Greeting.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/src/Platform/Linux.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/src/Platform/Other.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/loud/Message.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/quiet/Message.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/app/Main.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/test/Main.hs": {
       "junit": [],
-      "python": [
-        "test/test_driver.py"
-      ]
+      "python": [],
+      "haskell": ["driver-tests"]
     },
     "compiler/test-fixtures/BitPrimopsAudit.hs": {
       "junit": [
@@ -511,6 +492,91 @@
       "python": [
         "scripts/test-putstrln-export.py"
       ]
+    },
+    "src/THC/Driver/Project.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-pure/run-pure.cabal": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-pure/app/Main.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-pure/app/Answer.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/cabal.project": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/th-helper/th-helper.cabal": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/app-run/app-run.cabal": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/dep-data/dep-data.cabal": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/dep-data/src/Answer.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/app-run/app/Main.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/app-run/src/Bridge.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/fixtures/run-project/th-helper/src/THHelper.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/haskell-driver/ProjectTests.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/haskell-driver/RunTests.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/haskell-driver/PlanTests.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/haskell-driver/Main.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
+    },
+    "test/haskell-driver/TestSupport.hs": {
+      "junit": [],
+      "python": [],
+      "haskell": ["driver-tests"]
     }
   },
   "automation": {

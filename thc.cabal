@@ -14,9 +14,6 @@ description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/G
 extra-source-files:
   README.md
   docs/driver.md
-  test/test_driver.py
-  test/run_integration.py
-  test/run_project_integration.py
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
   test/fixtures/run-pure/app/Answer.hs
@@ -83,6 +80,32 @@ executable thc
     filepath >= 1.5.4 && < 1.6,
     process >= 1.6.26 && < 1.7,
     unix >= 2.8 && < 2.9
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite driver-tests
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/haskell-driver
+  other-modules:
+    TestSupport
+    PlanTests
+    RunTests
+    ProjectTests
+  build-tool-depends: thc:thc
+  build-depends:
+    base >= 4.22 && < 4.23,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13,
+    containers >= 0.8 && < 0.9,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    HUnit >= 1.6 && < 1.7,
+    process >= 1.6.26 && < 1.7,
+    text >= 2.1 && < 2.2,
+    vector >= 0.13 && < 0.14
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)
