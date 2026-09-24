@@ -60,22 +60,22 @@ typed interpretation, so sign extension cannot silently become zero extension.
 Run preparation with the pinned GHC 9.14.1 environment:
 
 ```sh
-python3 scripts/test-int32-array-model.py
-python3 scripts/prepare-int32-arrays.py
+./gradlew test --tests thc.runtime.Int32ArrayNativeTest
+cabal run exe:thc-fixtures --offline -- int32-arrays
 python3 scripts/test-core-bytearrays.py
 ./gradlew test --tests 'thc.runtime.Int32Array*' --tests 'thc.Int32LiteralTest'
 ```
 
 The preparer regenerates real pre/post-Tidy Core and the native
-`NativeInt32Array.hs` oracle under `build/int32-arrays`. It requires strict
-all-branch acceptance, all selected typed primitives, exact alias primitive use
-counts, complete unique native rows, and equality with an explicit integer/byte
+`NativeInt32Array.hs` oracle under `build/int32-arrays`. JVM tests check all
+selected typed primitives, exact alias use counts, complete unique native rows,
+and equality with an explicit integer/byte
 model. The corpus covers all 64 input-bit positions and neighboring values,
 32-bit sign/wrap boundaries, all-ones and alternating patterns, and distinct high
-halves with the same narrow payload. Python controls independently test both byte
+halves with the same narrow payload. JVM controls independently test both byte
 orders with a mask/shift model; native execution claims only its recorded host
 byte order. Source and artifact fingerprints include the exact capability and
-exporter inputs, generated driver, oracle executable, rows, Core and audits.
+exporter inputs, generated driver, oracle executable, rows, and Core.
 The frozen domain is 397 inputs per entry: 2,382 unique native/model rows.
 
 The guest-root proof counts the entry and its unconditional immediate local

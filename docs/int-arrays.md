@@ -51,14 +51,14 @@ cross-endian export contract.
 Preparation and checks:
 
 ```sh
-python3 scripts/prepare-int-arrays.py
+cabal run exe:thc-fixtures --offline -- int-arrays
 python3 scripts/test-core-bytearrays.py
-python3 scripts/test-int-array-model.py
+./gradlew test --tests thc.runtime.IntArrayNativeTest
 ./gradlew test --tests 'thc.runtime.IntArray*'
 ```
 
-The native oracle, independent mathematical models, exact dependency audits,
-and source/artifact hashes are retained under `build/int-arrays`. Runtime tests
+The native oracle and source/artifact hashes are retained under `build/int-arrays`.
+JVM tests apply independent mathematical models and inspect Core directly. Runtime tests
 exercise both Core stages and both backends before and after compilation;
 every checked compiled invocation must enter installed guest code and retain
 valid host/active entry targets. Bounds, byte aliasing, state ordering, exact

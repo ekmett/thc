@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "a93b3bbed81b0c585d2517148df9293d42cb239841c5ee5c8e9e53d6e32756a7"
+FULL_PREPARATION_PLAN = "59ab122d10df9aded97a3b45caf4b3a74fecc8012b3e9c91633f9b53d268cfc8"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native", "build/pinned-addresses", "build/simd-capability-smoke",
 })

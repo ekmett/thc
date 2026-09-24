@@ -50,7 +50,7 @@ results only in its driver.
 Fresh preparation covers nine entries and 846 inputs each: **7,614 native/model
 rows**. Inputs include every value from -256 through 255, all 64 machine bit
 positions and their neighbors with both signs, and alternating byte patterns.
-An unbounded Python model and separate sequential-cell/bytearray checks verify
+An unbounded JVM model and separate sequential-cell/bytearray checks verify
 the results. Pre/post-Tidy exports require all expected primitive occurrences,
 strict whole-closure acceptance and exactly two guest functions per entry: the
 entry and its immediately applied State lambda.
@@ -70,15 +70,15 @@ Run with pinned GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
 
 ```sh
 compiler/build.sh
-python3 scripts/prepare-int8-arrays.py
-python3 scripts/test-int8-array-model.py
+cabal run exe:thc-fixtures --offline -- int8-arrays
+./gradlew test --tests thc.runtime.Int8ArrayNativeTest
 python3 scripts/test-core-bytearrays.py
 ./gradlew --no-daemon test --tests 'thc.runtime.Int8Array*'
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun --tests 'thc.runtime.Int8Array*'
 ```
 
-`build/int8-arrays/manifest.json` records original source, preparer, auditor and
-artifact hashes, toolchain/package information, primitive counts and the native
+`build/int8-arrays/manifest.json` records source and artifact hashes,
+toolchain/package information, input domains and the native
 executable. Standard fresh test preparation and CI run the fixture/model and
 retain these artifacts. Native accesses are initialized and in bounds; invalid
 indices are tested only against THC's explicit managed-domain errors. General
