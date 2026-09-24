@@ -14,6 +14,55 @@ class ManagedAddressStorageTest {
             else target.intValueExact()
     }
 
+    @Test fun completeRangesRejectFullWidthOverflowBeforeEffects() {
+        for (size in listOf(0, 1, 4, 16)) for (base in 0..size) {
+            val bytes = ByteArray(size) { (it + 0x80).toByte() }
+            val before = bytes.copyOf()
+            val address = ManagedAddress.fromByteArray(bytes).plus(base.toLong())
+            val displacements = listOf(Long.MIN_VALUE, Long.MAX_VALUE, -base.toLong() - 1,
+                -base.toLong(), -1L, 0L, 1L, size.toLong() - base - 1, size.toLong() - base, size.toLong() - base + 1)
+            val counts = listOf(Long.MIN_VALUE, Long.MAX_VALUE, Int.MAX_VALUE.toLong() + 1,
+                -1L, 0L, 1L, 2L, size.toLong(), size.toLong() + 1)
+            for (displacement in displacements) for (count in counts) {
+                val start = BigInteger.valueOf(base.toLong()).add(BigInteger.valueOf(displacement))
+                val end = start.add(BigInteger.valueOf(count))
+                val valid = start.signum() >= 0 && start <= BigInteger.valueOf(size.toLong()) &&
+                    count >= 0 && end <= BigInteger.valueOf(size.toLong())
+                val label = "size=$size/base=$base/displacement=$displacement/count=$count"
+                for (writable in listOf(false, true)) {
+                    if (valid) address.requireRange(displacement, count, writable)
+                    else assertThrows(RuntimeFault::class.java,
+                        { address.requireRange(displacement, count, writable) }, label)
+                    assertArrayEquals(before, bytes, label)
+                }
+            }
+        }
+        val literal = ManagedAddress.fromHex("41")
+        literal.requireRange(0, 2)
+        literal.requireRange(2, 0)
+        assertThrows(RuntimeFault::class.java) { literal.requireRange(0, 0, true) }
+        assertThrows(RuntimeFault::class.java) { literal.requireRange(2, 0, true) }
+    }
+
+    @Test fun overlapUsesBackingIdentityAndExactNonemptyRegions() {
+        val bytes = ByteArray(16)
+        val first = ManagedAddress.fromByteArray(bytes)
+        val alias = ManagedAddress.fromByteArray(ManagedByteArray.freeze(bytes)).plus(8)
+        val distinct = ManagedAddress.fromByteArray(bytes.copyOf())
+        assertTrue(first.overlaps(0, 16, alias, -8, 16))
+        assertTrue(first.overlaps(4, 5, alias, 0, 1))
+        assertFalse(first.overlaps(4, 4, alias, 0, 1))
+        assertFalse(first.overlaps(0, 16, alias, 8, 0))
+        assertFalse(first.overlaps(16, 0, alias, -8, 16))
+        assertFalse(first.overlaps(0, 16, distinct, 0, 16))
+        assertThrows(RuntimeFault::class.java) { first.overlaps(0, Long.MAX_VALUE, alias, 0, 1) }
+        assertThrows(RuntimeFault::class.java) { first.overlaps(0, 1, alias, Long.MIN_VALUE, 0) }
+        val literal = ManagedAddress.fromHex("41ff")
+        assertTrue(literal.overlaps(1, 2, literal.plus(2), -1, 2))
+        assertFalse(literal.overlaps(0, 3, ManagedAddress.fromHex("41ff"), 0, 3))
+        assertFalse(first.overlaps(0, 3, literal, 0, 3))
+    }
+
     @Test fun fullWidthBoundsMatchIndependentArithmeticAndFailedWritesHaveNoEffects() {
         val displacements = (-34L..34L).toList() + listOf(
             Long.MIN_VALUE, Long.MIN_VALUE + 1, Long.MAX_VALUE - 1, Long.MAX_VALUE,

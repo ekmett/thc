@@ -48,6 +48,31 @@ internal class ManagedAddress private constructor(
         bytes[index] = value.toByte()
     }
 
+    /** Validate a complete byte region before any effect. An empty region may
+     * start one past the allocation; an immutable destination is never writable. */
+    fun requireRange(displacement: Long, count: Long, writable: Boolean = false) {
+        if (writable && mutableBytes == null) fault("Cannot write through an immutable literal Addr#")
+        if (count < 0 || displacement < -offset || displacement > size() - offset)
+            fault("Managed Addr# range outside its backing storage")
+        val start = offset + displacement
+        if (count > size() - start) fault("Managed Addr# range outside its backing storage")
+    }
+
+    /** Exact overlap of two checked byte regions, including independently made
+     * addresses of the same array. Adjacent and empty regions do not overlap. */
+    fun overlaps(displacement: Long, count: Long, other: ManagedAddress,
+        otherDisplacement: Long, otherCount: Long): Boolean {
+        requireRange(displacement, count)
+        other.requireRange(otherDisplacement, otherCount)
+        if (count == 0L || otherCount == 0L) return false
+        val shared = if (literalBytes != null) literalBytes === other.literalBytes
+            else mutableBytes === other.mutableBytes
+        if (!shared) return false
+        val start = offset + displacement
+        val otherStart = other.offset + otherDisplacement
+        return start < otherStart + otherCount && otherStart < start + count
+    }
+
     @TruffleBoundary
     override fun toString(): String = "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
