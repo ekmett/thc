@@ -7,6 +7,7 @@
 -- independent arithmetic models and compiled guest comparisons.
 module Main (main) where
 
+import AggregateFixtures (prepareAggregate)
 import Control.Monad (forM, forM_, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA256
 import Data.Aeson (Value, object, (.=), encode)
@@ -442,13 +443,17 @@ readInteger text = case reads text of
 main :: IO ()
 main = do
   args <- getArgs
-  family <- case args of
-    ["bit"] -> pure Bit
-    ["integer"] -> pure IntegerWord
-    ["signed-narrow"] -> pure SignedNarrow
-    ["explicit64"] -> pure Explicit64
-    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64)"
   root <- getCurrentDirectory
   exists <- doesFileExist (root </> "thc.cabal")
   unless exists (die "Run thc-fixtures from the THC repository root")
-  prepare root family
+  handled <- case args of
+    [name] -> prepareAggregate root name
+    _ -> pure False
+  unless handled $ do
+    family <- case args of
+      ["bit"] -> pure Bit
+      ["integer"] -> pure IntegerWord
+      ["signed-narrow"] -> pure SignedNarrow
+      ["explicit64"] -> pure Explicit64
+      _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64|tuple-arithmetic)"
+    prepare root family

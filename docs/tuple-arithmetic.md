@@ -38,11 +38,11 @@ oversaturated applications remain unsupported.
 
 `TupleArithmeticAudit.hs` retains each genuine primitive in both pre- and
 post-Tidy Core. A dynamic selector observes each result field separately without
-turning the tuple into a boxed product. `prepare-tuple-arithmetic.py` checks
-12,219 native two-field rows plus 3,940 opaque mixed-return call rows against Python's unbounded integer arithmetic.
+turning the tuple into a boxed product. `thc-fixtures tuple-arithmetic` exports
+both boundaries, audits ten entry roots at each boundary, and produces native two-field rows.
 Inputs include signed endpoints, word sign/carry transitions, neighbors of
 powers of two through bit 63 (every bit for WordC), equal operands, negative divisors and reproducible
-random bit patterns. Division by zero and signed minimum divided by minus one
+bit patterns. Division by zero and signed minimum divided by minus one
 are excluded from the native oracle; the runtime reports an undefined-input
 fault for those cases and assigns no numeric result.
 
