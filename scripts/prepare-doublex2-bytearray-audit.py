@@ -205,7 +205,7 @@ def family_controls(module, path, auditor, capabilities, element):
             worker = next(b for b in changed['bindings'] if b['name'] == family+operation+'Worker')
             call = next(x for x in expressions(worker['expr'], 'app') if x[1][:1] == ['prim'] and x[1][1] in OPERATIONS)
             proof = representation(call) if operation == 'Index' else representation(call)['components'][1] if operation == 'Read' else representation(call[2][2])
-            lanes = 2 if element == 'DoubleElemRep' else 4
+            lanes = 2 if element in ('DoubleElemRep', 'Int64ElemRep') else 4
             proof['primReps'] = [f'VecRep {lanes} {element}']; proof['vector'] = dict(lanes=lanes, element=element)
             detail = {'Index': 'result representation', 'Read': 'read result components', 'Write': 'argument representation'}[operation]
             expected = {('malformed-expression', 'Invalid local vector memory intrinsic: '+detail): 1}
@@ -298,7 +298,7 @@ def main():
             structure[stage]['entries'][entry['name']] = facts
             calls[stage+'/'+entry['name']] = facts['guestCalls']
         controls[stage] = {element: family_controls(module, path, auditor, capabilities, element)
-                           for element in ('Int32ElemRep', 'Word32ElemRep', 'FloatElemRep')}
+                           for element in ('Int64ElemRep', 'Int32ElemRep', 'Word32ElemRep', 'FloatElemRep')}
         audit_path = OUT/f'{stage}-audit.json'
         audit_path.write_text(json.dumps(audits[stage], indent=2)+'\n')
         artifacts += [path, audit_path]

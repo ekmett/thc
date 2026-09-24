@@ -7,7 +7,7 @@ from pathlib import Path
 import unittest
 
 from core_vector_memory import ARRAY, INDEX, STATE, DOUBLE_OPERATIONS as OPERATIONS, DOUBLE_READS as READS, DOUBLE_INDICES as INDICES, DOUBLE_WRITES as WRITES, read_case, validate_direct
-from core_vectors import VECTOR_DOUBLE_REP, VECTOR32_REP, TUPLE_DOUBLE_REP, LANE_DOUBLE_REP, proof_error
+from core_vectors import VECTOR_DOUBLE_REP, VECTOR32_REP, VECTOR_REP, TUPLE_DOUBLE_REP, LANE_DOUBLE_REP, proof_error
 
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
@@ -72,6 +72,24 @@ def check(module):
 
 
 class DoubleVectorMemoryProofTest(unittest.TestCase):
+    def test_same_width_two_lane_integer_proof_is_not_double_memory(self):
+        self.assertIsNone(proof_error(VECTOR_REP))
+        for name in OPERATIONS:
+            sites = ('producer', 'whole', 'producer-component', 'whole-component', 'pattern') if name in READS else ('direct',)
+            for site in sites:
+                module, app, body = fixture(name)
+                if site == 'direct':
+                    proof = app[2][2][6]['rep'] if name in WRITES else app[6]['rep']
+                else:
+                    producer, whole = app[6]['rep'], body[4]['binder']['rep']
+                    proof = {'producer': producer, 'whole': whole,
+                             'producer-component': producer['components'][1],
+                             'whole-component': whole['components'][1],
+                             'pattern': body[3][0][4]['binders'][1]['rep']}[site]
+                proof['primReps'] = copy.deepcopy(VECTOR_REP['primReps'])
+                proof['vector'] = copy.deepcopy(VECTOR_REP['vector'])
+                self.assertFalse(check(module)['accepted'], (name, site))
+
     def test_all_six_contracts_and_no_generic_field_expansion(self):
         self.assertEqual(len(OPERATIONS), 6)
         for name in sorted(OPERATIONS):

@@ -27,7 +27,9 @@ class DoubleVectorMemoryProofTest {
         "evaluated" to true, "vector" to mapOf("lanes" to 2, "element" to "DoubleElemRep"))
     private val signedVector = vector + mapOf("primReps" to listOf("VecRep 4 Int32ElemRep"),
         "vector" to mapOf("lanes" to 4, "element" to "Int32ElemRep"))
-    private val wrongVectors = listOf(signedVector,
+    private val sameWidthIntegerVector = vector + mapOf("primReps" to listOf("VecRep 2 Int64ElemRep"),
+        "vector" to mapOf("lanes" to 2, "element" to "Int64ElemRep"))
+    private val wrongVectors = listOf(sameWidthIntegerVector, signedVector,
         vector + mapOf("primReps" to listOf("VecRep 4 Word32ElemRep"),
             "vector" to mapOf("lanes" to 4, "element" to "Word32ElemRep")),
         vector + mapOf("primReps" to listOf("VecRep 4 FloatElemRep"),
@@ -229,6 +231,7 @@ class DoubleVectorMemoryProofTest {
 
     @Test fun immediateReadCasesRejectEscapesWrongShapesAndPatternMetadata() {
         val mutations = listOf("whole-escape", "missing-vector", "signed-result", "width", "components", "component-state", "component-unknown",
+            "same-width-result", "same-width-whole", "same-width-component", "same-width-whole-component", "same-width-pattern",
             "default", "multiple", "constructor", "arity", "duplicate-pattern", "whole-pattern", "pattern-order",
             "pattern-state", "pattern-signed", "pattern-unknown", "whole-levity", "pattern-levity", "whole-coercion", "pattern-coercion",
             "missing-whole-coercion", "missing-pattern-coercion", "whole-id", "whole-unevaluated", "pattern-unevaluated", "outer-result")
@@ -241,6 +244,14 @@ class DoubleVectorMemoryProofTest {
                     "whole-escape" -> alternative[3] = mutableListOf<Any?>("var", "whole")
                     "missing-vector" -> result.remove("vector")
                     "signed-result" -> { result["vector"] = signedVector["vector"]; result["primReps"] = signedVector["primReps"] }
+                    "same-width-result" -> { result["vector"] = sameWidthIntegerVector["vector"]; result["primReps"] = sameWidthIntegerVector["primReps"] }
+                    "same-width-whole" -> {
+                        map(whole["rep"])["vector"] = copy(sameWidthIntegerVector["vector"])
+                        map(whole["rep"])["primReps"] = copy(sameWidthIntegerVector["primReps"])
+                    }
+                    "same-width-component" -> list(result["components"])[1] = copy(sameWidthIntegerVector)
+                    "same-width-whole-component" -> list(map(whole["rep"])["components"])[1] = copy(sameWidthIntegerVector)
+                    "same-width-pattern" -> map(records[1])["rep"] = copy(sameWidthIntegerVector)
                     "width" -> map(result["vector"])["lanes"] = 4
                     "components" -> list(result["components"]).reverse()
                     "component-state" -> list(result["components"])[0] = copy(integer)
