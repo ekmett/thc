@@ -164,10 +164,10 @@ def prepare():
     commands.append(dict(argv=[str(native / 'tuple-return')], stdout=str(OUT / 'oracle.tsv')))
     (OUT / 'oracle.tsv').write_text(output([str(native / 'tuple-return')]) + '\n')
     for stage in STAGES:
-        run(['compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+        run(['compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
             dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'compiler/build.sh',
-               ROOT / 'compiler/export.sh', ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/Thc').glob('*.hs'))]
+               ROOT / 'compiler/export.sh', ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs'))]
     artifacts = [p for d in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
                  for p in sorted((OUT / d).rglob('*')) if p.is_file()]
     artifacts += [OUT / 'oracle.tsv', *sorted((ROOT / 'build/compiler').glob('libHSthc-core-plugin-*'))]

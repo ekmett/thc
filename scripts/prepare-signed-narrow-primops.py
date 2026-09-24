@@ -59,7 +59,7 @@ def main():
                for op in OPERATIONS for width in (8, 16, 32)]
     core = BUILD / 'core'
     env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(BUILD / 'ghc'))
-    run([ROOT / 'compiler/export.sh', *['-fplugin-opt=Thc.Plugin:closure=' + e['name']
+    run([ROOT / 'compiler/export.sh', *['-fplugin-opt=THC.Plugin:closure=' + e['name']
                                       for e in entries], SOURCE], env=env)
     spec = importlib.util.spec_from_file_location('core_audit', ROOT / 'scripts/audit-core.py')
     audit = importlib.util.module_from_spec(spec)
@@ -105,7 +105,7 @@ def main():
     (BUILD / 'oracle.tsv').write_text(completed.stdout)
     inputs = [SOURCE, 'scripts/prepare-signed-narrow-primops.py', 'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json',
               'scripts/audit-core.py', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']
-    inputs += [str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/Thc').glob('*.hs')]
+    inputs += [str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/THC').glob('*.hs')]
     artifacts = [str(p.relative_to(ROOT)) for p in paths] + ['build/signed-narrow-primops/oracle.tsv']
     hashes = lambda items: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in items}
     manifest.write_text(json.dumps(dict(schema=1, entries=entries, modules=[p for p, _ in modules],

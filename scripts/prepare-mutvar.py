@@ -73,9 +73,9 @@ def main():
         directory = BUILD / stage
         core = directory / 'core'
         env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(directory / 'ghc'))
-        options = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+        options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
         run([ROOT / 'compiler/export.sh', *options,
-             *['-fplugin-opt=Thc.Plugin:closure=' + name for name in ENTRIES], SOURCE], env=env)
+             *['-fplugin-opt=THC.Plugin:closure=' + name for name in ENTRIES], SOURCE], env=env)
         paths = sorted(core.glob('*.json'))
         modules = [(str(p.relative_to(ROOT)), json.loads(p.read_text())) for p in paths]
         stages[stage] = [p for p, _ in modules]
@@ -136,7 +136,7 @@ def main():
     inputs = [SOURCE, 'scripts/prepare-mutvar.py', 'scripts/core-capabilities.json', 'scripts/audit-core.py',
               'src/main/resources/thc/scalar-primop-signatures.json', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']
     inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'scripts').glob('core_*.py'))
-    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/Thc').glob('*.hs'))
+    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/THC').glob('*.hs'))
     artifacts += ['build/mutvar/oracle.tsv', 'build/mutvar/NativeMutVar.hs']
     hashes = lambda paths: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths}
     manifest.write_text(json.dumps(dict(schema=1, ghc='9.14.1', entries=ENTRIES, stages=stages,

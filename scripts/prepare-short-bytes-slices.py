@@ -104,8 +104,8 @@ def main():
         for frontier, directory in [('lists','list'),('exceptions','cstring')]:
             run([sys.executable,'compiler/export-boot.py','--frontier',frontier,'--build-dir',OUT/directory])
         for stage in STAGES:
-            run(['compiler/export.sh',*(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []),
-                 *['-fplugin-opt=Thc.Plugin:closure='+n for n in (*ENTRIES,*FRONTIERS)],FIXTURES[0]],
+            run(['compiler/export.sh',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
+                 *['-fplugin-opt=THC.Plugin:closure='+n for n in (*ENTRIES,*FRONTIERS)],FIXTURES[0]],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         stages, coverage = inventory(unit)
         binary=OUT/'native/short-bytes-slices-oracle'
@@ -116,7 +116,7 @@ def main():
         native=subprocess.run([str(binary)],input=text,text=True,capture_output=True,check=True);(OUT/'oracle.tsv').write_text(native.stdout)
         count=verify(native.stdout)
         sources=[*FIXTURES,Path(__file__).resolve(),ROOT/'scripts/short_bytes_slice_model.py',ROOT/'compiler/export-boot.py',
-                 *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')],*sorted((ROOT/'compiler/Thc').glob('*.hs')),*audit_inputs()]
+                 *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')],*sorted((ROOT/'compiler/THC').glob('*.hs')),*audit_inputs()]
         for d in ('list','cstring'):
             sources += [ROOT/r['path'] for r in json.loads((OUT/d/'boot-provenance.json').read_text())['sources']]
         artifacts=[OUT/'requests.tsv',OUT/'oracle.tsv',*sorted(OUT.glob('*.audit.json')),

@@ -45,7 +45,7 @@ def main():
     artifacts=[]; stages={}; summaries={}; inventories={}
     for stage in ('pre','post'):
         out=BUILD/stage
-        run([ROOT/'compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []), SOURCE],
+        run([ROOT/'compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []), SOURCE],
             env=dict(THC_CORE_OUT=str(out/'core'), THC_GHC_OUT=str(out/'ghc')))
         paths=sorted((out/'core').glob('*.json'))
         modules=[(str(p.relative_to(ROOT)),json.loads(p.read_text())) for p in paths]
@@ -94,7 +94,7 @@ def main():
     artifacts += [source,executable,BUILD/'oracle.tsv',BUILD/'expected.tsv',BUILD/'exceptions.tsv']
     sources=[SOURCE,Path(__file__),ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',
              ROOT/'src/main/resources/thc/scalar-primop-signatures.json',*sorted((ROOT/'scripts').glob('core_*.py')),
-             *sorted((ROOT/'compiler/Thc').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
+             *sorted((ROOT/'compiler/THC').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     def hashes(paths):return {str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
     manifest=dict(schema=1,ghc='9.14.1',entries=ENTRIES,frontiers=FRONTIERS,stages=stages,audits=summaries,
         inventories=inventories,nativeRows=len(inputs),nativeExceptionRows=1,allNativeResultsMatchIndependentModel=True,

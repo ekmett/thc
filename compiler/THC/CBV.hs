@@ -1,5 +1,5 @@
 -- GHC 9.14.1 calling-convention evidence, kept separate from WHNF facts.
-module Thc.Cbv (entryContract, existingMarks, eligible) where
+module THC.CBV (entryContract, existingMarks, eligible) where
 
 import GHC.Plugins
 import GHC.Core.Tidy (tidyCbvInfoTop)

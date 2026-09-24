@@ -28,7 +28,7 @@ CHECK_SOURCE
 compiler/build.sh
 THC_CORE_OUT="$root/build/map/core" THC_GHC_OUT="$root/build/map/ghc" \
   compiler/export.sh -i"$root/vendor/containers-0.8/src" -I"$root/vendor/containers-0.8/include" \
-  -fplugin-opt=Thc.Plugin:closure=mapAggregate examples/THC/MapWorkload.hs
+  -fplugin-opt=THC.Plugin:closure=mapAggregate examples/THC/MapWorkload.hs
 python3 compiler/export-boot.py
 python3 - <<'MANIFEST'
 import hashlib, json, os, pathlib, subprocess

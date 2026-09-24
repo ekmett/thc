@@ -66,7 +66,7 @@ class ScalarLexicalProofTest {
         assertEquals(-1L, Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("entry"), arrayOf(1L))))
     }
     @Test fun genuineUnliftedNewtypeCastsKeepTheirScalarRepresentation() = visit { language, backend ->
-        val module = Json.parse(File(root, "build/core/CbvCoercionAudit.json").readText()) as Map<String, Any?>
+        val module = Json.parse(File(root, "build/core/CBVCoercionAudit.json").readText()) as Map<String, Any?>
         for (name in listOf("wrapRaw", "unwrapRaw")) {
             val lambda = (module["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }["expr"] as List<Any?>
             val binder = (lambda[1] as List<Map<String, Any?>>).single()

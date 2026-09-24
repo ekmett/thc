@@ -2,7 +2,7 @@
 {-# LANGUAGE StandaloneKindSignatures, UnliftedDatatypes #-}
 {-# OPTIONS_GHC -fno-cpr-anal #-}
 -- A worker retains an equality coercion before the strict boxed tree slot.
-module CbvCoercionAudit where
+module CBVCoercionAudit where
 import GHC.Exts (Int(I#), Int#, Word#, UnliftedType, (+#), int2Word#)
 
 data Spine = Done | More Int# Spine

@@ -191,7 +191,7 @@ def main():
         module_path = OUT/f'{stage}-core/SimdWord16X8.json'
         module_path.unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
-        if stage == 'post': options += ['-fplugin-opt=Thc.Plugin:post-tidy']
+        if stage == 'post': options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['compiler/export.sh', *options, FIXTURE],
             dict(THC_CORE_OUT=str(module_path.parent), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         module = json.loads(module_path.read_text())
@@ -231,7 +231,7 @@ def main():
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT/'scripts/word16x8_model.py', ROOT/'scripts/test-word16x8-model.py',
                ROOT/'scripts/audit-core.py', ROOT/'scripts/core-capabilities.json',
                ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-               *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/Thc').glob('*.hs')),
+               *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/THC').glob('*.hs')),
                *[ROOT/'compiler'/name for name in ('build.sh', 'export.sh', 'toolchain.sh')]]
     provenance = dict(schema=1, vector='word16x8', stages=stages, nativeRows=native_rows,
         modelMatched=True if native_rows is not None else None, modelRows=len(wanted), entries=entries(),

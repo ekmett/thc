@@ -68,7 +68,7 @@ def main():
     capabilities=json.loads((ROOT/'scripts/core-capabilities.json').read_text())
     inventories=[]
     for stage in ('pre','post'):
-        flags=['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []
+        flags=['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []
         run(['compiler/export.sh',*flags,'compiler/test-fixtures/SumResultAudit.hs'],
             dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         path=OUT/f'{stage}-core/SumResultAudit.json'; module=json.loads(path.read_text())
@@ -100,7 +100,7 @@ def main():
     (OUT/'checks.json').write_text(json.dumps(dict(nativeRows=110,independentPairRows=7,coverage=inventories),indent=2)+'\n')
     sources=[ROOT/'compiler/test-fixtures/SumResultAudit.hs',ROOT/'compiler/test-fixtures/SumResultAuditNative.hs',Path(__file__).resolve(),
              ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-             ROOT/'scripts/generate-scalar-signatures.py',*sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/Thc').glob('*.hs')),
+             ROOT/'scripts/generate-scalar-signatures.py',*sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),
              *[ROOT/'compiler'/name for name in ('build.sh','export.sh','toolchain.sh')]]
     artifacts=[p for p in sorted(OUT.rglob('*')) if p.is_file() and p.name!='provenance.json']+sorted((ROOT/'build/compiler').glob('libHSthc-core-plugin-*'))
     provenance=dict(schema=1,nativeRows=110,independentPairRows=7,sources=[record(p) for p in sources],artifacts=[record(p) for p in artifacts],commands=commands,

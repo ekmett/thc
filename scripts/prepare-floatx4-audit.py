@@ -195,7 +195,7 @@ def main():
         module_path.unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
         if stage == 'post':
-            options += ['-fplugin-opt=Thc.Plugin:post-tidy']
+            options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['compiler/export.sh', *options, str(FIXTURE)],
             dict(THC_CORE_OUT=str(module_path.parent), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         module = json.loads(module_path.read_text())
@@ -226,7 +226,7 @@ def main():
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'scripts/test-floatx4-model.py',
                ROOT / 'scripts/audit-core.py', ROOT / 'scripts/core-capabilities.json',
                ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',
-               *sorted((ROOT / 'scripts').glob('core_*.py')), *sorted((ROOT / 'compiler/Thc').glob('*.hs')),
+               *sorted((ROOT / 'scripts').glob('core_*.py')), *sorted((ROOT / 'compiler/THC').glob('*.hs')),
                *[ROOT / 'compiler' / name for name in ('build.sh', 'export.sh', 'toolchain.sh')]]
     positives = all(audits[s][e['name']]['accepted'] for s in stages for e in entries())
     provenance = dict(schema=1, vector='floatx4', stages=stages, nativeRows=native_rows,

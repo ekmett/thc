@@ -97,10 +97,10 @@ if args.frontier == 'bignum':
 for name in boot_modules:
     subprocess.run(common + [str(source_root / 'GHC/Internal' / (name + '.hs-boot'))], cwd=root, check=True)
 plugin = ['-O2', '-dcore-lint', '-package-db', str(root / 'build/compiler/package.conf.d'),
-          '-package', 'thc-core-plugin', '-fplugin=Thc.Plugin',
-          '-fplugin-opt=Thc.Plugin:' + str(build / 'boot-core'), '-fplugin-opt=Thc.Plugin:post-tidy']
+          '-package', 'thc-core-plugin', '-fplugin=THC.Plugin',
+          '-fplugin-opt=THC.Plugin:' + str(build / 'boot-core'), '-fplugin-opt=THC.Plugin:post-tidy']
 if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
-    plugin += ['-g', '-fplugin-opt=Thc.Plugin:source-notes']
+    plugin += ['-g', '-fplugin-opt=THC.Plugin:source-notes']
 if args.frontier in ('lists', 'show', 'bignum'):
     # Loading the plugin's interface would import GHC.Driver.Plugins, including
     # its Semigroup instance, into the Base unit being rebuilt. Load the already
@@ -113,7 +113,7 @@ if args.frontier in ('lists', 'show', 'bignum'):
     if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
         plugin += ['-g']
         options += ['source-notes']
-    plugin += ['-fplugin-library=' + str(library) + ';thc-core-plugin-0.1;Thc.Plugin;' + json.dumps(options)]
+    plugin += ['-fplugin-library=' + str(library) + ';thc-core-plugin-0.1;THC.Plugin;' + json.dumps(options)]
 for name in source_modules:
     subprocess.run(common + plugin + [str(source_root / 'GHC/Internal' / (name + '.hs'))], cwd=root, check=True)
     shutil.copyfile(build / 'boot-core' / ('GHC.Internal.' + name.replace('/', '.') + '.json'),
@@ -125,7 +125,7 @@ if args.frontier == 'exceptions':
     env.update(GHC=ghc, GHC_PKG=ghc_pkg)
     env.update(THC_CORE_OUT=str(build / 'interface-core'), THC_GHC_OUT=str(build / 'interface-ghc'))
     subprocess.run([str(root / 'compiler/export.sh'), '-package', 'ghc-internal',
-                    '-fplugin-opt=Thc.Plugin:closure=exceptionInterfaceRoot',
+                    '-fplugin-opt=THC.Plugin:closure=exceptionInterfaceRoot',
                     'compiler/package-roots/InterfaceRoots.hs'], cwd=root, env=env, check=True)
     shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
 (build / 'boot-provenance.json').write_text(json.dumps({

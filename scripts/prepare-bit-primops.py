@@ -78,9 +78,9 @@ def main():
     for stage in ('pre', 'post'):
         core = BUILD / (stage + '-core')
         env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(BUILD / (stage + '-ghc')))
-        options = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+        options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
         run([ROOT / 'compiler/export.sh', *options,
-             *['-fplugin-opt=Thc.Plugin:closure=' + e['name'] for e in operations], SOURCE], env=env)
+             *['-fplugin-opt=THC.Plugin:closure=' + e['name'] for e in operations], SOURCE], env=env)
         paths = sorted(core.glob('*.json'))
         modules = [(str(p.relative_to(ROOT)), json.loads(p.read_text())) for p in paths]
         stages[stage] = [p for p, _ in modules]
@@ -129,7 +129,7 @@ def main():
     (BUILD / 'oracle.tsv').write_text(result.stdout)
     inputs = [SOURCE, 'scripts/prepare-bit-primops.py', 'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json', 'scripts/audit-core.py',
               'scripts/core_vectors.py', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']
-    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/Thc').glob('*.hs'))
+    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/THC').glob('*.hs'))
     artifacts += ['build/bit-primops/oracle.tsv', 'build/bit-primops/NativeBitPrimops.hs']
     hashes = lambda paths: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths}
     manifest.write_text(json.dumps(dict(schema=1, ghc='9.14.1', entries=operations, stages=stages,

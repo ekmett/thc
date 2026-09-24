@@ -125,7 +125,7 @@ def main():
     parser.add_argument('--json', action='store_true', help='Print per-definition audit results')
     parser.add_argument('--post-tidy-dir', type=Path, default=ROOT / 'build/cbv-post-core')
     args = parser.parse_args()
-    files = args.modules or [ROOT / 'build/core/CbvAudit.json', ROOT / 'build/core/CbvJoinAudit.json', ROOT / 'build/core/CbvCoercionAudit.json']
+    files = args.modules or [ROOT / 'build/core/CBVAudit.json', ROOT / 'build/core/CBVJoinAudit.json', ROOT / 'build/core/CBVCoercionAudit.json']
     modules = [json.loads(p.read_text()) for p in files]
     summaries = [audit(module) for module in modules]
     if not args.modules:

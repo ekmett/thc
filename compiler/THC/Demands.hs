@@ -1,6 +1,6 @@
 -- Caller-side evaluation permissions from GHC 9.14.1 demand signatures.
 -- These are neither entry calling-convention marks nor prior WHNF facts.
-module Thc.Demands (callDemand) where
+module THC.Demands (callDemand) where
 
 import GHC.Plugins
 import GHC.Builtin.Names (hasKey, lazyIdKey)
@@ -26,7 +26,7 @@ callDemand (Var callee) args = Just (arity, marks)
     isTypeArg _ = False
 callDemand _ _ = Nothing
 
--- Match CorePrep.isLazyExpr before Thc.Wired erases the lazyId marker.
+-- Match CorePrep.isLazyExpr before THC.Wired erases the lazyId marker.
 isLazyExpr :: CoreExpr -> Bool
 isLazyExpr (Cast expression _) = isLazyExpr expression
 isLazyExpr (Tick _ expression) = isLazyExpr expression
