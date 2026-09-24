@@ -13,6 +13,10 @@ import com.oracle.truffle.api.nodes.Node
 internal class AsyncDelivery(val request: AsyncRequest, node: Node) :
     AbstractTruffleException("Asynchronous guest exception", null, 0, node)
 
+/** A blocking operation was cancelled before commitment and can be retried after the saved cut. */
+internal class AsyncBlocked(val request: AsyncRequest, node: Node) :
+    AbstractTruffleException("Asynchronous interruption before blocking operation committed", null, 0, node)
+
 /** A trampoline has discarded every caller suffix and reached this exact tail target. */
 internal class TailYield(val continuation: ContinuationResult, val target: RootCallTarget) {
     init {
