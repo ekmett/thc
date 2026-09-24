@@ -71,6 +71,7 @@ class CoreContinuationNativeTest {
                     val driver = Driver()
                     assertSame(thunk, assertThrows(ThunkSuspended::class.java) { driver.force(thunk) }.thunk)
                     assertEquals(AsyncRequestState.CLAIMED, request.state)
+                    assertTrue(request.compiledCapture, "Installed bytecode must notice the request before its cold mailbox call")
                     assertSame(request, AsyncContinuations.request(thunk.value as ContinuationResult))
                     request.acknowledge()
                     val answer = driver.force(thunk) as DataValue
