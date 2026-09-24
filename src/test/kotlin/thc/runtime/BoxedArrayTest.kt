@@ -177,7 +177,7 @@ class BoxedArrayTest {
             context.initialize("thc");context.enter()
             try {
                 val language=TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (operation in ArrayOp.entries) for (mutation in 0..7) for (diagnostic in listOf(false,true)) {
+                for (operation in listOf(ArrayOp.NEW, ArrayOp.READ, ArrayOp.WRITE, ArrayOp.FREEZE, ArrayOp.INDEX)) for (mutation in 0..7) for (diagnostic in listOf(false,true)) {
                     val module=CoreModules.reachable(merged(paths),"boxedSTRecursive")
                     val app=applications(module).first { (it[1] as List<*>).take(2)==listOf("prim",operation.primitive) }
                     val args=app[2] as MutableList<Any?>;val flags=app[3] as MutableList<Any?>
@@ -204,7 +204,7 @@ class BoxedArrayTest {
                     }
                     assertThrows(RuntimeFault::class.java,{ program(language,module+("diagnosticUnsupported" to diagnostic),backend) },"$backend/${operation.primitive}/$mutation/$diagnostic")
                 }
-                for (operation in ArrayOp.entries) {
+                for (operation in listOf(ArrayOp.NEW, ArrayOp.READ, ArrayOp.WRITE, ArrayOp.FREEZE, ArrayOp.INDEX)) {
                     val module=CoreModules.reachable(merged(paths),"boxedSTRecursive")
                     val app=applications(module).first { (it[1] as List<*>).take(2)==listOf("prim",operation.primitive) }
                     val primitive=(app[1] as List<*>).toList();app.clear();app.addAll(primitive)

@@ -233,3 +233,10 @@ installed decimal worker from the complete pinned GHC Show module. Public
 pre/post-Tidy consumers compare checksums and every character against fresh
 native GHC and an independent decimal model. This separate source-coverage
 slice does not close the Set/Sequence exception and Typeable frontiers above.
+
+## Boxed-array slices
+
+[Shallow Array# slices](array-slices.md) add genuine `cloneArray#`, `freezeArray#`
+and `thawArray#` with independent storage and lazy shared references. Public
+STArray construction and Array indexing are covered around the slice operations;
+ordinary public freeze/thaw remains an explicit `arrEleBottom` source frontier.
