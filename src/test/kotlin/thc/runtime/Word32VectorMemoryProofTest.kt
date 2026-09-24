@@ -183,6 +183,13 @@ class Word32VectorMemoryProofTest {
                     val f = fixture(operation); list(f.app[3])[index] = flag
                     reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/flag[$index]=$flag")
                 }
+                if (!operation.isRead) for (count in listOf<Any?>(4.0, 4.5, true, "4", null)) {
+                    val f = fixture(operation)
+                    val proof = if (operation.isWrite) map(map(list(list(f.app[2])[2])[6])["rep"])
+                        else map(map(f.app[6])["rep"])
+                    map(proof["vector"])["lanes"] = count
+                    reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/direct lanes=$count")
+                }
                 if (operation.isWrite) {
                     val f = fixture(operation); map(list(list(f.app[2])[2])[6])["rep"] = copy(signedVector)
                     reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/signed vector")

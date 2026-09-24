@@ -142,6 +142,12 @@ class VectorMemoryProofTest(unittest.TestCase):
                 self.assertFalse(check(module)['accepted'], (name, arity))
 
     def test_all_operations_require_exact_flags_arity_and_arguments(self):
+        for name in INDICES | WRITES:
+            for count in (4.0, 4.5, True, '4', None):
+                module, app, _ = fixture(name)
+                proof = app[2][2][6]['rep'] if name in WRITES else app[6]['rep']
+                proof['vector']['lanes'] = count
+                self.assertFalse(check(module)['accepted'], (name, count))
         for name in OPERATIONS:
             for flag in (True, None, 0, 'false'):
                 module, app, _ = fixture(name)
