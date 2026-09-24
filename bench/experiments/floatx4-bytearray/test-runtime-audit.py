@@ -137,6 +137,15 @@ def bloom_metadata():
     return summarize(value)
 
 
+def float_frame_metadata():
+    value=frame_tags('vectorStoreGraph')
+    by_id(value,96)['properties']['stamp']='a!# long[]'
+    value['nodes'].append(node(201,'ConstantNode',stamp='i32 [4]',rawvalue='4'))
+    next(e for e in value['edges'] if e['to']==93 and e['label']=='values' and e['listIndex']==1)['from']=201
+    value['edges'].append(edge(110,100,'values',index=1))
+    return summarize(value)
+
+
 class GraphTest(unittest.TestCase):
     def reject(self, value, entry='vectorIndexGraph'):
         with self.assertRaises(AssertionError): audit.inspect_graph(summarize(value), entry)
@@ -258,6 +267,66 @@ class GraphTest(unittest.TestCase):
             elif mutation=='owner':by_id(bad,91)['properties']['type']='jdk.incubator.vector.Float128Vector'
             else:next(e for e in bad['edges'] if e['from']==96 and e['label']=='values')['listIndex']=2
             self.reject(bad)
+
+    def test_float_frame_slot_has_exact_float_tag_and_primitive_storage(self):
+        for spelling in ('f32','f32!','f32! [-65536.0 - 65535.0]'):
+            value=float_frame_metadata();by_id(value,110)['properties']['stamp']=spelling
+            result=audit.inspect_graph(value,'vectorStoreGraph')
+            self.assertEqual(result['frameTagMetadata'],[90])
+            self.assertEqual(len(result['packedStoreLanes']),4)
+        # Omitted/default entry and explicit Float +0 are reconstruction-only.
+        value=float_frame_metadata()
+        value['edges']=[e for e in value['edges'] if not (e['to']==100 and e['label']=='values')]
+        audit.inspect_graph(summarize(value),'vectorStoreGraph')
+        value['nodes'].append(node(202,'ConstantNode',stamp='f32! [0.0]',rawvalue='0.0'))
+        value['edges'].append(edge(202,100,'values',index=1))
+        audit.inspect_graph(summarize(value),'vectorStoreGraph')
+
+    def test_float_frame_wrong_width_tag_object_and_escape_fail(self):
+        for mutation in ('double','long','integer','object','missing_stamp','tag_long','tag_double','tag_illegal',
+                         'tag_bool','tag_static','tag_fraction','tag_kind','object_slot','escape','state_escape',
+                         'wrong_owner','wrong_slot','wrong_length','materialized'):
+            value=float_frame_metadata()
+            if mutation in ('double','long','integer','object','missing_stamp'):
+                by_id(value,110)['properties']['stamp']={'double':'f64','long':'i64','integer':'i32',
+                    'object':'a!# java.lang.Float','missing_stamp':''}[mutation]
+            elif mutation.startswith('tag_'):
+                if mutation=='tag_kind':by_id(value,201)['properties']['stamp']='i64'
+                else:by_id(value,201)['properties']['rawvalue']={'tag_long':'1','tag_double':'3','tag_illegal':'7',
+                    'tag_bool':'5','tag_static':'8','tag_fraction':'4.0'}[mutation]
+            elif mutation=='object_slot':
+                value['nodes'].append(node(202,'ConstantNode',stamp='a java.lang.Object'))
+                value['edges'].append(edge(202,99,'values',index=1))
+            elif mutation=='escape':value['edges'].append(edge(96,80,'result'))
+            elif mutation=='state_escape':value['edges'].append(edge(100,80,'result'))
+            elif mutation=='wrong_owner':by_id(value,91)['properties']['type']='jdk.incubator.vector.Float128Vector'
+            elif mutation=='wrong_slot':next(e for e in value['edges'] if e['to']==100 and e['label']=='values')['listIndex']=0
+            elif mutation=='wrong_length':by_id(value,96)['properties']['length']=4
+            else:value['nodes'].append(node(202,'CommitAllocationNode'))
+            with self.subTest(mutation=mutation):
+                if mutation!='materialized':
+                    nodes={n['id']:n for n in value['nodes']}
+                    self.assertFalse(audit.virtual_frame_tags(nodes[90],nodes,value['edges']))
+                self.reject(value,'vectorStoreGraph')
+
+    def test_float_frame_snapshot_kinds_cannot_be_mismatched(self):
+        value=float_frame_metadata()
+        value['nodes'] += [node(210,'VirtualObjectState'),node(211,'FrameState'),
+                           node(212,'ConstantNode',stamp='i32 [1]',rawvalue='1')]
+        value['edges'] += [edge(90,210,'object'),edge(210,211,'virtualObjectMappings','State')]
+        for e in list(value['edges']):
+            if e['to']==93 and e['label']=='values':
+                value['edges'].append(edge(e['from'],210,'values',index=e['listIndex']))
+        for state in (92,99,100):value['edges'].append(edge(state,211,'virtualObjectMappings','State'))
+        audit.inspect_graph(summarize(value),'vectorStoreGraph')
+        for mutation in ('long_tag_float_value','missing_primitive_snapshot','duplicate_tag_snapshot'):
+            bad=copy.deepcopy(value)
+            if mutation=='long_tag_float_value':
+                next(e for e in bad['edges'] if e['to']==210 and e['label']=='values' and e['listIndex']==1)['from']=212
+            elif mutation=='missing_primitive_snapshot':
+                bad['edges']=[e for e in bad['edges'] if not (e['from']==100 and e['to']==211)]
+            else:bad['edges'].append(edge(210,94,'virtualObjectMappings','State'))
+            with self.subTest(mutation=mutation):self.reject(bad,'vectorStoreGraph')
 
     def test_duplicate_or_dangling_nodes_fail(self):
         value=graph();value['nodes'].append(copy.deepcopy(value['nodes'][0]));self.reject(value)

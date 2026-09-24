@@ -285,7 +285,7 @@ def virtual_frame_tags(node, nodes, edges):
         for value in tags.values():
             p = value['properties']
             if (kind(value) != 'ConstantNode' or not re.match(r'^i32(?:\s|$)', p.get('stamp', ''))
-                    or p.get('rawvalue') not in ('0', '1', '7')):
+                    or p.get('rawvalue') not in ('0', '1', '4', '7')):
                 return False
         for frame in fs:
             if frame in snapshots: return False
@@ -317,9 +317,16 @@ def virtual_frame_tags(node, nodes, edges):
         for index in range(length):
             tag = int(tags[index]['properties']['rawvalue']) if index in tags else 0
             if tag in (0, 7) and index in primitive: return False
-            if tag in (1, 7) and index in objects: return False
-            if index in primitive and not re.match(r'^i64(?:\s|$)', primitive[index]['properties'].get('stamp', '')):
-                return False
+            if tag in (1, 4, 7) and index in objects: return False
+            if index in primitive:
+                # Pinned Graal NewFrameNode.java:81-88 defines Float tag=4.
+                # VirtualFrameSetNode.java:84-101 keeps the actual f32 value
+                # in the virtual long[] entry; only OSR/static access forces
+                # long bits (123-132). This is exact frame reconstruction,
+                # not permission for a live long[]/FloatVector payload.
+                stamp = primitive[index]['properties'].get('stamp', '')
+                if not (float_stamp(stamp) if tag == 4 else re.match(r'^i64(?:\s|$)', stamp)):
+                    return False
             if index in objects and not objects[index]['properties'].get('stamp', '').startswith('a'):
                 return False
     return True
