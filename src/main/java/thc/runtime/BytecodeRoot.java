@@ -427,8 +427,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class PollAsync {
         @Specialization public static boolean poll(VirtualFrame frame, LocalAccessor request,
                 @Bind Node node) {
+            // Take the evidence before the mailbox's cold boundary leaves compiled code.
+            boolean compiled = CompilerDirectives.inCompiledCode();
             AsyncRequest pending = GuestThreads.pollCurrent(node, false);
             if (pending == null) return false;
+            pending.compiledCapture = compiled;
             request.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, pending);
             return true;
         }
