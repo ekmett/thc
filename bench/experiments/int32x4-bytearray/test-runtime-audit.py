@@ -73,8 +73,8 @@ def graph(entry='vectorIndexWorker'):
     return summarize(dict(nodes=nodes, edges=edges))
 
 
-def frame_tags():
-    value = graph()
+def frame_tags(entry='vectorIndexWorker'):
+    value = graph(entry)
     owner = 'com.oracle.truffle.api.impl.FrameWithoutBoxing'
     value['nodes'] += [
         node(90, 'VirtualArrayNode', stamp='a!# byte[]', componentType='byte', length=3),
@@ -118,6 +118,16 @@ def metadata_array(bytecode=True):
         value['nodes'] += [node(203,'FrameState',code='thc.runtime.Vector32Unpack.executeTuple(Lcom/oracle/truffle/api/frame/VirtualFrame;, [I, I)'),
                            node(205,'ConstantNode',stamp='i32 [0]',rawvalue='0')]
         value['edges'] += [edge(201,203,'values',index=2),edge(91,203,'values',index=1),edge(205,203,'values',index=3)]
+    return summarize(value)
+
+
+def bloom_metadata():
+    value=frame_tags('vectorStoreGraph')
+    value['nodes'] += [node(201,'UnboxNode',boxingKind='JavaKind.Long',stamp='i64'),
+                      node(202,'OrNode',stamp='i64'),node(203,'ConstantNode',stamp='i64',rawvalue='141888540639232'),
+                      node(204,'ConstantNode',stamp='i32 [1]',rawvalue='1')]
+    value['edges'] += [edge(20,201),edge(201,202,'x'),edge(203,202,'y'),edge(202,100,'values',index=0)]
+    next(e for e in value['edges'] if e['to']==93 and e['label']=='values' and e['listIndex']==0)['from']=204
     return summarize(value)
 
 
@@ -271,6 +281,32 @@ class GraphTest(unittest.TestCase):
             value=graph();value['nodes'] += [node(200,'ConstantNode',stamp='a!# byte[]'),node(201,name)]
             with self.assertRaisesRegex(AssertionError,'Residual allocation/payload/call: '+name):
                 audit.inspect_graph(summarize(value),'vectorIndexWorker')
+
+    def test_exact_host_bloom_bookkeeping_is_not_a_guest_lane(self):
+        result=audit.inspect_graph(bloom_metadata(),'vectorStoreGraph')
+        self.assertEqual(result['bloomBookkeepingUnbox'],201)
+        self.assertEqual(len(result['packedStoreLanes']),4)
+
+    def test_bloom_mask_slot_owner_and_escape_negatives(self):
+        for mutation in ('mask','mask_width','dynamic_mask','operator','frame_slot','header_slot','wrong_owner',
+                         'duplicate','address','payload','returned','state_escape','extra_argument'):
+            value=bloom_metadata()
+            if mutation=='mask':by_id(value,203)['properties']['rawvalue']='0'
+            elif mutation=='mask_width':by_id(value,203)['properties']['stamp']='i32'
+            elif mutation=='dynamic_mask':by_id(value,203)['nodeClass']='test.AddNode'
+            elif mutation=='operator':by_id(value,202)['nodeClass']='test.AddNode'
+            elif mutation=='frame_slot':next(e for e in value['edges'] if e['from']==202)['listIndex']=1
+            elif mutation=='header_slot':next(e for e in value['edges'] if e['to']==201)['from']=27
+            elif mutation=='wrong_owner':by_id(value,91)['properties']['fields'][3]='payload'
+            elif mutation=='duplicate':
+                value['nodes'].append(node(205,'UnboxNode',boxingKind='JavaKind.Long',stamp='i64'));value['edges'].append(edge(20,205))
+            elif mutation=='address':value['edges'].append(edge(201,61,'x'))
+            elif mutation=='payload':next(e for e in value['edges'] if e['to']==110)['from']=201
+            elif mutation=='returned':next(e for e in value['edges'] if e['to']==80 and e['type']=='Value')['from']=202
+            elif mutation=='state_escape':value['edges'].append(edge(202,94,'values',index=2))
+            else:
+                value['nodes'].append(node(205,'UnboxNode',boxingKind='JavaKind.Long',stamp='i64'));value['edges'].append(edge(27,205))
+            with self.subTest(mutation=mutation):self.reject(value,'vectorStoreGraph')
 
 
 class LirTest(unittest.TestCase):

@@ -452,7 +452,42 @@ def inspect_graph(graph, entry):
             array = one(n['id'], 'array')
             require(strip_object(array) == base_origin or kind(nodes[strip_object(array)]) == 'ParameterNode',
                     'Private payload array length')
-    require(set(unboxes) == ({2} if operation == 'index' else set(range(2, 7))),
+    bloom_unbox = None
+    if operation == 'store' and 0 in unboxes:
+        # FunctionRoot.execute stores (host bloom header | root mask) into
+        # FrameLayout.BLOOM_FILTER=0. Retain only that exact deopt-only use;
+        # this is not an extra scalar/lane-input exception.
+        bloom_unbox = unboxes[0]
+        users = [e for e in edges if e['from'] == bloom_unbox and e['type'] == 'Value']
+        require(len(users) == 1 and users[0]['label'] == 'x' and kind(nodes[users[0]['to']]) == 'OrNode',
+                'Bloom header requires one exact mask OR')
+        merged = users[0]['to']; mask = nodes[one(merged, 'y')]
+        require(inputs(merged, 'x') == [bloom_unbox] and len(inputs(merged)) == 2
+                and re.match(r'^i64(?:\s|$)', nodes[merged]['properties'].get('stamp', ''))
+                and kind(mask) == 'ConstantNode' and re.match(r'^i64(?:\s|$)', mask['properties'].get('stamp', ''))
+                and re.fullmatch(r'-?[0-9]+', mask['properties'].get('rawvalue', ''))
+                and -(1 << 63) <= int(mask['properties']['rawvalue']) < (1 << 63)
+                and int(mask['properties']['rawvalue']) != 0, 'Invalid constant bloom mask')
+        uses = [e for e in edges if e['from'] == merged]
+        require(uses, 'Unused bloom bookkeeping is not evidence')
+        for use in uses:
+            state = use['to']
+            require(use['type'] == 'Value' and use['label'] == 'values' and use.get('listIndex') == 0
+                    and kind(nodes[state]) == 'VirtualObjectState', 'Bloom header escapes frame primitive slot zero')
+            primitive = one(state, 'object')
+            require(kind(nodes[primitive]) == 'VirtualArrayNode'
+                    and nodes[primitive]['properties'].get('componentType') == 'long', 'Bloom storage must be frame long[]')
+            owners = [e['to'] for e in edges if e['from'] == primitive and e['type'] == 'Value'
+                      and e['label'] == 'values' and e.get('listIndex') == 3
+                      and kind(nodes[e['to']]) == 'VirtualObjectState']
+            require(len(owners) == 1, 'Bloom storage requires one exact frame owner')
+            tags = [e['from'] for e in edges if e['to'] == owners[0] and e['type'] == 'Value'
+                    and e['label'] == 'values' and e.get('listIndex') == 4]
+            require(len(tags) == 1 and virtual_frame_tags(nodes[tags[0]], nodes, edges),
+                    'Bloom storage requires fully validated frame metadata')
+    expected_unboxes = {2} if operation == 'index' else set(range(2, 7))
+    if bloom_unbox is not None: expected_unboxes.add(0)
+    require(set(unboxes) == expected_unboxes,
             'Expected exact offset/lane host Long unboxes')
     require(unboxes[2] in ancestors(offset), 'Dynamic caller offset must reach the memory address')
     # Native byte checks establish the offset scale; the graph independently
@@ -536,6 +571,7 @@ def inspect_graph(graph, entry):
                 backingArray=base, backingArgumentSlot=1, offset=offset, offsetUnitBytes=scale,
                 signedLaneExtensions=sorted(signed, key=lambda x: x['lane']), packedStoreLanes=packed_lanes,
                 interpreterArrayMetadata=sorted(interpreter_arrays),
+                bloomBookkeepingUnbox=bloom_unbox,
                 frameTagMetadata=[n['id'] for n in nodes.values() if kind(n) == 'VirtualArrayNode'
                                   and virtual_frame_tags(n, nodes, edges)])
 
