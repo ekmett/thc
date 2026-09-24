@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
 """Independent bit formulas and declared-domain coverage; no guest execution."""
 import collections
+import copy
+import gzip
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
 import unittest
 import int32x4_bytearray_model as model
+
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def signed(value):
@@ -24,6 +37,49 @@ def bytes_after(offset, lanes, vector_units):
 
 
 class ModelTest(unittest.TestCase):
+    def test_genuine_unsigned_mutations_match_current_auditor(self):
+        prepare = load('int32x4_memory_prepare', Path(__file__).with_name('prepare-int32x4-bytearray-audit.py'))
+        auditor = load('int32x4_memory_current_audit', prepare.ROOT/'scripts/audit-core.py')
+        capabilities = json.loads((prepare.ROOT/'scripts/core-capabilities.json').read_text())
+        retained = prepare.ROOT/'bench/experiments/int32x4-bytearray/evidence-x86_64'
+        provenance = json.loads(gzip.decompress((retained/'native/provenance.json.gz').read_bytes()))
+        hashes = {item['path']: item['sha256'] for item in provenance['artifacts']}
+        fixture_hash = next(item['sha256'] for item in provenance['sources']
+                            if item['path'] == 'compiler/test-fixtures/SimdInt32X4ByteArray.hs')
+        self.assertEqual(hashlib.sha256(prepare.FIXTURE.read_bytes()).hexdigest(), fixture_hash)
+        modules = []
+        for stage in ('pre', 'post'):
+            path = retained/f'{stage}-core.json.gz'
+            data = gzip.decompress(path.read_bytes())
+            self.assertEqual(hashlib.sha256(data).hexdigest(),
+                             hashes[f'build/simd-int32x4-bytearray/{stage}-core/SimdInt32X4ByteArray.json'])
+            modules.append((path, stage, json.loads(data)))
+        # AArch64 freshly exports pre-Core only; the pinned x86 capture above
+        # always covers both stages without claiming a new native run here.
+        # Retained stages keep this model check useful in a clean checkout too.
+        prepared = sorted(prepare.OUT.glob('*-core/SimdInt32X4ByteArray.json'))
+        modules.extend((path, path.parent.name.removesuffix('-core'), json.loads(path.read_text()))
+                       for path in prepared)
+        expected_counts = {family+operation: 3 if operation == 'Index' else 1
+                           for family in ('vector', 'scalar') for operation in ('Index', 'Read', 'Write')}
+        for path, stage, module in modules:
+            with self.subTest(path=str(path)):
+                self.assertEqual(module['boundary'], prepare.STAGES[stage])
+                original = copy.deepcopy(module)
+                for name in expected_counts:
+                    report = auditor.Audit([(str(path), module)], capabilities).run([name+'Case'])
+                    self.assertTrue(report['accepted'])
+                    self.assertFalse(report['issues'])
+                    self.assertFalse(report['missingGlobals'])
+                controls = prepare.unsigned_controls(module, path, auditor, capabilities)
+                self.assertEqual(module, original)
+                self.assertEqual(set(controls), set(expected_counts))
+                for name, count in expected_counts.items():
+                    report = controls[name]['report']
+                    self.assertFalse(report['accepted'])
+                    self.assertFalse(report['missingGlobals'])
+                    self.assertEqual(len(report['issues']), count)
+
     def test_narrow_constructed_half_domains(self):
         low, high = set(), set()
         for i in range(65536):
