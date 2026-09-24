@@ -1151,8 +1151,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         SmallArrayOp.NEW -> e.builder.beginNewSmallArray(destination[0])
                         SmallArrayOp.READ -> e.builder.beginReadSmallArray(destination[0])
                         SmallArrayOp.INDEX -> e.builder.beginIndexSmallArray(destination[0])
-                        SmallArrayOp.FREEZE -> e.builder.beginFreezeSmallArray(destination[0])
+                        SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.beginFreezeSmallArray(destination[0])
                         SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeSmallMutableArray(destination[0])
+                        SmallArrayOp.CLONE_MUTABLE -> e.builder.beginCopySmallArraySlice(destination[0])
                         else -> error("Not a tuple SmallArray operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -1160,16 +1161,25 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         SmallArrayOp.NEW -> e.builder.endNewSmallArray()
                         SmallArrayOp.READ -> e.builder.endReadSmallArray()
                         SmallArrayOp.INDEX -> e.builder.endIndexSmallArray()
-                        SmallArrayOp.FREEZE -> e.builder.endFreezeSmallArray()
+                        SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> e.builder.endFreezeSmallArray()
                         SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeSmallMutableArray()
+                        SmallArrayOp.CLONE_MUTABLE -> e.builder.endCopySmallArraySlice()
                         else -> error("Not a tuple SmallArray operation")
                     }
                 } else ProvenExpression(Expression { e ->
-                    if (operation == SmallArrayOp.WRITE) e.builder.beginWriteSmallArray()
-                    else e.builder.beginSizeSmallArray()
+                    when (operation) {
+                        SmallArrayOp.WRITE -> e.builder.beginWriteSmallArray()
+                        SmallArrayOp.CLONE -> e.builder.beginCloneSmallArray()
+                        SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.beginTransferSmallArray(operation == SmallArrayOp.COPY_MUTABLE)
+                        else -> e.builder.beginSizeSmallArray()
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == SmallArrayOp.WRITE) e.builder.endWriteSmallArray()
-                    else e.builder.endSizeSmallArray()
+                    when (operation) {
+                        SmallArrayOp.WRITE -> e.builder.endWriteSmallArray()
+                        SmallArrayOp.CLONE -> e.builder.endCloneSmallArray()
+                        SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.endTransferSmallArray()
+                        else -> e.builder.endSizeSmallArray()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!

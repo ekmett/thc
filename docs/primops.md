@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 274 | Implemented fixed numeric/character scalar forms. |
-| Partial | 237 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 980 | No declared lowering. |
+| Partial | 242 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 975 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -342,10 +342,14 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `byteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `catch#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `cloneArray#` — arity 3 — Managed lifted arrays
+- [ ] `cloneSmallArray#` — arity 3 — Managed lifted arrays
+- [ ] `cloneSmallMutableArray#` — arity 4 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
 - [ ] `copyMutableByteArray#` — arity 6 — Managed byte storage
 - [ ] `copyMutableByteArrayNonOverlapping#` — arity 6 — Managed byte storage
+- [ ] `copySmallArray#` — arity 6 — Managed lifted arrays
+- [ ] `copySmallMutableArray#` — arity 6 — Managed lifted arrays
 - [ ] `dataToTagLarge#` — arity 1 — concrete-algebraic-family-64
 - [ ] `dataToTagSmall#` — arity 1 — concrete-algebraic-family-64
 - [ ] `divideDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -535,6 +539,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unsafeFreezeArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeFreezeByteArray#` — arity 2 — Managed byte storage
 - [ ] `unsafeFreezeSmallArray#` — arity 2 — Managed lifted arrays
+- [ ] `unsafeThawSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `writeAddrArray#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeArray#` — arity 4 — Managed lifted arrays
@@ -619,8 +624,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `catchSTM#` — arity 3
 - [ ] `clearCCS#` — arity 2
 - [ ] `cloneMutableArray#` — arity 4
-- [ ] `cloneSmallArray#` — arity 3
-- [ ] `cloneSmallMutableArray#` — arity 4
 - [ ] `closureSize#` — arity 1
 - [ ] `compactAdd#` — arity 3
 - [ ] `compactAddWithSharing#` — arity 3
@@ -641,8 +644,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `copyByteArrayToAddr#` — arity 5
 - [ ] `copyMutableArray#` — arity 6
 - [ ] `copyMutableByteArrayToAddr#` — arity 5
-- [ ] `copySmallArray#` — arity 6
-- [ ] `copySmallMutableArray#` — arity 6
 - [ ] `deRefStablePtr#` — arity 2
 - [ ] `deRefWeak#` — arity 2
 - [ ] `decodeDouble_2Int#` — arity 1
@@ -1375,7 +1376,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord8X64#` — arity 1
 - [ ] `unsafeThawArray#` — arity 2
 - [ ] `unsafeThawByteArray#` — arity 2
-- [ ] `unsafeThawSmallArray#` — arity 2
 - [ ] `waitRead#` — arity 2
 - [ ] `waitWrite#` — arity 2
 - [ ] `whereFrom#` — arity 3
