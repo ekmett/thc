@@ -21,8 +21,8 @@ pointerRoundtrip raw = runRW# (\s0 ->
     case writeWord8OffAddr# base 16# (wordToWord8# 9##) s5 of { s6 ->
     case readAddrOffAddr# base 1# s6 of { (# s7, target #) ->
     case readWord8OffAddr# target 0# s7 of { (# s8, observed #) ->
-    case readWord8OffAddr# base 16# s8 of { (# s9, separate #) ->
-      (# s9, I# (eqAddr# target (plusAddr# base 24#) *# 1000#
+    case indexWord8Array# bytes 16# of { separate ->
+      (# s8, I# (eqAddr# target (plusAddr# base 24#) *# 1000#
         +# word2Int# (word8ToWord# observed) *# 17#
         +# word2Int# (word8ToWord# separate)) #)
     } } } } } }) of { (# _, I# answer #) -> answer }

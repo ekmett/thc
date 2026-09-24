@@ -27,6 +27,12 @@ one owner object and creates its cell map only on the first pointer write.
 Pinned owner accesses synchronize to order pointer-cell changes. Ordinary
 unpinned arrays retain their direct byte-array fast path. Concurrent raw writes
 to one guest array remain outside this narrow contract.
+Scalar byte-array reads and writes inspect only their touched range, so a
+disjoint numeric field remains usable beside a pointer cell. Vector operations
+on a pinned array still require a raw view and therefore cannot mix with
+pointer cells in that allocation.
+An aligned full-width numeric overwrite releases the replaced pointer;
+partial overlap fails before changing bytes or references.
 
 Pinning and power-of-two alignment are logical properties of managed storage,
 not physical JVM heap pinning or native process pointers. There is no address

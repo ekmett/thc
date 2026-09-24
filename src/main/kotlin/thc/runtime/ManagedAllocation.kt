@@ -100,6 +100,39 @@ internal class ManagedAllocation private constructor(
         return pointers?.get(start) ?: fault("No managed pointer cell at this address")
     }
 
+    /** Internal scalar array operations keep the backing private and inspect
+     * exactly their element range while holding the pointer-cell monitor. */
+    @Synchronized fun <T> accessElement(index: Long, width: Int, writable: Boolean,
+        action: (ByteArray) -> T): T {
+        if (width <= 0 || index < 0 || index > Long.MAX_VALUE / width)
+            fault("Managed allocation element outside its backing storage")
+        val start = range(index * width, width.toLong())
+        if (writable) {
+            mutable()
+            if (pointerCapable) invalidate(start, width)
+        } else if (intersectsPointer(start, width))
+            fault("Scalar read overlaps a managed pointer cell")
+        return action(bytes)
+    }
+
+    @Synchronized fun copyBytesOut(offset: Long, count: Long): ByteArray {
+        val start = range(offset, count)
+        if (intersectsPointer(start, count.toInt()))
+            fault("Raw copy overlaps a managed pointer cell")
+        return bytes.copyOfRange(start, start + count.toInt())
+    }
+
+    @Synchronized fun copyBytesIn(source: ByteArray, sourceOffset: Int,
+        destinationOffset: Long, count: Long) {
+        mutable()
+        if (sourceOffset < 0 || count < 0 || sourceOffset.toLong() > source.size ||
+            count > source.size.toLong() - sourceOffset)
+            fault("Raw copy source outside its backing storage")
+        val start = range(destinationOffset, count)
+        if (pointerCapable) invalidate(start, count.toInt())
+        System.arraycopy(source, sourceOffset, bytes, start, count.toInt())
+    }
+
     @Synchronized fun fill(offset: Long, count: Long, value: Long) {
         mutable()
         val start = range(offset, count)

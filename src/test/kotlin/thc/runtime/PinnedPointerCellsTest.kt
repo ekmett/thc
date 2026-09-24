@@ -45,7 +45,7 @@ class PinnedPointerCellsTest {
             assertEquals(emptyList<Any>(), audit["missingGlobals"])
             val primitives = (audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.toSet()
             assertTrue(primitives.containsAll(setOf("newPinnedByteArray#", "unsafeFreezeByteArray#", "byteArrayContents#",
-                "keepAlive#", "writeAddrOffAddr#", "readAddrOffAddr#", "readWord8OffAddr#")))
+                "keepAlive#", "writeAddrOffAddr#", "readAddrOffAddr#", "readWord8OffAddr#", "indexWord8Array#")))
             val paths = listOf("PinnedPointerCellsAudit.json", "THC.InterfaceClosure.json")
                 .map { File(directory, "core/$it") }
             val merged = CoreModules.merge(paths.map { Json.parse(it.readText()) as Map<String, Any?> })
