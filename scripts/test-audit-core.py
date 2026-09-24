@@ -5,6 +5,7 @@
 """Regression tests for lexical dependency closure and capability diagnostics."""
 import importlib.util
 import copy
+import hashlib
 import json
 from pathlib import Path
 import unittest
@@ -1221,14 +1222,15 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
     resource = ROOT.parent / 'src/test/resources/core/original-stack-info-calls.json'
 
     def fixture(self, symbol):
-        records = json.loads(self.resource.read_text())['calls']
-        call = next(r['application'] for r in records if r['application'][6]['foreignCall']['target']['symbol'] == symbol)
+        resource = json.loads(self.resource.read_text())
+        call = next(r['application'] for r in resource['calls'] if r['application'][6]['foreignCall']['target']['symbol'] == symbol)
         parameters = [dict(id=a[1], lifted=False, rep=copy.deepcopy(a[2]['rep'])) for a in call[2]]
         case = ['case', call, 'synthetic-result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
                 dict(rep=LONG, binder=dict(id='synthetic-result', lifted=False, rep=dict(copy.deepcopy(call[6]['rep']), evaluated=True)))]
         wrapper = dict(bind('synthetic-consumer', ['lam', parameters, case, dict(rep=CLOSURE, resultRep=LONG)]),
                        rep=CLOSURE, arity=len(parameters))
-        return dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[])
+        return dict(schema=1, ghc='9.14.1', bindings=[wrapper], constructors=[],
+                    sourceFiles=resource['sourceFiles'], sourceSpans=resource['sourceSpans'])
 
     @staticmethod
     def call(module):
@@ -1267,6 +1269,34 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
             # Foreign identity is the descriptor, not a particular owner/head ID.
             self.call(module)[1][1] = 'unrelated:InlinedCaller.foreign'
             self.assertTrue(self.audit(module)['accepted'])
+
+    def test_projected_source_records_exactly_cover_original_application_notes(self):
+        resource = json.loads(self.resource.read_text())
+        # Canonical hashes of records copied directly from the two pinned source
+        # exports, not coordinates inferred from span IDs or freshly read files.
+        for key, expected in (
+            ('sourceFiles', 'e695a8a85c68c6fe276608c9a9564156ec639387edbacb9ef823a3c342859a14'),
+            ('sourceSpans', '011dc0f96e5b8e1ab8510ad20313fe73e11c19622aefafb7e1b57a78d8a1b551')):
+            encoded = json.dumps(resource[key], sort_keys=True, separators=(',', ':')).encode()
+            self.assertEqual(expected, hashlib.sha256(encoded).hexdigest())
+        referenced = set()
+        def collect(value):
+            if isinstance(value, dict):
+                if isinstance(value.get('source'), str): referenced.add(value['source'])
+                referenced.update(value.get('sourceNotes', []))
+                for child in value.values(): collect(child)
+            elif isinstance(value, list):
+                for child in value: collect(child)
+        for record in resource['calls']: collect(record['application'])
+        spans = resource['sourceSpans']; files = resource['sourceFiles']
+        self.assertEqual(15, len(spans)); self.assertEqual(2, len(files))
+        self.assertEqual(len(spans), len({s['id'] for s in spans}))
+        self.assertEqual(referenced, {s['id'] for s in spans})
+        self.assertEqual({s['file'] for s in spans}, {f['id'] for f in files})
+        for symbol in self.symbols:
+            wrapper = self.fixture(symbol)
+            self.assertEqual(files, wrapper['sourceFiles'])
+            self.assertEqual(spans, wrapper['sourceSpans'])
 
     def test_exact_descriptor_schema_target_saturation_convention_and_safety(self):
         for symbol in self.symbols:
