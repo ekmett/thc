@@ -1,4 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Pure Git/source selection tests: never compile or execute guest/JUnit code."""
+import ast
 import copy
 import importlib.util
 import json
@@ -525,7 +529,23 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                     continue
                 checked_python.add(path)
                 self.assertTrue((self.root / path).is_file(), path)
-                self.assertTrue(select.standalone_python_test((self.root / path).read_text()), path)
+                source = (self.root / path).read_text()
+                if path == "test/test_driver.py":
+                    # This test has a custom unittest runner to preserve command
+                    # evidence, so it cannot use the usual unittest.main shape.
+                    calls = [node.func for node in ast.walk(ast.parse(source))
+                             if isinstance(node, ast.Call)]
+                    self.assertTrue(any(isinstance(fn, ast.Attribute) and fn.attr == "TextTestRunner"
+                                        for fn in calls), path)
+                    self.assertTrue(any(isinstance(fn, ast.Attribute) and fn.attr == "loadTestsFromTestCase"
+                                        for fn in calls), path)
+                    help_result = subprocess.run([sys.executable, path, "--help"], cwd=self.root,
+                                                 capture_output=True, text=True, check=False)
+                    self.assertEqual(0, help_result.returncode, help_result.stderr)
+                    self.assertIn("--driver", help_result.stdout)
+                    self.assertIn("--scratch", help_result.stdout)
+                else:
+                    self.assertTrue(select.standalone_python_test(source), path)
 
     def test_fast_automation_sources_have_control_owners(self):
         automation = self.policy["automation"]
