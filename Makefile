@@ -2,12 +2,17 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 CABAL ?= cabal
+GHC ?= ghc
+GHC_PKG ?=
+RUN_GHC ?= runghc
 GRADLE_FLAGS ?=
 CABAL_FLAGS ?=
 export GRADLE_USER_HOME ?= $(CURDIR)/.gradle-user-home
 export JAVA_HOME
 
-.PHONY: all runtime haskell run jar fixtures test jit-test probe clean distclean check-java
+CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v '$(GHC)')" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal scripts/check-ghc-core.hs
+
+.PHONY: all runtime haskell run jar fixtures test jit-test probe clean distclean check-java check-ghc-core
 
 all: runtime haskell
 
@@ -15,10 +20,15 @@ runtime: check-java
 	./gradlew installDist $(GRADLE_FLAGS)
 
 haskell:
-	$(CABAL) build $(CABAL_FLAGS)
+	@set -e; pkg=$$($(CORE_PREFLIGHT) advisory); \
+	  $(CABAL) build $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg="$$pkg"
 
 run: all
-	$(CABAL) run thc $(CABAL_FLAGS) -- $(ARGS)
+	@set -e; pkg=$$($(CORE_PREFLIGHT) advisory); \
+	  $(CABAL) run thc $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg="$$pkg" -- $(ARGS)
+
+check-ghc-core:
+	@$(CORE_PREFLIGHT) check
 
 jar: check-java
 	./gradlew jar $(GRADLE_FLAGS)

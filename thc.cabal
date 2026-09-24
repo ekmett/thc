@@ -12,6 +12,8 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  scripts/check-ghc-core.hs
+  test/check-ghc-core.sh
   compiler/test-fixtures/MaskFunctionAudit.hs
   compiler/test-fixtures/MaskFunctionNative.hs
   compiler/test-fixtures/BoxedArrayExtensionsAudit.hs
@@ -26,6 +28,8 @@ extra-source-files:
   compiler/test-fixtures/OriginalStackFormatterNative.hs
   README.md
   docs/driver.md
+  docs/ghc-core.md
+  compiler/patches/ghc-internal-simplified-core.patch
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
   compiler/pinned-ghc-internal/GHC/Internal/Base.hs
   compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs
