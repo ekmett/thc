@@ -159,7 +159,8 @@ def main():
                     structures=structures, entries=[dict(name=n, lanes=f['lanes'], operation=o) for n, f, o in entries()],
                     inputs=[record(p) for p in sources], artifacts=[record(p) for p in artifacts], commands=commands,
                     toolchain=dict(ghc='9.14.1', info=subprocess.check_output([ghc, '--info'], text=True),
-                        executableSha256=hashlib.sha256(Path(shutil.which(ghc) or ghc).resolve().read_bytes()).hexdigest(),
+                        executable=str(Path(shutil.which(ghc) or ghc).resolve()),
+                        installedArtifactsHashed=False,
                         machine=platform.machine(), system=platform.platform()))
     (OUT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     print(f'SIMD families: {len(expected)} model rows, {native_rows} native rows, {len(stages)*len(entries())} strict experimental audits')
