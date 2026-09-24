@@ -57,7 +57,9 @@ internal class FrameLayout private constructor(
 /** Primitive locals widen monotonically when an object representation is needed. */
 internal object FrameAccess {
     /** Claim an uninitialized descriptor slot without undoing another thread's
-     * widening to Object. The frame's own tag remains authoritative for reads. */
+     * widening to Object. A concurrent fast-path read can still observe an older
+     * kind; that activation's frame tag, not the shared descriptor, determines
+     * how its value is read. */
     private fun primitiveKind(descriptor: FrameDescriptor, slot: Int, wanted: FrameSlotKind): Boolean {
         val kind = descriptor.getSlotKind(slot)
         if (kind == wanted) return true

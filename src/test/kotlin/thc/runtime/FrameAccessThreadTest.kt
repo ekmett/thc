@@ -27,7 +27,7 @@ class FrameAccessThreadTest {
                 val marker = Any()
                 val results = (0 until 5).map { worker -> workers.submit(Callable {
                     val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
-                    barrier.await()
+                    barrier.await(10, TimeUnit.SECONDS)
                     when (worker) {
                         0 -> FrameAccess.writeLong(frame, slot, 41L)
                         1 -> FrameAccess.writeFloat(frame, slot, 3.5f)

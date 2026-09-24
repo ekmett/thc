@@ -34,7 +34,7 @@ class InputDispatchThreadTest {
         val workers = Executors.newFixedThreadPool(5)
         try {
             val calls = (0 until 5).map { worker -> workers.submit(Callable {
-                barrier.await()
+                barrier.await(10, TimeUnit.SECONDS)
                 repeat(500) { step ->
                     val index = (worker + step) % closures.size
                     val input = (worker * 1000 + step).toLong()
