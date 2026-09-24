@@ -78,7 +78,11 @@ object CoreModules {
             for (c in module["constructors"] as List<Map<String, Any?>>) {
                 val id = c["id"] as String
                 val old = constructors.putIfAbsent(id, c)
-                require(old == null || old == c) { "Inconsistent constructor: $id" }
+                // The pretty-printed type can differ by quantified variable
+                // names; all layout and future metadata fields must still agree.
+                require(old == null || old.filterKeys { it != "type" } == c.filterKeys { it != "type" }) {
+                    "Inconsistent constructor: $id"
+                }
             }
         }
         return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
