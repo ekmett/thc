@@ -738,6 +738,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ResizeByteArray {
+        @Specialization public static void resize(VirtualFrame frame, LocalAccessor destination,
+                Object value, long size, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            byte[] result = ManagedByteArray.resize(array, size);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class FreezeByteArray {
         @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
                 Object value, Object state, @Bind("$node") Node node) {

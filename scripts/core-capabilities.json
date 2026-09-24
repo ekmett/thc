@@ -417,6 +417,7 @@
     "minusFloatX4#": 2,
     "timesFloatX4#": 2,
     "newByteArray#": 2,
+    "resizeMutableByteArray#": 3,
     "writeWord8Array#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
@@ -601,6 +602,21 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "resizeMutableByteArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple",
+        "primReps": ["BoxedRep (Just Unlifted)"],
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }
+        ]
+      }
+    },
     "setByteArray#": {
       "arguments": [
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },

@@ -52,6 +52,14 @@ internal object ManagedByteArray {
         return java.util.Arrays.compareUnsigned(first, firstOffset.toInt(), (firstOffset + count).toInt(),
             second, secondOffset.toInt(), (secondOffset + count).toInt()).toLong()
     }
+    /** GHC forbids accessing the original reference after resize. A replacement
+     * preserves the prefix while keeping the JVM array length exact for all views.
+     * Newly grown storage is unspecified to guests despite JVM zero initialization. */
+    @JvmStatic fun resize(bytes: ByteArray, size: Long): ByteArray {
+        if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("ByteArray# size outside the managed allocation domain")
+        if (size == bytes.size.toLong()) return bytes
+        return bytes.copyOf(size.toInt())
+    }
     /** Unsafe freeze changes the static type, not the array or its identity. */
     @JvmStatic fun freeze(bytes: ByteArray): ByteArray = bytes
     @JvmStatic fun allocate(size: Long): ByteArray {
@@ -67,6 +75,7 @@ private const val BYTE_ARRAY_REP = "BoxedRep (Just Unlifted)"
 /** Exact primitive representation contracts, including the logical State# slot. */
 internal enum class ByteArrayOp(val primitive: String, private val arguments: List<List<String>>, val tuple: Boolean = false) {
     NEW("newByteArray#", listOf(listOf("IntRep"), emptyList()), true),
+    RESIZE("resizeMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE("writeWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word8Rep"), emptyList())),
     COPY("copyByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
         listOf("IntRep"), listOf("IntRep"), emptyList())),
@@ -147,6 +156,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
 internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentation, operands: Array<Expr>): Expr =
     when (operation) {
         ByteArrayOp.NEW -> NewByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.RESIZE -> ResizeByteArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
@@ -193,6 +203,18 @@ private class NewByteArrayExpression(@field:Child private var size: Expr,
         return null
     }
 }
+private class ResizeByteArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var size: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        val count = size.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        FrameAccess.write(frame, slots[offset], ManagedByteArray.resize(bytes, count))
+        return null
+    }
+}
+
 private class FreezeByteArrayExpression(@field:Child private var array: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")

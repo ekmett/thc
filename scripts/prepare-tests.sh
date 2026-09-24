@@ -26,6 +26,7 @@ python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py
 python3 scripts/prepare-bytearray.py
 python3 scripts/prepare-mutable-bytearrays.py
+python3 scripts/prepare-resize-bytearrays.py
 python3 scripts/prepare-compare-byte-arrays.py
 python3 scripts/prepare-boxed-arrays.py
 python3 scripts/prepare-array-slices.py
