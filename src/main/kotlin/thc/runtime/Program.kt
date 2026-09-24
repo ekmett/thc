@@ -478,11 +478,18 @@ internal class Force(private val metrics: Metrics) : Node() {
     private fun evaluateCallSegment(segment: CallSegment, continuation: ContinuationResult, resumeValue: Any?): Any? {
         try {
             val ambient = SynchronousMasking.current(this)
+            if (ambient != MaskingState.UNMASKED)
+                throw IllegalStateException("Masked call segment resume has no logical mask segment")
+            var maskAtReturn = ambient
             val result = try {
-                try { continuation.continueWith(resumeValue) }
+                val answer = try { continuation.continueWith(resumeValue) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+                maskAtReturn = SynchronousMasking.current(this)
+                answer
             } finally { SynchronousMasking.set(this, ambient) }
             if (result is ContinuationResult) {
+                if (maskAtReturn != MaskingState.UNMASKED)
+                    throw IllegalStateException("Masked call segment yield has no logical mask segment")
                 if (result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
                 publishCallContinuation(segment, result)

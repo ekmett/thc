@@ -307,6 +307,35 @@ class CoreContinuationNativeTest {
         }
     }
 
+    @Test fun repeatedCallYieldUnderActiveMaskFailsClosed() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val (segment, parent) = entered(context) {
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    val prior = b.createLocal("prior mask", "object")
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginStoreLocal(prior); b.emitEnterMask(MaskingState.MASKED_INTERRUPTIBLE); b.endStoreLocal()
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginReturn(); b.emitLoadConstant(1L); b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
+                segment to Thunk(callSegmentCaller(language, segment), null)
+            }
+            val driver = entered(context) { Driver() }
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                val unsupported = assertThrows(IllegalStateException::class.java) { driver.force(parent) }
+                assertTrue(unsupported.message!!.contains("Masked call segment yield"))
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+            }
+            assertEquals(4, segment.state)
+            assertEquals(5, parent.state)
+        }
+    }
+
     @Test fun forwardedRecursiveCellStillResumesItsCapturedChild() {
         executionContext().use { context ->
             context.initialize("thc")
