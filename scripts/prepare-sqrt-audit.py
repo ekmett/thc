@@ -23,7 +23,9 @@ ENTRIES = ['sqrtFloat', 'sqrtDouble', 'floatCase', 'doubleCase']
 MATH_OPERATIONS = {
     **{name + suffix: primitive + ('Float#' if suffix == 'Float' else 'Double#')
        for primitive, name in [('fabs', 'fabs'), ('exp', 'exp'), ('expm1', 'expm1'),
-                               ('log', 'log'), ('log1p', 'log1p'), ('sin', 'sin'), ('cos', 'cos')]
+                               ('log', 'log'), ('log1p', 'log1p'), ('sin', 'sin'), ('cos', 'cos'),
+                               ('tan', 'tan'), ('asin', 'asin'), ('acos', 'acos'), ('atan', 'atan'),
+                               ('sinh', 'sinh'), ('cosh', 'cosh'), ('tanh', 'tanh')]
        for suffix in ('Float', 'Double')},
     'powerFloat': 'powerFloat#', 'powerDouble': '**##',
 }
@@ -119,6 +121,12 @@ def input_rows():
             values = [-1.0, -0.5, -0.0, 0.0, 0.125, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, math.inf, math.nan]
         elif name.startswith('power'):
             values = [-1.0, -0.5, -0.0, 0.0, 0.125, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, math.nan]
+        elif name.startswith('asin') or name.startswith('acos'):
+            values = [-2.0, -1.0, -0.75, -0.5, -0.0, 0.0, 0.5, 0.75, 1.0, 2.0, math.nan]
+        elif name.startswith('sinh') or name.startswith('cosh'):
+            limit = [88.0, 89.0, 90.0] if width == 32 else [709.0, 710.0, 711.0]
+            values = [-math.inf, *[-x for x in reversed(limit)], -3.0, -1.0, -0.0, 0.0,
+                      1.0, 3.0, *limit, math.inf, math.nan]
         else:
             values = [-math.inf, -3.0, -2.0, -1.0, -0.5, -0.25, -0.0, 0.0,
                       0.25, 0.5, 1.0, 2.0, 3.0, math.inf, math.nan]

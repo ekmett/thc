@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 260 | Implemented fixed numeric/character scalar forms. |
+| Supported | 274 | Implemented fixed numeric/character scalar forms. |
 | Partial | 225 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1006 | No declared lowering. |
+| Missing | 992 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -65,12 +65,18 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `>##` — arity 2
 - [x] `>=#` — arity 2
 - [x] `>=##` — arity 2
+- [x] `acosDouble#` — arity 1
+- [x] `acosFloat#` — arity 1
 - [x] `and#` — arity 2
 - [x] `and64#` — arity 2
 - [x] `andI#` — arity 2
 - [x] `andWord16#` — arity 2
 - [x] `andWord32#` — arity 2
 - [x] `andWord8#` — arity 2
+- [x] `asinDouble#` — arity 1
+- [x] `asinFloat#` — arity 1
+- [x] `atanDouble#` — arity 1
+- [x] `atanFloat#` — arity 1
 - [x] `bitReverse#` — arity 1
 - [x] `bitReverse16#` — arity 1
 - [x] `bitReverse32#` — arity 1
@@ -92,6 +98,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `clz8#` — arity 1
 - [x] `cosDouble#` — arity 1
 - [x] `cosFloat#` — arity 1
+- [x] `coshDouble#` — arity 1
+- [x] `coshFloat#` — arity 1
 - [x] `ctz#` — arity 1
 - [x] `ctz16#` — arity 1
 - [x] `ctz32#` — arity 1
@@ -253,6 +261,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `remWord8#` — arity 2
 - [x] `sinDouble#` — arity 1
 - [x] `sinFloat#` — arity 1
+- [x] `sinhDouble#` — arity 1
+- [x] `sinhFloat#` — arity 1
 - [x] `sqrtDouble#` — arity 1
 - [x] `sqrtFloat#` — arity 1
 - [x] `subInt16#` — arity 2
@@ -263,6 +273,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `subWord32#` — arity 2
 - [x] `subWord64#` — arity 2
 - [x] `subWord8#` — arity 2
+- [x] `tanDouble#` — arity 1
+- [x] `tanFloat#` — arity 1
+- [x] `tanhDouble#` — arity 1
+- [x] `tanhFloat#` — arity 1
 - [x] `timesFloat#` — arity 2
 - [x] `timesInt16#` — arity 2
 - [x] `timesInt32#` — arity 2
@@ -539,8 +553,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 <details>
 <summary>Remaining GHC primops, in name order</summary>
 
-- [ ] `acosDouble#` — arity 1
-- [ ] `acosFloat#` — arity 1
 - [ ] `acoshDouble#` — arity 1
 - [ ] `acoshFloat#` — arity 1
 - [ ] `addCFinalizerToWeak#` — arity 6
@@ -548,12 +560,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2
-- [ ] `asinDouble#` — arity 1
-- [ ] `asinFloat#` — arity 1
 - [ ] `asinhDouble#` — arity 1
 - [ ] `asinhFloat#` — arity 1
-- [ ] `atanDouble#` — arity 1
-- [ ] `atanFloat#` — arity 1
 - [ ] `atanhDouble#` — arity 1
 - [ ] `atanhFloat#` — arity 1
 - [ ] `atomicCasAddrAddr#` — arity 4
@@ -623,8 +631,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `copyMutableByteArrayToAddr#` — arity 5
 - [ ] `copySmallArray#` — arity 6
 - [ ] `copySmallMutableArray#` — arity 6
-- [ ] `coshDouble#` — arity 1
-- [ ] `coshFloat#` — arity 1
 - [ ] `deRefStablePtr#` — arity 2
 - [ ] `deRefWeak#` — arity 2
 - [ ] `decodeDouble_2Int#` — arity 1
@@ -1310,18 +1316,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `shuffleWord8X16#` — arity 3
 - [ ] `shuffleWord8X32#` — arity 3
 - [ ] `shuffleWord8X64#` — arity 3
-- [ ] `sinhDouble#` — arity 1
-- [ ] `sinhFloat#` — arity 1
 - [ ] `sizeofArray#` — arity 1
 - [ ] `sizeofMutableArray#` — arity 1
 - [ ] `sizeofSmallArray#` — arity 1
 - [ ] `sizeofSmallMutableArray#` — arity 1
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
-- [ ] `tanDouble#` — arity 1
-- [ ] `tanFloat#` — arity 1
-- [ ] `tanhDouble#` — arity 1
-- [ ] `tanhFloat#` — arity 1
 - [ ] `thawSmallArray#` — arity 4
 - [ ] `threadLabel#` — arity 2
 - [ ] `threadStatus#` — arity 2

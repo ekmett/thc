@@ -165,6 +165,29 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
 
+    def test_original_stack_has_portable_focused_and_full_preparation(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["original-stack"]
+        self.assertEqual("original-stack", owners["thc.runtime.OriginalStackConsumerProofTest"])
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}], group["commands"])
+        self.assertEqual(["build/original-stack"], group["outputs"])
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn('"$fixture_bin" original-stack', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn("build/original-stack", fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn("build/original-stack/manifest.json", fast_fixtures.FULL_REQUIRED)
+        gradle = (project / "build.gradle.kts").read_text()
+        self.assertIn('"original-stack/manifest.json"', gradle)
+        self.assertIn('"original-stack/run-*/**"', gradle)
+        self.assertNotIn('"original-stack/proof.json"', gradle)
+        for name in ("thc.cabal", "compiler/pinned-ghc-internal/LICENSE",
+                     "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
+                     "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc"):
+            self.assertIn('"' + name + '"', gradle)
+            self.assertIn(name, group["sources"])
+        for name in ("Stack/CloneStack.hs", "Stack/Decode.hs"):
+            self.assertIn("compiler/pinned-ghc-internal/GHC/Internal/" + name, group["sources"])
+
     def test_original_stdio_has_strict_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
