@@ -78,7 +78,7 @@ jobs:
         run: |
           test "$(ghc --numeric-version)" = 9.14.1
           test "$(ghc-pkg --version)" = 'GHC package manager version 9.14.1'
-          test "$(cabal --numeric-version)" = 3.16.0.0
+          case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
           python3 - <<'PY'
           import os
           from pathlib import Path
