@@ -77,6 +77,9 @@ conversion and cleanup introduced by lowering. Forcing a strict argument in
 host code before entering the root's capture handler is not covered by that
 handler. Bytecode places this forcing in its resumable prologue; the first AST
 subset rejects strict entry marks until it has equivalent coverage.
+Admission must also match the execution route chosen by the parent. A saved
+`executeLong` suffix does not cover a generic or tuple-returning entry; the
+declared result convention must select the covered route before execution.
 
 ## Saved computation
 
@@ -154,7 +157,11 @@ pool. Separate owned-thunk tests interrupt twice without replaying the prefix,
 and keep an uninterruptibly masked caller's unfinished work when its child
 unmasks. Construction rejects unsupported parent expressions and strict-entry
 forcing. This is a small synthetic Core proof: public AST async entry remains
-disabled until calls, cases, masks and handlers have complete coverage.
+disabled until calls, cases, masks and handlers have complete coverage. A tuple
+case around a direct MVar read is admitted only with a non-suspending Int#
+literal suffix and an exact Long entry convention. Its compiled test checks
+cross-thread resumption after the read; conflicting entry conventions and
+unsupported suffixes are rejected during construction.
 
 Nested foreign callback checks must land before those paths are advertised as
 admitted. They must distinguish successful interruption inside a callback from
