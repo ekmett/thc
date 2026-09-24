@@ -55,6 +55,8 @@ prepareCoreContinuation root = do
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "tupleOverapplicationThunk", "--output", base </> "tuple-overapplication-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
+       "--entry", "tupleTailOverapplicationThunk", "--output", base </> "tuple-tail-overapplication-audit.json"] ""
+  _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "tupleApplicationFailure", "--output", base </> "tuple-application-failure-audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "tupleCompactAnswer", "--output", base </> "tuple-compact-audit.json"] ""
@@ -77,7 +79,7 @@ prepareCoreContinuation root = do
        "-hidir", base </> "native", "-o", base </> "native-oracle",
        "compiler/test-fixtures/CoreContinuationNative.hs", source] ""
   native <- run root [] (base </> "native-oracle") [] ""
-  unless (native == "108\n208\n42\n77\n43\n114\n114\n79\n2\n0\n1\n208\n208\n209\n209\n208\n8\n114\n")
+  unless (native == "108\n208\n42\n77\n43\n114\n114\n79\n2\n0\n1\n208\n208\n209\n209\n208\n8\n114\n114\n")
     (die "core-continuation native oracle disagreed with checkpoint results")
   writeFile (base </> "native-output.txt") native
   _ <- run root [] ghc ["-O2", "-i./compiler/test-fixtures", "-odir", base </> "native",

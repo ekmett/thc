@@ -645,7 +645,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209", "208", "8", "114"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209", "208", "8", "114", "114"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -740,7 +740,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209", "208", "8", "114"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209", "209", "208", "8", "114", "114"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -1486,6 +1486,58 @@ class CoreContinuationNativeTest {
                 assertEquals(114L, resumed.get(5, TimeUnit.SECONDS))
             }
             assertEquals(1, checkpoint.visits.get(), "The first stage must not replay after the tuple suffix")
+            assertEquals(2, parent.state)
+        }
+    }
+
+    @Test fun originalTailTupleOverapplicationForwardsItsFinalCalleeYield() {
+        assertEquals("114", File(root, "build/core-continuation/native-output.txt").readLines()[18])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val tail = (module["bindings"] as List<Map<String, Any?>>).single {
+            (it["id"] as String).endsWith(".tupleTailOverapplication")
+        }
+        val body = (tail["expr"] as List<*>)[2] as List<*>
+        assertEquals("app", body[0])
+        assertEquals(2, (body[2] as List<*>).size, "GHC retained a tuple tail overapplication")
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "tupleTailOverapplicationThunk", strictLink = true)
+            entered(context) {
+                for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val answer = driver.force(ordinary.entryValue("tupleTailOverapplicationThunk") as Thunk) as DataValue
+                    assertEquals(114L, answer.layout.readLong(answer, 0))
+                }
+            }
+            val checkpoint = BytecodeCheckpoint()
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            val parent = entered(context) { program.entryValue("tupleTailOverapplicationThunk") as Thunk }
+            entered(context) {
+                val target = parent.target!!
+                val ordinary = Calls.target(target, arrayOf(0L)) as DataValue
+                assertEquals(114L, ordinary.layout.readLong(ordinary, 0))
+                compile(target)
+                checkpoint.armed = true
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(1, checkpoint.visits.get())
+            }
+            Executors.newSingleThreadExecutor().use { pool ->
+                val result = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        val answer = driver.force(parent) as DataValue
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        answer.layout.readLong(answer, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(114L, result.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(1, checkpoint.visits.get(), "The tail prefix must not replay")
             assertEquals(2, parent.state)
         }
     }

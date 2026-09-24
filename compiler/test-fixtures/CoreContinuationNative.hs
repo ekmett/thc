@@ -26,3 +26,4 @@ main = do
   print overapplicationTail
   case directOverapplicationTailThunk of Box value -> print (I# value)
   print tupleOverapplicationThunk
+  print tupleTailOverapplicationThunk
