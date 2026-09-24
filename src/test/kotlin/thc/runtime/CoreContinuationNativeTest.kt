@@ -8,6 +8,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.BytecodeRootNode
 import com.oracle.truffle.api.bytecode.BytecodeConfig
 import com.oracle.truffle.api.bytecode.ContinuationResult
+import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.FrameSlotKind
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -340,6 +341,47 @@ class CoreContinuationNativeTest {
             }
             assertEquals(4, segment.state)
             assertEquals(5, parent.state)
+        }
+    }
+
+    @Test fun wrongMaskCompletionReleasesPooledTupleBeforeFailingClosed() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val marker = Any()
+            val tuple = entered(context) { TupleShape(CoreRepresentation(CoreKind.UNKNOWN, true, true,
+                listOf("BoxedRep (Just Lifted)"), listOf(
+                    CoreRepresentation(CoreKind.VOID, true, true, emptyList()),
+                    CoreRepresentation(CoreKind.DATA, true, true, listOf("BoxedRep (Just Lifted)"))
+                )), language) }
+            val (segment, parent) = entered(context) {
+                val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    val field = b.createLocal("tuple reference", "object")
+                    val slots = BytecodeTupleSlots(tuple, arrayOf(LocalAccessor.constantOf(field)))
+                    val prior = b.createLocal("prior mask", "object")
+                    b.beginStoreLocal(field); b.emitLoadConstant(marker); b.endStoreLocal()
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginStoreLocal(prior); b.emitEnterMask(MaskingState.MASKED_INTERRUPTIBLE); b.endStoreLocal()
+                    b.beginReturn(); b.emitFinishTuple(slots); b.endReturn()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
+                    tupleShape = tuple)
+                segment to Thunk(callSegmentCaller(language, segment), null)
+            }
+            val driver = entered(context) { Driver() }
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                val unsupported = assertThrows(IllegalStateException::class.java) { driver.force(parent) }
+                assertTrue(unsupported.message!!.contains("did not restore its caller mask"))
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+                assertEquals(0, language.handoffState.get().results.depth,
+                    "The completed producer-thread slab is released before wrong-mask rejection")
+                assertEquals(0, language.handoffState.get().results.retainedReferences())
+                assertThrows(RuntimeFault::class.java) { driver.force(parent) }
+            }
+            assertEquals(4, segment.state)
         }
     }
 

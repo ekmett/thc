@@ -535,9 +535,11 @@ internal class Force(private val metrics: Metrics) : Node() {
                 publishCallContinuation(segment, result, parkedMask ?: SynchronousMasking.current(this))
                 throw CallSegmentSuspended(segment)
             }
+            // A completed tuple may still be a producer-thread slab loan.
+            // Release that loan even if the callee returned under a wrong mask.
+            val answer = segment.tupleShape?.let { ownedTupleResult(result, it) } ?: result
             if (SynchronousMasking.current(this) != segment.callerMask)
                 throw IllegalStateException("Completed call segment did not restore its caller mask")
-            val answer = segment.tupleShape?.let { ownedTupleResult(result, it) } ?: result
             synchronized(segment.monitor) {
                 segment.value = answer // A scalar call may return an unforced thunk; never enter it here.
                 segment.owner = null
