@@ -21,16 +21,16 @@ internal class OriginalStackInfoExpression(private val operation: OriginalStackI
     override fun executeLong(frame: VirtualFrame): Long {
         if (operation == OriginalStackInfoOp.STACK_FIELDS)
             return ManagedStackRuntime.stackFields(operands[0].execute(frame), layout)
-        return incompatible(frame)
+        return super.executeLong(frame)
     }
 
     private fun incompatible(frame: VirtualFrame): Nothing = ManagedStackRuntime.incompatibleGetter(operation,
         operands[0].execute(frame), operands[1].executeRequiredLong(frame), layout)
 
     override fun executeAddress(frame: VirtualFrame): ManagedAddress {
-        if (operation != OriginalStackInfoOp.STACK_INFO)
-            fault("Original stack info tuple requires a destination")
-        return ManagedStackRuntime.stackInfo(operands[0].execute(frame), layout)
+        if (operation == OriginalStackInfoOp.STACK_INFO)
+            return ManagedStackRuntime.stackInfo(operands[0].execute(frame), layout)
+        return super.executeAddress(frame)
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {

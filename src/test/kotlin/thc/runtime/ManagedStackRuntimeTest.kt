@@ -245,6 +245,30 @@ class ManagedStackRuntimeTest {
         }
     }
 
+    @Test fun speculativeScalarGetterInterfacesPreserveValueAndEvaluateOperandOnce(): Unit = context { language ->
+        val snapshot = capture(language); val layout = layout()
+        val frame = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameLayout().build())
+        var evaluations = 0
+        fun operand() = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any { evaluations++; return snapshot }
+        }
+        val info = OriginalStackInfoExpression(OriginalStackInfoOp.STACK_INFO, layout, arrayOf(operand()),
+            CoreRepresentation(CoreKind.ADDRESS, evaluated = true))
+        val expectedAddress = ManagedStackRuntime.stackInfo(snapshot, layout)
+        val addressMiss = assertThrows(com.oracle.truffle.api.nodes.UnexpectedResultException::class.java) {
+            info.executeLong(frame)
+        }
+        assertSame(expectedAddress, addressMiss.result)
+        assertEquals(1, evaluations)
+        val fields = OriginalStackInfoExpression(OriginalStackInfoOp.STACK_FIELDS, layout, arrayOf(operand()),
+            CoreRepresentation(CoreKind.LONG, evaluated = true))
+        val longMiss = assertThrows(com.oracle.truffle.api.nodes.UnexpectedResultException::class.java) {
+            fields.executeAddress(frame)
+        }
+        assertEquals(2L, longMiss.result)
+        assertEquals(2, evaluations)
+    }
+
     @Test fun newGettersEnforceSnapshotContextAndRegistryLifetime() {
         val layout = layout()
         val snapshot = context { capture(it) }
