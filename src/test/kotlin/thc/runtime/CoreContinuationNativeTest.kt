@@ -120,6 +120,49 @@ class CoreContinuationNativeTest {
         }
     }
 
+    @Test fun suspendedApplicationReturningLazyThunkFailsClosedWithoutForcingIt() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+                val lazyEffects = AtomicInteger()
+                val lazy = Thunk(object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any {
+                        lazyEffects.incrementAndGet()
+                        return 7L
+                    }
+                }.callTarget, null)
+                val callee = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    val visited = b.createLocal("visited", "primitive")
+                    b.beginBlock()
+                    b.beginStoreLocal(visited); b.emitCheckpointArmed(checkpoint); b.endStoreLocal()
+                    b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                    b.beginReturn(); b.emitLoadConstant(lazy); b.endReturn()
+                    b.endBlock()
+                    b.endRoot()
+                }.getNode(0).callTarget
+                val continuation = Calls.target(callee, arrayOf(0L)) as ContinuationResult
+                val function = Closure(null, NO_PAP_ARGUMENTS, 0, callee)
+                val call = assertThrows(CapturedCallSuspension::class.java) {
+                    BytecodeRoot.CaptureApplicationResult.capture(0, function, continuation, Driver())
+                }.thunk
+                val driver = Driver()
+                val failure = assertThrows(RuntimeFault::class.java) { driver.force(call) }
+                assertTrue(failure.message!!.contains("Thunk target violated WHNF convention"))
+                assertEquals(3, call.state, "The unsupported return must not replay the call")
+                assertEquals(1, checkpoint.visits.get())
+                assertEquals(0, lazy.state, "The returned lazy thunk must not be forced")
+                assertEquals(0, lazyEffects.get())
+                assertThrows(RuntimeFault::class.java) { driver.force(call) }
+                assertEquals(1, checkpoint.visits.get())
+                assertEquals(0, lazyEffects.get())
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun forwardedRecursiveCellStillResumesItsCapturedChild() {
         executionContext().use { context ->
             context.initialize("thc")

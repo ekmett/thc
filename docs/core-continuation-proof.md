@@ -29,6 +29,13 @@ nested root and an active mask fail closed; overapplication, aggregate calls,
 and tail transfers remain outside this seam. No call packet is added to the
 ordinary path.
 
+The synthetic call segment uses the thunk update protocol, so its resumed
+result must be WHNF. A callee continuation returning a lazy `Thunk` is outside
+this prototype: the segment faults without forcing that thunk or replaying the
+call. Pending aggregate results and operand handoff ownership are likewise
+uncaptured; only the scalar result already on this direct call edge is fed to
+its caller.
+
 These are two boundaries enabled only by the private test control. Other
 force, tuple, mask, and handler edges do not yet capture caller segments.
 There is no general async delivery, `throwTo`, or replay of an interrupted
