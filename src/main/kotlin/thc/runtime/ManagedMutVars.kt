@@ -1,11 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
 /** One mutable guest reference. Reads return the stored value without entering a thunk.
- * The field is deliberately neither final nor CompilationFinal; aliases see every write.
+ * Volatile access publishes stored values between threads without serializing
+ * independent cells. The field remains mutable and is never CompilationFinal.
  */
-internal class ManagedMutVar(var value: Any?) {
+internal class ManagedMutVar(@Volatile var value: Any?) {
     companion object {
         @JvmStatic fun require(value: Any?): ManagedMutVar = value as? ManagedMutVar
             ?: fault("Expected a managed MutVar#")
