@@ -22,6 +22,7 @@ import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMis
                          doesDirectoryExist, doesFileExist, listDirectory, makeAbsolute,
                          removeFile, removePathForcibly, renameDirectory, renameFile)
 import System.Exit (ExitCode(..))
+import System.Environment (getEnvironment)
 import System.FilePath ((</>), isAbsolute, makeRelative, takeDirectory, takeExtension,
                         takeFileName, joinPath, replaceExtension)
 import System.IO (SeekMode(AbsoluteSeek), hClose, openTempFile, stderr)
@@ -63,6 +64,15 @@ runProject opts target = do
   runtime <- maybe (pure (thcRoot </> "build/install/thc/bin/thc")) makeAbsolute (runRuntime opts)
   requireFile runtime
   requireFile (thcRoot </> "scripts/audit-core.py")
+  let buildPlugin = thcRoot </> "compiler/build.sh"
+      overrides = maybe [] (\path -> [("GHC", path)]) (ghcPath flags) ++
+                  maybe [] (\path -> [("GHC_PKG", path)]) (ghcPkgPath flags)
+  requireFile buildPlugin
+  inherited <- getEnvironment
+  let environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
+  -- Cabal can build thc's executable without building its library. Publish the
+  -- actual Cabal plugin registration before consulting the plugin manifest.
+  runCommandWithEnv True buildPlugin [] thcRoot (Just environment)
   plugin <- readJson (thcRoot </> "build/compiler/plugin.json")
   schema <- field plugin "schema" :: IO Int
   require (schema == 1) "unsupported THC plugin manifest"
@@ -183,7 +193,8 @@ exportUnit unit compilerId pluginDb pluginUnit pluginLibrary output = do
      [ ("native:" ++ path, path) | path <- sort products ])
   buildInfoHash <- digestFile (componentBuildInfo component)
   pluginHash <- digestFile pluginLibrary
-  let key = shaHex (BL.toStrict (encode (unitValue unit, buildInfoHash, pluginHash, inputs)))
+  let key = shaHex (BL.toStrict (encode (unitValue unit, buildInfoHash,
+                                       pluginHash, pluginDb, pluginUnit, inputs)))
       unitRoot = output </> "core/units" </> shaHex (BL.toStrict (encode (unitId unit)))
       destination = unitRoot </> key
       cache = destination </> "cache.json"
@@ -383,9 +394,14 @@ requireDirectory :: FilePath -> IO ()
 requireDirectory path = doesDirectoryExist path >>= \exists -> require exists ("required directory not found: " ++ path)
 
 runCommand :: Bool -> FilePath -> [String] -> FilePath -> IO ()
-runCommand tool command arguments directory = do
+runCommand tool command arguments directory =
+  runCommandWithEnv tool command arguments directory Nothing
+
+runCommandWithEnv :: Bool -> FilePath -> [String] -> FilePath -> Maybe [(String, String)] -> IO ()
+runCommandWithEnv tool command arguments directory environment = do
   (_, _, _, process) <- createProcess (proc command arguments)
-    { cwd = Just directory, std_out = if tool then UseHandle stderr else Inherit }
+    { cwd = Just directory, env = environment,
+      std_out = if tool then UseHandle stderr else Inherit }
   result <- waitForProcess process
   when (result /= ExitSuccess) (fail ("command failed: " ++ command ++ " (" ++ show result ++ ")"))
 
