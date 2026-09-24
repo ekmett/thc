@@ -23,11 +23,12 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "61cc293e96118c14f52976097b754400997b62be1462d75d5bf71d525a6ad6ad"
+FULL_PREPARATION_PLAN = "dc31045e0d37078f7be9f3edf991c654f3a77aee2d42097468f0126aea5abca3"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/core-continuation", "build/small-arrays", "build/floating-address",
+    "build/floating-byte-offset",
     "build/explicit64-arrays",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
@@ -48,6 +49,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/floating-address/pre/audit.json", "build/floating-address/post/audit.json",
     "build/floating-address/pre/core/FloatingAddressAudit.json",
     "build/floating-address/post/core/FloatingAddressAudit.json",
+    "build/floating-byte-offset/manifest.json", "build/floating-byte-offset/oracle.tsv",
+    "build/floating-byte-offset/pre/audit.json", "build/floating-byte-offset/post/audit.json",
+    "build/floating-byte-offset/pre/core/FloatingByteOffsetAudit.json",
+    "build/floating-byte-offset/post/core/FloatingByteOffsetAudit.json",
     "build/explicit64-arrays/manifest.json", "build/explicit64-arrays/oracle.tsv",
     "build/explicit64-arrays/pre/audit.json", "build/explicit64-arrays/post/audit.json",
     "build/explicit64-arrays/pre/core/Explicit64ArrayAudit.json",

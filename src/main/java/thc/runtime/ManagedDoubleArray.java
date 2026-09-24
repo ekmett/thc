@@ -31,4 +31,21 @@ public final class ManagedDoubleArray {
     public static void write(byte[] bytes, long index, double value) {
         ELEMENTS.set(bytes, byteOffset(bytes, index), value);
     }
+
+    /** Unlike DoubleArray#, Word8ArrayAsDouble# counts bytes, not elements. */
+    private static int checkedByteOffset(byte[] bytes, long offset) {
+        if (offset < 0 || offset > (long) bytes.length - Double.BYTES) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new RuntimeFault("ByteArray# Double byte offset outside its backing storage");
+        }
+        return (int) offset;
+    }
+
+    public static double readByteOffset(byte[] bytes, long offset) {
+        return (double) ELEMENTS.get(bytes, checkedByteOffset(bytes, offset));
+    }
+
+    public static void writeByteOffset(byte[] bytes, long offset, double value) {
+        ELEMENTS.set(bytes, checkedByteOffset(bytes, offset), value);
+    }
 }

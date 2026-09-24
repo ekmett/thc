@@ -126,6 +126,19 @@
         "thc.cabal"
       ]
     },
+    "floating-byte-offset": {
+      "junit": ["thc.runtime.FloatingByteOffsetTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-byte-offset"]}],
+      "outputs": ["build/floating-byte-offset"],
+      "sources": [
+        "test/haskell-fixtures/FloatingByteOffsetFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/FloatingByteOffsetAudit.hs",
+        "compiler/test-fixtures/FloatingByteOffsetNative.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stack-formatter": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
