@@ -211,6 +211,7 @@ executable thc-fixtures
   other-modules:
     AggregateFixtures
     ContinuationFixtures
+    LiveAsyncFixtures
     FixtureSupport
     WordFloatingFixtures
     FloatingAddressFixtures

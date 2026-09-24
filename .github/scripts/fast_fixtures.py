@@ -23,11 +23,11 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "5391abe61fa52a674751cf033670f5667192d180c56de89d4fc8832cfc4ee6fc"
+FULL_PREPARATION_PLAN = "a3bee6177e270f7956f3a8fb0ae946556596c722b54414e2cb36cc3398462185"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/core-continuation", "build/small-arrays", "build/floating-address",
+    "build/original-stdio", "build/core-continuation", "build/live-async", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset",
     "build/explicit64-arrays",
 })
@@ -37,6 +37,15 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/core-continuation/application-audit.json",
     "build/core-continuation/nested-audit.json",
     "build/core-continuation/native-output.txt",
+    "build/live-async/manifest.json", "build/live-async/oracle.txt",
+    "build/live-async/pre/core/LiveAsyncAudit.json", "build/live-async/post/core/LiveAsyncAudit.json",
+    "build/live-async/pre/forceShared-audit.json", "build/live-async/post/forceShared-audit.json",
+    "build/live-async/pre/takeReady-audit.json", "build/live-async/post/takeReady-audit.json",
+    "build/live-async/pre/takeRunning-audit.json", "build/live-async/post/takeRunning-audit.json",
+    "build/live-async/pre/releaseGate-audit.json", "build/live-async/post/releaseGate-audit.json",
+    "build/live-async/pre/prefixCount-audit.json", "build/live-async/post/prefixCount-audit.json",
+    "build/live-async/pre/warmLoop-audit.json", "build/live-async/post/warmLoop-audit.json",
+    "build/live-async/pre/asyncPayload-audit.json", "build/live-async/post/asyncPayload-audit.json",
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",
