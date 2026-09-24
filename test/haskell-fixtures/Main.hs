@@ -9,6 +9,8 @@ module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
 import WordFloatingFixtures (prepareWordFloating)
+import OriginalStdioFixtures (prepareOriginalStdio)
+import StackFixtures (prepareOriginalStack)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -737,14 +739,16 @@ preparePinnedPointers root = do
         options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
     forM_ [core, ghcOut] (createDirectoryIfMissing True . (root </>))
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip", source]) ""
+      "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip",
+        "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
+      "--entry", "pointerArrayRoundtrip",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
   plugin <- listDirectory (root </> "compiler/THC")
   scripts <- listDirectory (root </> "scripts")
-  let inputs = sort $ [source, driver, "test/haskell-fixtures/Main.hs", "scripts/audit-core.py",
+  let inputs = sort $ [source, driver, "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "scripts/audit-core.py",
         "scripts/core-capabilities.json", "compiler/export.sh", "compiler/build.sh",
         "compiler/toolchain.sh", "compiler/plugin.py", "thc.cabal", "cabal.project"] ++
         ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
@@ -769,10 +773,12 @@ main = do
     _ -> pure False
   unless handled $ case args of
     ["word-floating"] -> prepareWordFloating root
+    "original-stdio":options -> prepareOriginalStdio root options
+    ["original-stack"] -> prepareOriginalStack root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
     ["pinned-pointer-cells"] -> preparePinnedPointers root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64|word-floating|tuple-arithmetic|pinned-pointer-cells|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (original-stack|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|tuple-arithmetic|pinned-pointer-cells|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

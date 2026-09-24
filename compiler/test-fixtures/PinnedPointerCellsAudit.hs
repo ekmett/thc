@@ -27,3 +27,23 @@ pointerRoundtrip raw = runRW# (\s0 ->
         +# word2Int# (word8ToWord# separate)) #)
     } } } } } }) of { (# _, I# answer #) -> answer }
   } } })
+
+-- A separate compact root keeps each Addr# array access in the compiled
+-- guest path without making the original keepAlive# proof graph enormous.
+{-# OPAQUE pointerArrayRoundtrip #-}
+pointerArrayRoundtrip :: Int# -> Int#
+pointerArrayRoundtrip raw = runRW# (\s0 ->
+  case newPinnedByteArray# 16# s0 of { (# s1, mutable #) ->
+  case unsafeFreezeByteArray# mutable s1 of { (# s2, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s2 (\s3 ->
+    case plusAddr# base (8# +# andI# raw 7#) of { target ->
+    case writeAddrArray# mutable 0# target s3 of { s4 ->
+    case readAddrArray# mutable 0# s4 of { (# s5, loaded #) ->
+    case indexAddrOffAddr# base 0# of { indexedOff ->
+    case indexAddrArray# bytes 0# of { indexedArray ->
+      (# s5, I# (eqAddr# loaded target
+                  *# eqAddr# indexedOff target
+                  *# eqAddr# indexedArray target) #)
+    } } } } }) of { (# _, I# answer #) -> answer }
+  } } })

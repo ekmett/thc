@@ -18,6 +18,13 @@
       ],
       "result": "DoubleRep"
     },
+    "**##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
     "+#": {
       "arguments": [
         "IntRep",
@@ -137,6 +144,18 @@
       ],
       "result": "IntRep"
     },
+    "acosDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "acosFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "and#": {
       "arguments": [
         "WordRep",
@@ -178,6 +197,30 @@
         "Word8Rep"
       ],
       "result": "Word8Rep"
+    },
+    "asinDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "asinFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "atanDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "atanFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "bitReverse#": {
       "arguments": [
@@ -292,6 +335,30 @@
         "WordRep"
       ],
       "result": "WordRep"
+    },
+    "cosDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "cosFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "coshDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "coshFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "ctz#": {
       "arguments": [
@@ -425,6 +492,42 @@
         "Word8Rep"
       ],
       "result": "IntRep"
+    },
+    "expDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "expFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "expm1Double#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "expm1Float#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "fabsDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "fabsFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "float2Double#": {
       "arguments": [
@@ -592,6 +695,13 @@
       ],
       "result": "IntRep"
     },
+    "indexAddrOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "AddrRep"
+    },
     "indexCharOffAddr#": {
       "arguments": [
         "AddrRep",
@@ -747,6 +857,30 @@
         "Word8Rep"
       ],
       "result": "IntRep"
+    },
+    "log1pDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "log1pFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "logDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "logFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "ltChar#": {
       "arguments": [
@@ -1174,6 +1308,13 @@
       ],
       "result": "WordRep"
     },
+    "powerFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "quotInt#": {
       "arguments": [
         "IntRep",
@@ -1314,6 +1455,30 @@
       ],
       "result": "Word8Rep"
     },
+    "sinDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "sinFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "sinhDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "sinhFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "sqrtDouble#": {
       "arguments": [
         "DoubleRep"
@@ -1381,6 +1546,30 @@
         "Word8Rep"
       ],
       "result": "Word8Rep"
+    },
+    "tanDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "tanFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "tanhDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "tanhFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "timesFloat#": {
       "arguments": [

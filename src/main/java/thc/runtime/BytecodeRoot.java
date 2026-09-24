@@ -398,6 +398,31 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class IndexAddrOffAddr {
+        @Specialization public static ManagedAddress read(ManagedAddress address, long index) {
+            return address.readAddressElementIndex(index);
+        }
+    }
+
+    @Operation
+    public static final class IndexAddrArray {
+        @Specialization public static ManagedAddress read(Object array, long index) {
+            return PinnedMemory.readAddressArray(array, index);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadAddrArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object array, long index, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                PinnedMemory.readAddressArray(array, index));
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadManagedAddress {
@@ -425,6 +450,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress value, Object state) {
             ManagedByteArray.requireState(state);
             address.writeAddressElementIndex(offset, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
+    public static final class WriteAddrArray {
+        @Specialization public static Object write(Object array, long index,
+                ManagedAddress value, Object state) {
+            ManagedByteArray.requireState(state);
+            PinnedMemory.writeAddressArray(array, index, value);
             return kotlin.Unit.INSTANCE;
         }
     }
@@ -2131,6 +2166,36 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleDivide { @Specialization public static double apply(double x, double y) { return x / y; } }
     @Operation public static final class DoubleNegate { @Specialization public static double apply(double x) { return -x; } }
     @Operation public static final class DoubleSqrt { @Specialization public static double apply(double x) { return Math.sqrt(x); } }
+    @Operation public static final class FloatAbs { @Specialization public static float apply(float x) { return Math.abs(x); } }
+    @Operation public static final class FloatExp { @Specialization public static float apply(float x) { return (float) Math.exp(x); } }
+    @Operation public static final class FloatExpm1 { @Specialization public static float apply(float x) { return (float) Math.expm1(x); } }
+    @Operation public static final class FloatLog { @Specialization public static float apply(float x) { return (float) Math.log(x); } }
+    @Operation public static final class FloatLog1p { @Specialization public static float apply(float x) { return (float) Math.log1p(x); } }
+    @Operation public static final class FloatSin { @Specialization public static float apply(float x) { return (float) Math.sin(x); } }
+    @Operation public static final class FloatCos { @Specialization public static float apply(float x) { return (float) Math.cos(x); } }
+    @Operation public static final class FloatPower { @Specialization public static float apply(float x, float y) { return (float) Math.pow(x, y); } }
+    @Operation public static final class DoubleAbs { @Specialization public static double apply(double x) { return Math.abs(x); } }
+    @Operation public static final class DoubleExp { @Specialization public static double apply(double x) { return Math.exp(x); } }
+    @Operation public static final class DoubleExpm1 { @Specialization public static double apply(double x) { return Math.expm1(x); } }
+    @Operation public static final class DoubleLog { @Specialization public static double apply(double x) { return Math.log(x); } }
+    @Operation public static final class DoubleLog1p { @Specialization public static double apply(double x) { return Math.log1p(x); } }
+    @Operation public static final class DoubleSin { @Specialization public static double apply(double x) { return Math.sin(x); } }
+    @Operation public static final class DoubleCos { @Specialization public static double apply(double x) { return Math.cos(x); } }
+    @Operation public static final class DoublePower { @Specialization public static double apply(double x, double y) { return Math.pow(x, y); } }
+    @Operation public static final class FloatTan { @Specialization public static float apply(float x) { return (float) Math.tan(x); } }
+    @Operation public static final class FloatAsin { @Specialization public static float apply(float x) { return (float) Math.asin(x); } }
+    @Operation public static final class FloatAcos { @Specialization public static float apply(float x) { return (float) Math.acos(x); } }
+    @Operation public static final class FloatAtan { @Specialization public static float apply(float x) { return (float) Math.atan(x); } }
+    @Operation public static final class FloatSinh { @Specialization public static float apply(float x) { return (float) Math.sinh(x); } }
+    @Operation public static final class FloatCosh { @Specialization public static float apply(float x) { return (float) Math.cosh(x); } }
+    @Operation public static final class FloatTanh { @Specialization public static float apply(float x) { return (float) Math.tanh(x); } }
+    @Operation public static final class DoubleTan { @Specialization public static double apply(double x) { return Math.tan(x); } }
+    @Operation public static final class DoubleAsin { @Specialization public static double apply(double x) { return Math.asin(x); } }
+    @Operation public static final class DoubleAcos { @Specialization public static double apply(double x) { return Math.acos(x); } }
+    @Operation public static final class DoubleAtan { @Specialization public static double apply(double x) { return Math.atan(x); } }
+    @Operation public static final class DoubleSinh { @Specialization public static double apply(double x) { return Math.sinh(x); } }
+    @Operation public static final class DoubleCosh { @Specialization public static double apply(double x) { return Math.cosh(x); } }
+    @Operation public static final class DoubleTanh { @Specialization public static double apply(double x) { return Math.tanh(x); } }
     @Operation public static final class DoubleEqual { @Specialization public static long apply(double x, double y) { return x == y ? 1L : 0L; } }
     @Operation public static final class DoubleNotEqual { @Specialization public static long apply(double x, double y) { return x != y ? 1L : 0L; } }
     @Operation public static final class DoubleLess { @Specialization public static long apply(double x, double y) { return x < y ? 1L : 0L; } }

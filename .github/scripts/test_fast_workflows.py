@@ -28,11 +28,12 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
-    def test_full_workflow_runs_original_stdio_contract_checks_in_both_python_modes(self):
+    def test_stdio_checks_use_haskell_and_kotlin_not_a_python_test_family(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
         block = workflow.split("name: Check merged fixture and runtime recipes with and without assertions", 1)[1].split("      - name:", 1)[0]
         for name in ("test-core-original-stdio.py", "test-original-stdio-fixtures.py", "test-generate-stdio-abi.py"):
-            self.assertEqual(1, block.count("scripts/" + name), name)
+            self.assertNotIn("scripts/" + name, block)
+            self.assertFalse((WORKFLOW.parents[2] / "scripts" / name).exists(), name)
         self.assertIn('python3 "$test"', block)
         self.assertIn('python3 -O "$test"', block)
 

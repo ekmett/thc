@@ -13,6 +13,9 @@ category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
   compiler/target-layout.c
+  compiler/test-fixtures/OriginalStackAudit.hs
+  compiler/test-fixtures/OriginalStackAuditNative.hs
+  compiler/test-fixtures/OriginalStackProof.json
   README.md
   docs/driver.md
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
@@ -188,6 +191,8 @@ executable thc-fixtures
     AggregateFixtures
     FixtureSupport
     WordFloatingFixtures
+    OriginalStdioFixtures
+    StackFixtures
   hs-source-dirs: test/haskell-fixtures
   build-depends:
     base >= 4.22 && < 4.23,

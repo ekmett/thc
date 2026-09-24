@@ -37,7 +37,7 @@ MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
-narrow-literal-proofs original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
+narrow-literal-proofs original-stack original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple sqrt state-tuple sum-layout sum-result tag-to-enum tuple-input
@@ -85,17 +85,41 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
 # results as well as the semantic Core/oracle data. Admit only the reviewed 144
 # cases and two export stages, not a general log/text/executable suffix rule.
 ORIGINAL_STDIO_OUTPUTS = frozenset("build/original-stdio/" + name for name in (
-    "manifest.json", "expected.json", "oracle.json", "native/original-stdio-oracle",
+    "manifest.json", "oracle.json", "native/original-stdio-oracle",
     *(f"results/{index}.txt" for index in range(144)),
     *(f"logs/{label}.{suffix}"
       for label in ("ghc-version", "ghc-info", "native-build", "pre-export", "post-export",
-                    *(f"native-{index:03}" for index in range(144)))
+                    *(f"native-{index:03}" for index in range(144)),
+                    *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in
+                      ("originalWrite", "originalSafeWrite", "originalWriteErrno", "originalSafeWriteErrno")))
       for suffix in ("stdout", "stderr", "command.json")),
     *(f"{stage}/{name}" for stage in ("pre", "post")
-      for name in ("core/OriginalStdioAudit.json", "core/THC.InterfaceClosure.json", "proofs.json",
+      for name in ("core/OriginalStdioAudit.json", "core/THC.InterfaceClosure.json",
                    "originalWrite.audit.json", "originalSafeWrite.audit.json",
                    "originalWriteErrno.audit.json", "originalSafeWriteErrno.audit.json")),
 ))
+
+# Each attempt retains its logs without admitting arbitrary files from a build
+# tree. Only artifacts referenced by the current manifest enter the cache.
+ORIGINAL_STACK_FILES = frozenset((
+    "native/original-stack-native",
+    *(f"{stage}-core/{module}.json" for stage in ("pre", "post")
+      for module in ("OriginalStackAudit", "THC.InterfaceClosure")),
+    *(f"logs/{label}.{suffix}"
+      for label in ("ghc-version", "thc-revision", "pre-export", "post-export",
+                    "native-compile", "native-invariants")
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+
+
+def original_stack_artifact(name):
+    match = re.fullmatch(r"build/original-stack/run-[1-9][0-9]*/(.+)", name)
+    return match is not None and match.group(1) in ORIGINAL_STACK_FILES
+
+
+def native_executable(name):
+    return name in NATIVE_EXECUTABLES or (
+        original_stack_artifact(name) and name.endswith("/native/original-stack-native"))
 
 
 class CacheMiss(RuntimeError):
@@ -244,7 +268,7 @@ def allowed_payload(name, pins):
         return True
     if name in ("build/primop-coverage.json", "build/aggregate-frontier.json"):
         return True
-    if name in NATIVE_EXECUTABLES:
+    if native_executable(name):
         return True
     if len(parts) < 3 or parts[0] != "build":
         return False
@@ -253,6 +277,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "original-stack":
+        return name == "build/original-stack/manifest.json" or original_stack_artifact(name)
     if parts[1] not in BUILD_DIRS or any(p in ("test-results", "reports", "classes", ".gradle") for p in parts):
         return False
     # Fixture inputs and recorded native objects only, not arbitrary executable
@@ -370,7 +396,7 @@ def safe_mode(mode, name):
             "Unsafe payload permissions: " + name)
     if mode & 0o111:
         path = PurePosixPath(name)
-        require(name in NATIVE_EXECUTABLES or (not path.suffix and
+        require(native_executable(name) or (not path.suffix and
                 ("oracle" in path.name or path.name == "aggregate-frontier")) or path.suffix in (".so", ".dylib"),
                 "Executable non-native input: " + name)
     return mode

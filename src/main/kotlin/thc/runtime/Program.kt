@@ -409,11 +409,20 @@ internal class Force(private val metrics: Metrics) : Node() {
                 val target = thunk.target ?: fault("Unevaluated thunk has no body")
                 metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name)
             }
-            val result = try {
-                if (continuation == null) calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment)
-                else continuation.continueWith(resumeValue)
+            val result = if (continuation == null) {
+                try { calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment) }
+                catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+            } else {
+                // A captured logical computation may move to another host
+                // thread. Its bytecode reinstalls the saved logical mask;
+                // the carrier's ambient mask must survive the entire resumed
+                // chain, including a tail-call trampoline.
+                val ambient = SynchronousMasking.current(this)
+                try {
+                    try { continuation.continueWith(resumeValue) }
+                    catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+                } finally { SynchronousMasking.set(this, ambient) }
             }
-            catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             if (result is ContinuationResult) {
                 val expectedRoot = continuation?.continuationRootNode?.sourceRootNode
                     ?: thunk.target?.rootNode
@@ -1677,7 +1686,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
+                if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
+                    PinnedPointerIndexExpression(operation, tupleProof,
+                        compile(args[0], scope, false), compile(args[1], scope, false))
+                else if (operation == PinnedMemoryOp.WRITE_ADDR_ARRAY)
+                    PinnedPointerArrayWrite(tupleProof, compile(args[0], scope, false),
+                        compile(args[1], scope, false), compile(args[2], scope, false),
+                        compile(args[3], scope, false))
+                else if (operation == PinnedMemoryOp.READ_ADDR_ARRAY)
+                    PinnedPointerArrayRead(tupleProof, compile(args[0], scope, false),
+                        compile(args[1], scope, false), compile(args[2], scope, false))
+                else PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

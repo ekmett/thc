@@ -9,6 +9,7 @@
   ],
   "externalBindings": [],
   "managedForeignCalls": [
+    "stg_cloneMyStackzh",
     "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "__hscore_get_errno",
@@ -470,8 +471,12 @@
     "readInt32OffAddr#": 3,
     "readIntOffAddr#": 3,
     "readAddrOffAddr#": 3,
+    "indexAddrOffAddr#": 2,
+    "indexAddrArray#": 2,
+    "readAddrArray#": 3,
     "writeWord8OffAddr#": 4,
     "writeAddrOffAddr#": 4,
+    "writeAddrArray#": 4,
     "keepAlive#": 3,
     "newByteArray#": 2,
     "resizeMutableByteArray#": 3,
@@ -488,6 +493,36 @@
     "compareByteArrays#": 5,
     "sqrtFloat#": 1,
     "sqrtDouble#": 1,
+    "fabsFloat#": 1,
+    "expFloat#": 1,
+    "expm1Float#": 1,
+    "logFloat#": 1,
+    "log1pFloat#": 1,
+    "sinFloat#": 1,
+    "cosFloat#": 1,
+    "powerFloat#": 2,
+    "fabsDouble#": 1,
+    "expDouble#": 1,
+    "expm1Double#": 1,
+    "logDouble#": 1,
+    "log1pDouble#": 1,
+    "sinDouble#": 1,
+    "cosDouble#": 1,
+    "**##": 2,
+    "tanFloat#": 1,
+    "asinFloat#": 1,
+    "acosFloat#": 1,
+    "atanFloat#": 1,
+    "sinhFloat#": 1,
+    "coshFloat#": 1,
+    "tanhFloat#": 1,
+    "tanDouble#": 1,
+    "asinDouble#": 1,
+    "acosDouble#": 1,
+    "atanDouble#": 1,
+    "sinhDouble#": 1,
+    "coshDouble#": 1,
+    "tanhDouble#": 1,
     "newMutVar#": 2,
     "readMutVar#": 2,
     "writeMutVar#": 3,
@@ -953,9 +988,46 @@
         ]
       }
     },
+    "indexAddrOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "address", "primReps": ["AddrRep"]}
+    },
+    "indexAddrArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "address", "primReps": ["AddrRep"]}
+    },
+    "readAddrArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["AddrRep"],
+        "components": [
+          {"kind": "void", "primReps": []},
+          {"kind": "address", "primReps": ["AddrRep"]}
+        ]
+      }
+    },
     "writeAddrOffAddr#": {
       "arguments": [
         {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeAddrArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
         {"kind": "long", "primReps": ["IntRep"]},
         {"kind": "address", "primReps": ["AddrRep"]},
         {"kind": "void", "primReps": []}

@@ -2,12 +2,14 @@
 
 THC supports a bounded scalar `Float#`/`Double#` foundation in both the AST and
 bytecode backends. It includes floating literals, primitive locals, constructor
-fields and closure captures, scalar arguments/results, and 36 primops:
+fields and closure captures, scalar arguments/results, and 66 primops:
 
 | Family | Float# | Double# |
 | --- | --- | --- |
 | Arithmetic | `plusFloat#`, `minusFloat#`, `timesFloat#`, `divideFloat#`, `negateFloat#` | `+##`, `-##`, `*##`, `/##`, `negateDouble#` |
 | Square root | `sqrtFloat#` | `sqrtDouble#` |
+| Scalar math | `fabsFloat#`, `expFloat#`, `expm1Float#`, `logFloat#`, `log1pFloat#`, `sinFloat#`, `cosFloat#`, `powerFloat#` | `fabsDouble#`, `expDouble#`, `expm1Double#`, `logDouble#`, `log1pDouble#`, `sinDouble#`, `cosDouble#`, `**##` |
+| Trigonometric and hyperbolic | `tanFloat#`, `asinFloat#`, `acosFloat#`, `atanFloat#`, `sinhFloat#`, `coshFloat#`, `tanhFloat#` | `tanDouble#`, `asinDouble#`, `acosDouble#`, `atanDouble#`, `sinhDouble#`, `coshDouble#`, `tanhDouble#` |
 | Comparisons | `eqFloat#`, `neFloat#`, `ltFloat#`, `leFloat#`, `gtFloat#`, `geFloat#` | `==##`, `/=##`, `<##`, `<=##`, `>##`, `>=##` |
 | Int conversion | `int2Float#`, `float2Int#` | `int2Double#`, `double2Int#` |
 | Unsigned Word conversion | `word2Float#` | `word2Double#` |
@@ -88,14 +90,28 @@ Malformed case results are checked against every known alternative independent
 of ordering; an unknown alternative does not inherit a floating proof from its
 peers.
 
-`scripts/prepare-sqrt-audit.py` separately exports public `Prelude.sqrt` for both
-precisions before and after Tidy. Its 418 native rows include signed zeros,
+`scripts/prepare-sqrt-audit.py` separately exports public `Prelude.sqrt` and
+the scalar math wrappers for both precisions before and after Tidy. Its 418
+sqrt/control native rows include signed zeros,
 subnormals, infinities, negative values, signaling/quiet NaNs, boundaries around
 perfect squares, and deterministic random finite inputs. An independent exact
 rational model finds adjacent output values and compares their squared midpoint,
 checking nearest-even rounding without calling a floating square-root function.
 The suite checks 288 exact bit results, 104 NaN classifications and 26 scalar
-consumer results. Arithmetic NaN payloads and signs are not specified.
+consumer results. Another 402 native rows exercise the 30 scalar math primops
+through typed `Float#`/`Double#` wrappers. Arithmetic NaN payloads and signs
+are not specified. Inverse trigonometric rows include inputs outside [-1, 1]
+for NaN classification; hyperbolic rows include infinities and values near
+Float and Double overflow.
+
+Scalar math uses JVM `Math` operations and rounds each Float result to
+binary32. Native GHC is the differential oracle, not a claim of bit-exact
+transcendentals across `libm` and the JVM. Both backends execute every math
+row before and after explicit compilation. The comparison checks NaN by class,
+infinities and signed zero by exact bits, and finite results within the larger
+of 8 ulps or 2e-6 relative for Float, and 16 ulps or 2e-14 relative for Double.
+These bounds apply to the tested finite domain; they do not promise
+cross-platform bit identity or a universal `Math.pow` accuracy contract.
 
 The AST uses separate typed unary nodes; BytecodeDSL uses typed unary operations.
 Both call JVM `Math.sqrt`, whose [specified behavior](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Math.html#sqrt(double))

@@ -17,16 +17,37 @@
       "outputs": ["build/word-floating"],
       "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
     },
+    "original-stack": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}],
+      "outputs": ["build/original-stack"],
+      "sources": [
+        "compiler/test-fixtures/OriginalStackAudit.hs",
+        "compiler/test-fixtures/OriginalStackAuditNative.hs",
+        "compiler/test-fixtures/OriginalStackProof.json",
+        "compiler/pinned-ghc-internal/LICENSE",
+        "compiler/pinned-ghc-internal/GHC/Internal/Stack/CloneStack.hs",
+        "compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs",
+        "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
+        "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc",
+        "test/haskell-fixtures/StackFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stdio": {
       "junit": ["thc.runtime.OriginalStdioNativeTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-original-stdio.py", "--require-supported"]}],
+      "commands": [{"argv": ["scripts/prepare-original-stdio.sh", "--require-supported"]}],
       "outputs": ["build/original-stdio"],
       "sources": [
         "compiler/test-fixtures/OriginalStdioAudit.hs",
         "compiler/test-fixtures/OriginalStdioAuditNative.hs",
-        "scripts/prepare-original-stdio.py",
-        "scripts/original_stdio_model.py",
-        "scripts/test-original-stdio-fixtures.py"
+        "scripts/prepare-original-stdio.sh",
+        "test/haskell-fixtures/Main.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/OriginalStdioFixtures.hs",
+        "thc.cabal"
       ]
     },
     "address-identity": {

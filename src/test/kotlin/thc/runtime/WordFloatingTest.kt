@@ -29,6 +29,14 @@ class WordFloatingTest {
     private fun module(stage: String) = json("$stage-core/WordFloatingAudit.json")
     private data class Row(val input: Long, val floatBits: Int, val doubleBits: Long)
 
+    @Test fun floatingOperationIdsRemainDistinctAcrossMergedFamilies() {
+        val source = File(root, "src/main/kotlin/thc/runtime/FloatingPrimitives.kt").readText()
+        val ids = Regex("private const val ([A-Z][A-Z0-9_]*) = ([0-9]+)").findAll(source)
+            .associate { it.groupValues[1] to it.groupValues[2].toInt() }
+        assertTrue(ids.keys.containsAll(listOf("WORD_FLOAT", "WORD_DOUBLE", "FLOAT_ABS", "FLOAT_EXP")))
+        assertEquals(ids.size, ids.values.toSet().size, "Floating operation IDs must not alias another family")
+    }
+
     // Independent integer quotient/remainder model: never use a floating cast.
     private fun roundedBits(x: Long, precision: Int): Long {
         val n = unsigned(x)

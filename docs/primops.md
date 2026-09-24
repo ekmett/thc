@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 246 | Implemented fixed numeric/character scalar forms. |
-| Partial | 225 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1020 | No declared lowering. |
+| Supported | 276 | Implemented fixed numeric/character scalar forms. |
+| Partial | 229 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 986 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -47,6 +47,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 - [x] `*#` — arity 2
 - [x] `*##` — arity 2
+- [x] `**##` — arity 2
 - [x] `+#` — arity 2
 - [x] `+##` — arity 2
 - [x] `-#` — arity 2
@@ -64,12 +65,18 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `>##` — arity 2
 - [x] `>=#` — arity 2
 - [x] `>=##` — arity 2
+- [x] `acosDouble#` — arity 1
+- [x] `acosFloat#` — arity 1
 - [x] `and#` — arity 2
 - [x] `and64#` — arity 2
 - [x] `andI#` — arity 2
 - [x] `andWord16#` — arity 2
 - [x] `andWord32#` — arity 2
 - [x] `andWord8#` — arity 2
+- [x] `asinDouble#` — arity 1
+- [x] `asinFloat#` — arity 1
+- [x] `atanDouble#` — arity 1
+- [x] `atanFloat#` — arity 1
 - [x] `bitReverse#` — arity 1
 - [x] `bitReverse16#` — arity 1
 - [x] `bitReverse32#` — arity 1
@@ -89,6 +96,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `clz32#` — arity 1
 - [x] `clz64#` — arity 1
 - [x] `clz8#` — arity 1
+- [x] `cosDouble#` — arity 1
+- [x] `cosFloat#` — arity 1
+- [x] `coshDouble#` — arity 1
+- [x] `coshFloat#` — arity 1
 - [x] `ctz#` — arity 1
 - [x] `ctz16#` — arity 1
 - [x] `ctz32#` — arity 1
@@ -108,6 +119,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `eqWord32#` — arity 2
 - [x] `eqWord64#` — arity 2
 - [x] `eqWord8#` — arity 2
+- [x] `expDouble#` — arity 1
+- [x] `expFloat#` — arity 1
+- [x] `expm1Double#` — arity 1
+- [x] `expm1Float#` — arity 1
+- [x] `fabsDouble#` — arity 1
+- [x] `fabsFloat#` — arity 1
 - [x] `float2Double#` — arity 1
 - [x] `float2Int#` — arity 1
 - [x] `geChar#` — arity 2
@@ -155,6 +172,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `leWord32#` — arity 2
 - [x] `leWord64#` — arity 2
 - [x] `leWord8#` — arity 2
+- [x] `log1pDouble#` — arity 1
+- [x] `log1pFloat#` — arity 1
+- [x] `logDouble#` — arity 1
+- [x] `logFloat#` — arity 1
 - [x] `ltChar#` — arity 2
 - [x] `ltFloat#` — arity 2
 - [x] `ltInt16#` — arity 2
@@ -217,6 +238,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `popCnt32#` — arity 1
 - [x] `popCnt64#` — arity 1
 - [x] `popCnt8#` — arity 1
+- [x] `powerFloat#` — arity 2
 - [x] `quotInt#` — arity 2
 - [x] `quotInt16#` — arity 2
 - [x] `quotInt32#` — arity 2
@@ -237,6 +259,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `remWord32#` — arity 2
 - [x] `remWord64#` — arity 2
 - [x] `remWord8#` — arity 2
+- [x] `sinDouble#` — arity 1
+- [x] `sinFloat#` — arity 1
+- [x] `sinhDouble#` — arity 1
+- [x] `sinhFloat#` — arity 1
 - [x] `sqrtDouble#` — arity 1
 - [x] `sqrtFloat#` — arity 1
 - [x] `subInt16#` — arity 2
@@ -247,6 +273,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `subWord32#` — arity 2
 - [x] `subWord64#` — arity 2
 - [x] `subWord8#` — arity 2
+- [x] `tanDouble#` — arity 1
+- [x] `tanFloat#` — arity 1
+- [x] `tanhDouble#` — arity 1
+- [x] `tanhFloat#` — arity 1
 - [x] `timesFloat#` — arity 2
 - [x] `timesInt16#` — arity 2
 - [x] `timesInt32#` — arity 2
@@ -329,6 +359,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
+- [ ] `indexAddrArray#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `indexAddrOffAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexCharOffAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexDoubleArray#` — arity 2 — Managed byte storage
@@ -423,6 +455,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `readAddrArray#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
 - [ ] `readDoubleArray#` — arity 3 — Managed byte storage
@@ -497,6 +530,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `unsafeFreezeArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeFreezeByteArray#` — arity 2 — Managed byte storage
+- [ ] `writeAddrArray#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeArray#` — arity 4 — Managed lifted arrays
 - [ ] `writeDoubleArray#` — arity 4 — Managed byte storage
@@ -525,9 +559,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 <details>
 <summary>Remaining GHC primops, in name order</summary>
 
-- [ ] `**##` — arity 2
-- [ ] `acosDouble#` — arity 1
-- [ ] `acosFloat#` — arity 1
 - [ ] `acoshDouble#` — arity 1
 - [ ] `acoshFloat#` — arity 1
 - [ ] `addCFinalizerToWeak#` — arity 6
@@ -535,12 +566,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2
-- [ ] `asinDouble#` — arity 1
-- [ ] `asinFloat#` — arity 1
 - [ ] `asinhDouble#` — arity 1
 - [ ] `asinhFloat#` — arity 1
-- [ ] `atanDouble#` — arity 1
-- [ ] `atanFloat#` — arity 1
 - [ ] `atanhDouble#` — arity 1
 - [ ] `atanhFloat#` — arity 1
 - [ ] `atomicCasAddrAddr#` — arity 4
@@ -610,10 +637,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `copyMutableByteArrayToAddr#` — arity 5
 - [ ] `copySmallArray#` — arity 6
 - [ ] `copySmallMutableArray#` — arity 6
-- [ ] `cosDouble#` — arity 1
-- [ ] `cosFloat#` — arity 1
-- [ ] `coshDouble#` — arity 1
-- [ ] `coshFloat#` — arity 1
 - [ ] `deRefStablePtr#` — arity 2
 - [ ] `deRefWeak#` — arity 2
 - [ ] `decodeDouble_2Int#` — arity 1
@@ -623,12 +646,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `divideDoubleX8#` — arity 2
 - [ ] `divideFloatX16#` — arity 2
 - [ ] `eqStablePtr#` — arity 2
-- [ ] `expDouble#` — arity 1
-- [ ] `expFloat#` — arity 1
-- [ ] `expm1Double#` — arity 1
-- [ ] `expm1Float#` — arity 1
-- [ ] `fabsDouble#` — arity 1
-- [ ] `fabsFloat#` — arity 1
 - [ ] `fetchAddIntArray#` — arity 4
 - [ ] `fetchAddWordAddr#` — arity 3
 - [ ] `fetchAndIntArray#` — arity 4
@@ -683,8 +700,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `getSizeofSmallMutableArray#` — arity 2
 - [ ] `getSpark#` — arity 1
 - [ ] `gtAddr#` — arity 2
-- [ ] `indexAddrArray#` — arity 2
-- [ ] `indexAddrOffAddr#` — arity 2
 - [ ] `indexCharArray#` — arity 2
 - [ ] `indexDoubleArrayAsDoubleX4#` — arity 2
 - [ ] `indexDoubleArrayAsDoubleX8#` — arity 2
@@ -888,10 +903,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `labelThread#` — arity 3
 - [ ] `leAddr#` — arity 2
 - [ ] `listThreads#` — arity 1
-- [ ] `log1pDouble#` — arity 1
-- [ ] `log1pFloat#` — arity 1
-- [ ] `logDouble#` — arity 1
-- [ ] `logFloat#` — arity 1
 - [ ] `ltAddr#` — arity 2
 - [ ] `makeStableName#` — arity 2
 - [ ] `makeStablePtr#` — arity 2
@@ -1038,7 +1049,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `plusWord64X8#` — arity 2
 - [ ] `plusWord8X32#` — arity 2
 - [ ] `plusWord8X64#` — arity 2
-- [ ] `powerFloat#` — arity 2
 - [ ] `prefetchAddr0#` — arity 3
 - [ ] `prefetchAddr1#` — arity 3
 - [ ] `prefetchAddr2#` — arity 3
@@ -1090,7 +1100,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `raiseDivZero#` — arity 1
 - [ ] `raiseOverflow#` — arity 1
 - [ ] `raiseUnderflow#` — arity 1
-- [ ] `readAddrArray#` — arity 3
 - [ ] `readCharArray#` — arity 3
 - [ ] `readCharOffAddr#` — arity 3
 - [ ] `readDoubleArrayAsDoubleX4#` — arity 3
@@ -1310,20 +1319,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `shuffleWord8X16#` — arity 3
 - [ ] `shuffleWord8X32#` — arity 3
 - [ ] `shuffleWord8X64#` — arity 3
-- [ ] `sinDouble#` — arity 1
-- [ ] `sinFloat#` — arity 1
-- [ ] `sinhDouble#` — arity 1
-- [ ] `sinhFloat#` — arity 1
 - [ ] `sizeofArray#` — arity 1
 - [ ] `sizeofMutableArray#` — arity 1
 - [ ] `sizeofSmallArray#` — arity 1
 - [ ] `sizeofSmallMutableArray#` — arity 1
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
-- [ ] `tanDouble#` — arity 1
-- [ ] `tanFloat#` — arity 1
-- [ ] `tanhDouble#` — arity 1
-- [ ] `tanhFloat#` — arity 1
 - [ ] `thawSmallArray#` — arity 4
 - [ ] `threadLabel#` — arity 2
 - [ ] `threadStatus#` — arity 2
@@ -1382,7 +1383,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `word16ToInt16#` — arity 1
 - [ ] `word32ToInt32#` — arity 1
 - [ ] `word8ToInt8#` — arity 1
-- [ ] `writeAddrArray#` — arity 4
 - [ ] `writeCharArray#` — arity 4
 - [ ] `writeCharOffAddr#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4
