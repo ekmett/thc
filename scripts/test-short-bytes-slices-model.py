@@ -41,6 +41,23 @@ class ModelTest(unittest.TestCase):
                     rows[0].rsplit('\t', 1)[0]+'\t999\n'+''.join(rows[1:])):
             with self.assertRaises(AssertionError): model.verify(bad)
 
+    def test_installed_unit_identity_and_frontier_remain_exact(self):
+        spec = importlib.util.spec_from_file_location('slice_prepare_units', Path(__file__).with_name('prepare-short-bytes-slices.py'))
+        prepare = importlib.util.module_from_spec(spec); spec.loader.exec_module(prepare)
+        for unit in ('bytestring-0.12.2.0-5637', 'bytestring-0.12.2.0-3f3f'):
+            expected = unit+':Data.ByteString.Internal.Type.overflowError'
+            good = dict(accepted=False, issues=[], missingGlobals=[dict(id=expected)])
+            prepare.check_frontier(good, unit, 'retained platform unit')
+            other = 'bytestring-0.12.2.0-'+('3f3f' if unit.endswith('5637') else '5637')
+            for bad in (dict(good, accepted=True), dict(good, issues=[dict(code='unsupported-primop')]),
+                        dict(good, missingGlobals=[]), dict(good, missingGlobals=[dict(id=expected)]*2),
+                        dict(good, missingGlobals=[dict(id=other+prepare.OVERFLOW_WORKER)]),
+                        dict(good, missingGlobals=[dict(id=unit+':Data.ByteString.Internal.Type.other')])):
+                with self.assertRaises(AssertionError): prepare.check_frontier(bad, unit, 'negative')
+        for bad in (None, '', 'bytestring-0.12.1.0-5637', 'bytestring-0.12.2.0-5637 extra',
+                    'bytestring-0.12.2.0-5637:forged', ['bytestring-0.12.2.0-5637']):
+            with self.assertRaises(AssertionError): prepare.overflow_id(bad)
+
     def test_prepared_original_composition_and_exact_missing_source_frontiers(self):
         spec = importlib.util.spec_from_file_location('slice_prepare', Path(__file__).with_name('prepare-short-bytes-slices.py'))
         prepare = importlib.util.module_from_spec(spec); spec.loader.exec_module(prepare)

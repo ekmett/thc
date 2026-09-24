@@ -160,11 +160,15 @@ class ShortByteStringSliceTest {
         }
     }
     @Test fun completeAppendAndConcatOverflowPathsRemainStrictFrontiers() {
-        val stages = manifest()["stages"] as Map<String, List<String>>
+        val manifest = manifest()
+        val unit = manifest["installedBytestringUnitId"] as String
+        assertTrue(unit.matches(Regex("bytestring-0\\.12\\.2\\.0(?:-[A-Za-z0-9]+)?")))
+        val stages = manifest["stages"] as Map<String, List<String>>
         for ((stage, paths) in stages) for (name in listOf("appendFrontier", "concatFrontier")) {
             val audit = Json.parse(File(directory, "$stage-$name.audit.json").readText()) as Map<String, Any?>
             assertEquals(false, audit["accepted"])
-            assertEquals(listOf("bytestring-0.12.2.0-5637:Data.ByteString.Internal.Type.overflowError"),
+            assertEquals(emptyList<Any?>(), audit["issues"])
+            assertEquals(listOf("$unit:Data.ByteString.Internal.Type.overflowError"),
                 (audit["missingGlobals"] as List<Map<String, Any?>>).map { it["id"] })
             for (backend in listOf("ast", "bytecode")) context(true).use { context ->
                 context.initialize("thc"); context.enter()
