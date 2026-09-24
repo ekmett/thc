@@ -273,7 +273,7 @@ def main():
         path = OUT/f'{stage}-core/SimdDoubleX2ByteArray.json'
         path.unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
-        if stage == 'post': options += ['-fplugin-opt=Thc.Plugin:post-tidy']
+        if stage == 'post': options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['compiler/export.sh', *options, FIXTURE],
             dict(THC_CORE_OUT=str(path.parent), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         module = json.loads(path.read_text())
@@ -331,9 +331,9 @@ def main():
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT/'scripts/doublex2_bytearray_model.py',
                ROOT/'scripts/test-doublex2-bytearray-model.py', ROOT/'scripts/audit-core.py',
                ROOT/'scripts/core-capabilities.json', ROOT/'scripts/core_vectors.py', ROOT/'scripts/core_vector_memory.py',
-               ROOT/'src/main/kotlin/thc/runtime/CoreVectorMemory.kt', ROOT/'src/main/java/thc/runtime/DoubleX2.java',
+               ROOT/'src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt', ROOT/'src/main/java/thc/runtime/DoubleX2.java',
                ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-               *[ROOT/'compiler/Thc'/name for name in ('Cbv.hs', 'Demands.hs', 'Plugin.hs', 'Sources.hs', 'Wired.hs')],
+               *[ROOT/'compiler/THC'/name for name in ('CBV.hs', 'Demands.hs', 'Plugin.hs', 'Sources.hs', 'Wired.hs')],
                *[ROOT/'compiler'/name for name in ('build.sh', 'export.sh', 'toolchain.sh')]]
     provenance = dict(schema=1, vector='doublex2-bytearray', stages=stages, modelByteOrder=BYTE_ORDER,
                       nativeByteOrder=None if args.export_only else BYTE_ORDER,

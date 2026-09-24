@@ -94,13 +94,13 @@ def main():
         commands.append(dict(argv=argv, stdout=str(OUT / 'oracle.tsv')))
         (OUT / 'oracle.tsv').write_text(subprocess.check_output(argv, text=True)); verify_native()
         for stage in ['pre', 'post']:
-            run(['compiler/export.sh', '-icompiler/test-fixtures', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
+            run(['compiler/export.sh', '-icompiler/test-fixtures', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(SOURCES[0]), str(SOURCES[3])],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
             run([sys.executable, 'scripts/audit-core.py', *[str(p) for p in sorted((OUT / f'{stage}-core').glob('*.json'))],
                  *[v for name in ENTRIES for v in ['--entry', name]], '--output', str(OUT / f'{stage}-audit.json')])
             inventory(stage)
         sources = SOURCES + [Path(__file__).resolve(), ROOT / 'compiler/build.sh', ROOT / 'compiler/export.sh',
-                             ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/Thc').glob('*.hs')), *audit_inputs()]
+                             ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs')), *audit_inputs()]
         artifacts = [p for folder in ['native', 'pre-core', 'post-core'] for p in sorted((OUT / folder).rglob('*')) if p.is_file()]
         artifacts += [OUT / name for name in ['inputs.tsv', 'oracle.tsv', 'pre-audit.json', 'post-audit.json']]
         provenance.write_text(json.dumps(dict(schema=1, ghcInfo=subprocess.check_output([ghc, '--info'], text=True),

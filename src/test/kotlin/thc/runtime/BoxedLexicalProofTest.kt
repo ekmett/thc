@@ -85,7 +85,7 @@ class BoxedLexicalProofTest {
     }
     @Test fun genuineBoxedNewtypeCastsPreserveLevityAndLazyFieldsInCompiledCode() = visit { language, backend ->
         for (stage in listOf("core", "cbv-post-core")) {
-            val input = Json.parse(File(root, "build/$stage/CbvCoercionAudit.json").readText()) as Map<String, Any?>
+            val input = Json.parse(File(root, "build/$stage/CBVCoercionAudit.json").readText()) as Map<String, Any?>
             val bindings = (input["bindings"] as List<Map<String, Any?>>).associateBy { it["name"] }
             for ((name, levity) in listOf("wrapSpine" to "Lifted", "unwrapSpine" to "Lifted",
                     "wrapProduct" to "Unlifted", "unwrapProduct" to "Unlifted")) {

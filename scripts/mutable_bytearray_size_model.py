@@ -23,5 +23,6 @@ def mathematical(name,raw,code):
 def rows():return [(n,x,c,mathematical(n,x,c)) for n in ENTRIES for x,c in inputs()]
 def verify(text):
     actual=[(n,int(x),int(c),int(y)) for n,x,c,y in (line.split('\t') for line in text.splitlines())]
-    assert actual==rows(),'Mutable size native/model mismatch, missing, duplicated or reordered row'
+    if actual!=rows():
+        raise AssertionError('Mutable size native/model mismatch, missing, duplicated or reordered row')
     return actual

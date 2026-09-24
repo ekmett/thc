@@ -1,0 +1,7 @@
+// Keep reusable Kotlin/KAPT/Java outputs, but never store or load Test outputs.
+// --rerun separately ensures that project-local up-to-date state cannot skip tests.
+allprojects {
+    tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+        outputs.doNotCacheIf('Fast checks require fresh test execution') { true }
+    }
+}

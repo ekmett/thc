@@ -187,13 +187,13 @@ def prepare():
         (OUT / file).write_text(output(argv) + '\n')
     entries = list(dict.fromkeys(name for name, _ in expected_rows())) + ['pairInputs']
     for stage in STAGES:
-        run(['compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
+        run(['compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), str(FIXTURE)],
             dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         run(['python3', 'scripts/audit-core.py', str(OUT / f'{stage}-core/TupleInputAudit.json'),
              *[part for entry in entries for part in ['--entry', entry]], '--output', str(OUT / f'{stage}-audit.json')])
         check(json.loads((OUT / f'{stage}-audit.json').read_text())['accepted'] is True, f'{stage}: strict audit rejected')
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT / 'compiler/build.sh', ROOT / 'compiler/export.sh',
-               ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/Thc').glob('*.hs')),
+               ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs')),
                ROOT / 'scripts/audit-core.py', ROOT / 'scripts/core-capabilities.json', *sorted((ROOT / 'scripts').glob('core_*.py')),
                ROOT / 'src/main/resources/thc/scalar-primop-signatures.json']
     artifacts = [p for directory in ('native', 'pre-core', 'post-core') for p in sorted((OUT / directory).rglob('*')) if p.is_file()]

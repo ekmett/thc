@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import dataclass
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -17,6 +18,20 @@ CHECKS = {"build (ubuntu-latest)", "build (macos-latest)", "automation"} | {
     for backend in ("ast", "bytecode")
     for handoff in ("false", "true")
 }
+
+
+@dataclass(frozen=True)
+class Gate:
+    workflow: str
+    name: str
+    checks: frozenset
+
+
+BUILD_GATE = Gate("build.yml", "Build", frozenset(CHECKS))
+FAST_GATE = Gate("fast.yml", "Fast checks", frozenset({"automation", "fast-check"}))
+# This policy is code checked out from trusted main, never PR data or an event
+# input. The transition PR itself still uses the old main's Build/11 policy.
+PR_GATE = FAST_GATE
 REQUIRED_STATUS = "required-tests"
 ACTIONS_APP = 15368
 
@@ -59,40 +74,142 @@ def eligible(pr, repo):
             and LABEL in {label["name"] for label in pr["labels"]})
 
 
-def build_result(api, sha):
-    workflow = api.call("GET", "actions/workflows/build.yml")
-    runs = [run for run in api.pages(f"actions/workflows/build.yml/runs?head_sha={sha}", "workflow_runs")
+def complete_attempt(api, run, gate, current=True):
+    if run["status"] != "completed":
+        return "pending"
+    if run["conclusion"] != "success":
+        return "failure"
+    jobs = list(api.pages(f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", "jobs"))
+    names = [job["name"] for job in jobs]
+    passed = (all(names.count(name) == 1 for name in gate.checks)
+              and all(job["status"] == "completed" and job["conclusion"] == "success" for job in jobs))
+    if current:
+        fresh = api.call("GET", f"actions/runs/{run['id']}")
+        if any(fresh[key] != run[key] for key in
+               ("id", "workflow_id", "head_sha", "run_attempt", "status", "conclusion")):
+            return "pending"
+    return "success" if passed else "failure"
+
+
+def workflow_result(api, sha, gate):
+    workflow = api.call("GET", f"actions/workflows/{gate.workflow}")
+    runs = [run for run in api.pages(f"actions/workflows/{gate.workflow}/runs?head_sha={sha}", "workflow_runs")
             if run["head_sha"] == sha and run["workflow_id"] == workflow["id"]
             and run["event"] in ("push", "pull_request", "workflow_dispatch", "merge_group")]
     if not runs:
         return "missing", None
-    # Rerunning an old run does not change its ID. Any active execution holds
-    # the gate; otherwise the most recently updated result wins, so a failed
-    # rerun cannot hide behind a higher-ID success.
+    # An older-ID rerun can supersede a newer run. Any active exact-head run
+    # holds the PR gate; jobs belong to exactly the selected attempt.
     active = [run for run in runs if run["status"] != "completed"]
     run = max(active or runs, key=lambda item: (item["updated_at"], item["id"]))
-    if run["status"] != "completed":
-        return "pending", run
-    if run["conclusion"] != "success":
-        return "failure", run
-    # Read this attempt, not jobs left over from an earlier successful attempt
-    # or identically named jobs in an unrelated workflow.
-    jobs = list(api.pages(f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", "jobs"))
-    names = [job["name"] for job in jobs]
-    passed = (all(names.count(name) == 1 for name in CHECKS)
-              and all(job["status"] == "completed" and job["conclusion"] == "success" for job in jobs))
-    current = api.call("GET", f"actions/runs/{run['id']}")
-    if current["run_attempt"] != run["run_attempt"] or current["status"] != "completed":
-        return "pending", current
-    return ("success" if passed else "failure"), run
+    return complete_attempt(api, run, gate), run
 
 
-def publish_result(api, sha, state, run):
+def build_result(api, sha):
+    """The full Build contract remains independently testable during bootstrap."""
+    return workflow_result(api, sha, BUILD_GATE)
+
+
+def main_workflow_runs(api, gate):
+    workflow = api.call("GET", f"actions/workflows/{gate.workflow}")
+    return [run for run in api.pages(f"actions/workflows/{gate.workflow}/runs?branch=main", "workflow_runs")
+            if run["workflow_id"] == workflow["id"] and run.get("head_branch") == "main"
+            and run["event"] in ("push", "workflow_dispatch")
+            and (run.get("head_repository") or {}).get("full_name") == api.repo]
+
+
+def main_build_runs(api):
+    return main_workflow_runs(api, BUILD_GATE)
+
+
+def completed_main_attempts(api):
+    completed = []
+    for run in main_build_runs(api):
+        if run["status"] == "completed":
+            completed.append(run)
+        elif run["run_attempt"] > 1:
+            prior = api.call("GET", f"actions/runs/{run['id']}/attempts/{run['run_attempt'] - 1}")
+            if (any(prior[key] != run[key] for key in
+                    ("id", "workflow_id", "head_sha", "head_branch", "event"))
+                    or (prior.get("head_repository") or {}).get("full_name") != api.repo
+                    or prior["run_attempt"] != run["run_attempt"] - 1
+                    or prior["status"] != "completed"):
+                raise RuntimeError("Cannot establish previous full Build attempt")
+            completed.append(prior)
+    return completed
+
+
+def main_build_snapshot(runs):
+    return tuple(sorted((r["id"], r["head_sha"], r["run_attempt"], r["conclusion"], r["updated_at"])
+                        for r in runs))
+
+
+def main_build_health(api):
+    """Pending full builds do not hold PRs; completed failures do.
+
+    A rerun retains its previous completed result. A later verified full success
+    clears old results only when its source includes those completed main heads.
+    """
+    completed = completed_main_attempts(api)
+    snapshot = main_build_snapshot(completed)
+    if not completed:
+        return "missing", snapshot
+    latest = max(completed, key=lambda item: (item["updated_at"], item["id"], item["run_attempt"]))
+    state = complete_attempt(api, latest, BUILD_GATE, current=False)
+    if state != "success":
+        return state, snapshot
+    for sha in {run["head_sha"] for run in completed} - {latest["head_sha"]}:
+        comparison = api.call("GET", f"compare/{sha}...{latest['head_sha']}")
+        if comparison.get("status") not in ("ahead", "identical"):
+            return "failure", snapshot
+    # Catch a completed failure/rerun that appeared while reading jobs/ancestry.
+    # New first attempts still pending are deliberately absent from this view.
+    if main_build_snapshot(completed_main_attempts(api)) != snapshot:
+        return "changed", snapshot
+    return "success", snapshot
+
+
+def ensure_main_checks(api, sha, report, base_sha=None):
+    # GITHUB_TOKEN merges suppress both ordinary push workflows. Recover each
+    # missing workflow independently; an existing failed run is never retried.
+    failure = None
+    for gate in (BUILD_GATE, FAST_GATE):
+        try:
+            if any(run["head_sha"] == sha for run in main_workflow_runs(api, gate)):
+                continue
+            inputs = {"expected_sha": sha}
+            if gate == FAST_GATE:
+                if base_sha is None:
+                    commit = api.call("GET", f"commits/{sha}")
+                    if commit["sha"] != sha or not commit.get("parents"):
+                        raise RuntimeError("Cannot establish main's parent for Fast checks")
+                    base_sha = commit["parents"][0]["sha"]
+                inputs["base_sha"] = base_sha
+            if api.call("GET", "branches/main")["commit"]["sha"] != sha:
+                report(f"main advanced; a later run will recover its {gate.name}")
+                continue
+            api.call("POST", f"actions/workflows/{gate.workflow}/dispatches", {
+                "ref": "main", "inputs": inputs,
+            })
+            report(f"Dispatched missing {gate.name} for main {sha}")
+        except HTTPError as error:
+            # Do not let one failed dispatch prevent the other workflow from
+            # starting. A later reconciliation inspects actual runs to recover.
+            if failure is None:
+                failure = error
+            else:
+                error.close()
+            report(f"Could not dispatch {gate.name} for main {sha}: HTTP {error.code}")
+    if failure is not None:
+        raise failure
+
+
+def publish_result(api, sha, state, run, gate=PR_GATE):
     # workflow_dispatch job checks are not reliably eligible for PR protection.
     # This separate commit status is produced by trusted main after inspecting
-    # GitHub's actual Build run/attempt, without executing any PR artifacts.
+    # GitHub's actual selected workflow run/attempt, without executing any PR artifacts.
     target = (f"{run['html_url']}/attempts/{run['run_attempt']}" if run
-              else f"https://github.com/{api.repo}/actions/workflows/build.yml")
+              else f"https://github.com/{api.repo}/actions/workflows/{gate.workflow}")
     # The combined status response omits creator. The reverse-chronological
     # status history retains it; only this context's latest entry counts.
     existing = next((status for status in api.pages(f"commits/{sha}/statuses")
@@ -103,17 +220,17 @@ def publish_result(api, sha, state, run):
         return
     api.call("POST", f"statuses/{sha}", {
         "context": REQUIRED_STATUS, "state": state, "target_url": target,
-        "description": {"success": "All required Build jobs passed",
-                        "pending": "Waiting for the current Build attempt",
-                        "failure": "Build failed or omitted a required job"}[state],
+        "description": {"success": f"All required {gate.name} jobs passed",
+                        "pending": f"Waiting for the current {gate.name} attempt",
+                        "failure": f"{gate.name} failed or omitted a required job"}[state],
     })
 
 
-def publish_run(api, run_id):
+def publish_run(api, run_id, gate=PR_GATE):
     run = api.call("GET", f"actions/runs/{int(run_id)}")
-    state, latest = build_result(api, run["head_sha"])
+    state, latest = workflow_result(api, run["head_sha"], gate)
     if latest and latest["id"] == run["id"]:
-        publish_result(api, run["head_sha"], state, latest)
+        publish_result(api, run["head_sha"], state, latest, gate)
 
 
 def owner_authorized(api, number):
@@ -131,16 +248,27 @@ def still_authorized(api, pr):
     return eligible(pr, api.repo) and owner_authorized(api, pr["number"])
 
 
-def dispatch(api, pr):
+def dispatch(api, pr, gate=PR_GATE):
     if not still_authorized(api, pr):
-        return
-    publish_result(api, pr["head"]["sha"], "pending", None)
-    api.call("POST", "actions/workflows/build.yml/dispatches", {
-        "ref": pr["head"]["ref"], "inputs": {"expected_sha": pr["head"]["sha"]},
+        return False
+    inputs = {"expected_sha": pr["head"]["sha"]}
+    if gate == FAST_GATE:
+        base = api.call("GET", "branches/main")["commit"]["sha"]
+        fresh = api.call("GET", f"pulls/{pr['number']}")
+        if (not still_authorized(api, fresh) or fresh["head"]["sha"] != pr["head"]["sha"]
+                or fresh["base"]["sha"] != base
+                or api.call("GET", f"compare/{base}...{fresh['head']['sha']}")["behind_by"]):
+            return False
+        inputs["base_sha"] = base
+        pr = fresh
+    publish_result(api, pr["head"]["sha"], "pending", None, gate)
+    api.call("POST", f"actions/workflows/{gate.workflow}/dispatches", {
+        "ref": pr["head"]["ref"], "inputs": inputs,
     })
+    return True
 
 
-def reconcile(api, report=print, sleep=time.sleep):
+def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
     # The installation configures strict, administrator-enforced protection.
     # The Actions token has no administration permission or bypass actor.
     branch = api.call("GET", "branches/main")
@@ -155,9 +283,12 @@ def reconcile(api, report=print, sleep=time.sleep):
     # Events can be coalesced by workflow concurrency. Recover gate publication
     # for every PR, including forks and manually merged/unlabelled work.
     for candidate in candidates:
-        state, run = build_result(api, candidate["head"]["sha"])
-        if run:
-            publish_result(api, candidate["head"]["sha"], state, run)
+        state, run = workflow_result(api, candidate["head"]["sha"], gate)
+        # A policy transition must retire old Build-derived greens even on
+        # unlabelled/fork PRs that do not yet have a Fast checks run.
+        publish_result(api, candidate["head"]["sha"], "pending" if state == "missing" else state, run, gate)
+    if gate == FAST_GATE:
+        ensure_main_checks(api, branch["commit"]["sha"], report)
     for candidate in candidates:
         number = candidate["number"]
         path = f"pulls/{number}"
@@ -212,24 +343,33 @@ def reconcile(api, report=print, sleep=time.sleep):
                 if updated["head"]["sha"] != sha:
                     # Token-authored pushes don't start ordinary push CI.
                     # Dispatch is explicit and verifies the expected commit.
-                    dispatch(api, updated)
-                    report(f"#{number}: updated against main and dispatched Build")
+                    if dispatch(api, updated, gate):
+                        report(f"#{number}: updated against main and dispatched {gate.name}")
+                    else:
+                        report(f"#{number}: changed before dispatch; waiting")
                     return
-            report(f"#{number}: branch update pending; a later run will dispatch Build")
+            report(f"#{number}: branch update pending; a later run will dispatch {gate.name}")
             return
-        state, run = build_result(api, sha)
+        state, run = workflow_result(api, sha, gate)
         if run:
-            publish_result(api, sha, state, run)
+            publish_result(api, sha, state, run, gate)
         if state == "failure":
             report(f"#{number}: checks failed; waiting for a fix or manual rerun")
             continue
         if state != "success":
             if state == "missing":
-                dispatch(api, pr)
-                report(f"#{number}: dispatched missing Build")
+                if dispatch(api, pr, gate):
+                    report(f"#{number}: dispatched missing {gate.name}")
+                else:
+                    report(f"#{number}: changed before dispatch; waiting")
             else:
                 report(f"#{number}: waiting for required checks ({state})")
             return
+        if gate == FAST_GATE:
+            health, health_snapshot = main_build_health(api)
+            if health != "success":
+                report(f"#{number}: full main Build health is {health}; automatic merges paused")
+                return
         # Recheck consent and head immediately before the mutation. GitHub
         # enforces strict checks again atomically when accepting the merge.
         fresh = api.call("GET", path)
@@ -240,17 +380,24 @@ def reconcile(api, report=print, sleep=time.sleep):
             report(f"#{number}: main advanced; waiting for an updated build")
             return
         # An unrelated approval-required run can leave an otherwise eligible
-        # PR unstable. Our trusted Build gate still must pass; GitHub decides
+        # PR unstable. Our trusted selected-workflow gate still must pass; GitHub decides
         # atomically whether protection permits the expected-head merge.
         if fresh["mergeable_state"] not in ("clean", "unstable"):
             report(f"#{number}: GitHub merge state is {fresh['mergeable_state']}")
             continue
-        final_state, final_run = build_result(api, sha)
+        final_state, final_run = workflow_result(api, sha, gate)
         if (final_state != "success" or final_run["id"] != run["id"]
                 or final_run["run_attempt"] != run["run_attempt"]):
             if final_run:
-                publish_result(api, sha, final_state, final_run)
-            report(f"#{number}: Build changed before merging; waiting")
+                publish_result(api, sha, final_state, final_run, gate)
+            report(f"#{number}: {gate.name} changed before merging; waiting")
+            return
+        if (gate == FAST_GATE
+                and main_build_snapshot(completed_main_attempts(api)) != health_snapshot):
+            # A full result may have arrived during the final consent/Fast
+            # reads. Keep this last observation adjacent to the mutation;
+            # pending first attempts still do not block automatic merging.
+            report(f"#{number}: full main Build changed before merging; waiting")
             return
         try:
             result = api.call("PUT", f"{path}/merge", {"sha": sha, "merge_method": "squash"})
@@ -262,6 +409,14 @@ def reconcile(api, report=print, sleep=time.sleep):
         if not result["merged"]:
             raise RuntimeError(f"GitHub did not merge #{number}")
         report(f"#{number}: merged {sha}")
+        if gate == FAST_GATE:
+            merged = result.get("sha")
+            if not isinstance(merged, str) or not merged:
+                raise RuntimeError("Successful merge response lacks its main commit SHA")
+            # Send the actual merge result and previous main to Fast checks so
+            # it can select affected tests and seed trusted current-main caches.
+            # Build retains its original expected_sha-only input contract.
+            ensure_main_checks(api, merged, report, base_sha=base)
         # Continue with a fresh base for the next candidate; no stale green PR
         # can be merged just because it was ready before this merge.
 

@@ -57,9 +57,9 @@ def main():
     for stage in ('pre', 'post'):
         directory = BUILD/stage
         env = dict(os.environ, THC_CORE_OUT=str(directory/'core'), THC_GHC_OUT=str(directory/'ghc'))
-        options = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+        options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
         run([ROOT/'compiler/export.sh', *options,
-             *['-fplugin-opt=Thc.Plugin:closure='+name for name in ENTRIES], SOURCE], env=env)
+             *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], SOURCE], env=env)
         # Original pinned List bodies supply the omitted $wlenAcc unfolding.
         run([sys.executable, ROOT/'compiler/export-boot.py', '--frontier', 'lists', '--build-dir', directory], env=env)
         provenance = directory/'boot-provenance.json'
@@ -102,7 +102,7 @@ def main():
                'compiler/export.sh', 'compiler/export-boot.py', 'compiler/build.sh', 'compiler/toolchain.sh',
                'src/main/resources/thc/scalar-primop-signatures.json']
     sources += sorted(str(p.relative_to(ROOT)) for p in (ROOT/'scripts').glob('core_*.py'))
-    sources += sorted(str(p.relative_to(ROOT)) for p in (ROOT/'compiler/Thc').glob('*.hs'))
+    sources += sorted(str(p.relative_to(ROOT)) for p in (ROOT/'compiler/THC').glob('*.hs'))
     hashes = lambda paths: {p: hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths}
     manifest = dict(schema=1, ghc='9.14.1', bytestring='0.12.2.0', resultContract='sign only', entries=ENTRIES,
                     inputsByEntry={n:inputs(n) for n in ENTRIES}, stages=stages, audits=summaries,

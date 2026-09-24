@@ -7,7 +7,7 @@ root=$(pwd)
 THC_CORE_OUT="$root/build/aggregate-core" THC_GHC_OUT="$root/build/aggregate-ghc" \
   compiler/export.sh compiler/test-fixtures/AggregateFrontier.hs
 THC_CORE_OUT="$root/build/aggregate-post-core" THC_GHC_OUT="$root/build/aggregate-post-ghc" \
-  compiler/export.sh -fplugin-opt=Thc.Plugin:post-tidy compiler/test-fixtures/AggregateFrontier.hs
+  compiler/export.sh -fplugin-opt=THC.Plugin:post-tidy compiler/test-fixtures/AggregateFrontier.hs
 mkdir -p build/aggregate-native
 "$GHC" --make -v0 -O2 -fforce-recomp -dcore-lint -icompiler/test-fixtures \
   -odir build/aggregate-native -hidir build/aggregate-native \

@@ -109,8 +109,8 @@ def main():
         audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
         caps = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
         for stage in STAGES:
-            run(['compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []),
-                 *['-fplugin-opt=Thc.Plugin:closure=' + name for name in ENTRIES + FRONTIERS + EFFECTS], str(FIXTURES[0])],
+            run(['compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
+                 *['-fplugin-opt=THC.Plugin:closure=' + name for name in ENTRIES + FRONTIERS + EFFECTS], str(FIXTURES[0])],
                 dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
             paths = sorted((OUT / f'{stage}-core').glob('*.json'))
             modules = [(str(p), json.loads(p.read_text())) for p in paths]
@@ -123,7 +123,7 @@ def main():
                       f'{stage}/{name}: expected exact unresolved proof frontier')
                 (OUT / f'{stage}-{name}-audit.json').write_text(json.dumps(report, indent=2) + '\n')
         sources = [*FIXTURES, Path(__file__).resolve(), ROOT / 'compiler/build.sh', ROOT / 'compiler/export.sh',
-                   ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/Thc').glob('*.hs')), *audit_inputs()]
+                   ROOT / 'compiler/toolchain.sh', *sorted((ROOT / 'compiler/THC').glob('*.hs')), *audit_inputs()]
         artifacts = [p for folder in ('native', 'api', 'pre-core', 'post-core') for p in sorted((OUT / folder).rglob('*')) if p.is_file()]
         artifacts += [OUT / 'oracle.tsv', *sorted(OUT.glob('*-audit.json'))]
         provenance.write_text(json.dumps(dict(schema=1, recordedAtUtc=datetime.now(timezone.utc).isoformat(), commands=commands,

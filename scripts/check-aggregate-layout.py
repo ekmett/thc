@@ -213,14 +213,14 @@ def prepare():
     run([ghc, '--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint',
          '-odir', str(native), '-hidir', str(native), str(FIXTURE)])
     for stage in STAGES:
-        flags = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+        flags = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
         run(['compiler/export.sh', *flags, str(FIXTURE)], dict(
             THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc'),
             THC_SOURCE_NOTES='true'))
     sources = [FIXTURE, Path(__file__).resolve(), ROOT / 'scripts/audit-core.py',
                ROOT / 'scripts/core-capabilities.json', ROOT / 'scripts/sum_layout_model.py', ROOT / 'compiler/build.sh',
                ROOT / 'compiler/export.sh', ROOT / 'compiler/toolchain.sh',
-               *sorted((ROOT / 'compiler/Thc').glob('*.hs'))]
+               *sorted((ROOT / 'compiler/THC').glob('*.hs'))]
     artifacts = [p for directory in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
                  for p in sorted((OUT / directory).rglob('*')) if p.is_file()]
     artifacts += sorted((ROOT / 'build/compiler').glob('libHSthc-core-plugin-*'))

@@ -85,7 +85,7 @@ class ScalarPrimitiveSignatureTest {
     }
     @Test fun nativeNewtypeCastsAroundScalarArithmeticAndConversionKeepCompiledEntries() = visit { language, backend ->
         for (stage in listOf("core", "cbv-post-core")) for (name in listOf("addRaw", "rawToWord")) {
-            val input = CoreModules.reachable(module("build/$stage/CbvCoercionAudit.json"), name)
+            val input = CoreModules.reachable(module("build/$stage/CBVCoercionAudit.json"), name)
             val program = program(language, input, backend)
             val arity = if (name == "addRaw") 2 else 1
             val host = program.hostEntryTarget(arity); val entry = program.entryValue(name)

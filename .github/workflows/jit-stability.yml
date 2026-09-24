@@ -1,0 +1,113 @@
+name: JIT stability
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/jit-stability.yml'
+      - 'build.gradle.kts'
+      - 'src/**'
+      - 'compiler/**'
+      - 'scripts/**'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: jit-stability-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  short-bytestring:
+    # This workflow is advisory and is deliberately outside Build/Fast checks
+    # and the merge bot's main-health check. Correctness stays in ordinary test.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        with:
+          ghc-version: '9.14.1'
+          cabal-update: false
+      - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        with:
+          version: '25.3.4.1'
+          java-version: '25'
+          distribution: graalvm
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          check-for-updates: false
+      - name: Prepare fresh native and Core inputs
+        id: prepare
+        run: python3 scripts/prepare-short-bytes-slices.py
+      - name: Check compiled-code stability with ordinary handoffs
+        id: ordinary
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p build/jit-stability/ordinary
+          status=0
+          scripts/gradle.sh --no-daemon jitStabilityTest --rerun 2>&1 | tee build/jit-stability/ordinary/run.log || status=$?
+          if [ -d build/test-results/jitStabilityTest ]; then
+            cp -R build/test-results/jitStabilityTest build/jit-stability/ordinary/xml
+          fi
+          exit "$status"
+      - name: Check compiled-code stability with dense handoffs
+        id: dense
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
+        run: |
+          mkdir -p build/jit-stability/dense
+          rm -rf build/test-results/jitStabilityTest build/reports/tests/jitStabilityTest
+          status=0
+          scripts/gradle.sh --no-daemon jitStabilityTest --rerun 2>&1 | tee build/jit-stability/dense/run.log || status=$?
+          if [ -d build/test-results/jitStabilityTest ]; then
+            cp -R build/test-results/jitStabilityTest build/jit-stability/dense/xml
+          fi
+          exit "$status"
+      - name: Report advisory outcomes
+        if: always()
+        env:
+          PREPARE: ${{ steps.prepare.outcome }}
+          ORDINARY: ${{ steps.ordinary.outcome }}
+          DENSE: ${{ steps.dense.outcome }}
+        run: |
+          {
+            echo '### ShortByteString JIT stability (advisory)'
+            echo
+            echo "Native/Core preparation: $PREPARE"
+            echo "Ordinary handoffs: $ORDINARY"
+            echo "Dense handoffs: $DENSE"
+            echo
+            echo 'These checks do not gate merges. Native-result correctness remains required.'
+            echo 'Failure logs include the row, target identities, compiled-entry counts and validity snapshots.'
+            echo 'Tracking: https://github.com/ekmett/thc/issues/72'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$PREPARE" != success ] || [ "$ORDINARY" != success ] || [ "$DENSE" != success ]; then
+            echo '::warning::ShortByteString JIT stability did not pass; see the advisory summary and artifacts.'
+          fi
+      - name: Retain failures and native provenance
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: jit-stability-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/jit-stability/
+            build/reports/tests/jitStabilityTest/
+            build/short-bytes-slices/manifest.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -306,8 +306,8 @@ def main():
         output.mkdir(parents=True, exist_ok=True)
         env = dict(os.environ, THC_CORE_OUT=str(output / 'core'), THC_GHC_OUT=str(output / 'ghc'))
         run(['compiler/export.sh', '-i' + str(containers / 'src'), '-I' + str(containers / 'include'),
-             *(['-fplugin-opt=Thc.Plugin:post-tidy'] if group['postTidy'] else []),
-             *['-fplugin-opt=Thc.Plugin:closure=' + name for name in group['names']], group['source']], env=env)
+             *(['-fplugin-opt=THC.Plugin:post-tidy'] if group['postTidy'] else []),
+             *['-fplugin-opt=THC.Plugin:closure=' + name for name in group['names']], group['source']], env=env)
         closure_path = output / 'core/THC.InterfaceClosure.json'
         closure = json.loads(closure_path.read_text())
         modules = [output / 'core' / (module.split(':', 1)[1] + '.json') for module in closure['sourceModules']]
@@ -402,7 +402,7 @@ def main():
         ROOT / 'compiler/package-roots/InterfaceRoots.hs', ROOT / 'vendor/archives/containers-0.8.tar.gz',
         ROOT / 'scripts/sequence_model.py', ROOT / 'scripts/test-sequence-model.py',
     }
-    inputs.update((ROOT / 'compiler/Thc').glob('*.hs'))
+    inputs.update((ROOT / 'compiler/THC').glob('*.hs'))
     inputs.update(path for path in containers.rglob('*') if path.is_file())
     inputs.update(ROOT / item['path'] for item in
                   json.loads((BUILD / 'boot/boot-provenance.json').read_text())['sources'])

@@ -107,7 +107,7 @@ def main():
         commands = [['compiler/build.sh']]
         subprocess.run(commands[0], cwd=ROOT, check=True)
         for stage in ('pre', 'post'):
-            command = ['compiler/export.sh'] + (['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
+            command = ['compiler/export.sh'] + (['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []) + [str(SOURCE.relative_to(ROOT))]
             env = dict(os.environ, THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'))
             subprocess.run(command, cwd=ROOT, env=env, check=True); commands.append(command)
         native = OUT/'native'; native.mkdir(exist_ok=True)
@@ -116,7 +116,7 @@ def main():
         subprocess.run(command, cwd=ROOT, check=True); commands.append(command)
         (OUT/'oracle.tsv').write_text(subprocess.check_output([str(native/'oracle')], text=True))
         inputs = [SOURCE, NATIVE, Path(__file__).resolve(), ROOT/'compiler/build.sh', ROOT/'compiler/export.sh', ROOT/'compiler/toolchain.sh',
-                  *sorted((ROOT/'compiler/Thc').glob('*.hs')), ROOT/'scripts/audit-core.py',
+                  *sorted((ROOT/'compiler/THC').glob('*.hs')), ROOT/'scripts/audit-core.py',
                   *sorted((ROOT/'scripts').glob('core_*.py')), ROOT/'scripts/core-capabilities.json',
                   ROOT/'src/main/resources/thc/scalar-primop-signatures.json']
         verify()

@@ -22,7 +22,8 @@ def mathematical(name,x):
 def rows():return [(n,x,mathematical(n,x)) for n in ENTRIES+FRONTIERS for x in inputs()]
 def verify(text):
     actual=[(n,int(x),int(y)) for n,x,y in (line.split('\t') for line in text.splitlines())]
-    assert actual==rows(),'Native/model mismatch, missing, duplicate or reordered array-slice rows'
+    if actual!=rows():
+        raise AssertionError('Native/model mismatch, missing, duplicate or reordered array-slice rows')
     return actual
 def main():
     OUT.mkdir(parents=True,exist_ok=True);(OUT/'manifest.json').unlink(missing_ok=True)
@@ -41,8 +42,8 @@ def main():
     caps=json.loads((ROOT/'scripts/core-capabilities.json').read_text());stages={};summaries={};artifacts=[]
     for stage in ('pre','post'):
         core=OUT/f'{stage}-core'
-        run(['compiler/export.sh',*(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []),
-             *['-fplugin-opt=Thc.Plugin:closure='+n for n in ENTRIES+FRONTIERS],SOURCE],
+        run(['compiler/export.sh',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
+             *['-fplugin-opt=THC.Plugin:closure='+n for n in ENTRIES+FRONTIERS],SOURCE],
             env=dict(THC_CORE_OUT=str(core),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         paths=sorted(core.glob('*.json'));modules=[(str(p.relative_to(ROOT)),json.loads(p.read_text())) for p in paths]
         stages[stage]=[p for p,_ in modules];artifacts+=paths
@@ -71,7 +72,7 @@ def main():
     result=run([binary],input=''.join(f'{n}\t{x}\n' for n,x,_ in rows()),text=True,capture_output=True,timeout=30)
     verify(result.stdout);(OUT/'oracle.tsv').write_text(result.stdout)
     sources=[SOURCE,Path(__file__).resolve(),ROOT/'scripts/primop-coverage.py',ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-             *sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/Thc').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
+             *sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     artifacts += [driver,binary,OUT/'oracle.tsv']
     hashes=lambda ps:{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(ps))}
     (OUT/'manifest.json').write_text(json.dumps(dict(schema=1,ghc='9.14.1',array='0.5.8.0',wordBits=64,entries=ENTRIES,frontiers=FRONTIERS,inputs=inputs(),stages=stages,audits=summaries,
