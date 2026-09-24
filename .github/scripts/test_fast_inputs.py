@@ -40,7 +40,7 @@ class FastInputTests(unittest.TestCase):
     def test_formatter_catalog_and_exact_artifact_admission(self):
         project = Path(__file__).resolve().parents[2]
         modules, pins = cache.wired_catalog(project)
-        self.assertEqual((43, 55), (len(modules), len(pins)))
+        self.assertEqual((46, 61), (len(modules), len(pins)))
         self.assertEqual('GHC.Internal.Enum', modules['GHC/Internal/Enum.hs'])
         self.assertLess(list(modules).index('GHC/Internal/Show.hs'), list(modules).index('GHC/Internal/Enum.hs'))
         self.assertLess(list(modules).index('GHC/Internal/Enum.hs'), list(modules).index('GHC/Internal/ClosureTypes.hs'))
@@ -48,12 +48,15 @@ class FastInputTests(unittest.TestCase):
             path = 'GHC/Internal/' + source
             self.assertLess(list(modules).index('GHC/Internal/Enum.hs'), list(modules).index(path))
             self.assertLess(list(modules).index(path), list(modules).index('GHC/Internal/Heap/InfoTable/Types.hsc'))
+        for first, second in (('Bignum/Natural.hs', 'Bignum/Integer.hs'),
+                              ('Enum.hs', 'Real.hs'), ('Real.hs', 'Numeric.hs'), ('Numeric.hs', 'Ptr.hs')):
+            self.assertLess(list(modules).index('GHC/Internal/' + first), list(modules).index('GHC/Internal/' + second))
         self.assertIn('  compiler/pinned-ghc-internal/GHC/Internal/Enum.hs\n',
                       (project / 'thc.cabal').read_text())
         for name, expected in pins.items():
             self.assertEqual(expected, cache.digest(project / 'compiler/pinned-ghc-internal' / name), name)
         files = cache.original_stack_formatter_files(project)
-        self.assertEqual(84, len(files))
+        self.assertEqual(87, len(files))
         self.assertIn('build/original-stack-formatter/manifest.json', DECLARED_REQUIRED)
         for attempt in ('run-1', 'run-42'):
             for suffix in files:
