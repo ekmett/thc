@@ -11,6 +11,7 @@ import thc.runtime.Metrics
 import com.oracle.truffle.api.CallTarget
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.interop.InvalidArrayIndexException
@@ -157,7 +158,14 @@ class Language : TruffleLanguage<Language.State>() {
                     candidate.run() // Parsing LLVM can execute guest code; never hold a cache lock here.
                 } else task = nativeCbits.get()
             }
-            return try { task!!.get() } catch (failure: ExecutionException) {
+            return try {
+                val selected = task!!
+                if (selected.isDone) selected.get()
+                else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                    TruffleSafepoint.InterruptibleFunction<FutureTask<thc.runtime.SulongCbits>, thc.runtime.SulongCbits> {
+                        waiting -> waiting.get()
+                    }, selected)
+            } catch (failure: ExecutionException) {
                 nativeCbits.compareAndSet(task, null)
                 throw (failure.cause ?: failure)
             }
