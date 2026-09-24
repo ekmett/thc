@@ -65,7 +65,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class EnterRoot {
         @Specialization public static void enter(Metrics metrics) {
             if (metrics.getEnabled() && CompilerDirectives.inCompiledCode()) {
-                metrics.setCompiledEntries(metrics.getCompiledEntries() + 1);
+                metrics.incrementCompiledEntries();
             }
         }
     }
@@ -74,7 +74,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class JoinTransfer {
         @Specialization public static void record(Metrics metrics) {
-            if (metrics.getEnabled()) metrics.setLocalJoinTransfers(metrics.getLocalJoinTransfers() + 1);
+            if (metrics.getEnabled()) metrics.incrementLocalJoinTransfers();
         }
     }
 
@@ -449,7 +449,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return dispatch.execute(frame, function, null);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             } finally {
                 BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
@@ -473,7 +473,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return dispatch.execute(frame, function, null);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             } finally {
                 BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
@@ -548,7 +548,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return null;
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             }
         }
@@ -585,7 +585,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return null;
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             }
         }
@@ -645,7 +645,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 // consumes this internal result and restores locals before a real
                 // bytecode backedge. Never intercept a call with pending non-tail work.
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(call.getTarget())) throw call;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return call;
             }
         }
@@ -671,7 +671,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 // consumes this internal result and restores locals before a real
                 // bytecode backedge. Never intercept a call with pending non-tail work.
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(call.getTarget())) throw call;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return call;
             }
         }
@@ -792,7 +792,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Unsupported {
         @Specialization public static Object trap(String message, Metrics metrics) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            metrics.setUnsupportedTraps(metrics.getUnsupportedTraps() + 1);
+            metrics.incrementUnsupportedTraps();
             throw fail("Diagnostic unsupported path reached: " + message);
         }
     }

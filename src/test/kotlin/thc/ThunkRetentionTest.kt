@@ -79,38 +79,41 @@ class ThunkRetentionTest {
             }.callTarget
             val driver = ForceDriver(Metrics(true))
             val thunk = Thunk(target, environment)
-            repeat(3) {
-                assertSame(failure, assertThrows(failure.javaClass) { driver.apply(thunk) })
+            repeat(3) { attempt ->
+                val observed = assertThrows(failure.javaClass) { driver.apply(thunk) }
+                if (failure is GuestException) {
+                    assertSame(failure.payload, (observed as GuestException).payload)
+                    if (attempt > 0) assertNotSame(failure, observed)
+                } else assertSame(failure, observed)
                 assertEquals(3, thunk.state)
-                assertSame(failure, thunk.value)
+                if (failure is GuestException) assertFalse(thunk.value is GuestException)
+                else assertSame(failure, thunk.value)
                 assertReleased(thunk)
             }
             assertEquals(1, evaluations)
         }
     }
 
-    @Test fun unexpectedFailuresKeepTheSuspensionForAnActualRetry() = withRuntime { _, environment ->
-        val interrupted = IllegalStateException("retryable host interruption")
+    @Test fun unexpectedFailuresRetainTheSuspensionWithoutReplayingItsEffects() = withRuntime { _, environment ->
+        val interrupted = IllegalStateException("host failure after an effect")
         var evaluations = 0
         val target = object : RootNode(null) {
             override fun execute(frame: VirtualFrame): Any {
                 evaluations++
                 assertSame(environment, frame.arguments[1])
-                if (evaluations == 1) throw interrupted
-                return (frame.arguments[1] as CapturedFrame).getLong(0)
+                throw interrupted
             }
         }.callTarget
         val driver = ForceDriver(Metrics(true))
         val thunk = Thunk(target, environment)
         assertSame(interrupted, assertThrows(IllegalStateException::class.java) { driver.apply(thunk) })
-        assertEquals(0, thunk.state)
+        assertEquals(4, thunk.state)
         assertNull(thunk.value)
         assertSame(target, thunk.target)
         assertSame(environment, thunk.environment)
-        assertEquals(3_000_000_000L, driver.apply(thunk))
-        assertReleased(thunk)
-        assertEquals(3_000_000_000L, driver.apply(thunk))
-        assertEquals(2, evaluations, "The unexpected failure retries once; the completed value remains shared")
+        val unsupported = assertThrows(RuntimeFault::class.java) { driver.apply(thunk) }
+        assertTrue(unsupported.message!!.contains("no resumable continuation"))
+        assertEquals(1, evaluations, "Escaping after an effect must not execute the body again")
     }
 
     @Test fun aThunkReturningAnotherThunkFailsBeforeEitherCanPublishAnIndirection() = withRuntime { _, environment ->

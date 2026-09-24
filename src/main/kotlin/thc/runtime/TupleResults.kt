@@ -220,7 +220,7 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
     @Child private var rest: TupleDispatch? = if (arity < argsSize) TupleDispatch(destination, metrics, argsSize - arity, tail, inputLayout?.suffix(arity)) else null
     @Child private var force = Force(metrics)
     init {
-        if (metrics.enabled) metrics.directCacheMisses++
+        if (metrics.enabled) metrics.incrementDirectCacheMisses()
         val root = target.rootNode as? GuestRoot ?: fault("Invalid tuple call target")
         if (arity > argsSize) fault("Tuple result application is under-saturated")
         if (arity == argsSize && root.tupleResult?.matches(destination.shape) != true) fault("Tuple call target result shape mismatch")
@@ -271,7 +271,7 @@ internal class TupleBounce(private val destination: TupleDestination, private va
                 fault("Tuple tail target result shape mismatch")
             }
             try {
-                if (metrics.enabled) metrics.trampolineIterations++
+                if (metrics.enabled) metrics.incrementTrampolineIterations()
                 val input = next.input
                 val result = if (input != null) {
                     input.layout.setLong(input, 0, 0L)
@@ -322,7 +322,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                 continue
             }
             entry.execute(frame, function.target, packet)
-            if (metrics.enabled) metrics.indirectCalls++
+            if (metrics.enabled) metrics.incrementIndirectCalls()
             if (tail) {
                 tailCheck.check(frame, function.target, packet)
                 destination.consume(frame, this, Calls.indirect(call, function.target, packet))

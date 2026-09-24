@@ -211,7 +211,7 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
                 val destination = target.rootNode as GuestRoot
                 if (mask and destination.mask == destination.mask) {
                     transferred = true
-                    if (metrics.enabled) { state.tailTransfers++; metrics.tailBounces++ }
+                    if (metrics.enabled) { state.tailTransfers++; metrics.incrementTailBounces() }
                     throw HandoffTailCall(target, input)
                 }
                 entry.arguments.setLong(input, 0, mask)
@@ -243,7 +243,7 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
     private fun trampoline(state: HandoffState, initial: HandoffTailCall): Any? {
         var transfer = initial
         while (true) {
-            if (metrics.enabled) metrics.trampolineIterations++
+            if (metrics.enabled) metrics.incrementTrampolineIterations()
             val next = transfer
             val generation = next.arguments.generation
             try {
