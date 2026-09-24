@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Move fingerprinted library inputs between read-only jobs of one Build attempt.
 
 Original Core, cases, native provenance and oracle bytes are never rewritten.

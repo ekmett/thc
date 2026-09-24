@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Prepare exact Int64#/Word64# scalar primitives, native results and an integer model."""
 import argparse
 import hashlib

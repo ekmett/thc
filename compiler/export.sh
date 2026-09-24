@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Usage: compiler/export.sh [GHC options] path/to/Module.hs ...
 set -eu
 cd "$(dirname "$0")/.."

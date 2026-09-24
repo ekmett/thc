@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Merge opted-in PRs using GitHub's required checks and expected-head guard.
 
 Run only from trusted main. PR contents are data and are never checked out here.

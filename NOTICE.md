@@ -3,9 +3,9 @@
 THC is licensed under **UPL-1.0 AND BSD-3-Clause**, following Cadenza.
 The rights and obligations of both licenses apply. THC's original contributions
 are copyright (c) 2026, Edward Kmett. See [LICENSE](LICENSE) and the complete
-terms in [LICENSE.txt](LICENSE.txt). The original Edward Kmett and Oracle
-copyright notices remain intact; third-party components retain the terms
-identified below.
+terms in [LICENSE.txt](LICENSE.txt). Edward Kmett's copyright notice extends
+through 2026; the Oracle notices are unchanged. Third-party components retain
+the terms identified below.
 
 ## Cadenza runtime adaptation
 
@@ -38,14 +38,27 @@ returned functions before overapplication, GHC Core lowering, and Long rather
 than Cadenza's Nat Int capture representation. Cadenza's neutral-value and
 normalization paths are intentionally absent.
 
-Cadenza's license and copyright notices are retained without modification in
-[LICENSE.txt](LICENSE.txt) and
+Cadenza's license terms and Oracle copyright notices are retained in
+[LICENSE.txt](LICENSE.txt), with Edward Kmett's copyright extended through 2026.
+The original notice is retained without modification in
 [third-party-licenses/cadenza-LICENSE.txt](third-party-licenses/cadenza-LICENSE.txt).
 The incorporated portions and THC's original modifications use the same SPDX
 expression, `UPL-1.0 AND BSD-3-Clause`, including the retained Oracle notices.
 
 The adaptation and Haskell-specific changes are described above; the Cadenza
 repository itself was not modified.
+
+## Source headers
+
+Active THC source files carry `SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause`
+headers. The Gradle wrapper keeps its own Apache-2.0 identifiers. Captured
+benchmark and compiler evidence, including frozen copies of source files, is
+preserved byte for byte so recorded hashes remain valid.
+
+The retained GHC sources in `compiler/test-fixtures/empty-join-typeable/` also
+remain byte for byte intact. Their adjacent `LICENSE` and provenance identify
+the upstream terms; SPDX sidecars identify the BSD-3-Clause source license
+without changing the recorded source hashes.
 
 ## Gradle wrapper
 

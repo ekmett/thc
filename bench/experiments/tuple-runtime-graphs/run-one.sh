@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 set -euo pipefail
 [[ $# == 6 ]] || { echo 'Usage: run-one.sh MODULE_JSON ORACLE_TSV ENTRY ast|bytecode inline|residual OUT' >&2; exit 1; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

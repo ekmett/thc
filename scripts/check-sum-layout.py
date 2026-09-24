@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Pinned GHC sum layouts, native fixtures and exact runtime capability boundaries."""
 import argparse
 import hashlib

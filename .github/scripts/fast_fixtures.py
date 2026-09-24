@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Prepare only native fixtures needed by selected JUnit classes.
 
 The persistent stamps are local acceleration hints. Every reuse checks both the

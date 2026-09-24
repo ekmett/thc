@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Fresh GHC values and strict pre/post proof for mutable byte fills/copies."""
 import ast,hashlib,importlib.util,json,os,subprocess
 from pathlib import Path

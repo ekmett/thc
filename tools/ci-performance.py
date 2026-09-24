@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Manual CI orchestration: freeze inputs, check Map, then compare serially.
 
 All timings belong to this GitHub-hosted machine. Absolute values must not be

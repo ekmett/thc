@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Reaudit existing Set exports without regenerating them or changing their native oracle."""
 import hashlib,importlib.util,json,pathlib,sys
 cases_path,out=map(pathlib.Path,sys.argv[1:]); out.mkdir(parents=True,exist_ok=True)

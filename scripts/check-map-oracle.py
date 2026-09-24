@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Generate native rows and check them against an independent histogram model."""
 import json, pathlib, subprocess, sys
 root = pathlib.Path(__file__).resolve().parent.parent

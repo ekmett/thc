@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Build a native tuple-join oracle and verify exact GHC joins before/after Tidy."""
 import argparse
 import hashlib

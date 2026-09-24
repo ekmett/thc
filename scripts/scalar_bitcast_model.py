@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Integer-only IEEE encodings; no host floating conversion or NaN normalization."""
 ENTRIES = [p+s for p in ('float', 'double') for s in ('Roundtrip', 'Field', 'Captured', 'Decode', 'Encode')]
 PRIMITIVES = {'castFloatToWord32#', 'castWord32ToFloat#', 'castDoubleToWord64#', 'castWord64ToDouble#'}

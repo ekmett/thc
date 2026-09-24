@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Fresh Map source export, strict audit, native oracle, and independent model.
 # Does not regenerate unrelated test fixtures or rebuild the JVM distribution.
 set -euo pipefail

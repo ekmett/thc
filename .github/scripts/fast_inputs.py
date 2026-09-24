@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Validated native/Core fixture cache, never a cache of JVM test outcomes.
 
 Only trusted-main workflows may publish these bundles. Hashes establish integrity

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Shared by the compiler drivers; executable paths may contain spaces.
 GHC=${GHC:-ghc}
 GHC_PKG=${GHC_PKG:-ghc-pkg}

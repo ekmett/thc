@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Fresh shallow Array# slice semantics with an explicit public-copy frontier."""
 from pathlib import Path
 import hashlib, importlib.util, json, os, subprocess

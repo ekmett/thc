@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Exact bounded vector proof checks shared by Core audit sites."""
 VECTOR_REP = {'kind': 'vector', 'primReps': ['VecRep 2 Int64ElemRep'], 'evaluated': True,
               'vector': {'lanes': 2, 'element': 'Int64ElemRep'}}

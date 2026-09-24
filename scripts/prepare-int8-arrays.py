@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Fresh GHC9.14.1 public Int8/Word8 arrays, alias and empty-storage evidence."""
 import hashlib
 import importlib.util

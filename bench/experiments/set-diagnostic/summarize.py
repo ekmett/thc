@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Fail closed on incomplete diagnostic runs and write compact reproducible evidence."""
 import collections,hashlib,json,pathlib,sys
 out=pathlib.Path(sys.argv[1])

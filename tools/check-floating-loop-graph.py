@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Check concrete f32/f64 recurrences and allocation-free continuing loop blocks.
 
 Reads actual GraphInspect JSON before HighTierLowering. Reuses the integer-loop

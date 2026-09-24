@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Genuine scalar IEEE bitcasts, exact retained calls and integer-only native oracle."""
 from collections import Counter
 import hashlib

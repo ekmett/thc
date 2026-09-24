@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE DataKinds, MagicHash, NoImplicitPrelude, StandaloneKindSignatures #-}
 {-# LANGUAGE UnboxedTuples, UnliftedDatatypes #-}
 -- Result-only tuple boundaries: every executable oracle entry is Int# -> Int#.

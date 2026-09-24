@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 import thc.Json;
 import java.lang.management.*;
 import java.nio.file.*;

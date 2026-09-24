@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Exact logical tuple ingress proofs; no capability is enabled by this helper.
 
 The recursive logical tree remains distinct from its flattened storage. VOID

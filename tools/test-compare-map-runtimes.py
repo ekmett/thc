@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Benchmark guard fixtures; never starts a JVM, benchmark or host probe."""
 from pathlib import Path
 import runpy

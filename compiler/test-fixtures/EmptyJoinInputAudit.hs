@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 {-# OPTIONS_GHC -fno-full-laziness -fno-worker-wrapper -fno-specialise -fno-spec-constr #-}
 module EmptyJoinInputAudit where

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Exact integer-only lane semantics and input domains for genuine Int16X8 Core."""
 MASK = (1 << 16)-1
 WEIGHTS = (3, 5, 7, 11, 13, 17, 19, 23)

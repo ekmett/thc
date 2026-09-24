@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 -- GHC 9.14.1 calling-convention evidence, kept separate from WHNF facts.
 module THC.CBV (entryContract, existingMarks, eligible) where
 

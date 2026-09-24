@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE MagicHash, NoImplicitPrelude, RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, AllowAmbiguousTypes, UnboxedTuples #-}
 {-# OPTIONS_GHC -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion #-}
 -- Compiler-only representation evidence, including types THC does not execute.

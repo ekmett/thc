@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Build the reviewed runtime and capture fixed native-backed empty-input controls; no timing."""
 import argparse
 import hashlib

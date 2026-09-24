@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent integer-only semantics and input domains for genuine Word32X4 Core."""
 MASK = 4294967295
 WEIGHTS = (3, 5, 7, 11)

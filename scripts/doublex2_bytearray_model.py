@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent byte/IEEE64 model: no SIMD, scalar bitcasts, or guest imports.
 
 Raw movement uses only integer bytes. Finite graph seeds are exactly representable
