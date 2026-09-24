@@ -212,6 +212,16 @@ class FullFixtureReceiptTest(unittest.TestCase):
                          {"mode": "full", "rebuilt": [], "reused": ["full"]})
         self.assertEqual(self.prepared, 1)
 
+    def test_jvm_generated_sources_do_not_invalidate_full_fixture_receipt(self):
+        self.prepare("thc.UnknownTest")
+        generated = self.root / "build/generated/kapt/main/Generated.java"
+        generated.parent.mkdir(parents=True)
+        generated.write_text("class Generated {}\n")
+        self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])
+        generated.write_text("class Generated { int changed; }\n")
+        self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])
+        self.assertEqual(self.prepared, 1)
+
     def test_source_output_and_toolchain_drift_each_miss(self):
         self.prepare("thc.UnknownTest")
         (self.root / "fixtures/alpha.hs").write_text("changed fixture source")

@@ -26,7 +26,7 @@ outputs cause preparation again. Unknown selected classes and full selections
 use `scripts/prepare-tests.sh` on a local receipt miss. A hit verifies the pinned
 source/toolchain identity, vendored source pins, and the exact paths, bytes and
 modes of the reviewed Core/native fixture outputs before reusing them. GHC
-objects/interfaces, compiled JVM classes and task state are outside this
+objects/interfaces, JVM-generated sources and classes, and task state are outside this
 receipt. A changed preparation plan or new output root declines reuse until its
 scope is reviewed. The groups retain independent native oracles and pre/post
 Core audits. These are local accelerators, not cached test results or a transfer

@@ -24,14 +24,16 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 FULL_PREPARATION_PLAN = "e047fc33bdf635462331dfa5f70b2255ebe680019a30eb95090872e4688b0ff2"
-FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | {"build/generated"}
+FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS)
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED)
 # Compiler interfaces/objects and Gradle products are not consumed by JUnit;
 # full receipt reuse checks the final Core/native fixture data instead.
 INTERMEDIATE_SUFFIXES = frozenset({".o", ".hi", ".dyn_o", ".dyn_hi"})
+# The reviewed preparation plan emits no fixture under build/generated; Gradle
+# writes JVM products there. A future fixture there requires a plan/output review.
 NON_FIXTURE_BUILD_ROOTS = frozenset({
     "aggregate-ghc", "aggregate-post-ghc", "cbv-post-ghc", "classes", "compiler",
-    "fast", "ghc", "kotlin", "libs", "reports", "resources",
+    "fast", "generated", "ghc", "kotlin", "libs", "reports", "resources",
     "snapshot", "source-ghc", "test-results", "tmp",
 })
 COMMON_SOURCES = (
