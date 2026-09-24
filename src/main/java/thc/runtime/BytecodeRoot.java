@@ -1576,7 +1576,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (delivery.getAction() != segment || !segment.getCaughtIOAction() ||
                     segment.getTupleShape() != destination.getShape())
                 throw new IllegalStateException("Async delivery requires the exact captured catch# action");
-            throw new CapturedAsyncDelivery(delivery.getPayload());
+            throw new CapturedAsyncDelivery(delivery.getPayload(), delivery.getRequest());
         }
         @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {
             throw new IllegalStateException("IO action continuation requires an owned ChildResume tuple");
@@ -1613,7 +1613,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     /** Only the private captured catch# path may handle an async-origin payload. */
     @Operation public static final class RequireCaughtIOFailure {
         @Specialization public static Object payload(AbstractTruffleException failure) {
-            if (failure instanceof CapturedAsyncDelivery delivered) return delivered.getPayload();
+            if (failure instanceof CapturedAsyncDelivery delivered) {
+                if (delivered.getRequest() != null) delivered.getRequest().acknowledge();
+                return delivered.getPayload();
+            }
             return RequireGuestFailure.payload(failure);
         }
     }

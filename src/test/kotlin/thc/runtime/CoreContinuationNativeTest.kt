@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.ThreadLocalAction
 import com.oracle.truffle.api.bytecode.BytecodeRootNode
 import com.oracle.truffle.api.bytecode.BytecodeConfig
 import com.oracle.truffle.api.bytecode.ContinuationResult
@@ -41,6 +42,8 @@ class CoreContinuationNativeTest {
         fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
         fun deliver(boundary: Any, child: CallSegment, payload: Any?, afterClaim: (() -> Unit)? = null): Any? =
             force.deliverAtCapturedIOHandler(boundary, child, payload, afterClaim)
+        fun deliver(request: CapturedAsyncRequest, afterClaim: (() -> Unit)? = null): Any? =
+            force.deliverAtCapturedIOHandler(request, afterClaim)
     }
 
     private fun <T> entered(context: Context, action: () -> T): T {
@@ -855,6 +858,179 @@ class CoreContinuationNativeTest {
                 }.payload)
                 val malformed = resumeTarget(child, Unit, ChildResume(17L, null))
                 assertThrows(IllegalStateException::class.java) { Calls.target(malformed, arrayOf(0L)) }
+            }
+        }
+    }
+
+    @Test fun capturedRequestAcknowledgesOnlyAtOriginalHandlerAndSurvivesCarrierChange() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val state = entered(context) { Language.currentState() }
+            val driver = entered(context) { Driver() }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            val parent = entered(context) { program.entryValue("catchActionAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            val cancelled = state.capturedAsyncRequests.submit(parent, child, payload)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val senderThread = AtomicReference<Thread>()
+                val sender = pool.submit<Throwable?> { entered(context) {
+                    senderThread.set(Thread.currentThread())
+                    try { cancelled.await(driver); null } catch (failure: Throwable) { failure }
+                } }
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                while (senderThread.get()?.state != Thread.State.WAITING && System.nanoTime() < deadline)
+                    Thread.sleep(1)
+                assertEquals(Thread.State.WAITING, senderThread.get()?.state)
+                state.env.submitThreadLocal(arrayOf(senderThread.get()), object : ThreadLocalAction(true, false) {
+                    override fun perform(access: Access) { throw AsyncThunkUnwind("sender") }
+                })
+                assertTrue(sender.get(5, TimeUnit.SECONDS) is AsyncThunkUnwind)
+            }
+            assertEquals(CapturedRequestState.CANCELLED, cancelled.state)
+            assertFalse(cancelled.cancel())
+            entered(context) { assertThrows(RuntimeFault::class.java) { driver.deliver(cancelled) } }
+            assertEquals(5, parent.state)
+            assertEquals(5, child.state)
+
+            val request = state.capturedAsyncRequests.submit(parent, child, payload)
+            assertThrows(IllegalStateException::class.java) {
+                state.capturedAsyncRequests.submit(parent, child, payload)
+            }
+            val waiting = CountDownLatch(1)
+            val committed = CountDownLatch(1)
+            val finishCut = CountDownLatch(1)
+            Executors.newFixedThreadPool(2).use { pool ->
+                val sender = pool.submit<CapturedRequestState> { entered(context) {
+                    waiting.countDown()
+                    request.await(driver)
+                } }
+                assertTrue(waiting.await(5, TimeUnit.SECONDS))
+                val receiver = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                    try {
+                        val answer = driver.deliver(request) {
+                            committed.countDown()
+                            assertTrue(finishCut.await(5, TimeUnit.SECONDS))
+                        } as DataValue
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                        answer.layout.readLong(answer, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertTrue(committed.await(5, TimeUnit.SECONDS))
+                assertEquals(CapturedRequestState.COMMITTED, request.state)
+                assertFalse(sender.isDone, "A committed cut is not yet a delivered exception")
+                assertFalse(request.cancel(), "Cancellation cannot revoke a committed cut")
+                finishCut.countDown()
+                assertEquals(107L, receiver.get(5, TimeUnit.SECONDS))
+                assertEquals(CapturedRequestState.ACKNOWLEDGED, sender.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(2, parent.state)
+            assertEquals(5, child.state, "The original action remains available to another evaluator")
+            assertEquals(1, checkpoint.visits.get(), "The action prefix was not replayed")
+        }
+    }
+
+    @Test fun committedRequestFailsOnHostUnwindAndContextClosureWakesPendingSender() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        val context = executionContext()
+        try {
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val state = entered(context) { Language.currentState() }
+            val driver = entered(context) { Driver() }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            val parent = entered(context) { program.entryValue("catchActionAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            val request = state.capturedAsyncRequests.submit(parent, child, payload)
+            entered(context) {
+                assertThrows(IllegalStateException::class.java) {
+                    driver.deliver(request) {
+                        assertEquals(CapturedRequestState.COMMITTED, request.state)
+                        throw IllegalStateException("host unwind before handler")
+                    }
+                }
+            }
+            assertEquals(CapturedRequestState.FAILED, request.state)
+            assertEquals(CapturedRequestState.FAILED, entered(context) { request.await(driver) })
+            assertEquals(4, parent.state, "An unacknowledged host unwind cannot replay the thunk")
+            assertEquals(5, child.state)
+            val second = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val pendingParent = entered(context) { second.entryValue("catchActionAnswer") as Thunk }
+            val pendingChild = entered(context) {
+                assertSame(pendingParent, assertThrows(ThunkSuspended::class.java) { driver.force(pendingParent) }.thunk)
+                ((pendingParent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            assertThrows(IllegalStateException::class.java) {
+                state.capturedAsyncRequests.submit(pendingParent, child, payload)
+            }
+            val pending = state.capturedAsyncRequests.submit(pendingParent, pendingChild, payload)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val waiting = CountDownLatch(1)
+                val sender = pool.submit<CapturedRequestState> { entered(context) {
+                    waiting.countDown()
+                    pending.await(driver)
+                } }
+                assertTrue(waiting.await(5, TimeUnit.SECONDS))
+                state.capturedAsyncRequests.close()
+                assertEquals(CapturedRequestState.FAILED, sender.get(5, TimeUnit.SECONDS),
+                    "Closing the logical request owner must wake a blocked sender")
+            }
+            context.close(true)
+            assertEquals(CapturedRequestState.FAILED, pending.state)
+            assertThrows(IllegalStateException::class.java) {
+                state.capturedAsyncRequests.submit(pendingParent, pendingChild, payload)
+            }
+        } finally { context.close(true) }
+    }
+
+    @Test fun staleRequestFailsAfterAnotherEvaluatorCompletesTheParent() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val state = entered(context) { Language.currentState() }
+            val driver = entered(context) { Driver() }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            val parent = entered(context) { program.entryValue("catchActionAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            val request = state.capturedAsyncRequests.submit(parent, child, payload)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val waiting = CountDownLatch(1)
+                val sender = pool.submit<CapturedRequestState> { entered(context) {
+                    waiting.countDown()
+                    request.await(driver)
+                } }
+                assertTrue(waiting.await(5, TimeUnit.SECONDS))
+                checkpoint.armed = false
+                val completed = entered(context) { driver.force(parent) as DataValue }
+                assertEquals(42L, completed.layout.readLong(completed, 0))
+                assertSame(completed, parent.value)
+                assertEquals(2, parent.state)
+                assertEquals(2, child.state)
+                entered(context) { assertThrows(RuntimeFault::class.java) { driver.deliver(request) } }
+                assertEquals(CapturedRequestState.FAILED, sender.get(5, TimeUnit.SECONDS))
+                assertSame(completed, parent.value, "Stale delivery cannot overwrite the newer result")
+                assertEquals(1, checkpoint.visits.get(), "Ordinary completion must not replay the prefix")
             }
         }
     }

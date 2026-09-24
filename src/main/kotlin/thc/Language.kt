@@ -217,6 +217,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stdio = thc.runtime.ManagedStdio(files)
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
+        internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
         internal val singleThreadedAssumption = Truffle.getRuntime().createAssumption("THC single-threaded context")
@@ -257,6 +258,7 @@ class Language : TruffleLanguage<Language.State>() {
     override fun createContext(env: Env): State = State(env, this)
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
     override fun disposeContext(context: State) {
+        context.capturedAsyncRequests.close()
         try { context.files.dispose() } finally {
             try { context.stdio.dispose() } finally { context.stackSnapshots.dispose() }
         }
