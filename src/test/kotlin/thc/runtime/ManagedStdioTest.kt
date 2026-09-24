@@ -4,14 +4,23 @@
 package thc.runtime
 
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.io.FileSystem
 import org.graalvm.polyglot.io.IOAccess
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import thc.Language
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.channels.SeekableByteChannel
+import java.nio.file.Files
+import java.nio.file.OpenOption
+import java.nio.file.Path
+import java.nio.file.attribute.FileAttribute
 
 class ManagedStdioTest {
+    @TempDir lateinit var directory: Path
     private fun bytes(vararg value: Byte) = ManagedAddress.fromByteArray(value)
     private fun context(output: ByteArrayOutputStream, errors: ByteArrayOutputStream = ByteArrayOutputStream()) =
         Context.newBuilder("thc").allowIO(IOAccess.NONE).out(output).err(errors).build()
@@ -67,5 +76,35 @@ class ManagedStdioTest {
             }
         } }
         assertArrayEquals(byteArrayOf(3), one.toByteArray()); assertArrayEquals(byteArrayOf(2), two.toByteArray())
+    }
+
+    @Test fun partialCountsArePreservedAndNonemptyZeroProgressCannotSpin() {
+        val backing = FileSystem.newDefaultFileSystem()
+        var stalled = false
+        val fs = object : FileSystem by backing {
+            override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attributes: FileAttribute<*>): SeekableByteChannel {
+                val delegate = backing.newByteChannel(path, options, *attributes)
+                return object : SeekableByteChannel by delegate {
+                    override fun write(source: ByteBuffer): Int {
+                        if (stalled) return 0
+                        val limit = source.limit()
+                        source.limit(source.position() + minOf(2, source.remaining()))
+                        return try { delegate.write(source) } finally { source.limit(limit) }
+                    }
+                }
+            }
+        }
+        Context.newBuilder("thc").allowIO(IOAccess.newBuilder().fileSystem(fs).build()).build().use { context -> entered(context) { stdio ->
+            val path = directory.resolve("partial.bin")
+            val fd = Language.currentState().files.open(ManagedAddress.fromByteArray((path.toString() + "\u0000").toByteArray()), 1)
+            assertTrue(fd >= 3)
+            assertEquals(2L, stdio.write(fd, bytes(1, 2, 3, 4), 4))
+            assertEquals(0L, stdio.errno()); assertArrayEquals(byteArrayOf(1, 2), Files.readAllBytes(path))
+            stalled = true
+            assertEquals(-1L, stdio.write(fd, bytes(3, 4), 2))
+            assertEquals(StdioHostAbi.load().error(6), stdio.errno())
+            assertArrayEquals(byteArrayOf(1, 2), Files.readAllBytes(path))
+            assertEquals(0L, stdio.write(fd, bytes(), 0))
+        } }
     }
 }
