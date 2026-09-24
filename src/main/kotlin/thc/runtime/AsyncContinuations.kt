@@ -49,4 +49,38 @@ internal object AsyncContinuations {
         }
         throw AsyncDelivery(request, node)
     }
+
+    /** A public host call has no Haskell catch frame. Settle only a claimed
+     * request from this Java target thread; leave its parked thunk untouched. */
+    @JvmStatic @TruffleBoundary fun uncaught(request: AsyncRequest, node: Node): Nothing {
+        check(request.target === Thread.currentThread() && request.state == AsyncRequestState.CLAIMED) {
+            "Uncaught async request left its target or was already settled"
+        }
+        request.acknowledge()
+        throw GuestException(request.payload, node)
+    }
+
+    @JvmStatic fun publicResult(result: Any?, node: Node): Any? {
+        val continuation = when (result) {
+            is ContinuationResult -> result
+            is TailYield -> result.continuation
+            is ThunkSuspended -> publicSuspension(result, node)
+            is CallSegmentSuspended -> publicSuspension(result, node)
+            else -> return result
+        }
+        val pending = request(continuation) ?: fault("Guest continuation escaped without an async request")
+        uncaught(pending, node)
+    }
+
+    @JvmStatic fun publicSuspension(suspended: ThunkSuspended, node: Node): Nothing {
+        val pending = suspended.asyncRequest ?: (suspended.thunk.value as? ContinuationResult)?.let(::request)
+            ?: fault("Guest thunk suspension escaped without an async request")
+        uncaught(pending, node)
+    }
+
+    @JvmStatic fun publicSuspension(suspended: CallSegmentSuspended, node: Node): Nothing {
+        val pending = suspended.asyncRequest ?: (suspended.segment.value as? ContinuationResult)?.let(::request)
+            ?: fault("Guest call suspension escaped without an async request")
+        uncaught(pending, node)
+    }
 }
