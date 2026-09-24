@@ -154,6 +154,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        CoreOriginalStdio.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
@@ -847,13 +848,27 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val javascript = if (managedFile == null) CoreJavaScript.validate(expr, defined) else null
+            val javascript = if (originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
-            if (managedFile != null) {
+            val polyglot = if (originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (originalStdio != null) {
+                CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val result = destination.single()
+                    if (originalStdio == OriginalStdioOp.ERRNO) b.beginOriginalStdioErrno(result)
+                    else b.beginOriginalStdioWrite(result)
+                    operands.forEach { it.emit(e) }
+                    if (originalStdio == OriginalStdioOp.ERRNO) b.endOriginalStdioErrno()
+                    else b.endOriginalStdioWrite()
+                }
+            } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.map { compile(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->

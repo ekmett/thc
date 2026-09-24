@@ -15,6 +15,7 @@ import json
 import core_data_tags
 import core_md5_foreign
 import core_managed_files
+import core_original_stdio
 import core_package_manifest
 from pathlib import Path
 import sys
@@ -529,6 +530,19 @@ class Audit:
 
         target = call.get('target') if isinstance(call, dict) else None
         symbol = target.get('symbol') if isinstance(target, dict) else None
+        if isinstance(symbol, str) and symbol in core_original_stdio.OPERATIONS:
+            try:
+                core_original_stdio.validate(metadata, [self.expression_rep(arg) for arg in arguments],
+                                             expr[3], self.expression_rep(expr))
+                head_id = function[1] if isinstance(function, list) and len(function) > 1 else None
+                defined = isinstance(head_id, str) and (head_id in bound or head_id in self.bindings)
+                core_original_stdio.validate_head(function, defined)
+                if symbol not in self.cap.get('managedForeignCalls', []):
+                    raise ValueError('Original stdio foreign-call capability disabled')
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+            except ValueError as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
         if isinstance(symbol, str) and symbol.startswith(core_managed_files.PREFIX):
             try:
                 core_managed_files.validate(metadata, [self.expression_rep(arg) for arg in arguments],
