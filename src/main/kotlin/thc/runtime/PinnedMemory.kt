@@ -104,6 +104,16 @@ internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryO
     }
 }
 
+/** Both contents primops share storage semantics and a direct adopted child.
+ * Do not pass the virtual frame through an array-selected operand or enum arm. */
+internal class PinnedByteArrayContents(proof: CoreRepresentation,
+    @field:Child private var array: Expr) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): ManagedAddress = executeAddress(frame)
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress =
+        ManagedAddress.fromGuestByteArray(array.execute(frame))
+}
+
 internal class PinnedPointerArrayWrite(proof: CoreRepresentation,
     @field:Child private var array: Expr, @field:Child private var index: Expr,
     @field:Child private var address: Expr, @field:Child private var state: Expr) : Expr() {

@@ -1941,7 +1941,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
+                if (operation == PinnedMemoryOp.CONTENTS || operation == PinnedMemoryOp.MUTABLE_CONTENTS)
+                    PinnedByteArrayContents(tupleProof, compile(args[0], scope, false))
+                else if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
                     PinnedPointerIndexExpression(operation, tupleProof,
                         compile(args[0], scope, false), compile(args[1], scope, false))
                 else if (operation == PinnedMemoryOp.WRITE_ADDR_ARRAY)

@@ -41,7 +41,7 @@ class MutableByteArrayContentsTest {
             init { representation = reference }
             override fun execute(frame: VirtualFrame): Any? { reads++; return value }
         }
-        val expression = PinnedMemoryExpression(operation, address, arrayOf(operand))
+        val expression = PinnedByteArrayContents(address, operand)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
         val result = expression.executeAddress(frame)
         assertEquals(1, reads)
