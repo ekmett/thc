@@ -88,6 +88,8 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
         listOf("IntRep"), listOf("IntRep"))),
     FREEZE("unsafeFreezeByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
     SIZE("sizeofByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
+    SIZE_MUTABLE("sizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
+    GET_SIZE_MUTABLE("getSizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
     INDEX("indexWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_INT("readIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_INT("writeIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("IntRep"), emptyList())),
@@ -128,7 +130,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
         if (flags != List(arguments.size) { false } || actual.indices.any { !scalar(actual[it], arguments[it]) })
             throw RuntimeFault("ByteArray primitive argument representation mismatch: $primitive")
         val payload = listOf(when (this) {
-            READ_INT -> "IntRep"; READ_DOUBLE -> "DoubleRep"
+            READ_INT, GET_SIZE_MUTABLE -> "IntRep"; READ_DOUBLE -> "DoubleRep"
             READ_INT8 -> "Int8Rep"; READ_WORD8 -> "Word8Rep"
             READ_INT16 -> "Int16Rep"; READ_WORD16 -> "Word16Rep"
             READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"
@@ -139,7 +141,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             result.primReps == payload
         else scalar(result, when (this) {
             WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
-            SIZE, INDEX_INT, COMPARE -> listOf("IntRep")
+            SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
             INDEX_INT16 -> listOf("Int16Rep"); INDEX_WORD16 -> listOf("Word16Rep")
             INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
@@ -164,7 +166,8 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> CopyMutableByteArrayExpression(
             operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING, operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.COMPARE -> CompareByteArraysExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
-        ByteArrayOp.SIZE -> SizeByteArrayExpression(operands[0])
+        ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> SizeByteArrayExpression(operands[0])
+        ByteArrayOp.GET_SIZE_MUTABLE -> GetSizeMutableByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
@@ -235,6 +238,17 @@ private class WriteByteArrayExpression(@field:Child private var array: Expr,
         ManagedByteArray.requireState(state.execute(frame))
         ManagedByteArray.write(bytes, offset, byte)
         return Unit
+    }
+}
+/** State is evaluated and checked before observing length or publishing a result. */
+private class GetSizeMutableByteArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = ManagedByteArray.require(array.execute(frame))
+        ManagedByteArray.requireState(state.execute(frame))
+        FrameAccess.writeLong(frame, slots[offset], ManagedByteArray.size(bytes))
+        return null
     }
 }
 private class SizeByteArrayExpression(@field:Child private var array: Expr) : Expr() {

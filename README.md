@@ -139,6 +139,8 @@ pack/length/unpack/uncons and public comparison/prefix/suffix operations, with o
 contained ranges and native/model checks on both backends.
 [Mutable byte-array resize](docs/resize-bytearrays.md) preserves prefixes in direct
 managed byte storage and checks exact State/reference tuple results.
+[Mutable size queries](docs/mutable-bytearray-size.md) return typed Long lengths,
+with State sequencing for the effectful query and separate stable-reference pure semantics.
 [Int-array operations](docs/int-arrays.md) extend the same byte storage to
 public `UArray`/`STUArray` examples with native-endian, full-width values.
 [Double-array operations](docs/double-arrays.md) add typed floating storage,
