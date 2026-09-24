@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
+import java.math.BigInteger
 import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.util.Collections
@@ -65,7 +66,8 @@ class Int16ArrayNativeTest {
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
-    private fun model(name: String, seed: Long): Long {
+    private fun model(name: String, seed: Long, byteOrder: ByteOrder = ByteOrder.nativeOrder()): Long {
+        require(name in names)
         val unsigned = name.contains("Word16")
         fun decode(value: Long): Long {
             val bits = value and 0xffffL
@@ -89,7 +91,7 @@ class Int16ArrayNativeTest {
         val bytes = LongArray(4) { offset ->
             val value = if (offset < 2) bits else bits xor 0x55aaL
             val position = offset % 2
-            val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) position else 1-position)*8
+            val shift = (if (byteOrder == ByteOrder.LITTLE_ENDIAN) position else 1-position)*8
             (value ushr shift) and 255
         }
         bytes[1] = (seed+101) and 255
@@ -97,7 +99,7 @@ class Int16ArrayNativeTest {
         fun element(offset: Int): Long {
             var value = 0L
             for (byte in 0..1) {
-                val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 1-byte)*8
+                val shift = (if (byteOrder == ByteOrder.LITTLE_ENDIAN) byte else 1-byte)*8
                 value = value or (bytes[offset+byte] shl shift)
             }
             return decode(value)
@@ -105,12 +107,111 @@ class Int16ArrayNativeTest {
         return 3*decode(bits) + 16*element(0) + 20*element(2) +
             17*bytes[0] + 19*bytes[1] + 23*bytes[2] + 29*bytes[3]
     }
+    // Independently pinned input inventory; the producer/manifest cannot silently shrink the domain.
+    private val inputs = buildSet {
+        addAll(-16L..16L); addAll(listOf(Long.MIN_VALUE, Long.MIN_VALUE+1, Long.MAX_VALUE-1, Long.MAX_VALUE))
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L)) add(sign*((1L shl bit)+delta))
+        addAll(listOf(0x5555555555555555UL, 0xaaaaaaaaaaaaaaaaUL, 0x55aa55aa55aa55aaUL, 0xaa55aa55aa55aa55UL,
+            0x0123456789abcdefUL, 0xfedcba9876543210UL, 0x8000000080000000UL, 0xffffffff00000000UL,
+            0x800000007fffffffUL, 0x7fffffff80000000UL, 0xffffffff7fffffffUL, 0x0000000100000001UL,
+            0x12345678abcdef01UL, 0x80008000UL, 0xffff0000UL, 0x80007fffUL, 0x7fff8000UL, 0xffff7fffUL,
+            0x00010001UL, 0x12345678abcd8000UL).map { it.toLong() })
+    }.sorted()
+    private val literalValues = mapOf("noinlineInt16Literal" to -32768L, "noinlineWord16Literal" to 65535L)
+    private val literalInputs = listOf(Long.MIN_VALUE, -32768L, -1L, 0L, 1L, 32767L, Long.MAX_VALUE)
+    private fun literalModel(name: String, raw: Long) = raw+literalValues.getValue(name)
+    private fun checkedRows(text: String, literals: Boolean = false): Map<String, List<Pair<Long, Long>>> {
+        val entries = if (literals) literalValues.keys.toList() else names
+        val values = if (literals) literalInputs else inputs
+        val split = text.lineSequence().toList()
+        val lines = if (split.lastOrNull() == "") split.dropLast(1) else split
+        require(lines.size == entries.size*values.size) { "Int16 oracle row count mismatch" }
+        val rows = entries.associateWith { mutableListOf<Pair<Long, Long>>() }
+        for ((index, line) in lines.withIndex()) {
+            val fields = line.split('\t'); require(fields.size == 3) { "Int16 oracle columns at row $index" }
+            val name = entries[index/values.size]; val raw = values[index%values.size]
+            require(fields[0] == name && fields[1].toLongOrNull() == raw) { "Int16 oracle inventory/order at row $index" }
+            val answer = fields[2].toLongOrNull()
+            require(answer == if (literals) literalModel(name, raw) else model(name, raw)) { "Int16 native/model mismatch at row $index" }
+            rows.getValue(name).add(raw to answer)
+        }
+        return rows
+    }
+    @Test fun independentInventoryAndNarrowingCoverFullWidthBoundaries() {
+        assertEquals(403, inputs.size); assertEquals(2418, names.size*inputs.size)
+        assertEquals(inputs, inputs.distinct().sorted())
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            assertTrue(sign*((1L shl bit)+delta) in inputs)
+        for (name in names) for (raw in listOf(0L, 1L, 0x7fffL, 0x8000L, 0xffffL))
+            for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN)) {
+                assertEquals(model(name, raw, order), model(name, raw+65536L, order))
+                assertEquals(model(name, raw, order), model(name, raw-65536L, order))
+            }
+        for ((signed, unsigned) in listOf("unboxedInt16Accum" to "unboxedWord16Accum", "unboxedInt16ST" to "unboxedWord16ST",
+            "aliasInt16Bytes" to "aliasWord16Bytes"))
+            assertNotEquals(model(signed, 0x8000L), model(unsigned, 0x8000L))
+    }
+    @Test fun independentModelMatchesClosedFormCellsAndBothEndianAliasMasks() {
+        for (raw in inputs) for (unsigned in listOf(false, true)) {
+            fun wide(value: Long) = if (unsigned) value and 65535L else value.toShort().toLong()
+            val kind = if (unsigned) "Word16" else "Int16"
+            assertEquals(7*wide(raw+1)+11*wide(raw+5)+13*wide(2*raw), model("unboxed${kind}Accum", raw))
+            assertEquals(7*wide(raw)+11*wide(raw+7)+13*wide(2*raw+21), model("unboxed${kind}ST", raw))
+            for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN)) {
+                val lowFirst = order == ByteOrder.LITTLE_ENDIAN
+                val shiftA = if (lowFirst) 8 else 0; val shiftB = 8-shiftA
+                val before = raw and 65535L; val other = (raw xor 0x55aaL) and 65535L
+                val a = (before and (255L shl shiftA).inv()) or (((raw+101L) and 255L) shl shiftA)
+                val b = (other and (255L shl shiftB).inv()) or (((raw+37L) and 255L) shl shiftB)
+                val byte0 = if (lowFirst) a and 255L else a ushr 8
+                val byte3 = if (lowFirst) b ushr 8 else b and 255L
+                assertEquals(3*wide(before)+16*wide(a)+20*wide(b)+17*byte0+19*((raw+101L) and 255L)+
+                    23*((raw+37L) and 255L)+29*byte3, model("alias${kind}Bytes", raw, order), "$kind/$raw/$order")
+            }
+        }
+        assertNotEquals(model("aliasInt16Bytes", 0L, ByteOrder.LITTLE_ENDIAN), model("aliasInt16Bytes", 0L, ByteOrder.BIG_ENDIAN))
+    }
+    @Test fun literalModelWrapsOnlyTheMachineResult() {
+        for ((name, value) in literalValues) for (raw in literalInputs)
+            assertEquals(BigInteger.valueOf(raw).add(BigInteger.valueOf(value)).toLong(), literalModel(name, raw))
+        assertEquals(Long.MAX_VALUE-32767L, literalModel("noinlineInt16Literal", Long.MIN_VALUE))
+        assertEquals(Long.MIN_VALUE+65534L, literalModel("noinlineWord16Literal", Long.MAX_VALUE))
+        assertEquals(-32768L, literalModel("noinlineInt16Literal", 0L))
+        assertEquals(65535L, literalModel("noinlineWord16Literal", 0L))
+    }
+    @Test fun exactOraclesRejectMissingDuplicateReorderedMalformedAndWrongRows() {
+        for (literals in listOf(false, true)) {
+            val entries = if (literals) literalValues.keys.toList() else names
+            val values = if (literals) literalInputs else inputs
+            fun answer(name: String, raw: Long) = if (literals) literalModel(name, raw) else model(name, raw)
+            val lines = entries.flatMap { name -> values.map { "$name\t$it\t${answer(name, it)}" } }
+            fun text(rows: List<String>) = rows.joinToString("\n", postfix="\n")
+            val expected = entries.associateWith { name -> values.map { it to answer(name, it) } }
+            assertEquals(expected, checkedRows(text(lines), literals))
+            assertEquals(expected, checkedRows(lines.joinToString("\n"), literals))
+            fun reject(rows: List<String>) { assertThrows(IllegalArgumentException::class.java) { checkedRows(text(rows), literals) } }
+            reject(emptyList()); reject(lines.drop(1)); reject(lines+lines.first()); reject(lines.reversed())
+            reject(lines.toMutableList().apply { this[1]=first() })
+            reject(lines.toMutableList().apply { Collections.swap(this, 0, 1) })
+            reject(lines.drop(values.size)+lines.take(values.size))
+            for (nameIndex in entries.indices) reject(lines.toMutableList().apply {
+                val index = nameIndex*values.size
+                this[index] = this[index].substringBeforeLast('\t')+"\t${answer(entries[nameIndex], values.first()) xor 1L}"
+            })
+            for (bad in listOf("unknown\t0\t0", "", "${entries.first()}\t0", lines.first()+"\t0",
+                "${entries.first()}\tbad\t0", "${entries.first()}\t9223372036854775808\t0",
+                "${entries.first()}\t${values.first()}\t", "${entries.first()}\t${values.first()}\t1.5",
+                "${entries.first()}\t${values.first()}\t9223372036854775808")) reject(listOf(bad)+lines.drop(1))
+            reject(lines+"")
+        }
+    }
     @Test fun nativePublicArraysAndByteAliasesWithInlining() = native(true)
     @Test fun nativePublicArraysAndByteAliasesAcrossResidualCalls() = native(false)
     @Test fun genuineNoinlineNarrowLiteralsRefineUnknownProofsInCompiledCode() {
         val manifest = manifest()
-        val entries = listOf("noinlineInt16Literal", "noinlineWord16Literal")
+        val entries = literalValues.keys.toList()
         assertEquals(entries, manifest["literalEntries"])
+        assertEquals(literalInputs, manifest["literalInputs"])
         assertEquals(entries.associateWith { 2L },
             (manifest["literalExpectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
         assertEquals(listOf("pre", "post").flatMap { stage -> entries.map { "$stage/$it" } }.associateWith { 2L },
@@ -120,12 +221,10 @@ class Int16ArrayNativeTest {
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale literal fixture: $path")
         }
-        val rows = File(root, "build/int16-arrays/literal-oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(entries.toSet(), rows.keys)
-        assertEquals(14, rows.values.sumOf { it.size })
+        val rows = checkedRows(File(root, "build/int16-arrays/literal-oracle.tsv").readText(), literals=true)
         assertEquals(14, (manifest["literalNativeRows"] as Number).toInt())
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) for (name in entries) {
-            val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+            val cases = rows.getValue(name)
             assertEquals((manifest["literalInputs"] as List<Number>).map { it.toLong() }, cases.map { it.first })
             for ((input, answer) in cases) assertEquals(input + if (name == entries[0]) -32768L else 65535L, answer)
             for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining).use { context ->
@@ -170,7 +269,9 @@ class Int16ArrayNativeTest {
     }
     private fun native(inlining: Boolean) {
         val manifest = manifest()
-        assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())
+        assertEquals(names, manifest["entries"])
+        assertEquals(inputs, manifest["inputs"])
+        assertEquals((names.size*inputs.size).toLong(), manifest["nativeRows"])
         assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
         assertEquals(64, (manifest["wordBits"] as Number).toInt())
         assertEquals(16, (manifest["elementBits"] as Number).toInt())
@@ -179,9 +280,7 @@ class Int16ArrayNativeTest {
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale 16-bit-array fixture: $path; rerun prepare-int16-arrays.py")
         }
-        val rows = File(root, "build/int16-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(names.toSet(), rows.keys)
-        assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
+        val rows = checkedRows(File(root, "build/int16-arrays/oracle.tsv").readText())
         val expectedCalls = names.associateWith { 2L }
         assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
         val stages = manifest["stages"] as Map<String, List<String>>
@@ -189,13 +288,7 @@ class Int16ArrayNativeTest {
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
-                val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
-                assertEquals(403, cases.size, "$name pinned full-width input domain")
-                assertEquals(cases.size, cases.map { it.first }.toSet().size)
-                assertEquals((manifest["inputs"] as List<Number>).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
-                for ((input, native) in cases) {
-                    assertEquals(model(name, input), native, "Native $name($input)")
-                }
+                val cases = rows.getValue(name)
                 for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
                     context.initialize("thc"); context.enter()
                     try {

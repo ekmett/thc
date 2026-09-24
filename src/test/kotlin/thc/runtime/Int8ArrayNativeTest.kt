@@ -66,6 +66,7 @@ class Int8ArrayNativeTest {
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
     private fun model(name: String, raw: Long): Long {
+        require(name in names)
         fun lane(x: Long, unsigned: Boolean = false): Long { val bits=x and 255L; return if(unsigned || bits<128) bits else bits-256 }
         if(name=="emptyBytes") return raw
         if(name.startsWith("raw")) return lane(raw, name=="rawUnsignedRead")
@@ -75,11 +76,94 @@ class Int8ArrayNativeTest {
         return cells.zip(listOf(7L,11L,13L)).sumOf { (x,w)->w*lane(x,name.contains("Word8")) }
     }
 
+    // This inventory is independent of the producer and its manifest. Long arithmetic wraps at 64 bits.
+    private val inputs = buildSet {
+        addAll(-256L..255L)
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L)) add(sign*((1L shl bit)+delta))
+        addAll(listOf(0x5555555555555555UL, 0xaaaaaaaaaaaaaaaaUL, 0x0123456789abcdefUL, 0xfedcba9876543210UL).map { it.toLong() })
+    }.sorted()
+    private fun checkedRows(text: String): Map<String, List<Pair<Long, Long>>> {
+        val split = text.lineSequence().toList()
+        val lines = if (split.lastOrNull() == "") split.dropLast(1) else split
+        require(lines.size == names.size*inputs.size) { "Int8 oracle row count mismatch" }
+        val rows = names.associateWith { mutableListOf<Pair<Long, Long>>() }
+        for ((index, line) in lines.withIndex()) {
+            val fields = line.split('\t'); require(fields.size == 3) { "Int8 oracle columns at row $index" }
+            val name = names[index/inputs.size]; val raw = inputs[index%inputs.size]
+            require(fields[0] == name && fields[1].toLongOrNull() == raw) { "Int8 oracle inventory/order at row $index" }
+            val answer = fields[2].toLongOrNull()
+            require(answer == model(name, raw)) { "Int8 native/model mismatch at row $index" }
+            rows.getValue(name).add(raw to answer)
+        }
+        return rows
+    }
+    @Test fun independentInventoryCoversEveryByteAndFullWidthBoundary() {
+        assertEquals(846, inputs.size); assertEquals(7614, names.size*inputs.size)
+        assertEquals(inputs, inputs.distinct().sorted())
+        assertTrue(inputs.containsAll((-256L..255L).toList()))
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            assertTrue(sign*((1L shl bit)+delta) in inputs)
+        for (name in names.filter { it != "emptyBytes" }) for (raw in 0L..255L) {
+            assertEquals(model(name, raw), model(name, raw+256L), "$name/$raw")
+            assertEquals(model(name, raw), model(name, raw-256L), "$name/$raw")
+        }
+        assertEquals(-128L, model("rawSignedRead", 128L)); assertEquals(-1L, model("rawSignedIndex", 255L))
+        assertEquals(128L, model("rawUnsignedRead", 128L)); assertEquals(255L, model("rawUnsignedRead", -1L))
+        assertNotEquals(model("unboxedInt8ST", 128L), model("unboxedWord8ST", 128L))
+    }
+    @Test fun independentModelMatchesSequentialCellsAndAliasSnapshots() {
+        for (raw in inputs) {
+            for (unsigned in listOf(false, true)) {
+                fun wide(value: Byte) = if (unsigned) value.toLong() and 255L else value.toLong()
+                val accum = ByteArray(8) { raw.toByte() }
+                for ((index, value) in listOf(-3 to 3L, 0 to 5L, -3 to -2L, 4 to (raw and 255L)))
+                    accum[index+3] = (accum[index+3]+value).toByte()
+                val st = ByteArray(8) { raw.toByte() }
+                st[3] = (st[0]+7).toByte(); st[7] = (3*st[3]-st[0]).toByte()
+                for ((suffix, cells) in listOf("Accum" to accum, "ST" to st))
+                    assertEquals(7*wide(cells[0])+11*wide(cells[3])+13*wide(cells[7]),
+                        model("unboxed${if (unsigned) "Word8" else "Int8"}$suffix", raw))
+            }
+            val bytes = byteArrayOf(raw.toByte(), (raw xor 0x55L).toByte())
+            val before = bytes[0].toLong(); val beforeUnsigned = before and 255L
+            bytes[0] = (raw+101L).toByte(); bytes[1] = (raw+37L).toByte()
+            val first = bytes[0].toLong(); val second = bytes[1].toLong()
+            assertEquals(3*before+5*beforeUnsigned+7*first+11*(second and 255L)+13*first+17*second+
+                19*(first and 255L)+23*(second and 255L), model("aliasBytes", raw))
+            assertEquals(raw, model("emptyBytes", raw))
+            assertEquals(raw.toByte().toLong(), model("rawSignedRead", raw))
+            assertEquals(raw.toByte().toLong(), model("rawSignedIndex", raw))
+            assertEquals(raw.toByte().toLong() and 255L, model("rawUnsignedRead", raw))
+        }
+    }
+    @Test fun exactOracleRejectsMissingDuplicateReorderedMalformedAndWrongRows() {
+        val lines = names.flatMap { name -> inputs.map { "$name\t$it\t${model(name, it)}" } }
+        fun text(rows: List<String>) = rows.joinToString("\n", postfix="\n")
+        val expected = names.associateWith { name -> inputs.map { it to model(name, it) } }
+        assertEquals(expected, checkedRows(text(lines))); assertEquals(expected, checkedRows(lines.joinToString("\n")))
+        fun reject(rows: List<String>) { assertThrows(IllegalArgumentException::class.java) { checkedRows(text(rows)) } }
+        reject(emptyList()); reject(lines.drop(1)); reject(lines+lines.first()); reject(lines.reversed())
+        reject(lines.toMutableList().apply { this[1]=first() })
+        reject(lines.toMutableList().apply { Collections.swap(this, 0, 1) })
+        reject(lines.drop(inputs.size)+lines.take(inputs.size))
+        for (nameIndex in names.indices) reject(lines.toMutableList().apply {
+            val index = nameIndex*inputs.size
+            this[index] = this[index].substringBeforeLast('\t')+"\t${model(names[nameIndex], inputs.first()) xor 1L}"
+        })
+        for (bad in listOf("unknown\t0\t0", "", "unboxedInt8Accum\t0", lines.first()+"\t0",
+            "unboxedInt8Accum\tbad\t0", "unboxedInt8Accum\t9223372036854775808\t0",
+            "unboxedInt8Accum\t${inputs.first()}\t", "unboxedInt8Accum\t${inputs.first()}\t1.5",
+            "unboxedInt8Accum\t${inputs.first()}\t9223372036854775808")) reject(listOf(bad)+lines.drop(1))
+        reject(lines+"")
+    }
+
     @Test fun nativePublicArraysAndByteAliasesWithInlining() = native(true)
     @Test fun nativePublicArraysAndByteAliasesAcrossResidualCalls() = native(false)
     private fun native(inlining: Boolean) {
         val manifest = manifest()
-        assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())
+        assertEquals(names, manifest["entries"])
+        assertEquals(inputs, manifest["inputs"])
+        assertEquals((names.size*inputs.size).toLong(), manifest["nativeRows"])
         assertEquals(64, (manifest["wordBits"] as Number).toInt())
         assertEquals(8, (manifest["elementBits"] as Number).toInt())
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
@@ -87,9 +171,7 @@ class Int8ArrayNativeTest {
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale 8-bit-array fixture: $path; rerun prepare-int8-arrays.py")
         }
-        val rows = File(root, "build/int8-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(names.toSet(), rows.keys)
-        assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
+        val rows = checkedRows(File(root, "build/int8-arrays/oracle.tsv").readText())
         val expectedCalls = names.associateWith { 2L }
         assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
         val stages = manifest["stages"] as Map<String, List<String>>
@@ -97,13 +179,7 @@ class Int8ArrayNativeTest {
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
-                val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
-                assertEquals((manifest["inputs"] as List<*>).size, cases.size, "$name pinned full-width input domain")
-                assertEquals(cases.size, cases.map { it.first }.toSet().size)
-                assertEquals((manifest["inputs"] as List<Number>).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
-                for ((input, native) in cases) {
-                    assertEquals(model(name, input), native, "Native $name($input)")
-                }
+                val cases = rows.getValue(name)
                 for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
                     context.initialize("thc"); context.enter()
                     try {
