@@ -71,8 +71,8 @@ the individual contracts, native checks and remaining gaps; the generated
 [primop checklist](docs/primops.md) tracks what is implemented, partial or missing.
 
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
-complete boot-library closure, FFI, and stack-safe non-tail evaluation remain
-unfinished. The script-level scalar entry interface is currently integer-only;
+complete boot-library closure, full FFI coverage, and stack-safe non-tail
+evaluation remain unfinished. The script-level scalar entry is integer-only;
 `thc run` has the narrower `IO ()` path described above. Vector calling
 conventions and several aggregate storage forms are deliberately unsupported.
 
