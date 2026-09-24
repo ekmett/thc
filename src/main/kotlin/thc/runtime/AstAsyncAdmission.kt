@@ -8,6 +8,7 @@ package thc.runtime
  * parent step would otherwise drop an effectful suffix inside the same root. */
 internal object AstAsyncAdmission {
     private val blockingMVars = setOf("takeMVar#", "readMVar#", "putMVar#")
+    private val readingMVars = setOf("takeMVar#", "readMVar#")
 
     fun validate(bindings: List<Map<String, Any?>>) {
         for (binding in bindings) {
@@ -27,6 +28,19 @@ internal object AstAsyncAdmission {
             val arguments = expression.getOrNull(2) as? List<*>
             head?.firstOrNull() == "prim" && head.getOrNull(1) in blockingMVars &&
                 arguments != null && arguments.all { atom(it as? List<*>) }
+        }
+        "case" -> {
+            val scrutinee = expression.getOrNull(1) as? List<*>
+            val head = scrutinee?.getOrNull(1) as? List<*>
+            val alternative = (expression.getOrNull(3) as? List<*>)?.singleOrNull() as? List<*>
+            val body = alternative?.getOrNull(3) as? List<*>
+            // The literal suffix cannot suspend. Other tuple alternatives wait
+            // until their own effects and typed result paths have capture steps.
+            scrutinee?.firstOrNull() == "app" && head?.firstOrNull() == "prim" &&
+                head.getOrNull(1) in readingMVars && root(scrutinee) &&
+                CoreRepresentations.expression(scrutinee as List<Any?>).isTuple &&
+                alternative?.firstOrNull() == "data" && body?.firstOrNull() == "lit" &&
+                body.getOrNull(1) == "int" && CoreRepresentations.expression(body as List<Any?>).isLong
         }
         else -> false
     }

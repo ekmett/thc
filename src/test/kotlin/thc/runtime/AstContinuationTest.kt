@@ -21,22 +21,37 @@ class AstContinuationTest {
     private val stateRep = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
     private val mvarRep = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true)
     private val dataRep = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to false)
+    private val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val tupleRep = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple",
         "primReps" to listOf("BoxedRep (Just Lifted)"), "components" to listOf(stateRep, dataRep), "evaluated" to false)
 
-    private fun directMVarModule(wrap: Boolean = false, strict: Boolean = false): Map<String, Any?> {
+    private fun directMVarModule(wrap: Boolean = false, strict: Boolean = false,
+                                 caseLiteral: Boolean = false, casePayload: Boolean = false): Map<String, Any?> {
         val cell = listOf("var", "cell", mapOf("rep" to mvarRep))
         val state = listOf("void", mapOf("rep" to stateRep))
         val read = listOf("app", listOf("prim", "takeMVar#"), listOf(cell, state),
             listOf(false, false), false, false, mapOf("rep" to tupleRep))
-        val body: Any = if (wrap) listOf("case", read, "returned", emptyList<Any>()) else read
+        val body: Any = when {
+            wrap -> listOf("case", read, "returned", emptyList<Any>())
+            caseLiteral || casePayload -> listOf("case", read, "returned", listOf(listOf("data", "Pair",
+                listOf("stateOut", "payload"), if (casePayload) listOf("var", "payload", mapOf("rep" to dataRep))
+                    else listOf("lit", "int", "7", mapOf("rep" to longRep)),
+                mapOf("binders" to listOf(
+                    mapOf("id" to "stateOut", "rep" to stateRep),
+                    mapOf("id" to "payload", "rep" to dataRep))))),
+                mapOf("rep" to if (casePayload) dataRep else longRep,
+                    "binder" to mapOf("id" to "returned", "rep" to tupleRep)))
+            else -> read
+        }
         val parameters = listOf(
             mapOf("id" to "cell", "name" to "cell", "lifted" to false, "coercion" to false, "rep" to mvarRep),
             mapOf("id" to "state", "name" to "state", "lifted" to false, "coercion" to false, "rep" to stateRep))
-        val lambda = listOf("lam", parameters, body, mapOf("resultRep" to tupleRep,
+        val lambda = listOf("lam", parameters, body, mapOf("resultRep" to when {
+            caseLiteral -> longRep; casePayload -> dataRep; else -> tupleRep },
             "entryStrict" to listOf(strict, false)))
         return mapOf("bindings" to listOf(mapOf("id" to "direct", "name" to "direct",
-            "lifted" to true, "expr" to lambda)), "instrument" to true)
+            "lifted" to true, "expr" to lambda)), "instrument" to true,
+            "constructors" to listOf(mapOf("id" to "Pair", "name" to "Pair", "kind" to "unboxed-tuple", "arity" to 2)))
     }
 
     @Test fun asyncAstAdmissionRejectsAnUncapturedParentSuffix() {
@@ -53,6 +68,11 @@ class AstContinuationTest {
                     Program(language, directMVarModule(strict = true), true)
                 }
                 assertTrue(eager.message!!.contains("direct"))
+                Program(language, directMVarModule(casePayload = true))
+                val lazyBranch = assertThrows(RuntimeFault::class.java) {
+                    Program(language, directMVarModule(casePayload = true), true)
+                }
+                assertTrue(lazyBranch.message!!.contains("direct"))
             } finally { context.leave() }
         }
     }
@@ -122,6 +142,68 @@ class AstContinuationTest {
                     assertEquals(0, handoff.results.depth)
                     assertEquals(0, handoff.results.retainedReferences())
                     assertNull(handoff.pending)
+                } finally { context.leave() }
+            } finally {
+                if (thread.isAlive) context.close(true)
+                thread.join(5000)
+            }
+        }
+    }
+
+    @Test fun admittedTupleCaseKeepsItsLongSuffixAfterCompiledMVarCut() {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw")
+            .build().use { context ->
+            context.initialize("thc"); context.enter()
+            val program: Program
+            val target: com.oracle.truffle.api.RootCallTarget
+            val state: Language.State
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                state = Language.currentState()
+                program = Program(language, directMVarModule(caseLiteral = true), true)
+                target = program.entryTarget("direct")
+                repeat(5) {
+                    val ready = ManagedMVar()
+                    assertTrue(ready.tryPut("discarded"))
+                    assertEquals(7L, Calls.target(target, arrayOf(0L, ready, Unit)))
+                }
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+            } finally { context.leave() }
+
+            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            val cell = ManagedMVar()
+            val answer = CompletableFuture<AstContinuation>()
+            val thread = Thread {
+                context.enter(); state.threads.enterCurrent()
+                try {
+                    val captured = Calls.target(target, arrayOf(0L, cell, Unit)) as AstContinuation
+                    (captured.yielded as AsyncRequest).acknowledge()
+                    answer.complete(captured)
+                } catch (failure: Throwable) { answer.completeExceptionally(failure) }
+                finally { state.threads.leaveCurrent(); context.leave() }
+            }
+            thread.start()
+            try {
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                while (cell.pendingCounts().takers != 1 && !answer.isDone && System.nanoTime() < deadline)
+                    Thread.sleep(1)
+                assertEquals(1, cell.pendingCounts().takers)
+                state.threads.send(thread.threadId(), "cut")
+                val captured = answer.get(10, TimeUnit.SECONDS)
+                thread.join(5000)
+                assertFalse(thread.isAlive)
+                assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                context.enter()
+                try {
+                    assertTrue(cell.tryPut("unused"))
+                    assertEquals(7L, captured.continueWith(Unit))
+                    assertTrue(cell.isEmpty(), "The tuple scrutinee must complete before its saved case suffix")
+                    val handoff = TruffleLanguage.LanguageReference.create(Language::class.java).get(null).handoffState.get()
+                    assertEquals(0, handoff.results.depth)
+                    assertEquals(0, handoff.results.retainedReferences())
                 } finally { context.leave() }
             } finally {
                 if (thread.isAlive) context.close(true)
