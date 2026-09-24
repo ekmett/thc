@@ -77,11 +77,13 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         private val LONG_REPS = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
         // Scalar argument handoff still uses only Long/reference snapshots.
         internal fun supports(rep: String): Boolean = rep in LONG_REPS || rep.startsWith("BoxedRep ")
-        internal fun supportsResult(rep: String): Boolean = supports(rep) || rep == "FloatRep" || rep == "DoubleRep"
+        internal fun supportsResult(rep: String): Boolean = supports(rep) || rep in setOf("FloatRep", "DoubleRep", "AddrRep")
         internal fun fieldKind(rep: String): String = when {
             rep in LONG_REPS -> "long"
             rep == "FloatRep" -> "float"
             rep == "DoubleRep" -> "double"
+            // Addr# is an owned managed reference here, never a raw native word.
+            rep == "AddrRep" -> "reference"
             rep.startsWith("BoxedRep ") -> "reference"
             else -> fault("Unsupported handoff representation: $rep")
         }
