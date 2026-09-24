@@ -2,13 +2,9 @@
   "schema": 2,
   "smoke": {
     "junit": [
-      "thc.BytecodeBackendTest",
-      "thc.RuntimeTest",
-      "thc.runtime.Explicit64PrimopsTest",
+      "thc.FastSmokeTest",
       "thc.runtime.HandoffTest",
-      "thc.runtime.HostEntryCompilationTest",
-      "thc.runtime.TupleInputNativeTest",
-      "thc.runtime.TypedInputScalarSourceTest"
+      "thc.runtime.HostEntryCompilationTest"
     ],
     "python": [
       ".github/scripts/test_fast_select.py",
@@ -222,6 +218,7 @@
     },
     "examples/NativeOracle.hs": {
       "junit": [
+        "thc.FastSmokeTest",
         "thc.RuntimeTest",
         "thc.BytecodeBackendTest"
       ],
@@ -229,6 +226,7 @@
     },
     "examples/THC/Fixtures.hs": {
       "junit": [
+        "thc.FastSmokeTest",
         "thc.RuntimeTest",
         "thc.BytecodeBackendTest",
         "thc.SelfTailProfileTest"
@@ -244,6 +242,7 @@
     },
     "examples/THC/Prim.hs": {
       "junit": [
+        "thc.FastSmokeTest",
         "thc.RuntimeTest",
         "thc.BytecodeBackendTest",
         "thc.SelfTailProfileTest"
@@ -252,6 +251,7 @@
     },
     "scripts/native-oracle.sh": {
       "junit": [
+        "thc.FastSmokeTest",
         "thc.RuntimeTest",
         "thc.BytecodeBackendTest"
       ],
