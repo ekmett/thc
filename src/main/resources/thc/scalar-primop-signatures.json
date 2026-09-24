@@ -342,6 +342,13 @@
       ],
       "result": "IntRep"
     },
+    "eqAddr#": {
+      "arguments": [
+        "AddrRep",
+        "AddrRep"
+      ],
+      "result": "IntRep"
+    },
     "eqChar#": {
       "arguments": [
         "WordRep",
@@ -847,6 +854,13 @@
     "narrow8Int#": {
       "arguments": [
         "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "neAddr#": {
+      "arguments": [
+        "AddrRep",
+        "AddrRep"
       ],
       "result": "IntRep"
     },

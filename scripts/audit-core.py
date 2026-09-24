@@ -222,6 +222,8 @@ class Audit:
         if kind == 'string-bytes':
             if not isinstance(value, str) or len(value) % 2 or any(c not in '0123456789abcdefABCDEF' for c in value):
                 self.issue('invalid-literal-value', owner, path, 'string-bytes must contain pairs of hexadecimal digits')
+        if kind == 'null-addr' and value != '0':
+            self.issue('invalid-literal-value', owner, path, 'null-addr must be exactly 0')
         if kind in self.cap.get('integerLiteralRanges', {}):
             lo, hi = self.cap['integerLiteralRanges'][kind]
             try:
@@ -390,6 +392,8 @@ class Audit:
                 return dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
             if expr[1] in narrow:
                 return dict(kind='long', primReps=[narrow[expr[1]]], evaluated=True)
+            if expr[1] == 'null-addr':
+                return dict(kind='address', primReps=['AddrRep'], evaluated=True)
             kind = {'float': 'float', 'double': 'double', 'string-bytes': 'address',
                     **dict.fromkeys(('int', 'word', 'char', 'int8', 'int16', 'int32', 'int64',
                                      'word8', 'word16', 'word32', 'word64'), 'long')}.get(expr[1])
@@ -977,6 +981,22 @@ class Audit:
                             proof.get('primReps') == output_reps):
                         self.issue('primitive-representation', owner, path,
                                    function[1] + ': exact State#/result tuple required')
+                if function[0] == 'prim' and function[1] == 'getCurrentCCS#':
+                    def scalar(rep, kind, reps):
+                        return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
+                                rep.get('kind') == kind and rep.get('primReps') == reps)
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    fields = proof.get('components') if isinstance(proof, dict) else None
+                    if not (len(actual) == 2 and flags == [True, False] and
+                            isinstance(actual[0], dict) and 'aggregate' not in actual[0] and
+                            not is_vector(actual[0]) and actual[0].get('kind') in ('object', 'data', 'closure') and
+                            actual[0].get('primReps') == ['BoxedRep (Just Lifted)'] and
+                            scalar(actual[1], 'void', []) and self.is_tuple(proof) and
+                            proof.get('kind') == 'unknown' and isinstance(fields, list) and len(fields) == 2 and
+                            scalar(fields[0], 'void', []) and scalar(fields[1], 'address', ['AddrRep']) and
+                            proof.get('primReps') == ['AddrRep']):
+                        self.issue('primitive-representation', owner, path,
+                                   'getCurrentCCS#: exact lifted dummy, State# and State#/Addr# tuple required')
                 bytearray_primitive = (self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) or
                                        self.cap.get('managedPinnedMemoryPrimitives', {}).get(function[1])) if function[0] == 'prim' else None
                 if bytearray_primitive is not None:

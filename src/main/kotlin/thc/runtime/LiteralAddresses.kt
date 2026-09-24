@@ -7,8 +7,8 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** A concrete managed Addr#, never a native pointer. Exactly one final backing
- * reference is present. Literal contents are immutable compilation constants;
+/** A managed Addr#, never a native pointer. Non-null addresses have exactly one
+ * final backing reference. Literal contents are immutable compilation constants;
  * mutable contents are ordinary array elements, even after unsafeFreezeByteArray#.
  * Each derived address strongly retains its allocation without exposing it. */
 internal class ManagedAddress private constructor(
@@ -18,14 +18,26 @@ internal class ManagedAddress private constructor(
 ) {
     // Package-internal views for original C bitcode; callers never obtain a
     // process pointer and the byte storage is not copied or replaced.
-    internal fun cbitsBacking(): ByteArray = literalBytes ?: mutableBytes!!
+    internal fun cbitsBacking(): ByteArray = literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
     internal fun cbitsWritable(): Boolean = mutableBytes != null
-    internal fun cbitsOffset(): Long = offset
+    internal fun cbitsOffset(): Long { cbitsBacking(); return offset }
 
-    private fun size(): Long = (literalBytes?.size ?: mutableBytes!!.size).toLong()
+    private fun size(): Long = cbitsBacking().size.toLong()
+
+    /** GHC pointer equality compares allocation identity and byte offset. */
+    fun sameLocation(other: ManagedAddress): Boolean =
+        offset == other.offset && when {
+            this === NULL || other === NULL -> this === other
+            literalBytes != null -> literalBytes === other.literalBytes
+            else -> mutableBytes === other.mutableBytes
+        }
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
     fun plus(displacement: Long): ManagedAddress {
+        if (this === NULL) {
+            if (displacement == 0L) return this
+            fault("Cannot offset null Addr#")
+        }
         // Check before adding so even Long.MIN/MAX_VALUE cannot wrap into range.
         if (displacement < -offset || displacement > size() - offset)
             fault("Managed Addr# offset outside its backing storage")
@@ -101,9 +113,13 @@ internal class ManagedAddress private constructor(
     }
 
     @TruffleBoundary
-    override fun toString(): String = "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
+    override fun toString(): String = if (this === NULL) "Addr#(null)"
+        else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
     companion object {
+        private val NULL = ManagedAddress(null, null, 0L)
+        fun nullAddress(): ManagedAddress = NULL
+
         /** Logical pinning means stable managed backing and a strong lifetime,
          * not physical pinning or a process address. Do not copy: views must alias. */
         fun fromByteArray(bytes: ByteArray): ManagedAddress = ManagedAddress(null, bytes, 0L)

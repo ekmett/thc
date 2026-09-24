@@ -869,6 +869,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class GetCurrentCCS {
+        @Specialization public static void run(VirtualFrame frame, LocalAccessor destination, Object state,
+                @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedAddress.Companion.nullAddress());
+        }
+    }
+
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -905,6 +916,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Fallback public static long invalid(Object address, Object displacement) {
             if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
             throw fail("Expected primitive Long");
+        }
+    }
+    @Operation public static final class AddressEqual {
+        @Specialization public static long compare(ManagedAddress left, ManagedAddress right) {
+            return left.sameLocation(right) ? 1L : 0L;
+        }
+        @Fallback public static long invalid(Object left, Object right) {
+            throw fail("Expected managed Addr# operands");
+        }
+    }
+    @Operation public static final class AddressNotEqual {
+        @Specialization public static long compare(ManagedAddress left, ManagedAddress right) {
+            return left.sameLocation(right) ? 0L : 1L;
+        }
+        @Fallback public static long invalid(Object left, Object right) {
+            throw fail("Expected managed Addr# operands");
         }
     }
 

@@ -11,6 +11,16 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "address-identity": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest"],
+      "commands": [{"argv": ["scripts/prepare-address-identity.sh"]}],
+      "outputs": ["build/addr-identity"],
+      "sources": [
+        "scripts/prepare-address-identity.sh",
+        "compiler/test-fixtures/AddressIdentityAudit.hs",
+        "compiler/test-fixtures/AddressIdentityAuditNative.hs"
+      ]
+    },
     "synchronous-exceptions": {
       "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
       "commands": [

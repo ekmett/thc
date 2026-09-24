@@ -464,6 +464,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> ManagedAddress.fromHex(value)
+        "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -938,6 +939,15 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         "getMaskingState#" -> e.builder.endGetMaskingState()
                         else -> e.builder.endUnmaskAsyncExceptions()
                     }
+                }
+            } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
+                CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                argument(args[0], scope, true) // Compile/prove the lifted dummy, never enter it.
+                val state = argument(args[1], scope, false)
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginGetCurrentCCS(destination[0])
+                    state.emit(e)
+                    e.builder.endGetCurrentCCS()
                 }
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
@@ -2071,6 +2081,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"
+            "eqAddr#" -> "AddressEqual"
+            "neAddr#" -> "AddressNotEqual"
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
@@ -2131,6 +2143,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "Narrow8" -> b.beginNarrow8(); "Narrow16" -> b.beginNarrow16(); "Narrow32" -> b.beginNarrow32()
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus(); "AddressIndexChar" -> b.beginAddressIndexChar()
+                "AddressEqual" -> b.beginAddressEqual(); "AddressNotEqual" -> b.beginAddressNotEqual()
             }
             args.forEach { it.emit(e) }
             when (operation) {
@@ -2184,6 +2197,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "Narrow8" -> b.endNarrow8(); "Narrow16" -> b.endNarrow16(); "Narrow32" -> b.endNarrow32()
                 "NarrowWord" -> b.endNarrowWord()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()
+                "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
             }
         })
     }

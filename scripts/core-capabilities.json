@@ -25,7 +25,8 @@
     "word16",
     "word32",
     "char",
-    "string-bytes"
+    "string-bytes",
+    "null-addr"
   ],
   "integerLiteralRanges": {
     "int8": [
@@ -297,7 +298,10 @@
     "uncheckedIShiftRL#": 2,
     "uncheckedShiftRL#": 2,
     "plusAddr#": 2,
+    "eqAddr#": 2,
+    "neAddr#": 2,
     "indexCharOffAddr#": 2,
+    "getCurrentCCS#": 2,
     "raise#": 1,
     "raiseIO#": 2,
     "catch#": 3,
