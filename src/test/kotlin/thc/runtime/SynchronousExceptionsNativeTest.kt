@@ -16,7 +16,7 @@ class SynchronousExceptionsNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/synchronous-exceptions")
     private val supported = listOf("preciseCatch", "actionHeadCatch", "ignoredBottomPayload", "nestedRethrow",
-        "unusedHandler", "lazyResultBoundary", "restoreAndRethrow")
+        "unusedHandler", "lazyResultBoundary", "restoreAndRethrow", "handlerMaskState")
 
     private fun compile(target: RootCallTarget) {
         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
@@ -32,8 +32,7 @@ class SynchronousExceptionsNativeTest {
         }
         @Suppress("UNCHECKED_CAST")
         val statuses = manifest["auditStatus"] as Map<String, Map<String, Any?>>
-        assertTrue(statuses.filterKeys { !it.endsWith("/handlerMaskState") }.values.all { it["accepted"] == true })
-        assertTrue(statuses.filterKeys { it.endsWith("/handlerMaskState") }.values.all { it["accepted"] == false })
+        assertTrue(statuses.values.all { it["accepted"] == true })
         val inputs = (manifest["inputs"] as List<*>).map { (it as Number).toLong() }
         val cases = File(directory, "oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(169, inputs.size)
@@ -65,6 +64,17 @@ class SynchronousExceptionsNativeTest {
                             assertEquals(expected, function.execute(input).asLong(), "$label compiled/$input")
                             val after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             assertTrue(after > before, "$label entered compiled guest code")
+                        }
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(program.entryTarget(name).rootNode),
+                            "$label restored caller masking state")
+                        if (name == "handlerMaskState") {
+                            val node = program.entryTarget(name).rootNode
+                            SynchronousMasking.set(node, MaskingState.MASKED_UNINTERRUPTIBLE)
+                            try {
+                                assertEquals(34L, function.execute(0L).asLong(), "$label nested unmask")
+                                assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(node),
+                                    "$label restored masked caller")
+                            } finally { SynchronousMasking.set(node, MaskingState.UNMASKED) }
                         }
                         assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong(), label)
                         assertEquals(0L, (program.diagnostics().getValue("blackholes") as Number).toLong(), label)

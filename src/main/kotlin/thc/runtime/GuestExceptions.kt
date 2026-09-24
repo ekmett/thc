@@ -11,6 +11,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import java.util.concurrent.Callable
+import thc.Language
 
 /** A synchronous Haskell exception payload, kept separate from unsupported-runtime diagnostics. */
 class GuestException(val payload: Any?, location: Node) :
@@ -29,11 +30,17 @@ internal object CoreSynchronousExceptions {
             "raiseIO#" -> arguments.size == 2 && boxed(arguments[0]) && state(arguments[1]) && flags == listOf(true, false)
             "catch#" -> arguments.size == 3 && closure(arguments[0]) && closure(arguments[1]) &&
                 state(arguments[2]) && flags == listOf(true, true, false)
+            "unmaskAsyncExceptions#" -> arguments.size == 2 && closure(arguments[0]) && state(arguments[1]) &&
+                flags == listOf(true, false)
+            "getMaskingState#" -> arguments.size == 1 && state(arguments[0]) && flags == listOf(false)
             else -> false
         }
         val components = result.components
         if (!validArguments || result.kind != CoreKind.UNKNOWN || !result.isTuple || result.isSum || result.isVector ||
-            components?.size != 2 || !state(components[0]) || !boxed(components[1]) || result.primReps != lifted)
+            components?.size != 2 || !state(components[0]) ||
+            (if (name == "getMaskingState#") components[1].kind != CoreKind.LONG ||
+                components[1].primReps != listOf("IntRep") || result.primReps != listOf("IntRep")
+             else !boxed(components[1]) || result.primReps != lifted))
             throw RuntimeFault("$name: expected exact lifted exception, State# and boxed tuple contract")
     }
 }
@@ -80,9 +87,67 @@ internal class CatchException(private val shape: TupleShape,
             actionCall!!.execute(frame, requireClosure(force.execute(frame, action.execute(frame))), arrayOf(Unit))
             null
         } catch (guest: GuestException) { guest }
-        if (failure != null)
-            handlerCall!!.execute(frame, requireClosure(force.execute(frame, handler.execute(frame))),
-                arrayOf(failure.payload, Unit))
+        if (failure != null) {
+            val prior = SynchronousMasking.current(this)
+            if (prior == MaskingState.UNMASKED) SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE)
+            try {
+                handlerCall!!.execute(frame, requireClosure(force.execute(frame, handler.execute(frame))),
+                    arrayOf(failure.payload, Unit))
+            } finally { SynchronousMasking.set(this, prior) }
+        }
+        return null
+    }
+}
+
+/** The three GHC masking-state tags, local to a guest context and guest thread. */
+enum class MaskingState(val tag: Long) {
+    UNMASKED(0), MASKED_UNINTERRUPTIBLE(1), MASKED_INTERRUPTIBLE(2)
+}
+
+object SynchronousMasking {
+    @JvmStatic @TruffleBoundary fun current(node: Node): MaskingState = Language.currentState(node).maskingState.get()
+    @JvmStatic @TruffleBoundary fun set(node: Node, state: MaskingState) {
+        Language.currentState(node).maskingState.set(state)
+    }
+}
+
+internal class GetMaskingState(@field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("getMaskingState# requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        requireVoidCarrier(state.execute(frame))
+        FrameAccess.writeLong(frame, slots[offset], SynchronousMasking.current(this).tag)
+        return null
+    }
+}
+
+internal class UnmaskAsyncExceptions(private val shape: TupleShape,
+    @field:Child private var action: Expr, @field:Child private var state: Expr,
+    private val metrics: Metrics) : Expr() {
+    @Child private var force = Force(metrics)
+    @Child @Volatile private var actionCall: TupleDispatch? = null
+    @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
+    @CompilationFinal private var destinationOffset = -1
+    init { representation = shape.proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("unmaskAsyncExceptions# requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        requireVoidCarrier(state.execute(frame))
+        if (actionCall == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate()
+            atomic(Callable {
+                if (actionCall == null) {
+                    actionCall = insert(TupleDispatch(AstTupleDestination(shape, slots, offset), metrics, 1, false))
+                    destinationSlots = slots
+                    destinationOffset = offset
+                }
+            })
+        }
+        check(destinationSlots === slots && destinationOffset == offset)
+        val prior = SynchronousMasking.current(this)
+        SynchronousMasking.set(this, MaskingState.UNMASKED)
+        try {
+            actionCall!!.execute(frame, requireClosure(force.execute(frame, action.execute(frame))), arrayOf(Unit))
+        } finally { SynchronousMasking.set(this, prior) }
         return null
     }
 }

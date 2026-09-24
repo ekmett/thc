@@ -949,28 +949,34 @@ class Audit:
                             self.compare_shapes(proof, returned, owner, path + '/continuation-result', component=True)
                         elif not kept_reference(proof) or proof.get('primReps') != ['BoxedRep (Just Lifted)']:
                             self.issue('primitive-representation', owner, path, 'keepAlive#: partial continuation returns a lifted function')
-                if function[0] == 'prim' and function[1] in ('raiseIO#', 'catch#'):
+                if function[0] == 'prim' and function[1] in ('raiseIO#', 'catch#', 'unmaskAsyncExceptions#', 'getMaskingState#'):
                     def exception_role(rep, role):
                         if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
                             return False
                         if role == 'state':
                             return rep.get('kind') == 'void' and rep.get('primReps') == []
+                        if role == 'int':
+                            return rep.get('kind') == 'long' and rep.get('primReps') == ['IntRep']
                         return ((rep.get('kind') == 'closure' if role == 'closure' else
                                  rep.get('kind') in ('object', 'data', 'closure')) and
                                 rep.get('primReps') == ['BoxedRep (Just Lifted)'])
-                    roles = ('boxed', 'state') if function[1] == 'raiseIO#' else ('closure', 'closure', 'state')
+                    roles = {'raiseIO#': ('boxed', 'state'), 'catch#': ('closure', 'closure', 'state'),
+                             'unmaskAsyncExceptions#': ('closure', 'state'),
+                             'getMaskingState#': ('state',)}[function[1]]
                     actual = [self.expression_rep(argument) for argument in arguments]
                     if (len(actual) != len(roles) or flags != [role != 'state' for role in roles] or
                             any(not exception_role(rep, role) for rep, role in zip(actual, roles))):
                         self.issue('primitive-representation', owner, path,
                                    function[1] + ': exact lifted exception and State# arguments required')
                     fields = proof.get('components') if isinstance(proof, dict) else None
+                    output = 'int' if function[1] == 'getMaskingState#' else 'boxed'
+                    output_reps = ['IntRep'] if output == 'int' else ['BoxedRep (Just Lifted)']
                     if not (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
                             isinstance(fields, list) and len(fields) == 2 and
-                            exception_role(fields[0], 'state') and exception_role(fields[1], 'boxed') and
-                            proof.get('primReps') == ['BoxedRep (Just Lifted)']):
+                            exception_role(fields[0], 'state') and exception_role(fields[1], output) and
+                            proof.get('primReps') == output_reps):
                         self.issue('primitive-representation', owner, path,
-                                   function[1] + ': exact State#/lifted boxed tuple required')
+                                   function[1] + ': exact State#/result tuple required')
                 bytearray_primitive = (self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) or
                                        self.cap.get('managedPinnedMemoryPrimitives', {}).get(function[1])) if function[0] == 'prim' else None
                 if bytearray_primitive is not None:

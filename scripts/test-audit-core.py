@@ -767,6 +767,25 @@ class AuditTest(unittest.TestCase):
                 with self.subTest(name=name, field=field):
                     self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
 
+    def test_masking_state_primops_require_exact_continuation_state_and_int_result(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        for name, args, result in (
+                ('getMaskingState#', [state], tuple_rep(state, LONG)),
+                ('unmaskAsyncExceptions#', [CLOSURE, state], tuple_rep(state, REFERENCE))):
+            good = ['app', ['prim', name], [[*var('operand'), dict(rep=copy.deepcopy(rep))] for rep in args],
+                    [rep is not state for rep in args], False, False, dict(rep=copy.deepcopy(result))]
+            self.assertNotIn('primitive-representation', {issue['code'] for issue in run(good)['issues']})
+            for field in ('state', 'flags', 'result'):
+                bad = copy.deepcopy(good)
+                if field == 'state':
+                    bad[2][-1][-1]['rep'] = LONG
+                elif field == 'flags':
+                    bad[3][-1] = True
+                else:
+                    bad[-1]['rep']['components'][1] = REFERENCE if name == 'getMaskingState#' else LONG
+                with self.subTest(name=name, field=field):
+                    self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
+
     def test_floating_tuple_leaves_preserve_exact_proofs_and_reject_literal_alternatives(self):
         for kind, register in [('float', 'FloatRep'), ('double', 'DoubleRep')]:
             scalar = dict(kind=kind, primReps=[register], evaluated=True)

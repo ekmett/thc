@@ -31,10 +31,9 @@ def application(name):
 
 
 def audit_report(name):
-    frontier = name == 'handlerMaskState'
-    return dict(accepted=not frontier, missingGlobals=[], reachableBindings=[],
+    return dict(accepted=True, missingGlobals=[], reachableBindings=[],
                 primitives=[{'name': primitive} for primitive in sorted(recipe.REQUIRED[name])],
-                issues=[dict(code='unsupported-primitive', detail='getMaskingState#')] if frontier else [])
+                issues=[])
 
 
 class ContractAndModelTests(unittest.TestCase):
@@ -124,21 +123,21 @@ class ContractAndModelTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 recipe.validate_rows(bad, [0])
 
-    def test_synchronous_audit_is_accepted_but_masking_remains_a_frontier(self):
+    def test_synchronous_and_masking_state_audit_is_accepted(self):
         for name in recipe.ENTRIES:
-            self.assertEqual(name != 'handlerMaskState', recipe.classify_audit(audit_report(name), name)['accepted'])
+            self.assertTrue(recipe.classify_audit(audit_report(name), name)['accepted'])
         for mutation in ('unknown-primitive', 'missing-global', 'missing-required', 'other-issue', 'false-acceptance'):
             report = audit_report('handlerMaskState')
             if mutation == 'unknown-primitive':
-                report['issues'][0]['detail'] = 'fork#'
+                report['issues'] = [dict(code='unsupported-primitive', detail='fork#')]
             elif mutation == 'missing-global':
                 report['missingGlobals'] = ['absent']
             elif mutation == 'missing-required':
                 report['primitives'] = [{'name': 'catch#'}]
             elif mutation == 'other-issue':
-                report['issues'][0]['code'] = 'primitive-representation'
+                report['issues'] = [dict(code='primitive-representation', detail='bad')]
             else:
-                report['accepted'] = True
+                report['accepted'] = False
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 recipe.classify_audit(report, 'handlerMaskState')
 

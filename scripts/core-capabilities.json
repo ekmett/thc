@@ -301,6 +301,8 @@
     "raise#": 1,
     "raiseIO#": 2,
     "catch#": 3,
+    "unmaskAsyncExceptions#": 2,
+    "getMaskingState#": 1,
     "packInt64X2#": 1,
     "unpackInt64X2#": 1,
     "broadcastInt64X2#": 1,
