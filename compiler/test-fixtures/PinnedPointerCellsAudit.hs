@@ -182,3 +182,34 @@ wideStoreByte raw selector = runRW# (\s0 ->
         1# -> word2Int# (word8ToWord# byte); _ -> -1# }) #)
     } } } } } } } } }) of { (# _, I# answer #) -> answer }
   } } })
+
+-- Pure indexes and state-threaded 64-bit reads share one pinned image. All
+-- index displacements are relative to base+24, so the 32-bit accesses use
+-- negative element offsets while the 64-bit accesses use positive offsets.
+{-# OPAQUE wideReadSelector #-}
+wideReadSelector :: Int# -> Int# -> Int#
+wideReadSelector raw selector = runRW# (\s0 ->
+  case newPinnedByteArray# 64# s0 of { (# s1, mutable #) ->
+  case unsafeFreezeByteArray# mutable s1 of { (# s2, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s2 (\s3 ->
+    case writeInt32OffAddr# base 4# (intToInt32# raw) s3 of { s4 ->
+    case writeWord32OffAddr# base 5# (wordToWord32# (int2Word# (raw +# 17#))) s4 of { s5 ->
+    case writeIntOffAddr# base 3# raw s5 of { s6 ->
+    case writeWordOffAddr# base 4# (int2Word# (raw +# 33#)) s6 of { s7 ->
+    case writeInt64OffAddr# base 5# (intToInt64# raw) s7 of { s8 ->
+    case writeWord64OffAddr# base 6# (wordToWord64# (int2Word# (raw +# 49#))) s8 of { s9 ->
+    case plusAddr# base 24# of { origin ->
+    case selector of {
+      0# -> (# s9, I# (int32ToInt# (indexInt32OffAddr# origin (-2#))) #);
+      1# -> (# s9, I# (word2Int# (word32ToWord# (indexWord32OffAddr# origin (-1#)))) #);
+      2# -> (# s9, I# (indexIntOffAddr# origin 0#) #);
+      3# -> (# s9, I# (word2Int# (indexWordOffAddr# origin 1#)) #);
+      4# -> (# s9, I# (int64ToInt# (indexInt64OffAddr# origin 2#)) #);
+      5# -> (# s9, I# (word2Int# (word64ToWord# (indexWord64OffAddr# origin 3#))) #);
+      6# -> case readInt64OffAddr# origin 2# s9 of { (# s10, value #) ->
+              (# s10, I# (int64ToInt# value) #) };
+      _  -> case readWord64OffAddr# origin 3# s9 of { (# s10, value #) ->
+              (# s10, I# (word2Int# (word64ToWord# value)) #) }
+    } } } } } } } }) of { (# _, I# answer #) -> answer }
+  } } })

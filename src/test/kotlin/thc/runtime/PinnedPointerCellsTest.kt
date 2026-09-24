@@ -19,7 +19,7 @@ class PinnedPointerCellsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private data class Row(val input: Long, val pointer: Long, val array: Long, val order: Long,
         val char8: Long, val byte8: Long, val halfwordRead: Long, val halfwordWrite: Long,
-        val wideBytes: List<Long>)
+        val wideBytes: List<Long>, val wideReads: List<Long>)
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
@@ -122,6 +122,27 @@ class PinnedPointerCellsTest {
         return (16..55).map { bytes.get(it).toLong() and 255L }
     }
 
+    @Test fun wideIndexesUseElementOffsetsAndRejectPointerOverlap() {
+        val base = ManagedAddress.fromAllocation(PinnedMemory.allocate(64, 1))
+        base.writeNativeScalar(4, 4, -1)
+        base.writeNativeScalar(5, 8, 0x123456789abcdef)
+        val derived = base.plus(24)
+        assertEquals(-1L, ManagedAddressRead.INT32.read(derived, -2))
+        assertEquals(0xffffffffL, ManagedAddressRead.WORD32.read(derived, -2))
+        assertEquals(0x123456789abcdefL, ManagedAddressRead.INT64.read(derived, 2))
+        assertEquals(0x123456789abcdefL, ManagedAddressRead.WORD64.read(derived, 2))
+        for (operation in listOf(ManagedAddressRead.INT32, ManagedAddressRead.WORD64))
+            for (index in listOf(Long.MIN_VALUE, Long.MAX_VALUE))
+                assertThrows(RuntimeFault::class.java) { operation.read(derived, index) }
+        val target = base.plus(56)
+        base.writeAddressElementIndex(1, target)
+        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD64.read(base, 1) }
+        assertSame(target, base.readAddressElementIndex(1))
+    }
+
+    private fun wideReadModel(input: Long): List<Long> = listOf(input.toInt().toLong(),
+        (input + 17) and 0xffffffffL, input, input + 33, input, input + 49, input, input + 49)
+
     private fun halfwordModel(input: Long): Long {
         val bytes = ByteBuffer.allocate(32).order(ByteOrder.nativeOrder())
         bytes.putShort(24, input.toShort())
@@ -143,10 +164,10 @@ class PinnedPointerCellsTest {
             }
         val rows = File(root, "build/pinned-pointer-cells/oracle.tsv").readLines().map { line ->
             val fields = line.split('\t')
-            assertEquals(9, fields.size)
+            assertEquals(10, fields.size)
             Row(fields[0].toLong(), fields[1].toLong(), fields[2].toLong(), fields[3].toLong(),
                 fields[4].toLong(), fields[5].toLong(), fields[6].toLong(), fields[7].toLong(),
-                fields[8].split(',').map(String::toLong))
+                fields[8].split(',').map(String::toLong), fields[9].split(',').map(String::toLong))
         }
         assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, 32767L, 32768L, 65535L,
             4294967297L, 81985529216486895L, -1L, -32768L),
@@ -166,6 +187,7 @@ class PinnedPointerCellsTest {
                 (halfword shl 16) + halfword, row.halfwordRead)
             assertEquals(halfwordModel(row.input), row.halfwordWrite)
             assertEquals(wideStoreModel(row.input), row.wideBytes)
+            assertEquals(wideReadModel(row.input), row.wideReads)
         }
         for (stage in listOf("pre", "post")) {
             val directory = File(root, "build/pinned-pointer-cells/$stage")
@@ -184,12 +206,23 @@ class PinnedPointerCellsTest {
                 "writeInt16OffAddr#", "writeWord16OffAddr#",
                 "writeInt32OffAddr#", "writeWord32OffAddr#", "writeIntOffAddr#",
                 "writeWordOffAddr#", "writeInt64OffAddr#", "writeWord64OffAddr#",
+                "indexInt32OffAddr#", "indexWord32OffAddr#", "indexIntOffAddr#",
+                "indexWordOffAddr#", "indexInt64OffAddr#", "indexWord64OffAddr#",
+                "readInt64OffAddr#", "readWord64OffAddr#",
                 "readWord8OffAddr#", "indexWord8Array#")))
+            for (primitive in setOf("indexInt32OffAddr#", "indexWord32OffAddr#",
+                "indexIntOffAddr#", "indexWordOffAddr#", "indexInt64OffAddr#", "indexWord64OffAddr#",
+                "readInt64OffAddr#", "readWord64OffAddr#")) {
+                val evidence = (audit["primitives"] as List<Map<String, Any?>>).single { it["name"] == primitive }
+                val owners = (evidence["uses"] as List<Map<String, Any?>>).map { it["owner"] }.toSet()
+                assertEquals(setOf("main:PinnedPointerCellsAudit.wideReadSelector"), owners, "$stage/$primitive")
+            }
             for (primitive in setOf("writeInt32OffAddr#", "writeWord32OffAddr#",
                 "writeIntOffAddr#", "writeWordOffAddr#", "writeInt64OffAddr#", "writeWord64OffAddr#")) {
                 val evidence = (audit["primitives"] as List<Map<String, Any?>>).single { it["name"] == primitive }
                 val owners = (evidence["uses"] as List<Map<String, Any?>>).map { it["owner"] }.toSet()
-                assertEquals(setOf("main:PinnedPointerCellsAudit.wideStoreByte"), owners, "$stage/$primitive")
+                assertEquals(setOf("main:PinnedPointerCellsAudit.wideStoreByte",
+                    "main:PinnedPointerCellsAudit.wideReadSelector"), owners, "$stage/$primitive")
             }
             for (primitive in setOf("readInt8OffAddr#", "writeInt8OffAddr#", "indexInt8OffAddr#",
                 "indexWord8OffAddr#", "writeInt16OffAddr#", "writeWord16OffAddr#")) {
@@ -279,6 +312,32 @@ class PinnedPointerCellsTest {
                             after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         }
                         assertTrue(after > before, "$stage/$backend/$entry/${row.input}: $before->$after")
+                    }
+                    val readEntry = "wideReadSelector"
+                    val readSource = CoreModules.reachable(merged, readEntry) + ("instrument" to true)
+                    val readProgram: ExecutableProgram = if (backend == "ast") Program(language, readSource)
+                        else BytecodeProgram(language, readSource)
+                    val readFunction = context.asValue(EntryValue(readProgram, readEntry, 2))
+                    fun checkRead(row: Row, selectors: IntProgression) {
+                        for (selector in selectors)
+                            assertEquals(row.wideReads[selector], readFunction.execute(row.input, selector).asLong(),
+                                "$stage/$backend/$readEntry/${row.input}/$selector")
+                        assertEquals(0L, (readProgram.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                    }
+                    rows.filter { it.input in Int.MIN_VALUE..Int.MAX_VALUE }.forEach { checkRead(it, 0..7) }
+                    assertTrue(readFunction.invokeMember("compile").asBoolean(), "$stage/$backend/$readEntry compilation")
+                    valid(readProgram.hostEntryTarget(2), "$stage/$backend/$readEntry host target after compilation")
+                    for (row in rows.asReversed()) {
+                        val before = (readProgram.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        checkRead(row, 7 downTo 0)
+                        var after = (readProgram.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        if (after == before) {
+                            assertTrue(readFunction.invokeMember("compile").asBoolean(),
+                                "$stage/$backend/$readEntry recompilation")
+                            checkRead(row, 7 downTo 0)
+                            after = (readProgram.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        }
+                        assertTrue(after > before, "$stage/$backend/$readEntry/${row.input}: $before->$after")
                     }
                 } finally { context.leave() }
             }
