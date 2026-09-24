@@ -59,6 +59,22 @@ An isolated cold bounds-transition test follows the existing memory-family
 pattern: explicitly compile one fresh guest, invalidate on its first invalid
 access, verify no effects, then recover without recompilation.
 
-This document describes the implementation and required checks, not completion
-of the full validation campaign. No big-endian execution, non-x86 packed code,
-throughput, no-spill or globally allocation-free behavior is claimed.
+## Verified x86-64 checkpoint
+
+Frozen source `b6ba65f3ba54f937e2b88f61f04e7e4f425a1e5c` passes all 4,384
+native/model rows, 545 JVM tests in each of default and dense-handoff modes,
+and 294 Python checks both normally and under `-O`, with no final skips.
+Each complete JVM mode requires 35,072 compiled calls and 104,704 exact guest
+entries. The separate 96 cold-transition cases pass without partial effects.
+
+Sixteen Double captures pass on first check: 512 installed-target comparisons,
+sixteen live f64 lane products, sixteen exact store inputs, eight XMM
+VMOVDQU32 loads and eight XMM VMOVUPD stores. Fresh Int32, Word32 and Float
+regressions also pass sixteen captures each on the same runtime, totaling
+64 accepted graph/LIR records and 3,840 installed-target comparisons.
+No runtime or reader correction, compiler-budget increase or guest retry was
+needed in this campaign. The [retained evidence](../bench/experiments/doublex2-bytearray/evidence-x86_64/README.md)
+records source/binary hashes, commands, first development-test failures and scope.
+
+No big-endian execution, non-x86 packed code, throughput, no-spill or globally
+allocation-free behavior is claimed.

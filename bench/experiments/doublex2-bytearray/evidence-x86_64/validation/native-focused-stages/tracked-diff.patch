@@ -1,0 +1,195 @@
+diff --git a/.github/workflows/build.yml b/.github/workflows/build.yml
+index a6f754c..29c7897 100644
+--- a/.github/workflows/build.yml
++++ b/.github/workflows/build.yml
+@@ -122,6 +122,8 @@ jobs:
+           assert proof['nativeRows'] == 9666 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+           proof = json.loads(Path('build/simd-floatx4-bytearray/provenance.json').read_text())
+           assert proof['nativeRows'] == 6720 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
++          proof = json.loads(Path('build/simd-doublex2-bytearray/provenance.json').read_text())
++          assert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+           PY
+       - name: Test opt-in dense handoff
+         env:
+@@ -163,6 +165,8 @@ jobs:
+           python3 scripts/test-core-word32-vector-memory.py
+           python3 scripts/test-floatx4-bytearray-model.py
+           python3 scripts/test-core-float-vector-memory.py
++          python3 scripts/test-doublex2-bytearray-model.py
++          python3 scripts/test-core-double-vector-memory.py
+           python3 scripts/test-core-bytearrays.py
+           python3 scripts/test-core-arrays.py
+           python3 scripts/test-core-mutvars.py
+@@ -293,6 +297,7 @@ jobs:
+             build/simd-int32x4-bytearray/
+             build/simd-word32x4-bytearray/
+             build/simd-floatx4-bytearray/
++            build/simd-doublex2-bytearray/
+             build/signed-narrow-primops/manifest.json
+             build/signed-narrow-primops/oracle.tsv
+             build/signed-narrow-primops/*.audit.json
+diff --git a/README.md b/README.md
+index 4879189..12f279c 100644
+--- a/README.md
++++ b/README.md
+@@ -122,6 +122,9 @@ four observed lanes.
+ The [FloatX4 ByteArray slice](docs/floatx4-bytearray.md) adds six floating
+ counterparts with exact raw-bit movement, immediate State/vector reads and
+ verified packed caller-array loads/stores on both backends.
++The [DoubleX2 ByteArray slice](docs/doublex2-bytearray.md) adds the six binary64
++counterparts with two-lane raw-bit witnesses and 16-byte or 8-byte offset units,
++without expanding vector transport.
+ 
+ Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
+ scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
+diff --git a/build.gradle.kts b/build.gradle.kts
+index 386cf91..b209943 100644
+--- a/build.gradle.kts
++++ b/build.gradle.kts
+@@ -79,6 +79,7 @@ tasks.test {
+             "simd-int32x4-bytearray/**/*.json", "simd-int32x4-bytearray/*.tsv", "simd-int32x4-bytearray/native/int32x4-bytearray-oracle",
+             "simd-word32x4-bytearray/**/*.json", "simd-word32x4-bytearray/*.tsv", "simd-word32x4-bytearray/native/word32x4-bytearray-oracle",
+             "simd-floatx4-bytearray/**/*.json", "simd-floatx4-bytearray/*.tsv", "simd-floatx4-bytearray/native/floatx4-bytearray-oracle",
++            "simd-doublex2-bytearray/**/*.json", "simd-doublex2-bytearray/*.tsv", "simd-doublex2-bytearray/native/doublex2-bytearray-oracle",
+             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
+             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
+     })
+@@ -102,6 +103,7 @@ tasks.test {
+             "prepare-int32x4-bytearray-audit.py", "int32x4_bytearray_model.py", "test-int32x4-bytearray-model.py", "test-core-vector-memory.py",
+             "prepare-word32x4-bytearray-audit.py", "word32x4_bytearray_model.py", "test-word32x4-bytearray-model.py", "test-core-word32-vector-memory.py",
+             "prepare-floatx4-bytearray-audit.py", "floatx4_bytearray_model.py", "test-floatx4-bytearray-model.py", "test-core-float-vector-memory.py",
++            "prepare-doublex2-bytearray-audit.py", "doublex2_bytearray_model.py", "test-doublex2-bytearray-model.py", "test-core-double-vector-memory.py",
+             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
+             "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py")
+     })
+diff --git a/docs/doublex2.md b/docs/doublex2.md
+index d286f8d..9390233 100644
+--- a/docs/doublex2.md
++++ b/docs/doublex2.md
+@@ -19,9 +19,10 @@ production graphs; type acceptance alone does not establish either claim.
+ No vector ABI boundary is added. Vector function arguments/results, PAP prefixes,
+ captures, ordinary lets, join arguments/results, constructor fields and tuple
+ leaves remain unsupported. Division, negation, FMA, comparisons, other shapes,
+-vector array access, addresses and FFI are outside this slice. In particular,
+-`indexDoubleX2Array#` and `indexDoubleArrayAsDoubleX2#` have different index units
+-and are both unsupported; scalar Double-array coverage is independent.
++addresses and FFI are outside this slice. The separate
++[DoubleX2 ByteArray slice](doublex2-bytearray.md) adds six local memory operations:
++`indexDoubleX2Array#` and `indexDoubleArrayAsDoubleX2#` have different index units.
++Scalar Double-array coverage remains independent.
+ 
+ ## Correctness gates
+ 
+diff --git a/scripts/prepare-doublex2-bytearray-audit.py b/scripts/prepare-doublex2-bytearray-audit.py
+index 6f34096..9ace7b5 100644
+--- a/scripts/prepare-doublex2-bytearray-audit.py
++++ b/scripts/prepare-doublex2-bytearray-audit.py
+@@ -205,7 +205,7 @@ def family_controls(module, path, auditor, capabilities, element):
+             worker = next(b for b in changed['bindings'] if b['name'] == family+operation+'Worker')
+             call = next(x for x in expressions(worker['expr'], 'app') if x[1][:1] == ['prim'] and x[1][1] in OPERATIONS)
+             proof = representation(call) if operation == 'Index' else representation(call)['components'][1] if operation == 'Read' else representation(call[2][2])
+-            lanes = 2 if element == 'DoubleElemRep' else 4
++            lanes = 2 if element in ('DoubleElemRep', 'Int64ElemRep') else 4
+             proof['primReps'] = [f'VecRep {lanes} {element}']; proof['vector'] = dict(lanes=lanes, element=element)
+             detail = {'Index': 'result representation', 'Read': 'read result components', 'Write': 'argument representation'}[operation]
+             expected = {('malformed-expression', 'Invalid local vector memory intrinsic: '+detail): 1}
+@@ -298,7 +298,7 @@ def main():
+             structure[stage]['entries'][entry['name']] = facts
+             calls[stage+'/'+entry['name']] = facts['guestCalls']
+         controls[stage] = {element: family_controls(module, path, auditor, capabilities, element)
+-                           for element in ('Int32ElemRep', 'Word32ElemRep', 'FloatElemRep')}
++                           for element in ('Int64ElemRep', 'Int32ElemRep', 'Word32ElemRep', 'FloatElemRep')}
+         audit_path = OUT/f'{stage}-audit.json'
+         audit_path.write_text(json.dumps(audits[stage], indent=2)+'\n')
+         artifacts += [path, audit_path]
+diff --git a/scripts/prepare-tests.sh b/scripts/prepare-tests.sh
+index 100c039..721139a 100755
+--- a/scripts/prepare-tests.sh
++++ b/scripts/prepare-tests.sh
+@@ -78,6 +78,10 @@ case "$(uname -m)" in
+   arm64|aarch64) python3 scripts/prepare-floatx4-bytearray-audit.py --export-only ;;
+   *) python3 scripts/prepare-floatx4-bytearray-audit.py ;;
+ esac
++case "$(uname -m)" in
++  arm64|aarch64) python3 scripts/prepare-doublex2-bytearray-audit.py --export-only ;;
++  *) python3 scripts/prepare-doublex2-bytearray-audit.py ;;
++esac
+ python3 scripts/prepare-explicit64-primops.py
+ compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs
+ python3 scripts/check-speculation-metadata.py
+diff --git a/scripts/test-core-double-vector-memory.py b/scripts/test-core-double-vector-memory.py
+index 56036ba..ab3645b 100644
+--- a/scripts/test-core-double-vector-memory.py
++++ b/scripts/test-core-double-vector-memory.py
+@@ -7,7 +7,7 @@ from pathlib import Path
+ import unittest
+ 
+ from core_vector_memory import ARRAY, INDEX, STATE, DOUBLE_OPERATIONS as OPERATIONS, DOUBLE_READS as READS, DOUBLE_INDICES as INDICES, DOUBLE_WRITES as WRITES, read_case, validate_direct
+-from core_vectors import VECTOR_DOUBLE_REP, VECTOR32_REP, TUPLE_DOUBLE_REP, LANE_DOUBLE_REP, proof_error
++from core_vectors import VECTOR_DOUBLE_REP, VECTOR32_REP, VECTOR_REP, TUPLE_DOUBLE_REP, LANE_DOUBLE_REP, proof_error
+ 
+ ROOT = Path(__file__).resolve().parent
+ spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
+@@ -72,6 +72,24 @@ def check(module):
+ 
+ 
+ class DoubleVectorMemoryProofTest(unittest.TestCase):
++    def test_same_width_two_lane_integer_proof_is_not_double_memory(self):
++        self.assertIsNone(proof_error(VECTOR_REP))
++        for name in OPERATIONS:
++            sites = ('producer', 'whole', 'producer-component', 'whole-component', 'pattern') if name in READS else ('direct',)
++            for site in sites:
++                module, app, body = fixture(name)
++                if site == 'direct':
++                    proof = app[2][2][6]['rep'] if name in WRITES else app[6]['rep']
++                else:
++                    producer, whole = app[6]['rep'], body[4]['binder']['rep']
++                    proof = {'producer': producer, 'whole': whole,
++                             'producer-component': producer['components'][1],
++                             'whole-component': whole['components'][1],
++                             'pattern': body[3][0][4]['binders'][1]['rep']}[site]
++                proof['primReps'] = copy.deepcopy(VECTOR_REP['primReps'])
++                proof['vector'] = copy.deepcopy(VECTOR_REP['vector'])
++                self.assertFalse(check(module)['accepted'], (name, site))
++
+     def test_all_six_contracts_and_no_generic_field_expansion(self):
+         self.assertEqual(len(OPERATIONS), 6)
+         for name in sorted(OPERATIONS):
+diff --git a/src/test/kotlin/thc/runtime/DoubleVectorMemoryProofTest.kt b/src/test/kotlin/thc/runtime/DoubleVectorMemoryProofTest.kt
+index eee4273..4b60f09 100644
+--- a/src/test/kotlin/thc/runtime/DoubleVectorMemoryProofTest.kt
++++ b/src/test/kotlin/thc/runtime/DoubleVectorMemoryProofTest.kt
+@@ -27,7 +27,9 @@ class DoubleVectorMemoryProofTest {
+         "evaluated" to true, "vector" to mapOf("lanes" to 2, "element" to "DoubleElemRep"))
+     private val signedVector = vector + mapOf("primReps" to listOf("VecRep 4 Int32ElemRep"),
+         "vector" to mapOf("lanes" to 4, "element" to "Int32ElemRep"))
+-    private val wrongVectors = listOf(signedVector,
++    private val sameWidthIntegerVector = vector + mapOf("primReps" to listOf("VecRep 2 Int64ElemRep"),
++        "vector" to mapOf("lanes" to 2, "element" to "Int64ElemRep"))
++    private val wrongVectors = listOf(sameWidthIntegerVector, signedVector,
+         vector + mapOf("primReps" to listOf("VecRep 4 Word32ElemRep"),
+             "vector" to mapOf("lanes" to 4, "element" to "Word32ElemRep")),
+         vector + mapOf("primReps" to listOf("VecRep 4 FloatElemRep"),
+@@ -229,6 +231,7 @@ class DoubleVectorMemoryProofTest {
+ 
+     @Test fun immediateReadCasesRejectEscapesWrongShapesAndPatternMetadata() {
+         val mutations = listOf("whole-escape", "missing-vector", "signed-result", "width", "components", "component-state", "component-unknown",
++            "same-width-result", "same-width-whole", "same-width-component", "same-width-whole-component", "same-width-pattern",
+             "default", "multiple", "constructor", "arity", "duplicate-pattern", "whole-pattern", "pattern-order",
+             "pattern-state", "pattern-signed", "pattern-unknown", "whole-levity", "pattern-levity", "whole-coercion", "pattern-coercion",
+             "missing-whole-coercion", "missing-pattern-coercion", "whole-id", "whole-unevaluated", "pattern-unevaluated", "outer-result")
+@@ -241,6 +244,14 @@ class DoubleVectorMemoryProofTest {
+                     "whole-escape" -> alternative[3] = mutableListOf<Any?>("var", "whole")
+                     "missing-vector" -> result.remove("vector")
+                     "signed-result" -> { result["vector"] = signedVector["vector"]; result["primReps"] = signedVector["primReps"] }
++                    "same-width-result" -> { result["vector"] = sameWidthIntegerVector["vector"]; result["primReps"] = sameWidthIntegerVector["primReps"] }
++                    "same-width-whole" -> {
++                        map(whole["rep"])["vector"] = copy(sameWidthIntegerVector["vector"])
++                        map(whole["rep"])["primReps"] = copy(sameWidthIntegerVector["primReps"])
++                    }
++                    "same-width-component" -> list(result["components"])[1] = copy(sameWidthIntegerVector)
++                    "same-width-whole-component" -> list(map(whole["rep"])["components"])[1] = copy(sameWidthIntegerVector)
++                    "same-width-pattern" -> map(records[1])["rep"] = copy(sameWidthIntegerVector)
+                     "width" -> map(result["vector"])["lanes"] = 4
+                     "components" -> list(result["components"]).reverse()
+                     "component-state" -> list(result["components"])[0] = copy(integer)

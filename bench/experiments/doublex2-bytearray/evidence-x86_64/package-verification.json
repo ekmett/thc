@@ -1,0 +1,88 @@
+{
+  "sourceRevision": "b6ba65f3ba54f937e2b88f61f04e7e4f425a1e5c",
+  "nativeRows": 4384,
+  "selectedHostOnlySnanRows": 576,
+  "selectedNativeSourceHashes": 20,
+  "nativeArtifactHashes": 9,
+  "nativeProvenanceSha256": "a4bffa1cb13dbb5a883601a0ca123cd04af9cc104ec140005be81154fa0628df",
+  "suites": {
+    "first-focused": {
+      "tests": 10,
+      "suites": 2
+    },
+    "native-focused": {
+      "tests": 15,
+      "suites": 3
+    },
+    "full-default": {
+      "tests": 545,
+      "suites": 112
+    },
+    "full-dense": {
+      "tests": 545,
+      "suites": 112
+    }
+  },
+  "compiledCallsPerMode": 35072,
+  "exactCompiledGuestEntriesPerMode": 104704,
+  "coldTransitionsPerMode": 96,
+  "pythonTests": {
+    "normal": 294,
+    "optimized": 294
+  },
+  "families": {
+    "doublex2": {
+      "captures": 16,
+      "installedTargetComparisons": 512,
+      "physicalInstructions": 16,
+      "evidenceSha256": "abd45fa1ff4de2d4ad5b039116053aa57aac7f47ca4db95da20a9f1b08f9add2",
+      "snapshotRecords": {
+        "sources": 75,
+        "runtimeJars": 11,
+        "jdkFiles": 4
+      },
+      "loadLaneProducts": 16,
+      "storeLaneInputs": 16
+    },
+    "int32x4": {
+      "captures": 16,
+      "installedTargetComparisons": 1152,
+      "physicalInstructions": 16,
+      "evidenceSha256": "a673c91bec7db6cb484e7206ec4077f70046c48b6d93568cb2b3e89676396605",
+      "snapshotRecords": {
+        "sources": 75,
+        "runtimeJars": 11,
+        "jdkFiles": 4
+      }
+    },
+    "word32x4": {
+      "captures": 16,
+      "installedTargetComparisons": 1152,
+      "physicalInstructions": 16,
+      "evidenceSha256": "7a53cf1587c61fa524356cb9bf2139d736ea8b9a6af4876f86b6efdb01e8e4a4",
+      "snapshotRecords": {
+        "sources": 75,
+        "runtimeJars": 11,
+        "jdkFiles": 4
+      }
+    },
+    "floatx4": {
+      "captures": 16,
+      "installedTargetComparisons": 1024,
+      "physicalInstructions": 16,
+      "evidenceSha256": "b5f9c9c2608778254e6cc19c53a8b2d650e4482d67910f978cde0d6a2a8127f5",
+      "snapshotRecords": {
+        "sources": 75,
+        "runtimeJars": 11,
+        "jdkFiles": 4
+      },
+      "loadLaneProducts": 32,
+      "storeLaneInputs": 32
+    }
+  },
+  "copiedFiles": 800,
+  "verifiedArchives": 6,
+  "rawGraphsRehashed": true,
+  "archiveContentsReverified": true,
+  "firstReaderTestFailure": "Explicit reconstruction of stale inherited test expectations; reader unchanged by correction."
+}
