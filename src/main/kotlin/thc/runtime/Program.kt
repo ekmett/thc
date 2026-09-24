@@ -621,7 +621,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             val result = if (returned is TailYield) returned.continuation else returned
             if (result is ContinuationResult) {
-                if (returned !is TailYield && result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
+                if (returned !is TailYield && !sameContinuationBody(result.continuationRootNode.sourceRootNode,
+                        continuation.continuationRootNode.sourceRootNode))
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
                 val parkedMask = (result.result as? CallSegmentSuspended)?.parkedActiveMask
                 if (parkedMask != null && SynchronousMasking.current(this) != segment.callerMask)
@@ -741,7 +742,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             if (result is ContinuationResult) {
                 val expectedRoot = continuation?.continuationRootNode?.sourceRootNode
                     ?: thunk.target?.rootNode
-                if (returned !is TailYield && result.continuationRootNode.sourceRootNode !== expectedRoot)
+                if (returned !is TailYield && !sameContinuationBody(result.continuationRootNode.sourceRootNode, expectedRoot))
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
                 val request = AsyncContinuations.request(result)
                 publishContinuation(thunk, result)
@@ -778,6 +779,9 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             throw e
         }
     }
+
+    private fun sameContinuationBody(actual: Any, expected: Any?): Boolean =
+        actual === expected || actual is GuestRoot && expected is GuestRoot && actual.isSelf(expected.callTarget)
 
     private fun publishContinuation(thunk: Thunk, continuation: ContinuationResult) {
         // A side-effecting thread-local action must not unwind between storing

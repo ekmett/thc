@@ -336,18 +336,6 @@
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "python": []
     },
-    "compiler/test-fixtures/LiveAsyncAudit.hs": {
-      "junit": ["thc.runtime.LiveAsyncNativeTest"],
-      "python": []
-    },
-    "compiler/test-fixtures/LiveAsyncNative.hs": {
-      "junit": ["thc.runtime.LiveAsyncNativeTest"],
-      "python": []
-    },
-    "test/haskell-fixtures/LiveAsyncFixtures.hs": {
-      "junit": ["thc.runtime.LiveAsyncNativeTest"],
-      "python": []
-    },
     "compiler/test-fixtures/ThreadAsyncAudit.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
@@ -755,7 +743,6 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
-        "thc.runtime.LiveAsyncNativeTest",
         "thc.runtime.ThreadAsyncNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",

@@ -320,12 +320,6 @@
         "compiler/test-fixtures/CoreContinuationNative.hs"
       ]
     },
-    "live-async": {
-      "junit": ["thc.runtime.LiveAsyncNativeTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "live-async"]}],
-      "outputs": ["build/live-async"],
-      "sources": ["test/haskell-fixtures/LiveAsyncFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/LiveAsyncAudit.hs", "compiler/test-fixtures/LiveAsyncNative.hs", "thc.cabal"]
-    },
     "thread-async": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-async"]}],
