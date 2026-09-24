@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from core_vectors import OPERATIONS, proof_error, signature_matches
-from simd_family_model import float_operation
+from simd_family_model import float_operation, result
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location('simd_generator', ROOT / 'scripts/generate-simd-families.py')
@@ -49,7 +49,7 @@ class SimdFamiliesTest(unittest.TestCase):
 
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(25, len(GEN.contracts(families)))
+        self.assertEqual(31, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'
@@ -78,6 +78,16 @@ class SimdFamiliesTest(unittest.TestCase):
             self.assertIn(f'.SPECIES_{family["bits"]}', source)
             for forbidden in ('Object', '[]', 'SPECIES_PREFERRED', 'VectorSpecies'):
                 self.assertNotIn(forbidden, source)
+
+    def test_word32_lanes_observe_unsigned_bits_in_both_backends(self):
+        family = next(f for f in GEN.families() if f['name'] == 'Word32X8')
+        self.assertEqual((1 << 32) - 1 + 17, result(family, 'broadcast', 0, -1, 0))
+        self.assertEqual((1 << 32) - 2 + 17, result(family, 'plus', 0, -1, -1))
+        ast = GEN.ast_code([family])
+        bytecode = GEN.bytecode_nodes([family])
+        for i in range(family['lanes']):
+            self.assertIn(f'value.lane{i}.toLong() and 0xffff_ffffL', ast)
+            self.assertIn(f'value.lane{i} & 0xffff_ffffL', bytecode)
 
     def test_contradictory_tables_are_rejected(self):
         original = json.loads(GEN.SPEC.read_text())

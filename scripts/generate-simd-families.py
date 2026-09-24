@@ -16,6 +16,7 @@ SPEC = ROOT / 'scripts/simd-families.json'
 # primitive scalar type, bit width, Java Vector type, Kotlin carrier accessor
 LANES = {
     'Int32Rep': ('int', 32, 'IntVector', 'Long'),
+    'Word32Rep': ('int', 32, 'IntVector', 'Long'),
     'Word64Rep': ('long', 64, 'LongVector', 'Long'),
     'Int64Rep': ('long', 64, 'LongVector', 'Long'),
     'FloatRep': ('float', 32, 'FloatVector', 'Float'),
@@ -139,7 +140,7 @@ def proof_code(fs):
 def ast_code(fs):
     lines=[HEADER,'package thc.runtime\n','import com.oracle.truffle.api.CompilerDirectives.CompilationFinal','import com.oracle.truffle.api.frame.VirtualFrame\n']
     for f in fs:
-        n=f['name'];count=f['lanes'];_,_,_,access=LANES[f['laneRep']]; cast='.toInt()' if f['laneRep']=='Int32Rep' else ''
+        n=f['name'];count=f['lanes'];_,_,_,access=LANES[f['laneRep']]; cast='.toInt()' if f['laneRep'] in ('Int32Rep', 'Word32Rep') else ''
         if 'pack' in f['operations']:
             lines += [f'internal class Generated{n}Pack(@field:Child private var argument: Expr,',
                       '    @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {',
@@ -153,8 +154,9 @@ def ast_code(fs):
                       '    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {',
                       f'        val value = argument.execute(frame) as? {n} ?: fault("Expected {n}#")']
             for i in range(count):
-                wide='.toLong()' if cast else ''
-                lines.append(f'        FrameAccess.write{access}(frame, slots[offset + {i}], value.lane{i}{wide})')
+                lane = (f'value.lane{i}.toLong() and 0xffff_ffffL' if f['laneRep'] == 'Word32Rep'
+                        else f'value.lane{i}.toLong()' if cast else f'value.lane{i}')
+                lines.append(f'        FrameAccess.write{access}(frame, slots[offset + {i}], {lane})')
             lines += ['        return null','    }','}']
         ops=[op for op in f['operations'] if op not in ('pack','unpack')]
         lines += [f'internal class Generated{n}Operation(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {{',
@@ -182,7 +184,9 @@ def bytecode_nodes(fs):
                 lines += [f'    public static final class {node} {{',
                           '        @Specialization public static void apply(VirtualFrame frame, '+', '.join(f'LocalAccessor lane{i}' for i in range(count))+f', {n} value, @Bind("$node") Node node) {{',
                           '            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();']
-                lines += [f'            lane{i}.set{access}(bytecode, frame, value.lane{i});' for i in range(count)]
+                lane = (lambda i: f'value.lane{i} & 0xffff_ffffL' if f['laneRep'] == 'Word32Rep'
+                        else f'value.lane{i}')
+                lines += [f'            lane{i}.set{access}(bytecode, frame, {lane(i)});' for i in range(count)]
                 lines += ['        }','    }']
             else:
                 if op=='pack':
@@ -231,6 +235,7 @@ def fixture_sources(fs):
               '  _ -> word2Int# (word64ToWord# (castDoubleToWord64# value))', '']
     convert = {
         'Int32Rep': lambda x: f'intToInt32# ({x})',
+        'Word32Rep': lambda x: f'wordToWord32# (int2Word# ({x}))',
         'Int64Rep': lambda x: f'intToInt64# ({x})',
         'Word64Rep': lambda x: f'wordToWord64# (int2Word# ({x}))',
         'FloatRep': lambda x: f'castWord32ToFloat# (wordToWord32# (int2Word# ({x})))',
@@ -256,7 +261,9 @@ def fixture_sources(fs):
             source += [f'  case unpack{n}# ({vector}) of',
                        '    (# ' + ', '.join(f'p{i}' for i in range(count)) + ' #) -> case lane of']
             for i in range(count):
-                value = f'word2Int# (word64ToWord# p{i})' if rep == 'Word64Rep' else f'{observe[rep]} p{i}'
+                value = (f'word2Int# (word64ToWord# p{i})' if rep == 'Word64Rep'
+                         else f'word2Int# (word32ToWord# p{i})' if rep == 'Word32Rep'
+                         else f'{observe[rep]} p{i}')
                 source.append(f'      {str(i)+"#" if i < count-1 else "_"} -> {value}')
             source += [f'{name} :: Int# -> Int# -> Int# -> Int#',
                        f'{name} lane a b = case {worker} lane a b of value -> value +# 17#', '']

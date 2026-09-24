@@ -147,7 +147,7 @@ def main():
     sources += [ROOT / 'compiler' / name for name in ('build.sh', 'export.sh', 'toolchain.sh')]
     sources += sorted(GENERATED.glob('*.hs'))
     sources += [ROOT / 'src/main/resources/thc/scalar-primop-signatures.json']
-    manifest = dict(schema=1, scope='25 experimental local SIMD operations; no vector ABI or advertised capability change',
+    manifest = dict(schema=1, scope=f'{len(contracts)} experimental local SIMD operations; no vector ABI or advertised capability change',
                     stages=stages, modelRows=len(expected), nativeRows=native_rows,
                     structures=structures, entries=[dict(name=n, lanes=f['lanes'], operation=o) for n, f, o in entries()],
                     inputs=[record(p) for p in sources], artifacts=[record(p) for p in artifacts], commands=commands,
