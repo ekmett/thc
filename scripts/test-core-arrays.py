@@ -53,14 +53,14 @@ class ArrayContracts(unittest.TestCase):
                 self.assertIn('primitive-representation',codes(module),(name,change))
 
     def test_index_singleton_and_state_pair_are_not_interchangeable(self):
-        for name in ('newArray#','readArray#','unsafeFreezeArray#','indexArray#'):
+        for name in ('newArray#','readArray#','unsafeFreezeArray#','freezeArray#','thawArray#','indexArray#'):
             module,app=fixture(name);fields=app[6]['rep']['components']
             if name=='indexArray#':fields.insert(0,dict(kind='void',primReps=[]))
             else:fields.pop(0)
             self.assertIn('primitive-representation',codes(module),name)
 
     def test_state_is_not_empty_aggregate_and_payload_is_not_flat_scalar(self):
-        for name in ('newArray#','readArray#','unsafeFreezeArray#'):
+        for name in ('newArray#','readArray#','unsafeFreezeArray#','freezeArray#','thawArray#'):
             module,app=fixture(name)
             app[6]['rep']['components'][0].update(kind='unknown',aggregate='unboxed-tuple',components=[])
             self.assertIn('primitive-representation',codes(module),name)
@@ -79,10 +79,19 @@ class ArrayContracts(unittest.TestCase):
                 app[6]['rep']['primReps']=['BoxedRep (Just Unlifted)'];self.assertIn('primitive-representation',codes(module))
 
     def test_lexical_lifted_storage_proof_cannot_be_relabelled(self):
-        for name in ('readArray#','writeArray#','unsafeFreezeArray#','indexArray#'):
+        for name in ('readArray#','writeArray#','unsafeFreezeArray#','indexArray#','cloneArray#','freezeArray#','thawArray#'):
             module,_=fixture(name)
             module['bindings'][0]['expr'][1][0]['rep']['primReps']=['BoxedRep (Just Lifted)']
             self.assertIn('scalar-representation',codes(module),name)
+
+    def test_clone_scalar_result_is_not_a_singleton_tuple_or_lifted_reference(self):
+        for change in ('tuple','lifted','unknown','vector'):
+            module,app=fixture('cloneArray#');proof=app[6]['rep']
+            if change=='tuple':app[6]['rep']=dict(kind='unknown',aggregate='unboxed-tuple',components=[copy.deepcopy(proof)],primReps=proof['primReps'])
+            elif change=='lifted':proof['primReps']=['BoxedRep (Just Lifted)']
+            elif change=='unknown':proof['primReps']=['BoxedRep Nothing']
+            else:proof.update(kind='vector',primReps=['VecRep 2 Int64ElemRep'],vector=dict(lanes=2,element='Int64ElemRep'))
+            self.assertIn('primitive-representation',codes(module),change)
 
     def test_first_class_and_unclaimed_families_remain_unsupported(self):
         for name in CAP['managedArrayPrimitives']:

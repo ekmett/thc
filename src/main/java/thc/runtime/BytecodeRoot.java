@@ -637,6 +637,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class CloneArray {
+        @Specialization public static Object clone(Object reference, long offset, long count) {
+            return ManagedArray.slice(ManagedArray.require(reference), offset, count);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class CopyArraySlice {
+        @Specialization public static void copy(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+            Object[] array = ManagedArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedArray.slice(array, offset, count));
+        }
+    }
+
     /** State operands are evaluated before each effect; only the array has a tuple slot. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

@@ -21,21 +21,33 @@ internal object ManagedArray {
     }
     @JvmStatic fun read(array: Array<Any?>, index: Long): Any? = array[index(array, index)]
     @JvmStatic fun write(array: Array<Any?>, index: Long, value: Any?) { array[index(array, index)] = value }
+    /** Shallow, independent storage. Validate full-width values without adding
+     * offset and count, so invalid overflowing ranges cannot wrap into bounds. */
+    @JvmStatic fun slice(array: Array<Any?>, offset: Long, count: Long): Array<Any?> {
+        val size = array.size.toLong()
+        if (offset < 0 || offset > size || count < 0 || count > size - offset)
+            fault("Array# slice outside its backing storage")
+        return array.copyOfRange(offset.toInt(), (offset + count).toInt())
+    }
     /** The managed collector requires no info-table transition; preserve storage identity. */
     @JvmStatic fun freeze(array: Array<Any?>): Array<Any?> = array
 }
 
-/** Bounded GHC a_levpoly specialization: known lifted elements only. */
+/** Element-exposing operations keep the known-lifted specialization. Slice
+ * operations copy boxed references opaquely without changing element proofs. */
 internal enum class ArrayOp(val primitive: String, private val arguments: List<String>, private val result: List<String>) {
     NEW("newArray#", listOf("int", "element", "state"), listOf("state", "array")),
     READ("readArray#", listOf("array", "int", "state"), listOf("state", "element")),
     WRITE("writeArray#", listOf("array", "int", "element", "state"), emptyList()),
     FREEZE("unsafeFreezeArray#", listOf("array", "state"), listOf("state", "array")),
-    INDEX("indexArray#", listOf("array", "int"), listOf("element"));
+    INDEX("indexArray#", listOf("array", "int"), listOf("element")),
+    CLONE("cloneArray#", listOf("array", "int", "int"), listOf("array")),
+    FREEZE_COPY("freezeArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
+    THAW("thawArray#", listOf("array", "int", "int", "state"), listOf("state", "array"));
 
-    val tuple: Boolean get() = result.isNotEmpty()
+    val tuple: Boolean get() = result.isNotEmpty() && this != CLONE
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, proof: CoreRepresentation) {
-        fun matches(rep: CoreRepresentation, role: String): Boolean = !rep.isTuple && !rep.isVector && when (role) {
+        fun matches(rep: CoreRepresentation, role: String): Boolean = !rep.isAggregate && !rep.isVector && when (role) {
             "state" -> rep.kind == CoreKind.VOID && rep.primReps == emptyList<String>()
             "int" -> rep.kind == CoreKind.LONG && rep.primReps == listOf("IntRep")
             "array" -> rep.kind == CoreKind.OBJECT && rep.primReps == listOf("BoxedRep (Just Unlifted)")
@@ -46,7 +58,7 @@ internal enum class ArrayOp(val primitive: String, private val arguments: List<S
             throw RuntimeFault("Primitive arity mismatch: $primitive")
         if (flags != arguments.map { it == "element" } || actual.indices.any { !matches(actual[it], arguments[it]) })
             throw RuntimeFault("Array primitive argument representation mismatch: $primitive")
-        val valid = if (!tuple) matches(proof, "state") else proof.isTuple && proof.kind == CoreKind.UNKNOWN &&
+        val valid = if (!tuple) matches(proof, if (this == CLONE) "array" else "state") else proof.isTuple && proof.kind == CoreKind.UNKNOWN &&
             proof.components!!.size == result.size && result.indices.all { matches(proof.components[it], result[it]) } &&
             proof.primReps == proof.components.flatMap { it.primReps!! }
         if (!valid) throw RuntimeFault("Array primitive result representation mismatch: $primitive")
@@ -60,6 +72,8 @@ internal fun arrayExpression(operation: ArrayOp, proof: CoreRepresentation, oper
     ArrayOp.WRITE -> WriteArrayExpression(operands[0], operands[1], operands[2], operands[3])
     ArrayOp.FREEZE -> FreezeArrayExpression(operands[0], operands[1])
     ArrayOp.INDEX -> IndexArrayExpression(operands[0], operands[1])
+    ArrayOp.CLONE -> CloneArrayExpression(operands[0], operands[1], operands[2])
+    ArrayOp.FREEZE_COPY, ArrayOp.THAW -> CopyArrayExpression(operands[0], operands[1], operands[2], operands[3])
 }.proven(proof.copy(evaluated = true))
 
 private class NewArrayExpression(@field:Child private var size: Expr, @field:Child private var initial: Expr,
@@ -110,6 +124,28 @@ private class IndexArrayExpression(@field:Child private var array: Expr, @field:
         val storage = ManagedArray.require(array.execute(frame))
         val at = index.executeRequiredLong(frame)
         FrameAccess.write(frame, slots[offset], ManagedArray.read(storage, at))
+        return null
+    }
+}
+
+private class CloneArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
+    @field:Child private var count: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val storage = ManagedArray.require(array.execute(frame))
+        val start = offset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        return ManagedArray.slice(storage, start, length)
+    }
+}
+private class CopyArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
+    @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val storage = ManagedArray.require(array.execute(frame))
+        val start = this.offset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        requireVoidCarrier(state.execute(frame))
+        FrameAccess.write(frame, slots[offset], ManagedArray.slice(storage, start, length))
         return null
     }
 }

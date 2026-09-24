@@ -438,6 +438,9 @@
     "writeArray#": 4,
     "unsafeFreezeArray#": 2,
     "indexArray#": 2,
+    "cloneArray#": 3,
+    "freezeArray#": 4,
+    "thawArray#": 4,
     "readInt32Array#": 3,
     "writeInt32Array#": 4,
     "indexInt32Array#": 2,
@@ -1589,6 +1592,18 @@
       "result": [
         "element"
       ]
+    },
+    "cloneArray#": {
+      "arguments": ["array", "int", "int"],
+      "result": "array"
+    },
+    "freezeArray#": {
+      "arguments": ["array", "int", "int", "state"],
+      "result": ["state", "array"]
+    },
+    "thawArray#": {
+      "arguments": ["array", "int", "int", "state"],
+      "result": ["state", "array"]
     }
   }
 }
