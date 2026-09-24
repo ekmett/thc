@@ -49,6 +49,13 @@ validates the static `ghc-internal` target, `prim`/`safe` convention, raw argume
 and result representations, saturation, and unresolved foreign head; it does
 not depend on the consuming binding's name.
 
+The strict Core auditor admits that same exact symbol through its shared original
+foreign-call validator. It checks the raw State/snapshot tuple and rejects a
+State occurrence that relabels a stored scalar or boxed binding. The existing
+auditor tests use the unchanged exported worker with an explicitly synthetic
+scalar-result consumer. No stack getter, IPE, decoder, or remote-capture symbol
+is admitted by this capability.
+
 This does not attach snapshots to exceptions, emulate `StgStack`/info-table/IPE
 memory, capture remote threads, or freeze backtrace configuration. The remaining
 GHC compatibility layer must preserve original primitive and foreign protocols:

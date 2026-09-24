@@ -2213,6 +2213,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleSin { @Specialization public static double apply(double x) { return Math.sin(x); } }
     @Operation public static final class DoubleCos { @Specialization public static double apply(double x) { return Math.cos(x); } }
     @Operation public static final class DoublePower { @Specialization public static double apply(double x, double y) { return Math.pow(x, y); } }
+    @Operation public static final class FloatTan { @Specialization public static float apply(float x) { return (float) Math.tan(x); } }
+    @Operation public static final class FloatAsin { @Specialization public static float apply(float x) { return (float) Math.asin(x); } }
+    @Operation public static final class FloatAcos { @Specialization public static float apply(float x) { return (float) Math.acos(x); } }
+    @Operation public static final class FloatAtan { @Specialization public static float apply(float x) { return (float) Math.atan(x); } }
+    @Operation public static final class FloatSinh { @Specialization public static float apply(float x) { return (float) Math.sinh(x); } }
+    @Operation public static final class FloatCosh { @Specialization public static float apply(float x) { return (float) Math.cosh(x); } }
+    @Operation public static final class FloatTanh { @Specialization public static float apply(float x) { return (float) Math.tanh(x); } }
+    @Operation public static final class DoubleTan { @Specialization public static double apply(double x) { return Math.tan(x); } }
+    @Operation public static final class DoubleAsin { @Specialization public static double apply(double x) { return Math.asin(x); } }
+    @Operation public static final class DoubleAcos { @Specialization public static double apply(double x) { return Math.acos(x); } }
+    @Operation public static final class DoubleAtan { @Specialization public static double apply(double x) { return Math.atan(x); } }
+    @Operation public static final class DoubleSinh { @Specialization public static double apply(double x) { return Math.sinh(x); } }
+    @Operation public static final class DoubleCosh { @Specialization public static double apply(double x) { return Math.cosh(x); } }
+    @Operation public static final class DoubleTanh { @Specialization public static double apply(double x) { return Math.tanh(x); } }
     @Operation public static final class DoubleEqual { @Specialization public static long apply(double x, double y) { return x == y ? 1L : 0L; } }
     @Operation public static final class DoubleNotEqual { @Specialization public static long apply(double x, double y) { return x != y ? 1L : 0L; } }
     @Operation public static final class DoubleLess { @Specialization public static long apply(double x, double y) { return x < y ? 1L : 0L; } }
