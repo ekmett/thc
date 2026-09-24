@@ -42,6 +42,7 @@ object CoreModules {
         val constructors = linkedMapOf<String, Map<String, Any?>>()
         val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
         val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
+        val bindingOrigins = linkedMapOf<String, Map<String, String>>()
         val moduleKeys = hashSetOf<Pair<String, String>>()
         for (module in modules) {
             require((module["schema"] as? Number)?.toInt() == 1) { "Unsupported Core schema: ${module["schema"]}" }
@@ -67,6 +68,11 @@ object CoreModules {
             for (b in module["bindings"] as List<Map<String, Any?>>) {
                 val id = b["id"] as String
                 require(bindings.putIfAbsent(id, b) == null) { "Duplicate binding: $id" }
+                // The merged bundle has no single unit/module. Preserve the exact
+                // exporting module for globally named bindings; synthetic entries
+                // and interface fragments must not acquire a guessed owner.
+                if (unit != null && name != null && id.startsWith("$unit:$name.") && id.length > "$unit:$name.".length)
+                    bindingOrigins[id] = mapOf("unit" to unit, "module" to name)
             }
             for (c in module["constructors"] as List<Map<String, Any?>>) {
                 val id = c["id"] as String
@@ -76,6 +82,7 @@ object CoreModules {
         }
         return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
             "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
+            "bindingOrigins" to bindingOrigins,
             "sourceFiles" to sourceFiles.values.toList(), "sourceSpans" to sourceSpans.values.toList())
     }
 
@@ -184,6 +191,7 @@ class Language : TruffleLanguage<Language.State>() {
     class State(val env: Env, language: Language) {
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
+        internal val files = thc.runtime.ManagedFiles(env)
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         // A future SHARED policy may keep the lockless thunk path while this is valid.
         // The transition is one-way and belongs to this context, not to Language.
@@ -224,6 +232,7 @@ class Language : TruffleLanguage<Language.State>() {
     }
     override fun createContext(env: Env): State = State(env, this)
     override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
+    override fun disposeContext(context: State) = context.files.dispose()
     override fun initializeThread(context: State, thread: Thread) = context.noteThread(thread)
     override fun initializeMultiThreading(context: State) = context.markMultithreaded()
     companion object {

@@ -220,6 +220,7 @@ jobs:
           for test in \
             scripts/test-build-cbits.py \
             scripts/test-core-managed-memory.py \
+            scripts/test-core-managed-files.py \
             scripts/test-core-md5-foreign.py \
             scripts/test-core-package-manifest.py \
             scripts/test-managed-mvar-fixtures.py \

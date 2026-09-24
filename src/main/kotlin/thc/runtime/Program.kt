@@ -1172,6 +1172,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
+        CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
@@ -1188,7 +1189,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scope.layout.build())
-        bindings.forEachIndexed { index, binding -> globals.getValue(binding["id"] as String).initialize(initializers[index].execute(frame)) }
+        bindings.forEachIndexed { index, binding ->
+            val value = initializers[index].execute(frame)
+            CoreFunctionIdentity.install(moduleData, binding, value)
+            globals.getValue(binding["id"] as String).initialize(value)
+        }
     }
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
         ?: names.entries.singleOrNull { it.key.substringAfterLast('.') == name }?.value?.singleOrNull()
@@ -1402,11 +1407,16 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
-            val javascript = CoreJavaScript.validate(expr, defined)
+            val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val javascript = if (managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
-            if (md5 != null) {
+            val polyglot = if (managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (managedFile != null) {
+                CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (md5 != null) {
                 CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 Md5ForeignExpression(md5, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (javascript != null) {
