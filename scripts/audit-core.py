@@ -10,6 +10,7 @@ import argparse
 from collections import deque
 import json
 import core_data_tags
+import core_package_manifest
 from pathlib import Path
 import sys
 
@@ -1088,11 +1089,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('modules', nargs='*', help='Exported JSON modules, or directories containing exported *.json modules')
     parser.add_argument('--module-list', action='append', type=Path, default=[], help='Read an exact newline-delimited module manifest; relative paths are relative to the manifest')
+    parser.add_argument('--package-manifest', type=Path, help='Validate and audit an exact GHC-unit Core package manifest')
     parser.add_argument('--entry', action='append', required=True, help='Exact global id or unambiguous occurrence name; repeatable')
     parser.add_argument('--io-main', action='store_true', help='Validate the exact IO () host entry contract instead of the scalar host result')
     parser.add_argument('--capabilities', type=Path, default=Path(__file__).with_name('core-capabilities.json'))
     parser.add_argument('--output', type=Path, help='Write full JSON report here (otherwise stdout)')
     args = parser.parse_args()
+    if args.package_manifest and (args.modules or args.module_list):
+        parser.error('--package-manifest cannot be mixed with loose module paths')
     files = []
     for supplied in args.modules:
         path = Path(supplied)
@@ -1103,9 +1107,10 @@ def main():
                 if line.strip():
                     path = Path(line.strip())
                     files.append(path if path.is_absolute() else manifest.parent / path)
-        if not files:
+        if not files and not args.package_manifest:
             parser.error('Supply modules or --module-list')
-        modules = [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)]
+        modules = (core_package_manifest.load(args.package_manifest) if args.package_manifest else
+                   [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)])
         report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
     except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))

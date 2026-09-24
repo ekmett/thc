@@ -35,9 +35,15 @@ object CoreModules {
         val constructors = linkedMapOf<String, Map<String, Any?>>()
         val sourceFiles = linkedMapOf<String, Map<String, Any?>>()
         val sourceSpans = linkedMapOf<String, Map<String, Any?>>()
+        val moduleKeys = hashSetOf<Pair<String, String>>()
         for (module in modules) {
             require((module["schema"] as? Number)?.toInt() == 1) { "Unsupported Core schema: ${module["schema"]}" }
             require(module["ghc"] == "9.14.1") { "This adapter requires GHC 9.14.1 exports" }
+            val unit = module["unit"] as? String
+            val name = module["module"] as? String
+            if (unit != null && name != null) {
+                require(moduleKeys.add(unit to name)) { "Duplicate GHC module: $unit:$name" }
+            }
             for ((key, table) in listOf("sourceFiles" to sourceFiles, "sourceSpans" to sourceSpans)) {
                 val records = module[key] ?: continue
                 require(records is List<*>) { "Invalid $key table" }
@@ -65,16 +71,28 @@ object CoreModules {
     }
 
     @Suppress("UNCHECKED_CAST")
-    fun reachable(module: Map<String, Any?>, entry: String): Map<String, Any?> {
+    fun reachable(module: Map<String, Any?>, entry: String, strictLink: Boolean = false): Map<String, Any?> {
         val bindings = module["bindings"] as List<Map<String, Any?>>
         val byId = bindings.associateBy { it["id"] as String }
+        val constructorIds = (module["constructors"] as? List<Map<String, Any?>>)
+            ?.mapTo(hashSetOf()) { it["id"] as String } ?: emptySet()
         val exact = byId[entry]
         val roots = if (exact != null) listOf(exact) else bindings.filter { it["name"] == entry }
         require(roots.size == 1) { "Missing or ambiguous entry: $entry" }
         val reachable = linkedSetOf<String>()
         val pending = ArrayDeque<String>()
+        val missing = linkedMapOf<String, MutableSet<String>>()
+        val missingConstructors = linkedMapOf<String, MutableSet<String>>()
+        var owner = ""
+        fun constructor(id: String) {
+            if (strictLink && id !in constructorIds)
+                missingConstructors.getOrPut(id) { linkedSetOf() }.add(owner)
+        }
         fun reference(id: String, bound: Set<String>) {
-            if (id !in bound && id in byId && reachable.add(id)) pending.addLast(id)
+            if (id in bound) return
+            if (id in byId) {
+                if (reachable.add(id)) pending.addLast(id)
+            } else if (strictLink) missing.getOrPut(id) { linkedSetOf() }.add(owner)
         }
         fun visit(expr: List<Any?>, bound: Set<String>) {
             when (expr[0]) {
@@ -98,31 +116,45 @@ object CoreModules {
                     visit(expr[1] as List<Any?>, bound)
                     val alternatives = expr[3] as List<List<Any?>>
                     alternatives.forEach { alt ->
+                        if (alt[0] == "data") constructor(alt[1] as String)
                         visit(alt[3] as List<Any?>, bound + (expr[2] as String) + (alt[2] as List<String>))
                     }
                 }
+                "con" -> constructor(expr[1] as String)
             }
         }
         val root = roots.single()["id"] as String
         reachable.add(root)
         pending.addLast(root)
-        while (pending.isNotEmpty()) visit(byId.getValue(pending.removeFirst())["expr"] as List<Any?>, emptySet())
+        while (pending.isNotEmpty()) {
+            owner = pending.removeFirst()
+            visit(byId.getValue(owner)["expr"] as List<Any?>, emptySet())
+        }
+        require(missing.isEmpty()) {
+            "Unlinked Core globals: " + missing.entries.joinToString { (id, uses) -> "$id referenced by ${uses.joinToString()}" }
+        }
+        require(missingConstructors.isEmpty()) {
+            "Unlinked Core constructors: " + missingConstructors.entries.joinToString { (id, uses) -> "$id referenced by ${uses.joinToString()}" }
+        }
         return module + ("bindings" to bindings.filter { it["id"] in reachable })
     }
 
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false): String {
+        val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
         val settings = linkedMapOf<String, Any>(
             "entry" to entry, "instrument" to instrument,
             "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend,
             "sourceNotesEnabled" to sourceNotesEnabled)
+        if (manifest != null) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
         val options = StringBuilder().also { Json.appendObjectDocument(it,
             Json.stringify(settings)) }
         return buildString {
             append(options, 0, options.length - 1)
             append(",\"modules\":[")
-            paths.forEachIndexed { index, path ->
+            if (manifest != null) CorePackageManifest.appendModules(this, manifest)
+            else paths.forEachIndexed { index, path ->
                 if (index != 0) append(',')
                 // Validate each complete document before embedding it. Language.parse
                 // materializes the modules once; all bindings and metadata travel intact.
@@ -149,7 +181,7 @@ class Language : TruffleLanguage<Language.State>() {
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
-        val linked = CoreModules.reachable(CoreModules.merge(modules), entry) + mapOf("instrument" to (input["instrument"] != false),
+        val linked = CoreModules.reachable(CoreModules.merge(modules), entry, input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false))
         val bindings = linked["bindings"] as List<Map<String, Any?>>

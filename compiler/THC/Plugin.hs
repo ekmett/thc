@@ -25,7 +25,7 @@ import Data.Maybe (mapMaybe)
 import System.IO.Unsafe (unsafePerformIO)
 import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 
 -- This plugin intentionally runs last in the ordinary Core pipeline, before
 -- Tidy. It exports executable trees, never parses a pretty-printed Core dump.
@@ -57,6 +57,9 @@ num = N . toInteger
 data Ctx = Ctx
   { dynFlags :: DynFlags
   , modulePrefix :: String
+  -- Package artifacts qualify opaque source IDs by their GHC unit. Source
+  -- paths remain unchanged for display, but two packages may both have src/A.hs.
+  , sourceUnit :: Maybe String
   -- As in CorePrep, exclude every enclosing recursive group while traversing
   -- its RHSs: speculative calls can otherwise destroy guarded recursion.
   , recursiveIds :: VarSet
@@ -78,24 +81,28 @@ sourceFields d = case activeSources d of
 
 binderSource :: Ctx -> Var -> [(String,J)]
 binderSource d v = case (sourceTable d, Sources.binderNote v) of
-  (Just table, Just note) | Sources.hasNote table note -> [("source",S (Sources.noteKey note))]
+  (Just table, Just note) | Sources.hasNote table note -> [("source",S (sourceKey d (Sources.noteKey note)))]
   _ -> []
 
 underTick :: Ctx -> CoreTickish -> Ctx
 underTick d tick = case (sourceTable d, Sources.tickNote tick) of
   (Just table, Just note) | Sources.hasNote table note ->
-    d { activeSources = activeSources d ++ [Sources.noteKey note] }
+    d { activeSources = activeSources d ++ [sourceKey d (Sources.noteKey note)] }
   _ -> d
 
-sourceTableFields :: Maybe Sources.SourceTable -> [(String,J)]
-sourceTableFields Nothing = []
-sourceTableFields (Just table) =
-  [("sourceFiles",A [O [("id",S (Sources.sourceFileId file)),("path",S (Sources.sourceFilePath file)),
+sourceKey :: Ctx -> String -> String
+sourceKey d key = maybe key (\unit -> show (unit,key)) (sourceUnit d)
+
+sourceTableFields :: Ctx -> [(String,J)]
+sourceTableFields d = case sourceTable d of
+  Nothing -> []
+  Just table ->
+   [("sourceFiles",A [O [("id",S (sourceKey d (Sources.sourceFileId file))),("path",S (Sources.sourceFilePath file)),
                        ("content",maybe Z S (Sources.sourceFileContent file))] | file <- Sources.sourceFiles table])
-  ,("sourceSpans",A (map spanRecord (Sources.sourceSpans table)))]
+   ,("sourceSpans",A (map spanRecord (Sources.sourceSpans table)))]
   where
     spanRecord record = let Sources.Note span label = Sources.sourceSpanNote record in O
-      [("id",S (Sources.sourceSpanId record)),("file",S (Sources.sourceSpanFile record))
+      [("id",S (sourceKey d (Sources.sourceSpanId record))),("file",S (sourceKey d (Sources.sourceSpanFile record)))
       ,("startLine",num (srcSpanStartLine span)),("startColumn",num (srcSpanStartCol span))
       ,("endLine",num (srcSpanEndLine span)),("endColumn",num (srcSpanEndCol span))
       ,("charIndex",maybe Z num (Sources.sourceCharIndex record))
@@ -111,6 +118,20 @@ nameKey :: Name -> String
 nameKey n = case nameModule_maybe n of
   Just m -> unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m) ++ "." ++ occNameString (nameOccName n)
   Nothing -> occNameString (nameOccName n) ++ "_" ++ showSDocUnsafe (ppr (nameUnique n))
+
+-- Cabal can compile the same module name in several distinct units. Keep the
+-- historical flat layout for fixtures, but let package exports preserve the
+-- exact GHC unit ID in their path. Escaping is injective and cannot traverse
+-- out of the export root, even for an unusual unit ID.
+coreOutputPath :: [CommandLineOption] -> FilePath -> String -> String -> FilePath
+coreOutputPath opts dir unit modName
+  | "unit-qualified" `elem` opts = dir </> "units" </> ("u-" ++ concatMap escapeUnit unit) </> modName ++ ".json"
+  | otherwise = dir </> modName ++ ".json"
+  where
+    escapeUnit c
+      | asciiAlphaNum c || c `elem` ("-._" :: String) = [c]
+      | otherwise = '%' : showHex (ord c) ";"
+    asciiAlphaNum c = ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')
 
 varKey :: Ctx -> Var -> String
 varKey d v = case nameModule_maybe (varName v) of
@@ -519,7 +540,8 @@ exportModule :: [CommandLineOption] -> ModGuts -> CoreM ModGuts
 exportModule opts guts = do
   flags <- getDynFlags
   sources <- liftIO $ loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
-  let d = Ctx flags (unitString (moduleUnit (mg_module guts)) ++ ":" ++ moduleNameString (moduleName (mg_module guts))) emptyVarSet emptyVarSet True True sources []
+  let unit = unitString (moduleUnit (mg_module guts))
+      d = Ctx flags (unit ++ ":" ++ moduleNameString (moduleName (mg_module guts))) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True True sources []
       dir = case opts of [] -> "build/core"; x:_ -> x
       closureRoots = mapMaybe (stripPrefix "closure=") (drop 1 opts)
       modName = moduleNameString (moduleName (mg_module guts))
@@ -534,13 +556,14 @@ exportModule opts guts = do
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- mg_binds guts])
         , ("rules",S (pretty d (mg_rules guts)))
         , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
-        ] ++ sourceTableFields sources
+        ] ++ sourceTableFields d
   liftIO $ do
-    createDirectoryIfMissing True dir
-    writeFile (dir </> modName ++ ".json") (json result ++ "\n")
+    let path = coreOutputPath opts dir (unitString (moduleUnit (mg_module guts))) modName
+    createDirectoryIfMissing True (takeDirectory path)
+    writeFile path (json result ++ "\n")
     modifyIORef' sourceDefinitions ((d,binds):)
     let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
-    if null roots then pure () else exportInterfaceClosure dir d roots
+    if null roots then pure () else exportInterfaceClosure opts dir d roots
   pure guts
 
 -- Package rebuilding needs identities that agree with the newly emitted
@@ -553,7 +576,8 @@ exportLate hsc opts pair@(guts,_)
   | otherwise = do
       sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (cg_binds guts))
       let m = cg_module guts
-          d = Ctx (hsc_dflags hsc) (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)) emptyVarSet emptyVarSet True False sources []
+          unit = unitString (moduleUnit m)
+          d = Ctx (hsc_dflags hsc) (unit ++ ":" ++ moduleNameString (moduleName m)) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True False sources []
           dir = case opts of [] -> "build/core"; x:_ -> x
           modName = moduleNameString (moduleName m)
           binds = concatMap flattenBind (cg_binds guts)
@@ -564,12 +588,13 @@ exportLate hsc opts pair@(guts,_)
             , ("sourceCore",S (pretty d (cg_binds guts)))
             , ("bindings",A (concatMap (bindingGroup d) (cg_binds guts))), ("constructors",A (map (constructor d) cons))
             , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- cg_binds guts])
-            ] ++ sourceTableFields sources
-      createDirectoryIfMissing True dir
-      writeFile (dir </> modName ++ ".json") (json result ++ "\n")
+            ] ++ sourceTableFields d
+      let path = coreOutputPath opts dir (unitString (moduleUnit m)) modName
+      createDirectoryIfMissing True (takeDirectory path)
+      writeFile path (json result ++ "\n")
       modifyIORef' sourceDefinitions ((d,binds):)
       let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` mapMaybe (stripPrefix "closure=") opts]
-      if null roots then pure () else exportInterfaceClosure dir d roots
+      if null roots then pure () else exportInterfaceClosure opts dir d roots
       pure pair
 
 -- Source definitions from earlier modules of this same --make invocation let
@@ -579,8 +604,8 @@ exportLate hsc opts pair@(guts,_)
 sourceDefinitions :: IORef [(Ctx,[(Id,CoreExpr)])]
 sourceDefinitions = unsafePerformIO (newIORef [])
 
-exportInterfaceClosure :: FilePath -> Ctx -> [Id] -> IO ()
-exportInterfaceClosure dir rootCtx roots = do
+exportInterfaceClosure :: [CommandLineOption] -> FilePath -> Ctx -> [Id] -> IO ()
+exportInterfaceClosure opts dir rootCtx roots = do
   modules <- readIORef sourceDefinitions
   let sourceEnv = mkVarEnv [(v,(d,e)) | (d,bs) <- modules, (v,e) <- bs]
       -- exprFreeVars deliberately omits global IDs. Dependency discovery
@@ -626,7 +651,8 @@ exportInterfaceClosure dir rootCtx roots = do
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]
   sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) [(v,e) | (_,v,e,_) <- imports]
-  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, activeSources = [] }) (v,e) of
+  let closureCtx = rootCtx { sourceTable = sources, sourceUnit = if "unit-qualified" `elem` opts then Just "dependency-closure" else Nothing }
+  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, sourceUnit = sourceUnit closureCtx, activeSources = [] }) (v,e) of
         O fields -> O (fields ++ [("origin",S kind),("originModule",S (modulePrefix d))])
         _ -> error "binding was not an object"
       cons = nubBy (\a b -> dataConName a == dataConName b) (concat [exprCons e | (_,_,e,_) <- imports])
@@ -638,6 +664,8 @@ exportInterfaceClosure dir rootCtx roots = do
         , ("groups",A [O [("recursive",B True),("ids",A [S (varKey d v) | (d,v,_,_) <- imports])]])
         , ("missingDefinitions",A [O [("id",S (varKey d v)),("type",S (pretty d (varType v))), ("reason",S "No executable interface unfolding; source export required")] | (d,v) <- missing])
         , ("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports]))
-        ] ++ sourceTableFields sources
-  writeFile (dir </> "THC.InterfaceClosure.json") (json result ++ "\n")
+        ] ++ sourceTableFields closureCtx
+  let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
+  createDirectoryIfMissing True (takeDirectory path)
+  writeFile path (json result ++ "\n")
   putStrLn ("THC interface closure: " ++ show (length imports) ++ " actual unfoldings, " ++ show (length missing) ++ " missing source definitions")
