@@ -571,6 +571,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    public static final class TupleArithmetic3 {
+        @Specialization public static void execute(VirtualFrame frame, TupleArithmeticOp operation,
+                LocalAccessor first, LocalAccessor second, LocalAccessor third,
+                long left, long right, @Bind("$node") Node node) {
+            long a = operation.first(left, right);
+            long b = operation.second(left, right);
+            long c = operation.third(left, right);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, a);
+            second.setLong(bytecode, frame, b);
+            third.setLong(bytecode, frame, c);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class NewPinnedByteArray {
         @Specialization public static void allocate(VirtualFrame frame, LocalAccessor destination,

@@ -377,6 +377,7 @@
     "subIntC#": 2,
     "plusWord2#": 2,
     "timesWord2#": 2,
+    "timesInt2#": 2,
     "negateInt8#": 1,
     "plusInt8#": 2,
     "subInt8#": 2,
@@ -917,6 +918,10 @@
         "WordRep",
         "WordRep"
       ]
+    },
+    "timesInt2#": {
+      "arguments": ["IntRep", "IntRep"],
+      "result": ["IntRep", "IntRep", "IntRep"]
     }
   },
   "managedPinnedMemoryPrimitives": {

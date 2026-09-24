@@ -2154,9 +2154,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { argument(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1])
+                    if (tupleOperation.resultArity == 3)
+                        e.builder.beginTupleArithmetic3(tupleOperation, destination[0], destination[1], destination[2])
+                    else e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1])
                     operands.forEach { it.emit(e) }
-                    e.builder.endTupleArithmetic()
+                    if (tupleOperation.resultArity == 3) e.builder.endTupleArithmetic3() else e.builder.endTupleArithmetic()
                 }
             } else if (tupleProof.isSum && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-sum") {
                 val tag = SumShape.constructor(tupleProof, constructors[fn[1]], fn[2])

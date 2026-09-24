@@ -36,6 +36,11 @@ timesWord2 :: Int# -> Int# -> Int# -> Int#
 timesWord2 x y field = case timesWord2# (int2Word# x) (int2Word# y) of
   (# high, low #) -> case field of 0# -> word2Int# high; _ -> word2Int# low
 
+{-# OPAQUE timesInt2 #-}
+timesInt2 :: Int# -> Int# -> Int# -> Int#
+timesInt2 x y field = case timesInt2# x y of
+  (# highNeeded, high, low #) -> case field of 0# -> highNeeded; 1# -> high; _ -> low
+
 {-# OPAQUE addWordC #-}
 addWordC :: Int# -> Int# -> Int# -> Int#
 addWordC x y field = case addWordC# (int2Word# x) (int2Word# y) of
