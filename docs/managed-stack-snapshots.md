@@ -176,7 +176,7 @@ post-Tidy consumers pass strict audits. `OriginalStackFormatterTest` checks thos
 observations through both backends, before and immediately after explicit
 compilation, with inlining enabled and disabled.
 
-The fixture records exactly 79 source inputs and 78 artifacts from one export
+The fixture records exactly 80 source inputs and 80 artifacts from one export
 attempt. Provenance tests independently pin the upstream source catalog and
 reject omissions, changed pins and escaped paths. Focused preparation and cache
 receipts reuse this exact inventory; installed-interface symlink overlays are
@@ -196,3 +196,14 @@ the result runs it, through both backends and explicit compilation. This is not
 a native oracle for those synthetic consumers, nor full decoder support. The
 worker itself still has an unboxed-tuple result and is not a scalar host entry;
 the libdw-based `stackFrames` closure remains unsupported.
+
+The same overlay includes unchanged `GHC.Internal.Heap.InfoTable.Types.hsc`
+from that pinned revision, compiled before `Heap.InfoTable` using the target's
+real `hsc2hs`. Fresh export supplies the exact
+`ghc-internal:GHC.Internal.Heap.InfoTable.Types.$w$cshowsPrec` body, referenced
+36 times by three original `Heap.Closures` workers. The proof checks its formal
+representations and the generated `HalfWord` width against the target layout;
+it does not replace or alias the worker. Full `Show StgInfoTable` execution is
+not claimed: the source closure still lacks `Data.Either.$fShowEither`,
+`Ptr.$fShowFunPtr`, `Word.$fShowWord32`, and `Word.$fShowWord8` under the
+`ghc-internal:GHC.Internal` prefix. Adding those modules is a separate slice.

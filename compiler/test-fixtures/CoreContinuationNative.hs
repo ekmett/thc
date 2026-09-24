@@ -13,3 +13,5 @@ main = do
   print catchActionAnswer
   print catchActionFailure
   print nestedCatchAction
+  print tupleApplicationAnswer
+  print tupleCompactAnswer

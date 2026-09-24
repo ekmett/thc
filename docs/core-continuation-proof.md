@@ -77,6 +77,21 @@ for the successful action and 77 for a caught `raiseIO#`. Repeated suspension
 does not replay the action prefix, and another host thread can complete the
 shared action before the catch caller resumes.
 
+A separate private checkpoint now captures saturated, non-tail tuple-result
+applications with scalar or compact arguments. The ordinary
+`checkpoint == null` `ApplyTuple` paths are unchanged. The exact yielding
+callee target and recursive tuple shape are checked before a cold segment is
+published; its completed result becomes owned storage before any cross-thread
+handoff, then fills the saved caller's typed slots. An original GHC caller
+returns nested `(# State#, Int#, (# State#, Box #) #)` fields: both state
+components erase, while the `Int#` and lifted `Box` retain distinct physical
+slots. Native GHC, AST, bytecode, and explicitly compiled caller and callee
+agree on 114. A compact zero-width tuple argument also retains its logical
+arity. Repeated yields, carrier-mask restoration, post-call failure, and a
+guest failure from the yielding callee leave no pooled result loan or replayed
+checkpoint. Typed aggregate inputs, tail tuple calls, general async delivery,
+and arbitrary nested handler capture remain outside this checkpoint proof.
+
 The private handler cut now also reaches that original GHC `catch#` frame. It
 claims a saved caller only when its Yield signal names the exact parked
 `CallSegment` created inside a caught IO action. A cold, action-bound token

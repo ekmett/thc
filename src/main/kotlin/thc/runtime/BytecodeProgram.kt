@@ -1831,6 +1831,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.beginStoreLocal(b.createLocal("typed tuple call", null))
                     typedArguments(e, function, arguments, inputLayout, false, tupleSlots(shape, destination))
                     b.endStoreLocal()
+                } else if (checkpoint != null) {
+                    checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination)
                 } else if (inputLayout == null) {
                     b.beginApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
                     requireClosure(function).emit(e); arguments.forEach { it.emit(e) }; b.endApplyTuple()
@@ -1863,6 +1865,57 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.endBlock()
             }
         }
+    }
+
+    /** The private tuple call edge captures only an exact yielded callee; normal return writes typed slots. */
+    private fun checkpointedTupleApplication(e: Emission, shape: TupleShape, function: Expression,
+                                             arguments: List<Expression>, inputLayout: ArgumentLayout?,
+                                             destination: List<BytecodeLocal>) {
+        val b = e.builder
+        val slots = tupleSlots(shape, destination)
+        b.beginBlock()
+        val fn = b.createLocal("captured tuple function", "object")
+        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        val values = arrayListOf<BytecodeLocal>()
+        arguments.forEachIndexed { index, argument ->
+            if (inputLayout?.isEmpty(index) == true) argument.emitTuple(e, emptyList())
+            else values += b.createLocal("captured tuple operand $index", null).also { local ->
+                b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal()
+            }
+        }
+        val callerMask = b.createLocal("captured tuple caller mask", "object")
+        val suspended = b.createLocal("captured tuple suspension", "object")
+        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginTryCatch()
+        if (inputLayout == null) {
+            b.beginApplyTupleCheckpoint(slots, arguments.size, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endApplyTupleCheckpoint()
+        } else {
+            b.beginApplyCompactTupleCheckpoint(slots, inputLayout, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endApplyCompactTupleCheckpoint()
+        }
+        b.beginBlock()
+        b.beginStoreLocal(suspended)
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+        b.endStoreLocal()
+        b.beginResumeTupleApplication(slots)
+        b.emitLoadLocal(suspended)
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkCallMask()
+        b.emitLoadLocal(suspended)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.emitLoadLocal(callerMask)
+        b.endParkCallMask()
+        b.endYield()
+        b.emitLoadLocal(callerMask)
+        b.endReenterCallMask()
+        b.endResumeTupleApplication()
+        b.endBlock()
+        b.endTryCatch()
+        b.endBlock()
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
