@@ -66,9 +66,8 @@ with the pinned GHC 9.14.1/Graal JDK environment:
 bash bench/experiments/floatx4-bytearray/run-runtime.sh build/floatx4-bytearray-runtime
 ```
 
-Use the project's shared JVM/build gate and coordinate the execution window.
-This script is not permission to overlap another worker's JVM job. It keeps the
-existing single-tier capture threshold and forty complete warmup passes; there
+The script keeps the existing single-tier capture threshold and forty complete
+warmup passes; there
 are no retries, settling calls, graph-limit increases or policy changes. The
 active selected target must be installed at last tier and unchanged/valid before
 and after every measured input. Graph captures disable counters; the separate
