@@ -838,8 +838,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 failure = guest;
             }
             if (failure != null) {
-                handlerCall.execute(frame, RequireClosure.require(force.execute(frame, handler)),
-                        new Object[]{failure.getPayload(), kotlin.Unit.INSTANCE});
+                MaskingState prior = SynchronousMasking.current(force);
+                if (prior == MaskingState.UNMASKED)
+                    SynchronousMasking.set(force, MaskingState.MASKED_INTERRUPTIBLE);
+                try {
+                    handlerCall.execute(frame, RequireClosure.require(force.execute(frame, handler)),
+                            new Object[]{failure.getPayload(), kotlin.Unit.INSTANCE});
+                } finally {
+                    SynchronousMasking.set(force, prior);
+                }
             }
         }
         public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
@@ -847,6 +854,41 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         public static TupleDispatch createHandler(BytecodeTupleSlots destination, Metrics metrics) {
             return new TupleDispatch(destination, metrics, 2, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class GetMaskingState {
+        @Specialization public static void run(VirtualFrame frame, LocalAccessor destination, Object state,
+                @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    SynchronousMasking.current(node).getTag());
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class UnmaskAsyncExceptions {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, Object state,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            TupleResultsKt.requireVoidCarrier(state);
+            MaskingState prior = SynchronousMasking.current(force);
+            SynchronousMasking.set(force, MaskingState.UNMASKED);
+            try {
+                actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
+                        new Object[]{kotlin.Unit.INSTANCE});
+            } finally {
+                SynchronousMasking.set(force, prior);
+            }
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 1, false);
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }

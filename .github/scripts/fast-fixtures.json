@@ -13,7 +13,10 @@
   "groups": {
     "synchronous-exceptions": {
       "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-synchronous-exceptions.py"]}],
+      "commands": [
+        {"argv": ["rm", "-rf", "--", "build/synchronous-exceptions"]},
+        {"argv": ["python3", "scripts/prepare-synchronous-exceptions.py"]}
+      ],
       "outputs": ["build/synchronous-exceptions"],
       "sources": [
         "scripts/prepare-synchronous-exceptions.py",
