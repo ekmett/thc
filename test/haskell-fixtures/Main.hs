@@ -783,8 +783,10 @@ preparePinnedPointers root = do
         options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
     forM_ [core, ghcOut] (createDirectoryIfMissing True . (root </>))
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip", source]) ""
+      "compiler/export.sh" (options ++ ["-fplugin-opt=THC.Plugin:closure=pointerRoundtrip",
+        "-fplugin-opt=THC.Plugin:closure=pointerArrayRoundtrip", source]) ""
     _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", "pointerRoundtrip",
+      "--entry", "pointerArrayRoundtrip",
       "--output", directory </> stage </> "audit.json",
       core </> "PinnedPointerCellsAudit.json", core </> "THC.InterfaceClosure.json"] ""
     pure ()
