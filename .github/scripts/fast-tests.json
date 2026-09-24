@@ -192,6 +192,108 @@
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "python": ["scripts/test-audit-core.py"]
     },
+    "Setup.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "app/Main.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "cabal.project": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "thc.cabal": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "src/THC/Driver/Cabal.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "src/THC/Driver/Json.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "src/THC/Driver/Run.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/test_driver.py": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/tiny-fixture.cabal": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/words/Words.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/src/Greeting.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/src/Platform/Linux.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/src/Platform/Other.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/loud/Message.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/quiet/Message.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/app/Main.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
+    "test/fixtures/tiny/test/Main.hs": {
+      "junit": [],
+      "python": [
+        "test/test_driver.py"
+      ]
+    },
     "compiler/test-fixtures/BitPrimopsAudit.hs": {
       "junit": [
         "thc.runtime.BitPrimopsTest"

@@ -1,9 +1,10 @@
 {-# LANGUAGE MagicHash, NoImplicitPrelude, GADTs, UnliftedNewtypes #-}
-{-# LANGUAGE StandaloneKindSignatures, UnliftedDatatypes #-}
+{-# LANGUAGE ExplicitNamespaces, StandaloneKindSignatures, UnliftedDatatypes #-}
 {-# OPTIONS_GHC -fno-cpr-anal #-}
 -- A worker retains an equality coercion before the strict boxed tree slot.
 module CBVCoercionAudit where
 import GHC.Exts (Int(I#), Int#, Word#, UnliftedType, (+#), int2Word#)
+import Data.Type.Equality (type (~))
 
 data Spine = Done | More Int# Spine
 data Witness a where
