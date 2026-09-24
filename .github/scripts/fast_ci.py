@@ -122,7 +122,8 @@ def gradle_command(selection):
     require(classes and len(set(classes)) == len(classes), "Empty/duplicate selected classes")
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
-    argv = ["scripts/gradle.sh", "--no-daemon", "--max-workers=4", "--build-cache", "test", "--rerun"]
+    argv = ["scripts/gradle.sh", "--no-daemon", "--max-workers=4", "--build-cache",
+            "--init-script", ".github/scripts/fast_ci.init.gradle", "test", "--rerun"]
     if selection["mode"] == "narrow":
         require(selection["junit"]["patterns"] == classes, "Narrow patterns must name entire selected classes")
         for name in classes:
@@ -184,7 +185,7 @@ def identify(recorder, identity_path):
     # dependency, compiler-plugin, wrapper or cache-policy changes.
     paths = [root / name for name in ("build.gradle.kts", "settings.gradle.kts", "gradle.properties",
              "gradlew", "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties")]
-    paths.extend([release, Path(__file__)])
+    paths.extend([release, Path(__file__), root / ".github/scripts/fast_ci.init.gradle"])
     h = hashlib.sha256()
     for path in paths:
         h.update(path.name.encode() + b"\0" + hashlib.sha256(path.read_bytes()).digest())
