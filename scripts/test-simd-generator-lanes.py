@@ -128,6 +128,28 @@ class SimdGeneratorLanesTest(unittest.TestCase):
             self.assertIn(f'CoreRepresentation(CoreKind.{access.upper()}, true, true, listOf("{rep}"))', source)
             self.assertIn(f'List({f["lanes"]}) {{ "{rep}" }}, List({f["lanes"]}) {{ lane{f["name"]} }}', source)
 
+    def test_composite_fixtures_inline_all_operations_and_preserve_residual_scalar_call(self):
+        fs = [family(rep) for rep in LANE_CASES]
+        source = GEN.fixture_sources(fs)['fixtures/GeneratedSimdFamilies.hs']
+        native = GEN.fixture_sources(fs)['fixtures/GeneratedSimdFamiliesNative.hs']
+        for f in fs:
+            n = f['name']
+            operations = [op for op in f['operations'] if op not in ('pack', 'unpack')]
+            arguments = 'lane a b ' + ' '.join(f'expected{i}' for i in range(len(operations)))
+            signature = ' -> '.join(['Int#'] * (4 + len(operations)))
+            with self.subTest(family=n):
+                self.assertIn(f'{{-# OPAQUE check{n}Worker #-}}', source)
+                self.assertIn(f'check{n}Worker :: {signature}', source)
+                self.assertIn(f'check{n} {arguments} = case check{n}Worker {arguments} of value -> value +# 17#', source)
+                for i, op in enumerate(operations):
+                    self.assertIn(f'{{-# INLINE {op}{n}Local #-}}', source)
+                    self.assertIn(f'{op}{n}Worker lane a b = {op}{n}Local lane a b', source)
+                    self.assertIn(f'(uncheckedIShiftL# (({op}{n}Local lane a b +# 17#) /=# expected{i}) {i}#)', source)
+                    self.assertIn(f'"{op}{n}" -> emit name {op}{n} (read lane) (read a) (read b)', native)
+                # Existing native rows retain their four input fields; composite
+                # roots consume those independently checked expected outputs.
+                self.assertNotIn(f'"check{n}"', native)
+
 
 if __name__ == '__main__':
     unittest.main()

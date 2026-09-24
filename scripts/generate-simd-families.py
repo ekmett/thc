@@ -271,6 +271,23 @@ def bytecode_emitter(fs):
     return '\n'.join(lines)+'\n'
 
 
+def fixture_operation(family, operation):
+    """One scalar observation of a local vector operation, shared by fixtures."""
+    n = family['name']; count = family['lanes']; rep = family['laneRep']
+    if operation == 'broadcast':
+        vector = f'broadcast{n}# ({haskell_narrow_lane(rep, "a")})'
+    else:
+        left = f'pack{n}# (# ' + ', '.join(haskell_narrow_lane(rep, f'a +# {i * 104729}#') for i in range(count)) + ' #)'
+        right = f'pack{n}# (# ' + ', '.join(haskell_narrow_lane(rep, f'b -# {i * 7919}#') for i in range(count)) + ' #)'
+        vector = f'{operation}{n}# ({left})' + (f' ({right})' if operation in BINARY else '')
+    source = [f'  case unpack{n}# ({vector}) of',
+              '    (# ' + ', '.join(f'p{i}' for i in range(count)) + ' #) -> case lane of']
+    for i in range(count):
+        value = haskell_observe_lane(rep, f'p{i}')
+        source.append(f'      {str(i)+"#" if i < count-1 else "_"} -> {value}')
+    return source
+
+
 def fixture_sources(fs):
     """Real scalar-entry Haskell; vectors never cross a function boundary."""
     source = ['{-# LANGUAGE MagicHash, UnboxedTuples #-}', 'module GeneratedSimdFamilies where',
@@ -287,26 +304,30 @@ def fixture_sources(fs):
               '  _ -> word2Int# (word64ToWord# (castDoubleToWord64# value))', '']
     names = []
     for family in fs:
-        n = family['name']; count = family['lanes']; rep = family['laneRep']
-        for op in family['operations']:
-            if op in ('pack', 'unpack'):
-                continue
-            name = op + n; worker = name + 'Worker'; names.append(name)
-            source += [f'{{-# OPAQUE {worker} #-}}', f'{worker} :: Int# -> Int# -> Int# -> Int#',
-                       f'{worker} lane a b =']
-            if op == 'broadcast':
-                vector = f'broadcast{n}# ({haskell_narrow_lane(rep, "a")})'
-            else:
-                left = f'pack{n}# (# ' + ', '.join(haskell_narrow_lane(rep, f'a +# {i * 104729}#') for i in range(count)) + ' #)'
-                right = f'pack{n}# (# ' + ', '.join(haskell_narrow_lane(rep, f'b -# {i * 7919}#') for i in range(count)) + ' #)'
-                vector = f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY else '')
-            source += [f'  case unpack{n}# ({vector}) of',
-                       '    (# ' + ', '.join(f'p{i}' for i in range(count)) + ' #) -> case lane of']
-            for i in range(count):
-                value = haskell_observe_lane(rep, f'p{i}')
-                source.append(f'      {str(i)+"#" if i < count-1 else "_"} -> {value}')
-            source += [f'{name} :: Int# -> Int# -> Int# -> Int#',
+        n = family['name']
+        operations = [op for op in family['operations'] if op not in ('pack', 'unpack')]
+        for op in operations:
+            name = op + n; worker = name + 'Worker'; local = name + 'Local'; names.append(name)
+            source += [f'{{-# INLINE {local} #-}}', f'{local} :: Int# -> Int# -> Int# -> Int#',
+                       f'{local} lane a b =', *fixture_operation(family, op), '',
+                       f'{{-# OPAQUE {worker} #-}}', f'{worker} :: Int# -> Int# -> Int# -> Int#',
+                       f'{worker} lane a b = {local} lane a b',
+                       f'{name} :: Int# -> Int# -> Int# -> Int#',
                        f'{name} lane a b = case {worker} lane a b of value -> value +# 17#', '']
+        if operations:
+            name = 'check' + n; worker = name + 'Worker'
+            arguments = 'lane a b ' + ' '.join(f'expected{i}' for i in range(len(operations)))
+            signature = ' -> '.join(['Int#'] * (4 + len(operations)))
+            failures = [f'(uncheckedIShiftL# (({op}{n}Local lane a b +# 17#) /=# expected{i}) {i}#)'
+                        for i, op in enumerate(operations)]
+            mask = failures[-1]
+            for failure in reversed(failures[:-1]):
+                mask = f'(orI# {failure} {mask})'
+            source += ['-- Bit i reports a mismatch for operation i in declaration order.',
+                       f'{{-# OPAQUE {worker} #-}}', f'{worker} :: {signature}',
+                       f'{worker} {arguments} =', f'  {mask}',
+                       f'{name} :: {signature}',
+                       f'{name} {arguments} = case {worker} {arguments} of value -> value +# 17#', '']
     native = ['{-# LANGUAGE MagicHash #-}', 'module Main where', 'import GHC.Exts',
               'import Data.Bits (finiteBitSize)', 'import GeneratedSimdFamilies', '',
               'emit :: String -> (Int# -> Int# -> Int# -> Int#) -> Int -> Int -> Int -> IO ()',
