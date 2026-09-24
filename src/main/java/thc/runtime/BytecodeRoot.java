@@ -362,8 +362,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object capture(int arity, Closure function, Object result, MaskingState callerMask,
                 @Bind("$node") Node node) {
             if (!(result instanceof ContinuationResult continuation)) {
-                if (SynchronousMasking.current(node) != callerMask)
+                if (SynchronousMasking.current(node) != callerMask) {
+                    SynchronousMasking.set(node, callerMask);
                     throw new IllegalStateException("Completed application did not restore its caller mask");
+                }
                 return result;
             }
             CompilerDirectives.transferToInterpreterAndInvalidate();

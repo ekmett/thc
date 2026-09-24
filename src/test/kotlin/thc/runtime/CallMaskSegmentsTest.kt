@@ -201,6 +201,26 @@ class CallMaskSegmentsTest {
         }
     }
 
+    @Test fun malformedOrdinaryCalleeRestoresCallerMaskBeforeFailingClosed() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val driver = entered(context) { Driver() }
+            entered(context) {
+                val target = object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any = 42L
+                }.callTarget
+                val function = Closure(null, NO_PAP_ARGUMENTS, 0, target)
+                SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                val failure = assertThrows(IllegalStateException::class.java) {
+                    BytecodeRoot.CaptureApplicationResult.capture(0, function, 42L,
+                        MaskingState.UNMASKED, driver)
+                }
+                assertTrue(failure.message!!.contains("caller mask"))
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+            }
+        }
+    }
+
     @Test fun resumedGuestFailureRestoresEachCallerMaskAndCarrierAmbient() {
         executionContext().use { context ->
             context.initialize("thc")
