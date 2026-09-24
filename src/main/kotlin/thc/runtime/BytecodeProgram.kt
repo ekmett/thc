@@ -291,13 +291,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else emptyList()
                 scope.bindTuple(arg["id"] as String, proof, fields)
                 null
-            } else if (arg["id"] in free) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true, proof).also {
+            } else if (arg["id"] in free || enableAsync && context.entryStrict[index]) bind(scope, arg["id"] as String, !lifted && arg["coercion"] != true, proof).also {
                 physicalArguments += offset to it
             } else null
         }
         context.typedArguments = physicalArguments
         val compiled = compile(expression, scope, true)
-        if (compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
+        if ((!enableAsync || context.entryStrict.none { it }) && compiled.loweredCase && context.inputLayout == null) context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression,
             resultProof, if (context.captureLayout == null) 1 else 2, free.intersect(argumentIds), context.captureLayout != null,
             ::dataLayout, sources, compiled.source)
         if ((compiled.proof.isSum || resultProof.isSum) && (!compiled.proof.isSum || !resultProof.isSum))
@@ -332,9 +332,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 val bloom = LocalAccessor.constantOf(b.createLocal("typed input bloom", "primitive"))
                 typedBloom = bloom
                 val physical = context.typedArguments
+                val deferredStrict = context.arguments.mapIndexedNotNull { index, local ->
+                    if (enableAsync && context.entryStrict[index] && local != null && !local.primitive) local.id else null
+                }.toSet()
                 val slots = BytecodeTypedInputSlots(typed, bloom,
                     physical.map { LocalAccessor.constantOf(e.locals.getValue(it.second.id)) }.toTypedArray(),
-                    physical.map { it.first }.toIntArray(), physical.map { it.second.proof }.toTypedArray(),
+                    physical.map { it.first }.toIntArray(), physical.map {
+                        if (it.second.id in deferredStrict) it.second.proof.copy(evaluated = false) else it.second.proof
+                    }.toTypedArray(),
                     context.captureLayout,
                     context.captures.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray(),
                     context.captures.map { if (it.cell) CoreRepresentation.UNKNOWN else it.proof }.toTypedArray())
@@ -350,7 +355,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
                 val offset = if (context.captureLayout == null) 1 else 2
                 context.arguments.forEachIndexed { index, local -> if (local != null) {
-                    restoreArgument(e, local) { b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset) }
+                    restoreArgument(e, local, enableAsync && context.entryStrict[index]) {
+                        b.emitLoadArgument(ArgumentLayout.offset(context.inputLayout, index) + offset)
+                    }
                 } }
             }
             if (context.mayLoop) {
@@ -360,6 +367,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 e.continueLabel = b.createLabel()
             }
             if (enableAsync) emitAsyncPoll(e)
+            if (enableAsync) emitEntryStrictDemands(e, context)
             val tuple = context.tuple
             if (tuple != null) {
                 val result = List(tuple.width) { b.createLocal("tuple result $it", null) }
@@ -508,9 +516,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
 
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
-    private fun restoreArgument(e: Emission, local: Local, value: () -> Unit) {
+    private fun restoreArgument(e: Emission, local: Local, deferStrictDemand: Boolean = false, value: () -> Unit) {
         val b = e.builder
-        val reference = if (local.cell) null else local.proof.referenceCarrier()
+        val reference = if (local.cell || deferStrictDemand) null else local.proof.referenceCarrier()
         b.beginStoreLocal(e.locals.getValue(local.id))
         when {
             local.directLong -> { b.beginToLong(); value(); b.endToLong() }
@@ -535,6 +543,18 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (local.id < 0 && local.proof.kind == CoreKind.VOID) ProvenExpression(constant(Unit), local.proof)
         else LocalExpression(local, resolve)
     private fun evaluated(value: Expression): Expression = ProvenExpression(value, value.proof.copy(evaluated = true))
+    /** Async callees demand their own CBV formals at a captured bytecode cut.
+     * The caller has already transferred PAP prefixes and typed input fields. */
+    private fun emitEntryStrictDemands(e: Emission, context: FunctionContext) {
+        val b = e.builder
+        context.arguments.forEachIndexed { index, local ->
+            if (!context.entryStrict[index] || local == null || local.primitive || local.proof.isAggregate) return@forEachIndexed
+            val raw = ProvenExpression(read(local), local.proof.copy(evaluated = false))
+            b.beginStoreLocal(b.createLocal("strict entry result $index", null))
+            force(raw).emit(e)
+            b.endStoreLocal()
+        }
+    }
     private fun force(value: Expression): Expression {
         if (value.proof.isAggregate) return value
         if (value.proof.evaluated) return value
@@ -1000,11 +1020,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (!strict || index >= prefix && arguments[index - prefix].proof.evaluated) null
                     else b.createLocal("strict tail operand $index", null).also { temporary ->
                         b.beginStoreLocal(temporary)
-                        b.beginForceValue(metrics, false)
-                        if (index < prefix) {
-                            b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
-                        } else b.emitLoadLocal(args[index - prefix])
-                        b.endForceValue()
+                        if (enableAsync) {
+                            force(Expression { reentry ->
+                                val builder = reentry.builder
+                                if (index < prefix) {
+                                    builder.beginReadSupplied(index); builder.emitLoadLocal(fn); builder.endReadSupplied()
+                                } else builder.emitLoadLocal(args[index - prefix])
+                            }).emit(e)
+                        } else {
+                            b.beginForceValue(metrics, false)
+                            if (index < prefix) {
+                                b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
+                            } else b.emitLoadLocal(args[index - prefix])
+                            b.endForceValue()
+                        }
                         b.endStoreLocal()
                     }
                 }

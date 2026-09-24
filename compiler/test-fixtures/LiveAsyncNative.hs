@@ -7,19 +7,27 @@ import Control.Concurrent
 import Control.Exception
 import System.Timeout
 import GHC.Exts (Int(I#))
+import System.Environment (getArgs)
 import qualified LiveAsyncAudit as A
 
 force :: Int -> IO Int
 force (I# token) = evaluate (I# (A.forceShared token))
+forceStrict :: Int -> IO Int
+forceStrict (I# token) = evaluate (I# (A.strictEntry token))
 ready :: IO Int
 ready = evaluate (I# (A.takeReady 0#))
 count :: IO Int
 count = evaluate (I# (A.prefixCount 0#))
 main :: IO ()
 main = do
+  mode <- getArgs
+  initial <- case mode of
+    [] -> pure force
+    ["strict"] -> pure forceStrict
+    _ -> error "Expected no argument or strict"
   result <- newEmptyMVar
   tid <- forkIO $ do
-    x <- try (force 0) :: IO (Either SomeException Int)
+    x <- try (initial 0) :: IO (Either SomeException Int)
     putMVar result x
   r <- timeout 5000000 ready
   ack <- newEmptyMVar

@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-{-# LANGUAGE MagicHash, UnboxedTuples #-}
+{-# LANGUAGE BangPatterns, MagicHash, UnboxedTuples #-}
 module LiveAsyncAudit where
 import GHC.Exts
 
@@ -63,6 +63,23 @@ forceShared token =
   case catch# (\s -> case shared of { Box value -> (# s, Box value #) })
               (\_ s -> (# s, Box (-1#) #)) realWorld# of
     (# _, Box value #) -> value +# token
+
+-- A dynamic call must demand this otherwise unused strict formal inside the
+-- callee. The shared thunk can suspend there while the caller's catch# is live.
+{-# OPAQUE strictWorker #-}
+strictWorker :: Box -> Int# -> Int#
+strictWorker !ignored token = token
+
+{-# OPAQUE strictCall #-}
+strictCall :: (Int# -> Int#) -> Int# -> Int#
+strictCall worker token =
+  case catch# (\s -> case worker token of { value -> (# s, Box value #) })
+              (\_ s -> (# s, Box (-1#) #)) realWorld# of
+    (# _, Box value #) -> value
+
+{-# OPAQUE strictEntry #-}
+strictEntry :: Int# -> Int#
+strictEntry token = strictCall (strictWorker shared) token
 
 {-# OPAQUE takeReady #-}
 takeReady :: Int# -> Int#
