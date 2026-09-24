@@ -193,9 +193,17 @@ class BigNatLiteralTest {
                 "aggregate" to "unboxed-sum", "tagSlot" to 0, "alternativeSlots" to listOf(emptyList<Int>(), emptyList<Int>()),
                 "alternatives" to List(2) { mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true) }))
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
-            fun size(proof: Map<String, Any?>?) = listOf("app", listOf("prim", "sizeofByteArray#"),
-                listOf(listOf("lit", "bignat", "18446744073709551616") + if (proof == null) emptyList() else listOf(mapOf("rep" to proof))),
-                listOf(false), false, false, mapOf("rep" to mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)))
+            fun size(proof: Map<String, Any?>?): List<Any?> {
+                val scalar = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
+                val literal = listOf("lit", "bignat", "18446744073709551616") +
+                    if (proof == null) emptyList() else listOf(mapOf("rep" to proof))
+                // Keep sizeof's existing exact raw operand certificate. The case
+                // separately checks the intrinsic proof of an erased literal.
+                val read = listOf("app", listOf("prim", "sizeofByteArray#"),
+                    listOf(listOf("var", "bytes", mapOf("rep" to exact))), listOf(false), false, false, mapOf("rep" to scalar))
+                return listOf("case", literal, "bytes", listOf(listOf("default", null, emptyList<String>(), read)),
+                    mapOf("rep" to scalar, "binder" to mapOf("id" to "bytes", "lifted" to false, "rep" to exact)))
+            }
             for (proof in listOf(exact, null, mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)))
                 assertEquals(16L, context.eval("thc", request(backend, size(proof))).execute(0L).asLong())
             for (proof in bad) assertThrows(PolyglotException::class.java) { context.eval("thc", request(backend, size(proof))) }
