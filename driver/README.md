@@ -6,9 +6,11 @@ declarations and native Cabal output layout. It links `Cabal` and `Cabal-syntax`
 directly. There is no subprocess call to the `cabal` command and no replacement
 dependency solver.
 
-This is the first package-planning slice of the THC driver. It does not compile
-or export Haskell to THC, invoke `THC.Plugin`, start Graal/Sulong, run a program,
-or provide a REPL. The `build`, `run`, and `repl` commands are deliberately absent.
+`thc run` is the first executable slice. It asks Cabal's library to configure and
+build one selected executable, exports that executable's `Main.main :: IO ()`
+through `Thc.Plugin`, rejects unsupported reachable Core through the strict
+audit, then invokes the THC JVM runtime. It never executes the native Cabal
+binary. The standalone `build` and `repl` commands remain absent.
 
 ## Build and exercise
 
@@ -31,6 +33,39 @@ python3 test/test_driver.py \
   --driver ../build/driver-package/build/thc/thc \
   --scratch ../build/driver-tests
 ```
+
+To exercise `run`, first build the plugin and JVM launcher from the repository
+root using the pinned GHC and GraalVM JDK 25:
+
+```sh
+export JAVA_HOME=/path/to/graalvm-jdk-25
+compiler/build.sh
+scripts/gradle.sh installDist --offline
+build/driver-package/build/thc/thc run driver/test/fixtures/run-pure \
+  --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
+
+python3 driver/test/run_integration.py \
+  --driver "$PWD/build/driver-package/build/thc/thc" \
+  --runtime "$PWD/build/install/thc/bin/thc" \
+  --thc-root "$PWD" --scratch "$PWD/build/run-integration"
+```
+
+`run` requires a real Cabal executable and its `Main.main :: IO ()`. It builds
+that component with Cabal's own `LocalBuildInfo`, then invokes GHC again with
+the selected source directories, language/CPP/GHC options and installed package
+IDs to export Core. The strict `--io-main` audit checks the erased
+`State# RealWorld -> (# State#, () #)` boundary and every reachable dependency.
+The runtime supplies the zero-width state carrier, executes the action, and
+verifies its boxed unit result. The successful fixture performs `newMutVar#`,
+`writeMutVar#`, and `readMutVar#`; the integration check also changes its expected
+read value and requires a guest failure. Console IO such as `putStrLn` still
+fails strict audit. There is no diagnostic trap fallback or native execution.
+
+This first slice requires an executable without internal library or build-tool
+dependencies. It expects a source `.hs` main and an installed THC JVM launcher
+(`--runtime` overrides `<thc-root>/build/install/thc/bin/thc`). Native Cabal
+output is built but never launched by `thc run`. The runtime currently executes
+the IO action in the interpreter; it does not claim a compiled guest entry.
 
 On coordinated development hosts, wrap each configure/build/test command in the
 shared `resource_run.py --build-dir /absolute/checkout/build -- COMMAND` gate.
@@ -160,14 +195,13 @@ and test, and verify that all input source hashes stayed unchanged.
 Additional cases exercise missing dependencies, unknown flags, disabled
 components, ambiguous/malformed/missing packages, project boundaries, custom
 Setup rejection, unsupported test interfaces and relative output paths. These
-are native Cabal integration checks, not THC execution coverage. The test build
-is only an independent oracle; the driver itself never calls a build command.
+are native Cabal planning checks; their test build is an independent oracle.
+`run_integration.py` separately checks THC IO execution on both backends and
+requires unsupported console IO to fail before launch.
 
-Future work should use cabal-install's project APIs for genuine project solving
-and provide a separate THC artifact/export mapping using `THC.Plugin`. That work
-must preserve the distinction between resolved compiler inputs, native outputs
-and THC runtime capability. GHCi and Sulong integration are outside this package
-slice.
+Future work should use cabal-install's project APIs for genuine project solving,
+support internal package libraries in the export graph, and expand strict IO
+capabilities. GHCi and Sulong integration are outside this package slice.
 
 Source and fixture licensing follow THC's `UPL-1.0 AND BSD-3-Clause` terms; the
 repository's license notices are included for standalone package distribution.

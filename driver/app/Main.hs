@@ -8,6 +8,7 @@ import System.Exit (die)
 import System.IO (hSetEncoding, stderr, stdout, utf8)
 import THC.Driver.Cabal
 import THC.Driver.Json (renderJson)
+import THC.Driver.Run
 
 main :: IO ()
 main = topHandler $ do
@@ -17,12 +18,19 @@ main = topHandler $ do
   case args of
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
+    ["run", "--help"] -> putStr runUsage
     "plan-package" : rest -> case getOpt Permute options rest of
       (updates, targets, []) | length targets <= 1 -> do
         let opts = foldl (flip ($)) defaultPlanOptions updates
             target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
         planPackage opts target >>= putStrLn . renderJson
       (_, _, errors) -> die (concat errors ++ usage)
+    "run" : rest -> case getOpt Permute runOptions rest of
+      (updates, targets, []) | length targets <= 1 -> do
+        let opts = foldl (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing) updates
+            target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
+        runPackage opts target
+      (_, _, errors) -> die (concat errors ++ runUsage)
     _ -> die usage
 
 options :: [OptDescr (PlanOptions -> PlanOptions)]
@@ -39,4 +47,21 @@ options =
     parseFlag name = (mkFlagName name, True)
 
 usage :: String
-usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core, run or repl.\n" options
+usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [--runtime PATH]\n" options
+
+runOptions :: [OptDescr (RunOptions -> RunOptions)]
+runOptions =
+  [ Option [] ["exe"] (ReqArg (\name r -> r {runExecutable = name}) "NAME") "Selected Cabal executable"
+  , Option [] ["thc-root"] (ReqArg (\path r -> r {runThcRoot = path}) "DIR") "THC source/build root"
+  , Option [] ["runtime"] (ReqArg (\path r -> r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
+  ] ++ map liftPlanOption options
+
+liftPlanOption :: OptDescr (PlanOptions -> PlanOptions) -> OptDescr (RunOptions -> RunOptions)
+liftPlanOption (Option shorts longs argument description) = Option shorts longs (case argument of
+  NoArg update -> NoArg (liftUpdate update)
+  ReqArg update name -> ReqArg (\value -> liftUpdate (update value)) name
+  OptArg update name -> OptArg (\value -> liftUpdate (update value)) name) description
+  where liftUpdate update run = run {runPlan = update (runPlan run)}
+
+runUsage :: String
+runUsage = usageInfo "Usage: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [OPTIONS]\n\nBuild the selected Cabal executable, export and audit its GHC main :: IO (), then execute that action in THC.\nThe native executable is never run. This first slice requires an executable without internal library or build-tool dependencies.\n" runOptions

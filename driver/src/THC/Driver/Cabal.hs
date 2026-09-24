@@ -1,4 +1,4 @@
-module THC.Driver.Cabal (PlanOptions(..), defaultPlanOptions, planPackage) where
+module THC.Driver.Cabal (PlanOptions(..), defaultPlanOptions, configurePackage, planPackage) where
 
 import Control.Monad (filterM, unless, when)
 import qualified Data.ByteString as BS
@@ -38,8 +38,8 @@ defaultPlanOptions = PlanOptions "dist-thc" Nothing Nothing [] False False
 
 -- Cabal's configure action resolves against the selected compiler's installed
 -- global package database. It is not cabal-install's project dependency solver.
-planPackage :: PlanOptions -> FilePath -> IO Json
-planPackage opts target = do
+configurePackage :: PlanOptions -> FilePath -> IO (FilePath, LocalBuildInfo)
+configurePackage opts target = do
   cabalFile <- discoverPackage target
   let packageRoot = takeDirectory cabalFile
   bytes <- BS.readFile cabalFile
@@ -79,6 +79,14 @@ planPackage opts target = do
   let configuredPackage = localPkgDescr lbi
       components = allComponentsInBuildOrder lbi
   mapM_ (checkComponent . getComponent configuredPackage . componentLocalName) components
+  pure (cabalFile, lbi)
+
+planPackage :: PlanOptions -> FilePath -> IO Json
+planPackage opts target = do
+  (cabalFile, lbi) <- configurePackage opts target
+  let packageRoot = takeDirectory cabalFile
+      configuredPackage = localPkgDescr lbi
+      components = allComponentsInBuildOrder lbi
   pure $ Object
     [ ("schema", String "thc.cabal-package-plan.v1")
     , ("stage", String "cabal-installed-package-configuration")

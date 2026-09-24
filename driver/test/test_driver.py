@@ -139,7 +139,7 @@ class DriverTest(unittest.TestCase):
         self.dist = self.root / "configuration"
 
     def invoke(self, *args, ok=True):
-        extra = self.compiler_options if args and args[0] == "plan-package" else []
+        extra = self.compiler_options if args and args[0] in ("plan-package", "run") else []
         result = self.commands.run([self.driver, *args, *extra], cwd=self.root)
         if ok:
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
@@ -303,9 +303,11 @@ class DriverTest(unittest.TestCase):
         self.assertTrue((self.package / plan["setupConfig"]).exists())
         self.assertFalse((self.root / "out").exists())
 
-    def test_cli_does_not_claim_build_run_or_repl(self):
+    def test_cli_exposes_run_without_claiming_build_or_repl(self):
         self.assertIn("plan-package", self.invoke("--help").stdout)
-        for args in (("build", "--dry-run"), ("run",), ("repl",),
+        self.assertIn("run", self.invoke("--help").stdout)
+        self.reject("run", contains="run requires --exe NAME")
+        for args in (("build", "--dry-run"), ("repl",),
                      ("plan-package", "--unknown"), ("plan-package", "a", "b")):
             with self.subTest(args=args):
                 self.reject(*args, contains="Usage:")

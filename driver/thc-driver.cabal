@@ -11,6 +11,9 @@ description: A bounded Cabal-library-backed package configuration inspector.
 extra-source-files:
   README.md
   test/test_driver.py
+  test/run_integration.py
+  test/fixtures/run-pure/run-pure.cabal
+  test/fixtures/run-pure/app/Main.hs
   test/fixtures/tiny/tiny-fixture.cabal
   test/fixtures/tiny/words/Words.hs
   test/fixtures/tiny/src/Greeting.hs
@@ -28,9 +31,10 @@ executable thc
   other-modules:
     THC.Driver.Cabal
     THC.Driver.Json
+    THC.Driver.Run
   build-depends:
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
-    bytestring, directory, filepath
+    bytestring, directory, filepath, process
   default-language: Haskell2010
   ghc-options: -Wall -Werror
