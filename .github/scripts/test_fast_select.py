@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 """Pure Git/source selection tests: never compile or execute guest/JUnit code."""
 import copy
 import importlib.util
@@ -49,6 +51,7 @@ class FastSelectionTest(unittest.TestCase):
             "src/test/kotlin/example/SmokeTest.kt": kotlin("SmokeTest"),
             "src/test/kotlin/example/LeafTest.kt": kotlin("LeafTest"),
             "src/test/kotlin/example/OtherTest.kt": kotlin("OtherTest"),
+            "src/polyglotTest/kotlin/example/PolyglotTest.kt": kotlin("PolyglotTest"),
             "src/main/kotlin/Leaf.kt": "package example\nfun leaf() = 1\n",
             "src/main/kotlin/Critical.kt": "package example\nclass Critical\n",
             "scripts/test-smoke.py": PYTHON_TEST,
@@ -89,6 +92,7 @@ class FastSelectionTest(unittest.TestCase):
 
     def test_no_diff_and_documentation_keep_nonempty_smoke(self):
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertEqual({"required": False, "classes": []}, self.plan()["polyglot"])
         self.write("README.md", "New documentation\n")
         head = self.commit()
         result = self.plan()
@@ -99,6 +103,37 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["README.md"], result["changedPaths"])
         self.assertRegex(result["policySha256"], "^[0-9a-f]{64}$")
         self.assertEqual(result, self.plan())
+
+    def test_polyglot_changes_select_actual_optional_class_without_all_regular_tests(self):
+        path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
+        self.write(path, kotlin("PolyglotTest", "@Test fun changed() {}"))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual({"required": True, "classes": ["example.PolyglotTest"]}, result["polyglot"])
+        self.assertEqual(["example.SmokeTest"], result["junit"]["classes"])
+
+    def test_shared_core_and_frontend_changes_require_polyglot_but_leaf_does_not(self):
+        for path in ("src/main/kotlin/thc/runtime/CoreRepresentations.kt",
+                     "compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
+                     "scripts/audit-core.py", "build.gradle.kts"):
+            with self.subTest(path=path):
+                self.write(path, "changed\n")
+                self.commit()
+                self.assertTrue(self.plan()["polyglot"]["required"])
+                self.base = self.git("rev-parse", "HEAD")
+        self.write("src/main/kotlin/Leaf.kt", "package example\nfun leaf() = 2\n")
+        self.commit()
+        self.assertFalse(self.plan()["polyglot"]["required"])
+
+    def test_missing_optional_class_cannot_pass_a_required_lane(self):
+        path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
+        self.git("rm", path)
+        self.commit()
+        result = self.plan()
+        self.assertTrue(result["polyglot"]["required"])
+        self.assertFalse(result["runnable"])
+        self.assertIn("empty-polyglot-inventory", {reason["code"] for reason in result["reasons"]})
 
     def test_changed_test_is_never_removed_for_smoke_budget(self):
         self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", "@Test fun expensiveNativeCampaign() {}"))
@@ -208,9 +243,11 @@ private val text = "class FakeString { @Test }"
         self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffL\n    else ->'))
         self.commit()
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertFalse(self.plan()["polyglot"]["required"])
         self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffffL\n    else ->'))
         self.commit()
         self.full("shared-primop-registry-change")
+        self.assertTrue(self.plan()["polyglot"]["required"])
 
     def test_new_primitive_dispatch_arms_are_scoped_but_existing_arm_edits_widen(self):
         path = select.PROGRAM
@@ -224,6 +261,7 @@ private val text = "class FakeString { @Test }"
         self.write(path, after)
         self.commit()
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertFalse(self.plan()["polyglot"]["required"])
         self.write(path, after.replace('"plusInt#" -> x + y', '"plusInt#" -> x - y'))
         self.commit()
         self.full("shared-primop-registry-change")
@@ -239,6 +277,7 @@ private val text = "class FakeString { @Test }"
         self.write(path, after)
         self.commit()
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertFalse(self.plan()["polyglot"]["required"])
         self.write(path, after.replace('"PopulationCountWidth"\n    else', '"NewUnreviewedOperation"\n    else'))
         self.commit()
         self.full("shared-primop-registry-change")
