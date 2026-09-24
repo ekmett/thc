@@ -23,12 +23,14 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "56f2ebe2622a55a8146f7903563379cfa367095466c7b1cf2e0de73610e81f08"
+FULL_PREPARATION_PLAN = "8a64a47bde9bfd4572bb7b27c8619ca1473d7d993971b28943381c049d9927bd"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
-    "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native", "build/pinned-addresses", "build/simd-capability-smoke",
-    "build/managed-address-reads",
+    "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
+    "build/pinned-addresses", "build/simd-capability-smoke", "build/managed-address-reads",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
+    "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",
     "build/managed-address-reads/manifest.json",

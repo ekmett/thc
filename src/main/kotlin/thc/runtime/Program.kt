@@ -1345,6 +1345,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> ManagedAddress.fromHex(value)
+        "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -1479,6 +1480,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
                 CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 NoDuplicate(argument(args[0], scope, false), tupleProof)
+            } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
+                CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1859,6 +1863,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "raise#" -> {
             if (args.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
             RaiseException(args[0])
+        }
+        "eqAddr#", "neAddr#" -> {
+            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            CompareManagedAddress(args[0], args[1], name == "neAddr#")
         }
         "plusAddr#", "indexCharOffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")

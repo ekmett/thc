@@ -48,6 +48,7 @@ rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py
 python3 scripts/prepare-managed-md5.py
 python3 scripts/prepare-pinned-addresses.py
+scripts/prepare-address-identity.sh
 python3 scripts/prepare-managed-address-reads.py
 "$fixture_bin" int-arrays double-arrays int32-arrays float-word-arrays int16-arrays int8-arrays
 # GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately

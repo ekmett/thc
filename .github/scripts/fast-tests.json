@@ -12,6 +12,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
       "junit": [
         "thc.runtime.BitPrimopsTest"
@@ -176,6 +180,18 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/AddressIdentityAudit.hs": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/AddressIdentityAuditNative.hs": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest"],
+      "python": []
+    },
+    "scripts/prepare-address-identity.sh": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/CorePackageManifest.kt": {
       "junit": ["thc.CoreZipBundleTest", "thc.CoreLinkerTest"],
       "python": []
