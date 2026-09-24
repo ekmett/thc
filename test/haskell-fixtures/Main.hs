@@ -136,7 +136,9 @@ entryJson Bit e = object
   ["name" .= entryName e, "primitive" .= entryPrimitive e,
    "operation" .= entryOperation e, "width" .= entryWidth e,
    "arity" .= entryArity e,
-   "argumentRep" .= (if entryWidth e == 64 then "Word64Rep" else "WordRep" :: String),
+   "argumentRep" .= case entryArguments e of
+     [rep] -> rep
+     reps -> error ("Bit fixture must have one argument representation: " ++ show reps),
    "resultRep" .= entryResult e,
    "definedResultBits" .= (if entryOperation e `elem` ["byteSwap", "bitReverse"] then entryWidth e else 64),
    "index" .= entryIndex e]
