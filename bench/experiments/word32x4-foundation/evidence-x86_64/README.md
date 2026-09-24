@@ -81,5 +81,5 @@ and four JDK hashes match the frozen snapshot after the forced dense rebuild.
 Fresh runs use scripts/prepare-tests.sh, scripts/gradle.sh test installDist,
 the same full test with JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true and --rerun-tasks,
 and bench/experiments/word32x4-foundation/run-runtime.sh with a new output path.
-Use the pinned environment and shared resource gate for heavy jobs. Parent owns
-PR/integration; completed Word8 and Word16 branches remain frozen.
+Use the pinned toolchain. These results describe the recorded revision; later
+integration changes require their own validation.

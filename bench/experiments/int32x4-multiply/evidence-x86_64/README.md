@@ -84,13 +84,12 @@ recorded checkout, approximately 77 MiB, uncommitted. SHA256SUMS covers every
 retained file except itself. Supplemental scripts accept `--root CHECKOUT` and
 read the retained originals without guest execution.
 
-Fresh heavy runs use the pinned environment
-`/home/ekmett/thc-benchmarks/2026-09-23-083914/environment.sh` and reserve the
-checkout's build directory with the shared resource gate. Run complete
+Fresh runs use the pinned environment
+`/home/ekmett/thc-benchmarks/2026-09-23-083914/environment.sh`. Run complete
 scripts/prepare-tests.sh, then scripts/gradle.sh test installDist. Repeat the full
 test/build with JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true and --rerun-tasks.
 Capture with bench/experiments/int32x4-multiply/run-runtime.sh and a fresh output
 directory. Exact recorded Gradle arguments and environment are in test-suites.json.
 
-Parent owns integration/PR work. Prior Word32, Word16 and Word8 branches remain
-frozen; this branch does not claim integration with later main changes.
+These results describe the recorded revision; later integration changes require
+their own validation.

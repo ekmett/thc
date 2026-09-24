@@ -24,8 +24,7 @@ After native fixture preparation and `installDist`, with the pinned Graal JDK:
 bash bench/experiments/word32x4-bytearray/run-runtime.sh build/word32x4-bytearray-runtime-capture
 ```
 
-Reserve the shared build/runtime resource gate around that entire command. The
-runner does not build or generate native inputs. An existing output directory
+The runner does not build or generate native inputs. An existing output directory
 is rejected. Every command, log and status is retained, and any failure stops
 the run. There is no retry, settling call, raised compiler graph budget or relaxed
 compiled-entry condition: forty interpreted corpus passes, one explicit compile
