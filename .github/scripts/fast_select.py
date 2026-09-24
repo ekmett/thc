@@ -238,9 +238,9 @@ def standalone_python_test(source):
 
 def primop_family(name):
     """Only names exercised by the pinned, independent native primop oracles."""
-    if re.fullmatch(r"(?:popCnt|clz|ctz|byteSwap|bitReverse)(?:8|16|32|64)?#", name):
+    if re.fullmatch(r"(?:(?:popCnt|clz|ctz)(?:8|16|32|64)|byteSwap(?:16|32|64)?|bitReverse(?:8|16|32|64)?)#", name):
         return "bit-primops"
-    if re.fullmatch(r"(?:quot|rem|eq|ne|gt|ge|and|or|xor|not|uncheckedShiftL|uncheckedShiftRL)Word(?:8|16|32)?#", name):
+    if re.fullmatch(r"(?:(?:quot|rem|gt|ge)Word|(?:quot|rem|eq|ne|gt|ge|and|or|xor|not|uncheckedShiftL|uncheckedShiftRL)Word(?:8|16|32))#", name):
         return "integer-primops"
     if re.fullmatch(r"(?:negate|plus|sub|times|quot|rem|eq|ne|lt|le|gt|ge)Int(?:8|16|32)#", name):
         return "signed-narrow-primops"
@@ -303,7 +303,7 @@ def additive_program_families(before, after):
                             else {"8": "56", "16": "48", "32": "32"}).get(width[1] if width else "")
                 if match[2] != expected or family != ("integer-primops" if start == word else "signed-narrow-primops"):
                     return None
-            elif primitive < 0 or start <= primitive or family is None or not prefix[start:].count("\n"):
+            elif primitive < 0 or start <= primitive or family is None:
                 return None
             elif start == arity and match[2] not in ("1", "2"):
                 return None

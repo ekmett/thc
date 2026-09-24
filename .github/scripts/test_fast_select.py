@@ -179,6 +179,14 @@ private val text = "class FakeString { @Test }"
         self.commit()
         self.full("shared-primop-registry-change")
 
+    def test_uncovered_primitive_name_does_not_claim_native_oracle_coverage(self):
+        path = select.CAPABILITIES
+        self.write(path, json.dumps({"primitives": {}}))
+        self.base = self.commit()
+        self.write(path, json.dumps({"primitives": {"byteSwap8#": 1}}))
+        self.commit()
+        self.full("shared-primop-registry-change")
+
     def test_mask_registry_only_accepts_new_exact_width_arms(self):
         path = select.PROGRAM
         before = ('internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {\n'
