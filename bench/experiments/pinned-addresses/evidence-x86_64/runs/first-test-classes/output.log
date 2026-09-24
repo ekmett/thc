@@ -1,0 +1,202 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources
+> Task :processTestResources NO-SOURCE
+> Task :kaptGenerateStubsKotlin
+
+> Task :kaptKotlin
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:7: warning: This node is a candidate for node object inlining. The memory footprint is estimated to be reduced from 24 to 5 byte(s). Add @GenerateInline(true) to enable object inlining for this node or @GenerateInline(false) to disable this warning. Also consider disabling cached node generation with @GenerateCached(false) if all usages will be inlined. This warning may be suppressed using @SuppressWarnings("truffle-inlining").
+public abstract class BloomValue extends com.oracle.truffle.api.nodes.Node {
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:20: warning: The @Cached(neverDefault=true|false) property is not needed to be set. Remove the property to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+    long cachedMask, @com.oracle.truffle.api.dsl.Cached(value = "box(cachedMask)", neverDefault = true)
+                                                                                                  ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/Dispatch.java:105: warning: For this specialization with inlined cache parameters it is recommended to use the static modifier. The method should be static to avoid accidently passing the wrong node parameter to inlined cached nodes. To resolve this add the static keyword to the specialization method.  This warning may be suppressed using @SuppressWarnings("truffle-static-method").
+    @com.oracle.truffle.api.dsl.Specialization(guards = {"function.arity < argsSize"}, replaces = {"directOverapplied"})
+    ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:784: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, long index, @Bind("$node") Node node) {
+                                              ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1346: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor seventh, LocalAccessor eighth, Int16X8 value, @Bind("$node") Node node) {
+                                                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:266: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object state, @Bind("$node") Node node) {
+                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:201: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:324: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                TailCall transfer, @Bind("$node") Node node) {
+                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:833: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1385: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, Int32X4 value, @Bind("$node") Node node) {
+                                                                          ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1159: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Word8X16 value, @Bind("$node") Node node) {
+                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:728: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:551: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1006: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:981: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:774: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, Object state, @Bind("$node") Node node) {
+                                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1448: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second, DoubleX2 value, @Bind("$node") Node node) {
+                                                                                                                                 ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:799: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+                                                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:295: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:892: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1262: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, Word32X4 value, @Bind("$node") Node node) {
+                                                                           ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:525: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1301: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor seventh, LocalAccessor eighth, Word16X8 value, @Bind("$node") Node node) {
+                                                                             ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:822: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long size, Object state, @Bind("$node") Node node) {
+                                                       ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1032: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:812: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object state, @Bind("$node") Node node) {
+                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:911: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:430: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:253: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor first, LocalAccessor second, long left, long right, @Bind("$node") Node node) {
+                                                                                  ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:719: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:756: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:581: warning: This operation supports uncached execution, so forcing cached is not necessary. Remove the forceCached attribute to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-force-cached").
+    @Operation(forceCached = true)
+                             ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:591: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:601: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:467: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:336: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Metrics metrics, Closure function, @Bind("$node") Node node,
+                                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1418: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, FloatX4 value, @Bind("$node") Node node) {
+                                                                          ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1224: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Int8X16 value, @Bind("$node") Node node) {
+                               ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:693: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static Object raise(Object payload, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1060: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:487: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:360: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                BytecodeTupleSlots destination, boolean tail, Metrics metrics, Closure function, @Bind("$node") Node node,
+                                                                                                 ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:747: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object initial, Object state, @Bind("$node") Node node) {
+                                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1104: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Int64X2 value, @Bind("$node") Node node) {
+                               ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:277: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, long alignment, Object state, @Bind("$node") Node node) {
+                                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:315: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+
+> Task :compileKotlin
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:892:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:934:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:974:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:1021:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/CoreVectorMemory.kt:109:37 Unnecessary safe call on a non-null receiver of type 'Map<String, Any?>'.
+
+> Task :compileJava
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:33328: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:38965: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+3 warnings
+
+> Task :classes
+> Task :jar
+> Task :kaptGenerateStubsTestKotlin
+> Task :kaptTestKotlin
+
+> Task :compileTestKotlin
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/RealCoreCallDemandTest.kt:19:71 Cast is redundant.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:91:13 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:91:52 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:63:127 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:64:50 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:68:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdFloatVectorTest.kt:57:123 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:57:120 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:62:97 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:66:93 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:60:119 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:65:95 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:69:91 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:60:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:65:105 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:73:101 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:58:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:63:105 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:71:101 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:63:124 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:68:103 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:76:99 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SumProtocolTest.kt:51:45 Cast is redundant.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 40s
+9 actionable tasks: 9 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

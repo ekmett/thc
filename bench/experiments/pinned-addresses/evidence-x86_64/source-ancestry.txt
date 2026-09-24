@@ -1,0 +1,12 @@
+775034fbf7b3adbc9dcd781f1f31716d0055afc8 Add alias-preserving managed byte-backed addresses
+6c81f7c987cf463f1a1c9bfc499cfa163fbf345f Check managed address regions and backing overlap before effects
+8bb538ab21107b322b0df84f9d7e384232c94f06 Add genuine pinned-address native fixtures and exact byte models
+5cfefef9ccd42bd163252423bbf9f5b9b79a7d7b Keep pinned compiler identity checks portable to Darwin
+ffebf5baf149921bfdbf1c4a0b76669db0d02b08 Export structured declared foreign-call signatures without changing IDs
+fe39e8117530f5878373601a2d3b4de811f82df6 Port the three pinned MD5 ABI calls over checked managed storage
+f4805747e0ad7a7612c3b03df9e916a6071d101a Validate the closed managed MD5 foreign-call proof contract
+53f40c4b3b5013d49203c5ea5e7ae95d531fdf75 test: exercise keepAlive laziness proofs and continuation sequencing
+965e94a9165c15d85319fb322004dda106c5daff Test precise managed memory keepAlive and closed MD5 proofs
+2cbf1aa5f369658100fd7137a3725ba9dd85a639 Add managed pinned addresses keepAlive and closed MD5 foreign adapters
+0704e690d0509d88eee6c9c8f35d5e50f6148c6b Archive owned MD5 preparation attempts for safe repeat runs
+3e2c124e039926c165e907b034cc80bb9197b50b Wire repeatable MD5 preparation checks into validation

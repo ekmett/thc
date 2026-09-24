@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/check-foreign-call-metadata.py", line 173, in <module>
+    main()
+  File "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/check-foreign-call-metadata.py", line 160, in main
+    found = check_module(module, auditor, capabilities)
+  File "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/check-foreign-call-metadata.py", line 92, in check_module
+    require(not report['accepted'] and len(report['missingGlobals']) == 1
+  File "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/check-foreign-call-metadata.py", line 17, in require
+    raise AssertionError(detail)
+AssertionError: Foreign frontier changed: md5Init

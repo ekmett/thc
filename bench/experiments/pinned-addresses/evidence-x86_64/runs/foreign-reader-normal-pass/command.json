@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "python3",
+    "-c",
+    "import importlib.util, sys\nfrom pathlib import Path\nroot = Path(\"/home/ekmett/ai/thc-pinned-addresses-01a0cdeb\")\nworker = Path(\"/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb\")\nspec = importlib.util.spec_from_file_location(\"fixture_reader\", worker/\"compiler/test-fixtures/check-foreign-call-metadata.py\")\nreader = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(reader)\nreader.ROOT = root\nsys.path.insert(0, str(root/\"scripts\"))\nreader.main()\n",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/after-pre/ForeignCallAudit.json",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/after-post/ForeignCallAudit.json",
+    "--before",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/before-pre/ForeignCallAudit.json",
+    "--before",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/before-post/ForeignCallAudit.json"
+  ],
+  "cwd": "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb",
+  "started": 1790223764.6832097,
+  "resources": [
+    "build:/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build"
+  ]
+}

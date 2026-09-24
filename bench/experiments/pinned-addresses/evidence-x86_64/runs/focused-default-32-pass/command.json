@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "scripts/gradle.sh",
+    "--offline",
+    "--no-daemon",
+    "--max-workers=4",
+    "test",
+    "--tests",
+    "thc.runtime.PinnedAddressTest",
+    "--tests",
+    "thc.runtime.ManagedAddressStorageTest",
+    "--tests",
+    "thc.runtime.ManagedMd5Test",
+    "--tests",
+    "thc.runtime.CoreMd5ForeignTest",
+    "--tests",
+    "thc.runtime.Md5ForeignCallTest",
+    "--tests",
+    "thc.runtime.CoreKeepAliveTest"
+  ],
+  "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+  "started": 1790222813.4856923,
+  "resources": [
+    "build:/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build"
+  ]
+}

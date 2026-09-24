@@ -1,0 +1,1544 @@
+Preserved full default suite before dense run: {"tests": 665, "failures": 0, "errors": 0, "skipped": 0}
+Dense command: ["scripts/gradle.sh", "--offline", "--no-daemon", "--max-workers=4", "test", "--rerun-tasks"]
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true
+Picked up JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources
+> Task :processTestResources NO-SOURCE
+> Task :kaptGenerateStubsKotlin
+
+> Task :kaptKotlin
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:7: warning: This node is a candidate for node object inlining. The memory footprint is estimated to be reduced from 24 to 5 byte(s). Add @GenerateInline(true) to enable object inlining for this node or @GenerateInline(false) to disable this warning. Also consider disabling cached node generation with @GenerateCached(false) if all usages will be inlined. This warning may be suppressed using @SuppressWarnings("truffle-inlining").
+public abstract class BloomValue extends com.oracle.truffle.api.nodes.Node {
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:20: warning: The @Cached(neverDefault=true|false) property is not needed to be set. Remove the property to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+    long cachedMask, @com.oracle.truffle.api.dsl.Cached(value = "box(cachedMask)", neverDefault = true)
+                                                                                                  ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/Dispatch.java:105: warning: For this specialization with inlined cache parameters it is recommended to use the static modifier. The method should be static to avoid accidently passing the wrong node parameter to inlined cached nodes. To resolve this add the static keyword to the specialization method.  This warning may be suppressed using @SuppressWarnings("truffle-static-method").
+    @com.oracle.truffle.api.dsl.Specialization(guards = {"function.arity < argsSize"}, replaces = {"directOverapplied"})
+    ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:551: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1058: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1327: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor seventh, LocalAccessor eighth, Word16X8 value, @Bind("$node") Node node) {
+                                                                             ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1288: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, Word32X4 value, @Bind("$node") Node node) {
+                                                                           ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:773: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object initial, Object state, @Bind("$node") Node node) {
+                                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:360: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                BytecodeTupleSlots destination, boolean tail, Metrics metrics, Closure function, @Bind("$node") Node node,
+                                                                                                 ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:277: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, long alignment, Object state, @Bind("$node") Node node) {
+                                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:315: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1444: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, FloatX4 value, @Bind("$node") Node node) {
+                                                                          ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:918: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:295: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1250: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Int8X16 value, @Bind("$node") Node node) {
+                               ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1086: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:838: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object state, @Bind("$node") Node node) {
+                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1032: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:456: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1474: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second, DoubleX2 value, @Bind("$node") Node node) {
+                                                                                                                                 ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1185: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Word8X16 value, @Bind("$node") Node node) {
+                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:810: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, long index, @Bind("$node") Node node) {
+                                              ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:859: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:324: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                TailCall transfer, @Bind("$node") Node node) {
+                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:266: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object state, @Bind("$node") Node node) {
+                                         ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:493: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:937: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:607: warning: This operation supports uncached execution, so forcing cached is not necessary. Remove the forceCached attribute to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-force-cached").
+    @Operation(forceCached = true)
+                             ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:617: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:627: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:754: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:800: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, Object state, @Bind("$node") Node node) {
+                                                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1411: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, Int32X4 value, @Bind("$node") Node node) {
+                                                                          ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:719: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static Object raise(Object payload, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1372: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor seventh, LocalAccessor eighth, Int16X8 value, @Bind("$node") Node node) {
+                                                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:782: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1130: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Int64X2 value, @Bind("$node") Node node) {
+                               ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1007: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:336: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Metrics metrics, Closure function, @Bind("$node") Node node,
+                                                   ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:513: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:745: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:201: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:253: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor first, LocalAccessor second, long left, long right, @Bind("$node") Node node) {
+                                                                                  ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:577: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:848: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long size, Object state, @Bind("$node") Node node) {
+                                                       ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:825: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+                                                                         ^
+
+> Task :compileKotlin
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:912:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:956:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:996:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/BytecodeProgram.kt:1043:25 'when' is exhaustive so 'else' is redundant here.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/main/kotlin/thc/runtime/CoreVectorMemory.kt:109:37 Unnecessary safe call on a non-null receiver of type 'Map<String, Any?>'.
+
+> Task :compileJava
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:33497: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:39178: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+3 warnings
+
+> Task :classes
+> Task :jar
+> Task :kaptGenerateStubsTestKotlin
+> Task :kaptTestKotlin
+
+> Task :compileTestKotlin
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/RealCoreCallDemandTest.kt:19:71 Cast is redundant.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:91:13 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:91:52 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:63:127 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:64:50 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:68:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdFloatVectorTest.kt:57:123 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:57:120 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:62:97 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:66:93 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:60:119 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:65:95 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:69:91 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:60:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:65:105 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:73:101 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:58:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:63:105 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:71:101 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:63:124 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:68:103 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:76:99 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/src/test/kotlin/thc/runtime/SumProtocolTest.kt:51:45 Cast is redundant.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+Picked up JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
+WARNING: Using incubator modules: jdk.incubator.vector
+
+AggregateFrontierTest > existingConstructorRejectionAlsoCoversColdAndZeroWidthArms() PASSED
+
+AggregateFrontierTest > diagnosticModeTrapsConstructorFreeBoundariesIncludingUnusedFormals() PASSED
+
+AggregateFrontierTest > diagnosticModeKeepsLegacyColdAggregatePathsLazyAndTrapsWhenReached() PASSED
+
+AggregateFrontierTest > ordinaryUnknownMetadataRemainsOptionalAndDoesNotInferAggregateShape() PASSED
+
+AggregateFrontierTest > strictLoadingRejectsOptimizedAggregatesBeforeAnyInputRuns() PASSED
+
+AggregateLayoutTest > boxedTuplesAndUnliftedBoxedProductsRemainObjectsWithLazyPayloads() PASSED
+
+AggregateLayoutTest > strictLoadingRejectsRecursivePolymorphicAndNewtypeAggregateBoundaries() PASSED
+
+BloomHeaderTest > selfAndConservativeBloomHitsStillBounceBeforeWritingAnyHeader() PASSED
+
+BloomHeaderTest > compiledDynamicAncestryPreservesEveryBitAndStillDetectsBloomHits() PASSED
+
+BytecodeBackendTest > unsupportedCodeRejectsAtLoadOrTrapsOnlyWhenTheDiagnosticBranchIsEntered() PASSED
+
+BytecodeBackendTest > backendSelectionAndMutableProgramStateAreIsolatedWithinASharedEngine() PASSED
+
+BytecodeBackendTest > allExportedFixturesMatchNativeGhcBeforeAndAfterCompilation() PASSED
+
+BytecodeBackendTest > managedLiteralAddressesPreserveUnsignedBytesNulsAndBoundsAfterCompilation() PASSED
+
+BytecodeBackendTest > coldRaiseKeepsItsBottomPayloadLazyAndMemoizesTheGuestFailure() PASSED
+
+BytecodeBackendTest > unusedBottomStaysLazyAndFailedThunksAreNotReentered() PASSED
+
+BytecodeBackendTest > strictConstructorWorkersForceOnlyAtFullSaturationIncludingColdCompiledPaths() PASSED
+
+BytecodeBackendTest > sharingPartialAndOverapplicationPreserveTheirSemantics() PASSED
+
+BytecodeBackendTest > aSelfTailCallThroughAPapRestoresBothItsPrefixAndNewArguments() PASSED
+
+BytecodeBackendTest > compiledBaseCasesCanGrowIntoLongSelfMutualAndCapturedLoops() PASSED
+
+BytecodeBackendTest > wideArgumentsCapturesAndConstructorFieldsPreserveEveryOperand() PASSED
+
+BytecodeCoreProofTest > malformedJoinsAreRejectedEvenInDiagnosticMode() PASSED
+
+BytecodeCoreProofTest > adjustedJoinArityCanReturnTheRestOfAFlattenedLambda() PASSED
+
+BytecodeCoreProofTest > primitiveIdentityCompilesAfterOneOrdinaryInvocation() PASSED
+
+BytecodeCoreProofTest > capturedAddressesRemainObjectsAndCapturedLongsUsePrimitiveReads() PASSED
+
+BytecodeCoreProofTest > mutuallyRecursiveJoinsStayInsideTheirOwningRoot() PASSED
+
+BytecodeCoreProofTest > provenLongCaseAndLetOmitAdaptiveForcingInstructions() PASSED
+
+BytecodeCoreProofTest > diagnosticGlobalCannotRetainTheUnsupportedConstructorWhnfProof() PASSED
+
+BytecodeCoreProofTest > evaluatedCoreVarsStillForceOurCafAndRecursiveAliasThunks() PASSED
+
+BytecodeCoreProofTest > diagnosticSubstitutionCannotAcquireItsOriginalLongWhnfProof() PASSED
+
+BytecodeCoreProofTest > recursiveJoinUsesParallelMovesAndPreservesNonTailContinuation() PASSED
+
+BytecodeCoreProofTest > nestedNonrecursiveJoinsBranchToAncestorsWithoutLoopScaffolding() PASSED
+
+BytecodeSourceNotesTest > sourceSectionsPreserveLocalJoinBackedgesAndTheirOuterContinuation() PASSED
+
+BytecodeSourceNotesTest > notesAttachToNativeBytecodeWithoutChangingInstructionsOrLocalWriteback() PASSED
+
+BytecodeSourceNotesTest > bytecodeKeepsSourceLocationsWhenOriginalFileContentIsUnavailable() PASSED
+
+CStringTest > literalPrimitivesExecuteInGuestCodeAndRejectNumericFakePointers() PASSED
+
+CStringTest > genuineGhcCStringDecoderConsumesLiteralBytesBeforeAndAfterCompilation() PASSED
+
+CStringTest > literalAddressBoundsRejectOverflowAndForeignMemoryAccess() PASSED
+
+CStringTest > literalStoragePreservesUnsignedBytesEmbeddedNulsAndImplicitTerminator() PASSED
+
+CasePrimitiveTest > nestedLiteralAndDefaultCasesFeedPrimitiveOperandsThroughLetAndEvaluation() PASSED
+
+CasePrimitiveTest > dataAndDefaultArmsPreserveFieldsAndWholeScrutineeBindingsInPrimitiveContext() PASSED
+
+CasePrimitiveTest > primitiveCaseForcesSharedScrutineesOnceAndKeepsUnselectedFailureLazy() PASSED
+
+CoreLinkerTest > shadowedGlobalsDoNotBringTheirUnsupportedDependenciesIntoTheProgram() PASSED
+
+CoreLinkerTest > nonrecursiveRhsAndCaseScrutineeRetainTheirOuterDependencies() PASSED
+
+CoreLinkerTest > linkedModulesPreserveSourceIdentityAndRejectConflictingText() PASSED
+
+CoreLinkerTest > recursiveGlobalClosureTerminatesAndKeepsAllTransitiveDependencies() PASSED
+
+CoreRequestTest > validationMatchesTheMaterializingReaderForNestedDocuments() PASSED
+
+CoreRequestTest > rejectsMalformedDocumentsBeforeEmbeddingAndCannotInjectAnotherModule() PASSED
+
+CoreRequestTest > embedsCompleteValidatedModulesWithoutChangingTheirMeaning() PASSED
+
+CoreRequestTest > escapesLateUnicodeInStringsWhilePreservingLegacyNumericTokens() PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast int64-conversions/int64Roundtrip: Int#/Int64# conversion across exact primitive argument and result boundaries on 64-bit targets PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast int64-conversions/int64LiteralBoundary: Canonical Int64# literals retain both signed 64-bit endpoints PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast lists/listPipeline: ordinary list map/filter construction and recursive checksum consumption PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast lists/listAppendReverse: Prelude append and reverse with original ghc-internal source bodies and independently input-sized lists PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast lists/listSpineLazy: consume list spine without evaluating bottom-valued heads PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast lists/listTailLazy: consume exact finite prefix without forcing bottom tail PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast lists/streamPrefix: bounded consumption of input-dependent infinite productive stream PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast lists/streamKnot: bounded consumption of a local input-dependent cyclic list PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast lists/sharedListConsumers: two consumers reuse one input-dependent lazy spine PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast functions/closurePipeline: a list of captured closures transported and applied through an unknown function PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast functions/capturedOverapply: overapplication of an opaque one-argument function returning a captured function PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast functions/reusedLazyPAP: reused partial application retains an unused bottom argument lazily PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast functions/sharedCapturedThunk: an escaping closure retains an input-dependent shared thunk used by two calls PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast trees/treeFold: recursive three-constructor ADT construction and exhaustive fold PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast trees/treeMapFold: higher-order map with captured input across mixed-layout recursive constructors PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast trees/treeSelective: nested pattern matching selects the sole terminating branch; unused subtree is bottom PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast trees/treeShared: two branches of a recursive ADT share one input-dependent subtree PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast numeric/wordMixer: Word# wraparound, variable rotations, shifts, masks and bit complements PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast numeric/signedRadix: Signed quotient/remainder for both divisor signs, arithmetic versus logical shifts, Int# wraparound PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast numeric/packedSamples: Signed 8/16/32-bit narrowing, mixed primitive/reference fields, escaped mixed captures, Int# wraparound PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast numeric/unicodeChecksum: Unicode Char# constructors, chr#/ord#, literal cases, ASCII/Latin/BMP/supplementary comparisons PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast narrow-ints/narrowRecordChecksum: Ordinary Data.Int Int8/16/32 conversion with truncation/sign extension and unpacked narrow representation fields PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast narrow-words/word8Arithmetic: Ordinary Word8 conversion, wrapping arithmetic and unsigned ordering PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast narrow-words/word16Arithmetic: Ordinary Word16 conversion, wrapping arithmetic and unsigned ordering PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast narrow-words/word32Arithmetic: Ordinary Word32 conversion, wrapping arithmetic and unsigned ordering PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast narrow-words/narrowWordRecordChecksum: Two consumers share records with unpacked Word8Rep/Word16Rep/Word32Rep fields and zero-extending conversions PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast pointers/pointerShortcut: Non-strict object identity shortcut with allocation-independent key equality fallback PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > ast pointers/pointerLazyPayload: Pointer equality and key comparison leave irrelevant bottom-valued payloads untouched PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode int64-conversions/int64Roundtrip: Int#/Int64# conversion across exact primitive argument and result boundaries on 64-bit targets PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode int64-conversions/int64LiteralBoundary: Canonical Int64# literals retain both signed 64-bit endpoints PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode lists/listPipeline: ordinary list map/filter construction and recursive checksum consumption PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode lists/listAppendReverse: Prelude append and reverse with original ghc-internal source bodies and independently input-sized lists PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode lists/listSpineLazy: consume list spine without evaluating bottom-valued heads PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode lists/listTailLazy: consume exact finite prefix without forcing bottom tail PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode lists/streamPrefix: bounded consumption of input-dependent infinite productive stream PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode lists/streamKnot: bounded consumption of a local input-dependent cyclic list PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode lists/sharedListConsumers: two consumers reuse one input-dependent lazy spine PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode functions/closurePipeline: a list of captured closures transported and applied through an unknown function PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode functions/capturedOverapply: overapplication of an opaque one-argument function returning a captured function PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode functions/reusedLazyPAP: reused partial application retains an unused bottom argument lazily PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode functions/sharedCapturedThunk: an escaping closure retains an input-dependent shared thunk used by two calls PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode trees/treeFold: recursive three-constructor ADT construction and exhaustive fold PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode trees/treeMapFold: higher-order map with captured input across mixed-layout recursive constructors PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode trees/treeSelective: nested pattern matching selects the sole terminating branch; unused subtree is bottom PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode trees/treeShared: two branches of a recursive ADT share one input-dependent subtree PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode numeric/wordMixer: Word# wraparound, variable rotations, shifts, masks and bit complements PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode numeric/signedRadix: Signed quotient/remainder for both divisor signs, arithmetic versus logical shifts, Int# wraparound PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode numeric/packedSamples: Signed 8/16/32-bit narrowing, mixed primitive/reference fields, escaped mixed captures, Int# wraparound PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode numeric/unicodeChecksum: Unicode Char# constructors, chr#/ord#, literal cases, ASCII/Latin/BMP/supplementary comparisons PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode narrow-ints/narrowRecordChecksum: Ordinary Data.Int Int8/16/32 conversion with truncation/sign extension and unpacked narrow representation fields PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode narrow-words/word8Arithmetic: Ordinary Word8 conversion, wrapping arithmetic and unsigned ordering PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode narrow-words/word16Arithmetic: Ordinary Word16 conversion, wrapping arithmetic and unsigned ordering PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode narrow-words/word32Arithmetic: Ordinary Word32 conversion, wrapping arithmetic and unsigned ordering PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode narrow-words/narrowWordRecordChecksum: Two consumers share records with unpacked Word8Rep/Word16Rep/Word32Rep fields and zero-extending conversions PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode pointers/pointerShortcut: Non-strict object identity shortcut with allocation-independent key equality fallback PASSED
+
+CoverageCorpusTest > nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() > bytecode pointers/pointerLazyPayload: Pointer equality and key comparison leave irrelevant bottom-valued payloads untouched PASSED
+
+DiagnosticModeTest > diagnosticPrimitiveGapsRemainExplicitAndMalformedCoreStillRejects() PASSED
+
+DiagnosticModeTest > normalExecutionStillRejectsUnavailableCodeAtLoad() PASSED
+
+DiagnosticModeTest > diagnosticBranchesCompileAndUnavailablePathsTrapExplicitly() PASSED
+
+FramesTest > supportedTagsAndUnwrittenNullRetainTheirValues() PASSED
+
+FramesTest > typedLongWritesWidenBooleanSlotsWithoutChangingSuspendedFrames() PASSED
+
+FramesTest > livePrimitiveFramesSurviveDescriptorWideningInAnotherActivation() PASSED
+
+FramesTest > typedLongWritesRespectDescriptorWideningAcrossActivations() PASSED
+
+FramesTest > unrelatedTruffleNumericTagsAreRejectedInsteadOfSilentlyBoxed() PASSED
+
+GuestExceptionsTest > coldRaiseBranchStaysLazyCompilesAndReportsAGuestException() PASSED
+
+GuestExceptionsTest > raisingAnEvaluatedConstructorPreservesItsPayloadIdentity() PASSED
+
+GuestExceptionsTest > raiseKeepsBottomPayloadUnevaluatedAndMemoizesTheSameGuestException() PASSED
+
+Int16LiteralTest > canonicalSigned16LiteralsAndCaseAlternativesEnforceRangeInBothLoadModes() PASSED
+
+Int16LiteralTest > intrinsicNarrowLiteralsRefineUnconstrainedButNotMalformedProofs() PASSED
+
+Int16LiteralTest > signedAndUnsignedLiteralKindsCannotBeRelabelledThroughLongOrUnknownProofs() PASSED
+
+Int32LiteralTest > intrinsicNarrowLiteralsRefineUnconstrainedButNotMalformedProofs() PASSED
+
+Int32LiteralTest > canonicalSigned32LiteralsAndCaseAlternativesEnforceRangeInBothLoadModes() PASSED
+
+Int32LiteralTest > signedAndUnsignedLiteralKindsCannotBeRelabelledThroughLongOrUnknownProofs() PASSED
+
+Int64ConversionTest > int64LiteralsAndAlternativesRejectNoncanonicalOrOutOfRangeValues() PASSED
+
+Int64ConversionTest > realCorePreservesTypedLongArgumentsAndResults() PASSED
+
+IntegerPrimopsTest > everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode() PASSED
+
+IntegerPrimopsTest > realCoreAgreesWithNativeAndUnsignedModelBeforeAndAfterCompilation() PASSED
+
+JsonWriterTest > matchesPreviousTransportForNestedCoreShapedDocuments() PASSED
+
+JsonWriterTest > exactEscapingAndContainerFormatting() PASSED
+
+JsonWriterTest > traversesAnIterableOnceAndPreservesRejection() PASSED
+
+NarrowWordPrimitiveTest > ordinaryNativeExamplesAgreeWithIndependentUnsignedArithmeticModel() PASSED
+
+NarrowWordPrimitiveTest > wrappingArithmeticMatchesIndependentBigIntegerResultsIncludingWord32ProductOverflow() PASSED
+
+NarrowWordPrimitiveTest > allNewPrimitivesRejectWrongAritiesAtLoad() PASSED
+
+NarrowWordPrimitiveTest > comparisonsKeepUnsignedOrderAcrossEachWidthsSignBitAndEquality() PASSED
+
+NarrowWordPrimitiveTest > conversionsTruncateAndZeroExtendAllThreeWidths() PASSED
+
+NarrowWordPrimitiveTest > narrowLiteralsAndCaseAlternativesEnforceCanonicalUnsignedRangesEvenInDiagnosticMode() PASSED
+
+RealCoreCallDemandTest > exportedCallDemandIsSeparateFromWhnfEntryContractsAndSpeculation() PASSED
+
+RealCoreCallDemandTest > genuineOrdinaryPolymorphicLazyAndPartialCallsSurviveCompilation() PASSED
+
+RealCoreEntryContractTest > genuineWorkerContractPreservesFullWidthResultsAndColdBranches() PASSED
+
+RealCoreEntryContractTest > genuineFunctionReturningJoinKeepsTheReturnedArgumentOutsideItsContract() PASSED
+
+RealCoreEntryContractTest > genuinePolymorphicJoinUsesItsErasedValuePrefix() PASSED
+
+RealCoreEntryContractTest > genuineWorkerRetainsTheCoercionSlotBeforeItsMarkedBoxedArgument() PASSED
+
+RealCoreJoinTest > exportedRecursiveJoinIsALocalLoopBeforeAndAfterCompilation() PASSED
+
+RealCoreJoinTest > erasedTypeJoinAndFunctionReturningJoinPreserveTheirValueArity() PASSED
+
+RuntimeTest > cadenzaTailLoopsAndProductiveCafUseBoundedHostStack() PASSED
+
+RuntimeTest > hostKernelAbiRejectsNonIntegralArgumentsAndWrongArity() PASSED
+
+RuntimeTest > constructorCasesDistinguishEqualArityAlternativesBeforeAndAfterCompilation() PASSED
+
+RuntimeTest > selfTailCallsRefreshChangingPrimitiveCapturesAndReplayOriginalCaf() PASSED
+
+RuntimeTest > transportRejectsAmbiguityAndRoundTripsControlCharacters() PASSED
+
+RuntimeTest > recursiveAliasStaysLazyUntilDemanded() PASSED
+
+RuntimeTest > sharingPapAndOverapplicationHaveObservableRuntimeCoverage() PASSED
+
+RuntimeTest > repeatedHostEntryKeepsGuestAndInteropCompilable() PASSED
+
+RuntimeTest > boundedDispatchCacheSurvivesMoreThanThreeTargets() PASSED
+
+RuntimeTest > constructorLayoutsRejectCrossConstructorReadsAndShareNullaryValues() PASSED
+
+RuntimeTest > papPrefixesSurviveRepeatedUnderapplicationAndMegamorphicOverapplication() PASSED
+
+RuntimeTest > recursiveCapturedCellsAndEscapedThunksKeepTheirOwnLexicalValues() PASSED
+
+RuntimeTest > unusedBottomRemainsLazyAndDemandedBottomBlackholes() PASSED
+
+RuntimeTest > constructorLayoutsPreservePrimitiveWidthObjectIdentityAndVoidSlots() PASSED
+
+RuntimeTest > exportedHaskellMatchesNativeGhcBeforeAndAfterGuestCompilation() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRemainsStackSafeAndRecompiles() PASSED
+
+SelfTailProfileTest > firstSelfTailAfterCompiledBaseCaseRestoresChangingCaptures() PASSED
+
+SignedNarrowPrimopsTest > everyAddedPrimitiveRejectsWrongAritiesEvenInDiagnosticMode() PASSED
+
+SignedNarrowPrimopsTest > directResultsAreCanonicalWithoutAnIntNToIntConversionMaskingTheResult() PASSED
+
+SignedNarrowPrimopsTest > realCoreAgreesWithNativeAndSignedModelBeforeAndAfterCompilation() PASSED
+
+StrictFieldsTest > unknownStrictFieldLevityStillFailsClosed() PASSED
+
+StrictFieldsTest > strictFieldsShareTheirWhnfWhileAnOrdinaryFieldKeepsItsUnevaluatedThunk() PASSED
+
+StrictFieldsTest > directSaturatedStrictOperandsDoNotAllocateAnImmediatelyForcedThunk() PASSED
+
+StrictFieldsTest > partialConstructorRetainsStrictArgumentLazilyUntilItIsSaturated() PASSED
+
+StrictFieldsTest > strictWorkerForcesIgnoredFieldsInDirectAndFirstClassApplications() PASSED
+
+StrictFieldsTest > realGhcStrictConstructorPreservesPrimitiveValuesBeforeAndAfterCompilation() PASSED
+
+SumLayoutMetadataTest > genuineSumLayoutsEnforceResultCapabilityBoundariesOnBothBackends() PASSED
+
+TailCycleTest > twoRootCyclesReenterLocallyBeforeAndAfterCompilation() PASSED
+
+TailCycleTest > aNonTailEdgeRetainsEveryPendingAddition() PASSED
+
+TailCycleTest > aClonedRootConsumesTransfersTargetingItsOriginalBody() PASSED
+
+TailCycleTest > anInteriorRootHandlesABCDECReturnsAndCanRetargetOutwardToB() PASSED
+
+TailCycleTest > falsePositiveAncestryStillUsesTheTrampolineWhenNoActiveRootMatches() PASSED
+
+TailCycleTest > overapplicationAndNonTailWorkSurviveAnInnerTailCycle() PASSED
+
+TailCycleTest > reentryRestoresChangedCapturesAndPapPrefixesAcrossDifferentArities() PASSED
+
+ThunkDispatchTest > closedAndCapturedThunksKeepTheirArgumentsAfterTargetCacheSaturates() PASSED
+
+ThunkDispatchTest > capturedThunkTailBounceStillUpdatesTheOriginalThunk() PASSED
+
+ThunkRetentionTest > cafEntryTargetsRemainCompilableAfterValuesFunctionsAndFailuresAreMemoized() PASSED
+
+ThunkRetentionTest > aThunkReturningAnotherThunkFailsBeforeEitherCanPublishAnIndirection() PASSED
+
+ThunkRetentionTest > unexpectedFailuresKeepTheSuspensionForAnActualRetry() PASSED
+
+ThunkRetentionTest > nestedForcingThroughTheSameForceNodePublishesSeparateSharedAnswers() PASSED
+
+ThunkRetentionTest > successfulUpdatesReleaseSuspensionsAndRemainShared() PASSED
+
+ThunkRetentionTest > memoizedGuestAndRuntimeFailuresReleaseSuspensionsWithoutRepeatingEffects() PASSED
+
+TypedApplicationTest > partialAndOverapplicationReachTheNumericResultAfterAnIntermediateCapturedFunction() PASSED
+
+TypedApplicationTest > aPolymorphicLiftedResultCanChangeFromDataToClosureAfterCompilation() PASSED
+
+TypedApplicationTest > closedAndCapturedLambdasForwardNumericCaseAndLetResultsToPrimitiveConsumers() PASSED
+
+WordPrimitiveTest > bitCountsCoverEveryPositionNeighborsAndAlternatingPatterns() PASSED
+
+WordPrimitiveTest > wrongAritiesAreRejectedAtLoadEvenInDiagnosticMode() PASSED
+
+WordPrimitiveTest > comparisonsFollowUnsignedOrderIncludingEquality() PASSED
+
+AddressFieldTest > genuineAddressFieldsResidual() PASSED
+
+AddressFieldTest > bothBackendsRejectWrongCarriersAndKeepLazyNeighboursUnforced() PASSED
+
+AddressFieldTest > genuineAddressFieldsInline() PASSED
+
+AddressFieldTest > knownAddressStorageIsFinalAndPreciseEvenWithoutOptionalFieldTypes() PASSED
+
+AddressFieldTest > unliftedAddressComputationRunsBeforePartialApplicationPublication() PASSED
+
+AddressFieldTest > contradictoryFieldProofsAndAggregateAddressBoundariesStayRejected() PASSED
+
+AddressFieldTest > constructorPartialApplicationRetainsAddressAndDefersLazyPayload() PASSED
+
+ArraySliceTest > stateFailureCannotPublishCopyAndOperandsAreEvaluatedInOrder() PASSED
+
+ArraySliceTest > exactSliceSignaturesAndColdPublicFrontierRemainEnforced() PASSED
+
+ArraySliceTest > slicesCopyReferencesIntoIndependentStorageWithFullWidthBounds() PASSED
+
+ArraySliceTest > nativeSlicesAndPublicArrayConsumersAcrossResidualCalls() PASSED
+
+ArraySliceTest > bothBackendsPreserveLazyReferenceIdentityAndRejectInvalidStateAndSlices() PASSED
+
+ArraySliceTest > nativeSlicesAndPublicArrayConsumersWithInlining() PASSED
+
+AstSelfCallTest > polymorphicTailSiteRetainsSelfTransferAfterThreeNegativeTargetCacheEntries() PASSED
+
+AstSelfCallTest > selfTransferSwapsWidePrimitiveArgumentsAndSurvivesColdCompiledRecursion() PASSED
+
+AstSelfCallTest > clonedRootsShareBodyIdentityWhileKeepingIndependentSelfTargetCaches() PASSED
+
+AstSelfCallTest > selfTransferRestoresDistinctEnvironmentsAndTheirRecursiveCells() PASSED
+
+BigNatLiteralTest > originalIntegerNaturalConversionsAcrossResidualCalls() PASSED
+
+BigNatLiteralTest > originalIntegerNaturalConversionsWithInlining() PASSED
+
+BigNatLiteralTest > bignatLiteralAlternativesRemainForbidden() PASSED
+
+BigNatLiteralTest > exactUnliftedLiteralProofRejectsScalarAggregateAndBoxedForgeries() PASSED
+
+BigNatLiteralTest > canonicalPrivateBytesAndCheckedSizeMatchGhcLimbLayout() PASSED
+
+BindingCellMetadataTest > recursiveCapturesKeepCellsWhileClosuresCreatedAfterPublicationCaptureValues() PASSED
+
+BindingCellMetadataTest > ordinaryObjectParametersFieldsAndCapturesNeedNoRecursiveCellReads() PASSED
+
+BindingCellMetadataTest > escapingRecursiveClosuresRetainCellsAfterCaseRefinementAndAcrossInvocations() PASSED
+
+BitPrimopsTest > malformedArityIsRejectedAtLoadEvenWithDiagnosticExecutionEnabled() PASSED
+
+BitPrimopsTest > realCoreMatchesNativeAndBitModelForEveryInstalledEntry() PASSED
+
+BloomValueTest > specializingAnActualCloneDoesNotWidenTheOriginalCache() PASSED
+
+BloomValueTest > actualTailChainsReuseTheirHeaderAndNonTailCallsResetAncestry() PASSED
+
+BloomValueTest > saturatedBloomCollisionStillBouncesAndPreservesPendingWork() PASSED
+
+BloomValueTest > threeWideMasksReuseBoxesAndMegamorphicFallbackPreservesEveryBit() PASSED
+
+BoxedArrayTest > exactShapesLevityAndSaturationAreRequiredInBothLoadModes() PASSED
+
+BoxedArrayTest > publicSTArrayAndLazyElementsWithInlining() PASSED
+
+BoxedArrayTest > bothBackendsRejectBadStateAndBoundsBeforeWritingWithoutForcingPayloads() PASSED
+
+BoxedArrayTest > storageSharesInitialReferencesSnapshotsAndFreezeIdentityWithCheckedDomains() PASSED
+
+BoxedArrayTest > stateIsEvaluatedBeforeEffectsAndFailuresDoNotPublishDestinations() PASSED
+
+BoxedArrayTest > publicSTArrayAndLazyElementsWithoutInlining() PASSED
+
+BoxedLexicalProofTest > contradictoryBoxedOccurrencesAndCaseBindersFailBothLowerers() PASSED
+
+BoxedLexicalProofTest > unknownLevityClassAndEvaluatednessRefineIndependently() PASSED
+
+BoxedLexicalProofTest > genuineBoxedNewtypeCastsPreserveLevityAndLazyFieldsInCompiledCode() PASSED
+
+BoxedValueCacheTest > bothBackendsSwitchBetweenCachedAndFullWidthConstructorsAfterCompilation() PASSED
+
+BoxedValueCacheTest > wiredConstructorIdentitiesAndPrimitiveRepresentationsMatchActualPinnedExports() PASSED
+
+BoxedValueCacheTest > exactGhcRangesReuseImmutableValuesWhileEveryOtherPayloadStaysFullWidth() PASSED
+
+BoxedValueCacheTest > cachesRemainOwnedByTheirLayoutAcrossSharedArrayCarriersAndContexts() PASSED
+
+BoxedValueCacheTest > defaultOffAndNonBuiltinConstructorsKeepOrdinaryAllocation() PASSED
+
+ByteArrayTest > invalidSizesAndIndicesAreGuardedOnBothBackendsWithoutNativeUndefinedInputs() PASSED
+
+ByteArrayTest > lexicalLiftedReferenceCannotBecomeByteArrayByRelabellingAnOccurrence() PASSED
+
+ByteArrayTest > managedStorageHasExactSizeUnsignedBytesIdentityAndGuardedDomain() PASSED
+
+ByteArrayTest > copyEvaluatesAllSixOperandsBeforeTheEffectAndStateFailureDoesNotWrite() PASSED
+
+ByteArrayTest > effectsEvaluateTheStateOperandBeforeWritingAndFailWithoutPublishing() PASSED
+
+ByteArrayTest > copyRangesMatchAnIndependentModelAndRejectInvalidDomainsWithoutWriting() PASSED
+
+ByteArrayTest > copiedRangesAndAllOperandProofsAreCheckedInBothBackends() PASSED
+
+ByteArrayTest > exactShapesArityAndSaturationAreRequiredInBothLoadModes() PASSED
+
+ByteArrayTest > installedShortByteStringAndArrayEffectsMatchNativeAndIndependentModel() PASSED
+
+BytecodeTypedTupleInputTest > zeroWidthStateTupleOperandsExecuteBeforeLaterArgumentsAndLoanAcquisition() PASSED
+
+BytecodeTypedTupleInputTest > typedPairPapScalarSuffixCapturedOverapplicationAndResultLoans() PASSED
+
+BytecodeTypedTupleInputTest > failedReferenceRestoreReleasesInputWithoutTouchingOutstandingResult() PASSED
+
+BytecodeTypedTupleInputTest > genericDispatchKeepsTypedInputsAfterFiveTargets() PASSED
+
+BytecodeTypedTupleInputTest > hiddenTupleCaseProofCannotBeLiftedOrPassedToScalarPrimitive() PASSED
+
+BytecodeTypedTupleInputTest > matchingSelfAndMutualTupleTransfersRestoreLocalsAndRetainBloom() PASSED
+
+BytecodeTypedTupleInputTest > lexicalLongProofsTypeBareAndUnknownScalarOperandsBetweenTuplesAndPapSuffixes() PASSED
+
+BytecodeTypedTupleInputTest > nestedFloatDoubleAndLazyReferenceLeavesStayTyped() PASSED
+
+CallDemandTest > demandedFunctionExpressionsAreForcedToClosureWhnf() PASSED
+
+CallDemandTest > overapplicationDemandsOnlyTheSignaturePrefix() PASSED
+
+CallDemandTest > strictVariableArgumentsForceOneSharedThunkAndKeepLazyEnclosingBindings() PASSED
+
+CallDemandTest > callerDemandIsOptInAndDoesNotChangeAnAlreadyLoweredProgram() PASSED
+
+CallDemandTest > localJoinDemandRetainsTheCoercionSlotWithoutAddingAnEntryContract() PASSED
+
+CallDemandTest > undersaturatedDemandKeepsThePapPrefixLazyAndSharesItAfterSaturation() PASSED
+
+CallDemandTest > ordinaryDemandEliminatesArgumentThunksWithoutChangingUnknownCallsOrFormalContracts() PASSED
+
+CallDemandTest > malformedCallDemandFailsClosedAndMissingMetadataRemainsConservative() PASSED
+
+ClassOwnedLayoutTest > fieldlessOwnersAndArrayFallbackKeepOldCompiledValuesValid() PASSED
+
+ClassOwnedLayoutTest > offModeAndClosedContextsCannotReassignAnExistingOwner() PASSED
+
+ClassOwnedLayoutTest > defaultUsesClassOwnershipAndExplicitFalseKeepsLayoutCarriers() PASSED
+
+ClassOwnedLayoutTest > classReservationIsPermanentAndDescriptorPublicationCannotChangeItsOwner() PASSED
+
+ClassOwnedLayoutTest > ownershipChecksPreservePreciseFieldsLazyFieldsAndAllocationAuthentication() PASSED
+
+CompareByteArraysTest > unsignedRangeModelAliasesAndCompleteDomainGuards() PASSED
+
+CompareByteArraysTest > publicShortByteStringAndRangesWithInlining() PASSED
+
+CompareByteArraysTest > exactSaturationLevityAndPrimitiveProofsAreMandatory() PASSED
+
+CompareByteArraysTest > typedAstEvaluationVisitsAllOperandsInOrderIncludingZeroLength() PASSED
+
+CompareByteArraysTest > publicShortByteStringAndRangesAcrossResidualCalls() PASSED
+
+CompareByteArraysTest > bothBackendsUsePrimitiveReturnAndRejectInvalidRangesAndCarriers() PASSED
+
+ConstructorClassIdentityTest > matchingDistinguishesConstructorsAndRejectsForeignValuesInBothStrategies() PASSED
+
+ConstructorClassIdentityTest > registryOwnershipSpansContextsAndUnexpectedFactoryClassesInvalidateBothOwners() PASSED
+
+ConstructorClassIdentityTest > astAndBytecodeCaseLoweringUseTheSameMatchingSemantics() PASSED
+
+ConstructorClassIdentityTest > compiledMatchTracksPermanentOrInvalidatableClassOwnership() PASSED
+
+CoreKeepAliveTest > tupleCallbackDoesNotStrengthenLiftedPayloadEvaluatedness() PASSED
+
+CoreKeepAliveTest > exactScalarTupleAndExistingSumResultsKeepTheirLogicalIdentity() PASSED
+
+CoreKeepAliveTest > partialContinuationReturnsTheRemainingLiftedFunction() PASSED
+
+CoreKeepAliveTest > liftedKeptBottomStaysLazyAndScalarCallbackResultIsReturnedInWhnf() PASSED
+
+CoreKeepAliveTest > invalidStatePrecedesCallbackThunkForcingAndExceptionsReleaseAllLoans() PASSED
+
+CoreKeepAliveTest > bothLoadersRejectWrongKnownContinuationInputsResultsAndPartialApplicationResults() PASSED
+
+CoreKeepAliveTest > existingBinarySumResultCanBeConsumedWithoutChangingItsAbi() PASSED
+
+CoreMd5ForeignTest > ExactIntegerAndDescriptorKeysRejectNormalizedForgeries() PASSED
+
+CoreMd5ForeignTest > exactThreeContractsAndActualEvaluationFacts() PASSED
+
+CoreMd5ForeignTest > MissingUnknownAndDynamicTargetsRetainOrdinaryResolution() PASSED
+
+CoreMd5ForeignTest > EveryResultSiteRequiresOneExactStateComponent() PASSED
+
+CoreMd5ForeignTest > DeclaredActualAndSymbolProofsCannotContradictEachOther() PASSED
+
+CoreMd5ForeignTest > ActualArityAndEveryUnliftedFlagAreExact() PASSED
+
+CoreMd5ForeignTest > KnownSymbolsRequireOriginalUnitStaticFunctionUnsafeCcall() PASSED
+
+CoreMd5ForeignTest > EveryDeclaredAndActualScalarSlotRejectsWrongOrAggregateProofs() PASSED
+
+CoreProofJoinTest > recursivePrimitiveJoinUsesParallelMovesAndReturnsToNonTailContinuation() PASSED
+
+CoreProofJoinTest > mutualJoinsAndNestedOuterTransfersStayInTheirLexicalRegion() PASSED
+
+CoreProofJoinTest > nonrecursiveShadowedJoinRhsTransfersToItsLexicalAncestor() PASSED
+
+CoreProofJoinTest > exportedEvaluatedCafAndRecursiveAliasesStillForceIntroducedThunks() PASSED
+
+CoreProofJoinTest > provenLongCapturesPreserveFullWidthValuesWithoutAnObjectArm() PASSED
+
+CoreProofJoinTest > invalidJoinUsesRejectAtLoadRatherThanEscapingIntoClosures() PASSED
+
+CoreProofJoinTest > representationMetadataRequiresExactCarriersAndPreservesLegacyUnknown() PASSED
+
+CoreProofJoinTest > deeplyNestedNonrecursiveJoinsAreBranchesIncludingInClonedCompiledTargets() PASSED
+
+CoreSourceTest > unverifiedCoordinatesNeverIndexAvailableSourceText() PASSED
+
+CoreSourceTest > sourceNotesAttachToTypedAstAndRootsWithoutAddingExecutionNodes() PASSED
+
+CoreSourceTest > realGhcSourceNotesReachTypedRootsAndLocalJoinNodes() PASSED
+
+CoreSourceTest > characterOffsetsUseUtf16WithoutReencodingUnicodeSource() PASSED
+
+CoreSourceTest > missingSourceContentRetainsLocationsAndOriginalExclusiveProvenance() PASSED
+
+DataToTagTest > nativeFamiliesWithInlining() PASSED
+
+DataToTagTest > demandedOuterValueLeavesFieldsLazyAndReturnsExactCompiledTags() PASSED
+
+DataToTagTest > exactFamilyVariantAndMetadataRequiredAtLoad() PASSED
+
+DataToTagTest > genuineInvalidFamilyAndBarePrimitiveFrontiersStayRejected() PASSED
+
+DataToTagTest > typedDataOperandExecutesExactlyOnceBeforeTagSelection() PASSED
+
+DataToTagTest > nativeFamiliesAcrossResidualCalls() PASSED
+
+DiagnosticTupleTest > coldUnsupportedTupleLoadsOnlyInDiagnosticModeAndTrapsWhenDemanded() PASSED
+
+DoubleArrayNativeTest > invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() PASSED
+
+DoubleArrayNativeTest > nativePublicArraysAndBitMovementWithInlining() PASSED
+
+DoubleArrayNativeTest > exactDoubleStateShapesAndSaturationAreRequiredInBothLoadModes() PASSED
+
+DoubleArrayNativeTest > nativePublicArraysAndBitMovementAcrossResidualCalls() PASSED
+
+DoubleArrayTest > rawMovementPreservesDefinedBitsInSharedByteStorage() PASSED
+
+DoubleArrayTest > statePrecedesMemoryAccessAndOnlySuccessfulReadsPublishPrimitiveDouble() PASSED
+
+DoubleArrayTest > boundsRejectIncompleteElementsAndIndexOverflowWithoutWrites() PASSED
+
+EmptyArgumentRuntimeTest > emptyInputAndLazyReferenceTupleResultUseSeparateLoansAndRecoverAfterThrow() PASSED
+
+EmptyArgumentRuntimeTest > exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples() PASSED
+
+EmptyArgumentRuntimeTest > mixedTargetPrefixesAndOverapplicationUsePhysicalSlicesAfterThePicBecomesGeneric() PASSED
+
+EmptyArgumentRuntimeTest > selfAndMutualTailCallsForwardUsedEmptyFormalsWithoutHostStackGrowth() PASSED
+
+EmptyArgumentRuntimeTest > emptyOnlyPapPrefixesAndOverapplicationKeepLogicalArityWithoutPayloadSlots() PASSED
+
+EmptyArgumentRuntimeTest > rawLiftedEmptyFlagCannotBeHiddenByStrictDemandAndRecursiveAliasesKeepInputProofs() PASSED
+
+EmptyArgumentRuntimeTest > dynamicMasksRejectScalarStateAndBoxedUnitWithoutInventingEmptyProofs() PASSED
+
+EmptyArgumentRuntimeTest > emptyComputationsRunBeforeLaterOperandsAndPapPublicationAndReleaseResultsOnThrow() PASSED
+
+EmptyJoinInputTest > genuineEmptyJoinInputsAcrossResidualCalls() PASSED
+
+EmptyJoinInputTest > emptyOperandRunsInLogicalOrderBeforeParallelMovesAndFailureTransfersNothing() PASSED
+
+EmptyJoinInputTest > genuineThrowingEmptyOperandIsNotErasedAndRecoveryReleasesResults() PASSED
+
+EmptyJoinInputTest > genuineEmptyJoinInputsWithInlining() PASSED
+
+EmptyJoinInputTest > shapeLevityAndUnknownProofsRejectAtLoadWithoutWideningJoinFrontier() PASSED
+
+EmptyJoinInputTest > exactEmptyInputHasNoLocalSlotOnEitherBackendAndKeepsLogicalArity() PASSED
+
+EmptyTupleInputNativeTest > independentScalarInputsKeepCompiledEntryAndCompactPositions() PASSED
+
+EmptyTupleInputNativeTest > genuineEmptyInputsExecuteInlinedWithInstalledHostAndGuestEntries() PASSED
+
+EmptyTupleInputNativeTest > nativeEmptyProducerFailurePrecedesDeadFormalOrPapAndLeavesNoLoans() PASSED
+
+EmptyTupleInputNativeTest > genuineEmptyInputsExecuteAcrossResidualCallsWithInstalledHostAndGuestEntries() PASSED
+
+EntryContractTest > malformedEntryContractsFailAtLoad() PASSED
+
+EntryContractTest > megamorphicCallsEnforceAndShareStrictPapPrefixes() PASSED
+
+EntryContractTest > strictJoinPrefixDoesNotStrictifyTheReturnedFunctionSuffix() PASSED
+
+EntryContractTest > papPrefixStaysLazyUntilSaturationAndItsThunkIsSharedAfterward() PASSED
+
+EntryContractTest > overapplicationEnforcesOnlyTheSaturatedFirstFunctionBeforeApplyingItsResult() PASSED
+
+EntryContractTest > knownWorkerCompilesStrictOperandsDirectlyWhileUnknownCallsEnforceTheSameContract() PASSED
+
+EntrySelfCallTest > directSelfPapPrefixForcesEvenUnusedStrictFormalsBeforeReentry() PASSED
+
+EntrySelfCallTest > ancestorReentryReceivesForcedArgumentsThroughUnknownCalls() PASSED
+
+Explicit64PrimopsTest > malformedAritiesAndWord64LiteralsRejectAtLoadIncludingCaseAlternatives() PASSED
+
+Explicit64PrimopsTest > sharedLongCarrierDoesNotPermitReplacingInt64ProofWithWord64() PASSED
+
+Explicit64PrimopsTest > exactNativeScalarEntriesAgreeWithIndependentModelAndInstalledCode() PASSED
+
+FloatArrayTest > boundsExcludePartialElementsAndHugeIndicesBeforeAnyWrite() PASSED
+
+FloatArrayTest > rawFloatMovementUsesFourSharedBytesWithoutNumericalConversion() PASSED
+
+FloatArrayTest > statePrecedesAccessAndOnlySuccessfulReadsPublishPrimitiveFloat() PASSED
+
+FloatWordArrayNativeTest > invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() PASSED
+
+FloatWordArrayNativeTest > exactFloatAndWordStateShapesAndSaturationAreRequiredInBothLoadModes() PASSED
+
+FloatWordArrayNativeTest > nativePublicArraysAndFloatMovementWithInlining() PASSED
+
+FloatWordArrayNativeTest > nativePublicArraysAndFloatMovementAcrossResidualCalls() PASSED
+
+FloatingPrimitiveTest > floatingCaseValidationChecksEveryKnownAlternativeWithoutOrderDependence() PASSED
+
+FloatingPrimitiveTest > floatingSelfTransfersRejectWrongPrimitiveCarriers() PASSED
+
+FloatingPrimitiveTest > exactFloatingTupleProofsDoNotEnableFloatingLiteralAlternatives() PASSED
+
+FloatingPrimitiveTest > nativeArithmeticRoundingNonFiniteComparisonsAndStorageMatchBothCompiledBackends() PASSED
+
+FloatingPrimitiveTest > previouslyColdNaNsInfinitiesSubnormalsAndSignedZerosRemainCorrectAfterCompilation() PASSED
+
+FloatingPrimitiveTest > fieldsAndCapturesHaveConcreteFloatingStorageAndPreserveBits() PASSED
+
+FloatingTupleTest > equalPhysicalWidthsCannotEraseNestedTupleIdentity() PASSED
+
+FloatingTupleTest > compiledResidualProducerPreservesNativeIeeeBits() PASSED
+
+FloatingTupleTest > wholeNestedTupleCaseBinderCopiesFloatingSlotsOnBothBackends() PASSED
+
+FloatingTupleTest > nativeComplexAndMixedResultsExecuteAcrossResidualCalls() PASSED
+
+FloatingTupleTest > floatingTupleInputsKeepScalarHandoffAndHostAggregateFrontiersDistinct() PASSED
+
+FloatingTupleTest > concreteFieldsPreserveNanPayloadsAndReleaseOnlyReferences() PASSED
+
+FloatingTupleTest > nativeComplexAndMixedResultsExecuteInlined() PASSED
+
+ForcedBindingTest > repeatedLocalDemandsBypassThunkHeadersButSeparateAliasesKeepSharing() PASSED
+
+ForcedBindingTest > recursiveCellIdentitySurvivesStrictRhsForcingBeforeGroupPublication() PASSED
+
+ForcedBindingTest > astForcingReplacesOnlyTheDemandedLocalAndRetainsSharedThunkAliases() PASSED
+
+ForcedBindingTest > preexistingCapturesKeepTheirFinalThunkReferenceWhileTheirRestoredLocalUpdates() PASSED
+
+ForcedBindingTest > failedForcingLeavesLocalLinksPointingAtTheMemoizedFailure() PASSED
+
+HandoffReferenceTest > rejectedPacketsClearReferencesBeforeBodyEntryAndAllowReuse() PASSED
+
+HandoffReferenceTest > referenceTailCyclesAndCapturedPapPrefixesKeepNaturalResults() PASSED
+
+HandoffReferenceTest > referenceResultsPreserveIdentityNestedValuesAndLazyInputs() PASSED
+
+HandoffReferenceTest > referenceSnapshotsSurviveReleaseFailureDeoptimizationAndReuse() PASSED
+
+HandoffTest > nestedNonTailCallsKeepDistinctResultsAcrossCompilationAndReuse() PASSED
+
+HandoffTest > interiorCReentryThenOutwardBReentryRemainInActiveRoots() PASSED
+
+HandoffTest > interiorTailCyclesForwardDestinationAndReuseIncomingLoan() PASSED
+
+HandoffTest > forcedResidualCallsSupportMultipleAncestorCyclesAndPhysicalRepAliases() PASSED
+
+HandoffTest > lazyReferencePrefixesAndCapturedEnvironmentsRemainOwnedAcrossResidualCalls() PASSED
+
+HandoffTest > lexicalForksKeepOuterFormalsAcrossResidualCallsAndCarrierReuse() PASSED
+
+HandoffTest > retainedMaterializedFramesAndExceptionalCleanupSurviveReuse() PASSED
+
+HandoffTest > internedRepVectorsGenerateMutableDenseFieldsAndSeparateLifetimes() PASSED
+
+HostBoundaryCompilationTest > astCompilationRestoresTheRetiredBoundary() PASSED
+
+HostBoundaryCompilationTest > bytecodeCompilationRestoresTheRetiredBoundary() PASSED
+
+HostEntryCompilationTest > bytecodeHostCompilationFollowsTheActiveSplit() PASSED
+
+HostEntryCompilationTest > astHostCompilationFollowsTheActiveSplit() PASSED
+
+Int16ArrayNativeTest > exactNarrowStateShapesAndSaturationAreRequiredInBothLoadModes() PASSED
+
+Int16ArrayNativeTest > invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() PASSED
+
+Int16ArrayNativeTest > nativePublicArraysAndByteAliasesAcrossResidualCalls() PASSED
+
+Int16ArrayNativeTest > genuineNoinlineNarrowLiteralsRefineUnknownProofsInCompiledCode() PASSED
+
+Int16ArrayNativeTest > nativePublicArraysAndByteAliasesWithInlining() PASSED
+
+Int16ArrayTest > byteAliasesAcrossOneAndTwoAndWideViewsShareTheSameStorage() PASSED
+
+Int16ArrayTest > statePrecedesAccessAndFailedReadsNeverPublish() PASSED
+
+Int16ArrayTest > fullWidthBoundsExcludePartialElementsBeforeScalingOrWriting() PASSED
+
+Int16ArrayTest > everySixteenBitPatternHasIndependentSignedAndUnsignedResults() PASSED
+
+Int16ArrayTest > twoByteStorageNarrowsAndWidensWithoutChangingIdentityOrAdjacentBytes() PASSED
+
+Int32ArrayNativeTest > exactNarrowStateShapesAndSaturationAreRequiredInBothLoadModes() PASSED
+
+Int32ArrayNativeTest > invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() PASSED
+
+Int32ArrayNativeTest > nativePublicArraysAndByteAliasesAcrossResidualCalls() PASSED
+
+Int32ArrayNativeTest > genuineNoinlineNarrowLiteralsRefineUnknownProofsInCompiledCode() PASSED
+
+Int32ArrayNativeTest > nativePublicArraysAndByteAliasesWithInlining() PASSED
+
+Int32ArrayTest > fourByteStorageNarrowsAndWidensWithoutChangingIdentityOrAdjacentBytes() PASSED
+
+Int32ArrayTest > statePrecedesAccessAndFailedReadsNeverPublish() PASSED
+
+Int32ArrayTest > fullWidthBoundsExcludePartialElementsBeforeScalingOrWriting() PASSED
+
+Int32ArrayTest > byteAliasesAcrossThreeAndFourAndWideViewsShareTheSameStorage() PASSED
+
+Int32VectorMemoryProofTest > immediateReadCasesRejectEscapesWrongShapesAndPatternMetadata() PASSED
+
+Int32VectorMemoryProofTest > allOperationsRejectWrongArgumentsFlagsArityAndResultProofs() PASSED
+
+Int32VectorMemoryProofTest > installedGuestBoundsFailuresDeoptimizeWithoutEffectsAndRecover() PASSED
+
+Int32VectorMemoryProofTest > directAstOperandsPreserveStateOrderAndDoNotPublishFailedLoads() PASSED
+
+Int32VectorMemoryProofTest > allSixExactContractsExecuteOnBothBackendsInBothLoadModes() PASSED
+
+Int32VectorMemoryProofTest > stateExpressionsRunBeforeReadOrWriteAndFailurePrecedesVectorBounds() PASSED
+
+Int32VectorStorageTest > smallArrayBoundariesAndFullWidthIndicesMatchIndependentByteModels() PASSED
+
+Int32VectorStorageTest > byteAliasesAndOverlappingStoresObserveWritesButKeepLoadedLanes() PASSED
+
+Int32VectorStorageTest > everyLaneBitAndSignedPatternsUseNativeOrderAtBothOffsetUnits() PASSED
+
+Int8ArrayNativeTest > exactNarrowStateShapesAndSaturationAreRequiredInBothLoadModes() PASSED
+
+Int8ArrayNativeTest > invalidElementOffsetsAreGuardedOnBothBackendsWithoutNativeUndefinedAccesses() PASSED
+
+Int8ArrayNativeTest > nativePublicArraysAndByteAliasesAcrossResidualCalls() PASSED
+
+Int8ArrayNativeTest > nativePublicArraysAndByteAliasesWithInlining() PASSED
+
+Int8ArrayTest > everyBytePatternHasExactSignedAndUnsignedLongResultsAndSharedIdentity() PASSED
+
+Int8ArrayTest > statePrecedesReadAndWriteAndFailedReadNeverPublishes() PASSED
+
+Int8ArrayTest > fullWidthBoundsFailBeforeNarrowingOrWritingIncludingEmptyStorage() PASSED
+
+IntArrayNativeTest > genuinePublicArraysAndPrimitiveAliasesMatchNativeAndIndependentModel() PASSED
+
+IntArrayNativeTest > exactIntStateShapesSaturationAndLevityAreRequiredInBothLoadModes() PASSED
+
+IntArrayNativeTest > invalidElementIndicesFailOnBothBackendsWithoutComparingNativeUndefinedAccesses() PASSED
+
+IntArrayTest > elementBoundsRejectPartialWordsAndOverflowBeforeAnyWrite() PASSED
+
+IntArrayTest > stateRunsBeforeReadOrWriteAndFailureDoesNotPublish() PASSED
+
+IntArrayTest > fullWidthNativeEndianStorageAliasesBytesAndKeepsAllocationIdentity() PASSED
+
+JoinWhnfProofTest > recursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() PASSED
+
+JoinWhnfProofTest > nonrecursiveDataJoinsKeepWhnfWhileLazyReturningJoinsRemainLazy() PASSED
+
+LeadingCaseReturnTest > otherUsedFormalValidationAndUnprovenResultsCannotBeSkipped() PASSED
+
+LeadingCaseReturnTest > unusedStrictFormalsAreForcedBeforeShortcutAndPapPrefixesOnlyAtSaturation() PASSED
+
+LeadingCaseReturnTest > capturedEnvironmentOffsetAndOverapplicationRemainCorrect() PASSED
+
+LeadingCaseReturnTest > diagnosticReplacementCannotAcquireARecipeButAnUnsupportedColdBodyCan() PASSED
+
+LeadingCaseReturnTest > unmarkedThunkScrutineeFallsBackWhileMarkedScrutineeCanReturnAfterForcing() PASSED
+
+LeadingCaseReturnTest > sourceNotesAndClonedRecipesPreserveAttributionWithoutAddingRootEntries() PASSED
+
+LeadingCaseReturnTest > onlyCompiledDirectCallsShortcutAndPreservePendingWorkAndFullWidthResults() PASSED
+
+ManagedAddressStorageTest > finalBackingReferencesSeparateMutableStorageFromLiteralCompilationConstants() PASSED
+
+ManagedAddressStorageTest > overlapUsesBackingIdentityAndExactNonemptyRegions() PASSED
+
+ManagedAddressStorageTest > literalRawBytesAndTrailingNulStayImmutableThroughEveryDerivedAddress() PASSED
+
+ManagedAddressStorageTest > completeRangesRejectFullWidthOverflowBeforeEffects() PASSED
+
+ManagedAddressStorageTest > fullWidthBoundsMatchIndependentArithmeticAndFailedWritesHaveNoEffects() PASSED
+
+ManagedAddressStorageTest > aliasesIncludingUnsafeFrozenArraysSeeEveryWriteAndUnsignedByte() PASSED
+
+ManagedMd5Test > publishedDigestVectorsAndLiteralInputUseOnlyVisibleContext() PASSED
+
+ManagedMd5Test > everyMemcpyOverlapIsRejectedBeforeEvenEarlierDisjointCopies() PASSED
+
+ManagedMd5Test > malformedLengthsRangesAndLiteralDestinationsFailBeforeAnyEffect() PASSED
+
+ManagedMd5Test > exactNativeContextSnapshotsAndDefinedAliasesMatchPinnedC() PASSED
+
+Md5ForeignCallTest > mainUnitAndMissingDescriptorsNeverSelectTheAdapter() PASSED
+
+Md5ForeignCallTest > compiledClosedCallsUseVisibleStorageAndEraseOnlyTheStateResult() PASSED
+
+MutVarTest > publicSTRefEqualityWithInlining() PASSED
+
+MutVarTest > stateFailurePrecedesMutationAndTuplePublication() PASSED
+
+MutVarTest > nativeSTRefWithInliningAndBoundedGraalSpeculationWarmup() PASSED
+
+MutVarTest > publicSTRefEqualityAcrossResidualCalls() PASSED
+
+MutVarTest > exactShapesAritySaturationAndLevityAreRequiredInBothLoadModes() PASSED
+
+MutVarTest > managedReferencePreservesAliasesAndDoesNotEvaluateOrCacheContents() PASSED
+
+MutVarTest > bothBackendsRejectBadStateBeforeWritingAndKeepLiftedContentsLazy() PASSED
+
+MutVarTest > nativeSTRefAcrossResidualCalls() PASSED
+
+MutableByteArrayTest > exactArityIntFillStateAndUnliftedReferenceProofsAreRequired() PASSED
+
+MutableByteArrayTest > nativeFillsMovesAndPublicReplicateWithInlining() PASSED
+
+MutableByteArrayTest > allOperandsAndStateAreEvaluatedBeforeMutation() PASSED
+
+MutableByteArrayTest > nativeFillsMovesAndPublicReplicateAcrossResidualCalls() PASSED
+
+MutableByteArrayTest > fullWidthDomainsFillTruncationAndOverlapPoliciesPreserveStorage() PASSED
+
+MutableByteArrayTest > compiledTypedBackendsMutateExactBytesAndGuardStateBoundsAndOverlap() PASSED
+
+OperandRetentionTest > joinTransferReleasesCompletedOperandsButDoesNotMoveOrClearOnOperandFailure() PASSED
+
+OperandRetentionTest > selfTransferReleasesEveryOperandIncludingUnusedFormalsWithoutWideningSlots() PASSED
+
+PinnedAddressTest > nativePinnedAddressesAndLazyKeepAliveWithInlining() PASSED
+
+PinnedAddressTest > statePrecedesMemoryEffectsAndFailedReadsDoNotPublish() PASSED
+
+PinnedAddressTest > keepAliveEvaluatesKeptReferenceAndStateThenRunsActionExactlyOnce() PASSED
+
+PinnedAddressTest > allocationChecksFullWidthSizeAndPowerOfTwoAlignment() PASSED
+
+PinnedAddressTest > nativePinnedAddressesAndLazyKeepAliveAcrossResidualCalls() PASSED
+
+PointerEqualityTest > sharedAndDistinctReferencesIncludeUnevaluatedAndUpdatedThunks() PASSED
+
+PointerEqualityTest > forcingOneLocalDoesNotFollowASeparateAliasUntilThatAliasIsDemanded() PASSED
+
+PointerEqualityTest > malformedAritiesRemainLoadErrorsEvenInDiagnosticMode() PASSED
+
+PointerEqualityTest > resultFeedsFullWidthArithmeticOnBothIdentityBranches() PASSED
+
+PointerEqualityTest > onlyTheChosenFallbackBranchMayEnterABottom() PASSED
+
+ReferenceCaptureTest > lazyAndCaseRefinedRecursiveCapturesRetainTheirPhysicalStorage() PASSED
+
+ReferenceCaptureTest > preciseReferenceAndPrimitiveCapturesRoundTripThroughBothStorageEntrypoints() PASSED
+
+ReferenceCaptureTest > compiledEscapedClosuresKeepDataFunctionsAndLiteralAddressesPrecise() PASSED
+
+ReferenceFieldTest > strictDataAndClosureFieldsArePreciseWhileLazyAndPolymorphicFieldsRemainGeneric() PASSED
+
+ReferenceFieldTest > constructorProofsMustAlignWithBothStorageAndWorkerEvaluation() PASSED
+
+ReferenceFieldTest > typedConstructorPapKeepsItsStrictPrefixLazyUntilSaturation() PASSED
+
+ReferenceFormalTest > concreteReferenceFormalsSurviveDirectAndAncestorParallelMoves() PASSED
+
+ReferenceFormalTest > checkedReferenceEntryRejectsNullButDoesNotStrictifyLazyData() PASSED
+
+ResizeByteArrayTest > compiledBackendsReturnTheExactStorageAndGuardStateAndInvalidCarriers() PASSED
+
+ResizeByteArrayTest > exactSaturationStateReferenceAndLogicalPairProofsAreRequired() PASSED
+
+ResizeByteArrayTest > managedResizePreservesThePrefixAndRejectsFullWidthInvalidLengths() PASSED
+
+ResizeByteArrayTest > nativeResizePrefixAndRepeatedWritesAcrossResidualCalls() PASSED
+
+ResizeByteArrayTest > nativeResizePrefixAndRepeatedWritesWithInlining() PASSED
+
+ResizeByteArrayTest > stateIsEvaluatedBeforeAllocationAndFailureDoesNotPublish() PASSED
+
+ScalarBitCastTest > everyFloatNanEncodingAndSelectedDoubleNanPayloadsRemainExact() PASSED
+
+ScalarBitCastTest > nativeRawBitsAcrossResidualCalls() PASSED
+
+ScalarBitCastTest > typedNodesKeepRawBitsAndNeverUseBoxedOperandExecution() PASSED
+
+ScalarBitCastTest > directTypedCallsPreserveBitsWithExactlyOneCompiledEntryAndRejectWrongCarriers() PASSED
+
+ScalarBitCastTest > exactKindsSignednessArityAndScalarFrontiersAreChecked() PASSED
+
+ScalarBitCastTest > nativeRawBitsWithInlining() PASSED
+
+ScalarLexicalProofTest > tupleAndScalarArithmeticRejectContradictoryLexicalProofs() PASSED
+
+ScalarLexicalProofTest > genuineUnliftedNewtypeCastsKeepTheirScalarRepresentation() PASSED
+
+ScalarLexicalProofTest > absentUnknownAndMatchingScalarProofsRemainCompatible() PASSED
+
+ScalarPrimitiveSignatureTest > nativeNewtypeCastsAroundScalarArithmeticAndConversionKeepCompiledEntries() PASSED
+
+ScalarPrimitiveSignatureTest > genuineScalarApplicationsRejectConsistentlyForgedArgumentsAndResults() PASSED
+
+ScalarPrimitiveSignatureTest > missingUnknownAndCorrectLegacyMetadataRemainCompatible() PASSED
+
+ShortByteStringSliceTest > publicSlicesWithInlining() PASSED
+
+ShortByteStringSliceTest > completeAppendAndConcatOverflowPathsRemainStrictFrontiers() PASSED
+
+ShortByteStringSliceTest > publicSlicesAcrossResidualCalls() PASSED
+
+ShowIntTest > publicShowAndEveryCharacterWithInlining() PASSED
+
+ShowIntTest > publicShowAndEveryCharacterAcrossResidualCalls() PASSED
+
+ShowWordListTest > publicWordAndListCharactersWithInlining() PASSED
+
+ShowWordListTest > publicWordAndListCharactersAcrossResidualCalls() PASSED
+
+SimdDoubleVectorTest > exactShapeAndVectorBackedStorageRemainDistinctFromDoubleTuple() PASSED
+
+SimdDoubleVectorTest > primitiveLanesPreserveMovementBitsAndBinary64Arithmetic() PASSED
+
+SimdDoubleVectorTest > genuineCoreMatchesAvailableOracleAndEntersCompiledCodeForEveryInput() PASSED
+
+SimdDoubleVectorTest > bothLoadersRejectForgedVectorProofsAndVectorFormalArguments() PASSED
+
+SimdDoubleVectorTest > unknownLaneKindCannotHideFloatLiteralInVectorBroadcast() PASSED
+
+SimdFloatVectorTest > primitiveLanesPreserveMovementBitsAndBinary32Arithmetic() PASSED
+
+SimdFloatVectorTest > exactShapeAndVectorBackedStorageRemainDistinctFromFloatTuple() PASSED
+
+SimdFloatVectorTest > bothLoadersRejectForgedVectorProofsAndVectorFormalArguments() PASSED
+
+SimdFloatVectorTest > unknownLaneKindCannotHideDoubleLiteralInVectorBroadcast() PASSED
+
+SimdFloatVectorTest > genuineCoreMatchesNativeAndEntersCompiledCodeForEveryInput() PASSED
+
+SimdInt16VectorTest > literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() PASSED
+
+SimdInt16VectorTest > allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct() PASSED
+
+SimdInt16VectorTest > nativeCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdInt16VectorTest > exactShapeRequiresEightShortFieldsAndEightInt16TupleLanes() PASSED
+
+SimdInt16VectorTest > nativeCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdInt16VectorTest > bothLoadersRetainVectorBoundaryAndRejectForgedShapes() PASSED
+
+SimdInt32ByteArrayTest > preparationModeRejectsCorruptionAndNativeDowngrades() PASSED
+
+SimdInt32ByteArrayTest > nativeMemoryCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdInt32ByteArrayTest > nativeMemoryCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdInt32ByteArrayTest > genuineExportedVectorBoundariesRemainRejected() PASSED
+
+SimdInt32ByteArrayTest > publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() PASSED
+
+SimdInt32MultiplyTest > bothLoadersRequireUnliftedOperandsAndCanonicalSignedLiterals() PASSED
+
+SimdInt32MultiplyTest > multiplicationKeepsExactSignedFourLaneContract() PASSED
+
+SimdInt32MultiplyTest > bothLoadersRetainSignednessAndCallingFrontier() PASSED
+
+SimdInt32MultiplyTest > nativeCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdInt32MultiplyTest > nativeCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdInt32MultiplyTest > productsKeepLowBitsThenSignExtendWithoutSaturationOrHighProduct() PASSED
+
+SimdInt32VectorTest > exactInt32VectorIdentityAndDenseDurableStorage() PASSED
+
+SimdInt32VectorTest > vectorFormalJoinRemainsUnsupported() PASSED
+
+SimdInt32VectorTest > realInt32CorePreservesSignedLanesAndEntersCompiledCodeForEveryRow() PASSED
+
+SimdInt8VectorTest > literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() PASSED
+
+SimdInt8VectorTest > allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct() PASSED
+
+SimdInt8VectorTest > nativeCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdInt8VectorTest > nativeCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdInt8VectorTest > canonicalInt8LiteralsAndAlternativesRejectOutOfRangeAndNoncanonicalText() PASSED
+
+SimdInt8VectorTest > exactShapeRequiresSixteenByteFieldsAndSixteenInt8TupleLanes() PASSED
+
+SimdInt8VectorTest > bothLoadersRetainVectorBoundaryAndRejectForgedShapes() PASSED
+
+SimdVectorTest > exactVectorCaseStaysLocalAndExecutesCompiled() PASSED
+
+SimdVectorTest > caseCannotHideAVectorBoundaryWhenMetadataIsMissing() PASSED
+
+SimdVectorTest > vectorCallAndResultBoundariesStayExplicitlyUnsupported() PASSED
+
+SimdVectorTest > realCoreVectorArithmeticRemainsInstalledAfterCompiledExecution() PASSED
+
+SimdVectorTest > exactVectorMetadataAndDurableStorageAreDistinctFromTuples() PASSED
+
+SimdVectorTest > vectorJoinFormalRejectsWithoutAnEarlierVectorLet() PASSED
+
+SimdWord16VectorTest > literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() PASSED
+
+SimdWord16VectorTest > nativeCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdWord16VectorTest > nativeCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdWord16VectorTest > exactShapeRequiresEightShortFieldsAndEightWord16TupleLanes() PASSED
+
+SimdWord16VectorTest > bothLoadersRetainVectorBoundaryAndRejectForgedShapes() PASSED
+
+SimdWord16VectorTest > allBitPatternsAndBoundaryPairsWrapWithoutSaturationOrHighProduct() PASSED
+
+SimdWord16VectorTest > canonicalWord16LiteralsAndAlternativesRejectOutOfRangeAndNoncanonicalText() PASSED
+
+SimdWord32ByteArrayTest > preparationModeRejectsCorruptionAndNativeDowngrades() PASSED
+
+SimdWord32ByteArrayTest > nativeMemoryCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdWord32ByteArrayTest > nativeMemoryCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdWord32ByteArrayTest > genuineExportedVectorBoundariesRemainRejected() PASSED
+
+SimdWord32ByteArrayTest > publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() PASSED
+
+SimdWord32VectorTest > literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() PASSED
+
+SimdWord32VectorTest > nativeCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdWord32VectorTest > nativeCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdWord32VectorTest > canonicalWord32LiteralsAndAlternativesRejectOutOfRangeAndNoncanonicalText() PASSED
+
+SimdWord32VectorTest > sampledBitPatternsAndBoundaryPairsWrapWithoutSaturationOrHighProduct() PASSED
+
+SimdWord32VectorTest > bothLoadersRetainVectorBoundaryAndRejectForgedShapes() PASSED
+
+SimdWord32VectorTest > exactShapeRequiresFourIntFieldsAndFourWord32TupleLanes() PASSED
+
+SimdWord8VectorTest > literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() PASSED
+
+SimdWord8VectorTest > allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct() PASSED
+
+SimdWord8VectorTest > canonicalWord8LiteralsAndAlternativesRejectOutOfRangeAndNoncanonicalText() PASSED
+
+SimdWord8VectorTest > exactShapeRequiresSixteenByteFieldsAndSixteenWord8TupleLanes() PASSED
+
+SimdWord8VectorTest > nativeCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdWord8VectorTest > nativeCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdWord8VectorTest > bothLoadersRetainVectorBoundaryAndRejectForgedShapes() PASSED
+
+SourceCloneTest > actualClonedTargetsRetainRootAndChildLocationsBeforeAndAfterCompilation() PASSED
+
+SqrtPrimitiveTest > sqrtRequiresItsExactOperandAndResultProofs() PASSED
+
+SqrtPrimitiveTest > publicSqrtMatchesNativeWithInlining() PASSED
+
+SqrtPrimitiveTest > coldNaNsNegativesSubnormalsAndZeroSignsDoNotInvalidateCompiledSqrt() PASSED
+
+SqrtPrimitiveTest > publicSqrtMatchesNativeAcrossResidualCalls() PASSED
+
+StateTupleTest > nativeStateTuplesExecuteAcrossResidualCalls() PASSED
+
+StateTupleTest > ignoredStateFieldStillExecutesAndThrowsBeforeTupleCompletion() PASSED
+
+StateTupleTest > logicalStateAndNestedEmptyTupleFieldsHaveNoPhysicalSlots() PASSED
+
+StateTupleTest > zeroWidthStateCannotBeReinterpretedAsAnEmptyTuple() PASSED
+
+StateTupleTest > nativeStateTuplesExecuteInlined() PASSED
+
+StateTupleTest > legacyOperandWithoutProofMustStillProduceTheVoidCarrier() PASSED
+
+StaticShapeSafetyTest > ownedStorageRejectsForgedKeysAndCrossLayoutAccessInBothStrategies() PASSED
+
+StaticShapeSafetyTest > engineCanForceChecksDespiteThePerShapeExperiment() PASSED
+
+SumProtocolTest > intrinsicScalarColdArmCannotSatisfyAggregateResultWithoutMetadata() PASSED
+
+SumProtocolTest > exactLogicalAndPhysicalProofsRejectMalformedOrUnsupportedSums() PASSED
+
+SumProtocolTest > malformedColdConstructorAndCaseProofsRejectOnBothBackends() PASSED
+
+SumProtocolTest > inferredSumCannotCrossOrdinaryArgumentBoundaryWhenOuterProofIsOmitted() PASSED
+
+SumProtocolTest > sumAndTuplePayloadBindingsShadowOuterJoinWithoutChangingProjectionSlots() PASSED
+
+SumProtocolTest > inactiveReferencesAreClearedBeforeResidualCompletionAndShapeFailureReleasesLoan() PASSED
+
+SumProtocolTest > defaultAndNonExhaustiveSumCasesConsumeAndReleaseResults() PASSED
+
+SumProtocolTest > publicHostRejectsKnownAliasToSumResult() PASSED
+
+SumProtocolTest > realSumProducerMaterializesFreshCarrierAcrossDeoptWithoutPoolLoan() PASSED
+
+SumResultTest > nativeResultsResidual() PASSED
+
+SumResultTest > originalFrontierResultsResidual() PASSED
+
+SumResultTest > originalFrontierResultsInline() PASSED
+
+SumResultTest > independentPairInputsResidual() PASSED
+
+SumResultTest > extendedNativeResultsResidual() PASSED
+
+SumResultTest > extendedNativeResultsInline() PASSED
+
+SumResultTest > nativeResultsInline() PASSED
+
+SumResultTest > independentPairInputsInline() PASSED
+
+TagToEnumTest > genuineParameterizedAndDataFamilyEnumsRemainRejected() PASSED
+
+TagToEnumTest > nativeEnumsWithInlining() PASSED
+
+TagToEnumTest > nativeEnumsAcrossResidualCalls() PASSED
+
+TagToEnumTest > lexicalIntProofRefinesLegacyOrUnknownOccurrencesWithoutGuessingTheFamily() PASSED
+
+TagToEnumTest > directEnumRootsUseTypedNullaryValuesAndEveryCompiledCallEntersExactlyOnce() PASSED
+
+TagToEnumTest > malformedOrUnsaturatedEnumProofsRejectAtLoad() PASSED
+
+TagToEnumTest > typedTagOperandExecutesOnceBeforeSelectionAndFailure() PASSED
+
+TupleArithmeticTest > undefinedDivisionInputsFailWithoutPublishingResultsAndValidCallsRecover() PASSED
+
+TupleArithmeticTest > nativeFieldsAndUnboundedModelAgreeInBothBackendsAndInstalledCode() PASSED
+
+TupleArithmeticTest > exactPrimitiveShapesAndSaturationAreRequired() PASSED
+
+TupleCompletionTest > deoptimizationMaterializesAFreshPointerCarrierWithoutInventingALoan() PASSED
+
+TupleCompletionTest > polymorphicTupleCallsKeepPapPrefixesAndCapturedHeadersThroughGenericDispatch() PASSED
+
+TupleCompletionTest > freshAndResidualBranchesNormalizeBeforeTheirResultJoin() PASSED
+
+TupleInputNativeTest > nativeZeroWidthFailurePrecedesInputPublication() PASSED
+
+TupleInputNativeTest > nativeTypedInputsResidual() PASSED
+
+TupleInputNativeTest > nativeTypedInputsInline() PASSED
+
+TupleInputNativeTest > independentTypedInputLanesInlineAndResidual() PASSED
+
+TupleJoinResultTest > genuineTupleJoinsRunWithResidualCalls() PASSED
+
+TupleJoinResultTest > recursiveJoinShadowsAnOuterTupleButZeroArityJoinCannotCaptureIt() PASSED
+
+TupleJoinResultTest > tupleJoinProofsAndUnusedAggregateFormalsAreCheckedAtLoad() PASSED
+
+TupleJoinResultTest > genuineTupleJoinsRunWithInlining() PASSED
+
+TupleJoinResultTest > astTupleJoinScratchReferencesAreClearedAfterCopying() PASSED
+
+TupleRepresentationTest > forcingAConsumedLazyFieldCanBlackholeWithoutRetainingTheOutputLoan() PASSED
+
+TupleRepresentationTest > scalarHandoffCannotClaimSingletonReferenceTupleResults() PASSED
+
+TupleRepresentationTest > equalPhysicalVectorsDoNotEraseLogicalTupleBoundaries() PASSED
+
+TupleRepresentationTest > lexicalScalarAndJoinBindingsShadowTupleNames() PASSED
+
+TupleRepresentationTest > completedReferenceLoanIsReleasedEvenWhenTheConsumerShapeIsWrong() PASSED
+
+TupleResultTest > resultOnlyNativeBoundariesWithInlining() PASSED
+
+TupleResultTest > inlinedNativeResultsRemainVirtual() PASSED
+
+TupleResultTest > nativeProducersForwardersAndOutstandingResultsRunWithoutInlining() PASSED
+
+TupleResultTest > resultOnlyNativeBoundariesWithoutInlining() PASSED
+
+TypedCaseTest > typedCasesKeepWidePrimitiveResultsColdArmsAndGeneralCaseFallback() PASSED
+
+TypedCaseTest > defaultOnlyCasesForwardConcreteReferencesAndForceSharedScrutineeOnce() PASSED
+
+TypedExecutionTest > typedEvaluationRunsItsChildOnceWhenACompiledLongPathReceivesAThunk() PASSED
+
+TypedExecutionTest > runtimeTypesPreserveUnexpectedValuesAndDoNotCoerceDistinctPrimitiveKinds() PASSED
+
+TypedInputOwnershipTest > actualDeoptimizationAfterPartialRestoreClearsFreshReferenceWithoutPoolLoan() PASSED
+
+TypedInputOwnershipTest > staleCallerCleanupCannotReleaseReusedInputOrIndependentOutputLoan() PASSED
+
+TypedInputProtocolTest > durableTypedPapPrefixSurvivesReuseAndStrictPrefixFailureBeforeLoan() PASSED
+
+TypedInputProtocolTest > cyclicIntermediateClosureIsAppliedBeforeFinalTupleConsumptionInPicAndGenericRoutes() PASSED
+
+TypedInputProtocolTest > threeTargetAndPrefixedThreeTargetCyclesReturnTypedResults() PASSED
+
+TypedInputScalarSourceTest > unknownScalarBesideTupleSurvivesLongFloatDoubleLocalGeneralization() PASSED
+
+UnsafeEqualityTest > wrongCalleeAndDemandedBottomIntentionallyDeoptWithoutPublishingResults() PASSED
+
+UnsafeEqualityTest > nativeCasesAcrossResidualCalls() PASSED
+
+UnsafeEqualityTest > nativeCasesWithInlining() PASSED
+
+UnsafeEqualityTest > nonmatchingFirstClassProofsRemainStrictFrontiers() PASSED
+
+Word32VectorMemoryProofTest > immediateReadCasesRejectEscapesWrongShapesAndPatternMetadata() PASSED
+
+Word32VectorMemoryProofTest > allOperationsRejectWrongArgumentsFlagsArityAndResultProofs() PASSED
+
+Word32VectorMemoryProofTest > installedGuestBoundsFailuresDeoptimizeWithoutEffectsAndRecover() PASSED
+
+Word32VectorMemoryProofTest > directAstOperandsPreserveStateOrderAndDoNotPublishFailedLoads() PASSED
+
+Word32VectorMemoryProofTest > allSixExactContractsExecuteOnBothBackendsInBothLoadModes() PASSED
+
+Word32VectorMemoryProofTest > stateExpressionsRunBeforeReadOrWriteAndFailurePrecedesVectorBounds() PASSED
+
+Word32VectorStorageTest > fourFinalIntFieldsPreserveEveryUnsignedLaneBitAtBothOffsetUnits() PASSED
+
+Word32VectorStorageTest > byteAliasesAndOverlappingStoresKeepLoadedUnsignedSnapshots() PASSED
+
+Word32VectorStorageTest > smallArrayBoundariesAndFullWidthIndicesMatchIndependentUnsignedByteModels() PASSED
+
+WordArrayTest > elementBoundsRejectPartialWordsAndOverflowBeforeAnyWrite() PASSED
+
+WordArrayTest > machineWordRawBitsAliasBytesWithoutTruncatingTheHighHalf() PASSED
+
+WordArrayTest > stateRunsBeforeReadOrWriteAndFailureDoesNotPublish() PASSED
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 9m 14s
+10 actionable tasks: 10 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

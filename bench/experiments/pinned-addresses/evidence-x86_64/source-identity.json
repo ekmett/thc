@@ -1,0 +1,9 @@
+{
+  "base": "9a7fef75cc4ce44cb2b1031c61c92aadffb78859",
+  "testedSource": "3e2c124e039926c165e907b034cc80bb9197b50b",
+  "runtime": "2cbf1aa5f369658100fd7137a3725ba9dd85a639",
+  "tree": "a3c4d9c125d7b7e1929a632e33f547327399aa07",
+  "host": "eak-quartus",
+  "javaHome": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1",
+  "priorAttempts": "Earlier dirty development attempts are historical failures, not claims of this source identity."
+}

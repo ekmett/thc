@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "python3",
+    "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/check-foreign-call-metadata.py",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/after-pre/ForeignCallAudit.json",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/after-post/ForeignCallAudit.json",
+    "--before",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/before-pre/ForeignCallAudit.json",
+    "--before",
+    "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/before-post/ForeignCallAudit.json"
+  ],
+  "cwd": "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb",
+  "started": 1790223720.9288986,
+  "resources": [
+    "build:/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build"
+  ]
+}

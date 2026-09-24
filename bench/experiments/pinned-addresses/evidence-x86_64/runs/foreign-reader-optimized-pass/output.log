@@ -1,0 +1,3 @@
+PASS /home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/after-pre/ForeignCallAudit.json: 8 exact descriptors; 8 strict foreign frontiers; 1 ordinary control; renamed IDs=61
+PASS /home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build/foreign-call-signatures/after-post/ForeignCallAudit.json: 8 exact descriptors; 8 strict foreign frontiers; 1 ordinary control; renamed IDs=59
+PASS 16 malformed descriptor controls (reader-only, not runtime support)

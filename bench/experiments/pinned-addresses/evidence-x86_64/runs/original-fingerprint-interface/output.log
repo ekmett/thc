@@ -1,0 +1,816 @@
+Magic: Wanted 33214052,
+       got    33214052
+Version: Wanted 9141,
+         got    9141
+Way: Wanted ,
+     got    
+interface GHC.Internal.Fingerprint 9141
+  ABI hash: 904fbafc2ae6142ab9a45b5c00558a5e
+  interface hash: d98b6980193f6468ca862ee10c362dda
+  export avails hash: 5bfe6d7bb776caafecdf9c52c335ba3e
+  orphan-like hash: 2bc1ecdb78758462ca9602c439ee46c3
+  orphan hash: 09c3bb78ea98fd0019d1f100b0d60df5
+  sig of: Nothing
+  where
+exports:
+  fingerprint0
+  fingerprintData
+  fingerprintFingerprints
+  fingerprintString
+  getFileHash
+  GHC.Internal.Fingerprint.Type.Fingerprint{GHC.Internal.Fingerprint.Type.Fingerprint}
+defaults:
+direct module dependencies: normal ghc-internal-9.1401.0:GHC.Internal.Base
+                            normal ghc-internal-9.1401.0:GHC.Internal.Bits
+                            normal ghc-internal-9.1401.0:GHC.Internal.Fingerprint.Type
+                            normal ghc-internal-9.1401.0:GHC.Internal.Foreign.C.Types
+                            normal ghc-internal-9.1401.0:GHC.Internal.Foreign.Marshal.Alloc
+                            normal ghc-internal-9.1401.0:GHC.Internal.Foreign.Marshal.Array
+                            normal ghc-internal-9.1401.0:GHC.Internal.Foreign.Storable
+                            normal ghc-internal-9.1401.0:GHC.Internal.IO
+                            normal ghc-internal-9.1401.0:GHC.Internal.List
+                            normal ghc-internal-9.1401.0:GHC.Internal.Num
+                            normal ghc-internal-9.1401.0:GHC.Internal.Ptr
+                            normal ghc-internal-9.1401.0:GHC.Internal.Real
+                            normal ghc-internal-9.1401.0:GHC.Internal.Show
+                            normal ghc-internal-9.1401.0:GHC.Internal.System.IO
+                            normal ghc-internal-9.1401.0:GHC.Internal.Word
+boot module dependencies: (ghc-internal-9.1401.0,
+                           GHC.Internal.Bignum.BigNat)
+                          (ghc-internal-9.1401.0, GHC.Internal.Bignum.Integer)
+                          (ghc-internal-9.1401.0, GHC.Internal.Bignum.Natural)
+                          (ghc-internal-9.1401.0, GHC.Internal.ByteOrder {-# SOURCE #-})
+                          (ghc-internal-9.1401.0, GHC.Internal.Conc.Sync)
+                          (ghc-internal-9.1401.0, GHC.Internal.Data.Version {-# SOURCE #-})
+                          (ghc-internal-9.1401.0, GHC.Internal.Enum)
+                          (ghc-internal-9.1401.0, GHC.Internal.Exception)
+                          (ghc-internal-9.1401.0,
+                           GHC.Internal.Exception.Backtrace {-# SOURCE #-})
+                          (ghc-internal-9.1401.0, GHC.Internal.Exception.Type)
+                          (ghc-internal-9.1401.0, GHC.Internal.Fingerprint {-# SOURCE #-})
+                          (ghc-internal-9.1401.0, GHC.Internal.IO)
+                          (ghc-internal-9.1401.0, GHC.Internal.IO.Encoding)
+                          (ghc-internal-9.1401.0, GHC.Internal.IO.Exception)
+                          (ghc-internal-9.1401.0, GHC.Internal.IO.Handle)
+                          (ghc-internal-9.1401.0, GHC.Internal.IO.Handle.Text)
+                          (ghc-internal-9.1401.0, GHC.Internal.IO.Handle.Types)
+                          (ghc-internal-9.1401.0, GHC.Internal.IO.StdHandles)
+                          (ghc-internal-9.1401.0, GHC.Internal.Num)
+                          (ghc-internal-9.1401.0, GHC.Internal.Real)
+                          (ghc-internal-9.1401.0, GHC.Internal.Stack {-# SOURCE #-})
+direct package dependencies:
+plugin package dependencies:
+orphans: GHC.Internal.Base GHC.Internal.Data.NonEmpty
+         GHC.Internal.Float GHC.Internal.Prim.Ext
+family instance modules: GHC.Internal.Data.Monoid
+                         GHC.Internal.Data.Semigroup.Internal GHC.Internal.Data.Type.Ord
+                         GHC.Internal.Generics GHC.Internal.IO.Exception
+30c24d99a86c356a27abf6a29b3f4de3
+  $s$wpokeArray ::
+    GHC.Internal.Ptr.Ptr GHC.Internal.Word.Word8
+    -> [GHC.Internal.Word.Word8]
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+  [HasNoCafRefs, TagSig: <TagTuple[]>, LambdaFormInfo: LFReEntrant 3,
+   Arity: 3, Strictness: <ML><1L><L>, Inline: [2],
+   Unfolding: Core: <vanilla>
+              \ (ptr['GHC.Internal.Types.Many] :: GHC.Internal.Ptr.Ptr
+                                                    GHC.Internal.Word.Word8)
+                (vals0['GHC.Internal.Types.Many] :: [GHC.Internal.Word.Word8])
+                (eta['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                    GHC.Internal.Prim.RealWorld)[OneShot] ->
+              case vals0 of wild {
+                [] -> eta
+                : val vals
+                -> case ptr of wild1 { GHC.Internal.Ptr.Ptr a ->
+                   case val of wild2 { GHC.Internal.Word.W8# x ->
+                   case GHC.Internal.Prim.writeWord8OffAddr#
+                          @GHC.Internal.Prim.RealWorld
+                          a
+                          0#
+                          x
+                          eta of s2 { DEFAULT ->
+                   letrec {
+                     go :: [GHC.Internal.Word.Word8]
+                           -> GHC.Internal.Prim.Int#
+                           -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+                           -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+                       JoinPoint(3) [Arity: 3, Strictness: <1L><L><L>]
+                     = \ (ds['GHC.Internal.Types.Many] :: [GHC.Internal.Word.Word8])
+                         (ds1['GHC.Internal.Types.Many] :: GHC.Internal.Prim.Int#)
+                         (eta1['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                              GHC.Internal.Prim.RealWorld)[OneShot] ->
+                       case ds of wild3 {
+                         [] -> eta1
+                         : val1 vals1
+                         -> case val1 of wild4 { GHC.Internal.Word.W8# x1 ->
+                            case GHC.Internal.Prim.writeWord8OffAddr#
+                                   @GHC.Internal.Prim.RealWorld
+                                   a
+                                   ds1
+                                   x1
+                                   eta1 of s1 { DEFAULT ->
+                            go vals1 (GHC.Internal.Prim.+# ds1 1#) s1 } } }
+                   } in
+                   go vals 1# s2 } } } }]
+06a086d5e803f5a703edddd2dfacb052
+  $s$wpokeArray1 ::
+    GHC.Internal.Ptr.Ptr GHC.Internal.Fingerprint.Type.Fingerprint
+    -> [GHC.Internal.Fingerprint.Type.Fingerprint]
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+  [HasNoCafRefs, TagSig: <TagTuple[]>, LambdaFormInfo: LFReEntrant 3,
+   Arity: 3, Strictness: <ML><1L><L>, Inline: [2],
+   Unfolding: Core: <vanilla>
+              \ (ptr['GHC.Internal.Types.Many] :: GHC.Internal.Ptr.Ptr
+                                                    GHC.Internal.Fingerprint.Type.Fingerprint)
+                (vals0['GHC.Internal.Types.Many] :: [GHC.Internal.Fingerprint.Type.Fingerprint])
+                (eta['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                    GHC.Internal.Prim.RealWorld)[OneShot] ->
+              case vals0 of wild {
+                [] -> eta
+                : val vals
+                -> case val of wild1 { GHC.Internal.Fingerprint.Type.Fingerprint ww ww1 ->
+                   case ptr of wild2 { GHC.Internal.Ptr.Ptr addr ->
+                   case GHC.Internal.Prim.writeWord8OffAddr#
+                          @GHC.Internal.Prim.RealWorld
+                          addr
+                          7#
+                          (GHC.Internal.Prim.wordToWord8#
+                             (GHC.Internal.Prim.word64ToWord# ww))
+                          eta of s2 { DEFAULT ->
+                   case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpokeW64
+                          (GHC.Internal.Prim.uncheckedShiftRL64# ww 8#)
+                          7#
+                          addr
+                          s2 of ww2 { DEFAULT ->
+                   let {
+                     a1 :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                     = GHC.Internal.Prim.plusAddr# addr 8#
+                   } in
+                   case GHC.Internal.Prim.writeWord8OffAddr#
+                          @GHC.Internal.Prim.RealWorld
+                          a1
+                          7#
+                          (GHC.Internal.Prim.wordToWord8#
+                             (GHC.Internal.Prim.word64ToWord# ww1))
+                          ww2 of s1 { DEFAULT ->
+                   case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpokeW64
+                          (GHC.Internal.Prim.uncheckedShiftRL64# ww1 8#)
+                          7#
+                          a1
+                          s1 of ww4 { DEFAULT ->
+                   letrec {
+                     go :: [GHC.Internal.Fingerprint.Type.Fingerprint]
+                           -> GHC.Internal.Prim.Int#
+                           -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+                           -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+                       JoinPoint(3) [Arity: 3, Strictness: <1L><L><L>]
+                     = \ (ds['GHC.Internal.Types.Many] :: [GHC.Internal.Fingerprint.Type.Fingerprint])
+                         (ds1['GHC.Internal.Types.Many] :: GHC.Internal.Prim.Int#)
+                         (eta1['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                              GHC.Internal.Prim.RealWorld)[OneShot] ->
+                       case ds of wild3 {
+                         [] -> eta1
+                         : val1 vals1
+                         -> case val1 of wild4 { GHC.Internal.Fingerprint.Type.Fingerprint ww5 ww6 ->
+                            let {
+                              a :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                              = GHC.Internal.Prim.plusAddr# addr (GHC.Internal.Prim.*# ds1 16#)
+                            } in
+                            case GHC.Internal.Prim.writeWord8OffAddr#
+                                   @GHC.Internal.Prim.RealWorld
+                                   a
+                                   7#
+                                   (GHC.Internal.Prim.wordToWord8#
+                                      (GHC.Internal.Prim.word64ToWord# ww5))
+                                   eta1 of s4 { DEFAULT ->
+                            case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpokeW64
+                                   (GHC.Internal.Prim.uncheckedShiftRL64# ww5 8#)
+                                   7#
+                                   a
+                                   s4 of ww7 { DEFAULT ->
+                            let {
+                              a2 :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                              = GHC.Internal.Prim.plusAddr# a 8#
+                            } in
+                            case GHC.Internal.Prim.writeWord8OffAddr#
+                                   @GHC.Internal.Prim.RealWorld
+                                   a2
+                                   7#
+                                   (GHC.Internal.Prim.wordToWord8#
+                                      (GHC.Internal.Prim.word64ToWord# ww6))
+                                   ww7 of s5 { DEFAULT ->
+                            case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpokeW64
+                                   (GHC.Internal.Prim.uncheckedShiftRL64# ww6 8#)
+                                   7#
+                                   a2
+                                   s5 of ww8 { DEFAULT ->
+                            go vals1 (GHC.Internal.Prim.+# ds1 1#) ww8 } } } } } }
+                   } in
+                   go vals 1# ww4 } } } } } } }]
+6465a660b41965393982f26c9e9fd896
+  $tcMD5Context :: GHC.Internal.Types.TyCon
+  [HasNoCafRefs, TagSig: <TagProper>,
+   LambdaFormInfo: LFCon[GHC.Internal.Types.TyCon],
+   Unfolding: Core: <vanilla>
+              GHC.Internal.Types.TyCon
+                7909755621278311713#Word64
+                12533924026454298848#Word64
+                $trModule
+                $tcMD5Context1
+                0#
+                GHC.Internal.Types.krep$*]
+864710925234871451d62595bfa87b19
+  $tcMD5Context1 :: GHC.Internal.Types.TrName
+  [HasNoCafRefs, TagSig: <TagProper>,
+   LambdaFormInfo: LFCon[GHC.Internal.Types.TrNameS],
+   Unfolding: Core: <vanilla>
+              GHC.Internal.Types.TrNameS $tcMD5Context2]
+5c7fd96e952f3a16e8f19195bc9852c4
+  $tcMD5Context2 :: GHC.Internal.Prim.Addr#
+  [HasNoCafRefs, LambdaFormInfo: LFUnlifted,
+   Unfolding: Core: <vanilla> "MD5Context"#]
+efd6624eeaa9db0580e44f1900f2ea18
+  $trModule :: GHC.Internal.Types.Module
+  [HasNoCafRefs, TagSig: <TagProper>,
+   LambdaFormInfo: LFCon[GHC.Internal.Types.Module],
+   Unfolding: Core: <vanilla>
+              GHC.Internal.Types.Module $trModule3 $trModule1]
+707ccf06491b484901dba0641e7c520b
+  $trModule1 :: GHC.Internal.Types.TrName
+  [HasNoCafRefs, TagSig: <TagProper>,
+   LambdaFormInfo: LFCon[GHC.Internal.Types.TrNameS],
+   Unfolding: Core: <vanilla> GHC.Internal.Types.TrNameS $trModule2]
+03f4b14f9814ed01d9865dad75f02017
+  $trModule2 :: GHC.Internal.Prim.Addr#
+  [HasNoCafRefs, LambdaFormInfo: LFUnlifted,
+   Unfolding: Core: <vanilla> "GHC.Internal.Fingerprint"#]
+e2d2d96c668db516abc346d9d3e433bb
+  $trModule3 :: GHC.Internal.Types.TrName
+  [HasNoCafRefs, TagSig: <TagProper>,
+   LambdaFormInfo: LFCon[GHC.Internal.Types.TrNameS],
+   Unfolding: Core: <vanilla> GHC.Internal.Types.TrNameS $trModule4]
+50ffde64137586d30e98cfd661b7e002
+  $trModule4 :: GHC.Internal.Prim.Addr#
+  [HasNoCafRefs, LambdaFormInfo: LFUnlifted,
+   Unfolding: Core: <vanilla> "ghc-internal"#]
+30ba664404241f8987d61feb11d9b3e3
+  $wfingerprintData ::
+    GHC.Internal.Prim.Addr#
+    -> GHC.Internal.Prim.Int#
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+    -> (# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+          GHC.Internal.Fingerprint.Type.Fingerprint #)
+  [HasNoCafRefs, LambdaFormInfo: LFReEntrant 3, Arity: 3,
+   Strictness: <L><L><L>, Inline: [2],
+   Unfolding: Core: <vanilla>
+              \ (ww['GHC.Internal.Types.Many] :: GHC.Internal.Prim.Addr#)
+                (ww1['GHC.Internal.Types.Many] :: GHC.Internal.Prim.Int#)
+                (eta['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                    GHC.Internal.Prim.RealWorld)[OneShot] ->
+              case GHC.Internal.Prim.newPinnedByteArray#
+                     @GHC.Internal.Prim.RealWorld
+                     88#
+                     eta of ds1 { (#,#) ipv ipv1 ->
+              case GHC.Internal.Prim.unsafeFreezeByteArray#
+                     @GHC.Internal.Prim.RealWorld
+                     ipv1
+                     ipv of wild1 { (#,#) s2 barr# ->
+              GHC.Internal.Prim.keepAlive#
+                @'GHC.Internal.Types.Unlifted
+                @('GHC.Internal.Types.TupleRep
+                    '[GHC.Internal.Types.ZeroBitRep, GHC.Internal.Types.LiftedRep])
+                @GHC.Internal.Prim.ByteArray#
+                @GHC.Internal.Prim.RealWorld
+                @(# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+                    GHC.Internal.Fingerprint.Type.Fingerprint #)
+                barr#
+                s2
+                (\ (s['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                     GHC.Internal.Prim.RealWorld)[OneShot] ->
+                 let {
+                   pctxt :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                   = GHC.Internal.Prim.byteArrayContents# barr#
+                 } in
+                 case {__ffi_static_ccall_unsafe ghc-internal:__hsbase_MD5Init :: GHC.Internal.Prim.Addr#
+                                                                                  -> GHC.Internal.Prim.State#
+                                                                                       GHC.Internal.Prim.RealWorld
+                                                                                  -> (# GHC.Internal.Prim.State#
+                                                                                          GHC.Internal.Prim.RealWorld #)}
+                        pctxt
+                        s of wild { GHC.Internal.Types.MkSolo# ds ->
+                 case {__ffi_static_ccall_unsafe ghc-internal:__hsbase_MD5Update :: GHC.Internal.Prim.Addr#
+                                                                                    -> GHC.Internal.Prim.Addr#
+                                                                                    -> GHC.Internal.Prim.Int32#
+                                                                                    -> GHC.Internal.Prim.State#
+                                                                                         GHC.Internal.Prim.RealWorld
+                                                                                    -> (# GHC.Internal.Prim.State#
+                                                                                            GHC.Internal.Prim.RealWorld #)}
+                        pctxt
+                        ww
+                        (GHC.Internal.Prim.intToInt32# ww1)
+                        ds of wild2 { GHC.Internal.Types.MkSolo# ds2 ->
+                 case GHC.Internal.Prim.newPinnedByteArray#
+                        @GHC.Internal.Prim.RealWorld
+                        16#
+                        ds2 of ds3 { (#,#) ipv2 ipv3 ->
+                 case GHC.Internal.Prim.unsafeFreezeByteArray#
+                        @GHC.Internal.Prim.RealWorld
+                        ipv3
+                        ipv2 of wild3 { (#,#) s1 barr#1 ->
+                 GHC.Internal.Prim.keepAlive#
+                   @'GHC.Internal.Types.Unlifted
+                   @('GHC.Internal.Types.TupleRep
+                       '[GHC.Internal.Types.ZeroBitRep, GHC.Internal.Types.LiftedRep])
+                   @GHC.Internal.Prim.ByteArray#
+                   @GHC.Internal.Prim.RealWorld
+                   @(# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+                       GHC.Internal.Fingerprint.Type.Fingerprint #)
+                   barr#1
+                   s1
+                   (\ (s3['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                         GHC.Internal.Prim.RealWorld)[OneShot] ->
+                    let {
+                      pdigest :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                      = GHC.Internal.Prim.byteArrayContents# barr#1
+                    } in
+                    case {__ffi_static_ccall_unsafe ghc-internal:__hsbase_MD5Final :: GHC.Internal.Prim.Addr#
+                                                                                      -> GHC.Internal.Prim.Addr#
+                                                                                      -> GHC.Internal.Prim.State#
+                                                                                           GHC.Internal.Prim.RealWorld
+                                                                                      -> (# GHC.Internal.Prim.State#
+                                                                                              GHC.Internal.Prim.RealWorld #)}
+                           pdigest
+                           pctxt
+                           s3 of wild4 { GHC.Internal.Types.MkSolo# ds4 ->
+                    case GHC.Internal.Prim.readWord8OffAddr#
+                           @GHC.Internal.Prim.RealWorld
+                           pdigest
+                           0#
+                           ds4 of ds5 { (#,#) ipv4 ipv5 ->
+                    case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpeekW64
+                           (GHC.Internal.Prim.plusAddr# pdigest 1#)
+                           7#
+                           (GHC.Internal.Prim.int64ToWord64#
+                              (GHC.Internal.Prim.intToInt64#
+                                 (GHC.Internal.Prim.word2Int#
+                                    (GHC.Internal.Prim.word8ToWord# ipv5))))
+                           ipv4 of wild5 { (#,#) ww2 ww3 ->
+                    let {
+                      ipv6 :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                      = GHC.Internal.Prim.plusAddr# pdigest 8#
+                    } in
+                    case GHC.Internal.Prim.readWord8OffAddr#
+                           @GHC.Internal.Prim.RealWorld
+                           ipv6
+                           0#
+                           ww2 of ds6 { (#,#) ipv7 ipv8 ->
+                    case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpeekW64
+                           (GHC.Internal.Prim.plusAddr# ipv6 1#)
+                           7#
+                           (GHC.Internal.Prim.int64ToWord64#
+                              (GHC.Internal.Prim.intToInt64#
+                                 (GHC.Internal.Prim.word2Int#
+                                    (GHC.Internal.Prim.word8ToWord# ipv8))))
+                           ipv7 of wild6 { (#,#) ww4 ww5 ->
+                    (# ww4,
+                       GHC.Internal.Fingerprint.Type.Fingerprint
+                         ww3
+                         ww5 #) } } } } }) } } } }) } }]
+90f5de0ced665a0b007a9cb8b0ab84ef
+  $wlvl :: GHC.Internal.Prim.Int# -> GHC.Internal.Types.IO ()
+  [TagSig: <TagTagged>, LambdaFormInfo: LFReEntrant 1, Arity: 1,
+   Strictness: <S>b, CPR: b, Inline: [2]]
+98b5ce2e9a5e1672fef3a6edd656827b
+  type MD5Context :: *
+  data MD5Context
+0f0bf732ccf9b4b990018ce966160260
+  fingerprint0 :: GHC.Internal.Fingerprint.Type.Fingerprint
+  [HasNoCafRefs, TagSig: <TagProper>,
+   LambdaFormInfo: LFCon[GHC.Internal.Fingerprint.Type.Fingerprint],
+   Unfolding: Core: <vanilla>
+              GHC.Internal.Fingerprint.Type.Fingerprint 0#Word64 0#Word64]
+346a4e129eb54753ea53d89c961d9444
+  fingerprintData ::
+    GHC.Internal.Ptr.Ptr GHC.Internal.Word.Word8
+    -> GHC.Internal.Types.Int
+    -> GHC.Internal.Types.IO GHC.Internal.Fingerprint.Type.Fingerprint
+  [HasNoCafRefs, LambdaFormInfo: LFReEntrant 3, Arity: 3,
+   Strictness: <1!P(L)><1!P(L)><L>,
+   Unfolding: Core: <vanilla>
+              fingerprintData1
+                `cast`
+              (<GHC.Internal.Ptr.Ptr GHC.Internal.Word.Word8>_R
+               %<'GHC.Internal.Types.Many>_N ->_R <GHC.Internal.Types.Int>_R
+               %<'GHC.Internal.Types.Many>_N ->_R Sym (GHC.Internal.Types.N:IO
+                                                           <GHC.Internal.Fingerprint.Type.Fingerprint>_R))]
+1d13185a6c40b73cd3a788a66c33300b
+  fingerprintData1 ::
+    GHC.Internal.Ptr.Ptr GHC.Internal.Word.Word8
+    -> GHC.Internal.Types.Int
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+    -> (# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+          GHC.Internal.Fingerprint.Type.Fingerprint #)
+  [HasNoCafRefs, LambdaFormInfo: LFReEntrant 3, Arity: 3,
+   Strictness: <1!P(L)><1!P(L)><L>, Inline: [2],
+   Unfolding: Core: StableSystem <3,TrueFalse>
+              \ (buf['GHC.Internal.Types.Many] :: GHC.Internal.Ptr.Ptr
+                                                    GHC.Internal.Word.Word8)
+                (len['GHC.Internal.Types.Many] :: GHC.Internal.Types.Int)
+                (eta['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                    GHC.Internal.Prim.RealWorld)[OneShot] ->
+              case buf of wild { GHC.Internal.Ptr.Ptr ww ->
+              case len of wild1 { GHC.Internal.Types.I# ww1 ->
+              $wfingerprintData ww ww1 eta } }]
+7f73a158f43411d9b929f0d0c89fd816
+  fingerprintFingerprints ::
+    [GHC.Internal.Fingerprint.Type.Fingerprint]
+    -> GHC.Internal.Fingerprint.Type.Fingerprint
+  [LambdaFormInfo: LFReEntrant 1, Arity: 1, Strictness: <SL>,
+   Unfolding: Core: <vanilla>
+              \ (fs['GHC.Internal.Types.Many] :: [GHC.Internal.Fingerprint.Type.Fingerprint]) ->
+              GHC.Internal.Magic.runRW#
+                @GHC.Internal.Types.LiftedRep
+                @GHC.Internal.Fingerprint.Type.Fingerprint
+                (\ (s['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                     GHC.Internal.Prim.RealWorld) ->
+                 case GHC.Internal.List.$wlenAcc
+                        @GHC.Internal.Fingerprint.Type.Fingerprint
+                        fs
+                        0# of ww1 { DEFAULT ->
+                 case GHC.Internal.Foreign.Marshal.Alloc.$wallocaBytesAligned
+                        @GHC.Internal.Fingerprint.Type.Fingerprint
+                        @GHC.Internal.Fingerprint.Type.Fingerprint
+                        (GHC.Internal.Prim.*# ww1 16#)
+                        8#
+                        (\ (ptr['GHC.Internal.Types.Many] :: GHC.Internal.Ptr.Ptr
+                                                               GHC.Internal.Fingerprint.Type.Fingerprint)[OneShot]
+                           (s1['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                              GHC.Internal.Prim.RealWorld)[OneShot] ->
+                         case $s$wpokeArray1 ptr fs s1 of ww { DEFAULT ->
+                         case ptr
+                                `cast`
+                              (GHC.Internal.Ptr.Ptr
+                                 Univ(phantom (phantom)[<*>_N]
+                                      :: GHC.Internal.Fingerprint.Type.Fingerprint, GHC.Internal.Word.Word8))_R of wild { GHC.Internal.Ptr.Ptr ww2 ->
+                         $wfingerprintData ww2 (GHC.Internal.Prim.*# ww1 16#) ww } })
+                          `cast`
+                        (<GHC.Internal.Ptr.Ptr GHC.Internal.Fingerprint.Type.Fingerprint>_R
+                         %<'GHC.Internal.Types.Many>_N ->_R Sym (GHC.Internal.Types.N:IO
+                                                                     <GHC.Internal.Fingerprint.Type.Fingerprint>_R))
+                        s of ds1 { (#,#) ipv ipv1 ->
+                 GHC.Internal.Magic.lazy
+                   @GHC.Internal.Fingerprint.Type.Fingerprint
+                   ipv1 } })]
+6a1cdae2a2330ce0179095e51d97b8c9
+  fingerprintString ::
+    GHC.Internal.Base.String
+    -> GHC.Internal.Fingerprint.Type.Fingerprint
+  [LambdaFormInfo: LFReEntrant 1, Arity: 1, Strictness: <1L>,
+   Unfolding: Core: <vanilla>
+              \ (str['GHC.Internal.Types.Many] :: GHC.Internal.Base.String) ->
+              GHC.Internal.Magic.runRW#
+                @GHC.Internal.Types.LiftedRep
+                @GHC.Internal.Fingerprint.Type.Fingerprint
+                (\ (s['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                     GHC.Internal.Prim.RealWorld) ->
+                 let {
+                   vals :: [GHC.Internal.Word.Word8] NotJoinPoint []
+                   = fingerprintString_go1 str
+                 } in
+                 case GHC.Internal.List.$wlenAcc
+                        @GHC.Internal.Word.Word8
+                        vals
+                        0# of ww1 { DEFAULT ->
+                 case GHC.Internal.Foreign.Marshal.Alloc.$wallocaBytesAligned
+                        @GHC.Internal.Word.Word8
+                        @GHC.Internal.Fingerprint.Type.Fingerprint
+                        ww1
+                        1#
+                        (\ (ptr['GHC.Internal.Types.Many] :: GHC.Internal.Ptr.Ptr
+                                                               GHC.Internal.Word.Word8)[OneShot]
+                           (s1['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                              GHC.Internal.Prim.RealWorld)[OneShot] ->
+                         case $s$wpokeArray ptr vals s1 of ww { DEFAULT ->
+                         case ptr of wild { GHC.Internal.Ptr.Ptr ww2 ->
+                         $wfingerprintData ww2 ww1 ww } })
+                          `cast`
+                        (<GHC.Internal.Ptr.Ptr GHC.Internal.Word.Word8>_R
+                         %<'GHC.Internal.Types.Many>_N ->_R Sym (GHC.Internal.Types.N:IO
+                                                                     <GHC.Internal.Fingerprint.Type.Fingerprint>_R))
+                        s of ds1 { (#,#) ipv ipv1 ->
+                 GHC.Internal.Magic.lazy
+                   @GHC.Internal.Fingerprint.Type.Fingerprint
+                   ipv1 } })]
+c8f30248e946a355e5b34edd61553761
+  fingerprintString_go1 ::
+    [GHC.Internal.Types.Char] -> [GHC.Internal.Word.Word8]
+  [HasNoCafRefs, LambdaFormInfo: LFReEntrant 1, Arity: 1,
+   Strictness: <1L>]
+74c9dcfd38e27d2c9f660a681cdcd605
+  getFileHash ::
+    GHC.Internal.IO.FilePath
+    -> GHC.Internal.Types.IO GHC.Internal.Fingerprint.Type.Fingerprint
+  [LambdaFormInfo: LFReEntrant 2, Arity: 2, Strictness: <L><L>,
+   Unfolding: Core: <vanilla>
+              getFileHash1
+                `cast`
+              (<GHC.Internal.IO.FilePath>_R
+               %<'GHC.Internal.Types.Many>_N ->_R Sym (GHC.Internal.Types.N:IO
+                                                           <GHC.Internal.Fingerprint.Type.Fingerprint>_R))]
+524b5696908b790313a2ccb16d27df18
+  getFileHash1 ::
+    GHC.Internal.IO.FilePath
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+    -> (# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+          GHC.Internal.Fingerprint.Type.Fingerprint #)
+  [LambdaFormInfo: LFReEntrant 2, Arity: 2, Strictness: <L><L>,
+   Unfolding: Core: <vanilla>
+              \ (path['GHC.Internal.Types.Many] :: GHC.Internal.IO.FilePath)
+                (eta['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                    GHC.Internal.Prim.RealWorld)[OneShot] ->
+              GHC.Internal.IO.Handle.FD.withBinaryFile1
+                @GHC.Internal.Fingerprint.Type.Fingerprint
+                path
+                GHC.Internal.IO.IOMode.ReadMode
+                getFileHash2
+                  `cast`
+                (<GHC.Internal.IO.Handle.Types.Handle>_R
+                 %<'GHC.Internal.Types.Many>_N ->_R Sym (GHC.Internal.Types.N:IO
+                                                             <GHC.Internal.Fingerprint.Type.Fingerprint>_R))
+                eta]
+b1207fc1263629e891e0171511c41bdc
+  getFileHash2 ::
+    GHC.Internal.IO.Handle.Types.Handle
+    -> GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+    -> (# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+          GHC.Internal.Fingerprint.Type.Fingerprint #)
+  [LambdaFormInfo: LFReEntrant 2, Arity: 2, Strictness: <L><L>,
+   Unfolding: Core: <vanilla>
+              \ (h['GHC.Internal.Types.Many] :: GHC.Internal.IO.Handle.Types.Handle)
+                (eta['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                    GHC.Internal.Prim.RealWorld)[OneShot] ->
+              case GHC.Internal.Prim.newPinnedByteArray#
+                     @GHC.Internal.Prim.RealWorld
+                     88#
+                     eta of ds1 { (#,#) ipv ipv1 ->
+              case GHC.Internal.Prim.unsafeFreezeByteArray#
+                     @GHC.Internal.Prim.RealWorld
+                     ipv1
+                     ipv of wild1 { (#,#) s2 barr# ->
+              GHC.Internal.Prim.keepAlive#
+                @'GHC.Internal.Types.Unlifted
+                @('GHC.Internal.Types.TupleRep
+                    '[GHC.Internal.Types.ZeroBitRep, GHC.Internal.Types.LiftedRep])
+                @GHC.Internal.Prim.ByteArray#
+                @GHC.Internal.Prim.RealWorld
+                @(# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+                    GHC.Internal.Fingerprint.Type.Fingerprint #)
+                barr#
+                s2
+                (\ (s['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                     GHC.Internal.Prim.RealWorld)[OneShot] ->
+                 let {
+                   pctxt :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                   = GHC.Internal.Prim.byteArrayContents# barr#
+                 } in
+                 case {__ffi_static_ccall_unsafe ghc-internal:__hsbase_MD5Init :: GHC.Internal.Prim.Addr#
+                                                                                  -> GHC.Internal.Prim.State#
+                                                                                       GHC.Internal.Prim.RealWorld
+                                                                                  -> (# GHC.Internal.Prim.State#
+                                                                                          GHC.Internal.Prim.RealWorld #)}
+                        pctxt
+                        s of wild { GHC.Internal.Types.MkSolo# ds ->
+                 case GHC.Internal.Prim.newPinnedByteArray#
+                        @GHC.Internal.Prim.RealWorld
+                        4096#
+                        ds of ds2 { (#,#) ipv2 ipv3 ->
+                 case GHC.Internal.Prim.unsafeFreezeByteArray#
+                        @GHC.Internal.Prim.RealWorld
+                        ipv3
+                        ipv2 of wild2 { (#,#) s1 barr#1 ->
+                 case GHC.Internal.Prim.keepAlive#
+                        @'GHC.Internal.Types.Unlifted
+                        @('GHC.Internal.Types.TupleRep
+                            '[GHC.Internal.Types.ZeroBitRep, GHC.Internal.Types.LiftedRep])
+                        @GHC.Internal.Prim.ByteArray#
+                        @GHC.Internal.Prim.RealWorld
+                        @(# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld, () #)
+                        barr#1
+                        s1
+                        (\ (s3['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                              GHC.Internal.Prim.RealWorld)[OneShot] ->
+                         let {
+                           $j :: GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+                                 %1 -> (# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+                                          () #)
+                             JoinPoint(1) [Arity: 1, Strictness: <L>]
+                           = \ (ww['GHC.Internal.Types.One] :: GHC.Internal.Prim.State#
+                                                                 GHC.Internal.Prim.RealWorld)[OneShot] ->
+                             (# ww, GHC.Internal.Tuple.() #)
+                         } in
+                         letrec {
+                           $wloop :: GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld
+                                     -> (# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+                                           () #)
+                             JoinPoint(1) [Arity: 1, Strictness: <L>, Inline: [2]]
+                           = \ (s4['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                                  GHC.Internal.Prim.RealWorld) ->
+                             let {
+                               arrPtr :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                               = GHC.Internal.Prim.byteArrayContents# barr#1
+                             } in
+                             case GHC.Internal.IO.Handle.Text.hGetBuf1
+                                    @GHC.Internal.Word.Word8
+                                    h
+                                    (GHC.Internal.Ptr.Ptr @GHC.Internal.Word.Word8 arrPtr)
+                                    getFileHash__BUFSIZE
+                                    s4 of ds3 { (#,#) ipv4 ipv5 ->
+                             case GHC.Internal.IO.Handle.Internals.wantReadableHandle_1
+                                    @GHC.Internal.Types.Bool
+                                    GHC.Internal.IO.Handle.hIsEOF3
+                                    h
+                                    GHC.Internal.IO.Handle.hIsEOF2
+                                      `cast`
+                                    (<GHC.Internal.IO.Handle.Types.Handle__>_R
+                                     %<'GHC.Internal.Types.Many>_N ->_R Sym (GHC.Internal.Types.N:IO
+                                                                                 <GHC.Internal.Types.Bool>_R))
+                                    ipv4 of ds4 { (#,#) ipv6 ipv7 ->
+                             case ipv5 of wild3 { GHC.Internal.Types.I# x ->
+                             case x of wild4 {
+                               DEFAULT
+                               -> case ipv7 of wild5 {
+                                    GHC.Internal.Types.False
+                                    -> case $wlvl wild4
+                                       ret_ty (# GHC.Internal.Prim.State#
+                                                   GHC.Internal.Prim.RealWorld,
+                                                 () #)
+                                       of {}
+                                    GHC.Internal.Types.True
+                                    -> case {__ffi_static_ccall_unsafe ghc-internal:__hsbase_MD5Update :: GHC.Internal.Prim.Addr#
+                                                                                                          -> GHC.Internal.Prim.Addr#
+                                                                                                          -> GHC.Internal.Prim.Int32#
+                                                                                                          -> GHC.Internal.Prim.State#
+                                                                                                               GHC.Internal.Prim.RealWorld
+                                                                                                          -> (# GHC.Internal.Prim.State#
+                                                                                                                  GHC.Internal.Prim.RealWorld #)}
+                                              pctxt
+                                              arrPtr
+                                              (GHC.Internal.Prim.intToInt32# wild4)
+                                              ipv6 of wild6 { GHC.Internal.Types.MkSolo# ds5 ->
+                                       $j ds5 } }
+                               4096#
+                               -> case {__ffi_static_ccall_unsafe ghc-internal:__hsbase_MD5Update :: GHC.Internal.Prim.Addr#
+                                                                                                     -> GHC.Internal.Prim.Addr#
+                                                                                                     -> GHC.Internal.Prim.Int32#
+                                                                                                     -> GHC.Internal.Prim.State#
+                                                                                                          GHC.Internal.Prim.RealWorld
+                                                                                                     -> (# GHC.Internal.Prim.State#
+                                                                                                             GHC.Internal.Prim.RealWorld #)}
+                                         pctxt
+                                         arrPtr
+                                         4096#Int32
+                                         ipv6 of wild5 { GHC.Internal.Types.MkSolo# ds5 ->
+                                  case ipv7 of wild6 {
+                                    GHC.Internal.Types.False -> $wloop ds5
+                                    GHC.Internal.Types.True -> $j ds5 } } } } } }
+                         } in
+                         $wloop s3) of ds3 { (#,#) ipv4 ipv5 ->
+                 case GHC.Internal.Prim.newPinnedByteArray#
+                        @GHC.Internal.Prim.RealWorld
+                        16#
+                        ipv4 of ds4 { (#,#) ipv6 ipv7 ->
+                 case GHC.Internal.Prim.unsafeFreezeByteArray#
+                        @GHC.Internal.Prim.RealWorld
+                        ipv7
+                        ipv6 of wild3 { (#,#) s3 barr#2 ->
+                 GHC.Internal.Prim.keepAlive#
+                   @'GHC.Internal.Types.Unlifted
+                   @('GHC.Internal.Types.TupleRep
+                       '[GHC.Internal.Types.ZeroBitRep, GHC.Internal.Types.LiftedRep])
+                   @GHC.Internal.Prim.ByteArray#
+                   @GHC.Internal.Prim.RealWorld
+                   @(# GHC.Internal.Prim.State# GHC.Internal.Prim.RealWorld,
+                       GHC.Internal.Fingerprint.Type.Fingerprint #)
+                   barr#2
+                   s3
+                   (\ (s4['GHC.Internal.Types.Many] :: GHC.Internal.Prim.State#
+                                                         GHC.Internal.Prim.RealWorld)[OneShot] ->
+                    let {
+                      pdigest :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                      = GHC.Internal.Prim.byteArrayContents# barr#2
+                    } in
+                    case {__ffi_static_ccall_unsafe ghc-internal:__hsbase_MD5Final :: GHC.Internal.Prim.Addr#
+                                                                                      -> GHC.Internal.Prim.Addr#
+                                                                                      -> GHC.Internal.Prim.State#
+                                                                                           GHC.Internal.Prim.RealWorld
+                                                                                      -> (# GHC.Internal.Prim.State#
+                                                                                              GHC.Internal.Prim.RealWorld #)}
+                           pdigest
+                           pctxt
+                           s4 of wild4 { GHC.Internal.Types.MkSolo# ds5 ->
+                    case GHC.Internal.Prim.readWord8OffAddr#
+                           @GHC.Internal.Prim.RealWorld
+                           pdigest
+                           0#
+                           ds5 of ds6 { (#,#) ipv8 ipv9 ->
+                    case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpeekW64
+                           (GHC.Internal.Prim.plusAddr# pdigest 1#)
+                           7#
+                           (GHC.Internal.Prim.int64ToWord64#
+                              (GHC.Internal.Prim.intToInt64#
+                                 (GHC.Internal.Prim.word2Int#
+                                    (GHC.Internal.Prim.word8ToWord# ipv9))))
+                           ipv8 of wild5 { (#,#) ww ww1 ->
+                    let {
+                      ipv10 :: GHC.Internal.Prim.Addr# NotJoinPoint []
+                      = GHC.Internal.Prim.plusAddr# pdigest 8#
+                    } in
+                    case GHC.Internal.Prim.readWord8OffAddr#
+                           @GHC.Internal.Prim.RealWorld
+                           ipv10
+                           0#
+                           ww of ds7 { (#,#) ipv11 ipv12 ->
+                    case GHC.Internal.Foreign.Storable.$fStorableFingerprint_$s$wpeekW64
+                           (GHC.Internal.Prim.plusAddr# ipv10 1#)
+                           7#
+                           (GHC.Internal.Prim.int64ToWord64#
+                              (GHC.Internal.Prim.intToInt64#
+                                 (GHC.Internal.Prim.word2Int#
+                                    (GHC.Internal.Prim.word8ToWord# ipv12))))
+                           ipv11 of wild6 { (#,#) ww2 ww3 ->
+                    (# ww2,
+                       GHC.Internal.Fingerprint.Type.Fingerprint
+                         ww1
+                         ww3 #) } } } } }) } } } } } }) } }]
+c17fbc282c8804a29ef48199cec0d99f
+  getFileHash__BUFSIZE :: GHC.Internal.Types.Int
+  [HasNoCafRefs, TagSig: <TagProper>,
+   LambdaFormInfo: LFCon[GHC.Internal.Types.I#],
+   Unfolding: Core: <vanilla> GHC.Internal.Types.I# 4096#]
+"SPEC/GHC.Internal.Fingerprint $wpokeArray @Fingerprint" [orphan] [2] forall ($dStorable['GHC.Internal.Types.Many] :: GHC.Internal.Foreign.Storable.Storable
+                                                                                                                        GHC.Internal.Fingerprint.Type.Fingerprint).
+  GHC.Internal.Foreign.Marshal.Array.$wpokeArray @GHC.Internal.Fingerprint.Type.Fingerprint
+                                                 $dStorable
+  = $s$wpokeArray1
+"SPEC/GHC.Internal.Fingerprint $wpokeArray @Word8" [orphan] [2] forall ($dStorable['GHC.Internal.Types.Many] :: GHC.Internal.Foreign.Storable.Storable
+                                                                                                                  GHC.Internal.Word.Word8).
+  GHC.Internal.Foreign.Marshal.Array.$wpokeArray @GHC.Internal.Word.Word8
+                                                 $dStorable
+  = $s$wpokeArray
+Warnings:
+  Deprecated names:
+  Deprecated exports:
+trusted: trustworthy
+require own pkg trusted: True
+docs:
+  Just module header:
+         Nothing
+       export docs:
+         []
+       declaration docs:
+         [getFileHash -> [text:
+                            -- | Computes the hash of a given file.
+-- This function loops over the handle, running in constant memory.
+--
+-- @since base-4.7.0.0
+                          identifiers:]]
+       arg docs:
+         []
+       documentation structure:
+         avails:
+           [GHC.Internal.Fingerprint.Type.Fingerprint{GHC.Internal.Fingerprint.Type.Fingerprint,
+                                                      GHC.Internal.Fingerprint.Type.Fingerprint}]
+         avails:
+           [fingerprint0]
+         avails:
+           [fingerprintData]
+         avails:
+           [fingerprintString]
+         avails:
+           [fingerprintFingerprints]
+         avails:
+           [getFileHash]
+       named chunks:
+       haddock options:
+       language:
+         Just Haskell2010
+       language extensions:
+         Cpp
+         MonomorphismRestriction
+         DeepSubsumption
+         RelaxedPolyRec
+         ForeignFunctionInterface
+         DoAndIfThenElse
+         EmptyDataDecls
+         PatternGuards
+         DatatypeContexts
+         TraditionalRecordSyntax
+         StarIsType
+         CUSKs
+         FieldSelectors
+         ListTuplePuns
+         ImplicitStagePersistence
+extensible fields:
+

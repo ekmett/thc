@@ -1,0 +1,274 @@
+GHC primop inventory: 379 advertised / 1491 total; names and arities agree
+Verified 246 exact monomorphic scalar signatures against GHC 9.14.1
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 3] Compiling FloatingAudit    ( compiler/test-fixtures/FloatingAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating/native/FloatingAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/FloatingAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating/native/floating-oracle
+[1 of 1] Compiling FloatingAudit    ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/FloatingAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating/ghc/FloatingAudit.o )
+Floating audit: 441 native rows, 28 primops, 15 strict entries
+[1 of 3] Compiling FloatingTupleAudit ( compiler/test-fixtures/FloatingTupleAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating-tuple/native/FloatingTupleAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/FloatingTupleAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating-tuple/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating-tuple/native/oracle
+[1 of 1] Compiling FloatingTupleAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/FloatingTupleAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating-tuple/pre-ghc/FloatingTupleAudit.o )
+{"accepted": true, "suppliedBindings": 42, "reachableBindings": 18, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling FloatingTupleAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/FloatingTupleAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/floating-tuple/post-ghc/FloatingTupleAudit.o )
+{"accepted": true, "suppliedBindings": 44, "reachableBindings": 18, "missingGlobals": 0, "issues": 0}
+Floating tuples: 44 native/model rows, 8 IEEE bit rows, exact pre/post layouts and strict audits
+[1 of 3] Compiling SqrtAudit        ( compiler/test-fixtures/SqrtAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/sqrt/native/SqrtAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/SqrtAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/sqrt/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/sqrt/native/oracle
+[1 of 1] Compiling SqrtAudit        ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/SqrtAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/sqrt/pre-ghc/SqrtAudit.o )
+{"accepted": true, "suppliedBindings": 9, "reachableBindings": 4, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling SqrtAudit        ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/SqrtAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/sqrt/post-ghc/SqrtAudit.o )
+{"accepted": true, "suppliedBindings": 9, "reachableBindings": 4, "missingGlobals": 0, "issues": 0}
+Sqrt native/model: {"coverage": [{"audit": {"issues": 0, "missingGlobals": 0, "reachableBindings": 4, "suppliedBindings": 9}, "primitives": ["sqrtFloat#", "sqrtDouble#"], "stage": "pre"}, {"audit": {"issues": 0, "missingGlobals": 0, "reachableBindings": 4, "suppliedBindings": 9}, "primitives": ["sqrtFloat#", "sqrtDouble#"], "stage": "post"}], "exactBitRows": 288, "integerRows": 26, "nanClassificationRows": 104, "nativeRows": 418, "provenance": {"path": "build/sqrt/provenance.json", "sha256": "c7dff5a269842af729e6be3d608f329169ccb2935d43e24fe522eed9c0f5b9b9"}}
+[1 of 1] Compiling ScalarBitCastAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ScalarBitCastAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/scalar-bitcasts/pre-ghc/ScalarBitCastAudit.o )
+[1 of 1] Compiling ScalarBitCastAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ScalarBitCastAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/scalar-bitcasts/post-ghc/ScalarBitCastAudit.o )
+[1 of 3] Compiling ScalarBitCastAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ScalarBitCastAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/scalar-bitcasts/native/ScalarBitCastAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/scalar-bitcasts/NativeScalarBitCast.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/scalar-bitcasts/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/scalar-bitcasts/native/scalar-bitcast-oracle
+Prepared 13555 exact native bit rows, 10 entries, pre/post strict audits and retained guest counts
+[1 of 4] Compiling TagToEnumExternal ( compiler/test-fixtures/TagToEnumExternal.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/native/TagToEnumExternal.o )
+[2 of 4] Compiling TagToEnumAudit   ( compiler/test-fixtures/TagToEnumAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/native/TagToEnumAudit.o )
+[3 of 4] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TagToEnumAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/native/Main.o )
+[4 of 4] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/native/oracle
+[1 of 3] Compiling TagToEnumExternal ( compiler/test-fixtures/TagToEnumExternal.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/pre-ghc/TagToEnumExternal.o )
+[2 of 3] Compiling TagToEnumAudit   ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TagToEnumAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/pre-ghc/TagToEnumAudit.o )
+[3 of 3] Compiling TagToEnumFrontier ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TagToEnumFrontier.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/pre-ghc/TagToEnumFrontier.o )
+{"accepted": true, "suppliedBindings": 93, "reachableBindings": 20, "missingGlobals": 0, "issues": 0}
+[1 of 3] Compiling TagToEnumExternal ( compiler/test-fixtures/TagToEnumExternal.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/post-ghc/TagToEnumExternal.o )
+[2 of 3] Compiling TagToEnumAudit   ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TagToEnumAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/post-ghc/TagToEnumAudit.o )
+[3 of 3] Compiling TagToEnumFrontier ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TagToEnumFrontier.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tag-to-enum/post-ghc/TagToEnumFrontier.o )
+{"accepted": true, "suppliedBindings": 106, "reachableBindings": 20, "missingGlobals": 0, "issues": 0}
+{"nativeRows": 29, "coverage": [{"stage": "pre", "families": 4, "audit": {"suppliedBindings": 93, "reachableBindings": 20, "missingGlobals": 0, "issues": 0}}, {"stage": "post", "families": 4, "audit": {"suppliedBindings": 106, "reachableBindings": 20, "missingGlobals": 0, "issues": 0}}], "provenance": {"path": "build/tag-to-enum/provenance.json", "sha256": "d24055eef848ad96e1df3bc706144e9b63173d51f471ada433d552543c786ac8"}}
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+PASS actual wired case
+PASS live case binder
+PASS same spelling, different wired key
+PASS wrong alternative
+PASS default alternative
+PASS two alternatives
+PASS no alternatives
+PASS bare first-class proof
+PASS erased arguments
+PASS too few arguments
+PASS too many arguments
+[1 of 3] Compiling UnsafeEqualityAudit ( compiler/test-fixtures/UnsafeEqualityAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/unsafe-equality/native/UnsafeEqualityAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/UnsafeEqualityAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/unsafe-equality/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/unsafe-equality/native/oracle
+[1 of 1] Compiling UnsafeEqualityAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/UnsafeEqualityAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/unsafe-equality/pre-ghc/UnsafeEqualityAudit.o )
+THC interface closure: 1 actual unfoldings, 1 missing source definitions
+[1 of 1] Compiling UnsafeEqualityAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/UnsafeEqualityAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/unsafe-equality/post-ghc/UnsafeEqualityAudit.o )
+THC interface closure: 1 actual unfoldings, 1 missing source definitions
+Unsafe equality: 49 native/model rows, exact GHC predicate controls, 9 strict roots and 2 explicit frontiers at both stages
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 1] Compiling ShowIntAudit     ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShowIntAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-int/pre-ghc/ShowIntAudit.o )
+THC interface closure: 2 actual unfoldings, 1 missing source definitions
+[1 of 1] Compiling ShowIntAudit     ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShowIntAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-int/post-ghc/ShowIntAudit.o )
+THC interface closure: 2 actual unfoldings, 1 missing source definitions
+[1 of 3] Compiling ShowIntAudit     ( compiler/test-fixtures/ShowIntAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-int/native/ShowIntAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShowIntAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-int/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-int/native/show-int-oracle
+Show Int: 6763 native/model rows, 510 inputs, exact digit-by-digit observations, 4 strict audits and 2 missing-source controls
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 1] Compiling InterfaceRoots   ( compiler/package-roots/InterfaceRoots.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-word-list/cstring/interface-ghc/InterfaceRoots.o )
+THC interface closure: 20 actual unfoldings, 4 missing source definitions
+[1 of 1] Compiling ShowWordListAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShowWordListAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-word-list/pre-ghc/ShowWordListAudit.o )
+THC interface closure: 5 actual unfoldings, 4 missing source definitions
+[1 of 1] Compiling ShowWordListAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShowWordListAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-word-list/post-ghc/ShowWordListAudit.o )
+THC interface closure: 5 actual unfoldings, 4 missing source definitions
+[1 of 3] Compiling ShowWordListAudit ( compiler/test-fixtures/ShowWordListAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-word-list/native/ShowWordListAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShowWordListAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-word-list/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/show-word-list/native/show-word-list-oracle
+Show Word/list: 41816 native/model rows, 530 inputs, exact decimal/list character observations, 8 strict audits and 2 missing-source controls
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 1] Compiling BigNatLiteralAudit ( compiler/test-fixtures/BigNatLiteralAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bignat-literals/pre-ghc/BigNatLiteralAudit.o )
+THC interface closure: 1 actual unfoldings, 5 missing source definitions
+[1 of 1] Compiling BigNatLiteralAudit ( compiler/test-fixtures/BigNatLiteralAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bignat-literals/post-ghc/BigNatLiteralAudit.o )
+THC interface closure: 1 actual unfoldings, 5 missing source definitions
+[1 of 3] Compiling BigNatLiteralAudit ( compiler/test-fixtures/BigNatLiteralAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bignat-literals/native/BigNatLiteralAudit.o )
+[2 of 3] Compiling Main             ( compiler/test-fixtures/BigNatLiteralAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bignat-literals/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bignat-literals/native/bignat-literal-oracle
+BigNat: 699 native/model rows, 16 strict audits, 4 arithmetic and 2 missing-source frontiers; complete original sources
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 1] Compiling InterfaceRoots   ( compiler/package-roots/InterfaceRoots.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/short-bytes-slices/cstring/interface-ghc/InterfaceRoots.o )
+THC interface closure: 20 actual unfoldings, 4 missing source definitions
+[1 of 1] Compiling ShortByteStringSliceAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShortByteStringSliceAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/short-bytes-slices/pre-ghc/ShortByteStringSliceAudit.o )
+THC interface closure: 16 actual unfoldings, 3 missing source definitions
+[1 of 1] Compiling ShortByteStringSliceAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShortByteStringSliceAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/short-bytes-slices/post-ghc/ShortByteStringSliceAudit.o )
+THC interface closure: 16 actual unfoldings, 3 missing source definitions
+[1 of 3] Compiling ShortByteStringSliceAudit ( compiler/test-fixtures/ShortByteStringSliceAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/short-bytes-slices/native/ShortByteStringSliceAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ShortByteStringSliceAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/short-bytes-slices/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/short-bytes-slices/native/short-bytes-slices-oracle
+ShortByteString slices: 81312 native/model rows; 6 accepted audits, 4 exact overflow frontiers, 6 missing-List controls
+[1 of 1] Compiling AggregateFrontier ( compiler/test-fixtures/AggregateFrontier.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/aggregate-ghc/AggregateFrontier.o )
+[1 of 1] Compiling AggregateFrontier ( compiler/test-fixtures/AggregateFrontier.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/aggregate-post-ghc/AggregateFrontier.o )
+Aggregate frontier: 6 supported result-only entries, 5 rejected boundaries; 48 native oracle rows
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 1] Compiling AggregateLayoutAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/AggregateLayoutAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/aggregate-layout/native/AggregateLayoutAudit.o )
+[1 of 1] Compiling AggregateLayoutAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/AggregateLayoutAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/aggregate-layout/pre-ghc/AggregateLayoutAudit.o )
+[1 of 1] Compiling AggregateLayoutAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/AggregateLayoutAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/aggregate-layout/post-ghc/AggregateLayoutAudit.o )
+Aggregate layout: 18 recursive/unknown layout proofs in both native stages; polymorphic/alias regressions checked; 0 supported entries
+Sum metadata: 17 shapes × 2 stages, 130 native/model rows; capability boundaries checked
+Prepared 110 native sum rows, 7 independent pairs and both strict Core stages
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 3] Compiling TupleReturnAudit ( compiler/test-fixtures/TupleReturnAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-return/native/TupleReturnAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TupleReturnAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-return/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-return/native/tuple-return
+[1 of 1] Compiling TupleReturnAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TupleReturnAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-return/pre-ghc/TupleReturnAudit.o )
+[1 of 1] Compiling TupleReturnAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TupleReturnAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-return/post-ghc/TupleReturnAudit.o )
+Tuple return fixture: 94 verified native rows, 15 producers in both stages; PAP retained; overapplication retained: [True, True]
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 3] Compiling StateTupleAudit  ( compiler/test-fixtures/StateTupleAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/state-tuple/native/StateTupleAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/StateTupleAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/state-tuple/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/state-tuple/native/state-tuple
+[1 of 1] Compiling StateTupleAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/StateTupleAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/state-tuple/pre-ghc/StateTupleAudit.o )
+{"accepted": true, "suppliedBindings": 35, "reachableBindings": 12, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling StateTupleAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/StateTupleAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/state-tuple/post-ghc/StateTupleAudit.o )
+{"accepted": true, "suppliedBindings": 37, "reachableBindings": 12, "missingGlobals": 0, "issues": 0}
+State# tuples: 21 verified native rows; zero-width logical fields and runRW# proofs preserved at both stages
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 3] Compiling EmptyTupleInputAudit ( compiler/test-fixtures/EmptyTupleInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/empty-tuple-input/native/EmptyTupleInputAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/EmptyTupleInputAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/empty-tuple-input/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/empty-tuple-input/native/empty-tuple-input
+[1 of 1] Compiling EmptyTupleInputAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/EmptyTupleInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/empty-tuple-input/pre-ghc/EmptyTupleInputAudit.o )
+{"accepted": true, "suppliedBindings": 60, "reachableBindings": 38, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling EmptyTupleInputAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/EmptyTupleInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/empty-tuple-input/post-ghc/EmptyTupleInputAudit.o )
+{"accepted": true, "suppliedBindings": 62, "reachableBindings": 38, "missingGlobals": 0, "issues": 0}
+Exact-empty input fixture: 118 native rows + 7 independent-input rows; both stages strict accepted
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 3] Compiling TupleInputAudit  ( compiler/test-fixtures/TupleInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-input/native/TupleInputAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TupleInputAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-input/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-input/native/tuple-input
+[1 of 1] Compiling TupleInputAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TupleInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-input/pre-ghc/TupleInputAudit.o )
+{"accepted": true, "suppliedBindings": 54, "reachableBindings": 33, "missingGlobals": 0, "issues": 0}
+[1 of 1] Compiling TupleInputAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/TupleInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-input/post-ghc/TupleInputAudit.o )
+{"accepted": true, "suppliedBindings": 56, "reachableBindings": 33, "missingGlobals": 0, "issues": 0}
+Typed tuple input fixture: 139 native rows + 7 independent-input rows; both stages strict accepted
+[1 of 1] Compiling TupleJoinAudit   ( compiler/test-fixtures/TupleJoinAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-join/pre-ghc/TupleJoinAudit.o )
+[1 of 1] Compiling TupleJoinAudit   ( compiler/test-fixtures/TupleJoinAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/tuple-join/post-ghc/TupleJoinAudit.o )
+{"rows": 54, "joins": {"pre": 9, "post": 9}}
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+[1 of 1] Compiling EmptyJoinInputAudit ( compiler/test-fixtures/EmptyJoinInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/empty-join-input/pre-ghc/EmptyJoinInputAudit.o )
+[1 of 1] Compiling EmptyJoinInputAudit ( compiler/test-fixtures/EmptyJoinInputAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/empty-join-input/post-ghc/EmptyJoinInputAudit.o )
+{"rows": 58, "joins": {"pre": 10, "post": 10}}
+[1 of 1] Compiling IntegerPrimopsAudit ( compiler/test-fixtures/IntegerPrimopsAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/integer-primops/ghc/IntegerPrimopsAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling IntegerPrimopsAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/IntegerPrimopsAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/integer-primops/native/IntegerPrimopsAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/integer-primops/NativeIntegerPrimops.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/integer-primops/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/integer-primops/native/integer-primops-oracle
+Prepared 40 scalar integer primops / 56791 native oracle rows
+[1 of 1] Compiling BitPrimopsAudit  ( compiler/test-fixtures/BitPrimopsAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bit-primops/pre-ghc/BitPrimopsAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling BitPrimopsAudit  ( compiler/test-fixtures/BitPrimopsAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bit-primops/post-ghc/BitPrimopsAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling BitPrimopsAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/BitPrimopsAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bit-primops/native/BitPrimopsAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bit-primops/NativeBitPrimops.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bit-primops/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bit-primops/native/bit-primops-oracle
+Prepared 21 scalar bit primops / 11923 native oracle rows / pre+post Core
+[1 of 1] Compiling ByteArrayAudit   ( compiler/test-fixtures/ByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bytearray/pre/ghc/ByteArrayAudit.o )
+THC interface closure: 4 actual unfoldings, 1 missing source definitions
+[1 of 1] Compiling ByteArrayAudit   ( compiler/test-fixtures/ByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bytearray/post/ghc/ByteArrayAudit.o )
+THC interface closure: 4 actual unfoldings, 1 missing source definitions
+[1 of 3] Compiling ByteArrayAudit   ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bytearray/native/ByteArrayAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bytearray/NativeByteArray.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bytearray/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/bytearray/native/bytearray-oracle
+Prepared 4 real ByteArray workloads / 4116 native rows / pre+post Core
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+GHC primop inventory: 379 advertised / 1491 total; names and arities agree
+[1 of 1] Compiling MutableByteArrayAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/MutableByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/mutable-bytearrays/pre-ghc/MutableByteArrayAudit.o )
+THC interface closure: 1 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling MutableByteArrayAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/MutableByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/mutable-bytearrays/post-ghc/MutableByteArrayAudit.o )
+THC interface closure: 1 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling MutableByteArrayAudit ( compiler/test-fixtures/MutableByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/mutable-bytearrays/native/MutableByteArrayAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/mutable-bytearrays/NativeMutableByteArrays.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/mutable-bytearrays/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/mutable-bytearrays/native/mutable-bytearrays-oracle
+Mutable ByteArrays: 12876 native/model rows, 2146 independent input pairs, 12 strict accepted audits
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+GHC primop inventory: 379 advertised / 1491 total; names and arities agree
+[1 of 1] Compiling ResizeByteArrayAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ResizeByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/resize-bytearrays/pre-ghc/ResizeByteArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 1] Compiling ResizeByteArrayAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ResizeByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/resize-bytearrays/post-ghc/ResizeByteArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 0 missing source definitions
+[1 of 3] Compiling ResizeByteArrayAudit ( compiler/test-fixtures/ResizeByteArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/resize-bytearrays/native/ResizeByteArrayAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/resize-bytearrays/NativeResizeByteArrays.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/resize-bytearrays/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/resize-bytearrays/native/resize-bytearrays-oracle
+Resize ByteArrays: 3192 native/model rows, 1596 independent input pairs, 4 strict accepted audits
+[1 of 1] Compiling CompareByteArraysAudit ( compiler/test-fixtures/CompareByteArraysAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compare-byte-arrays/pre/ghc/CompareByteArraysAudit.o )
+THC interface closure: 2 actual unfoldings, 1 missing source definitions
+[1 of 1] Compiling CompareByteArraysAudit ( compiler/test-fixtures/CompareByteArraysAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compare-byte-arrays/post/ghc/CompareByteArraysAudit.o )
+THC interface closure: 2 actual unfoldings, 1 missing source definitions
+[1 of 3] Compiling CompareByteArraysAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/CompareByteArraysAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compare-byte-arrays/native/CompareByteArraysAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compare-byte-arrays/NativeCompareByteArrays.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compare-byte-arrays/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compare-byte-arrays/native/compare-byte-arrays-oracle
+Prepared 3027 sign-normalized native/model rows, 5 public/range entries, pre+post strict audits
+[1 of 1] Compiling BoxedArrayAudit  ( compiler/test-fixtures/BoxedArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/boxed-arrays/pre/ghc/BoxedArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 4 missing source definitions
+[1 of 1] Compiling BoxedArrayAudit  ( compiler/test-fixtures/BoxedArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/boxed-arrays/post/ghc/BoxedArrayAudit.o )
+THC interface closure: 0 actual unfoldings, 4 missing source definitions
+[1 of 3] Compiling BoxedArrayAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/BoxedArrayAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/boxed-arrays/native/BoxedArrayAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/boxed-arrays/NativeBoxedArray.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/boxed-arrays/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/boxed-arrays/native/boxed-array-oracle
+Prepared boxed arrays: 164 supported native/model rows; 451 total value rows; 5 expected exceptions; strict pre/post checks
+[6 of 6] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.so [Flags changed]
+Reading package info from "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler/thc-core-plugin.conf" ... done.
+Built THC Core plugin in /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/compiler
+GHC primop inventory: 379 advertised / 1491 total; names and arities agree
+[1 of 1] Compiling ArraySliceAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ArraySliceAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/array-slices/pre-ghc/ArraySliceAudit.o )
+THC interface closure: 0 actual unfoldings, 1 missing source definitions
+[1 of 1] Compiling ArraySliceAudit  ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/ArraySliceAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/array-slices/post-ghc/ArraySliceAudit.o )
+THC interface closure: 0 actual unfoldings, 1 missing source definitions
+[1 of 3] Compiling ArraySliceAudit  ( compiler/test-fixtures/ArraySliceAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/array-slices/native/ArraySliceAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/array-slices/NativeArraySlices.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/array-slices/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/array-slices/native/array-slices-oracle
+Array slices: 2316 native/model rows, 1930 strict-supported rows, 10 positive and 2 exact frontier audits
+[1 of 1] Compiling AddressFieldAudit ( compiler/test-fixtures/AddressFieldAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/address-fields/pre/ghc/AddressFieldAudit.o )
+[1 of 1] Compiling AddressFieldAudit ( compiler/test-fixtures/AddressFieldAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/address-fields/post/ghc/AddressFieldAudit.o )
+[1 of 3] Compiling AddressFieldAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/AddressFieldAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/address-fields/native/AddressFieldAudit.o )
+[2 of 3] Compiling Main             ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/address-fields/NativeAddressFields.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/address-fields/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/address-fields/native/address-fields-oracle
+Prepared address fields: 200 native/model rows; 16 accepted and 2 rejected pre/post audits
+[1 of 3] Compiling PinnedAddressAudit ( /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/compiler/test-fixtures/PinnedAddressAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/pinned-addresses/native/PinnedAddressAudit.o )
+[2 of 3] Compiling Main             ( compiler/test-fixtures/PinnedAddressAuditNative.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/pinned-addresses/native/Main.o )
+[3 of 3] Linking /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/pinned-addresses/native/pinned-address-oracle [Objects changed]
+[1 of 1] Compiling PinnedAddressAudit ( compiler/test-fixtures/PinnedAddressAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/pinned-addresses/pre/ghc/PinnedAddressAudit.o )
+THC interface closure: 82 actual unfoldings, 12 missing source definitions
+[1 of 1] Compiling PinnedAddressAudit ( compiler/test-fixtures/PinnedAddressAudit.hs, /home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/pinned-addresses/post/ghc/PinnedAddressAudit.o )
+THC interface closure: 82 actual unfoldings, 12 missing source definitions
+Pinned address preparation: mode=Namespace(native_only=False, export_only=False, allow_unsupported=False) nativeRows=7269 modelRows=7269 strictAccepted=True counts={'pinnedBytes': 1859, 'alignedBytes': 3718, 'keepAliveWord8': 13, 'keepAliveLazy': 13, 'fingerprintByte': 784, 'publicFingerprintByte': 784, 'publicFingerprintRoundtrip': 98}
+Traceback (most recent call last):
+  File "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/scripts/prepare-managed-md5.py", line 173, in <module>
+    main()
+  File "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/scripts/prepare-managed-md5.py", line 119, in main
+    output.mkdir(parents=True, exist_ok=False)
+  File "/usr/lib/python3.10/pathlib.py", line 1175, in mkdir
+    self._accessor.mkdir(self, mode)
+FileExistsError: [Errno 17] File exists: '/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build/managed-md5-native'

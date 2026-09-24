@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "bash",
+    "-c",
+    "\"$GHC\" --show-iface /home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/lib/ghc-9.14.1/lib/x86_64-linux-ghc-9.14.1-d8ec/ghc-internal-9.1401.0-56a8/GHC/Internal/Fingerprint.hi"
+  ],
+  "cwd": "/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb",
+  "started": 1790222343.8277698,
+  "resources": [
+    "build:/home/ekmett/ai/thc-foreign-call-signatures-01a0cdeb/build"
+  ]
+}

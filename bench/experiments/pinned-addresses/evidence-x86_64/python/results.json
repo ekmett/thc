@@ -1,0 +1,272 @@
+[
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-pinned-addresses.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-pinned-addresses.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.254377,
+    "elapsedSeconds": 0.11345028877258301,
+    "output": "normal-test-pinned-addresses.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-core-md5-foreign.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-core-md5-foreign.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.367925,
+    "elapsedSeconds": 0.028171539306640625,
+    "output": "normal-test-core-md5-foreign.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-core-managed-memory.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-core-managed-memory.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.4074755,
+    "elapsedSeconds": 0.09454178810119629,
+    "output": "normal-test-core-managed-memory.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-prepare-managed-md5.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-prepare-managed-md5.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.5021584,
+    "elapsedSeconds": 0.08268547058105469,
+    "output": "normal-test-prepare-managed-md5.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-audit-core.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-audit-core.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.5849693,
+    "elapsedSeconds": 0.1092672348022461,
+    "output": "normal-test-audit-core.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-core-bytearrays.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-core-bytearrays.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.6944108,
+    "elapsedSeconds": 0.13241314888000488,
+    "output": "normal-test-core-bytearrays.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-core-arrays.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-core-arrays.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.827,
+    "elapsedSeconds": 0.04355430603027344,
+    "output": "normal-test-core-arrays.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-core-sums.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-core-sums.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.8707376,
+    "elapsedSeconds": 0.07605123519897461,
+    "output": "normal-test-core-sums.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-tuple-inputs.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-tuple-inputs.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223552.947033,
+    "elapsedSeconds": 0.06535053253173828,
+    "output": "normal-test-tuple-inputs.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "scripts/test-address-fields.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "normal",
+    "test": "test-address-fields.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223553.0125642,
+    "elapsedSeconds": 0.0384066104888916,
+    "output": "normal-test-address-fields.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-pinned-addresses.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-pinned-addresses.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223553.0511432,
+    "elapsedSeconds": 0.21877074241638184,
+    "output": "optimized-test-pinned-addresses.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-core-md5-foreign.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-core-md5-foreign.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223553.2700915,
+    "elapsedSeconds": 0.11229300498962402,
+    "output": "optimized-test-core-md5-foreign.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-core-managed-memory.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-core-managed-memory.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223553.3827524,
+    "elapsedSeconds": 0.19948935508728027,
+    "output": "optimized-test-core-managed-memory.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-prepare-managed-md5.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-prepare-managed-md5.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223553.5825577,
+    "elapsedSeconds": 0.14786529541015625,
+    "output": "optimized-test-prepare-managed-md5.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-audit-core.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-audit-core.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223553.7306292,
+    "elapsedSeconds": 0.20566630363464355,
+    "output": "optimized-test-audit-core.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-core-bytearrays.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-core-bytearrays.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223553.9365072,
+    "elapsedSeconds": 0.2262420654296875,
+    "output": "optimized-test-core-bytearrays.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-core-arrays.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-core-arrays.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223554.1629786,
+    "elapsedSeconds": 0.14650917053222656,
+    "output": "optimized-test-core-arrays.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-core-sums.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-core-sums.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223554.3097055,
+    "elapsedSeconds": 0.17440462112426758,
+    "output": "optimized-test-core-sums.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-tuple-inputs.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-tuple-inputs.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223554.4843493,
+    "elapsedSeconds": 0.16450738906860352,
+    "output": "optimized-test-tuple-inputs.log"
+  },
+  {
+    "command": [
+      "/usr/bin/python3",
+      "-O",
+      "scripts/test-address-fields.py"
+    ],
+    "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+    "mode": "optimized",
+    "test": "test-address-fields.py",
+    "exitCode": 0,
+    "startedEpoch": 1790223554.6490996,
+    "elapsedSeconds": 0.13500428199768066,
+    "output": "optimized-test-address-fields.log"
+  }
+]

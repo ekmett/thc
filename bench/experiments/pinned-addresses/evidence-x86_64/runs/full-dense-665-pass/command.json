@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "python3",
+    "/tmp/thc-pinned-full-dense-01a0cdeb.py"
+  ],
+  "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+  "started": 1790223993.738687,
+  "resources": [
+    "build:/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build"
+  ]
+}

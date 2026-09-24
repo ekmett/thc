@@ -1,0 +1,382 @@
+[
+  {
+    "path": "compiler/Thc/Cbv.hs",
+    "sha256": "4a42b0cf69aab3c28ead9199943b9b563a3cc0d37e335558ca088662c6f1ef8c",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/Thc/Demands.hs",
+    "sha256": "01bd9536ef4963d27ec39739de7c871ff7564bdcb28d4f8b208a057372f6e76a",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/Thc/Plugin.hs",
+    "sha256": "0d6581397f75e92e19bd06342830d4035a6be69ab4816c1104b649be29167891",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/Thc/Sources.hs",
+    "sha256": "b550a2309633ad1e45f31568ec30456ad8f2e7ba5863a4509d4820520e3eb861",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/Thc/Wired.hs",
+    "sha256": "27d46e74a3ee1b6c65d6c0292057fe77f5867ec0a2013ba35749324a15de81d5",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/build.sh",
+    "sha256": "411128d1f13f5bc7ea417af7f8fe4d9f0d62ec7ca17a25189960e6cf7de009cb",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/export.sh",
+    "sha256": "d1638ed4845a59dfb3b0c6ef8555bb3cee43156a87604ab9d2f52f40f412a489",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/test-fixtures/PinnedAddressAudit.hs",
+    "sha256": "cd872e4ec2b1c46ad6ab96a2dd99c3e3dc98ac7c311b8df64a62f7d7873c2399",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/test-fixtures/PinnedAddressAuditNative.hs",
+    "sha256": "5ffee10020a1153c128771116239e50f5fa777b272ed3138c9c8c862642bc70c",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "compiler/toolchain.sh",
+    "sha256": "587ecaf06014f69c29beb58fbe003e4e2d0ea0d667a7fe24ea85f26a36a8a614",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/audit-core.py",
+    "sha256": "9593ae974d4b3f38a992b02864905c044f34ad589c9d3159fe43ef7d4d2a2fda",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/core-capabilities.json",
+    "sha256": "0a53bb9e40e6feeb31403f231d5fb86901218b0b64afcce70ae233312a8dadf4",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/core_data_tags.py",
+    "sha256": "5fc824099d553ab8d0b0f5d4daa37ce4398f6ebbfb06d91f3a448d67cd4a4cce",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/core_md5_foreign.py",
+    "sha256": "3b55ad29c5c86ca9044396c8d8ee67be25dd99c4ef17f81764e8caa4a5d600f5",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/core_sums.py",
+    "sha256": "ee39311b069a5120ea2cd9c58616b04b6a86bd8ce58230cbf0e2d660ad6417d3",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/core_tuple_inputs.py",
+    "sha256": "88de70e6184515c916d81e616ce278b3d30b4cb73e90c76f077ef2c678516a75",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/core_vector_memory.py",
+    "sha256": "e1d8c3aacd53780a583af4a944268383e5395021eb54511d52d763605c406066",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/core_vectors.py",
+    "sha256": "8b11636da6fa778eca02471032c4c8dce5c9f987bde5d40e88ca32873d49f2d4",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/pinned_address_model.py",
+    "sha256": "ae815c633fa9e6c7c0c7d7ea64da4f7278b320e3620858b83aa2ac4b4a29bfa8",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/prepare-pinned-addresses.py",
+    "sha256": "ffd9dfc5088a14f3432705ea78f70dd1bb038c832d653154e18c60660bd3f94b",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "scripts/test-pinned-addresses.py",
+    "sha256": "ea731829064ad8f5a11919bd3f6b24789a0832eacb6ba1a7701a304678bf4344",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "src/main/resources/thc/scalar-primop-signatures.json",
+    "sha256": "1b10915133b036ba8c98d435347c73e1de521e3c5c1e53ed391aae7fb7acd0ec",
+    "manifest": "pinned/inputHashes"
+  },
+  {
+    "path": "build/pinned-addresses/expected.tsv",
+    "sha256": "5105da31cff54d30e0f0afb4348c28572dac3e117ac3ca57b585b91491e3b178",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/native/pinned-address-oracle",
+    "sha256": "6c678a147a4c6dac84f0ed006cf6972bbd705dae0d68b634dec6af0d0f8c912d",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/oracle.tsv",
+    "sha256": "5105da31cff54d30e0f0afb4348c28572dac3e117ac3ca57b585b91491e3b178",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/alignedBytes.audit.json",
+    "sha256": "e6bb277990d3d9de2a73a01801d4b04338935857107339779898b0279b7b33b1",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/core/PinnedAddressAudit.json",
+    "sha256": "b3c8f6d2f1d0b007a90a1d270b8b1485caae7a5e77302756051b91b744b18b55",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/core/THC.InterfaceClosure.json",
+    "sha256": "44866aedc9cb0fe937f49f6bfe3ccde70990f3ec44a7068c2abed14a06ad6b60",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/fingerprintByte.audit.json",
+    "sha256": "9585576aefe44a4d2ea7541e395a84863065255bf5fc83e9114cb3e5ca2f1db2",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/keepAliveLazy.audit.json",
+    "sha256": "31f5b8b7d41f03c6847497b44a4dffb8cda570ae3171e9ad0a8fc9116b390fb9",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/keepAliveWord8.audit.json",
+    "sha256": "fbd5f890cf3bec29befcb360b7f08a58d5ecd23b3e9c4d7a6c1b22598ec8fafe",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/negative-proofs.json",
+    "sha256": "49b838831bd720e6887d24511b718a7cc027e2decaa9e3bed22b2c7247ee5089",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/pinnedBytes.audit.json",
+    "sha256": "5c112410be3b6c18d0c7e5f700bb64dd73c2430b5578c283d98ade424cdc5642",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/publicFingerprintByte.audit.json",
+    "sha256": "0882ec003cbde4a1d542a0c13934b962e5e4e9041e125d1c1fa3a379e959d88d",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/post/publicFingerprintRoundtrip.audit.json",
+    "sha256": "bd192f644bfbe5ab62ab612b5b71d717d998a761aaf7f7fc907166326df1059c",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/alignedBytes.audit.json",
+    "sha256": "94a8b7a01f4c8958eba098dfeba5a8b638ecb98beef02ee43c5063501401741f",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/core/PinnedAddressAudit.json",
+    "sha256": "b1140448f1cb8379aa26ba7c290965e05dce6ee187853aaf6e073409b2fbbd2b",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/core/THC.InterfaceClosure.json",
+    "sha256": "44866aedc9cb0fe937f49f6bfe3ccde70990f3ec44a7068c2abed14a06ad6b60",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/fingerprintByte.audit.json",
+    "sha256": "d46438dbd3d6564c60f7aa63d3c7bfc135cfe7ee09fe4820100e635699d2079d",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/keepAliveLazy.audit.json",
+    "sha256": "e2bf3cfa34428bb172d1c9d6412654db806e6c7ff361d6f27accad42dd5a35a0",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/keepAliveWord8.audit.json",
+    "sha256": "36798ee5ce77c7ddfb0985801d6f970add7bd0e85f786cbf58e619829a384994",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/negative-proofs.json",
+    "sha256": "502f27003d3c5b096c485286034ca45183ab6f29c0c62de3d90ed4c19bbb83d7",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/pinnedBytes.audit.json",
+    "sha256": "94ee78375b8bd0771934d8495731af339d4a3086d6e2936f1c9912a0a119cc74",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/publicFingerprintByte.audit.json",
+    "sha256": "e8ef9c7f6b8af75fcfdaa86a9fd3be0a042e42193a36bab27fe6488836db6ab0",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/pre/publicFingerprintRoundtrip.audit.json",
+    "sha256": "8607882a4b780f4f17ef1f4056d468e2365e4557dae93b01456fafe7a4aaac89",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "build/pinned-addresses/requests.tsv",
+    "sha256": "64df45b44ee6c6fedaee1929954245fa0a30fbbecca50e11215ff150ee5fe4fb",
+    "manifest": "pinned/artifactHashes"
+  },
+  {
+    "path": "scripts/prepare-managed-md5.py",
+    "sha256": "f5f6c2f38690e83689a59d7b96abbcd719eb15928bd0399b04961486f81a1c99",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "compiler/test-fixtures/ManagedMd5Native.c",
+    "sha256": "a7ace39c1d9d89cb9d95daae0e78c09401b90d064f0b1e5ce117b7aef968bd71",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "bench/experiments/pinned-addresses/reference/md5.c",
+    "sha256": "2e5d9dff69905bdf1d8bacbc00f9fb75dc6a2559f0276794f3f36fc8f7857554",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "bench/experiments/pinned-addresses/reference/md5.h",
+    "sha256": "be128d81cad7364be65ce3b6d86f246cb4addfc0b7b7fe32b50af8876999cd15",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/lib/ghc-9.14.1/lib/x86_64-linux-ghc-9.14.1-d8ec/rts-1.0.3/include/HsFFI.h",
+    "sha256": "5e51dade38d76f45dd453ee0b8123a26f8c4976df3c4e669c3710184a52e2ec2",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
+    "sha256": "109019997ccc7f20a6bb1bdebf8883d93cc208458b6c064117155212281dd14b",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "src/main/kotlin/thc/runtime/ManagedMd5.kt",
+    "sha256": "365c385d44d12d62e5ba87476295ca3262d428df9411e49c788bf2d4aa1eec03",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "src/test/kotlin/thc/runtime/ManagedMd5Test.kt",
+    "sha256": "ad5e310a0dbdb119416cf90b297eab0e7d204ed9f51d2f29a935d93f8af9d2c2",
+    "manifest": "md5/sources"
+  },
+  {
+    "path": "build/managed-md5-native/attempt-owner.json",
+    "sha256": "7f215aba0a14272b0b3486469bec3fbc0cc2ba0856616d168fc4bf6721a3e49b",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/cc-version.command.txt",
+    "sha256": "8ddbc99e358270b5f00cfa444d8b51c5ba8e039db259bc6f96ea3a79679dcb7d",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/cc-version.exit-status.txt",
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/cc-version.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/cc-version.stdout",
+    "sha256": "4bc2040d1c1df3b21860d29d55eded1b1651500b32d7838927c686f7e076e278",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/compile.command.txt",
+    "sha256": "7c7ddaa02fe0b8c39e94976e7aa94f21134f5538ccbff86d62ecf70d9630868b",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/compile.exit-status.txt",
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/compile.stderr",
+    "sha256": "3461f43d0b2338b39322ce2bb2f440adc798cf7b9ecb067398c958f59bfaff40",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/compile.stdout",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/ghc-libdir.command.txt",
+    "sha256": "1f9ba184d3fb821b46401a56b0c527de8151e07cbc99c5aa8f93bf16f593b35c",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/ghc-libdir.exit-status.txt",
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/ghc-libdir.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/ghc-libdir.stdout",
+    "sha256": "73e3b82c9025f15fb2ee976d6615cb5bd8cd803190c4de266322daacabe14fce",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/managed-md5-native",
+    "sha256": "6d263ad5aff28b304c1cea25779af555fa6be8832b4f6e2c32865842cc31a52c",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/native.command.txt",
+    "sha256": "485022992c30c37613e4bf48d2a766c8552fe138ee156fff5cd8602114dbf8eb",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/native.exit-status.txt",
+    "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/native.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "build/managed-md5-native/native.stdout",
+    "sha256": "3737ca61db2da76cb4ce2718c6fe6ef317f71ec7c8de2f46f86ef04953b600ff",
+    "manifest": "md5/artifacts"
+  },
+  {
+    "path": "/usr/bin/x86_64-linux-gnu-gcc-11",
+    "sha256": "821af3c74506283c179ca413bb33e6b528805a4dd8a5c09df125e5ad560a9e89",
+    "manifest": "md5/tools"
+  },
+  {
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc-9.14.1",
+    "sha256": "9fb9365cc68780907349303deb23ce360de33527a272b06385e27dc7bfe5d6ed",
+    "manifest": "md5/tools"
+  },
+  {
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/lib/ghc-9.14.1/bin/ghc-9.14.1",
+    "sha256": "0959be71d5d591f141194ddc0bffb03064f4b156ac05ae8f0d6418dafa1ee001",
+    "manifest": "pinned/ghcBinary"
+  },
+  {
+    "path": "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc-9.14.1",
+    "sha256": "9fb9365cc68780907349303deb23ce360de33527a272b06385e27dc7bfe5d6ed",
+    "manifest": "pinned/ghcLauncher"
+  }
+]

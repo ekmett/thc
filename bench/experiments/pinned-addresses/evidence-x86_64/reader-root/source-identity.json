@@ -1,0 +1,6 @@
+{
+  "source": "9871045c96302180413d856e2105c8f171d9ac41",
+  "readerSha256": "99cb06514d5634cc3a7196c905935c48dcacaa9396e077aed5fd40680574a577",
+  "jvmTestedSource": "3e2c124e039926c165e907b034cc80bb9197b50b",
+  "distinction": "One fixture-reader expectation correction after the frozen JVM runs; no runtime or auditor changes."
+}

@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "python3",
+    "scripts/prepare-pinned-addresses.py"
+  ],
+  "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+  "started": 1790222223.2330718,
+  "resources": [
+    "build:/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build"
+  ]
+}

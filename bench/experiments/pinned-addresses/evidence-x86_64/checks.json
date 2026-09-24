@@ -1,0 +1,145 @@
+{
+  "junit": {
+    "first-focused-15-failure.tar.gz": {
+      "tests": 5,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "suites": 1,
+      "pinnedMarkers": 40,
+      "pinnedCompiledRows": 51096,
+      "pinnedCompiledGuestEntries": 197904
+    },
+    "first-head-guard-32-failure.tar.gz": {
+      "tests": 32,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "suites": 6,
+      "pinnedMarkers": 40,
+      "pinnedCompiledRows": 51096,
+      "pinnedCompiledGuestEntries": 197904
+    },
+    "focused-25-pass.tar.gz": {
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "suites": 5,
+      "pinnedMarkers": 40,
+      "pinnedCompiledRows": 51096,
+      "pinnedCompiledGuestEntries": 197904
+    },
+    "focused-default-32-pass.tar.gz": {
+      "tests": 32,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "suites": 6,
+      "pinnedMarkers": 40,
+      "pinnedCompiledRows": 51096,
+      "pinnedCompiledGuestEntries": 197904
+    },
+    "focused-dense-32-pass.tar.gz": {
+      "tests": 32,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "suites": 6,
+      "pinnedMarkers": 40,
+      "pinnedCompiledRows": 51096,
+      "pinnedCompiledGuestEntries": 197904
+    },
+    "full-default-665-pass.tar.gz": {
+      "tests": 665,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "suites": 136,
+      "pinnedMarkers": 40,
+      "pinnedCompiledRows": 51096,
+      "pinnedCompiledGuestEntries": 197904
+    },
+    "full-dense-665-pass.tar.gz": {
+      "tests": 665,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "suites": 136,
+      "pinnedMarkers": 40,
+      "pinnedCompiledRows": 51096,
+      "pinnedCompiledGuestEntries": 197904
+    }
+  },
+  "runs": {
+    "first-focused-15-failure": {
+      "returncode": 1,
+      "seconds": 26.252190828323364
+    },
+    "first-foreign-reader-failure": {
+      "returncode": 1,
+      "seconds": 0.06593942642211914
+    },
+    "first-full-prepare-failure": {
+      "returncode": 1,
+      "seconds": 124.46780610084534
+    },
+    "first-head-guard-32-failure": {
+      "returncode": 1,
+      "seconds": 32.99249768257141
+    },
+    "first-md5-native": {
+      "returncode": 0,
+      "seconds": 0.22380781173706055
+    },
+    "first-pinned-native": {
+      "returncode": 0,
+      "seconds": 4.881604433059692
+    },
+    "first-test-classes": {
+      "returncode": 0,
+      "seconds": 40.77133297920227
+    },
+    "focused-25-pass": {
+      "returncode": 0,
+      "seconds": 51.34692358970642
+    },
+    "focused-default-32-pass": {
+      "returncode": 0,
+      "seconds": 29.09556245803833
+    },
+    "focused-dense-32-pass": {
+      "returncode": 0,
+      "seconds": 52.68203616142273
+    },
+    "foreign-reader-normal-pass": {
+      "returncode": 0,
+      "seconds": 0.03487133979797363
+    },
+    "foreign-reader-optimized-pass": {
+      "returncode": 0,
+      "seconds": 0.09939765930175781
+    },
+    "full-default-665-pass": {
+      "returncode": 0,
+      "seconds": 760.3747687339783
+    },
+    "full-dense-665-pass": {
+      "returncode": 0,
+      "seconds": 554.648904800415
+    },
+    "original-fingerprint-interface": {
+      "returncode": 0,
+      "seconds": 0.037496089935302734
+    }
+  },
+  "python": {
+    "normal": 169,
+    "optimized": 169
+  },
+  "nativeHashRecords": 76,
+  "readerModes": [
+    "normal",
+    "optimized"
+  ]
+}

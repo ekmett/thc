@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "python3",
+    "scripts/prepare-managed-md5.py"
+  ],
+  "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+  "started": 1790222301.8056147,
+  "resources": [
+    "build:/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "bash",
+    "-c",
+    "scripts/prepare-tests.sh && scripts/gradle.sh --offline --no-daemon --max-workers=4 test --rerun-tasks"
+  ],
+  "cwd": "/home/ekmett/ai/thc-pinned-addresses-01a0cdeb",
+  "started": 1790222931.4422524,
+  "resources": [
+    "build:/home/ekmett/ai/thc-pinned-addresses-01a0cdeb/build"
+  ]
+}
