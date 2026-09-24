@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-"""Export genuine synchronous-exception frontiers; do not advertise runtime support."""
+"""Export and check native synchronous catch/raise behavior and masking frontier."""
 
 import argparse
 import hashlib
@@ -18,8 +18,7 @@ SOURCE = 'compiler/test-fixtures/SynchronousExceptionsAudit.hs'
 NATIVE = 'compiler/test-fixtures/SynchronousExceptionsNative.hs'
 ENTRIES = ['preciseCatch', 'actionHeadCatch', 'ignoredBottomPayload', 'nestedRethrow',
            'unusedHandler', 'lazyResultBoundary', 'restoreAndRethrow', 'handlerMaskState']
-FRONTIER = {'catch#', 'raiseIO#', 'newMVar#', 'putMVar#', 'takeMVar#', 'readMVar#', 'tryPutMVar#',
-            'getMaskingState#', 'unmaskAsyncExceptions#'}
+FRONTIER = {'getMaskingState#', 'unmaskAsyncExceptions#'}
 REQUIRED = {
     'preciseCatch': {'catch#', 'raiseIO#'},
     'actionHeadCatch': {'catch#', 'raise#'},
@@ -154,6 +153,7 @@ def classify_audit(report, name):
             name + ': unexpected strict audit issue')
     require(REQUIRED[name] <= {entry['name'] for entry in report['primitives']}, name + ': required primitive was not retained')
     require(report['accepted'] == (not report['issues']), name + ': inconsistent audit status')
+    require(report['accepted'] == (name != 'handlerMaskState'), name + ': unexpected capability frontier')
     return {'accepted': report['accepted'],
             'unsupportedPrimitives': sorted({issue['detail'] for issue in report['issues']}),
             'reachableBindings': len(report['reachableBindings'])}
@@ -307,8 +307,7 @@ def main():
     save(build / 'manifest.json', dict(schema=1, recipeVersion=1, ghc='9.14.1', wordBits=64, plugin=plugin, entries=ENTRIES, inputs=values,
         nativeRows=len(rows), stages=stages, auditStatus=statuses, inputHashes=input_hashes,
         artifactHashes=hash_files(artifacts), installedArtifactsHashed=False,
-        limits=['Native/source-frontier evidence only; no capability or runtime changes.',
-                'Observed exception payloads/results are lifted boxed values, not every RuntimeRep.',
+        limits=['Observed exception payloads/results are lifted boxed values, not every RuntimeRep.',
                 'Handler masking observation is a separate unsupported frontier, not implemented masking.',
                 'Synchronous MVar restoration is not asynchronous-exception-safe bracket or Handle IO.']))
     check_prepared(build)

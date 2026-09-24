@@ -31,9 +31,10 @@ def application(name):
 
 
 def audit_report(name):
-    return dict(accepted=False, missingGlobals=[], reachableBindings=[],
+    frontier = name == 'handlerMaskState'
+    return dict(accepted=not frontier, missingGlobals=[], reachableBindings=[],
                 primitives=[{'name': primitive} for primitive in sorted(recipe.REQUIRED[name])],
-                issues=[dict(code='unsupported-primitive', detail='catch#')])
+                issues=[dict(code='unsupported-primitive', detail='getMaskingState#')] if frontier else [])
 
 
 class ContractAndModelTests(unittest.TestCase):
@@ -123,11 +124,11 @@ class ContractAndModelTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 recipe.validate_rows(bad, [0])
 
-    def test_audit_frontier_is_explicit_without_capability_promotion(self):
+    def test_synchronous_audit_is_accepted_but_masking_remains_a_frontier(self):
         for name in recipe.ENTRIES:
-            self.assertFalse(recipe.classify_audit(audit_report(name), name)['accepted'])
+            self.assertEqual(name != 'handlerMaskState', recipe.classify_audit(audit_report(name), name)['accepted'])
         for mutation in ('unknown-primitive', 'missing-global', 'missing-required', 'other-issue', 'false-acceptance'):
-            report = audit_report('preciseCatch')
+            report = audit_report('handlerMaskState')
             if mutation == 'unknown-primitive':
                 report['issues'][0]['detail'] = 'fork#'
             elif mutation == 'missing-global':
@@ -139,7 +140,7 @@ class ContractAndModelTests(unittest.TestCase):
             else:
                 report['accepted'] = True
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
-                recipe.classify_audit(report, 'preciseCatch')
+                recipe.classify_audit(report, 'handlerMaskState')
 
 
 class ProvenanceTests(unittest.TestCase):

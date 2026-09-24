@@ -805,10 +805,50 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     public static final class Raise {
         @Specialization public static Object raise(Object payload, @Bind("$node") Node node) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             return throwGuest(payload, node);
         }
         @TruffleBoundary private static Object throwGuest(Object payload, Node node) { throw new GuestException(payload, node); }
+    }
+
+    @Operation
+    public static final class RaiseIO {
+        @Specialization public static void raise(Object payload, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            throw new GuestException(payload, node);
+        }
+    }
+
+    /** Execute only the action inside this catch frame; a handler rethrow escapes it. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class CatchIO {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, Object handler, Object state,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createHandler(destination, metrics)", neverDefault = true) TupleDispatch handlerCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestException failure;
+            try {
+                actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
+                        new Object[]{kotlin.Unit.INSTANCE});
+                failure = null;
+            } catch (GuestException guest) {
+                failure = guest;
+            }
+            if (failure != null) {
+                handlerCall.execute(frame, RequireClosure.require(force.execute(frame, handler)),
+                        new Object[]{failure.getPayload(), kotlin.Unit.INSTANCE});
+            }
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 1, false);
+        }
+        public static TupleDispatch createHandler(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 2, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
     @Operation public static final class AddressPlus {

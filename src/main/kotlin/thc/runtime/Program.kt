@@ -1366,6 +1366,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     in CoreVectors.operationsWord32 -> VectorWord32Operation(name, operands)
                     else -> VectorOperation(name, operands)
                 }
+            } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#")) {
+                val name = fn[1] as String
+                CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (name == "raiseIO#") RaiseIOException(operands[0], operands[1], tupleProof)
+                else CatchException(TupleShape(tupleProof, language as thc.Language),
+                    operands[0], operands[1], operands[2], metrics)
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

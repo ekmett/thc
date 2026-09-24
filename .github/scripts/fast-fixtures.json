@@ -11,6 +11,16 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "synchronous-exceptions": {
+      "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-synchronous-exceptions.py"]}],
+      "outputs": ["build/synchronous-exceptions"],
+      "sources": [
+        "scripts/prepare-synchronous-exceptions.py",
+        "compiler/test-fixtures/SynchronousExceptionsAudit.hs",
+        "compiler/test-fixtures/SynchronousExceptionsNative.hs"
+      ]
+    },
     "io-main-pap": {
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "commands": [{"argv": ["python3", "scripts/prepare-io-main-pap.py"]}],

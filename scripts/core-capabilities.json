@@ -299,6 +299,8 @@
     "plusAddr#": 2,
     "indexCharOffAddr#": 2,
     "raise#": 1,
+    "raiseIO#": 2,
+    "catch#": 3,
     "packInt64X2#": 1,
     "unpackInt64X2#": 1,
     "broadcastInt64X2#": 1,

@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 244 | Implemented fixed numeric/character scalar forms. |
-| Partial | 209 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1038 | No declared lowering. |
+| Partial | 211 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 1036 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -310,6 +310,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastWord64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `byteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `catch#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `cloneArray#` — arity 3 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
@@ -412,6 +413,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
 - [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
 - [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `readArray#` — arity 3 — Managed lifted arrays
 - [ ] `readDoubleArray#` — arity 3 — Managed byte storage
 - [ ] `readDoubleArrayAsDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -564,7 +566,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `casIntArray#` — arity 5
 - [ ] `casMutVar#` — arity 4
 - [ ] `casSmallArray#` — arity 5
-- [ ] `catch#` — arity 3
 - [ ] `catchRetry#` — arity 3
 - [ ] `catchSTM#` — arity 3
 - [ ] `clearCCS#` — arity 2
@@ -1078,7 +1079,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotWord8X32#` — arity 2
 - [ ] `quotWord8X64#` — arity 2
 - [ ] `raiseDivZero#` — arity 1
-- [ ] `raiseIO#` — arity 2
 - [ ] `raiseOverflow#` — arity 1
 - [ ] `raiseUnderflow#` — arity 1
 - [ ] `readAddrArray#` — arity 3

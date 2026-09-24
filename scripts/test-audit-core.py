@@ -743,6 +743,30 @@ class AuditTest(unittest.TestCase):
         self.assertEqual({i['code'] for i in report['issues']}, {'primitive-arity', 'unsupported-literal', 'unsupported-primitive'})
         self.assertEqual([p['name'] for p in report['primitives']], ['+#', 'unsupported#'])
 
+    def test_synchronous_exception_primops_require_exact_boxed_state_tuple_contract(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        result = tuple_rep(state, REFERENCE)
+        def application(name):
+            roles = (REFERENCE, state) if name == 'raiseIO#' else (CLOSURE, CLOSURE, state)
+            args = [[*var('operand'), dict(rep=copy.deepcopy(rep))] for rep in roles]
+            return ['app', ['prim', name], args, [rep is not state for rep in roles], False, False,
+                    dict(rep=copy.deepcopy(result))]
+        for name in ('raiseIO#', 'catch#'):
+            good = application(name)
+            self.assertNotIn('primitive-representation', {issue['code'] for issue in run(good)['issues']})
+            for field in ('action', 'state', 'flags', 'result'):
+                bad = copy.deepcopy(good)
+                if field == 'action':
+                    bad[2][0][-1]['rep'] = LONG
+                elif field == 'state':
+                    bad[2][-1][-1]['rep'] = dict(state, aggregate='unboxed-tuple', components=[])
+                elif field == 'flags':
+                    bad[3][-1] = True
+                else:
+                    bad[-1]['rep']['components'][1] = LONG
+                with self.subTest(name=name, field=field):
+                    self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
+
     def test_floating_tuple_leaves_preserve_exact_proofs_and_reject_literal_alternatives(self):
         for kind, register in [('float', 'FloatRep'), ('double', 'DoubleRep')]:
             scalar = dict(kind=kind, primReps=[register], evaluated=True)
