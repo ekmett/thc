@@ -30,8 +30,18 @@ class FastSelectionTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.repo = Path(self.temporary.name)
         self.git("init", "-q")
-        self.policy = dict(schema=1, smoke=dict(junit=["example.SmokeTest"], python=["scripts/test-smoke.py"]),
-                           leafSources={"src/main/kotlin/Leaf.kt": dict(junit=["example.LeafTest"], python=[])})
+        smoke = dict(junit=["example.SmokeTest"], python=["scripts/test-smoke.py"])
+        affected = dict(junit=["example.OtherTest"], python=["scripts/test-other.py"])
+        self.policy = dict(schema=2, smoke=smoke,
+                           leafSources={"src/main/kotlin/Leaf.kt": dict(junit=["example.LeafTest"], python=[])},
+                           owners={"compiler/test-fixtures/Family.hs": affected,
+                                   "scripts/prepare-family.py": affected,
+                                   "src/test/kotlin/example/SharedContext.kt": affected},
+                           primopFamilies={name: affected for name in
+                                           ("bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops")},
+                           automation={name: dict(junit=[], python=["scripts/test-other.py"]) for name in
+                                       (select.SCRIPT, select.POLICY, ".github/scripts/test_fast_select.py",
+                                        ".github/workflows/fast.yml", ".github/scripts/fast_ci.py")})
         files = {
             select.SCRIPT: Path(select.__file__).read_text(),
             select.POLICY: json.dumps(self.policy),
@@ -133,13 +143,112 @@ private val text = "class FakeString { @Test }"
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.LeafTest", "example.SmokeTest"], result["junit"]["classes"])
 
+    def test_fixture_preparer_and_shared_test_context_select_their_owner(self):
+        for path in self.policy["owners"]:
+            with self.subTest(path=path):
+                self.write(path, "changed family input\n")
+                self.commit()
+                result = self.plan()
+                self.assertEqual("narrow", result["mode"], result)
+                self.assertIn("example.OtherTest", result["affected"]["junit"])
+                self.assertIn("scripts/test-other.py", result["affected"]["python"])
+                self.base = result["head"]
+
+    def test_unknown_fixture_and_preparer_still_widen(self):
+        for path in ("compiler/test-fixtures/Unknown.hs", "scripts/prepare-unknown.py"):
+            with self.subTest(path=path):
+                self.write(path, "unmapped\n")
+                self.commit()
+                self.full("unmapped-source-or-configuration")
+                self.base = self.git("rev-parse", "HEAD")
+
+    def test_capability_primop_addition_is_scoped_but_other_contract_edits_widen(self):
+        path = select.CAPABILITIES
+        original = {"name": "contract", "primitives": {"plusInt#": 2}}
+        self.write(path, json.dumps(original))
+        self.base = self.commit()
+        changed = copy.deepcopy(original)
+        changed["primitives"]["popCnt8#"] = 1
+        self.write(path, json.dumps(changed))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertIn("example.OtherTest", result["affected"]["junit"])
+        changed["name"] = "different contract"
+        self.write(path, json.dumps(changed))
+        self.commit()
+        self.full("shared-primop-registry-change")
+
+    def test_uncovered_primitive_name_does_not_claim_native_oracle_coverage(self):
+        path = select.CAPABILITIES
+        self.write(path, json.dumps({"primitives": {}}))
+        self.base = self.commit()
+        self.write(path, json.dumps({"primitives": {"byteSwap8#": 1}}))
+        self.commit()
+        self.full("shared-primop-registry-change")
+
+    def test_mask_registry_only_accepts_new_exact_width_arms(self):
+        path = select.PROGRAM
+        before = ('internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {\n'
+                  '    "plusWord8#" -> 0xffL\n    else -> 0L\n}\n')
+        self.write(path, before)
+        self.base = self.commit()
+        self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffL\n    else ->'))
+        self.commit()
+        self.assertEqual("narrow", self.plan()["mode"])
+        self.write(path, before.replace('    else ->', '    "quotWord8#" -> 0xffffL\n    else ->'))
+        self.commit()
+        self.full("shared-primop-registry-change")
+
+    def test_new_primitive_dispatch_arms_are_scoped_but_existing_arm_edits_widen(self):
+        path = select.PROGRAM
+        before = ('private class Primitive(private val name: String) {\n'
+                  '  val arity = when (operation) {\n    "plusInt#" -> 2\n    else -> 0\n  }\n'
+                  '  fun run() = return when (operation) {\n    "plusInt#" -> x + y\n    else -> 0\n  }\n}\n')
+        self.write(path, before)
+        self.base = self.commit()
+        after = before.replace('    "plusInt#" -> 2', '    "popCnt8#" -> 1\n    "plusInt#" -> 2')
+        after = after.replace('    "plusInt#" -> x + y', '    "popCnt8#" -> java.lang.Long.bitCount(x).toLong()\n    "plusInt#" -> x + y')
+        self.write(path, after)
+        self.commit()
+        self.assertEqual("narrow", self.plan()["mode"])
+        self.write(path, after.replace('"plusInt#" -> x + y', '"plusInt#" -> x - y'))
+        self.commit()
+        self.full("shared-primop-registry-change")
+
+    def test_bytecode_new_name_to_existing_operation_is_scoped(self):
+        path = select.BYTECODE_PROGRAM
+        before = ('val operation = when (scalar64PrimitiveOperation(name)) {\n'
+                  '    "popCnt8#" -> "PopulationCountWidth"\n'
+                  '    else -> throw UnsupportedCore("unknown")\n}\n')
+        self.write(path, before)
+        self.base = self.commit()
+        after = before.replace('    else ->', '    "popCnt16#" -> "PopulationCountWidth"\n    else ->')
+        self.write(path, after)
+        self.commit()
+        self.assertEqual("narrow", self.plan()["mode"])
+        self.write(path, after.replace('"PopulationCountWidth"\n    else', '"NewUnreviewedOperation"\n    else'))
+        self.commit()
+        self.full("shared-primop-registry-change")
+
     def test_unknown_production_configuration_resources_and_compiler_widen(self):
         for path in ("src/main/kotlin/Critical.kt", "src/main/kotlin/ArgumentLayout.kt", "compiler/THC/Plugin.hs",
-                     "build.gradle.kts", "src/main/resources/proof.json", ".github/workflows/fast.yml", "scripts/helper.py"):
+                     "build.gradle.kts", "src/main/resources/proof.json", "scripts/helper.py"):
             with self.subTest(path=path):
                 self.write(path, "changed")
                 self.commit()
                 self.full("unmapped-source-or-configuration")
+
+    def test_automation_changes_use_control_tests_and_smoke(self):
+        for path in (".github/workflows/fast.yml", ".github/scripts/fast_ci.py"):
+            with self.subTest(path=path):
+                self.write(path, "changed")
+                self.commit()
+                result = self.plan()
+                self.assertEqual("narrow", result["mode"], result)
+                self.assertEqual(["example.SmokeTest"], result["junit"]["classes"])
+                self.assertIn("scripts/test-other.py", result["python"]["files"])
+                self.base = result["head"]
 
     def test_deleted_and_renamed_tests_widen_and_retain_both_paths(self):
         old = "src/test/kotlin/example/OtherTest.kt"
@@ -252,7 +361,7 @@ private val text = "class FakeString { @Test }"
         self.policy["smoke"]["junit"].append("example.OtherTest")
         self.write(select.POLICY, json.dumps(self.policy))
         self.commit()
-        self.full("selection-policy-changed")
+        self.assertEqual("narrow", self.plan()["mode"])
         for mutation in (dict(schema=True), dict(smoke=dict(junit=[], python=[])),
                          dict(smoke=dict(junit=["example.NoSuchTest"], python=["scripts/test-smoke.py"])),
                          dict(leafSources={"missing.kt": dict(junit=["example.LeafTest"], python=[])})):
@@ -266,7 +375,9 @@ private val text = "class FakeString { @Test }"
         script = self.repo / select.SCRIPT
         script.write_text(script.read_text() + "\n# harmless change\n")
         self.commit()
-        result = self.full("selection-policy-changed")
+        # This unit invokes the original module against a modified checkout;
+        # actual CI executes the changed selector from that checkout.
+        result = self.full("executed-selector-mismatch")
         self.assertNotEqual(before, result["policySha256"])
 
     def test_deleted_selected_file_and_symlink_never_return_runnable_narrow(self):
@@ -303,7 +414,8 @@ private val text = "class FakeString { @Test }"
     def test_every_reviewed_family_selects_its_complete_union_without_budget_truncation(self):
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         self.write(select.POLICY, json.dumps(policy))
-        groups = [policy["smoke"], *policy["leafSources"].values()]
+        groups = [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
+                  *policy["primopFamilies"].values(), *policy["automation"].values()]
         for name in {name for group in groups for name in group["junit"]}:
             package, short = name.rsplit(".", 1)
             self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
@@ -355,6 +467,43 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 for test in group["python"]:
                     self.assertTrue((self.root / test).is_file(), test)
                     self.assertTrue(select.python_test(test), test)
+
+    def test_fixture_owners_match_the_preparation_manifest(self):
+        fixture = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
+        owners = self.policy["owners"]
+        native_only = {"examples/NativeOracle.hs", "examples/THC/MapWorkload.hs",
+                       "scripts/native-oracle.sh"}
+        for name, group in fixture["groups"].items():
+            for path in group["sources"]:
+                with self.subTest(group=name, path=path):
+                    expected = ({"thc.RuntimeTest", "thc.BytecodeBackendTest"} if path in native_only
+                                else set(group["junit"]))
+                    self.assertEqual(expected, set(owners[path]["junit"]))
+        self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
+                          "thc.SignedNarrowPrimopsTest"},
+                         set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
+
+    def test_control_and_owner_targets_exist_and_are_runnable(self):
+        classes = {name for path in (self.root / "src/test").rglob("*.kt")
+                   for name in select.junit_info(path.read_text())[0]}
+        for group in [*self.policy["owners"].values(), *self.policy["primopFamilies"].values(),
+                      *self.policy["automation"].values()]:
+            self.assertLessEqual(set(group["junit"]), classes)
+            for path in group["python"]:
+                self.assertTrue((self.root / path).is_file(), path)
+                self.assertTrue(select.standalone_python_test((self.root / path).read_text()), path)
+
+    def test_fast_automation_sources_have_control_owners(self):
+        automation = self.policy["automation"]
+        for path in (".github/scripts/fast_ci.py", ".github/scripts/fast_inputs.py",
+                     ".github/scripts/fast_fixtures.py", ".github/scripts/fast_select.py",
+                     ".github/scripts/fast-fixtures.json", ".github/scripts/fast-tests.json",
+                     ".github/scripts/test_fast_ci.py", ".github/scripts/test_fast_inputs.py",
+                     ".github/scripts/test_fast_fixtures.py", ".github/scripts/test_fast_select.py",
+                     ".github/workflows/fast.yml"):
+            with self.subTest(path=path):
+                self.assertIn(path, automation)
+                self.assertIn(".github/scripts/test_fast_select.py", automation[path]["python"])
 
     def test_floating_dispatch_retains_hidden_native_sum_tuple_memory_and_bitcast_consumers(self):
         floating = self.family("FloatingPrimitives")

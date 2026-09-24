@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "fixtureFreeJunit": [
+    "thc.runtime.HandoffTest",
+    "thc.runtime.HostEntryCompilationTest",
+    "thc.runtime.TypedInputScalarSourceTest"
+  ],
+  "groups": {
+    "runtime-core-native": {
+      "junit": [
+        "thc.RuntimeTest",
+        "thc.BytecodeBackendTest",
+        "thc.SelfTailProfileTest"
+      ],
+      "commands": [
+        {"argv": ["compiler/export.sh", "examples/THC/Fixtures.hs"]},
+        {"argv": ["scripts/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}
+      ],
+      "outputs": [
+        "build/core/THC.Prim.json",
+        "build/core/THC.Fixtures.json",
+        "build/native/oracle.tsv"
+      ],
+      "sources": [
+        "examples/THC/Prim.hs",
+        "examples/THC/Fixtures.hs",
+        "examples/NativeOracle.hs",
+        "examples/THC/MapWorkload.hs",
+        "scripts/native-oracle.sh"
+      ]
+    },
+    "explicit64-primops": {
+      "junit": ["thc.runtime.Explicit64PrimopsTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-explicit64-primops.py"]}
+      ],
+      "outputs": ["build/explicit64-primops"],
+      "sources": [
+        "scripts/prepare-explicit64-primops.py",
+        "compiler/test-fixtures/Explicit64PrimopsAudit.hs"
+      ]
+    },
+    "tuple-input": {
+      "junit": ["thc.runtime.TupleInputNativeTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-tuple-input-audit.py"]}
+      ],
+      "outputs": ["build/tuple-input"],
+      "sources": [
+        "scripts/prepare-tuple-input-audit.py",
+        "compiler/test-fixtures/TupleInputAudit.hs",
+        "compiler/test-fixtures/TupleInputAuditNative.hs"
+      ]
+    },
+    "integer-primops": {
+      "junit": ["thc.IntegerPrimopsTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-integer-primops.py"]}
+      ],
+      "outputs": ["build/integer-primops"],
+      "sources": [
+        "scripts/prepare-integer-primops.py",
+        "compiler/test-fixtures/IntegerPrimopsAudit.hs"
+      ]
+    },
+    "signed-narrow-primops": {
+      "junit": ["thc.SignedNarrowPrimopsTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-signed-narrow-primops.py"]}
+      ],
+      "outputs": ["build/signed-narrow-primops"],
+      "sources": [
+        "scripts/prepare-signed-narrow-primops.py",
+        "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs"
+      ]
+    },
+    "bit-primops": {
+      "junit": ["thc.runtime.BitPrimopsTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-bit-primops.py"]}
+      ],
+      "outputs": ["build/bit-primops"],
+      "sources": [
+        "scripts/prepare-bit-primops.py",
+        "compiler/test-fixtures/BitPrimopsAudit.hs"
+      ]
+    }
+  }
+}

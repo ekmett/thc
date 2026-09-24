@@ -18,21 +18,67 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: fast-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  # Candidate PR events do not run tests or cancel the bot's exact-head dispatch.
+  group: fast-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}-${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'thc-bulk/') && 'candidate-pr' || 'gate' }}
   cancel-in-progress: true
 
 jobs:
   automation:
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'thc-bulk/')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      runner: ${{ steps.trust.outputs.runner }}
+      trusted: ${{ steps.trust.outputs.trusted }}
+      revision: ${{ steps.revision.outputs.sha }}
     steps:
+      - name: Choose runner from the event before checking out code
+        id: trust
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ['GITHUB_EVENT_PATH']) as stream:
+              event = json.load(stream)
+
+          def field(*parts):
+              value = event
+              for part in parts:
+                  value = value.get(part) if isinstance(value, dict) else None
+              return value
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          kind = os.environ['GITHUB_EVENT_NAME']
+          ref = os.environ['GITHUB_REF']
+          trusted = False
+          if field('repository', 'full_name') == repo:
+              if kind == 'pull_request':
+                  trusted = (field('pull_request', 'head', 'repo', 'full_name') == repo
+                             and field('pull_request', 'head', 'repo', 'fork') is False
+                             and field('pull_request', 'base', 'repo', 'full_name') == repo
+                             and field('pull_request', 'base', 'ref') == 'main')
+              elif kind == 'push':
+                  trusted = ref == 'refs/heads/main'
+              elif kind == 'workflow_dispatch':
+                  trusted = ref.startswith('refs/heads/')
+          runner = ['self-hosted', 'Linux', 'X64', 'thc-fast'] if trusted else 'ubuntu-24.04'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('runner=' + json.dumps(runner) + '\n')
+              stream.write('trusted=' + str(trusted).lower() + '\n')
+          PY
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Check dispatched revision
+        id: revision
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
-        run: test -z "$EXPECTED_SHA" || test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+        run: |
+          checked_sha=$(git rev-parse HEAD)
+          test -z "$EXPECTED_SHA" || test "$checked_sha" = "$EXPECTED_SHA"
+          echo "sha=$checked_sha" >> "$GITHUB_OUTPUT"
       - name: Test automation and cache safety with assertions enabled and disabled
         run: |
           python3 -m unittest discover -s .github/scripts -p 'test_*.py'
@@ -50,111 +96,86 @@ jobs:
 
   fast-check:
     needs: automation
-    runs-on: ubuntu-24.04
-    # This is the warm ordinary-change gate. Compiler/ABI or unknown changes run
-    # the full tests and may exceed the ordinary 2–3 minute target.
+    runs-on: ${{ fromJSON(needs.automation.outputs.runner) }}
     timeout-minutes: 60
     env:
-      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-user-home
-      THC_GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-user-home
+      THC_GRADLE_USER_HOME: ${{ needs.automation.outputs.trusted == 'true' && '/home/ekmett/ai/thc-fast/cache/gradle' || format('{0}/.gradle-user-home', github.workspace) }}
       EXPECTED_SHA: ${{ inputs.expected_sha }}
       FAST_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || inputs.base_sha }}
       FAST_HEAD_SHA: ${{ github.sha }}
+      FAST_AUTOMATION_SHA: ${{ needs.automation.outputs.revision }}
+      FAST_REPORT_DIR: build/fast/results/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Refuse foreign or unknown events on the persistent runner
+        if: needs.automation.outputs.trusted == 'true'
+        shell: bash
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          import os
+
+          with open(os.environ['GITHUB_EVENT_PATH']) as stream:
+              event = json.load(stream)
+
+          def field(*parts):
+              value = event
+              for part in parts:
+                  value = value.get(part) if isinstance(value, dict) else None
+              return value
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          kind = os.environ['GITHUB_EVENT_NAME']
+          ref = os.environ['GITHUB_REF']
+          trusted = False
+          if field('repository', 'full_name') == repo:
+              if kind == 'pull_request':
+                  trusted = (field('pull_request', 'head', 'repo', 'full_name') == repo
+                             and field('pull_request', 'head', 'repo', 'fork') is False
+                             and field('pull_request', 'base', 'repo', 'full_name') == repo
+                             and field('pull_request', 'base', 'ref') == 'main')
+              elif kind == 'push':
+                  trusted = ref == 'refs/heads/main'
+              elif kind == 'workflow_dispatch':
+                  trusted = ref.startswith('refs/heads/')
+          if not trusted:
+              raise SystemExit('Persistent runner refuses a fork, foreign, or unknown event')
+          PYCODE
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+          clean: ${{ needs.automation.outputs.trusted != 'true' }}
       - name: Start timing and verify the dispatched revision
         run: python3 .github/scripts/fast_ci.py start
-      - name: Restore pinned Graal and GHC installations
-        id: toolchains
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          # Exact directories used by the pinned setup actions; not the entire
-          # runner tool cache. GHCup recreates its bin links during setup.
-          path: |
-            ~/.ghcup/ghc/9.14.1
-            ${{ runner.tool_cache }}/ghc/9.14.1
-            ${{ runner.tool_cache }}/ghcup
-            ${{ runner.tool_cache }}/graalvm-jdk-25.3.4.1_linux-x64_bin
-          key: thc-fast-tools-v1-ubuntu24-X64-ghc9.14.1-graal25.3.4.1-${{ hashFiles('.github/workflows/fast.yml') }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        if: needs.automation.outputs.trusted != 'true'
         with:
           python-version: '3.13'
       - uses: haskell-actions/setup@0f8e8c99d88aeb3fbfd523f1ef2c6f762d10d64d # v2
+        if: needs.automation.outputs.trusted != 'true'
         with:
           ghc-version: '9.14.1'
           cabal-update: false
       - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
+        if: needs.automation.outputs.trusted != 'true'
         with:
           version: '25.3.4.1'
           java-version: '25'
           distribution: graalvm
           github-token: ${{ secrets.GITHUB_TOKEN }}
           check-for-updates: false
-      - name: Identify actual toolchains and fixture dependencies
-        id: identity
+      - name: Identify toolchain and fixture dependencies
         run: python3 .github/scripts/fast_ci.py identify
-      - name: Restore Gradle dependencies and Kotlin compilation outputs
-        id: gradle
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          # The local build cache includes Kotlin/KAPT/Java task outputs. Never
-          # restore build/test-results, reports, or an earlier successful check.
-          path: |
-            .gradle-user-home/caches
-            .gradle-user-home/wrapper
-          key: ${{ steps.identity.outputs.gradle-prefix }}-${{ github.sha }}
-          restore-keys: ${{ steps.identity.outputs.gradle-prefix }}-
-      - name: Restore native and Core input archive
-        id: native
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: build/fast/native-inputs.tar.gz
-          # No fallback prefix: byte-level source/toolchain validation follows.
-          key: ${{ steps.identity.outputs.native-key }}
-      - name: Validate inputs and run fresh smoke plus affected tests
+      - name: Run fresh smoke plus affected tests
         run: python3 .github/scripts/fast_ci.py run
-      - name: Check trusted current-main cache publication
-        id: publish
-        run: python3 .github/scripts/fast_ci.py publish
-      - name: Save pinned toolchains from successful current main
-        if: steps.publish.outputs.allowed == 'true' && steps.toolchains.outputs.cache-hit != 'true'
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: |
-            ~/.ghcup/ghc/9.14.1
-            ${{ runner.tool_cache }}/ghc/9.14.1
-            ${{ runner.tool_cache }}/ghcup
-            ${{ runner.tool_cache }}/graalvm-jdk-25.3.4.1_linux-x64_bin
-          key: ${{ steps.toolchains.outputs.cache-primary-key }}
-      - name: Save Gradle compilation and dependency cache from successful current main
-        if: steps.publish.outputs.allowed == 'true' && steps.gradle.outputs.cache-hit != 'true'
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: |
-            .gradle-user-home/caches
-            .gradle-user-home/wrapper
-          key: ${{ steps.gradle.outputs.cache-primary-key }}
-      - name: Save verified native inputs from successful current main
-        if: steps.publish.outputs.allowed == 'true' && steps.native.outputs.cache-hit != 'true'
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-        with:
-          path: build/fast/native-inputs.tar.gz
-          key: ${{ steps.native.outputs.cache-primary-key }}
-      - name: Report complete timings and cache outcomes
+      - name: Report complete timings
         if: always()
-        env:
-          TOOLCHAIN_CACHE_HIT: ${{ steps.toolchains.outputs.cache-hit }}
-          GRADLE_CACHE_HIT: ${{ steps.gradle.outputs.cache-hit }}
-          NATIVE_CACHE_HIT: ${{ steps.native.outputs.cache-hit }}
         run: python3 .github/scripts/fast_ci.py finish
       - name: Retain commands, selected tests, fresh XML and failure output
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fast-checks-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/fast/results/
+          path: ${{ env.FAST_REPORT_DIR }}
           if-no-files-found: warn
           retention-days: 14

@@ -7,6 +7,7 @@ Commands are argv arrays, never shell source. No budget can remove changed tests
 """
 import argparse
 import ast
+import difflib
 import hashlib
 import json
 import os
@@ -17,6 +18,9 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ".github/scripts/fast_select.py"
 POLICY = ".github/scripts/fast-tests.json"
+CAPABILITIES = "scripts/core-capabilities.json"
+PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
+BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"
 DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+([A-Za-z_]\w*)")
@@ -233,6 +237,119 @@ def standalone_python_test(source):
     return methods and main
 
 
+def primop_family(name):
+    """Only names exercised by the pinned, independent native primop oracles."""
+    if re.fullmatch(r"(?:(?:popCnt|clz|ctz)(?:8|16|32|64)|byteSwap(?:16|32|64)?|bitReverse(?:8|16|32|64)?)#", name):
+        return "bit-primops"
+    if re.fullmatch(r"(?:(?:quot|rem|gt|ge)Word|(?:quot|rem|eq|ne|gt|ge|and|or|xor|not|uncheckedShiftL|uncheckedShiftRL)Word(?:8|16|32))#", name):
+        return "integer-primops"
+    if re.fullmatch(r"(?:negate|plus|sub|times|quot|rem|eq|ne|lt|le|gt|ge)Int(?:8|16|32)#", name):
+        return "signed-narrow-primops"
+    if re.fullmatch(r"(?:int64ToWord64|word64ToInt64|wordToWord64|word64ToWord|(?:plus|sub|times|quot|rem|eq|ne|lt|le|gt|ge)(?:Int|Word)64|negateInt64|(?:and|or|xor|not)64|uncheckedIShift(?:L|RA|RL)64|uncheckedShift(?:L|RL)64)#", name):
+        return "explicit64-primops"
+    return None
+
+
+def additive_capability_families(before, after):
+    """Allow only new, known primop entries; all other contract edits widen."""
+    old, new = json.loads(before), json.loads(after)
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return None
+    prior, current = old.get("primitives"), new.get("primitives")
+    if not isinstance(prior, dict) or not isinstance(current, dict):
+        return None
+    additions = current.keys() - prior.keys()
+    if not additions or any(primop_family(name) is None or type(current[name]) is not int for name in additions):
+        return None
+    reduced = dict(new)
+    reduced["primitives"] = {name: value for name, value in current.items() if name not in additions}
+    if reduced != old:
+        return None
+    return {primop_family(name) for name in additions}
+
+
+def additive_program_families(before, after):
+    """Allow only whole new primitive arms; existing dispatch must stay byte-identical."""
+    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
+    added = []
+    for tag, first, last, start, end in difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        if tag != "insert":
+            return None
+        added.extend(range(start, end))
+    if not added:
+        return None
+    families = set()
+    for index in added:
+        prefix = "".join(new_lines[:index])
+        word = prefix.rfind("internal fun narrowWordPrimitiveMask(")
+        signed = prefix.rfind("internal fun narrowIntPrimitiveShift(")
+        primitive = prefix.rfind("private class Primitive(")
+        arity = prefix.rfind("val arity = when (operation)")
+        execute = prefix.rfind("return when (operation)")
+        start = max(word, signed, arity, execute)
+        if start < 0 or "else ->" in prefix[start:]:
+            return None
+        line = new_lines[index].strip()
+        match = re.fullmatch(r'("[A-Za-z0-9]+#"(?:,\s*"[A-Za-z0-9]+#")*)\s*->\s*(.+)', line)
+        if not match:
+            return None
+        names = re.findall(r'"([A-Za-z0-9]+#)"', match[1])
+        for name in names:
+            family = primop_family(name)
+            if start in (word, signed):
+                width = re.search(r'(?:Word|Int)(8|16|32)#$', name)
+                expected = ({"8": "0xffL", "16": "0xffffL", "32": "0xffff_ffffL"} if start == word
+                            else {"8": "56", "16": "48", "32": "32"}).get(width[1] if width else "")
+                if match[2] != expected or family != ("integer-primops" if start == word else "signed-narrow-primops"):
+                    return None
+            elif primitive < 0 or start <= primitive or family is None:
+                return None
+            elif start == arity and match[2] not in ("1", "2"):
+                return None
+            elif start == execute and any(token in match[2] for token in ("{", "}", ";")):
+                return None
+            families.add(family)
+    return families
+
+
+def additive_bytecode_families(before, after):
+    """Only new name-to-existing-operation arms in the scalar bytecode dispatch."""
+    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
+    added = []
+    for tag, first, last, start, end in difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        if tag != "insert":
+            return None
+        added.extend(range(start, end))
+    if not added:
+        return None
+    marker = "val operation = when (scalar64PrimitiveOperation(name))"
+    old_start = before.find(marker)
+    old_end = before.find("else -> throw UnsupportedCore", old_start)
+    if old_start < 0 or old_end < 0:
+        return None
+    operations = set(re.findall(r'->\s*"([A-Za-z][A-Za-z0-9]*)"', before[old_start:old_end]))
+    families = set()
+    for index in added:
+        prefix = "".join(new_lines[:index])
+        start = prefix.rfind(marker)
+        if start < 0 or "else ->" in prefix[start:]:
+            return None
+        line = new_lines[index].strip()
+        match = re.fullmatch(r'("[A-Za-z0-9]+#"(?:,\s*"[A-Za-z0-9]+#")*)\s*->\s*"([A-Za-z][A-Za-z0-9]*)"', line)
+        if not match or match[2] not in operations:
+            return None
+        for name in re.findall(r'"([A-Za-z0-9]+#)"', match[1]):
+            family = primop_family(name)
+            if family is None:
+                return None
+            families.add(family)
+    return families
+
+
 def select(repo, base_ref, head_ref):
     repo = Path(repo).resolve()
     reasons = []
@@ -295,11 +412,12 @@ def select(repo, base_ref, head_ref):
             widen("executed-selector-mismatch")
         policy_hash = digest.hexdigest()
         policy = json.loads((repo / POLICY).read_text())
-        if set(policy) != {"schema", "smoke", "leafSources"} or type(policy["schema"]) is not int or policy["schema"] != 1:
+        if set(policy) != {"schema", "smoke", "leafSources", "owners", "primopFamilies", "automation"} or type(policy["schema"]) is not int or policy["schema"] != 2:
             raise SelectionError("invalid policy schema")
-        if not isinstance(policy["leafSources"], dict):
-            raise SelectionError("invalid leaf map")
-        for group in [policy["smoke"], *policy["leafSources"].values()]:
+        if any(not isinstance(policy[key], dict) for key in ("leafSources", "owners", "primopFamilies", "automation")):
+            raise SelectionError("invalid ownership map")
+        for group in [policy["smoke"], *policy["leafSources"].values(), *policy["owners"].values(),
+                      *policy["primopFamilies"].values(), *policy["automation"].values()]:
             if not isinstance(group, dict) or set(group) != {"junit", "python"}:
                 raise SelectionError("invalid test group")
             for key, available in (("junit", classes), ("python", python_files)):
@@ -312,6 +430,13 @@ def select(repo, base_ref, head_ref):
             raise SelectionError("empty smoke")
         if any(path not in files or not path.startswith("src/main/") for path in policy["leafSources"]):
             raise SelectionError("nonexistent or nonproduction leaf source")
+        if any(not isinstance(path, str) or not path or path.startswith("/") or ".." in PurePosixPath(path).parts
+               or path in policy["leafSources"] for path in policy["owners"]):
+            raise SelectionError("invalid owner path")
+        if set(policy["primopFamilies"]) != {"bit-primops", "integer-primops", "signed-narrow-primops", "explicit64-primops"}:
+            raise SelectionError("incomplete primop families")
+        if any(not isinstance(path, str) or not path.startswith(".github/") for path in policy["automation"]):
+            raise SelectionError("invalid automation path")
     except (OSError, ValueError, TypeError, KeyError, SelectionError):
         widen("invalid-selection-policy")
         policy = None
@@ -336,8 +461,14 @@ def select(repo, base_ref, head_ref):
             mode, kind, _ = files[path]
             if mode not in ("100644", "100755") or kind != "blob":
                 widen("nonregular-changed-path", path)
-            if path in (SCRIPT, POLICY, ".github/scripts/test_fast_select.py"):
-                widen("selection-policy-changed", path)
+            if policy and path in policy["automation"]:
+                group = policy["automation"][path]
+                affected_junit.update(group["junit"])
+                affected_python.update(group["python"])
+            elif policy and path in policy["owners"]:
+                group = policy["owners"][path]
+                affected_junit.update(group["junit"])
+                affected_python.update(group["python"])
             elif junit_source(path):
                 if path.endswith(".java"):
                     widen("non-kotlin-test-source", path)
@@ -374,6 +505,21 @@ def select(repo, base_ref, head_ref):
                 group = policy["leafSources"][path]
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
+            elif policy and base and record["status"] == "M" and path in (CAPABILITIES, PROGRAM, BYTECODE_PROGRAM):
+                try:
+                    before = git(repo, "show", base + ":" + path).decode("utf-8")
+                    families = (additive_capability_families(before, text(path)) if path == CAPABILITIES
+                                else additive_program_families(before, text(path)) if path == PROGRAM
+                                else additive_bytecode_families(before, text(path)))
+                    if not families:
+                        widen("shared-primop-registry-change", path)
+                    else:
+                        for family in families:
+                            group = policy["primopFamilies"][family]
+                            affected_junit.update(group["junit"])
+                            affected_python.update(group["python"])
+                except (SelectionError, UnicodeError, ValueError, TypeError):
+                    widen("shared-primop-registry-change", path)
             elif path.endswith(".md") and (path.startswith("docs/") or "/" not in path):
                 pass  # Explicit documentation-only lane still executes all smoke.
             else:
