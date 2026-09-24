@@ -1,0 +1,20 @@
+THC
+
+Copyright (c) 2026, Edward Kmett
+
+SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+THC is licensed under the Universal Permissive License, Version 1.0, and the
+BSD 3-Clause License, following Cadenza. The rights and obligations of both
+licenses apply. The complete terms and retained upstream copyright notices
+are in LICENSE.txt.
+
+These terms apply to THC's original source code, tests, tooling, documentation,
+and modifications, except where a file carries a different notice. The current
+THC copyright notice supplements the retained Edward Kmett and Oracle notices;
+it does not replace them. Cadenza's original license is also retained unchanged
+in third-party-licenses/cadenza-LICENSE.txt.
+
+Third-party components retain their own licenses. In particular, the Gradle
+wrapper remains Apache-2.0, and Haskell sources downloaded by the export scripts
+retain their upstream terms. See NOTICE.md for provenance and license locations.
