@@ -289,6 +289,7 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
         publish_result(api, candidate["head"]["sha"], "pending" if state == "missing" else state, run, gate)
     if gate == FAST_GATE:
         ensure_main_checks(api, branch["commit"]["sha"], report)
+    updated_branch = False
     for candidate in candidates:
         number = candidate["number"]
         path = f"pulls/{number}"
@@ -301,16 +302,21 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             continue
         if pr["mergeable"] is None:
             report(f"#{number}: GitHub is calculating mergeability")
-            return
+            continue
         base = api.call("GET", "branches/main")["commit"]["sha"]
         comparison = api.call("GET", f"compare/{base}...{sha}")
         if comparison["behind_by"]:
-            # Never update all queued branches at once: each successful merge
-            # would invalidate the later branches' work.
+            # Only one update per pass: a merge would invalidate later updates.
+            # Still inspect current-base PRs so this branch cannot serialize
+            # their independent Fast checks.
+            if updated_branch:
+                report(f"#{number}: waiting for the next branch-update pass")
+                continue
             fresh = api.call("GET", path)
             if not still_authorized(api, fresh) or fresh["head"]["sha"] != sha:
                 report(f"#{number}: changed while inspecting; waiting")
-                return
+                continue
+            updated_branch = True
             try:
                 api.call("PUT", f"{path}/update-branch", {"expected_head_sha": sha})
             except HTTPError as error:
@@ -333,13 +339,13 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
                     # state on the next run; never dispatch this rejected head.
                     report(f"#{number}: GitHub rejected branch update (HTTP {error.code}); "
                            "a later run will recheck the branch; update manually if it persists")
-                    return
+                    continue
                 raise
             for _ in range(15):
                 sleep(2)
                 updated = api.call("GET", path)
                 if not still_authorized(api, updated):
-                    return
+                    break
                 if updated["head"]["sha"] != sha:
                     # Token-authored pushes don't start ordinary push CI.
                     # Dispatch is explicit and verifies the expected commit.
@@ -347,9 +353,10 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
                         report(f"#{number}: updated against main and dispatched {gate.name}")
                     else:
                         report(f"#{number}: changed before dispatch; waiting")
-                    return
-            report(f"#{number}: branch update pending; a later run will dispatch {gate.name}")
-            return
+                    break
+            else:
+                report(f"#{number}: branch update pending; a later run will dispatch {gate.name}")
+            continue
         state, run = workflow_result(api, sha, gate)
         if run:
             publish_result(api, sha, state, run, gate)
@@ -364,7 +371,7 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
                     report(f"#{number}: changed before dispatch; waiting")
             else:
                 report(f"#{number}: waiting for required checks ({state})")
-            return
+            continue
         if gate == FAST_GATE:
             health, health_snapshot = main_build_health(api)
             if health != "success":

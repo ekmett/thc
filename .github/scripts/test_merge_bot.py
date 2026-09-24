@@ -68,8 +68,14 @@ class FakeAPI:
                 if self.update_error:
                     raise self.update_error
                 if not self.delayed_update:
-                    self.pr["head"]["sha"] = "updated"
-                    self.behind = 0
+                    number = int(path.split("/")[1])
+                    target = next(p for p in self.prs if p["number"] == number)
+                    old_head = target["head"]["sha"]
+                    target["head"]["sha"] = "updated"
+                    if isinstance(self.behind, dict):
+                        self.behind[old_head] = 0
+                    else:
+                        self.behind = 0
             if path.endswith("/merge"):
                 if self.merge_error:
                     raise self.merge_error
@@ -391,7 +397,8 @@ class MergeBotTest(unittest.TestCase):
                 api = FakeAPI()
                 api.behind = 1
                 api.update_error = HTTPError("", code, "Conflict", {}, None)
-                api.prs.append(pull(2))
+                second = pull(2); second["draft"] = True
+                api.prs.append(second)
                 messages = self.run_bot(api)
                 self.assertEqual(api.actions, [
                     ("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"})])
@@ -717,6 +724,62 @@ class FastGateTest(unittest.TestCase):
         self.run_bot(api)
         self.assertEqual(api.actions, [("POST", "actions/workflows/fast.yml/dispatches", {
             "ref": "codex/change", "inputs": {"expected_sha": "head", "base_sha": "base"}})])
+
+    def test_missing_fast_runs_dispatch_all_current_heads_in_one_pass(self):
+        api = FastAPI(); api.runs = []
+        second = pull(2)
+        second["head"].update(sha="second", ref="codex/second")
+        api.prs.append(second)
+        self.run_bot(api)
+        self.assertEqual(api.actions, [
+            ("POST", "actions/workflows/fast.yml/dispatches", {
+                "ref": "codex/change", "inputs": {"expected_sha": "head", "base_sha": "base"}}),
+            ("POST", "actions/workflows/fast.yml/dispatches", {
+                "ref": "codex/second", "inputs": {"expected_sha": "second", "base_sha": "base"}})])
+
+    def test_pending_fast_run_does_not_hold_another_green_pr(self):
+        api = FastAPI()
+        api.runs[0].update(status="in_progress", conclusion=None)
+        second = pull(2)
+        second["head"].update(sha="second", ref="codex/second")
+        api.prs.append(second)
+        api.runs.append({**build(2), "workflow_id": 18, "head_sha": "second"})
+        messages = self.run_bot(api)
+        self.assertIn("#1: waiting for required checks (pending)", messages)
+        self.assertIn(("PUT", "pulls/2/merge", {"sha": "second", "merge_method": "squash"}), api.actions)
+
+    def test_unknown_mergeability_does_not_hold_another_green_pr(self):
+        api = FastAPI(); api.pr["mergeable"] = None
+        second = pull(2)
+        second["head"].update(sha="second", ref="codex/second")
+        api.prs.append(second)
+        api.runs.append({**build(2), "workflow_id": 18, "head_sha": "second"})
+        messages = self.run_bot(api)
+        self.assertIn("#1: GitHub is calculating mergeability", messages)
+        self.assertIn(("PUT", "pulls/2/merge", {"sha": "second", "merge_method": "squash"}), api.actions)
+
+    def test_one_stale_update_still_dispatches_another_current_head(self):
+        api = FastAPI(); api.behind = {"head": 1}; api.runs = []
+        second = pull(2)
+        second["head"].update(sha="second", ref="codex/second")
+        api.prs.append(second)
+        self.run_bot(api)
+        self.assertEqual(api.actions, [
+            ("PUT", "pulls/1/update-branch", {"expected_head_sha": "head"}),
+            ("POST", "actions/workflows/fast.yml/dispatches", {
+                "ref": "codex/change", "inputs": {"expected_sha": "updated", "base_sha": "base"}}),
+            ("POST", "actions/workflows/fast.yml/dispatches", {
+                "ref": "codex/second", "inputs": {"expected_sha": "second", "base_sha": "base"}})])
+
+    def test_only_one_stale_branch_update_per_pass(self):
+        api = FastAPI(); api.behind = {"head": 1, "second": 1}
+        second = pull(2)
+        second["head"].update(sha="second", ref="codex/second")
+        api.prs.append(second)
+        messages = self.run_bot(api)
+        self.assertEqual([path for method, path, _ in api.actions if method == "PUT"],
+                         ["pulls/1/update-branch"])
+        self.assertIn("#2: waiting for the next branch-update pass", messages)
 
     def test_fast_dispatch_rejects_changed_consent_head_base_or_ancestry(self):
         mutations = [lambda a: a.pr.update(labels=[]), lambda a: a.pr["head"].update(sha="moved"),
