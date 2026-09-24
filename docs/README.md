@@ -100,3 +100,7 @@ Runtime experiments are opt-in except compact headers and class-owned layouts.
 `-Pthc.compactObjectHeaders=false` disables compact headers for Gradle launches.
 The controlled benchmark also accepts `-XX:-UseCompactObjectHeaders` for a
 matched header-off run. Keep graph capture separate from timed measurements.
+
+## Project integration
+
+[The Cabal plan](cabal.md) covers the shared build/run driver and GHCi-based REPL.

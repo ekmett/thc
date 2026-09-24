@@ -81,6 +81,8 @@ jobs:
           assert release['JAVA_VERSION'].strip('"').split('.')[0] == '25', release.get('JAVA_VERSION')
           PY
           java --version
+      - name: Check the primop checklist
+        run: python3 scripts/primop-coverage.py --check
       - name: Build and test from source
         run: scripts/try.sh
       - name: Preserve default test results
