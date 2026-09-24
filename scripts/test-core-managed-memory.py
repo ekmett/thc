@@ -25,6 +25,7 @@ def scalar(kind, *registers, evaluated=True):
 INT = scalar('long', 'IntRep')
 WORD = scalar('long', 'WordRep')
 WORD8 = scalar('long', 'Word8Rep')
+WORD32 = scalar('long', 'Word32Rep')
 INT32 = scalar('long', 'Int32Rep')
 STATE = scalar('void')
 ADDRESS = scalar('address', 'AddrRep')
@@ -43,6 +44,10 @@ PINNED = {
     'newAlignedPinnedByteArray#': ([INT, INT, STATE], tup(STATE, ARRAY)),
     'byteArrayContents#': ([ARRAY], ADDRESS),
     'readWord8OffAddr#': ([ADDRESS, INT, STATE], tup(STATE, WORD8)),
+    'readWord32OffAddr#': ([ADDRESS, INT, STATE], tup(STATE, WORD32)),
+    'readWordOffAddr#': ([ADDRESS, INT, STATE], tup(STATE, WORD)),
+    'readInt32OffAddr#': ([ADDRESS, INT, STATE], tup(STATE, INT32)),
+    'readIntOffAddr#': ([ADDRESS, INT, STATE], tup(STATE, INT)),
     'writeWord8OffAddr#': ([ADDRESS, INT, WORD8, STATE], STATE),
 }
 MD5 = {'__hsbase_MD5Init': [ADDRESS, STATE],
@@ -213,6 +218,16 @@ class ManagedMemoryProofTest(unittest.TestCase):
                 module, call = pinned(name)
                 fields = call[6]['rep']['components']
                 call[6]['rep'] = tup(replacement, fields[1])
+                self.rejected(module)
+
+    def test_address_read_payload_width_and_signedness_are_exact(self):
+        for name in ('readWord32OffAddr#', 'readWordOffAddr#', 'readInt32OffAddr#', 'readIntOffAddr#'):
+            expected = PINNED[name][1]['components'][1]
+            for wrong in (WORD8, WORD32, WORD, INT32, INT, ADDRESS, STATE):
+                if wrong == expected:
+                    continue
+                module, call = pinned(name)
+                call[6]['rep'] = tup(STATE, wrong)
                 self.rejected(module)
 
     def test_keepalive_direct_global_and_pap_state_signature_parity(self):

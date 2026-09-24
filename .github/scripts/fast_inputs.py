@@ -36,7 +36,7 @@ RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
 MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
-int8-arrays integer-primops mutable-bytearray-size mutable-bytearrays mutvar
+int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
 narrow-literal-proofs resize-bytearrays scalar-bitcasts short-bytes-slices
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic""".split()
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input

@@ -1051,6 +1051,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
                         PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT ->
+                            e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
                         else -> error("Scalar pinned memory operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -1058,6 +1061,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
                         PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
                     }
                 } else ProvenExpression(Expression { e ->
