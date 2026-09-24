@@ -537,13 +537,13 @@ internal class Force(private val metrics: Metrics) : Node() {
                     if (answer === Retry) null else ChildResume(answer, null)
                 } catch (suspension: ThunkSuspended) {
                     // Resignal the requested update boundary, not a deeper child.
-                    if (original.state == 5) throw ThunkSuspended(original)
+                    if (original.state == 5) throw ThunkSuspended(original, suspension.asyncRequest)
                     throw suspension
                 } catch (suspension: CallSegmentSuspended) {
                     // The requested thunk is still parked even if a deeper
                     // dependency yielded again. A new caller must capture the
                     // requested update boundary, not skip its continuation.
-                    if (original.state == 5) throw ThunkSuspended(original)
+                    if (original.state == 5) throw ThunkSuspended(original, suspension.asyncRequest)
                     throw suspension
                 } catch (failure: GuestException) { ChildResume(null, failure) }
                 if (outcome == null) break // Another evaluator advanced a link; rescan from the root.
