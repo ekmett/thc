@@ -5,13 +5,19 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.PolyglotAccess
+import org.graalvm.polyglot.proxy.ProxyExecutable
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
+import thc.EntryValue
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** The optional JS dependency is loaded only by Gradle's polyglotTest task. */
 class PolyglotFFITest {
@@ -263,6 +269,20 @@ class PolyglotFFITest {
         return JavaScriptRoot(language, declaration)
     }
 
+    /** A small public entry is enough to exercise the actual interop entry/exit delimiter. */
+    private fun publicEntry(language: Language, action: (VirtualFrame) -> Any?): EntryValue {
+        val target = object : RootNode(language) {
+            override fun execute(frame: VirtualFrame): Any? = action(frame)
+        }.callTarget
+        val program = object : ExecutableProgram {
+            override fun hostEntryTarget(arity: Int): RootCallTarget = target
+            override fun entryValue(name: String): Any = Unit
+            override fun entryTarget(name: String): RootCallTarget = target
+            override fun diagnostics(): Map<String, Any> = emptyMap()
+        }
+        return EntryValue(program, "callback", 0)
+    }
+
     @Test fun javascriptImportExecutesScalarAndVoidResults() {
         context().use { context ->
             context.initialize("thc")
@@ -277,6 +297,112 @@ class PolyglotFFITest {
                 Calls.target(effect, arrayOf<Any?>(Unit))
                 Calls.target(effect, arrayOf<Any?>(Unit))
                 assertEquals(2, context.eval("js", "globalThis.thcCount").asInt())
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun javascriptCallDefersSelfDeliveryUntilReentrantGuestCallback() {
+        context().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val state = Language.currentState()
+                val threads = state.threads
+                val node = object : Node() {}
+                val javaId = threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
+                try {
+                    val request = threads.send(javaId, "callback payload")
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val callback = context.asValue(publicEntry(language) {
+                        assertEquals(javaId, Thread.currentThread().threadId())
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, state.maskingState.get())
+                        val nestedForeign = threads.enterForeign()
+                        try { assertNull(threads.poll(node)) }
+                        finally { threads.leaveForeign(nestedForeign) }
+                        assertSame(request, threads.poll(node), "A public guest callback admits self delivery")
+                        request.acknowledge()
+                        42L
+                    })
+                    context.getBindings("js").putMember("thcReentry", ProxyExecutable { _ ->
+                        assertEquals(javaId, Thread.currentThread().threadId())
+                        assertNull(threads.poll(node), "The JavaScript call has no guest continuation cut")
+                        val answer = callback.execute().asLong()
+                        assertNull(threads.poll(node), "Callback exit restores JavaScript execution")
+                        answer
+                    })
+                    val target = javascriptRoot("globalThis.thcReentry", emptyList(), "IntRep").callTarget
+                    assertEquals(42L, Calls.target(target, arrayOf<Any?>(Unit)) as Long)
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                    assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, state.maskingState.get())
+                    val after = threads.send(javaId, "after foreign return")
+                    assertSame(after, threads.poll(node), "The outer guest cut is restored after JavaScript returns")
+                    after.acknowledge()
+                } finally { threads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun uncaughtCallbackCannotMemoizeOrReplayItsOpaqueForeignCaller() {
+        context().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val outerThreads = Language.currentState().threads
+                val node = object : Node() {}
+                val payload = Any()
+                val effects = AtomicInteger()
+                val request = AtomicReference<AsyncRequest>()
+                val id = outerThreads.enterCurrent()
+                try {
+                    Context.newBuilder("thc").allowExperimentalOptions(true).build().use { guest ->
+                        guest.initialize("thc"); guest.enter()
+                        val callback = try {
+                            val innerLanguage = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                            val innerThreads = Language.currentState().threads
+                            val abandoned = Thunk(object : RootNode(innerLanguage) {
+                                override fun execute(frame: VirtualFrame): Any = Unit
+                            }.callTarget, null)
+                            guest.asValue(publicEntry(innerLanguage) {
+                                val innerId = innerThreads.currentId()
+                                assertEquals(id, innerId, "Cross-context callback keeps the Java ThreadId#")
+                                val pending = innerThreads.send(innerId, payload)
+                                request.set(pending)
+                                val claimed = innerThreads.poll(node)!!
+                                assertSame(pending, claimed)
+                                // The public EntryValue boundary, not this synthetic
+                                // body, must settle and classify the escaped async cut.
+                                throw ThunkSuspended(abandoned, claimed)
+                            })
+                        } finally { guest.leave() }
+                        context.getBindings("js").putMember("thcUncaught", ProxyExecutable { _ ->
+                            assertNull(outerThreads.poll(node), "Opaque JavaScript is not a delivery cut")
+                            callback.execute().asLong()
+                        })
+                        val declaration = CoreJavaScript.validate(
+                            javascriptCall("globalThis.thcUncaught", emptyList(), "IntRep"), false)!!
+                        val body = object : RootNode(language) {
+                            @Child private var access = JavaScriptAccess(declaration)
+                            override fun execute(frame: VirtualFrame): Any {
+                                effects.incrementAndGet()
+                                return access.executeLong(emptyArray(), Unit)
+                            }
+                        }.callTarget
+                        val thunk = Thunk(body, null)
+                        val driver = object : RootNode(language) {
+                            @Child private var force = Force(Metrics(false))
+                            override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
+                        }.callTarget
+                        val escaped = assertThrows(Throwable::class.java) { Calls.target(driver, arrayOf(thunk)) }
+                        assertFalse(escaped is GuestException || escaped is ThunkSuspended || escaped is AsyncDelivery,
+                            "No synchronous guest failure or internal capture signal may escape JavaScript")
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, request.get().state)
+                        assertSame(payload, request.get().payload)
+                        assertEquals(4, thunk.state, "An opaque foreign caller has no saved continuation")
+                        assertThrows(RuntimeFault::class.java) { Calls.target(driver, arrayOf(thunk)) }
+                        assertEquals(1, effects.get(), "The abandoned foreign call must not run twice")
+                    }
+                } finally { outerThreads.leaveCurrent() }
             } finally { context.leave() }
         }
     }
