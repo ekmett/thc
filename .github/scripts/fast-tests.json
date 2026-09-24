@@ -775,6 +775,7 @@
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.AsyncStrictEntryNativeTest",
+        "thc.runtime.MaskFunctionNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
@@ -804,6 +805,18 @@
     },
     "compiler/test-fixtures/LazyIOCallbackNative.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/MaskFunctionFixtures.hs": {
+      "junit": ["thc.runtime.MaskFunctionNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/MaskFunctionAudit.hs": {
+      "junit": ["thc.runtime.MaskFunctionNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/MaskFunctionNative.hs": {
+      "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "python": []
     },
     "test/haskell-fixtures/FusedFloatingFixtures.hs": {
