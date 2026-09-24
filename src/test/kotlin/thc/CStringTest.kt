@@ -104,13 +104,16 @@ class CStringTest {
         val decoded = apply(variable(unpack), listOf(address), listOf(false))
         val driver = module(listOf(binding("sumChars", "list", true, traverse), binding("entry", "offset", false,
             apply(variable("sumChars"), listOf(decoded), listOf(true)))))
-        executionContext().use { context ->
-            val function = context.eval("thc", request(listOf(exported, driver)))
+        for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+            val function = context.eval("thc", Json.stringify(mapOf(
+                "entry" to "entry", "modules" to listOf(exported, driver), "backend" to backend)))
             val expected = listOf(386L, 321L, 66L, 0L, 67L, 0L)
-            repeat(8) { for ((offset, value) in expected.withIndex()) assertEquals(value, function.execute(offset).asLong()) }
+            repeat(8) { for ((offset, value) in expected.withIndex())
+                assertEquals(value, function.execute(offset).asLong(), "$backend/$offset") }
             assertTrue(function.invokeMember("compile").asBoolean())
             val before = count(function, "compiledEntries")
-            for ((offset, value) in expected.withIndex()) assertEquals(value, function.execute(offset).asLong())
+            for ((offset, value) in expected.withIndex())
+                assertEquals(value, function.execute(offset).asLong(), "$backend/$offset compiled")
             assertTrue(count(function, "compiledEntries") > before)
         }
     }

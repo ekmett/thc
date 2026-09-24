@@ -5,7 +5,7 @@ module ProjectTests (tests) where
 
 import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
 import Control.Exception (bracket)
-import Control.Monad (forM_)
+import Control.Monad (forM, forM_)
 import Data.Aeson (Value, eitherDecode')
 import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf)
@@ -17,7 +17,10 @@ import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestLabel "three-package project native versus THC run" $ TestCase $
+tests env = TestList [projectTests env, cstringTests env]
+
+projectTests :: Env -> Test
+projectTests env = TestLabel "three-package project native versus THC run" $ TestCase $
   withFixture env "test/fixtures/run-project" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project
@@ -72,6 +75,45 @@ tests env = TestLabel "three-package project native versus THC run" $ TestCase $
     forM_ (map (fst . snd) firstBundles ++ [fst $ bundleRef manifest depId]) $ \path -> do
       remains <- doesFileExist path
       assertBool "cabal clean removes in-place Core bundles" (not remains)
+
+cstringTests :: Env -> Test
+cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ TestCase $
+  withFixture env "test/fixtures/run-cstring" $ \project ->
+  withCache (takeDirectory project </> "cache") $ do
+    let output = takeDirectory project </> "output"
+        invoke backend = run env (takeDirectory project) (Just backend) 240
+          ["run", project, "--exe", "cstring", "--thc-root", thcRoot env,
+           "--runtime", runtime env, "--dist-dir", output]
+        wired manifest = one ((== "ghc-internal") . string . (`field` "id"))
+                            (objects manifest "units")
+    bundles <- forM ["ast", "bytecode"] $ \backend -> do
+      result <- invoke backend
+      assertSuccess result
+      assertNoStdout result
+      diagnostics <- json (last $ lines $ err result)
+      assertEqual "backend" backend (string $ field diagnostics "backend")
+      assertEqual "unsupported traps" 0 (number $ field diagnostics "unsupportedTraps")
+      audit <- readJson (output </> "audit.json")
+      assertBool "strict audit" (bool $ field audit "accepted")
+      assertEqual "no missing globals" [] (array $ field audit "missingGlobals")
+      assertBool "original CString binding reached" $ any
+        ((== "ghc-internal:GHC.Internal.CString.unpackCString#") . string . (`field` "id"))
+        (objects audit "reachableBindings")
+      manifest <- readJson (output </> "packages.json")
+      assertEqual "wired source module" ["GHC.Internal.CString"] (moduleNames $ wired manifest)
+      let bundle = string $ field (field (wired manifest) "bundle") "path"
+      requireFile bundle
+      plan <- readJson (output </> "native/cache/plan.json")
+      let entry = one ((== "exe:cstring") . string . (`field` "component-name"))
+                      (objects plan "install-plan")
+      native <- runExe env project Nothing 60 (string $ field entry "bin-file") []
+      assertSuccess native
+      assertNoStdout native
+      moment <- getModificationTime bundle
+      pure (bundle, moment)
+    case bundles of
+      [first, second] -> assertEqual "wired bundle reused across backends" first second
+      _ -> fail "expected AST and bytecode CString bundle results"
 
 withCache :: FilePath -> IO a -> IO a
 withCache path action = bracket acquire restore (const action)
