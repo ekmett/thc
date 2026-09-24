@@ -35,10 +35,10 @@ class BitPrimopsTest {
         val manifest = manifest()
         verifyHashes(manifest)
         val entries = manifest["entries"] as List<Map<String, Any?>>
-        assertEquals(21, entries.size)
+        assertEquals(24, entries.size)
         val rows = File(root, "build/bit-primops/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
-        assertEquals(11923, rows.values.sumOf { it.size })
+        assertEquals(14326, rows.values.sumOf { it.size })
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         val stages = manifest["stages"] as Map<String, List<String>>
         assertEquals(setOf("pre", "post"), stages.keys)
