@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Prepare only native fixtures needed by selected JUnit classes.
 
 The persistent stamps are local acceleration hints. Every reuse checks both the
@@ -9,10 +12,28 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import stat
+import sys
+
+import fast_inputs
 
 
 MANIFEST = Path(".github/scripts/fast-fixtures.json")
 STAMP_DIR = Path("build/fast/fixtures")
+FULL_STAMP = STAMP_DIR / "full.json"
+# The shebang and non-comment command body of reviewed prepare-tests.sh. A new
+# preparation command disables reuse until its output scope is reviewed.
+FULL_PREPARATION_PLAN = "e047fc33bdf635462331dfa5f70b2255ebe680019a30eb95090872e4688b0ff2"
+FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | {"build/generated"}
+FULL_REQUIRED = frozenset(fast_inputs.REQUIRED)
+# Compiler interfaces/objects and Gradle products are not consumed by JUnit;
+# full receipt reuse checks the final Core/native fixture data instead.
+INTERMEDIATE_SUFFIXES = frozenset({".o", ".hi", ".dyn_o", ".dyn_hi"})
+NON_FIXTURE_BUILD_ROOTS = frozenset({
+    "aggregate-ghc", "aggregate-post-ghc", "cbv-post-ghc", "classes", "compiler",
+    "fast", "ghc", "kotlin", "libs", "reports", "resources",
+    "snapshot", "source-ghc", "test-results", "tmp",
+})
 COMMON_SOURCES = (
     "compiler/THC/**/*.hs",
     "compiler/build.sh",
@@ -94,7 +115,7 @@ def _source_hashes(root, group):
 
 def cache_key(root, group_id, group, toolchain):
     """Return a source/toolchain identity without hashing the GHC executable."""
-    root = Path(root)
+    root = Path(root).resolve()
     identity = {"schema": 1, "group": group_id, "definition": group,
                 "sources": _source_hashes(root, group),
                 "toolchain": toolchain}
@@ -133,6 +154,107 @@ def _write_stamp(path, stamp):
     temporary.replace(path)
 
 
+def _preparation_plan(root):
+    lines = [line.rstrip() for index, line in enumerate(
+        (root / "scripts/prepare-tests.sh").read_text().splitlines())
+        if line.strip() and (index == 0 or not line.lstrip().startswith("#"))]
+    return hashlib.sha256(("\n".join(lines) + "\n").encode()).hexdigest()
+
+
+def _full_key(root):
+    if _preparation_plan(root) != FULL_PREPARATION_PLAN:
+        raise RuntimeError("Full preparation commands have not been reviewed for receipt reuse")
+    pins = fast_inputs.vendor_pins(root)
+    vendor_root = root / "vendor/ghc-9.14.1"
+    present = {}
+    if vendor_root.exists():
+        for path in vendor_root.rglob("*"):
+            if path.is_symlink() or not (path.is_file() or path.is_dir()):
+                raise RuntimeError("Unexpected vendored GHC source")
+            if path.is_file():
+                name = path.relative_to(root).as_posix()
+                if name not in pins:
+                    raise RuntimeError("Unpinned vendored GHC source")
+                present[name] = _digest(path)
+    for name, actual in present.items():
+        if actual != pins[name]:
+            raise RuntimeError("Vendored GHC source differs from its pinned hash")
+    extra = ("build.gradle.kts", ".github/scripts/fast-fixtures.json",
+             ".github/scripts/fast_fixtures.py")
+    value = {"schema": 1, "identity": fast_inputs.identity(root),
+             "declaration": {"plan": FULL_PREPARATION_PLAN,
+                             "roots": sorted(FULL_OUTPUT_ROOTS),
+                             "required": sorted(FULL_REQUIRED)},
+             "extraSources": {name: _digest(root / name) for name in extra},
+             "vendor": present}
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _full_output_hashes(root):
+    build = root / "build"
+    allowed = {Path(name).name for name in FULL_OUTPUT_ROOTS} | NON_FIXTURE_BUILD_ROOTS
+    top_files = {Path(name).name for name in FULL_REQUIRED if Path(name).parent == Path("build")}
+    for path in build.iterdir():
+        if path.is_symlink() or path.name not in (allowed if path.is_dir() else top_files):
+            raise RuntimeError(f"Unreviewed generated output: {path.relative_to(root)}")
+    files = set(FULL_REQUIRED)
+    for name in FULL_OUTPUT_ROOTS:
+        path = root / name
+        if not path.exists():
+            continue
+        if path.is_symlink() or not path.is_dir():
+            raise RuntimeError(f"Unexpected full fixture root: {name}")
+        for member in path.rglob("*"):
+            # GHC's output directories can contain links to installed package
+            # interfaces. They are not fixture inputs and are never followed.
+            if member.is_symlink() and member.suffix in INTERMEDIATE_SUFFIXES:
+                continue
+            if member.is_symlink() or not (member.is_file() or member.is_dir()):
+                raise RuntimeError(f"Unexpected full fixture output: {member}")
+            if member.is_file() and member.suffix not in INTERMEDIATE_SUFFIXES:
+                files.add(member.relative_to(root).as_posix())
+    if len(files) > fast_inputs.MAX_FILES:
+        raise RuntimeError("Too many full fixture outputs")
+    result, total = {}, 0
+    for name in sorted(files):
+        path = fast_inputs.file_path(root, name)
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing full fixture output: {name}")
+        details = path.stat()
+        if details.st_size > fast_inputs.MAX_FILE_BYTES:
+            raise RuntimeError(f"Oversized full fixture output: {name}")
+        total += details.st_size
+        if total > fast_inputs.MAX_TOTAL_BYTES:
+            raise RuntimeError("Full fixture outputs exceed the reviewed bound")
+        result[name] = {"sha256": _digest(path), "mode": stat.S_IMODE(details.st_mode)}
+    return result
+
+
+def _prepare_full(root, run):
+    stamp_path = root / FULL_STAMP
+    try:
+        key = _full_key(root)
+        stamp = json.loads(stamp_path.read_text())
+        if isinstance(stamp, dict) and stamp.get("schema") == 1 and stamp.get("key") == key \
+                and stamp.get("outputs") == _full_output_hashes(root):
+            return {"mode": "full", "rebuilt": [], "reused": ["full"]}
+    except (OSError, ValueError, RuntimeError):
+        pass
+    stamp_path.unlink(missing_ok=True)
+    run("fixtures-full", ["scripts/prepare-tests.sh"])
+    # Preparation may update a generated source. Bind the receipt to the final
+    # source identity and publish it only after every declared output is hashed.
+    try:
+        key = _full_key(root)
+        outputs = _full_output_hashes(root)
+        _write_stamp(stamp_path, {"schema": 1, "key": key, "outputs": outputs})
+    except (OSError, ValueError, RuntimeError) as error:
+        # Full preparation still ran. An unreviewed/missing output simply makes
+        # the next full selection prepare again instead of trusting this run.
+        print(f"Full fixture receipt unavailable: {error}", file=sys.stderr)
+    return {"mode": "full", "rebuilt": ["full"], "reused": []}
+
+
 def prepare(root, selection, run, toolchain):
     """Prepare selected JUnit fixtures; return {mode, rebuilt, reused}.
 
@@ -140,14 +262,13 @@ def prepare(root, selection, run, toolchain):
     ``stdout`` is an optional repository-relative output file. Its parent is
     created here before invoking the command.
     """
-    root = Path(root)
+    root = Path(root).resolve()
     manifest, owners = _manifest(root)
     classes = selection["junit"]["classes"]
     if not isinstance(classes, list) or not classes or not all(isinstance(name, str) for name in classes):
         raise ValueError("Invalid selected JUnit classes")
     if selection.get("mode") == "full" or any(name not in owners for name in classes):
-        run("fixtures-full", ["scripts/prepare-tests.sh"])
-        return {"mode": "full", "rebuilt": ["full"], "reused": []}
+        return _prepare_full(root, run)
     if selection.get("mode") != "narrow":
         raise ValueError("Invalid selected test mode")
 

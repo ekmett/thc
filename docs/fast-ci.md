@@ -23,9 +23,14 @@ For a narrow selection, `.github/scripts/fast-fixtures.json` names each required
 native/Core preparation group. Local stamps include the declared source bytes,
 toolchain identity and every output byte. Missing, changed or linked inputs or
 outputs cause preparation again. Unknown selected classes and full selections
-run `scripts/prepare-tests.sh`. The groups retain independent native oracles and
-pre/post Core audits. These are local accelerators, not cached test results or a
-transfer archive.
+use `scripts/prepare-tests.sh` on a local receipt miss. A hit verifies the pinned
+source/toolchain identity, vendored source pins, and the exact paths, bytes and
+modes of the reviewed Core/native fixture outputs before reusing them. GHC
+objects/interfaces, compiled JVM classes and task state are outside this
+receipt. A changed preparation plan or new output root declines reuse until its
+scope is reviewed. The groups retain independent native oracles and pre/post
+Core audits. These are local accelerators, not cached test results or a transfer
+archive.
 
 The selected Python tests run with normal Python and `-O`. Gradle runs the selected
 JUnit classes in ordinary and dense handoff modes, rerunning the `test` task while

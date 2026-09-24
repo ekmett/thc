@@ -1,10 +1,17 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Fixture selection and persistent-stamp tests; no compiler or JVM is run."""
 
+from contextlib import ExitStack, redirect_stderr
+import hashlib
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fast_fixtures
@@ -69,8 +76,9 @@ class FixturePreparationTest(unittest.TestCase):
         return {"mode": mode, "junit": {"classes": list(classes)}}
 
     def prepare(self, *classes, mode="narrow"):
-        return fast_fixtures.prepare(self.root, self.selection(*classes, mode=mode),
-                                     self.fake_run, self.toolchain)
+        with redirect_stderr(io.StringIO()):
+            return fast_fixtures.prepare(self.root, self.selection(*classes, mode=mode),
+                                         self.fake_run, self.toolchain)
 
     def test_deduplicates_group_and_reuses_verified_outputs(self):
         first = self.prepare("thc.AlphaTest", "thc.AlphaBackendTest")
@@ -148,6 +156,125 @@ class FixturePreparationTest(unittest.TestCase):
         (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
         self.assertEqual(self.prepare("thc.AlphaTest")["reused"], ["alpha"])
         self.assertEqual(self.calls, [])
+
+
+class FullFixtureReceiptTest(unittest.TestCase):
+    prepare = FixturePreparationTest.prepare
+    selection = staticmethod(FixturePreparationTest.selection)
+
+    def setUp(self):
+        FixturePreparationTest.setUp(self)
+        for name in ("build.gradle.kts", ".github/scripts/fast_fixtures.py",
+                     "scripts/prepare-tests.sh"):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("prepare reviewed fixtures\n")
+        self.fail_preparation = False
+        self.extra_output = False
+        self.prepared = 0
+        self.patches = ExitStack()
+        self.addCleanup(self.patches.close)
+        plan = fast_fixtures._preparation_plan(self.root)
+        self.patches.enter_context(mock.patch.object(fast_fixtures, "FULL_PREPARATION_PLAN", plan))
+        self.patches.enter_context(mock.patch.object(fast_fixtures, "FULL_OUTPUT_ROOTS",
+                                               frozenset({"build/alpha", "build/beta"})))
+        self.patches.enter_context(mock.patch.object(fast_fixtures, "FULL_REQUIRED",
+                                               frozenset({"build/alpha/oracle.tsv", "build/beta/result.tsv"})))
+        self.vendor_pins = self.patches.enter_context(mock.patch.object(
+            fast_fixtures.fast_inputs, "vendor_pins", return_value={}))
+        def identity(_root):
+            return {"source": hashlib.sha256((self.root / "fixtures/alpha.hs").read_bytes()).hexdigest(),
+                    "toolchain": self.toolchain.copy()}
+        self.patches.enter_context(mock.patch.object(fast_fixtures.fast_inputs, "identity",
+                                               side_effect=identity))
+
+    def fake_run(self, name, argv, stdout=None):
+        if argv != ["scripts/prepare-tests.sh"]:
+            return FixturePreparationTest.fake_run(self, name, argv, stdout)
+        self.calls.append((name, argv, stdout))
+        if self.fail_preparation:
+            raise RuntimeError("interrupted full preparation")
+        self.prepared += 1
+        for name in ("build/alpha/oracle.tsv", "build/beta/result.tsv"):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"prepared {self.prepared}\n")
+        if self.extra_output:
+            output = self.root / "build/new-family/proof.tsv"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text("new preparer output\n")
+
+    def test_full_miss_then_hit_for_full_and_unknown_selection(self):
+        self.assertEqual(self.prepare("thc.AlphaTest", mode="full"),
+                         {"mode": "full", "rebuilt": ["full"], "reused": []})
+        (self.root / "build/alpha/Main.o").write_text("compiler intermediate")
+        self.assertEqual(self.prepare("thc.UnknownTest"),
+                         {"mode": "full", "rebuilt": [], "reused": ["full"]})
+        self.assertEqual(self.prepared, 1)
+
+    def test_source_output_and_toolchain_drift_each_miss(self):
+        self.prepare("thc.UnknownTest")
+        (self.root / "fixtures/alpha.hs").write_text("changed fixture source")
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        (self.root / "build/beta/result.tsv").write_text("tampered output")
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        (self.root / "build/beta/result.tsv").chmod(0o600)
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        (self.root / "build/alpha/unrecorded.tsv").write_text("new output")
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        (self.root / "build/alpha/unrecorded.tsv").unlink()
+        self.toolchain["ghcVersion"] = "9.14.2"
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        (self.root / "build/alpha/oracle.tsv").unlink()
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        self.assertEqual(self.prepared, 7)
+
+    def test_interrupted_preparation_cannot_leave_a_hit(self):
+        self.prepare("thc.UnknownTest")
+        (self.root / "fixtures/alpha.hs").write_text("changed fixture source")
+        self.fail_preparation = True
+        with self.assertRaisesRegex(RuntimeError, "interrupted"):
+            self.prepare("thc.UnknownTest")
+        self.assertFalse((self.root / fast_fixtures.FULL_STAMP).exists())
+        self.fail_preparation = False
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        self.assertEqual(self.prepared, 2)
+
+    def test_unreviewed_preparer_command_or_new_output_never_gets_a_receipt(self):
+        self.prepare("thc.UnknownTest")
+        (self.root / "scripts/prepare-tests.sh").write_text("prepare reviewed fixtures\nmake-new-output\n")
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        self.assertFalse((self.root / fast_fixtures.FULL_STAMP).exists())
+        (self.root / "scripts/prepare-tests.sh").write_text("prepare reviewed fixtures\n")
+        self.extra_output = True
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        self.assertFalse((self.root / fast_fixtures.FULL_STAMP).exists())
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        self.assertEqual(self.prepared, 4)
+
+    def test_vendored_source_bytes_and_presence_are_bound_to_receipt(self):
+        name = "vendor/ghc-9.14.1/GHC/Internal/Base.hs"
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("pinned source")
+        self.vendor_pins.return_value = {name: hashlib.sha256(path.read_bytes()).hexdigest()}
+        self.prepare("thc.UnknownTest")
+        path.write_text("altered source")
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+        self.assertFalse((self.root / fast_fixtures.FULL_STAMP).exists())
+        path.write_text("pinned source")
+        self.prepare("thc.UnknownTest")
+        path.unlink()
+        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+
+    def test_compiler_interface_link_is_ignored_but_fixture_link_is_rejected(self):
+        self.prepare("thc.UnknownTest")
+        target = self.root / "fixtures/alpha.hs"
+        (self.root / "build/alpha/Imported.hi").symlink_to(target)
+        self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])
+        (self.root / "build/alpha/linked.tsv").symlink_to(target)
+        with self.assertRaisesRegex(RuntimeError, "Unexpected full fixture output"):
+            fast_fixtures._full_output_hashes(self.root)
 
 
 if __name__ == "__main__":
