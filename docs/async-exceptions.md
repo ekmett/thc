@@ -60,6 +60,10 @@ Those snapshots are display data, not executable continuations.
 and THC agree on catching a thrown exception, resuming the shared thunk, uncaught
 child termination and self-directed delivery. The JVM checks use the normal
 public parser before and after Tidy, interpreted and explicitly compiled.
+`LazyForkAudit.hs` checks that a forked action's lazy head is first evaluated by
+the child, then resumed by its parent after interruption. `UncaughtSelfAudit.hs`
+checks public execution and `runIO` failure boundaries without exposing internal
+continuation markers.
 
 `LiveAsyncAudit.hs` exposes a gated shared thunk. Tests deliver into its running
 compiled loop, its blocked MVar, a second evaluator waiting for the owner, and
@@ -72,6 +76,7 @@ The focused fixtures are prepared with:
 ```sh
 cabal run thc-fixtures --offline -- live-async
 cabal run thc-fixtures --offline -- thread-async
+cabal run thc-fixtures --offline -- uncaught-self
 ```
 
 The AST backend, arbitrary JVM/native foreign calls and blocking file operations
