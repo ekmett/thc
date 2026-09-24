@@ -57,20 +57,112 @@ class ResizeByteArrayTest {
     }
     @Test fun nativeResizePrefixAndRepeatedWritesWithInlining()=native(true)
     @Test fun nativeResizePrefixAndRepeatedWritesAcrossResidualCalls()=native(false)
-    private data class Row(val raw: Long,val code: Long,val expected: Long)
+    private data class Row(val name: String,val raw: Long,val code: Long,val expected: Long)
+    private fun inputs(): List<Pair<Long,Long>> {
+        val pairs=(0 until 17*17).map { it.toLong()*0x123456789abcdefL to it.toLong() }.toMutableSet()
+        for(seed in 0L..255L)for((old,size) in listOf(0 to 16,16 to 0,16 to 8,8 to 16,8 to 8))
+            pairs.add(seed to (old+17*size).toLong())
+        for(seed in listOf(Long.MIN_VALUE,-257L,-1L,0L,255L,256L,Long.MAX_VALUE))
+            for(code in listOf(Long.MIN_VALUE,-1L,0L,Long.MAX_VALUE))pairs.add(seed to code)
+        return pairs.sortedWith(compareBy({ it.first },{ it.second }))
+    }
+    private fun sizes(code: Long): Pair<Int,Int> {
+        val key=(code and 1023).toInt()
+        return key%17 to key/17%17
+    }
+    // Defined-domain list semantics: retain the prefix and initialize every grown
+    // byte. Do not model retired aliases or promise zero-filled native growth.
+    private fun byteModel(name: String,raw: Long,code: Long): List<Int> {
+        require(name in names) { "Unknown resize entry: $name" }
+        val (old,size)=sizes(code)
+        fun byte(seed: Long,index: Int)=((seed+17L*index) and 255).toInt()
+        fun resize(source: List<Int>,length: Int,seed: Long)=List(length) { index->
+            if(index<source.size)source[index] else byte(seed,index)
+        }
+        val result=resize(List(old) { byte(raw,it) },size,raw+91)
+        if(name=="resizedBytes")return result
+        val twice=resize(result,(size+7)%17,raw+133).toMutableList()
+        if(twice.isNotEmpty())twice[twice.lastIndex]=((raw+211) and 255).toInt()
+        return twice
+    }
+    private fun model(name: String,raw: Long,code: Long): Long {
+        val bytes=byteModel(name,raw,code)
+        return bytes.fold(bytes.size.toLong()) { answer,byte->answer*257+byte }
+    }
+    private fun expectedRows()=names.flatMap { name->inputs().map { (raw,code)->Row(name,raw,code,model(name,raw,code)) } }
+    private fun verifyRows(text: String): List<Row> {
+        val lines=text.lineSequence().toList().let { if(it.lastOrNull()=="")it.dropLast(1) else it }
+        val rows=lines.map { line->
+            val fields=line.split('\t')
+            require(fields.size==4) { "Resize oracle requires name/raw/code/result" }
+            Row(fields[0],fields[1].toLong(),fields[2].toLong(),fields[3].toLong())
+        }
+        require(rows==expectedRows()) { "Resize native/model mismatch, missing, duplicated or reordered row" }
+        return rows
+    }
+    @Test fun independentModelCoversEveryLengthBytePatternAndExtreme() {
+        val inputs=inputs();val inventory=inputs.toSet()
+        assertEquals(1596,inputs.size);assertEquals(inputs.size,inventory.size)
+        assertEquals(inputs.sortedWith(compareBy({ it.first },{ it.second })),inputs)
+        assertEquals((0..16).flatMap { old->(0..16).map { old to it } }.toSet(),inputs.map { sizes(it.second) }.toSet())
+        for((old,size) in listOf(0 to 16,16 to 0,16 to 8,8 to 16,8 to 8))
+            for(seed in 0L..255L)assertTrue((seed to (old+17*size).toLong()) in inventory)
+        for(seed in listOf(Long.MIN_VALUE,-257L,-1L,0L,255L,256L,Long.MAX_VALUE))
+            for(code in listOf(Long.MIN_VALUE,-1L,0L,Long.MAX_VALUE))assertTrue((seed to code) in inventory)
+        for(name in names)for((raw,code) in inputs) {
+            val (old,size)=sizes(code);val bytes=byteModel(name,raw,code)
+            val final=if(name=="resizedBytes")size else (size+7)%17
+            assertEquals(final,bytes.size)
+            for(index in bytes.indices) {
+                val expected=when {
+                    name=="resizedTwiceWrites" && index==final-1 -> raw+211
+                    index>=size -> raw+133+17*index
+                    index>=old -> raw+91+17*index
+                    else -> raw+17*index
+                }
+                assertEquals((expected and 255).toInt(),bytes[index],"$name/$raw/$code/$index")
+            }
+        }
+        assertEquals(0L,model("resizedBytes",Long.MIN_VALUE,0))
+        assertEquals(468L,model("resizedTwiceWrites",0,11*17))
+        assertThrows(IllegalArgumentException::class.java) { byteModel("unknown",0,0) }
+    }
+    @Test fun independentOracleRejectsMissingDuplicateReorderedMalformedAndWrongRows() {
+        val expected=expectedRows()
+        fun text(rows: List<Row>)=rows.joinToString("\n",postfix="\n") { "${it.name}\t${it.raw}\t${it.code}\t${it.expected}" }
+        val valid=text(expected)
+        assertEquals(3192,expected.size);assertEquals(expected,verifyRows(valid))
+        val first=expected.first()
+        val bad=listOf("",text(expected.drop(1)),text(expected+first),text(expected.asReversed()),
+            text(expected.toMutableList().apply { this[0]=this[1] }),
+            text(expected.toMutableList().apply { this[0]=first.copy(expected=first.expected+1) }),
+            text(expected.toMutableList().apply { this[0]=first.copy(raw=first.raw+1) }),
+            text(expected.toMutableList().apply { this[0]=first.copy(code=first.code+1) }),
+            text(expected.toMutableList().apply { this[0]=first.copy(name="unknown") }),
+            valid.replaceFirst("\t"," "),valid.replaceFirst("\t","\textra\t"),
+            "resizedBytes\t0\t0\tnot-an-integer\n", "resizedBytes\t9223372036854775808\t0\t0\n",valid+"\n")
+        for((index,corrupt) in bad.withIndex())assertThrows(IllegalArgumentException::class.java,{verifyRows(corrupt)},"mutation $index")
+    }
     private fun native(inlining: Boolean) {
         val manifest=manifest()
         for(kind in listOf("inputHashes","artifactHashes"))for((path,expected) in manifest[kind] as Map<String,String>) {
             val hash=MessageDigest.getInstance("SHA-256").digest(File(root,path).readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected,hash,"Stale resize input $path")
         }
-        val rows=File(root,"build/resize-bytearrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        assertEquals(names,manifest["entries"])
+        assertEquals(inputs(),(manifest["inputs"] as List<List<Number>>).map { it[0].toLong() to it[1].toLong() })
+        val rows=verifyRows(File(root,"build/resize-bytearrays/oracle.tsv").readText()).groupBy { it.name }
         assertEquals(names.toSet(),rows.keys)
+        assertEquals(3192,(manifest["nativeRows"] as Number).toInt())
         assertEquals((manifest["nativeRows"] as Number).toInt(),rows.values.sumOf { it.size })
-        for((stage,paths) in manifest["stages"] as Map<String,List<String>>)for(name in names) {
-            val cases=rows.getValue(name).map { Row(it[1].toLong(),it[2].toLong(),it[3].toLong()) }
+        val stages=manifest["stages"] as Map<String,List<String>>
+        assertEquals(setOf("pre","post"),stages.keys)
+        for((stage,paths) in stages)for(name in names) {
+            val cases=rows.getValue(name)
             val audit=Json.parse(File(root,"build/resize-bytearrays/$stage-$name.audit.json").readText()) as Map<*,*>
             assertEquals(true,audit["accepted"])
+            assertTrue((audit["reachableBindings"] as List<Map<String,Any?>>).any { (it["id"] as String).endsWith(".resizeWorker") })
+            assertTrue((audit["primitives"] as List<Map<String,Any?>>).any { it["name"]=="resizeMutableByteArray#" })
             for(backend in listOf("ast","bytecode"))context(inlining).use { context->
                 context.initialize("thc");context.enter()
                 try {

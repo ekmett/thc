@@ -329,7 +329,23 @@
     },
     "compiler/test-fixtures/MutableByteArraySizeAudit.hs": {
       "junit": ["thc.runtime.MutableByteArraySizeTest"],
-      "python": ["scripts/test-mutable-bytearray-size.py"]
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "compiler/test-fixtures/MutableByteArraySizeNative.hs": {
+      "junit": ["thc.runtime.MutableByteArraySizeTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "compiler/test-fixtures/ResizeByteArrayAudit.hs": {
+      "junit": ["thc.runtime.ResizeByteArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "compiler/test-fixtures/ResizeByteArrayNative.hs": {
+      "junit": ["thc.runtime.ResizeByteArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "compiler/test-fixtures/ByteArrayFixtureInputs.hs": {
+      "junit": ["thc.runtime.MutableByteArraySizeTest", "thc.runtime.ResizeByteArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
     },
     "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs": {
       "junit": [
@@ -450,7 +466,11 @@
     },
     "scripts/prepare-mutable-bytearray-size.py": {
       "junit": ["thc.runtime.MutableByteArraySizeTest"],
-      "python": ["scripts/test-mutable-bytearray-size.py"]
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "scripts/prepare-resize-bytearrays.py": {
+      "junit": ["thc.runtime.ResizeByteArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
     },
     "scripts/prepare-simd-capability-smoke.py": {
       "junit": ["thc.runtime.SimdCapabilitySmokeTest"],

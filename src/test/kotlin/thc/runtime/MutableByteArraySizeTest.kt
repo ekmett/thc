@@ -57,19 +57,116 @@ class MutableByteArraySizeTest {
     @Test fun nativeLiveMutableSizesWithInlining()=native(true)
     @Test fun nativeLiveMutableSizesAcrossResidualCalls()=native(false)
     private data class Row(val raw: Long,val code: Long,val expected: Long)
+    // Independent of both the native driver and the guest byte-array implementation.
+    // Long multiplication deliberately wraps, matching the signed 64-bit input inventory.
+    private val inputs=buildSet {
+        for(code in 0L until 17L*17L)add(code*0x123456789abcdefL to code)
+        for(raw in 0L..255L)add(raw to 280L)
+        for(raw in listOf(Long.MIN_VALUE,-257L,-1L,0L,255L,256L,Long.MAX_VALUE))
+            for(code in listOf(Long.MIN_VALUE,-1L,0L,16L,17L,288L,1023L,4095L,4096L,Long.MAX_VALUE))add(raw to code)
+    }.sortedWith(compareBy<Pair<Long,Long>> { it.first }.thenBy { it.second })
+    private fun mathematical(name: String,raw: Long,code: Long): Long {
+        val key=code and 1023L;val old=key%17L;val middle=key/17L%17L
+        return when(name) {
+            "freshSize","pureSize" -> code and 4095L
+            "resizedSizes" -> old*65536L+middle*256L+(middle+7L)%17L
+            "pureAfterResize" -> middle
+            "orderedSize" -> old+1L+(middle+1L)*257L+((raw+old+1L) and 255L)*65537L
+            else -> error("Unknown mutable-size entry $name")
+        }
+    }
+    private fun checkedRows(text: String): Map<String,List<Row>> {
+        val split=text.lineSequence().toList()
+        val lines=if(split.lastOrNull()=="")split.dropLast(1) else split
+        require(lines.size==names.size*inputs.size) { "Mutable-size oracle row count mismatch" }
+        val rows=names.associateWith { mutableListOf<Row>() }
+        for((index,line) in lines.withIndex()) {
+            val fields=line.split('\t');require(fields.size==4) { "Mutable-size oracle columns at row $index" }
+            val name=names[index/inputs.size];val (raw,code)=inputs[index%inputs.size]
+            require(fields[0]==name && fields[1].toLongOrNull()==raw && fields[2].toLongOrNull()==code) {
+                "Mutable-size oracle inventory/order mismatch at row $index"
+            }
+            val actual=fields[3].toLongOrNull()
+            require(actual==mathematical(name,raw,code)) { "Mutable-size native/model mismatch at row $index" }
+            rows.getValue(name).add(Row(raw,code,actual))
+        }
+        return rows
+    }
+    @Test fun independentInventoryCoversSizesResizeBoundariesAndBytePatterns() {
+        assertEquals(614,inputs.size);assertEquals(3070,names.size*inputs.size)
+        assertEquals(inputs.size,inputs.toSet().size)
+        assertEquals(inputs,inputs.sortedWith(compareBy<Pair<Long,Long>> { it.first }.thenBy { it.second }))
+        assertTrue(inputs.containsAll((0L..288L).map { it*0x123456789abcdefL to it }))
+        assertTrue(inputs.containsAll((0L..255L).map { it to 280L }))
+        for(raw in listOf(Long.MIN_VALUE,-257L,-1L,0L,255L,256L,Long.MAX_VALUE))
+            for(code in listOf(Long.MIN_VALUE,-1L,0L,16L,17L,288L,1023L,4095L,4096L,Long.MAX_VALUE))
+                assertTrue(raw to code in inputs,"$raw/$code")
+        for((raw,code) in inputs) {
+            val old=(code and 1023L)%17L;val middle=(code and 1023L)/17L%17L
+            for(name in listOf("freshSize","pureSize"))assertEquals(Math.floorMod(code,4096L),mathematical(name,raw,code))
+            assertEquals(middle,mathematical("pureAfterResize",raw,code))
+            val encoded=mathematical("resizedSizes",raw,code)
+            assertEquals(listOf(old,middle,(middle+7L)%17L),listOf(encoded/65536L,encoded/256L%256L,encoded%256L))
+            assertEquals(old+1L+(middle+1L)*257L+Math.floorMod(raw+old+1L,256L)*65537L,mathematical("orderedSize",raw,code))
+        }
+        assertEquals((0L..255L).toSet(),(0L..255L).map { (mathematical("orderedSize",it,280L)-4378L)/65537L }.toSet())
+    }
+    @Test fun independentModelHasExplicitBoundaryAnchors() {
+        for(name in listOf("freshSize","pureSize"))
+            for((code,expected) in listOf(Long.MIN_VALUE to 0L,-1L to 4095L,0L to 0L,16L to 16L,
+                17L to 17L,288L to 288L,1023L to 1023L,4095L to 4095L,4096L to 0L,Long.MAX_VALUE to 4095L))
+                assertEquals(expected,mathematical(name,Long.MAX_VALUE,code),"$name/$code")
+        for((code,expected) in listOf(Long.MIN_VALUE to 7L,0L to 7L,16L to 1048583L,17L to 264L,
+            288L to 1052678L,1023L to 198928L,-1L to 198928L,Long.MAX_VALUE to 198928L))
+            assertEquals(expected,mathematical("resizedSizes",0L,code),"resizedSizes/$code")
+        for((code,expected) in listOf(0L to 0L,288L to 16L,1023L to 9L))
+            assertEquals(expected,mathematical("pureAfterResize",0L,code))
+        for((raw,expected) in listOf(0L to 65795L,-1L to 258L,255L to 258L,256L to 65795L,
+            Long.MAX_VALUE to 258L,Long.MIN_VALUE to 65795L))
+            assertEquals(expected,mathematical("orderedSize",raw,0L),"orderedSize/$raw")
+    }
+    @Test fun exactOracleRejectsMissingDuplicatedReorderedMalformedAndWrongRows() {
+        val lines=names.flatMap { name->inputs.map { (raw,code)->"$name\t$raw\t$code\t${mathematical(name,raw,code)}" } }
+        fun verify(lines: List<String>)=checkedRows(lines.joinToString("\n",postfix="\n"))
+        val expected=names.associateWith { name->inputs.map { (raw,code)->Row(raw,code,mathematical(name,raw,code)) } }
+        assertEquals(expected,verify(lines));assertEquals(expected,checkedRows(lines.joinToString("\n")))
+        fun reject(label: String,broken: List<String>) {
+            assertThrows(IllegalArgumentException::class.java,{verify(broken)},label)
+        }
+        reject("missing",lines.drop(1));reject("extra duplicate",lines+lines.first())
+        reject("duplicate replaces input",lines.toMutableList().apply { this[1]=first() })
+        reject("reversed",lines.reversed())
+        reject("swapped inputs",lines.toMutableList().apply { Collections.swap(this,0,1) })
+        reject("swapped entries",lines.drop(inputs.size)+lines.take(inputs.size))
+        for((column,value) in listOf(0 to "unknownSize",1 to "0",2 to "1",3 to "-1",
+            1 to "not-an-int",2 to "9223372036854775808",3 to "",3 to "1.0",3 to "9223372036854775808")) {
+            val fields=lines.first().split('\t').toMutableList();fields[column]=value
+            reject("field $column/$value",listOf(fields.joinToString("\t"))+lines.drop(1))
+        }
+        reject("missing column",listOf(lines.first().substringBeforeLast('\t'))+lines.drop(1))
+        reject("extra column",listOf(lines.first()+"\t0")+lines.drop(1))
+        reject("blank row",listOf("")+lines.drop(1));reject("extra blank row",lines+"")
+        reject("empty",emptyList())
+    }
     private fun native(inlining: Boolean) {
         val manifest=manifest()
+        assertEquals(names,manifest["entries"])
+        assertEquals(inputs.map { listOf(it.first,it.second) },manifest["inputs"])
+        assertEquals((names.size*inputs.size).toLong(),manifest["nativeRows"])
+        assertEquals(setOf("pre","post"),(manifest["stages"] as Map<*,*>).keys)
+        assertEquals(setOf("pre","post").flatMap { stage->names.map { "$stage/$it" } }.toSet(),(manifest["audits"] as Map<*,*>).keys)
         for(kind in listOf("inputHashes","artifactHashes"))for((path,expected) in manifest[kind] as Map<String,String>) {
             val hash=MessageDigest.getInstance("SHA-256").digest(File(root,path).readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected,hash,"Stale mutable-size input $path")
         }
-        val rows=File(root,"build/mutable-bytearray-size/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(names.toSet(),rows.keys)
-        assertEquals((manifest["nativeRows"] as Number).toInt(),rows.values.sumOf { it.size })
+        val rows=checkedRows(File(root,"build/mutable-bytearray-size/oracle.tsv").readText())
         for((stage,paths) in manifest["stages"] as Map<String,List<String>>)for(name in names) {
-            val cases=rows.getValue(name).map { Row(it[1].toLong(),it[2].toLong(),it[3].toLong()) }
+            val cases=rows.getValue(name)
             val audit=Json.parse(File(root,"build/mutable-bytearray-size/$stage-$name.audit.json").readText()) as Map<*,*>
             assertEquals(true,audit["accepted"])
+            val pure=name in listOf("pureSize","pureAfterResize")
+            assertTrue((audit["primitives"] as List<Map<String,Any?>>).any { it["name"]==if(pure)"sizeofMutableByteArray#" else "getSizeofMutableByteArray#" })
+            assertTrue((audit["reachableBindings"] as List<Map<String,Any?>>).any { (it["id"] as String).endsWith(if(pure)".pureSizeWorker" else ".getSizeWorker") })
             for(backend in listOf("ast","bytecode"))context(inlining).use { context->
                 context.initialize("thc");context.enter()
                 try {

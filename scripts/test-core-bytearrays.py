@@ -78,7 +78,8 @@ class ByteArrayContracts(unittest.TestCase):
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
 
     def test_state_is_not_an_empty_tuple_and_reference_is_not_lifted(self):
-        for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'readIntArray#', 'readDoubleArray#',
+        for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'resizeMutableByteArray#',
+                     'getSizeofMutableByteArray#', 'readIntArray#', 'readDoubleArray#',
                      'readInt32Array#', 'readWord32Array#', 'readFloatArray#', 'readWordArray#',
                      'readInt16Array#', 'readWord16Array#', 'readInt8Array#', 'readWord8Array#'):
             for mutation in ('empty-tuple', 'missing-state', 'lifted-reference'):
@@ -88,7 +89,7 @@ class ByteArrayContracts(unittest.TestCase):
                     proof['components'][0].update(aggregate='unboxed-tuple', components=[], kind='unknown')
                 elif mutation == 'missing-state':
                     proof['components'].pop(0)
-                elif name.startswith('read'):
+                elif name.startswith('read') or name == 'getSizeofMutableByteArray#':
                     wrong = 'IntRep' if name == 'readWordArray#' else 'WordRep'
                     proof['components'][1]['primReps'] = [wrong]
                     proof['primReps'] = [wrong]
@@ -97,6 +98,44 @@ class ByteArrayContracts(unittest.TestCase):
                     proof['primReps'] = ['BoxedRep (Just Lifted)']
                 report = check(module)
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
+
+    def test_mutable_size_and_resize_require_exact_references_and_scalar_state(self):
+        # Positive contracts, reference flags, saturation and missing result proofs
+        # are already checked for every primitive by the first two tests above.
+        for name in ('sizeofMutableByteArray#', 'getSizeofMutableByteArray#', 'resizeMutableByteArray#'):
+            for replacement in ('BoxedRep (Just Lifted)', 'BoxedRep Nothing'):
+                module, app = fixture(name)
+                app[2][0][2]['rep']['primReps'] = [replacement]
+                self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
+                              (name, 'reference', replacement))
+            if name == 'sizeofMutableByteArray#':
+                continue
+            for mutation in ('empty-tuple-state', 'lifted-state'):
+                module, app = fixture(name)
+                if mutation == 'empty-tuple-state':
+                    app[2][-1][2]['rep'].update(kind='unknown', aggregate='unboxed-tuple', components=[])
+                else:
+                    app[3][-1] = True
+                self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
+                              (name, mutation))
+        for replacement in ('WordRep', 'Int64Rep', 'Word64Rep'):
+            module, app = fixture('resizeMutableByteArray#')
+            app[2][1][2]['rep']['primReps'] = [replacement]
+            self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']},
+                          ('resizeMutableByteArray#', 'length', replacement))
+
+    def test_pure_mutable_size_is_machine_int_not_a_tuple_or_explicit_int64(self):
+        # The generic wrong-result mutation above also rejects WordRep here.
+        for proof in (
+                dict(kind='unknown', aggregate='unboxed-tuple', primReps=[], components=[], evaluated=True),
+                dict(kind='long', primReps=['Int64Rep'], evaluated=True),
+                evaluated(CAP['managedByteArrayPrimitives']['getSizeofMutableByteArray#']['result'])):
+            module, app = fixture('sizeofMutableByteArray#')
+            app[6]['rep'] = proof
+            self.assertIn('primitive-representation', {i['code'] for i in check(module)['issues']}, proof)
+
+    def test_shrink_mutable_bytearray_stays_unsupported(self):
+        self.assertNotIn('shrinkMutableByteArray#', CAP['primitives'])
 
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
         for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',
