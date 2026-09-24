@@ -14,6 +14,13 @@ internal class ArgumentLayout private constructor(
     val logicalArity: Int get() = proofs.size
     val physicalArity: Int get() = offsets.last()
     val requiresTyped: Boolean = proofs.any { it.isTuple && !it.isEmptyTuple }
+    // Build recursive metadata once during lowering. PAP/overapplication indices
+    // can be dynamic even at an otherwise scalar/empty call site; rebuilding a
+    // recursive signature there makes partial evaluation expand unknown shapes.
+    @field:CompilationFinal(dimensions = 1)
+    private val tupleKeys: Array<String?> = Array(proofs.size) { index ->
+        proofs[index].takeIf { it.isTuple }?.let(TupleShape::compatibilityKey)
+    }
     fun isEmpty(index: Int): Boolean = proofs[index].isEmptyTuple
     fun isTuple(index: Int): Boolean = proofs[index].isTuple
     fun proof(index: Int): CoreRepresentation = proofs[index]
@@ -47,12 +54,9 @@ internal class ArgumentLayout private constructor(
         fun validate(formal: ArgumentLayout?, prefixCount: Int, supplied: ArgumentLayout?, offset: Int, count: Int) {
             if (formal == null && supplied == null) return
             for (i in 0 until count) {
-                val expected = formal?.proof(prefixCount + i)
-                val actual = supplied?.proof(offset + i)
-                if (expected?.isTuple == true || actual?.isTuple == true) {
-                    if (expected?.isTuple != true || actual?.isTuple != true || !TupleShape.compatible(expected, actual))
-                        fault("Conflicting logical tuple argument representation")
-                }
+                val expected = formal?.tupleKeys?.get(prefixCount + i)
+                val actual = supplied?.tupleKeys?.get(offset + i)
+                if (expected !== actual) fault("Conflicting logical tuple argument representation")
             }
         }
     }
