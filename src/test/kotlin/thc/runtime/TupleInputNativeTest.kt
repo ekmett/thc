@@ -84,41 +84,45 @@ class TupleInputNativeTest {
         assertEquals(if (arity == 1) 14 else 1, rows.size)
         for (stage in listOf("pre", "post")) {
             val module = Json.parse(File(folder, "$stage-core/TupleInputAudit.json").readText()) as Map<String, Any?>
-            for ((name, cases) in rows) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
+            for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val linked = CoreModules.reachable(module, name) + ("instrument" to true)
-                    val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
-                    val host = program.hostEntryTarget(arity)
-                    val original = program.entryTarget(name)
-                    val closure = program.entryValue(name)
-                    val label = "$stage/$backend/$name/inlining=$inlining"
-                    fun invoke(row: List<String>): Any? {
-                        val inputs = row.subList(1, row.lastIndex).map { it.toLong() as Any? }.toTypedArray()
-                        assertEquals(arity, inputs.size)
-                        return Calls.target(host, arrayOf(closure, inputs))
+                    // A context keeps one backend/inlining profile, while each
+                    // entry still receives a distinct Program and compiled roots.
+                    for ((name, cases) in rows) {
+                        val linked = CoreModules.reachable(module, name) + ("instrument" to true)
+                        val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+                        val host = program.hostEntryTarget(arity)
+                        val original = program.entryTarget(name)
+                        val closure = program.entryValue(name)
+                        val label = "$stage/$backend/$name/inlining=$inlining"
+                        fun invoke(row: List<String>): Any? {
+                            val inputs = row.subList(1, row.lastIndex).map { it.toLong() as Any? }.toTypedArray()
+                            assertEquals(arity, inputs.size)
+                            return Calls.target(host, arrayOf(closure, inputs))
+                        }
+                        cases.forEach { assertEquals(it.last().toLong(), invoke(it), "$label/interpreted/$it"); released(language, label) }
+                        val active = targets(host)
+                        assertTrue(active.size > 1, "$label missing observed guest call target")
+                        (listOf(original) + active).distinct().forEach(::compile)
+                        // Repair the existing host entry prerequisite without invoking
+                        // guest code, exactly as the production compile operation does.
+                        val runtime = com.oracle.truffle.api.Truffle.getRuntime()
+                        runtime.javaClass.getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                            .invoke(runtime, host)
+                        for (row in cases.asReversed()) {
+                            val before = program.diagnostics()["compiledEntries"] as Long
+                            assertEquals(row.last().toLong(), invoke(row), "$label/compiled/$row")
+                            assertEquals(entries.getValue(name), (program.diagnostics()["compiledEntries"] as Long) - before,
+                                "$label/$row compiled guest entries: ${program.diagnostics()}")
+                            valid(original, "$label original"); valid(host, "$label host")
+                            assertEquals(active, targets(host), "$label active target identities")
+                            active.forEach { valid(it, "$label active") }; released(language, label)
+                        }
+                        assertEquals(0L, program.diagnostics()["unsupportedTraps"])
+                        assertEquals(0L, program.diagnostics()["blackholes"])
                     }
-                    cases.forEach { assertEquals(it.last().toLong(), invoke(it), "$label/interpreted/$it"); released(language, label) }
-                    val active = targets(host)
-                    assertTrue(active.size > 1, "$label missing observed guest call target")
-                    (listOf(original) + active).distinct().forEach(::compile)
-                    // Repair the existing host entry prerequisite without invoking
-                    // guest code, exactly as the production compile operation does.
-                    val runtime = com.oracle.truffle.api.Truffle.getRuntime()
-                    runtime.javaClass.getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
-                        .invoke(runtime, host)
-                    for (row in cases.asReversed()) {
-                        val before = program.diagnostics()["compiledEntries"] as Long
-                        assertEquals(row.last().toLong(), invoke(row), "$label/compiled/$row")
-                        assertEquals(entries.getValue(name), (program.diagnostics()["compiledEntries"] as Long) - before,
-                            "$label/$row compiled guest entries: ${program.diagnostics()}")
-                        valid(original, "$label original"); valid(host, "$label host")
-                        assertEquals(active, targets(host), "$label active target identities")
-                        active.forEach { valid(it, "$label active") }; released(language, label)
-                    }
-                    assertEquals(0L, program.diagnostics()["unsupportedTraps"])
-                    assertEquals(0L, program.diagnostics()["blackholes"])
                 } finally { context.leave() }
             }
         }
