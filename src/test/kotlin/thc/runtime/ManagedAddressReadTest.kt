@@ -189,7 +189,7 @@ class ManagedAddressReadTest {
                 compile(target)
                 for (v in 255 downTo 0) {
                     bytes.fill(v.toByte())
-                    assertEquals(expected(operation.addressRead!!, bytes, 0), call(derived, -8L / operation.addressRead.width))
+                    assertEquals(expected(operation.addressRead!!, bytes, 0), call(derived, -8L / operation.addressRead!!.width))
                     valid(target); released(language)
                 }
                 for (bad in listOf<Any?>(null, 0L, Any(), bytes)) assertThrows(RuntimeFault::class.java) { call(bad) }
