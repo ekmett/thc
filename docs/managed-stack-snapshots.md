@@ -116,7 +116,11 @@ IPE strings retain actual copied binding and source provenance. Missing fields
 stay empty; debug names do not establish module identity. The table name says
 `THC managed diagnostic frame`, and the type description is empty. Strings and
 info images remain immutable and usable after context disposal without retaining
-guest frames or the context. Disposal clears the context's registrations.
+guest frames or the context. The snapshot cache and allocation/offset index use
+weak keys: discarded snapshots and unreferenced frame registrations are reclaimed
+during a long-lived context. Any surviving address alias or copied output pointer
+keeps its registration usable. Cached provenance excludes the info-table key to
+avoid a weak-key/value retention cycle. Disposal clears all registrations.
 
 `CoreStackInfoForeignTest`, `ManagedStackInfoImageTest`, and
 `ManagedStackRuntimeTest` cover the raw contracts, target bytes and ownership/
