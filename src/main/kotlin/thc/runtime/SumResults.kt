@@ -3,6 +3,7 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
+import java.util.concurrent.Callable
 
 /** Binary sums retain their logical alternatives and exact GHC storage projections.
  * This first slice deliberately needs no integer-width conversion. */
@@ -74,18 +75,19 @@ internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
     @Child private var payload: Expr) : Expr() {
     private val proof = shape.proof.alternatives!![tag - 1]
     @field:CompilationFinal(dimensions = 1) private val projection = shape.proof.alternativeSlots!![tag - 1].toIntArray()
-    @field:CompilationFinal(dimensions = 1) private var mapped: IntArray? = null
-    @field:CompilationFinal(dimensions = 1) private var destination: IntArray? = null
-    @field:CompilationFinal private var destinationOffset = -1
+    private class Mapping(val destination: IntArray, val offset: Int, val fields: IntArray)
+    @field:CompilationFinal @Volatile private var mapping: Mapping? = null
     init { representation = shape.proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Sum value requires a typed destination")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        if (mapped == null) {
+        val selected = mapping ?: run {
             com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate()
-            mapped = IntArray(projection.size) { slots[offset + projection[it]] }
-            destination = slots; destinationOffset = offset
+            atomic(Callable {
+                mapping ?: Mapping(slots, offset, IntArray(projection.size) { slots[offset + projection[it]] })
+                    .also { mapping = it }
+            })
         }
-        check(destination === slots && destinationOffset == offset)
+        check(selected.destination === slots && selected.offset == offset)
         // Clear every inactive slot before reuse, including references. No result
         // loan exists while the selected payload evaluates or throws.
         for (index in shape.leaves.indices) {
@@ -95,7 +97,7 @@ internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
             else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, target, 0.0)
             else FrameAccess.write(frame, target, null)
         }
-        val fields = mapped!!
+        val fields = selected.fields
         when {
             proof.isTuple -> payload.executeTuple(frame, fields, 0)
             proof.kind == CoreKind.VOID -> requireVoidCarrier(payload.execute(frame))

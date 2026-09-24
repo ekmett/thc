@@ -20,6 +20,7 @@ import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RepeatingNode
 import com.oracle.truffle.api.profiles.BranchProfile
 import com.oracle.truffle.api.profiles.InlinedConditionProfile
+import java.util.concurrent.Callable
 
 /* Adapted from Cadenza's dispatch.kt, tail_calls.kt and data/Closure.kt.
  * Keep the actual DSL specialization structure, closure/PAP convention and
@@ -150,13 +151,16 @@ internal abstract class Dispatch(
     @JvmField @CompilerDirectives.CompilationFinal(dimensions = 1)
     var evaluatedArguments: BooleanArray = booleanArrayOf()
     @JvmField @CompilerDirectives.CompilationFinal var argumentLayout: ArgumentLayout? = null
-    @Child private var typed: InputDispatch? = null
+    @Child @Volatile private var typed: InputDispatch? = null
     private fun typed(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any? {
-        if (typed == null) {
+        val child = typed ?: run {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            typed = insert(InputDispatch(ScalarArrayInputSource(argumentLayout), argsSize, tailCall, metrics))
+            atomic(Callable {
+                typed ?: insert(InputDispatch(ScalarArrayInputSource(argumentLayout), argsSize, tailCall, metrics))
+                    .also { typed = it }
+            })
         }
-        return typed!!.execute(frame, function, arguments)
+        return child.execute(frame, function, arguments)
     }
     abstract fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>): Any?
 

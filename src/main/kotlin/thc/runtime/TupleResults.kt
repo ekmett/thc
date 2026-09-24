@@ -8,6 +8,7 @@ import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.IndirectCallNode
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import com.oracle.truffle.api.nodes.Node
+import java.util.concurrent.Callable
 import thc.Language
 
 /** Erasure follows evaluation; malformed legacy values cannot masquerade as State#. */
@@ -152,18 +153,21 @@ internal class AstTupleDestination(shape: TupleShape,
  * result before joining control flow, keeping virtual carriers out of PIC phis. */
 internal class TupleDispatch @JvmOverloads constructor(private val destination: TupleDestination, private val metrics: Metrics,
     private val argsSize: Int, private val tail: Boolean, private val inputLayout: ArgumentLayout? = null) : Node() {
-    @Children private var direct = emptyArray<DirectTupleCaller>()
+    @Children @Volatile private var direct = emptyArray<DirectTupleCaller>()
     @Child private var generic = GenericTupleCaller(destination, metrics, tail, argsSize, inputLayout)
     @CompilationFinal private var megamorphic = false
-    @Child private var typed: InputDispatch? = null
+    @Child @Volatile private var typed: InputDispatch? = null
 
     @ExplodeLoop fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
         if ((function.target.rootNode as? GuestRoot)?.typedInput != null) {
-            if (typed == null) {
+            val child = typed ?: run {
                 CompilerDirectives.transferToInterpreterAndInvalidate()
-                typed = insert(InputDispatch(ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination))
+                atomic(Callable {
+                    typed ?: insert(InputDispatch(ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination))
+                        .also { typed = it }
+                })
             }
-            typed!!.execute(frame, function, arguments)
+            child.execute(frame, function, arguments)
             return
         }
         for (caller in direct) if (caller.matches(function)) {
@@ -172,13 +176,19 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
         }
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            if (direct.size < 3) {
-                val caller = insert(DirectTupleCaller(destination, metrics, argsSize, tail, function, inputLayout))
-                direct = direct + caller
+            val caller: DirectTupleCaller? = atomic(Callable {
+                direct.firstOrNull { it.matches(function) } ?: if (megamorphic) null else if (direct.size < 3) {
+                    insert(DirectTupleCaller(destination, metrics, argsSize, tail, function, inputLayout))
+                        .also { direct = direct + it }
+                } else {
+                    megamorphic = true
+                    null
+                }
+            })
+            if (caller != null) {
                 caller.execute(frame, function, arguments)
                 return
             }
-            megamorphic = true
         }
         generic.execute(frame, function, arguments)
     }
@@ -346,7 +356,7 @@ internal class TupleApplication(private val language: Language, private val shap
     function: Expr, @field:Children private var arguments: Array<Expr>, private val tail: Boolean, private val metrics: Metrics) : Expr() {
     @Child private var function = Evaluate(function, metrics)
     private val inputLayout = ArgumentLayout.fromProofs(arguments.map { it.representation })
-    @Child private var dispatch: TupleDispatch? = null
+    @Child @Volatile private var dispatch: TupleDispatch? = null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
     init { representation = shape.proof.copy(evaluated = true) }
@@ -358,14 +368,19 @@ internal class TupleApplication(private val language: Language, private val shap
             if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
             else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame)
         }
-        if (dispatch == null) {
+        val child = dispatch ?: run {
             CompilerDirectives.transferToInterpreterAndInvalidate()
-            destinationSlots = slots
-            destinationOffset = offset
-            dispatch = insert(TupleDispatch(AstTupleDestination(shape, slots, offset), metrics, arguments.size, tail, inputLayout))
+            atomic(Callable {
+                dispatch ?: insert(TupleDispatch(AstTupleDestination(shape, slots, offset), metrics, arguments.size, tail, inputLayout))
+                    .also {
+                        destinationSlots = slots
+                        destinationOffset = offset
+                        dispatch = it
+                    }
+            })
         }
         check(destinationSlots === slots && destinationOffset == offset)
-        dispatch!!.execute(frame, function, values)
+        child.execute(frame, function, values)
         return null
     }
 }
