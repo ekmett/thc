@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Export pinned GHC scalar floating Core and check native IEEE edge expectations."""
 import hashlib
 import importlib.util

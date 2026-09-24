@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent size/state-observation model: no retired native references."""
 ENTRIES=('freshSize','pureSize','resizedSizes','pureAfterResize','orderedSize')
 REQUIRED={name:('sizeofMutableByteArray#' if name in ('pureSize','pureAfterResize') else 'getSizeofMutableByteArray#') for name in ENTRIES}

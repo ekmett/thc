@@ -1,4 +1,4 @@
-SPDX-License: UPL-1.0 AND BSD-3-Clause
+SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 This source code is derived in part from a mixture of the sulong
 and simplelanguage projects for Truffle.
@@ -7,7 +7,7 @@ The rights and obligations of both of the following two licenses apply:
 
 ----------------------------------------------------------------------------
 
-Copyright (c) 2019, Edward Kmett
+Copyright (c) 2019-2026, Edward Kmett
 Copyright (c) 2013, 2019, Oracle and/or its affiliates.
 
 All rights reserved.

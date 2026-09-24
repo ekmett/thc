@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE DataKinds, ExplicitForAll, KindSignatures, MagicHash #-}
 {-# LANGUAGE NoImplicitPrelude, PolyKinds, TypeFamilies, UnboxedSums, UnboxedTuples, UnliftedNewtypes #-}
 {-# LANGUAGE StandaloneKindSignatures, UnliftedDatatypes #-}

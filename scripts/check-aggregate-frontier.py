@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Check staged aggregate support against genuine GHC exports and a native oracle.
 
 Supported tuple and binary-sum results execute in the JVM suite; aggregate

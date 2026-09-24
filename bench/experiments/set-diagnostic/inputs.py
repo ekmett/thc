@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Record the installed runtime, checkout, and probe used for this run."""
 import hashlib,json,pathlib,subprocess,sys
 out,runtime=map(pathlib.Path,sys.argv[1:])

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Strict native-backed Int8X16 graph/LIR gate. Synthetic parser tests are not evidence."""
 import argparse
 from collections import Counter

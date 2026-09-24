@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent signed modulo-2^32 semantics for genuine Int32X4 multiplication."""
 MASK = (1 << 32)-1
 WEIGHTS = (3, 5, 7, 11)

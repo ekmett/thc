@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Typed input graph controls: genuine native call edges and synthetic dynamic loops."""
 import argparse
 import hashlib

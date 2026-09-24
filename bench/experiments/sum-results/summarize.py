@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Inspect real production graphs. Long host-result boxing is reported, not hidden."""
 import hashlib,json,pathlib,re,sys
 out=pathlib.Path(sys.argv[1]); mode=sys.argv[2]

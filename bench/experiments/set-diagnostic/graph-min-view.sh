@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 set -euo pipefail
 [[ $# == 3 ]] || { echo 'Usage: graph-min-view.sh EXISTING_CASES_JSON ast|bytecode OUT' >&2; exit 1; }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

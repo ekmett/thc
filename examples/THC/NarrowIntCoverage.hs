@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE MagicHash #-}
 -- Ordinary Data.Int conversion and storage, with Int# only at the host entry.
 module THC.NarrowIntCoverage (narrowRecordChecksum) where

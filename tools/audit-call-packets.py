@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Trace materialized Object[] packets in GraphInspect JSON; never runs guest code.
 
 Usage: python3 tools/audit-call-packets.py PARSED_CAPTURE_DIR --output report.json

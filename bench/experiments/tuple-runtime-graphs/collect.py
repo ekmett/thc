@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Reduce checked graph runs to reviewable evidence; keep BGV/CFG outside git."""
 import collections,hashlib,json,os,pathlib,subprocess,sys
 base,runtime,destination=map(pathlib.Path,sys.argv[1:4]); destination.mkdir(parents=True,exist_ok=True)

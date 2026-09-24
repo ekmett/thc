@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 // Keep reusable Kotlin/KAPT/Java outputs, but never store or load Test outputs.
 // --rerun separately ensures that project-local up-to-date state cannot skip tests.
 allprojects {

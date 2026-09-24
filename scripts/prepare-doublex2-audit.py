@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Pinned real DoubleX2 Core, exact integer binary64 model, and optional native oracle."""
 import argparse
 import hashlib

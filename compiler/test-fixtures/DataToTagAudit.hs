@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 {-# LANGUAGE MagicHash, UnliftedDatatypes, StandaloneKindSignatures #-}
 -- Retain dataToTagSmall# to test its primitive and unsupported family frontiers.
 {-# OPTIONS_GHC -Wno-deprecations #-}

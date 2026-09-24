@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Audit the syntactically reachable exported Core, without evaluating it.
 
 Every alternative and local RHS of each reachable global is checked. Lexical

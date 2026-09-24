@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Read-only final-LIR SCC inventory; no JVM or new compilation."""
 from pathlib import Path
 import re,json,hashlib

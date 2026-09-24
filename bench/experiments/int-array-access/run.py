@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Native-backed production Int-array graph checks. Fixed correctness inputs, no timing."""
 import argparse
 from collections import Counter

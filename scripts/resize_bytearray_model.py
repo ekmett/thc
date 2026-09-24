@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Defined-domain list model; retired native references are never observed."""
 ENTRIES=('resizedBytes','resizedTwiceWrites')
 REQUIRED={n:'resizeMutableByteArray#' for n in ENTRIES}

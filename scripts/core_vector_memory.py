@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Exact local Int32X4/Word32X4/FloatX4/DoubleX2 memory; no vector aggregate transport.
 
 The pinned exporter places its sole physical vector annotation on the logical
