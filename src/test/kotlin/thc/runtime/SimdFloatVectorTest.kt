@@ -60,8 +60,9 @@ class SimdFloatVectorTest {
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("packFloatX4#", CoreVectors.unpackedFloat.components!!, proof) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.validate("broadcastFloatX4#",
             listOf(CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("FloatRep"))), proof) }
+        // FloatX8 is supported; a three-lane vector still has no carrier.
         assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(metadata() + mapOf(
-            "primReps" to listOf("VecRep 8 FloatElemRep"), "vector" to mapOf("lanes" to 8L, "element" to "FloatElemRep"))) }
+            "primReps" to listOf("VecRep 3 FloatElemRep"), "vector" to mapOf("lanes" to 3L, "element" to "FloatElemRep"))) }
     }
 
     @Test fun primitiveLanesPreserveMovementBitsAndBinary32Arithmetic() {
@@ -101,8 +102,8 @@ class SimdFloatVectorTest {
             { it + mapOf("primReps" to listOf("VecRep 4 Int32ElemRep"), "vector" to mapOf("lanes" to 4L, "element" to "Int32ElemRep")) })
         for (backend in listOf("ast", "bytecode")) {
             assertThrows(UnsupportedCore::class.java) { program(language, backend, input, "vectorArgument") }
-            val unsupported = rewrite(input) { it + mapOf("primReps" to listOf("VecRep 8 FloatElemRep"),
-                "vector" to mapOf("lanes" to 8L, "element" to "FloatElemRep")) } as Map<String, Any?>
+            val unsupported = rewrite(input) { it + mapOf("primReps" to listOf("VecRep 3 FloatElemRep"),
+                "vector" to mapOf("lanes" to 3L, "element" to "FloatElemRep")) } as Map<String, Any?>
             assertThrows(UnsupportedCore::class.java) { program(language, backend, unsupported, "plusCase") }
             assertTrue((program(language, backend, unsupported, "plusCase", true).diagnostics().getValue("deferredUnsupported") as Collection<*>).isNotEmpty())
             for (diagnostic in listOf(false, true)) for (mutation in mutations) {
