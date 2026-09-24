@@ -83,9 +83,12 @@ def frame_tags():
         node(92, 'VirtualObjectState'), node(93, 'VirtualObjectState'), node(94, 'FrameState'),
         node(95, 'VirtualArrayNode', componentType='java.lang.Object', length=3),
         node(96, 'VirtualArrayNode', componentType='long', length=3),
-        node(97, 'ConstantNode', stamp='i32 [7]', rawvalue='7'), node(98, 'ConstantNode')]
+        node(97, 'ConstantNode', stamp='i32 [7]', rawvalue='7'), node(98, 'ConstantNode'),
+        node(99, 'VirtualObjectState'), node(100, 'VirtualObjectState')]
     value['edges'] += [edge(91,92,'object'), edge(90,93,'object'), edge(91,94,'values',index=0)]
     for state in (92,93): value['edges'].append(edge(state,94,'virtualObjectMappings','State'))
+    for ident,state in ((95,99),(96,100)):
+        value['edges'] += [edge(ident,state,'object'),edge(state,94,'virtualObjectMappings','State')]
     for index, source in enumerate((98,98,95,96,90,98)): value['edges'].append(edge(source,92,'values',index=index))
     for index in range(3): value['edges'].append(edge(97,93,'values',index=index))
     return summarize(value)
@@ -97,6 +100,25 @@ def cfg(entry='vectorIndexWorker', line=None):
                    if store else 'xmm2|V128_BYTE = VECTORLOAD [rsi|QWORD + rax|QWORD * 1 + 16]')
     line = line or 'nr 42 <|@ instruction '+instruction+' size: XMM op: VMOVDQU32 <|@ <|@'
     return 'begin_compilation\n  method "TruffleHotSpotCompilation-123[lambda bytes, offset]"\nend_compilation\nbegin_cfg\n  name "After FinalCodeAnalysisStage"\n'+line+'\nend_cfg\n'
+
+
+def metadata_array(bytecode=True):
+    value=frame_tags()
+    cached='thc.runtime.BytecodeRootGen$CachedBytecodeNode'
+    value['nodes'].append(node(201,'ConstantNode',stamp='a!# byte[]' if bytecode else 'a!# int[]'))
+    if bytecode:
+        value['nodes'] += [node(202,'ConstantNode',stamp='a!# '+cached),
+            node(203,'FrameState',code=cached+'.handleIndexVector32Array$Index_(Lcom/oracle/truffle/api/impl/FrameWithoutBoxing;, [B, J, J)'),
+            node(204,'FrameState',code=cached+'.continueAt(Lthc/runtime/BytecodeRootGen;, Lcom/oracle/truffle/api/impl/FrameWithoutBoxing;, J)')]
+        for state,slot,frame_slot in ((203,2,1),(204,7,6)):
+            value['edges'] += [edge(201,state,'values',index=slot),edge(91,state,'values',index=frame_slot),
+                              edge(202,state,'values',index=0)]
+        value['edges'].append(edge(203,204,'outerFrameState','State'))
+    else:
+        value['nodes'] += [node(203,'FrameState',code='thc.runtime.Vector32Unpack.executeTuple(Lcom/oracle/truffle/api/frame/VirtualFrame;, [I, I)'),
+                           node(205,'ConstantNode',stamp='i32 [0]',rawvalue='0')]
+        value['edges'] += [edge(201,203,'values',index=2),edge(91,203,'values',index=1),edge(205,203,'values',index=3)]
+    return summarize(value)
 
 
 class GraphTest(unittest.TestCase):
@@ -185,7 +207,7 @@ class GraphTest(unittest.TestCase):
             elif mutation=='slot':next(e for e in value['edges'] if e['from']==90 and e['label']=='values')['listIndex']=5
             elif mutation=='fields':by_id(value,91)['properties']['fields'][4]='payload'
             elif mutation=='length':by_id(value,96)['properties']['length']=2
-            elif mutation=='tag':by_id(value,97)['properties']['rawvalue']='1'
+            elif mutation=='tag':by_id(value,97)['properties']['rawvalue']='2'
             elif mutation=='escape':value['edges'].append(edge(90,80,'result'))
             elif mutation=='materialize':value['nodes'].append(node(200,'CommitAllocationNode'))
             else:by_id(value,97)['nodeClass']='test.AddNode'
@@ -194,6 +216,61 @@ class GraphTest(unittest.TestCase):
     def test_duplicate_or_dangling_nodes_fail(self):
         value=graph();value['nodes'].append(copy.deepcopy(value['nodes'][0]));self.reject(value)
         value=graph();value['edges'].append(edge(999,70));self.reject(value)
+
+    def test_multiple_frame_tag_snapshots_and_default_zero(self):
+        value=frame_tags()
+        value['nodes'] += [node(201,'VirtualObjectState'),node(202,'FrameState'),
+                           node(203,'ConstantNode',stamp='i32 [1]',rawvalue='1')]
+        value['edges'] += [edge(90,201,'object'),edge(201,202,'virtualObjectMappings','State'),
+                           edge(203,201,'values',index=0),edge(97,201,'values',index=2)]
+        for state in (92,99,100):value['edges'].append(edge(state,202,'virtualObjectMappings','State'))
+        # Missing tag slot1 is default0; Long slot0 has default primitive0.
+        self.assertEqual(audit.inspect_graph(summarize(value),'vectorIndexWorker')['frameTagMetadata'],[90])
+        for mutation in ('overlap','extra_index','dynamic_tag','wrong_kind','object_in_long','primitive_in_object'):
+            bad=copy.deepcopy(value)
+            if mutation=='overlap':bad['edges'].append(edge(201,94,'virtualObjectMappings','State'))
+            elif mutation=='extra_index':bad['edges'].append(edge(97,201,'values',index=3))
+            elif mutation=='dynamic_tag':by_id(bad,203)['nodeClass']='test.AddNode'
+            elif mutation=='wrong_kind':by_id(bad,203)['properties']['stamp']='i64'
+            elif mutation=='object_in_long':
+                bad['nodes'].append(node(204,'ConstantNode',stamp='a java.lang.Object'));bad['edges'].append(edge(204,99,'values',index=0))
+            else:
+                bad['nodes'].append(node(204,'ConstantNode',stamp='i64'));bad['edges'].append(edge(204,100,'values',index=1))
+            self.reject(bad)
+
+    def test_exact_interpreter_arrays_are_metadata_only(self):
+        for bc in (False,True):
+            value=metadata_array(bc)
+            self.assertEqual(audit.inspect_graph(value,'vectorIndexWorker')['interpreterArrayMetadata'],[201])
+
+    def test_interpreter_array_slot_receiver_code_owner_escape_negatives(self):
+        for mutation in ('slot','receiver','code','owner','value_escape','state_escape','missing_method','memory_base','dynamic_array'):
+            value=metadata_array()
+            if mutation=='slot':next(e for e in value['edges'] if e['from']==201)['listIndex']=3
+            elif mutation=='receiver':by_id(value,202)['properties']['stamp']='a!# jdk.incubator.vector.Byte128Vector'
+            elif mutation=='code':by_id(value,203)['properties']['code']='arbitrary([B)'
+            elif mutation=='owner':by_id(value,91)['properties']['fields'][4]='payload'
+            elif mutation=='value_escape':value['edges'].append(edge(201,81))
+            elif mutation=='state_escape':value['edges'].append(edge(203,81))
+            elif mutation=='missing_method':value['edges']=[e for e in value['edges'] if e['from']!=201 or e['to']!=204]
+            elif mutation=='memory_base':next(e for e in value['edges'] if e['to']==60 and e['label']=='base')['from']=201
+            else:by_id(value,201)['nodeClass']='test.PiNode'
+            self.reject(value)
+
+    def test_tuple_destination_slots_are_not_vector_payloads(self):
+        for mutation in ('wrong_method','wrong_slot','nonzero_base','escaping'):
+            value=metadata_array(False)
+            if mutation=='wrong_method':by_id(value,203)['properties']['code']='jdk.incubator.vector.IntVector.lanes([I)'
+            elif mutation=='wrong_slot':next(e for e in value['edges'] if e['from']==201)['listIndex']=1
+            elif mutation=='nonzero_base':by_id(value,205)['properties']['rawvalue']='1'
+            else:value['edges'].append(edge(201,80,'result'))
+            self.reject(value)
+
+    def test_real_calls_allocations_rejected_before_metadata(self):
+        for name in ('InvokeWithExceptionNode','CommitAllocationNode','AllocatedObjectNode'):
+            value=graph();value['nodes'] += [node(200,'ConstantNode',stamp='a!# byte[]'),node(201,name)]
+            with self.assertRaisesRegex(AssertionError,'Residual allocation/payload/call: '+name):
+                audit.inspect_graph(summarize(value),'vectorIndexWorker')
 
 
 class LirTest(unittest.TestCase):
@@ -230,6 +307,15 @@ class LirTest(unittest.TestCase):
 
     def test_non_x86_fails(self):
         with self.assertRaises(AssertionError):audit.inspect_lir(cfg(),'lambda bytes, offset','vectorIndexWorker','aarch64')
+
+    def test_exact_compressed_oop_index_is_still_physical_heap_address(self):
+        for entry in audit.ENTRIES:
+            text=cfg(entry).replace('rax|QWORD * 1','rax|DWORD[_] * 8')
+            self.inspect(text,entry)
+            for before,after in (('DWORD[_]','DWORD'),('DWORD[_]','DWORD[*]'),('DWORD[_]','DWORD[.]'),
+                                 ('* 8','* 4'),('rax|DWORD','rsp|DWORD'),('xmm2','ymm2')):
+                with self.subTest(before=before,after=after),self.assertRaises(AssertionError):
+                    self.inspect(text.replace(before,after),entry)
 
 
 def cases(entry):

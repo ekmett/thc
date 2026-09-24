@@ -179,89 +179,175 @@ def packed_stamp(stamp, bits=32, length=4):
 
 
 def virtual_frame_tags(node, nodes, edges):
-    """Recognize only the eliminated FrameWithoutBoxing.indexedTags metadata.
+    """Exact eliminated frame-tag storage, including multiple deopt snapshots.
 
-    VirtualObjectState describes deoptimization reconstruction, not an allocation.
-    This is deliberately not a general exception for virtual byte/vector payloads.
+    ObjectState.createEscapeObjectState replaces default-valued entries with null:
+    an absent byte entry is ZERO (Object tag), not unknown payload data.
     """
     frame_type = 'com.oracle.truffle.api.impl.FrameWithoutBoxing'
-    fields = [frame_type + '.' + name for name in (
+    fields = [frame_type+'.'+name for name in (
         'descriptor', 'arguments', 'indexedLocals', 'indexedPrimitiveLocals', 'indexedTags', 'auxiliarySlots')]
-    props = node['properties']
-    length = props.get('length')
+    props = node['properties']; length = props.get('length')
     if (kind(node) != 'VirtualArrayNode' or props.get('stamp') != 'a!# byte[]'
             or props.get('componentType') != 'byte' or type(length) is not int or length <= 0):
         return False
 
-    def incoming(number):
-        return [e for e in edges if e['to'] == number]
-
-    def outgoing(number):
-        return [e for e in edges if e['from'] == number]
-
+    def incoming(number): return [e for e in edges if e['to'] == number]
+    def outgoing(number): return [e for e in edges if e['from'] == number]
     def object_of(state):
-        objects = [e['from'] for e in incoming(state) if e['label'] == 'object' and e['type'] == 'Value']
-        return objects[0] if len(objects) == 1 else None
+        values = [e['from'] for e in incoming(state) if e['type'] == 'Value' and e['label'] == 'object']
+        return values[0] if len(values) == 1 else None
+    def entries_of(state, count):
+        values = [e for e in incoming(state) if e['type'] == 'Value' and e['label'] == 'values']
+        if (len(incoming(state)) != len(values)+1 or any(type(e.get('listIndex')) is not int
+                or not 0 <= e['listIndex'] < count for e in values)
+                or len({e['listIndex'] for e in values}) != len(values)):
+            return None
+        return {e['listIndex']: nodes[e['from']] for e in values}
+    def frame_users(state):
+        uses = outgoing(state)
+        if not uses or any(e['type'] != 'State' or e['label'] != 'virtualObjectMappings'
+                           or kind(nodes[e['to']]) != 'FrameState' for e in uses):
+            return None
+        return {e['to'] for e in uses}
 
     uses = outgoing(node['id'])
-    if incoming(node['id']) or len(uses) != 2 or any(
-            e['type'] != 'Value' or kind(nodes[e['to']]) != 'VirtualObjectState' for e in uses):
+    if incoming(node['id']) or not uses or any(e['type'] != 'Value'
+            or kind(nodes[e['to']]) != 'VirtualObjectState' for e in uses):
         return False
     own = [e['to'] for e in uses if e['label'] == 'object']
     owners = [e['to'] for e in uses if e['label'] == 'values' and e.get('listIndex') == 4]
-    if len(own) != 1 or len(owners) != 1 or own == owners:
+    if not own or len(own) != len(set(own)) or len(owners) != 1 or len(uses) != len(own)+1:
         return False
-    own, owner_state = own[0], owners[0]
-    owner = object_of(owner_state)
-    if owner not in nodes or object_of(own) != node['id']:
-        return False
+    owner_state = owners[0]; owner = object_of(owner_state)
+    if owner not in nodes: return False
     owner_node = nodes[owner]
-    if (incoming(owner) or kind(owner_node) != 'VirtualInstanceNode' or owner_node['properties'].get('type') != frame_type
-            or owner_node['properties'].get('fields') != fields):
+    if (incoming(owner) or kind(owner_node) != 'VirtualInstanceNode'
+            or owner_node['properties'].get('type') != frame_type or owner_node['properties'].get('fields') != fields):
         return False
-    # Both reconstruction records must be used exclusively as state mappings of
-    # the same actual FrameState; the virtual owner must not escape either.
-    state_users = []
-    for state in (own, owner_state):
-        consumers = outgoing(state)
-        if not consumers or any(e['type'] != 'State' or e['label'] != 'virtualObjectMappings'
-                                or kind(nodes[e['to']]) != 'FrameState' for e in consumers):
-            return False
-        state_users.append({e['to'] for e in consumers})
-    if state_users[0] != state_users[1]:
+    owner_frames = frame_users(owner_state)
+    values = entries_of(owner_state, 6)
+    if not owner_frames or values is None or set(values) != set(range(6)) or values[4]['id'] != node['id']:
         return False
     for use in outgoing(owner):
         if use['type'] != 'Value' or not (
                 (use['to'] == owner_state and use['label'] == 'object')
                 or (kind(nodes[use['to']]) == 'FrameState' and use['label'] == 'values')):
             return False
-    frames = state_users[0] | {e['to'] for e in outgoing(owner) if kind(nodes[e['to']]) == 'FrameState'}
+    # Every state chain is reconstruction-only, never a value/return/call input.
+    frames = owner_frames | {e['to'] for e in outgoing(owner) if kind(nodes[e['to']]) == 'FrameState'}
     pending = list(frames)
     while pending:
         for use in outgoing(pending.pop()):
-            if use['type'] != 'State':
-                return False
+            if use['type'] != 'State': return False
             if kind(nodes[use['to']]) == 'FrameState' and use['to'] not in frames:
                 frames.add(use['to']); pending.append(use['to'])
-    values = [e for e in incoming(owner_state) if e['label'] == 'values' and e['type'] == 'Value']
-    if len(incoming(owner_state)) != 7 or sorted(e.get('listIndex', -1) for e in values) != list(range(6)):
-        return False
-    slots = {e['listIndex']: nodes[e['from']] for e in values}
-    if slots[4]['id'] != node['id']:
-        return False
+
+    snapshots = {}
+    for state in own:
+        fs = frame_users(state); tags = entries_of(state, length)
+        if object_of(state) != node['id'] or not fs or tags is None or not fs <= owner_frames:
+            return False
+        for value in tags.values():
+            p = value['properties']
+            if (kind(value) != 'ConstantNode' or not re.match(r'^i32(?:\s|$)', p.get('stamp', ''))
+                    or p.get('rawvalue') not in ('0', '1', '7')):
+                return False
+        for frame in fs:
+            if frame in snapshots: return False
+            snapshots[frame] = tags
+    if set(snapshots) != owner_frames: return False
+
+    siblings = {}
     for index, component in ((2, 'java.lang.Object'), (3, 'long')):
-        sibling = slots[index]
-        if (kind(sibling) != 'VirtualArrayNode' or sibling['properties'].get('componentType') != component
+        sibling = values[index]; ident = sibling['id']; state_by_frame = {}
+        if (kind(sibling) != 'VirtualArrayNode' or incoming(ident)
+                or sibling['properties'].get('componentType') != component
                 or sibling['properties'].get('length') != length):
             return False
-    tags = [e for e in incoming(own) if e['label'] == 'values' and e['type'] == 'Value']
-    if len(incoming(own)) != length + 1 or sorted(e.get('listIndex', -1) for e in tags) != list(range(length)):
+        for use in outgoing(ident):
+            if use['type'] != 'Value': return False
+            if use['to'] == owner_state and use['label'] == 'values' and use.get('listIndex') == index: continue
+            state = use['to']
+            if use['label'] != 'object' or kind(nodes[state]) != 'VirtualObjectState' or object_of(state) != ident:
+                return False
+            fs = frame_users(state); contents = entries_of(state, length)
+            if not fs or not fs <= owner_frames or contents is None: return False
+            for frame in fs:
+                if frame in state_by_frame: return False
+                state_by_frame[frame] = contents
+        if set(state_by_frame) != owner_frames: return False
+        siblings[index] = state_by_frame
+    for frame, tags in snapshots.items():
+        objects, primitive = siblings[2][frame], siblings[3][frame]
+        for index in range(length):
+            tag = int(tags[index]['properties']['rawvalue']) if index in tags else 0
+            if tag in (0, 7) and index in primitive: return False
+            if tag in (1, 7) and index in objects: return False
+            if index in primitive and not re.match(r'^i64(?:\s|$)', primitive[index]['properties'].get('stamp', '')):
+                return False
+            if index in objects and not objects[index]['properties'].get('stamp', '').startswith('a'):
+                return False
+    return True
+
+
+def interpreter_array_metadata(node, nodes, edges, operation):
+    """Only exact interpreter-local constant arrays used by deopt FrameStates."""
+    p = node['properties']
+    if kind(node) != 'ConstantNode' or p.get('stamp') not in ('a!# byte[]', 'a!# int[]'):
         return False
-    # Pinned FrameWithoutBoxing.ILLEGAL_TAG is 7: these are initial frame tags,
-    # not data from any guest lane. No reference is accepted merely by its name.
-    return all(kind(nodes[e['from']]) == 'ConstantNode'
-               and re.match(r'^i32(?:\s|$)', nodes[e['from']]['properties'].get('stamp', ''))
-               and nodes[e['from']]['properties'].get('rawvalue') == '7' for e in tags)
+    if any(e['to'] == node['id'] for e in edges): return False
+    uses = [e for e in edges if e['from'] == node['id']]
+    if not uses or any(e['type'] != 'Value' or e['label'] != 'values'
+                       or kind(nodes[e['to']]) != 'FrameState' for e in uses):
+        return False
+    frame_type = 'com.oracle.truffle.api.impl.FrameWithoutBoxing'
+    cached = 'thc.runtime.BytecodeRootGen$CachedBytecodeNode'
+    handler = 'Index' if operation == 'index' else 'Write'
+    if p['stamp'] == 'a!# int[]':
+        expected = {'thc.runtime.Vector32Unpack.executeTuple(Lcom/oracle/truffle/api/frame/VirtualFrame;, [I, I)': (2, 1)}
+        if operation != 'index': return False
+    else:
+        expected = {
+            cached+'.handle'+handler+'Vector32Array$'+handler+'_(Lcom/oracle/truffle/api/impl/FrameWithoutBoxing;, [B, J, J)': (2, 1),
+            cached+'.continueAt(Lthc/runtime/BytecodeRootGen;, Lcom/oracle/truffle/api/impl/FrameWithoutBoxing;, J)': (7, 6)}
+    observed, identities, receivers = set(), set(), set()
+    for use in uses:
+        state = nodes[use['to']]; code = state['properties'].get('code')
+        if code not in expected or code in observed or use.get('listIndex') != expected[code][0]: return False
+        observed.add(code)
+        values = [e for e in edges if e['to'] == state['id'] and e['type'] == 'Value' and e['label'] == 'values']
+        slots = {e.get('listIndex'): e['from'] for e in values}
+        if len(slots) != len(values): return False
+        frame = nodes.get(slots.get(expected[code][1]))
+        if (frame is None or kind(frame) != 'VirtualInstanceNode'
+                or frame['properties'].get('type') != frame_type): return False
+        identities.add(frame['id'])
+        if p['stamp'] == 'a!# byte[]':
+            receiver = nodes.get(slots.get(0))
+            if receiver is None or kind(receiver) != 'ConstantNode' or receiver['properties'].get('stamp') != 'a!# '+cached:
+                return False
+            receivers.add(receiver['id'])
+        else:
+            zero = nodes.get(slots.get(3))
+            if zero is None or kind(zero) != 'ConstantNode' or zero['properties'].get('rawvalue') != '0':
+                return False
+        pending, seen = [state['id']], set()
+        while pending:
+            current = pending.pop()
+            if current in seen: continue
+            seen.add(current)
+            for e in edges:
+                if e['from'] != current: continue
+                if e['type'] != 'State': return False
+                if kind(nodes[e['to']]) == 'FrameState': pending.append(e['to'])
+    if observed != set(expected) or len(identities) != 1 or len(receivers) > 1: return False
+    owner = next(iter(identities))
+    owner_states = {e['to'] for e in edges if e['from'] == owner and e['type'] == 'Value' and e['label'] == 'object'
+                    and kind(nodes[e['to']]) == 'VirtualObjectState'}
+    tags = [nodes[e['from']] for e in edges if e['to'] in owner_states and e['type'] == 'Value'
+            and e['label'] == 'values' and e.get('listIndex') == 4]
+    return len(tags) == 1 and virtual_frame_tags(tags[0], nodes, edges)
 
 
 def inspect_graph(graph, entry):
@@ -272,6 +358,13 @@ def inspect_graph(graph, entry):
     require(all(e['from'] in nodes and e['to'] in nodes for e in edges), 'Dangling graph edge')
     require(dict(Counter(n['nodeClass'] for n in nodes.values())) == graph['nodeClassCounts'],
             'Graph summary does not match detailed nodes')
+    # A genuine compiled failure path is still compiled allocation/call traffic.
+    # Report it before any metadata recognizer; no deopt exemption can hide it.
+    forbidden = ('NewArray', 'NewInstance', 'NewMultiArray', 'CommitAllocation', 'AllocatedObject',
+                 'MaterializedObject', 'DynamicNew', 'Invoke', 'ForeignCall', 'LoadField', 'StoreField',
+                 'StoreIndexed', 'UnsafeLoad', 'UnsafeStore', 'AtomicRead', 'CompareAndSwap')
+    for n in nodes.values():
+        require(not any(part in kind(n) for part in forbidden), 'Residual allocation/payload/call: ' + kind(n))
 
     def inputs(number, label=None, typ='Value'):
         return [e['from'] for e in edges if e['to'] == number and e['type'] == typ
@@ -329,6 +422,7 @@ def inspect_graph(graph, entry):
             'Memory base needs exact non-null byte[] proof')
     base_origin = strip_object(base)
     allowed_bytes = set()
+    interpreter_arrays = {n['id'] for n in nodes.values() if interpreter_array_metadata(n, nodes, edges, operation)}
     for n in nodes.values():
         if n['properties'].get('stamp') in ('a byte[]', 'a! byte[]', 'a!# byte[]'):
             if kind(n) in ('PiNode', 'PiArrayNode') and strip_object(n['id']) == base_origin:
@@ -337,15 +431,12 @@ def inspect_graph(graph, entry):
                 allowed_bytes.add(n['id'])
 
     allocated_boxes, unboxes = [], {}
-    forbidden = ('NewArray', 'NewInstance', 'NewMultiArray', 'CommitAllocation', 'AllocatedObject',
-                 'MaterializedObject', 'DynamicNew', 'Invoke', 'ForeignCall', 'LoadField', 'StoreField',
-                 'StoreIndexed', 'UnsafeLoad', 'UnsafeStore', 'AtomicRead', 'CompareAndSwap')
     for n in nodes.values():
         name, p = kind(n), n['properties']
-        require(not any(part in name for part in forbidden), 'Residual allocation/payload/call: ' + name)
         stamp = str(p.get('stamp', ''))
         reference = re.search(r'thc\.runtime\.(?:Word32X4|Int32X4)|(?:Byte|Short|Int)(?:\d+)?Vector|(?:byte|short|int)\[\]|\[(?:B|S|I)(?:;|$)', stamp)
-        require(not reference or n['id'] in allowed_bytes, 'Residual private carrier/vector/payload reference: ' + stamp)
+        require(not reference or n['id'] in allowed_bytes or n['id'] in interpreter_arrays,
+                'Residual private carrier/vector/payload reference: ' + stamp)
         if 'UnboxNode' in name:
             require(p.get('boxingKind') == 'JavaKind.Long', 'Intermediate lane unbox')
             slot = host_slot(one(n['id'], 'value'))
@@ -444,6 +535,7 @@ def inspect_graph(graph, entry):
     return dict(id=access['id'], nodeClass=access['nodeClass'], stamp=props.get('stamp'),
                 backingArray=base, backingArgumentSlot=1, offset=offset, offsetUnitBytes=scale,
                 signedLaneExtensions=sorted(signed, key=lambda x: x['lane']), packedStoreLanes=packed_lanes,
+                interpreterArrayMetadata=sorted(interpreter_arrays),
                 frameTagMetadata=[n['id'] for n in nodes.values() if kind(n) == 'VirtualArrayNode'
                                   and virtual_frame_tags(n, nodes, edges)])
 
@@ -465,8 +557,12 @@ def inspect_lir(text, target, entry, arch):
     # VectorMemOp has no @Opcode: the op DATA field identifies the instruction
     # emitted by AMD64VectorMove. Parse the full line, never a mnemonic comment.
     xmm = r'xmm\d+\|V128_(?:BYTE|DWORD)'
-    gpr = r'(?:rax|rbx|rcx|rdx|rsi|rdi|r(?:8|9|1[0-5]))\|QWORD(?:\[\.\])?'
-    address = r'\['+gpr+r'(?: \+ '+gpr+r' \* (?:1|2|4|8))?(?: [+-] [0-9]+)?\]'
+    register = r'(?:rax|rbx|rcx|rdx|rsi|rdi|r(?:8|9|1[0-5]))'
+    gpr = register+r'\|QWORD(?:\[\.\])?'
+    # LIRKind '_' denotes a compressed oop. Pinned HotSpot address lowering
+    # folds its uncompression into the SIB index (shift3 => scale8).
+    index = r'(?:'+gpr+r' \* (?:1|2|4|8)|'+register+r'\|DWORD\[_\] \* 8)'
+    address = r'\['+gpr+r'(?: \+ '+index+r')?(?: [+-] [0-9]+)?\]'
     if opcode == 'VECTORLOAD':
         body = xmm+r' = VECTORLOAD (?:address: )?'+address
     else:
