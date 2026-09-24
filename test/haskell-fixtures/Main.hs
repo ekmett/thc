@@ -10,7 +10,7 @@ module Main (main) where
 import AggregateFixtures (prepareAggregate)
 import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
-import StackFixtures (prepareOriginalStack)
+import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -774,6 +774,8 @@ main = do
   unless handled $ case args of
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
+    ["original-stack-formatter"] -> prepareOriginalStackFormatter root
+    ["original-stack-source-export", directory] -> exportOriginalStackSource root directory
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
