@@ -530,6 +530,13 @@
         ".github/scripts/test_fast_fixtures.py"
       ]
     },
+    ".github/scripts/fast_runner.py": {
+      "junit": [],
+      "python": [
+        ".github/scripts/test_fast_runner.py",
+        ".github/scripts/test_fast_workflows.py"
+      ]
+    },
     ".github/scripts/fast_select.py": {
       "junit": [],
       "python": [
