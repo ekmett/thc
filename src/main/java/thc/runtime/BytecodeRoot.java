@@ -1537,6 +1537,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     ManagedSmallArray.size(array));
         }
     }
+    @Operation public static final class CloneSmallArray {
+        @Specialization public static Object clone(Object reference, long offset, long count) {
+            return ManagedSmallArray.slice(ManagedSmallArray.require(reference), offset, count);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class CopySmallArraySlice {
+        @Specialization public static void clone(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedSmallArray.slice(array, offset, count));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "mutableSource")
+    public static final class TransferSmallArray {
+        @Specialization public static Object copy(boolean mutableSource, Object source, long sourceOffset,
+                Object destination, long destinationOffset, long count, Object state) {
+            SmallArrayStorage from = ManagedSmallArray.require(source);
+            SmallArrayStorage to = ManagedSmallArray.require(destination);
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedSmallArray.copy(from, sourceOffset, to, destinationOffset, count, mutableSource);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
 
     /** State operands are evaluated before each effect; only the array has a tuple slot. */
     @Operation

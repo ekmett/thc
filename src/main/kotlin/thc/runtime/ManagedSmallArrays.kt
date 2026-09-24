@@ -26,6 +26,23 @@ internal object ManagedSmallArray {
         array.elements[index(array, index)] = value
     }
     @JvmStatic fun freeze(array: SmallArrayStorage): SmallArrayStorage = array
+    private fun range(array: SmallArrayStorage, offset: Long, count: Long) {
+        val size = size(array)
+        if (offset < 0 || offset > size || count < 0 || count > size - offset)
+            fault("SmallArray# slice outside its backing storage")
+    }
+    @JvmStatic fun slice(array: SmallArrayStorage, offset: Long, count: Long): SmallArrayStorage {
+        range(array, offset, count)
+        return SmallArrayStorage(array.elements.copyOfRange(offset.toInt(), (offset + count).toInt()))
+    }
+    /** Mutable self-copy has memmove semantics. All checks precede mutation. */
+    @JvmStatic fun copy(source: SmallArrayStorage, sourceOffset: Long, destination: SmallArrayStorage,
+        destinationOffset: Long, count: Long, mutableSource: Boolean) {
+        range(source, sourceOffset, count)
+        range(destination, destinationOffset, count)
+        if (!mutableSource && source === destination) fault("copySmallArray# requires distinct arrays")
+        System.arraycopy(source.elements, sourceOffset.toInt(), destination.elements, destinationOffset.toInt(), count.toInt())
+    }
 }
 
 internal enum class SmallArrayOp(val primitive: String, private val arguments: List<String>,
@@ -37,9 +54,14 @@ internal enum class SmallArrayOp(val primitive: String, private val arguments: L
     FREEZE("unsafeFreezeSmallArray#", listOf("array", "state"), listOf("state", "array")),
     SIZE("sizeofSmallArray#", listOf("array"), listOf("int")),
     SIZE_MUTABLE("sizeofSmallMutableArray#", listOf("array"), listOf("int")),
-    GET_SIZE_MUTABLE("getSizeofSmallMutableArray#", listOf("array", "state"), listOf("state", "int"));
+    GET_SIZE_MUTABLE("getSizeofSmallMutableArray#", listOf("array", "state"), listOf("state", "int")),
+    CLONE("cloneSmallArray#", listOf("array", "int", "int"), listOf("array")),
+    CLONE_MUTABLE("cloneSmallMutableArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
+    COPY("copySmallArray#", listOf("array", "int", "array", "int", "int", "state"), listOf("state")),
+    COPY_MUTABLE("copySmallMutableArray#", listOf("array", "int", "array", "int", "int", "state"), listOf("state")),
+    UNSAFE_THAW("unsafeThawSmallArray#", listOf("array", "state"), listOf("state", "array"));
 
-    val tuple: Boolean get() = this in setOf(NEW, READ, INDEX, FREEZE, GET_SIZE_MUTABLE)
+    val tuple: Boolean get() = this in setOf(NEW, READ, INDEX, FREEZE, GET_SIZE_MUTABLE, CLONE_MUTABLE, UNSAFE_THAW)
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, proof: CoreRepresentation) {
         fun matches(rep: CoreRepresentation, role: String): Boolean = !rep.isAggregate && !rep.isVector && when (role) {
             "state" -> rep.kind == CoreKind.VOID && rep.primReps == emptyList<String>()
@@ -67,9 +89,13 @@ internal fun smallArrayExpression(operation: SmallArrayOp, proof: CoreRepresenta
     SmallArrayOp.READ -> ReadSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.WRITE -> WriteSmallArrayExpression(operands[0], operands[1], operands[2], operands[3])
     SmallArrayOp.INDEX -> IndexSmallArrayExpression(operands[0], operands[1])
-    SmallArrayOp.FREEZE -> FreezeSmallArrayExpression(operands[0], operands[1])
+    SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> FreezeSmallArrayExpression(operands[0], operands[1])
     SmallArrayOp.SIZE, SmallArrayOp.SIZE_MUTABLE -> SizeSmallArrayExpression(operands[0])
     SmallArrayOp.GET_SIZE_MUTABLE -> GetSizeSmallArrayExpression(operands[0], operands[1])
+    SmallArrayOp.CLONE -> CloneSmallArrayExpression(operands[0], operands[1], operands[2])
+    SmallArrayOp.CLONE_MUTABLE -> CopySmallArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> TransferSmallArrayExpression(operation == SmallArrayOp.COPY_MUTABLE,
+        operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
 }.proven(proof.copy(evaluated = true))
 
 private class NewSmallArrayExpression(@field:Child private var size: Expr, @field:Child private var initial: Expr,
@@ -134,5 +160,38 @@ private class GetSizeSmallArrayExpression(@field:Child private var array: Expr, 
         requireVoidCarrier(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], ManagedSmallArray.size(storage))
         return null
+    }
+}
+
+private class CloneSmallArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
+    @field:Child private var count: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): SmallArrayStorage = ManagedSmallArray.slice(
+        ManagedSmallArray.require(array.execute(frame)), offset.executeRequiredLong(frame), count.executeRequiredLong(frame))
+}
+private class CopySmallArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
+    @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val storage = ManagedSmallArray.require(array.execute(frame))
+        val start = this.offset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        requireVoidCarrier(state.execute(frame))
+        FrameAccess.write(frame, slots[offset], ManagedSmallArray.slice(storage, start, length))
+        return null
+    }
+}
+private class TransferSmallArrayExpression(private val mutableSource: Boolean,
+    @field:Child private var source: Expr, @field:Child private var sourceOffset: Expr,
+    @field:Child private var destination: Expr, @field:Child private var destinationOffset: Expr,
+    @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val from = ManagedSmallArray.require(source.execute(frame))
+        val fromOffset = sourceOffset.executeRequiredLong(frame)
+        val to = ManagedSmallArray.require(destination.execute(frame))
+        val toOffset = destinationOffset.executeRequiredLong(frame)
+        val length = count.executeRequiredLong(frame)
+        requireVoidCarrier(state.execute(frame))
+        ManagedSmallArray.copy(from, fromOffset, to, toOffset, length, mutableSource)
+        return Unit
     }
 }

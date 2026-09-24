@@ -611,6 +611,11 @@
     "sizeofSmallArray#": 1,
     "sizeofSmallMutableArray#": 1,
     "getSizeofSmallMutableArray#": 2,
+    "cloneSmallArray#": 3,
+    "cloneSmallMutableArray#": 4,
+    "copySmallArray#": 6,
+    "copySmallMutableArray#": 6,
+    "unsafeThawSmallArray#": 2,
     "cloneArray#": 3,
     "freezeArray#": 4,
     "thawArray#": 4,
@@ -2216,6 +2221,26 @@
     "getSizeofSmallMutableArray#": {
       "arguments": ["array", "state"],
       "result": ["state", "int"]
+    },
+    "cloneSmallArray#": {
+      "arguments": ["array", "int", "int"],
+      "result": "array"
+    },
+    "cloneSmallMutableArray#": {
+      "arguments": ["array", "int", "int", "state"],
+      "result": ["state", "array"]
+    },
+    "copySmallArray#": {
+      "arguments": ["array", "int", "array", "int", "int", "state"],
+      "result": "state"
+    },
+    "copySmallMutableArray#": {
+      "arguments": ["array", "int", "array", "int", "int", "state"],
+      "result": "state"
+    },
+    "unsafeThawSmallArray#": {
+      "arguments": ["array", "state"],
+      "result": ["state", "array"]
     },
     "newArray#": {
       "arguments": [
