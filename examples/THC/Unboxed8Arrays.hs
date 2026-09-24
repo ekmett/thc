@@ -33,7 +33,8 @@ unboxedInt8ST raw =
 unboxedWord8Accum :: Int# -> Int#
 unboxedWord8Accum raw =
   let x = fromIntegral (I# raw) :: Word8
-      a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word8
+      -- Explicitly convert the negative Int input to exercise Word8 wraparound.
+      a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,fromIntegral (-2 :: Int)),(4,x)] :: UArray Int Word8
   in case (fromIntegral (a!(-3))*7 + fromIntegral (a!0)*11 + fromIntegral (a!4)*13 :: Int) of
        I# answer -> answer
 
