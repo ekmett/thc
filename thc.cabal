@@ -204,6 +204,7 @@ executable thc-fixtures
     WordFloatingFixtures
     FloatingAddressFixtures
     FloatingByteOffsetFixtures
+    NarrowByteOffsetFixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
     OriginalStdioFixtures

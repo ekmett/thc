@@ -1610,8 +1610,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             e.builder.beginReadFloatArray(operation == ByteArrayOp.READ_WORD8_AS_FLOAT, destination[0])
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR ->
                             e.builder.beginReadByteArray(operation != ByteArrayOp.READ_INT8, destination[0])
-                        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 ->
-                            e.builder.beginReadInt16Array(operation == ByteArrayOp.READ_WORD16, destination[0])
+                        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
+                        ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 ->
+                            e.builder.beginReadInt16Array(
+                                operation == ByteArrayOp.READ_WORD16 || operation == ByteArrayOp.READ_WORD8_AS_WORD16,
+                                operation == ByteArrayOp.READ_WORD8_AS_INT16 || operation == ByteArrayOp.READ_WORD8_AS_WORD16,
+                                destination[0])
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 ->
                             e.builder.beginReadInt32Array(operation == ByteArrayOp.READ_WORD32, destination[0])
                         else -> error("Scalar ByteArray operation")
@@ -1627,7 +1631,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT -> e.builder.endReadFloatArray()
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()
-                        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> e.builder.endReadInt16Array()
+                        ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
+                        ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 -> e.builder.endReadInt16Array()
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> e.builder.endReadInt32Array()
                         else -> error("Scalar ByteArray operation")
                     }
@@ -1654,10 +1659,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             e.builder.beginWriteFloatArray(operation == ByteArrayOp.WRITE_WORD8_AS_FLOAT)
                         ByteArrayOp.INDEX_FLOAT, ByteArrayOp.INDEX_WORD8_AS_FLOAT ->
                             e.builder.beginIndexFloatArray(operation == ByteArrayOp.INDEX_WORD8_AS_FLOAT)
-                        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16 -> e.builder.beginWriteInt16Array()
+                        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16,
+                        ByteArrayOp.WRITE_WORD8_AS_INT16, ByteArrayOp.WRITE_WORD8_AS_WORD16 ->
+                            e.builder.beginWriteInt16Array(
+                                operation == ByteArrayOp.WRITE_WORD8_AS_INT16 || operation == ByteArrayOp.WRITE_WORD8_AS_WORD16)
                         ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> e.builder.beginWriteInt32Array()
-                        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16 ->
-                            e.builder.beginIndexInt16Array(operation == ByteArrayOp.INDEX_WORD16)
+                        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16,
+                        ByteArrayOp.INDEX_WORD8_AS_INT16, ByteArrayOp.INDEX_WORD8_AS_WORD16 ->
+                            e.builder.beginIndexInt16Array(
+                                operation == ByteArrayOp.INDEX_WORD16 || operation == ByteArrayOp.INDEX_WORD8_AS_WORD16,
+                                operation == ByteArrayOp.INDEX_WORD8_AS_INT16 || operation == ByteArrayOp.INDEX_WORD8_AS_WORD16)
                         ByteArrayOp.INDEX_INT32, ByteArrayOp.INDEX_WORD32 ->
                             e.builder.beginIndexInt32Array(operation == ByteArrayOp.INDEX_WORD32)
                         else -> error("Tuple ByteArray operation")
@@ -1681,9 +1692,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.WRITE_FLOAT, ByteArrayOp.WRITE_WORD8_AS_FLOAT -> e.builder.endWriteFloatArray()
                         ByteArrayOp.INDEX_FLOAT, ByteArrayOp.INDEX_WORD8_AS_FLOAT -> e.builder.endIndexFloatArray()
 
-                        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16 -> e.builder.endWriteInt16Array()
+                        ByteArrayOp.WRITE_INT16, ByteArrayOp.WRITE_WORD16,
+                        ByteArrayOp.WRITE_WORD8_AS_INT16, ByteArrayOp.WRITE_WORD8_AS_WORD16 -> e.builder.endWriteInt16Array()
                         ByteArrayOp.WRITE_INT32, ByteArrayOp.WRITE_WORD32 -> e.builder.endWriteInt32Array()
-                        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16 -> e.builder.endIndexInt16Array()
+                        ByteArrayOp.INDEX_INT16, ByteArrayOp.INDEX_WORD16,
+                        ByteArrayOp.INDEX_WORD8_AS_INT16, ByteArrayOp.INDEX_WORD8_AS_WORD16 -> e.builder.endIndexInt16Array()
                         ByteArrayOp.INDEX_INT32, ByteArrayOp.INDEX_WORD32 -> e.builder.endIndexInt32Array()
                         else -> error("Tuple ByteArray operation")
                     }

@@ -134,7 +134,7 @@ internal class ManagedAllocation private constructor(
      * entire scalar access under the pointer-cell monitor. */
     @Synchronized fun <T> accessByteRange(offset: Long, width: Int, writable: Boolean,
         action: (ByteArray) -> T): T {
-        if (width != 4 && width != 8) fault("Unsupported floating byte-range width")
+        if (width != 2 && width != 4 && width != 8) fault("Unsupported scalar byte-range width")
         val start = range(offset, width.toLong())
         if (writable) {
             mutable()

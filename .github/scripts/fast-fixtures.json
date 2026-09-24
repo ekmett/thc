@@ -139,6 +139,19 @@
         "thc.cabal"
       ]
     },
+    "narrow-byte-offset": {
+      "junit": ["thc.runtime.NarrowByteOffsetTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "narrow-byte-offset"]}],
+      "outputs": ["build/narrow-byte-offset"],
+      "sources": [
+        "test/haskell-fixtures/NarrowByteOffsetFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/NarrowByteOffsetAudit.hs",
+        "compiler/test-fixtures/NarrowByteOffsetNative.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stack-formatter": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],

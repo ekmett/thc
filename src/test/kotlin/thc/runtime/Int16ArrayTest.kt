@@ -134,7 +134,7 @@ class Int16ArrayTest {
             assertThrows(RuntimeFault::class.java) { badIndexRead.executeTuple(frame, intArrayOf(slot), 0) }
             assertEquals(73L, frame.getLong(slot))
             // Bytecode specializations likewise validate State before any access.
-            assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteInt16Array.write(bytes, 0, 99, 0L) }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteInt16Array.write(false, bytes, 0, 99, 0L) }
             assertEquals(0xffffL, ManagedInt16Array.readUnsigned(bytes, 0))
         }
     }

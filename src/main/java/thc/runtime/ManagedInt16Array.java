@@ -38,4 +38,25 @@ public final class ManagedInt16Array {
     public static void write(byte[] bytes, long index, long value) {
         ELEMENTS.set(bytes, byteOffset(bytes, index), (short) value);
     }
+
+    /** Word8ArrayAsInt16#/Word16# count bytes, including unaligned starts. */
+    private static int checkedByteOffset(byte[] bytes, long offset) {
+        if (offset < 0 || offset > (long) bytes.length - Short.BYTES) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new RuntimeFault("ByteArray# 16-bit byte offset outside its backing storage");
+        }
+        return (int) offset;
+    }
+
+    public static long readSignedByteOffset(byte[] bytes, long offset) {
+        return (short) ELEMENTS.get(bytes, checkedByteOffset(bytes, offset));
+    }
+
+    public static long readUnsignedByteOffset(byte[] bytes, long offset) {
+        return Short.toUnsignedLong((short) ELEMENTS.get(bytes, checkedByteOffset(bytes, offset)));
+    }
+
+    public static void writeByteOffset(byte[] bytes, long offset, long value) {
+        ELEMENTS.set(bytes, checkedByteOffset(bytes, offset), (short) value);
+    }
 }
