@@ -7,13 +7,13 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.nio.ByteOrder
 
-class ManagedStackInfoImageTest {
+internal object StackInfoTestLayout {
     private val platform = (if (System.getProperty("os.arch").lowercase() in setOf("arm64", "aarch64")) "aarch64" else "x86_64") +
         (if (System.getProperty("os.name").startsWith("Mac")) "-osx" else "-linux")
-    private val endian = if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big"
+    val endian = if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big"
 
     // Same complete synthetic typed-layout construction used by CoreZipBundleTest.
-    private fun fields(): Map<String, Any?> = mapOf(
+    fun fields(): Map<String, Any?> = mapOf(
         "schema" to 1, "profiled" to false, "wordBytes" to 8, "targetPlatform" to platform,
         "tablesNextToCode" to true, "endianness" to endian,
         "infoTableBytes" to 16, "infoTablePtrsOffset" to 0, "infoTablePtrsBytes" to 4,
@@ -34,11 +34,18 @@ class ManagedStackInfoImageTest {
         "stackCatchRetryAltBytes" to 24, "stackCatchRetryFrameBytes" to 32,
         "stackRetFunSizeBytes" to 8, "stackRetFunFunBytes" to 16, "stackRetFunPayloadBytes" to 24, "stackRetFunFrameBytes" to 24,
         "stackAnnPayloadBytes" to 8, "stackAnnFrameBytes" to 16, "stackClosurePayloadBytes" to 8)
-    private fun document(fields: Map<String, Any?> = fields()): Map<String, Any?> = mapOf(
+    fun document(fields: Map<String, Any?> = fields()): Map<String, Any?> = mapOf(
         "format" to "thc-target-layout", "schema" to 1,
         "compiler" to mapOf("id" to "ghc-9.14.1", "abi" to "info-image-test", "platform" to platform, "way" to "dynamic-nonprofiling"),
         "layout" to fields)
-    private fun layout(changes: Map<String, Any?> = emptyMap()) = TargetLayout.fromDocument(document(fields() + changes))
+    fun layout(changes: Map<String, Any?> = emptyMap()) = TargetLayout.fromDocument(document(fields() + changes))
+}
+
+class ManagedStackInfoImageTest {
+    private val endian = StackInfoTestLayout.endian
+    private fun fields() = StackInfoTestLayout.fields()
+    private fun document(fields: Map<String, Any?> = fields()) = StackInfoTestLayout.document(fields)
+    private fun layout(changes: Map<String, Any?> = emptyMap()) = StackInfoTestLayout.layout(changes)
     private val factories = listOf<(TargetLayout) -> ManagedStackInfoImage>(ManagedStackInfoImage::stack, ManagedStackInfoImage::frame)
 
     @Test fun exactStackAndZeroPayloadDiagnosticFrameBytes() {

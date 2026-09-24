@@ -23,6 +23,31 @@ internal object CoreStackInfoForeign {
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
 
+    fun requireLayout(value: Any?): TargetLayout {
+        val layout = value as? TargetLayout ?: fault("Original stack info call requires a typed target layout")
+        requireProof(layout.tablesNextToCode, "tables-next-to-code layout required")
+        return layout
+    }
+
+    /** An occurrence certificate cannot relabel an incompatible stored operand. */
+    fun validateOperand(operation: OriginalStackInfoOp, index: Int,
+        lowered: CoreRepresentation, stored: CoreRepresentation?) {
+        val primitive = operation.arguments[index]
+        val kind = when (primitive) {
+            null -> CoreKind.VOID
+            "AddrRep" -> CoreKind.ADDRESS
+            "BoxedRep (Just Unlifted)" -> CoreKind.OBJECT
+            else -> CoreKind.LONG
+        }
+        val reps = listOfNotNull(primitive)
+        requireProof(lowered.present && !lowered.isAggregate && !lowered.isVector &&
+            lowered.kind == kind && lowered.primReps == reps, "lowered operand $index")
+        if (stored != null && stored.present)
+            requireProof(!stored.isAggregate && !stored.isVector &&
+                stored.kind in setOf(kind, CoreKind.UNKNOWN) &&
+                (stored.primReps == null || stored.primReps == reps), "stored operand $index")
+    }
+
     private fun scalar(raw: Any?, primitive: String?, evaluated: Boolean? = null): Boolean {
         val value = raw as? Map<*, *> ?: return false
         val kind = when (primitive) {
