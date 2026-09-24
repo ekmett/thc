@@ -1378,9 +1378,18 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
 
     /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
     fun execute(frame: VirtualFrame): Any? {
-        if (tuple != null) {
-            value.executeTuple(frame, tupleSlots, 0)
-            return tuple.finish(frame, tupleSlots)
+        val shape = tuple
+        if (shape != null) {
+            try { value.executeTuple(frame, tupleSlots, 0) }
+            catch (cut: AstCapture) {
+                throw cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        if (input != null) fault("Invalid AST tuple resume value")
+                        return shape.finish(frame, tupleSlots)
+                    }
+                })
+            }
+            return shape.finish(frame, tupleSlots)
         }
         // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
         // cannot fold that lookup, even when this node's resultKind is constant.
@@ -1401,7 +1410,9 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
 }
 private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
     fun once(frame: VirtualFrame): Any? {
-        val entry = (rootNode as FunctionRoot).handoff
+        val root = rootNode as FunctionRoot
+        root.pollBeforeBody(this)
+        val entry = root.handoff
         return if (entry != null && entry.resultLong && entry.destination(frame) >= 0) entry.finishLong(frame, body.executeLong(frame))
         else body.execute(frame)
     }
@@ -1439,7 +1450,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             internal val handoff: HandoffEntry? = null,
                             tuple: TupleShape? = null,
                             tupleSlots: IntArray = intArrayOf(),
-                            inputLayout: ArgumentLayout? = null) : GuestRoot(language, descriptor) {
+                            inputLayout: ArgumentLayout? = null,
+                            private val enableAsync: Boolean = false) : GuestRoot(language, descriptor) {
     init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
@@ -1468,6 +1480,19 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         }
     }
     fun handoffDestination(frame: VirtualFrame): Int = handoff?.destination(frame) ?: -1
+
+    private class ResumeBody(private val root: FunctionRoot) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input !== Unit) fault("Invalid AST root poll resume value")
+            return root.executeBody(frame)
+        }
+    }
+
+    fun pollBeforeBody(node: Node) {
+        if (!enableAsync) return
+        val request = GuestThreads.pollCurrent(node, false) ?: return
+        throw AstCapture(request, SynchronousMasking.current(node)).append(ResumeBody(this))
+    }
 
     fun restoreTail(frame: VirtualFrame, transfer: TailCall) {
         val input = transfer.input
@@ -1544,7 +1569,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
             buildFrame(frame.arguments, frame)
         }
-        return executeBody(frame)
+        return try { executeBody(frame) }
+        catch (cut: AstCapture) { cut.freeze(this, frame.materialize()) }
     }
 
     private fun executeBody(frame: VirtualFrame): Any? {
@@ -1623,8 +1649,11 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
 }
 private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: IntArray)
 
-/** Exported GHC Core lowers lexical bindings to indexed frame slots, as Cadenza does. */
-class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>) : ExecutableProgram {
+/** Exported GHC Core lowers lexical bindings to indexed frame slots, as Cadenza does.
+ * Async AST admission is opt-in for internal proofs; Language.parse keeps it disabled
+ * until every public closure/call boundary can consume a saved continuation. */
+class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
+              private val enableAsync: Boolean = false) : ExecutableProgram {
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = Metrics(moduleData["instrument"] != false)
@@ -1657,6 +1686,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     init {
+        if (enableAsync) AstAsyncAdmission.validate(bindings)
         ArrayOp.validateApplications(bindings)
         CoreStackForeign.validateHeads(bindings)
         CoreStackInfoForeign.validateHeads(bindings)
@@ -1789,7 +1819,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<tuple return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
-            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout)
+            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
         if (body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
@@ -2022,7 +2052,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 })
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 operation.validate(operands.map { it.representation }, flags, tupleProof)
-                mVarExpression(operation, tupleProof, operands.toTypedArray())
+                mVarExpression(operation, tupleProof, operands.toTypedArray(), enableAsync)
             } else if (fn[0] == "prim" && MutVarOp.named(fn[1] as String) != null) {
                 val operation = MutVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
