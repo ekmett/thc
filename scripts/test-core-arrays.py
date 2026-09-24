@@ -96,11 +96,36 @@ class ArrayContracts(unittest.TestCase):
             else:proof.update(kind='vector',primReps=['VecRep 2 Int64ElemRep'],vector=dict(lanes=2,element='Int64ElemRep'))
             self.assertIn('primitive-representation',codes(module),change)
 
-    def test_first_class_and_unclaimed_families_remain_unsupported(self):
+    def test_first_class_and_atomic_operations_remain_unsupported(self):
         for name in CAP['managedArrayPrimitives']:
             module,app=fixture(name);app[:]=['prim',name]
             self.assertFalse(report(module)['accepted'])
-        for name in ('unsafeThawArray#','copyArray#','copyMutableArray#','sizeofArray#','newSmallArray#','casArray#'):
-            self.assertNotIn(name,CAP['primitives'])
+        self.assertNotIn('casArray#',CAP['primitives'])
+
+    def test_raw_flags_and_extra_scalar_fields_cannot_be_erased(self):
+        for name in CAP['managedArrayPrimitives']:
+            for field in ('components', 'aggregate', 'vector', 'alternatives', 'tagSlot'):
+                module, app = fixture(name)
+                app[2][0][2]['rep'][field] = None
+                self.assertIn('primitive-representation', codes(module), (name, field))
+            for value in (0, 1, None, 'false'):
+                module, app = fixture(name)
+                app[3][0] = value
+                self.assertIn('primitive-representation', codes(module), (name, value))
+
+    def test_extensions_exact_results_state_and_full_width_offsets(self):
+        names = ('sizeofArray#', 'sizeofMutableArray#', 'cloneMutableArray#',
+                 'copyArray#', 'copyMutableArray#', 'unsafeThawArray#')
+        for name in names:
+            contract = CAP['managedArrayPrimitives'][name]
+            for index, role in enumerate(contract['arguments']):
+                for wrong in (['Int64Rep', 'WordRep', 'Word64Rep'] if role == 'int' else
+                              ['BoxedRep Nothing', 'BoxedRep (Just Lifted)'] if role == 'array' else ['IntRep']):
+                    module, app = fixture(name)
+                    app[2][index][2]['rep']['primReps'] = [wrong]
+                    self.assertIn('primitive-representation', codes(module), (name, index, wrong))
+            module, app = fixture(name)
+            app[6]['rep']['primReps'] = ['WordRep']
+            self.assertIn('primitive-representation', codes(module), name)
 
 if __name__=='__main__':unittest.main()

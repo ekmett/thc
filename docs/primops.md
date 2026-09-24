@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 274 | Implemented fixed numeric/character scalar forms. |
-| Partial | 237 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 980 | No declared lowering. |
+| Partial | 243 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 974 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -342,8 +342,11 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `byteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `catch#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `cloneArray#` — arity 3 — Managed lifted arrays
+- [ ] `cloneMutableArray#` — arity 4 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
+- [ ] `copyArray#` — arity 6 — Managed lifted arrays
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
+- [ ] `copyMutableArray#` — arity 6 — Managed lifted arrays
 - [ ] `copyMutableByteArray#` — arity 6 — Managed byte storage
 - [ ] `copyMutableByteArrayNonOverlapping#` — arity 6 — Managed byte storage
 - [ ] `dataToTagLarge#` — arity 1 — concrete-algebraic-family-64
@@ -488,7 +491,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `resizeMutableByteArray#` — arity 3 — Managed byte storage
 - [ ] `setByteArray#` — arity 5 — Managed byte storage
+- [ ] `sizeofArray#` — arity 1 — Managed lifted arrays
 - [ ] `sizeofByteArray#` — arity 1 — Managed byte storage
+- [ ] `sizeofMutableArray#` — arity 1 — Managed lifted arrays
 - [ ] `sizeofMutableByteArray#` — arity 1 — Managed byte storage
 - [ ] `sizeofSmallArray#` — arity 1 — Managed lifted arrays
 - [ ] `sizeofSmallMutableArray#` — arity 1 — Managed lifted arrays
@@ -535,6 +540,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unsafeFreezeArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeFreezeByteArray#` — arity 2 — Managed byte storage
 - [ ] `unsafeFreezeSmallArray#` — arity 2 — Managed lifted arrays
+- [ ] `unsafeThawArray#` — arity 2 — Managed lifted arrays
 - [ ] `writeAddrArray#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeArray#` — arity 4 — Managed lifted arrays
@@ -618,7 +624,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `catchRetry#` — arity 3
 - [ ] `catchSTM#` — arity 3
 - [ ] `clearCCS#` — arity 2
-- [ ] `cloneMutableArray#` — arity 4
 - [ ] `cloneSmallArray#` — arity 3
 - [ ] `cloneSmallMutableArray#` — arity 4
 - [ ] `closureSize#` — arity 1
@@ -637,9 +642,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `copyAddrToAddr#` — arity 4
 - [ ] `copyAddrToAddrNonOverlapping#` — arity 4
 - [ ] `copyAddrToByteArray#` — arity 5
-- [ ] `copyArray#` — arity 6
 - [ ] `copyByteArrayToAddr#` — arity 5
-- [ ] `copyMutableArray#` — arity 6
 - [ ] `copyMutableByteArrayToAddr#` — arity 5
 - [ ] `copySmallArray#` — arity 6
 - [ ] `copySmallMutableArray#` — arity 6
@@ -1321,8 +1324,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `shuffleWord8X16#` — arity 3
 - [ ] `shuffleWord8X32#` — arity 3
 - [ ] `shuffleWord8X64#` — arity 3
-- [ ] `sizeofArray#` — arity 1
-- [ ] `sizeofMutableArray#` — arity 1
 - [ ] `spark#` — arity 2
 - [ ] `stableNameToInt#` — arity 1
 - [ ] `thawSmallArray#` — arity 4
@@ -1373,7 +1374,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord64X8#` — arity 1
 - [ ] `unpackWord8X32#` — arity 1
 - [ ] `unpackWord8X64#` — arity 1
-- [ ] `unsafeThawArray#` — arity 2
 - [ ] `unsafeThawByteArray#` — arity 2
 - [ ] `unsafeThawSmallArray#` — arity 2
 - [ ] `waitRead#` — arity 2

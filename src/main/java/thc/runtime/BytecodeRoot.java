@@ -1426,6 +1426,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class SizeArray {
+        @Specialization public static long size(Object reference) {
+            return ManagedArray.size(ManagedArray.require(reference));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "mutableSource")
+    public static final class TransferArray {
+        @Specialization public static Object copy(boolean mutableSource, Object source, long sourceOffset,
+                Object destination, long destinationOffset, long count, Object state) {
+            Object[] from = ManagedArray.require(source);
+            Object[] to = ManagedArray.require(destination);
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedArray.copy(from, sourceOffset, to, destinationOffset, count, mutableSource);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
     @Operation public static final class CloneArray {
         @Specialization public static Object clone(Object reference, long offset, long count) {
             return ManagedArray.slice(ManagedArray.require(reference), offset, count);

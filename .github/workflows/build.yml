@@ -349,6 +349,7 @@ jobs:
             build/mutvar/*/*.audit.json
             build/mutvar/*/core/*.json
             build/boxed-arrays/
+            build/boxed-array-extensions/
             build/address-fields/
             build/data-to-tag/
             build/scalar-bitcasts/

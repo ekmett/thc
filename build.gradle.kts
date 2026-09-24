@@ -108,6 +108,7 @@ tasks.withType<Test>().configureEach {
             "array-slices/**/*.json", "array-slices/*.tsv", "array-slices/NativeArraySlices.hs", "array-slices/native/**",
             "boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "boxed-arrays/NativeBoxedArray.hs", "boxed-arrays/native/**",
             "small-arrays/**/*.json", "small-arrays/*.tsv", "small-arrays/native/**",
+            "boxed-array-extensions/manifest.json", "boxed-array-extensions/run-*/**",
             "address-fields/**/*.json", "address-fields/*.tsv", "address-fields/NativeAddressFields.hs", "address-fields/native/**",
             "data-to-tag/**/*.json", "data-to-tag/*.tsv", "data-to-tag/NativeDataToTag.hs", "data-to-tag/native/**",
             "int-arrays/**/*.json", "int-arrays/oracle.tsv", "int-arrays/expected.tsv",
@@ -150,6 +151,7 @@ tasks.withType<Test>().configureEach {
         "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
         "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc")
     inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
+    inputs.file("thc.cabal")
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
         include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",

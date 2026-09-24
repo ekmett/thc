@@ -204,6 +204,15 @@
       "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest"],
       "python": []
     },
+    "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
+    },
+    "compiler/test-fixtures/BoxedArrayExtensionsNative.hs": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
+    },
+    "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs": {
+      "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
+    },
     "compiler/test-fixtures/AddressIdentityAudit.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -242,6 +251,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
         "thc.runtime.IntArrayNativeTest",
         "thc.runtime.Int8ArrayNativeTest",
@@ -607,6 +617,7 @@
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.OriginalStackConsumerProofTest",
+        "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
         "thc.SignedNarrowPrimopsTest",
