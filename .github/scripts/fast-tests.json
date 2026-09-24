@@ -414,27 +414,9 @@
       "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
       "python": ["scripts/test-simd-families.py"]
     },
-    "scripts/prepare-bit-primops.py": {
-      "junit": [
-        "thc.runtime.BitPrimopsTest"
-      ],
-      "python": []
-    },
     "scripts/prepare-data-to-tag.py": {
       "junit": ["thc.runtime.DataToTagTest"],
       "python": ["scripts/test-core-data-tags.py"]
-    },
-    "scripts/prepare-explicit64-primops.py": {
-      "junit": [
-        "thc.runtime.Explicit64PrimopsTest"
-      ],
-      "python": []
-    },
-    "scripts/prepare-integer-primops.py": {
-      "junit": [
-        "thc.IntegerPrimopsTest"
-      ],
-      "python": []
     },
     "scripts/prepare-int8-arrays.py": {
       "junit": ["thc.runtime.Int8ArrayNativeTest"],
@@ -459,12 +441,6 @@
     "scripts/prepare-simd-families.py": {
       "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
       "python": ["scripts/test-simd-families.py"]
-    },
-    "scripts/prepare-signed-narrow-primops.py": {
-      "junit": [
-        "thc.SignedNarrowPrimopsTest"
-      ],
-      "python": []
     },
     "scripts/prepare-tuple-input-audit.py": {
       "junit": [
@@ -491,6 +467,15 @@
     "src/test/kotlin/thc/ScalarPrimopModel.kt": {
       "junit": [
         "thc.ScalarPrimopModelTest",
+        "thc.runtime.BitPrimopsTest",
+        "thc.IntegerPrimopsTest",
+        "thc.SignedNarrowPrimopsTest",
+        "thc.runtime.Explicit64PrimopsTest"
+      ],
+      "python": []
+    },
+    "test/haskell-fixtures/Main.hs": {
+      "junit": [
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
         "thc.SignedNarrowPrimopsTest",
