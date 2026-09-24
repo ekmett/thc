@@ -28,8 +28,11 @@ internal object AstAsyncAdmission {
         val body = expression.getOrNull(2) as? List<*> ?: return Effect.MAY_SUSPEND
         // EntryArguments may force strict formals before FunctionRoot can capture.
         // A tuple formal may pass through a loan that is released before resume.
+        val formals = LinkedHashMap<String, Map<String, Any?>>()
         if (CoreEntries.lambda(expression).any { it } || arguments.any {
                 val binder = it as? Map<String, Any?> ?: return Effect.MAY_SUSPEND
+                val id = binder["id"] as? String ?: return Effect.MAY_SUSPEND
+                formals[id] = binder
                 CoreRepresentations.binder(binder).isAggregate
             }) return Effect.MAY_SUSPEND
         val declared = CoreRepresentations.lambdaResult(expression)
@@ -41,24 +44,29 @@ internal object AstAsyncAdmission {
             (if (declared.kind == CoreKind.UNKNOWN) actual.kind else declared.kind) == CoreKind.LONG -> Route.LONG
             else -> Route.OTHER
         }
-        return child(body, route, declared)
+        return child(body, route, declared, formals)
     }
 
-    private fun child(expression: List<*>, route: Route, declared: CoreRepresentation): Effect = when (expression.firstOrNull()) {
+    private fun child(expression: List<*>, route: Route, declared: CoreRepresentation,
+                      formals: Map<String, Map<String, Any?>>): Effect = when (expression.firstOrNull()) {
         "lit", "void" -> Effect.NO_SUSPEND
         "lam" -> if (lambda(expression) == Effect.MAY_SUSPEND) Effect.MAY_SUSPEND else Effect.NO_SUSPEND
         "app" -> {
             val head = expression.getOrNull(1) as? List<*>
             val arguments = expression.getOrNull(2) as? List<*>
+            val flags = expression.getOrNull(3) as? List<*>
             val name = if (head?.firstOrNull() == "prim") head.getOrNull(1) else null
             val capturedRoute = when (name) {
                 "takeMVar#", "readMVar#" -> Route.TUPLE
                 "putMVar#" -> Route.OTHER
                 else -> null
             }
-            // MVar operands use raw var/literal/State carriers. No Evaluate force
-            // precedes the managed blocking operation and its saved resume step.
-            if (capturedRoute == route && arguments != null && arguments.all { rawAtom(it as? List<*>) })
+            // Unlifted operands pass through Evaluate. Their lexical carrier,
+            // not an occurrence's claimed evaluatedness, must rule out Force.
+            if (capturedRoute == route && arguments != null && flags?.size == arguments.size &&
+                flags.all { it is Boolean } &&
+                arguments.indices.all { index -> rawOperand(arguments[index] as? List<*>,
+                    flags[index] == false, formals) })
                 Effect.CAPTURED else Effect.MAY_SUSPEND
         }
         "case" -> {
@@ -69,14 +77,22 @@ internal object AstAsyncAdmission {
             // The branch must itself be non-suspending, including Evaluate's demand.
             if (route != Route.LONG || declared.kind != CoreKind.LONG || declared.primReps != listOf("IntRep") ||
                 scrutinee == null || CoreRepresentations.expression(scrutinee as List<Any?>).isTuple != true ||
-                child(scrutinee, Route.TUPLE, CoreRepresentation.UNKNOWN) != Effect.CAPTURED ||
+                child(scrutinee, Route.TUPLE, CoreRepresentation.UNKNOWN, formals) != Effect.CAPTURED ||
                 alternative?.firstOrNull() != "data" || body?.firstOrNull() != "lit" ||
                 body.getOrNull(1) != "int" || !CoreRepresentations.expression(body as List<Any?>).isLong ||
-                child(body, Route.LONG, declared) != Effect.NO_SUSPEND)
+                child(body, Route.LONG, declared, formals) != Effect.NO_SUSPEND)
                 Effect.MAY_SUSPEND else Effect.CAPTURED
         }
         else -> Effect.MAY_SUSPEND
     }
 
-    private fun rawAtom(expression: List<*>?): Boolean = expression?.firstOrNull() in setOf("var", "lit", "void")
+    private fun rawOperand(expression: List<*>?, demanded: Boolean,
+                           formals: Map<String, Map<String, Any?>>): Boolean = when (expression?.firstOrNull()) {
+        "lit", "void" -> true
+        "var" -> if (!demanded) true else {
+            val formal = formals[expression.getOrNull(1)]
+            formal != null && formal["lifted"] == false && CoreRepresentations.binder(formal).evaluated
+        }
+        else -> false
+    }
 }
