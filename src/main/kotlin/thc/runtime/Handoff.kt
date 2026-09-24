@@ -4,6 +4,7 @@ import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ControlFlowException
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -237,6 +238,7 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
     private fun trampoline(state: HandoffState, initial: HandoffTailCall): Any? {
         var transfer = initial
         while (true) {
+            TruffleSafepoint.poll(this)
             if (metrics.enabled) metrics.incrementTrampolineIterations()
             val next = transfer
             val generation = next.arguments.generation
