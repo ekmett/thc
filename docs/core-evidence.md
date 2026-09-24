@@ -24,6 +24,15 @@ Binder, binding and expression metadata can carry:
 
 Newtypes, type families and unary class representations do not establish a data-object layout. Unboxed tuples and sums remain `unknown`, including the empty unboxed tuple: an empty register list alone does not make an unsupported aggregate a void token. The shared parser checks exact carriers for positive primitive/reference proofs. Older schema-1 trees without metadata remain accepted with unknown evidence; unsupported operations and unresolved required representations still fail explicitly.
 
+The six narrow literal forms (`int8`/`word8`, `int16`/`word16`, and
+`int32`/`word32`) intrinsically establish their exact signed or unsigned
+representation. Shared expression lookup recovers that proof for absent or
+unconstrained metadata before strict primitive validation, just as literal
+lowering does. Contradictory or malformed retained proofs and invalid literal
+ranges still reject. `NarrowLiteralProofAudit` retains genuine direct ByteArray
+writes in both GHC stages; metadata-only projections preserve the original native
+oracle and exercise this distinction without loosening primitive signatures.
+
 Aggregate records additionally retain [recursive logical components and alternatives](aggregate-layout.md), independently of their physical register vector. GHC's representation view exposes aggregate newtype aliases without promoting scalar newtypes to data/closure proofs. Unresolved aggregate runtime representations stay `null`; lazy lifted children stay unevaluated. These records drive [bounded tuple-result lowering](tuple-results.md) and [typed tuple inputs](tuple-inputs.md); [exact empty tuple inputs](empty-tuple-inputs.md) preserve logical arity with no payload fields; [binary sum results](sum-results.md) use exact storage projections. Sum arguments, aggregate join arguments, captures and unresolved layouts still reject.
 
 A successful case establishes WHNF for its binder and original scrutinee variable within the alternatives. Pattern fields gain the same fact only when they are unlifted or the saturated constructor worker requires them to be strict. Worker strictness marks must align exactly with worker fields, including coercions. Lazy lifted fields remain lazy. Lexical facts propagate by GHC variable identity, so shadowing does not leak them into another binding.
