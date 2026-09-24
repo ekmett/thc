@@ -114,6 +114,17 @@ private val floatingOperations = mapOf(
 /** JVM float operations round each result to binary32; no implicit numeric widening. */
 internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
     rawBitCastPrimitive(name, arguments)?.let { return it }
+    val fused = when (name) {
+        "fmaddFloat#", "fmaddDouble#" -> 0
+        "fmsubFloat#", "fmsubDouble#" -> 1
+        "fnmaddFloat#", "fnmaddDouble#" -> 2
+        "fnmsubFloat#", "fnmsubDouble#" -> 3
+        else -> -1
+    }
+    if (fused >= 0) {
+        if (arguments.size != 3) throw RuntimeFault("Primitive arity mismatch: $name")
+        return if (name.endsWith("Float#")) FusedFloat(fused, arguments) else FusedDouble(fused, arguments)
+    }
     if (name == "sqrtFloat#" || name == "sqrtDouble#") {
         if (arguments.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
         return if (name == "sqrtFloat#") FloatSqrt(arguments[0]) else DoubleSqrt(arguments[0])
@@ -138,6 +149,30 @@ internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
         "tanFloat#", "asinFloat#", "acosFloat#", "atanFloat#", "sinhFloat#", "coshFloat#", "tanhFloat#", "tanDouble#", "asinDouble#", "acosDouble#", "atanDouble#", "sinhDouble#", "coshDouble#", "tanhDouble#")
     if (arguments.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
     return FloatingPrimitive(floatingOperations.getValue(name), arguments, kind)
+}
+
+// GHC's negated variants negate operands, not the rounded result. The distinction
+// matters for signed zero. Math.fma performs one rounding in the declared format.
+private class FusedFloat(private val operation: Int, @field:Children private var arguments: Array<Expr>) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.FLOAT, evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = executeFloat(frame)
+    override fun executeFloat(frame: VirtualFrame): Float {
+        val x = arguments[0].executeRequiredFloat(frame)
+        val y = arguments[1].executeRequiredFloat(frame)
+        val z = arguments[2].executeRequiredFloat(frame)
+        return Math.fma(if (operation >= 2) -x else x, y, if (operation and 1 != 0) -z else z)
+    }
+}
+
+private class FusedDouble(private val operation: Int, @field:Children private var arguments: Array<Expr>) : Expr() {
+    init { representation = CoreRepresentation(CoreKind.DOUBLE, evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = executeDouble(frame)
+    override fun executeDouble(frame: VirtualFrame): Double {
+        val x = arguments[0].executeRequiredDouble(frame)
+        val y = arguments[1].executeRequiredDouble(frame)
+        val z = arguments[2].executeRequiredDouble(frame)
+        return Math.fma(if (operation >= 2) -x else x, y, if (operation and 1 != 0) -z else z)
+    }
 }
 
 // Keep each operand and result primitive throughout execution. Float inputs are

@@ -2638,6 +2638,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleDivide { @Specialization public static double apply(double x, double y) { return x / y; } }
     @Operation public static final class DoubleNegate { @Specialization public static double apply(double x) { return -x; } }
     @Operation public static final class DoubleSqrt { @Specialization public static double apply(double x) { return Math.sqrt(x); } }
+    @Operation public static final class FloatFMAdd { @Specialization public static float apply(float x, float y, float z) { return Math.fma(x, y, z); } }
+    @Operation public static final class FloatFMSub { @Specialization public static float apply(float x, float y, float z) { return Math.fma(x, y, -z); } }
+    @Operation public static final class FloatFNMAdd { @Specialization public static float apply(float x, float y, float z) { return Math.fma(-x, y, z); } }
+    @Operation public static final class FloatFNMSub { @Specialization public static float apply(float x, float y, float z) { return Math.fma(-x, y, -z); } }
+    @Operation public static final class DoubleFMAdd { @Specialization public static double apply(double x, double y, double z) { return Math.fma(x, y, z); } }
+    @Operation public static final class DoubleFMSub { @Specialization public static double apply(double x, double y, double z) { return Math.fma(x, y, -z); } }
+    @Operation public static final class DoubleFNMAdd { @Specialization public static double apply(double x, double y, double z) { return Math.fma(-x, y, z); } }
+    @Operation public static final class DoubleFNMSub { @Specialization public static double apply(double x, double y, double z) { return Math.fma(-x, y, -z); } }
     @Operation public static final class FloatAbs { @Specialization public static float apply(float x) { return Math.abs(x); } }
     @Operation public static final class FloatExp { @Specialization public static float apply(float x) { return (float) Math.exp(x); } }
     @Operation public static final class FloatExpm1 { @Specialization public static float apply(float x) { return (float) Math.expm1(x); } }

@@ -9,6 +9,7 @@ module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
 import WordFloatingFixtures (prepareWordFloating)
+import FusedFloatingFixtures (prepareFusedFloating)
 import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
@@ -817,6 +818,7 @@ main = do
     _ -> pure False
   unless handled $ case args of
     ["word-floating"] -> prepareWordFloating root
+    ["fused-floating"] -> prepareFusedFloating root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root

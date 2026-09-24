@@ -6,6 +6,45 @@ module FloatingAudit where
 
 import GHC.Exts
 
+-- Keep a typed residual boundary for all eight genuinely fused operations.
+{-# NOINLINE fusedFloatAddWorker #-}
+{-# NOINLINE fusedFloatSubWorker #-}
+{-# NOINLINE fusedFloatNegAddWorker #-}
+{-# NOINLINE fusedFloatNegSubWorker #-}
+fusedFloatAddWorker, fusedFloatSubWorker, fusedFloatNegAddWorker, fusedFloatNegSubWorker :: Float# -> Float# -> Float# -> Float#
+fusedFloatAddWorker x y z = fmaddFloat# x y z
+fusedFloatSubWorker x y z = fmsubFloat# x y z
+fusedFloatNegAddWorker x y z = fnmaddFloat# x y z
+fusedFloatNegSubWorker x y z = fnmsubFloat# x y z
+{-# NOINLINE fusedDoubleAddWorker #-}
+{-# NOINLINE fusedDoubleSubWorker #-}
+{-# NOINLINE fusedDoubleNegAddWorker #-}
+{-# NOINLINE fusedDoubleNegSubWorker #-}
+fusedDoubleAddWorker, fusedDoubleSubWorker, fusedDoubleNegAddWorker, fusedDoubleNegSubWorker :: Double# -> Double# -> Double# -> Double#
+fusedDoubleAddWorker x y z = fmaddDouble# x y z
+fusedDoubleSubWorker x y z = fmsubDouble# x y z
+fusedDoubleNegAddWorker x y z = fnmaddDouble# x y z
+fusedDoubleNegSubWorker x y z = fnmsubDouble# x y z
+
+{-# INLINE fusedFloatBits #-}
+fusedFloatBits :: (Float# -> Float# -> Float# -> Float#) -> Word# -> Word# -> Word# -> Word#
+fusedFloatBits f x y z = word32ToWord# (castFloatToWord32#
+  (f (castWord32ToFloat# (wordToWord32# x)) (castWord32ToFloat# (wordToWord32# y)) (castWord32ToFloat# (wordToWord32# z))))
+{-# INLINE fusedDoubleBits #-}
+fusedDoubleBits :: (Double# -> Double# -> Double# -> Double#) -> Word# -> Word# -> Word# -> Word#
+fusedDoubleBits f x y z = word64ToWord# (castDoubleToWord64#
+  (f (castWord64ToDouble# (wordToWord64# x)) (castWord64ToDouble# (wordToWord64# y)) (castWord64ToDouble# (wordToWord64# z))))
+fusedFloatAdd, fusedFloatSub, fusedFloatNegAdd, fusedFloatNegSub :: Word# -> Word# -> Word# -> Word#
+fusedFloatAdd x y z = fusedFloatBits fusedFloatAddWorker x y z
+fusedFloatSub x y z = fusedFloatBits fusedFloatSubWorker x y z
+fusedFloatNegAdd x y z = fusedFloatBits fusedFloatNegAddWorker x y z
+fusedFloatNegSub x y z = fusedFloatBits fusedFloatNegSubWorker x y z
+fusedDoubleAdd, fusedDoubleSub, fusedDoubleNegAdd, fusedDoubleNegSub :: Word# -> Word# -> Word# -> Word#
+fusedDoubleAdd x y z = fusedDoubleBits fusedDoubleAddWorker x y z
+fusedDoubleSub x y z = fusedDoubleBits fusedDoubleSubWorker x y z
+fusedDoubleNegAdd x y z = fusedDoubleBits fusedDoubleNegAddWorker x y z
+fusedDoubleNegSub x y z = fusedDoubleBits fusedDoubleNegSubWorker x y z
+
 -- These opaque-to-the-caller boundaries are conformance fixtures: keep actual
 -- scalar floating arguments/results and constructor fields in optimized Core.
 {-# NOINLINE floatWorker #-}

@@ -64,6 +64,7 @@ tasks.withType<Test>().configureEach {
         include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "word-floating/**/*.json", "word-floating/oracle.tsv",
+            "fused-floating/**/*.json", "fused-floating/oracle.tsv",
             "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
             "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
             "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",

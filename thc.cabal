@@ -196,6 +196,7 @@ executable thc-fixtures
     ContinuationFixtures
     FixtureSupport
     WordFloatingFixtures
+    FusedFloatingFixtures
     OriginalStdioFixtures
     SmallArrayFixtures
     StackFixtures
