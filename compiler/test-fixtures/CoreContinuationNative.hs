@@ -16,3 +16,6 @@ main = do
   print tupleApplicationAnswer
   print tupleCompactAnswer
   print catchHandlerAnswer
+  print maskedCheckpointAnswer
+  print unmaskedCheckpointAnswer
+  print uninterruptibleCheckpointAnswer
