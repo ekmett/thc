@@ -10,6 +10,8 @@ import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.dsl.TypeSystemReference
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.TruffleSafepoint
+import com.oracle.truffle.api.exception.AbstractTruffleException
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.*
@@ -19,8 +21,8 @@ import com.oracle.truffle.api.source.SourceSection
 
 /* Indexed frames, selective captures, rooted application and self-tail frame
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. Haskell thunks
- * supply the additional lazy update/blackhole protocol. One guest thread;
- * arbitrary non-tail recursion still uses the host stack. */
+ * supply the additional lazy update/blackhole protocol. Arbitrary non-tail
+ * recursion still uses the host stack. */
 open class RuntimeFault(message: String) : RuntimeException(message)
 /** A known implementation gap, distinct from malformed Core or runtime errors. */
 internal class UnsupportedCore(message: String) : RuntimeFault(message)
@@ -85,8 +87,8 @@ internal fun int64Literal(value: String): Long {
 }
 /** Cadenza's recursive indirection: captured by identity, initialized once. */
 internal class RecCell {
-    var initialized = false
-    var value: Any? = null
+    @Volatile var initialized = false
+    @Volatile var value: Any? = null
 }
 /** Program linkage is fixed before guest execution; CAF contents remain lazy. */
 internal class GlobalBinding(val name: String) {
@@ -101,27 +103,63 @@ internal class GlobalBinding(val name: String) {
 internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     // Updated thunks retain only their answer (or memoized guest failure).
     var target: RootCallTarget? = target
-    var state = 0
+    // 0 = unevaluated, 1 = owned, 2 = WHNF, 3 = ordinary failure,
+    // 4 = interrupted without a resumable continuation. State publishes value
+    // and release of the target/environment to all waiting guest threads.
+    @Volatile var state = 0
     var value: Any? = null
+    var owner: Thread? = null
+    val monitor = java.lang.Object()
 }
+/** Keep immutable guest failure data, never a shared mutable Truffle stack trace. */
+private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
+/** Async delivery must carry its origin separately from its guest payload. */
+internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
 internal class Metrics(val enabled: Boolean) {
-    val thunkEvaluationsByLabel = linkedMapOf<String, Long>()
-    @CompilerDirectives.TruffleBoundary fun recordThunk(label: String) {
-        thunkEvaluationsByLabel[label] = (thunkEvaluationsByLabel[label] ?: 0L) + 1L
+    private val thunkCounts = linkedMapOf<String, Long>()
+    @CompilerDirectives.TruffleBoundary @Synchronized fun recordThunk(label: String) {
+        thunkCounts[label] = (thunkCounts[label] ?: 0L) + 1L
     }
-    var compiledEntries = 0L
-    var leadingCaseReturns = 0L
-    var thunkEvaluations = 0L
-    var thunkHits = 0L
-    var blackholes = 0L
-    var directCacheMisses = 0L
-    var indirectCalls = 0L
-    var tailBounces = 0L
-    var selfTailReentries = 0L
-    var localJoinTransfers = 0L
-    var trampolineIterations = 0L
-    var papAllocations = 0L
-    var unsupportedTraps = 0L
+    @CompilerDirectives.TruffleBoundary @Synchronized fun thunkCountsSnapshot(): Map<String, Long> = thunkCounts.toMap()
+    private val compiledEntriesCounter = java.util.concurrent.atomic.AtomicLong()
+    val compiledEntries: Long get() = compiledEntriesCounter.get()
+    fun incrementCompiledEntries() { compiledEntriesCounter.incrementAndGet() }
+    private val leadingCaseReturnsCounter = java.util.concurrent.atomic.AtomicLong()
+    val leadingCaseReturns: Long get() = leadingCaseReturnsCounter.get()
+    fun incrementLeadingCaseReturns() { leadingCaseReturnsCounter.incrementAndGet() }
+    private val thunkEvaluationsCounter = java.util.concurrent.atomic.AtomicLong()
+    val thunkEvaluations: Long get() = thunkEvaluationsCounter.get()
+    fun incrementThunkEvaluations() { thunkEvaluationsCounter.incrementAndGet() }
+    private val thunkHitsCounter = java.util.concurrent.atomic.AtomicLong()
+    val thunkHits: Long get() = thunkHitsCounter.get()
+    fun incrementThunkHits() { thunkHitsCounter.incrementAndGet() }
+    private val blackholesCounter = java.util.concurrent.atomic.AtomicLong()
+    val blackholes: Long get() = blackholesCounter.get()
+    fun incrementBlackholes() { blackholesCounter.incrementAndGet() }
+    private val directCacheMissesCounter = java.util.concurrent.atomic.AtomicLong()
+    val directCacheMisses: Long get() = directCacheMissesCounter.get()
+    fun incrementDirectCacheMisses() { directCacheMissesCounter.incrementAndGet() }
+    private val indirectCallsCounter = java.util.concurrent.atomic.AtomicLong()
+    val indirectCalls: Long get() = indirectCallsCounter.get()
+    fun incrementIndirectCalls() { indirectCallsCounter.incrementAndGet() }
+    private val tailBouncesCounter = java.util.concurrent.atomic.AtomicLong()
+    val tailBounces: Long get() = tailBouncesCounter.get()
+    fun incrementTailBounces() { tailBouncesCounter.incrementAndGet() }
+    private val selfTailReentriesCounter = java.util.concurrent.atomic.AtomicLong()
+    val selfTailReentries: Long get() = selfTailReentriesCounter.get()
+    fun incrementSelfTailReentries() { selfTailReentriesCounter.incrementAndGet() }
+    private val localJoinTransfersCounter = java.util.concurrent.atomic.AtomicLong()
+    val localJoinTransfers: Long get() = localJoinTransfersCounter.get()
+    fun incrementLocalJoinTransfers() { localJoinTransfersCounter.incrementAndGet() }
+    private val trampolineIterationsCounter = java.util.concurrent.atomic.AtomicLong()
+    val trampolineIterations: Long get() = trampolineIterationsCounter.get()
+    fun incrementTrampolineIterations() { trampolineIterationsCounter.incrementAndGet() }
+    private val papAllocationsCounter = java.util.concurrent.atomic.AtomicLong()
+    val papAllocations: Long get() = papAllocationsCounter.get()
+    fun incrementPapAllocations() { papAllocationsCounter.incrementAndGet() }
+    private val unsupportedTrapsCounter = java.util.concurrent.atomic.AtomicLong()
+    val unsupportedTraps: Long get() = unsupportedTrapsCounter.get()
+    fun incrementUnsupportedTraps() { unsupportedTrapsCounter.incrementAndGet() }
 }
 @TypeSystemReference(RuntimeTypes::class)
 internal abstract class Expr : Node() {
@@ -215,7 +253,9 @@ internal class LocalRead(private val slot: Int, private val cell: Boolean = true
 }
 /** Replace only the successfully forced link; aliases may already have updated this cell. */
 internal fun updateForcedCell(cell: RecCell, original: Thunk, result: Any?) {
-    if (cell.initialized && cell.value === original) cell.value = result
+    synchronized(cell) {
+        if (cell.initialized && cell.value === original) cell.value = result
+    }
 }
 
 private class GlobalRead(private val binding: GlobalBinding) : Expr() {
@@ -239,7 +279,7 @@ internal class Force(private val metrics: Metrics) : Node() {
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
-    @CompilationFinal private var seenThunk = false
+    @CompilationFinal @Volatile private var seenThunk = false
     fun execute(frame: VirtualFrame, original: Any?): Any? {
         if (!seenThunk) {
             if (original !is Thunk) return original
@@ -250,40 +290,102 @@ internal class Force(private val metrics: Metrics) : Node() {
         // Every successful update below verifies WHNF before publishing state 2.
         // Re-entering the result through a generic forcing loop loses that fact
         // and merges the suspension with its answer in the compiled graph.
-        return when (original.state) {
-            2 -> { if (metrics.enabled) metrics.thunkHits++; original.value }
-            3 -> {
-                // Failed thunks rethrow on the cold interpreter path. A Kotlin
-                // non-null cast here otherwise pulls NPE stack-trace machinery
-                // into every compiled forcing site, including successful ones.
-                CompilerDirectives.transferToInterpreterAndInvalidate()
-                throw (original.value as? Throwable ?: fault("Invalid failed thunk"))
+        while (true) {
+            when (original.state) {
+                2 -> { if (metrics.enabled) metrics.incrementThunkHits(); return original.value }
+                3 -> rethrowFailure(original)
+                4 -> fault("Interrupted thunk has no resumable continuation")
             }
-            1 -> { if (metrics.enabled) metrics.blackholes++; fault("Blackhole: cyclic thunk entered while evaluating") }
-            else -> {
-                val thunk = original
-                val target = thunk.target ?: fault("Unevaluated thunk has no body")
-                thunk.state = 1
-                try {
-                    if (metrics.enabled) { metrics.thunkEvaluations++; metrics.recordThunk(target.rootNode.name) }
-                    val environment = thunk.environment
-                    val result = try { calls.call(target, environment) }
-                    catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
-                    if (result is Thunk) fault("Thunk target violated WHNF convention")
-                    thunk.value = result
-                    thunk.target = null
-                    thunk.environment = null
-                    thunk.state = 2
-                    result
-                } catch (e: GuestException) {
-                    thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
-                } catch (e: RuntimeFault) {
-                    thunk.value = e; thunk.target = null; thunk.environment = null; thunk.state = 3; throw e
-                } catch (e: Throwable) {
-                    thunk.value = null; thunk.state = 0; throw e
+            // A volatile state read alone cannot claim an unevaluated thunk:
+            // another thread can enter during the single-threaded transition.
+            val claim = synchronized(original.monitor) {
+                when (original.state) {
+                    0 -> { original.owner = Thread.currentThread(); original.state = 1; 0 }
+                    1 -> if (original.owner === Thread.currentThread()) 2 else 1
+                    else -> 3
                 }
             }
+            when (claim) {
+                0 -> return evaluateOwned(original)
+                1 -> awaitOwner(original)
+                2 -> { if (metrics.enabled) metrics.incrementBlackholes(); fault("Blackhole: cyclic thunk entered while evaluating") }
+            }
         }
+    }
+
+    private fun evaluateOwned(thunk: Thunk): Any? {
+        try {
+            val target = thunk.target ?: fault("Unevaluated thunk has no body")
+            if (metrics.enabled) { metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name) }
+            val result = try { calls.call(target, thunk.environment) }
+            catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+            if (result is Thunk) fault("Thunk target violated WHNF convention")
+            synchronized(thunk.monitor) {
+                thunk.value = result
+                thunk.target = null
+                thunk.environment = null
+                thunk.owner = null
+                thunk.state = 2
+                thunk.monitor.notifyAll()
+            }
+            return result
+        } catch (e: AsyncThunkUnwind) {
+            suspendOwned(thunk)
+            throw e
+        } catch (e: GuestException) {
+            publishFailure(thunk, MemoizedGuestFailure(e.payload, e.location ?: this))
+            throw e
+        } catch (e: RuntimeFault) {
+            publishFailure(thunk, e)
+            throw e
+        } catch (e: Throwable) {
+            if (e is ThreadDeath || e is InterruptedException || e is AbstractTruffleException ||
+                e is java.util.concurrent.CancellationException) suspendOwned(thunk)
+            else synchronized(thunk.monitor) {
+                // Unexpected host failure retains the body for an actual retry.
+                thunk.value = null
+                thunk.owner = null
+                thunk.state = 0
+                thunk.monitor.notifyAll()
+            }
+            throw e
+        }
+    }
+
+    private fun publishFailure(thunk: Thunk, failure: Any) = synchronized(thunk.monitor) {
+        thunk.value = failure
+        thunk.target = null
+        thunk.environment = null
+        thunk.owner = null
+        thunk.state = 3
+        thunk.monitor.notifyAll()
+    }
+
+    private fun suspendOwned(thunk: Thunk) = synchronized(thunk.monitor) {
+        // An arbitrary Java/bytecode stack is not a resumable Haskell AP_STACK.
+        // Retain the body for a future continuation implementation; never replay
+        // effects by silently returning this thunk to state 0.
+        thunk.owner = null
+        thunk.state = 4
+        thunk.monitor.notifyAll()
+    }
+
+    private fun rethrowFailure(thunk: Thunk): Nothing {
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        when (val failure = thunk.value) {
+            is MemoizedGuestFailure -> throw GuestException(failure.payload, failure.location)
+            is Throwable -> throw failure
+            else -> fault("Invalid failed thunk")
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private fun awaitOwner(thunk: Thunk) {
+        TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<Thunk> { waiting ->
+            synchronized(waiting.monitor) {
+                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) waiting.monitor.wait()
+            }
+        }, thunk)
     }
 }
 /** Typed execution widens per result kind; each fallback consumes the already evaluated value. */
@@ -832,20 +934,20 @@ private class SelfRepeater(@field:Child private var body: FunctionBody, private 
     override fun executeRepeating(frame: VirtualFrame): Boolean = error("value loop")
     override fun executeRepeatingWithValue(frame: VirtualFrame): Any? = try { once(frame) }
     catch (_: AstSelfCall) {
-        if (metrics.enabled) metrics.selfTailReentries++
+        if (metrics.enabled) metrics.incrementSelfTailReentries()
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
     catch (tail: HandoffTailCall) {
         val root = rootNode as FunctionRoot
         if (!root.isSelf(tail.target)) throw tail
-        if (metrics.enabled) metrics.selfTailReentries++
+        if (metrics.enabled) metrics.incrementSelfTailReentries()
         root.restoreHandoff(frame, tail.arguments, false)
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
     catch (tail: TailCall) {
         val root = rootNode as FunctionRoot
         if (!root.isSelf(tail.target)) throw tail
-        if (metrics.enabled) metrics.selfTailReentries++
+        if (metrics.enabled) metrics.incrementSelfTailReentries()
         root.restoreTail(frame, tail)
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
@@ -953,7 +1055,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     }
 
     override fun execute(frame: VirtualFrame): Any? {
-        if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.compiledEntries++
+        if (metrics.enabled && CompilerDirectives.inCompiledCode()) metrics.incrementCompiledEntries()
         val entry = handoff
         val typed = typedInput
         if (typed != null) {
@@ -978,7 +1080,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         return try { (loop.repeatingNode as SelfRepeater).once(frame) }
         catch (_: AstSelfCall) {
             tailCallProfile.enter()
-            if (metrics.enabled) metrics.selfTailReentries++
+            if (metrics.enabled) metrics.incrementSelfTailReentries()
             CompilerDirectives.transferToInterpreterAndInvalidate()
             hasSelfTail = true
             loop.execute(frame)
@@ -986,7 +1088,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         catch (tail: HandoffTailCall) {
             tailCallProfile.enter()
             if (!isSelf(tail.target)) throw tail
-            if (metrics.enabled) metrics.selfTailReentries++
+            if (metrics.enabled) metrics.incrementSelfTailReentries()
             CompilerDirectives.transferToInterpreterAndInvalidate()
             hasSelfTail = true
             restoreHandoff(frame, tail.arguments, false)
@@ -995,7 +1097,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         catch (tail: TailCall) {
             tailCallProfile.enter()
             if (!isSelf(tail.target)) throw tail
-            if (metrics.enabled) metrics.selfTailReentries++
+            if (metrics.enabled) metrics.incrementSelfTailReentries()
             CompilerDirectives.transferToInterpreterAndInvalidate()
             hasSelfTail = true
             // Keep this frame's bloom ancestry and restore the new captures.
@@ -1098,7 +1200,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
         ?: names.entries.singleOrNull { it.key.substringAfterLast('.') == name }?.value?.singleOrNull()
         ?: throw RuntimeFault("Unknown or ambiguous entry $name")
-    override fun hostEntryTarget(arity: Int): RootCallTarget = hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
+    @Synchronized override fun hostEntryTarget(arity: Int): RootCallTarget =
+        hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
     override fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
@@ -1107,7 +1210,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
         "backend" to "ast", "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
-        "sourceRootCount" to attachedRootCount, "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
+        "sourceRootCount" to attachedRootCount, "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkCountsSnapshot(),
         "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
@@ -1800,7 +1903,7 @@ private class UnsupportedExpression(private val message: String, private val met
     init { representation = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing {
         CompilerDirectives.transferToInterpreterAndInvalidate()
-        metrics.unsupportedTraps++
+        metrics.incrementUnsupportedTraps()
         throw RuntimeFault("Diagnostic unsupported path reached: $message")
     }
 }

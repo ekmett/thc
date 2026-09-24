@@ -34,7 +34,7 @@ class GuestExceptionsTest {
     private fun invoke(program: Program): Any? = Calls.target(program.hostEntryTarget(),
         arrayOf(program.entryValue("entry"), emptyArray<Any?>()))
 
-    @Test fun raiseKeepsBottomPayloadUnevaluatedAndMemoizesTheSameGuestException() {
+    @Test fun raiseKeepsBottomPayloadUnevaluatedAndMemoizesFailureData() {
         val data = module(listOf(binding("payload", variable("payload")), binding("entry", raised(variable("payload")))))
         runWithProgram(data) { program ->
             val payload = program.entryValue("payload") as Thunk
@@ -42,7 +42,8 @@ class GuestExceptionsTest {
             assertSame(payload, first.payload)
             assertEquals(0, payload.state, "raise# must not force its exception argument")
             val second = assertThrows(GuestException::class.java) { invoke(program) }
-            assertSame(first, second, "A failed thunk rethrows its memoized guest exception")
+            assertNotSame(first, second, "Concurrent unwinds need separate mutable Truffle stack traces")
+            assertSame(first.payload, second.payload, "The lazy Haskell payload remains shared")
             assertEquals(1L, program.diagnostics()["thunkEvaluations"])
             assertEquals(0L, program.diagnostics()["blackholes"])
         }

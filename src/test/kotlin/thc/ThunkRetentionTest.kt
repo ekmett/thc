@@ -79,10 +79,15 @@ class ThunkRetentionTest {
             }.callTarget
             val driver = ForceDriver(Metrics(true))
             val thunk = Thunk(target, environment)
-            repeat(3) {
-                assertSame(failure, assertThrows(failure.javaClass) { driver.apply(thunk) })
+            repeat(3) { attempt ->
+                val observed = assertThrows(failure.javaClass) { driver.apply(thunk) }
+                if (failure is GuestException) {
+                    assertSame(failure.payload, (observed as GuestException).payload)
+                    if (attempt > 0) assertNotSame(failure, observed)
+                } else assertSame(failure, observed)
                 assertEquals(3, thunk.state)
-                assertSame(failure, thunk.value)
+                if (failure is GuestException) assertFalse(thunk.value is GuestException)
+                else assertSame(failure, thunk.value)
                 assertReleased(thunk)
             }
             assertEquals(1, evaluations)
