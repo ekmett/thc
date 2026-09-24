@@ -483,6 +483,15 @@
       ],
       "python": []
     },
+    "src/test/kotlin/thc/NumericPrimopCoreEvidence.kt": {
+      "junit": [
+        "thc.runtime.BitPrimopsTest",
+        "thc.IntegerPrimopsTest",
+        "thc.SignedNarrowPrimopsTest",
+        "thc.runtime.Explicit64PrimopsTest"
+      ],
+      "python": []
+    },
     "compiler/putstrln/Main.hs": {
       "junit": [],
       "python": [

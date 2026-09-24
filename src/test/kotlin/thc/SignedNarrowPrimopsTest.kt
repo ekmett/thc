@@ -37,7 +37,22 @@ class SignedNarrowPrimopsTest {
         assertEquals(36, entries.size)
         assertEquals("signedNarrowDispatch", manifest["compositeEntry"])
         assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
-        val modules = (manifest["modules"] as List<String>).map { Json.parse(File(root, it).readText()) }
+        val modules = (manifest["modules"] as List<String>).map {
+            Json.parse(File(root, it).readText()) as Map<String, Any?>
+        }
+        val merged = CoreModules.merge(modules)
+        val compositeCalls = NumericPrimopCoreEvidence.calls(merged, manifest["compositeEntry"] as String, singleBinding = true)
+        for (entry in entries) {
+            val name = entry["name"] as String
+            val operation = name.substringBefore("Int")
+            val rep = "Int${(entry["width"] as Number).toInt()}Rep"
+            val arguments = List((entry["arity"] as Number).toInt()) { rep }
+            val result = if (operation in setOf("eq", "ne", "lt", "le", "gt", "ge")) "IntRep" else rep
+            val primitive = entry["primitive"] as String
+            NumericPrimopCoreEvidence.assertCall(
+                NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, name)
+            NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "signedNarrowDispatch/$name")
+        }
         val rows = File(root, "build/signed-narrow-primops/oracle.tsv").readLines()
             .map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)

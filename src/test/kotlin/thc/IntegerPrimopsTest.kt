@@ -44,7 +44,23 @@ class IntegerPrimopsTest {
         assertEquals(0, (composite["selectorArgument"] as Number).toInt())
         assertEquals(entries.map { it["name"] }, composite["selectorOrder"])
         assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
-        val modules = (manifest["modules"] as List<String>).map { Json.parse(File(root, it).readText()) }
+        val modules = (manifest["modules"] as List<String>).map {
+            Json.parse(File(root, it).readText()) as Map<String, Any?>
+        }
+        val merged = CoreModules.merge(modules)
+        val compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite["name"] as String, singleBinding = true)
+        for (entry in entries) {
+            val name = entry["name"] as String
+            val operation = name.substringBefore("Word")
+            val word = if (name.endsWith("Word")) "WordRep" else "Word${(entry["width"] as Number).toInt()}Rep"
+            val arguments = if ((entry["arity"] as Number).toInt() == 1) listOf(word) else
+                listOf(word, if (operation.startsWith("uncheckedShift")) "IntRep" else word)
+            val result = if (operation in setOf("eq", "ne", "gt", "ge")) "IntRep" else word
+            val primitive = entry["primitive"] as String
+            NumericPrimopCoreEvidence.assertCall(
+                NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, name)
+            NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "composite/$name")
+        }
         val rows = File(root, "build/integer-primops/oracle.tsv").readLines()
             .map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
