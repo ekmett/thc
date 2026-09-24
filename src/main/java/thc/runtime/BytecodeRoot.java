@@ -264,17 +264,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class ForceValue {
-        @Specialization public static float floating(Metrics metrics, float value) { return value; }
-        @Specialization public static double doubleValue(Metrics metrics, double value) { return value; }
-        @Specialization public static long number(Metrics metrics, long value) { return value; }
-        @Specialization public static boolean bool(Metrics metrics, boolean value) { return value; }
+        @Specialization public static float floating(Metrics metrics, boolean async, float value) { return value; }
+        @Specialization public static double doubleValue(Metrics metrics, boolean async, double value) { return value; }
+        @Specialization public static long number(Metrics metrics, boolean async, long value) { return value; }
+        @Specialization public static boolean bool(Metrics metrics, boolean async, boolean value) { return value; }
         @Specialization(replaces = {"number", "bool", "floating", "doubleValue"})
-        public static Object force(VirtualFrame frame, Metrics metrics, Object value,
-                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+        public static Object force(VirtualFrame frame, Metrics metrics, boolean async, Object value,
+                @Cached(value = "createForce(metrics, async)", neverDefault = true) Force force) {
             return force.execute(frame, value);
         }
-        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+        public static Force createForce(Metrics metrics, boolean async) { return new Force(metrics, async); }
     }
 
     /** A cold nonlocal force resumes only the thunk saved before entering it. */
@@ -298,15 +299,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     @ConstantOperand(type = LocalAccessor.class, name = "local")
     @ConstantOperand(type = boolean.class, name = "cell")
+    @ConstantOperand(type = boolean.class, name = "async")
     public static final class ForceLocal {
-        @Specialization public static float floating(Metrics metrics, LocalAccessor local, boolean cell, float value) { return value; }
-        @Specialization public static double doubleValue(Metrics metrics, LocalAccessor local, boolean cell, double value) { return value; }
-        @Specialization public static long number(Metrics metrics, LocalAccessor local, boolean cell, long value) { return value; }
-        @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean cell, boolean value) { return value; }
+        @Specialization public static float floating(Metrics metrics, LocalAccessor local, boolean cell, boolean async, float value) { return value; }
+        @Specialization public static double doubleValue(Metrics metrics, LocalAccessor local, boolean cell, boolean async, double value) { return value; }
+        @Specialization public static long number(Metrics metrics, LocalAccessor local, boolean cell, boolean async, long value) { return value; }
+        @Specialization public static boolean bool(Metrics metrics, LocalAccessor local, boolean cell, boolean async, boolean value) { return value; }
         @Specialization(replaces = {"number", "bool", "floating", "doubleValue"})
-        public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, boolean cell, Object binding,
+        public static Object force(VirtualFrame frame, Metrics metrics, LocalAccessor local, boolean cell, boolean async, Object binding,
                 @Bind("$node") Node node,
-                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+                @Cached(value = "createForce(metrics, async)", neverDefault = true) Force force) {
             // The compiler knows whether this lexical binding retains a recursive
             // cell. Ordinary formals, fields and published values need no cell test.
             Object original = cell ? ReadCellIfNeeded.read(binding) : binding;
@@ -314,7 +316,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             publish(frame, local, cell, binding, original, result, node);
             return result;
         }
-        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+        public static Force createForce(Metrics metrics, boolean async) { return new Force(metrics, async); }
         static void publish(VirtualFrame frame, LocalAccessor local, boolean cell, Object binding,
                 Object original, Object result, Node node) {
             if (!(original instanceof Thunk thunk)) return;

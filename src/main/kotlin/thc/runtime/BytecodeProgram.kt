@@ -466,6 +466,47 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endBlock()
     }
 
+    /** Only a foreign owner wait may restart; the producer/local operand stays saved. */
+    private fun emitOwnerWaitRetry(e: Emission, attempt: () -> Unit) {
+        if (!enableAsync) { attempt(); return }
+        val b = e.builder
+        b.beginBlock()
+        val retry = b.createLocal("owner wait pending", "primitive")
+        val request = b.createLocal("owner wait async request", "object")
+        val active = b.createLocal("owner wait logical mask", "object")
+        val discard = b.createLocal("owner wait resume value", "object")
+        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
+        b.beginWhile()
+        b.emitLoadLocal(retry)
+        b.beginBlock()
+        b.beginTryCatch()
+        b.beginBlock()
+        attempt()
+        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal()
+        b.endBlock()
+        b.beginBlock()
+        b.beginStoreLocal(request)
+        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
+        b.endStoreLocal()
+        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
+        b.beginStoreLocal(discard)
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkAsyncMask()
+        b.emitLoadLocal(request)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.endParkAsyncMask()
+        b.endYield()
+        b.emitLoadLocal(active)
+        b.endReenterCallMask()
+        b.endStoreLocal()
+        b.endBlock()
+        b.endTryCatch()
+        b.endBlock()
+        b.endWhile()
+        b.endBlock()
+    }
+
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
     private fun restoreArgument(e: Emission, local: Local, value: () -> Unit) {
         val b = e.builder
@@ -504,16 +545,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 if (localValue is LocalExpression && localValue.resolve) {
                     val local = e.locals.getValue(localValue.local.id)
                     if (!resumable) {
-                        b.beginForceLocal(metrics, local, localValue.local.cell)
+                        b.beginForceLocal(metrics, local, localValue.local.cell, false)
                         b.emitLoadLocal(local)
                         b.endForceLocal()
                     } else {
                         val result = b.createLocal("forced local result", null)
                         val suspended = b.createLocal("forced local suspension", "object")
                         b.beginBlock()
+                        emitOwnerWaitRetry(e) {
                         b.beginTryCatch()
                         b.beginStoreLocal(result)
-                        b.beginForceLocal(metrics, local, localValue.local.cell)
+                        b.beginForceLocal(metrics, local, localValue.local.cell, enableAsync)
                         b.emitLoadLocal(local)
                         b.endForceLocal()
                         b.endStoreLocal()
@@ -531,12 +573,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endStoreLocal()
                         b.endBlock()
                         b.endTryCatch()
+                        }
                         b.emitLoadLocal(result)
                         b.endBlock()
                     }
                 } else {
                     if (!resumable) {
-                        b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+                        b.beginForceValue(metrics, false); value.emit(e); b.endForceValue()
                     } else {
                         val operand = b.createLocal("saved force operand", null)
                         val result = b.createLocal("forced value result", null)
@@ -544,9 +587,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginBlock()
                         // Evaluate the producer once, before any child ownership is claimed.
                         b.beginStoreLocal(operand); value.emit(e); b.endStoreLocal()
+                        emitOwnerWaitRetry(e) {
                         b.beginTryCatch()
                         b.beginStoreLocal(result)
-                        b.beginForceValue(metrics); b.emitLoadLocal(operand); b.endForceValue()
+                        b.beginForceValue(metrics, enableAsync); b.emitLoadLocal(operand); b.endForceValue()
                         b.endStoreLocal()
                         b.beginBlock()
                         b.beginStoreLocal(suspended)
@@ -561,6 +605,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endStoreLocal()
                         b.endBlock()
                         b.endTryCatch()
+                        }
                         b.emitLoadLocal(result)
                         b.endBlock()
                     }
@@ -866,7 +911,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (!strict || index >= prefix && arguments[index - prefix].proof.evaluated) null
                     else b.createLocal("strict tail operand $index", null).also { temporary ->
                         b.beginStoreLocal(temporary)
-                        b.beginForceValue(metrics)
+                        b.beginForceValue(metrics, false)
                         if (index < prefix) {
                             b.beginReadSupplied(index); b.emitLoadLocal(fn); b.endReadSupplied()
                         } else b.emitLoadLocal(args[index - prefix])

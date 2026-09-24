@@ -499,7 +499,7 @@ class CoreContinuationNativeTest {
                     b.beginBlock()
                     b.beginTryCatch()
                     b.beginStoreLocal(result)
-                    b.beginForceLocal(metrics, local, true); b.emitLoadLocal(local); b.endForceLocal()
+                    b.beginForceLocal(metrics, local, true, false); b.emitLoadLocal(local); b.endForceLocal()
                     b.endStoreLocal()
                     b.beginBlock()
                     b.beginStoreLocal(suspended)
