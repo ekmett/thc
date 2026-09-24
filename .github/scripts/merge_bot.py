@@ -73,6 +73,40 @@ class API:
         raise RuntimeError("Pagination limit reached; refusing an incomplete view")
 
 
+class BuildEvidence:
+    """Cache only immutable attempt jobs, prior attempts and commit ancestry.
+
+    Run listings are deliberately fetched again at each merge guard: a new
+    completed failure must remain visible even during a single reconciliation.
+    """
+
+    def __init__(self):
+        self.jobs = {}
+        self.prior = {}
+        self.ancestry = {}
+
+    def attempt_jobs(self, api, run):
+        key = (run["id"], run["run_attempt"])
+        if key not in self.jobs:
+            self.jobs[key] = list(api.pages(
+                f"actions/runs/{key[0]}/attempts/{key[1]}/jobs", "jobs"))
+        return self.jobs[key]
+
+    def previous_attempt(self, api, run):
+        key = (run["id"], run["run_attempt"] - 1)
+        if key not in self.prior:
+            self.prior[key] = api.call("GET", f"actions/runs/{key[0]}/attempts/{key[1]}")
+        return self.prior[key]
+
+    def includes(self, api, older, newer):
+        if older == newer:
+            return True
+        key = (older, newer)
+        if key not in self.ancestry:
+            self.ancestry[key] = api.call("GET", f"compare/{older}...{newer}").get("status")
+        return self.ancestry[key] in ("ahead", "identical")
+
+
 def eligible(pr, repo, label=LABEL):
     labels = {item["name"] for item in pr["labels"]}
     return (pr["state"] == "open" and not pr["draft"]
@@ -84,7 +118,7 @@ def eligible(pr, repo, label=LABEL):
             and label in labels and ({LABEL, BULK_LABEL} & labels) == {label})
 
 
-def complete_attempt(api, run, gate, current=True):
+def complete_attempt(api, run, gate, current=True, evidence=None):
     if run["status"] != "completed":
         return "pending"
     if run["conclusion"] != "success":
@@ -94,7 +128,8 @@ def complete_attempt(api, run, gate, current=True):
                    ("id", "workflow_id", "head_sha", "run_attempt", "status", "conclusion")):
                 return "pending"
         return "failure"
-    jobs = list(api.pages(f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", "jobs"))
+    jobs = (evidence.attempt_jobs(api, run) if evidence is not None else
+            list(api.pages(f"actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", "jobs")))
     names = [job["name"] for job in jobs]
     passed = (all(names.count(name) == 1 for name in gate.checks)
               and all(job["status"] == "completed" and job["conclusion"] == "success" for job in jobs))
@@ -138,13 +173,30 @@ def main_build_runs(api):
     return main_workflow_runs(api, BUILD_GATE)
 
 
-def completed_main_attempts(api):
+def unstarted_main_cancellation(api, run, evidence):
+    # A coalesced pending workflow has no jobs. A started or rerun Build keeps
+    # its cancellation result; absence of timestamps alone is not proof.
+    return (run["status"] == "completed" and run["conclusion"] == "cancelled"
+            and run["run_attempt"] == 1 and not evidence.attempt_jobs(api, run))
+
+
+def completed_main_attempts(api, evidence=None):
+    evidence = evidence or BuildEvidence()
+    runs = main_build_runs(api)
+    newest = max(runs, key=lambda run: run["id"], default=None)
     completed = []
-    for run in main_build_runs(api):
+    for run in runs:
         if run["status"] == "completed":
+            # GitHub's single pending slot cancels an older queued workflow.
+            # Exclude it only after proving no job started and a newer trusted
+            # main Build covers the same commit or a descendant.
+            if (newest is not None and newest["id"] > run["id"]
+                    and unstarted_main_cancellation(api, run, evidence)
+                    and evidence.includes(api, run["head_sha"], newest["head_sha"])):
+                continue
             completed.append(run)
         elif run["run_attempt"] > 1:
-            prior = api.call("GET", f"actions/runs/{run['id']}/attempts/{run['run_attempt'] - 1}")
+            prior = evidence.previous_attempt(api, run)
             if (any(prior[key] != run[key] for key in
                     ("id", "workflow_id", "head_sha", "head_branch", "event"))
                     or (prior.get("head_repository") or {}).get("full_name") != api.repo
@@ -160,27 +212,27 @@ def main_build_snapshot(runs):
                         for r in runs))
 
 
-def main_build_health(api):
+def main_build_health(api, evidence=None):
     """Pending full builds do not hold PRs; completed failures do.
 
     A rerun retains its previous completed result. A later verified full success
     clears old results only when its source includes those completed main heads.
     """
-    completed = completed_main_attempts(api)
+    evidence = evidence or BuildEvidence()
+    completed = completed_main_attempts(api, evidence)
     snapshot = main_build_snapshot(completed)
     if not completed:
         return "missing", snapshot
     latest = max(completed, key=lambda item: (item["updated_at"], item["id"], item["run_attempt"]))
-    state = complete_attempt(api, latest, BUILD_GATE, current=False)
+    state = complete_attempt(api, latest, BUILD_GATE, current=False, evidence=evidence)
     if state != "success":
         return state, snapshot
     for sha in {run["head_sha"] for run in completed} - {latest["head_sha"]}:
-        comparison = api.call("GET", f"compare/{sha}...{latest['head_sha']}")
-        if comparison.get("status") not in ("ahead", "identical"):
+        if not evidence.includes(api, sha, latest["head_sha"]):
             return "failure", snapshot
     # Catch a completed failure/rerun that appeared while reading jobs/ancestry.
     # New first attempts still pending are deliberately absent from this view.
-    if main_build_snapshot(completed_main_attempts(api)) != snapshot:
+    if main_build_snapshot(completed_main_attempts(api, evidence)) != snapshot:
         return "changed", snapshot
     return "success", snapshot
 
@@ -191,7 +243,11 @@ def ensure_main_checks(api, sha, report, base_sha=None):
     failure = None
     for gate in (BUILD_GATE, FAST_GATE):
         try:
-            if any(run["head_sha"] == sha for run in main_workflow_runs(api, gate)):
+            runs = [run for run in main_workflow_runs(api, gate) if run["head_sha"] == sha]
+            if gate == BUILD_GATE:
+                evidence = BuildEvidence()
+                runs = [run for run in runs if not unstarted_main_cancellation(api, run, evidence)]
+            if runs:
                 continue
             inputs = {"expected_sha": sha}
             if gate == FAST_GATE:
@@ -572,7 +628,8 @@ def reconcile_bulk(api, candidates, report):
             else:
                 report(f"bulk #{pr['number']}: infrastructure result {run['conclusion']}; manual rerun needed")
             return True
-        health, snapshot = main_build_health(api)
+        build_evidence = BuildEvidence()
+        health, snapshot = main_build_health(api, build_evidence)
         if health != "success":
             report(f"bulk #{pr['number']}: full main Build health is {health}; promotion paused")
             return True
@@ -584,7 +641,7 @@ def reconcile_bulk(api, candidates, report):
                 or any(component_state(api, part, base) is None for part in manifest["components"])
                 or final_state != "success" or final_run["id"] != run["id"]
                 or final_run["run_attempt"] != run["run_attempt"]
-                or main_build_snapshot(completed_main_attempts(api)) != snapshot):
+                or main_build_snapshot(completed_main_attempts(api, build_evidence)) != snapshot):
             report(f"bulk #{pr['number']}: promotion state changed; waiting")
             return True
         try:
@@ -738,7 +795,8 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             report(f"#{number}: waiting for checked bulk candidate before solo merge")
             continue
         if gate == FAST_GATE:
-            health, health_snapshot = main_build_health(api)
+            build_evidence = BuildEvidence()
+            health, health_snapshot = main_build_health(api, build_evidence)
             if health != "success":
                 report(f"#{number}: full main Build health is {health}; automatic merges paused")
                 return
@@ -765,7 +823,7 @@ def reconcile(api, report=print, sleep=time.sleep, gate=PR_GATE):
             report(f"#{number}: {gate.name} changed before merging; waiting")
             return
         if (gate == FAST_GATE
-                and main_build_snapshot(completed_main_attempts(api)) != health_snapshot):
+                and main_build_snapshot(completed_main_attempts(api, build_evidence)) != health_snapshot):
             # A full result may have arrived during the final consent/Fast
             # reads. Keep this last observation adjacent to the mutation;
             # pending first attempts still do not block automatic merging.

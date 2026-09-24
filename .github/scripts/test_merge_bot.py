@@ -599,6 +599,7 @@ class FastAPI(FakeAPI):
         self.dispatch_errors = {}
         self.after_dispatch = lambda _: None
         self.full_jobs = jobs()
+        self.full_jobs_by_attempt = {}
         self.prior_attempts = {}
         self.comparisons = {}
         self.after_merge = lambda: None
@@ -606,6 +607,7 @@ class FastAPI(FakeAPI):
         self.on_main_runs = lambda: None
         self.dispatch_error = None
         self.reads = []
+        self.full_job_reads = []
 
     def call(self, method, path, body=None):
         if method == "GET":
@@ -657,8 +659,11 @@ class FastAPI(FakeAPI):
         if path.startswith("actions/workflows/fast.yml/runs?"):
             return copy.deepcopy(self.runs)
         if path.endswith("/jobs") and int(path.split("/")[2]) >= 100:
+            self.full_job_reads.append(path)
             self.on_full_jobs()
-            return copy.deepcopy(self.full_jobs)
+            parts = path.split("/")
+            return copy.deepcopy(self.full_jobs_by_attempt.get(
+                (int(parts[2]), int(parts[4])), self.full_jobs))
         return super().pages(path, key)
 
 
@@ -887,6 +892,66 @@ class FastGateTest(unittest.TestCase):
                        lambda a: a.full_jobs.append(copy.deepcopy(a.full_jobs[0])),
                        lambda a: a.full_jobs[0].update(conclusion="skipped")):
             api = FastAPI(); change(api); self.run_bot(api); self.assert_no_merge(api)
+
+    def test_superseded_unstarted_main_build_is_not_a_health_veto(self):
+        api = FastAPI()
+        api.full_runs.append(main_build(101, "queued", conclusion="cancelled", minute=2))
+        newer = main_build(102, "newer", minute=3)
+        newer.update(status="queued", conclusion=None)
+        api.full_runs.append(newer)
+        api.full_jobs_by_attempt[(101, 1)] = []
+        api.comparisons["compare/queued...newer"] = {"status": "ahead"}
+        self.assertEqual(main_build_health(api)[0], "success")
+        self.run_bot(api)
+        self.assertTrue(any(path.endswith("/merge") for _, path, _ in api.actions))
+
+    def test_started_or_unrelated_cancelled_build_still_blocks(self):
+        for started, ancestry in ((True, "ahead"), (False, "behind")):
+            with self.subTest(started=started, ancestry=ancestry):
+                api = FastAPI()
+                api.full_runs.append(main_build(101, "queued", conclusion="cancelled", minute=2))
+                newer = main_build(102, "newer", minute=3)
+                newer.update(status="queued", conclusion=None)
+                api.full_runs.append(newer)
+                if not started:
+                    api.full_jobs_by_attempt[(101, 1)] = []
+                api.comparisons["compare/queued...newer"] = {"status": ancestry}
+                self.assertEqual(main_build_health(api)[0], "failure")
+                self.run_bot(api); self.assert_no_merge(api)
+
+    def test_unstarted_cancelled_rerun_keeps_its_failure(self):
+        api = FastAPI()
+        api.full_runs.append(main_build(101, "queued", conclusion="cancelled", minute=2))
+        api.full_runs[-1]["run_attempt"] = 2
+        api.full_runs.append({**main_build(102, "newer", minute=3),
+                              "status": "queued", "conclusion": None})
+        api.full_jobs_by_attempt[(101, 2)] = []
+        api.comparisons["compare/queued...newer"] = {"status": "ahead"}
+        self.assertEqual(main_build_health(api)[0], "failure")
+
+    def test_cancelled_unstarted_exact_main_is_redispatched_once(self):
+        api = FastAPI(); api.prs = []
+        api.full_runs[0].update(conclusion="cancelled")
+        api.full_jobs_by_attempt[(100, 1)] = []
+        self.run_bot(api)
+        self.assertEqual(api.actions, [("POST", "actions/workflows/build.yml/dispatches",
+                                        {"ref": "main", "inputs": {"expected_sha": "base"}})])
+        self.run_bot(api)
+        self.assertEqual(len(api.actions), 1)
+
+    def test_completed_evidence_is_cached_but_run_list_is_refreshed(self):
+        api = FastAPI()
+        api.full_runs.append(main_build(101, "queued", conclusion="cancelled", minute=2))
+        api.full_runs.append(main_build(102, "newer", minute=3))
+        api.full_jobs_by_attempt[(101, 1)] = []
+        api.comparisons.update({"compare/queued...newer": {"status": "ahead"},
+                                "compare/base...newer": {"status": "ahead"}})
+        self.assertEqual(main_build_health(api)[0], "success")
+        self.assertEqual(api.full_job_reads.count("actions/runs/101/attempts/1/jobs"), 1)
+        self.assertEqual(api.full_job_reads.count("actions/runs/102/attempts/1/jobs"), 1)
+        self.assertEqual(api.reads.count("compare/queued...newer"), 1)
+        self.assertEqual(api.reads.count("compare/base...newer"), 1)
+        self.assertGreaterEqual(api.reads.count("actions/workflows/build.yml"), 2)
 
     def test_pending_rerun_cannot_hide_previous_main_failure(self):
         api = FastAPI(); prior = main_build(101, conclusion="failure", minute=2)

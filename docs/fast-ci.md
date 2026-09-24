@@ -47,4 +47,10 @@ merges the checked candidate while preserving each PR's commit ancestry. If
 that combined check fails, the bot switches the components to `auto-merge` and
 requires fresh individual Fast checks. A stale candidate or canceled run keeps
 the bulk labels for retry. A completed failing main `Build` pauses automatic
-merges; a pending main `Build` does not.
+merges; a pending main `Build` does not. GitHub keeps one full main `Build`
+running and replaces its pending snapshot with the newest main run. The bot
+ignores a superseded cancellation only when the cancelled first attempt had
+no jobs and a newer trusted main run covers the same commit or a descendant.
+A Build that started, failed, or was cancelled without that proof still pauses
+merges. If coalescing cancels the only run for the current main commit, the bot
+dispatches it again.
