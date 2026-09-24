@@ -10,7 +10,8 @@ work to a suspended callee.
 
 This contract separates those obligations. The bytecode implementation already
 checks ownership, masks and saved call boundaries. A restricted internal AST
-subset now checks admission; nested foreign-entry enforcement is in progress.
+subset now checks admission; foreign execution and nested public guest entries
+have a separate delivery-permission gate.
 The existence of a resumable root alone does not establish either property.
 
 ## Delivery
@@ -110,21 +111,28 @@ synchronous exceptions retain the normal thunk-update behavior.
 
 ## Foreign boundaries
 
-The required foreign execution permission is separate from the observable
-Haskell mask.
-The intended dynamic nesting is guest entry, opaque foreign call, fresh guest
-callback entry, foreign return, and outer guest return. Each transition restores
-the preceding permission in `finally`; a callback does not acquire a new Java
-thread identity. It may accept delivery subject to its Haskell mask.
+Foreign execution permission is separate from the observable Haskell mask.
+`GuestThreads` keeps a context-owned permission stack per Java thread. Public
+guest entry pushes guest permission; outgoing JavaScript, Polyglot, managed
+MD5/Sulong and managed-file operations, including teardown flushes, push foreign permission and restore
+their previous permission in `finally`. A reentrant public guest entry pushes
+guest permission above that foreign scope on the same Java thread. It may claim
+at its own THC cut, subject to its unchanged Haskell mask. A self-directed
+request bypasses that mask, but cannot claim while foreign permission is active.
+The foreign scope also works before any guest thread is registered. A separate
+Java-thread-local count records only whether an opaque foreign frame exists in
+*any* THC context, so an uncaught callback into a second context retains its
+async origin. It grants no delivery permission and shares no mask or mailbox.
 
-Each callback entry must be a capture delimiter. No continuation may contain an
+Each public callback entry is a capture delimiter. No continuation may contain an
 opaque Java frame or a released foreign-call argument loan. A caught callback
 exception may leave the foreign call running normally. The callback's uncaught
 boundary must acknowledge delivery and raise a foreign-visible failure with
 the original payload. Unlike an ordinary synchronous guest exception, this
-failure must retain its async origin if foreign code propagates it back into
-an outer guest thunk. The outer thunk must not memoize the async payload as its
-answer. Java may handle or propagate that failure. It does not receive a resumable Java computation;
+failure retains its async origin if foreign code propagates it back into an
+outer guest thunk. The outer thunk parks without memoizing the async payload as
+its answer or replaying the foreign call. Java may handle or propagate that
+failure. It does not receive a resumable Java computation;
 only guest work captured inside the callback remains resumable. Internal
 capture signals, saved records and delivery tokens must never escape as foreign
 return values.
@@ -132,14 +140,23 @@ return values.
 Returning from a completed foreign call is not permission to poll before its
 outcome has been saved. A later interruption must resume after that call. No
 automatic retry of opaque foreign work is allowed.
-The nested permission barrier and callback integration remain separate work;
-the existing public guest-entry acknowledgement does not by itself implement
-this contract for an arbitrary foreign callback.
+The permission gate never polls on foreign return. Capture after a foreign
+return still depends on the enclosing guest node's own resume proof; the gate
+does not make an arbitrary AST caller or opaque Java frame resumable.
 
 ## Evidence and remaining checks
 
 `GuestThreadsTest` checks Java identity, masking eligibility, nested entry
-lifetime, request acknowledgement and wake/claim races. `CallMaskSegmentsTest`
+lifetime, request acknowledgement, foreign/guest/foreign nesting, cross-context
+callback origin and wake/claim races. `ManagedFilesTest` checks embedding-stream
+calls and teardown flushes. The optional `PolyglotFFITest` invokes an actual
+public `EntryValue` from a JavaScript callback: an acknowledged request lets
+JavaScript continue, while an uncaught request passes through
+`EntryValue.publicSuspension` and leaves an outer thunk parked with one foreign
+effect. The unit test checks the exact payload and cause; Polyglot wraps the
+escaping failure before the outer caller sees it. These focused classes pass
+in ordinary and dense handoff modes. The callback target is synthetic; native GHC callback Core
+and general safe-FFI resumption are not established. `CallMaskSegmentsTest`
 checks logical mask restoration across Java threads and rejects malformed
 mask restoration. `ResumableThunkProofTest` rejects uncaptured caller updates
 and unrelated continuation roots. `LiveAsyncNativeTest` checks compiled loops,
@@ -163,6 +180,7 @@ literal suffix and an exact Long entry convention. Its compiled test checks
 cross-thread resumption after the read; conflicting entry conventions and
 unsupported suffixes are rejected during construction.
 
-Nested foreign callback checks must land before those paths are advertised as
-admitted. They must distinguish successful interruption inside a callback from
-unsupported capture across Java.
+The callback permission gate is admitted only at a public guest entry whose
+guest body already satisfies its backend's capture obligations. It does not
+admit suspension across Java or callbacks from an arbitrary unclassified AST
+node.
