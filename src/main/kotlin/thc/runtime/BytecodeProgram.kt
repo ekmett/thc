@@ -821,7 +821,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (tail) context.mayLoop = true
         return evaluated(Expression { e ->
             val b = e.builder
-            if (enableAsync) emitAsyncPoll(e)
+            if (enableAsync) {
+                b.beginBlock()
+                emitAsyncPoll(e)
+            }
             val reentryResult = if (tail) {
                 b.beginBlock()
                 b.createLocal("tail result", null).also { b.beginStoreLocal(it) }
@@ -909,6 +912,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.endConditional()
                 b.endBlock()
             }
+            if (enableAsync) b.endBlock()
         })
     }
 
