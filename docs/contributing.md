@@ -79,15 +79,6 @@ approves reviews or bypasses branch protection. Remove the label to withdraw a
 PR. Fork contributions can run the ordinary read-only PR tests and be reviewed
 and merged manually.
 
-Use `bulk-merge` instead to allow the bot to combine up to four PRs whose changed
-files do not overlap. It tests the combined commit against its base, then merges
-that exact composition. Once the combined run is queued, the bot cancels active
-individual Fast runs for those same component commits to free the runner.
-Cancelled individual runs never count as passing. If the batch fails, or its
-three infrastructure attempts are exhausted, the bot switches its members to
-`auto-merge` and requires fresh individual tests. If a member changes or withdraws
-permission, the batch is discarded and the remaining work is reconsidered.
-
 A conflicting or failing PR stays open for its author to fix. The bot can move
 past those PRs; it waits for an active build before updating another branch.
 Dependent changes should name their prerequisite PRs and wait to be labelled

@@ -45,11 +45,6 @@ stability workflow is advisory and separately records compiled-code behavior.
 Neither the smoke selection nor a warm local run is a claim about hosted PR
 latency; use the workflow's phase timings and elapsed time to assess that.
 
-For automatic merging, the repository owner applies `auto-merge` for a solo PR
-or `bulk-merge` to allow batching. The bot combines up to four PRs with disjoint
-changed files on the current main revision, runs one combined Fast check, and
-merges the checked candidate while preserving each PR's commit ancestry. If
-that combined check fails, the bot switches the components to `auto-merge` and
-requires fresh individual Fast checks. A stale candidate or canceled run keeps
-the bulk labels for retry. A completed failing main `Build` pauses automatic
-merges; a pending main `Build` does not.
+For automatic merging, the repository owner applies `auto-merge`. The bot
+checks and merges one PR at a time against current main. A completed failing
+main `Build` pauses automatic merges; a pending main `Build` does not.

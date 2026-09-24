@@ -28,11 +28,10 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
-    def test_candidate_pr_does_not_duplicate_or_cancel_dispatch(self):
+    def test_title_skip_preserves_normal_pr_gate(self):
         workflow = WORKFLOW.read_text()
-        self.assertIn("!startsWith(github.head_ref, 'thc-bulk/')", workflow)
         self.assertIn("!contains(github.event.pull_request.title, '[ci skip]')", workflow)
-        self.assertIn("&& 'candidate-pr' || 'gate'", workflow)
+        self.assertIn("cancel-in-progress: true", workflow)
 
     def check_case(self, kind, ref, event, trusted):
         with tempfile.TemporaryDirectory() as temporary:
