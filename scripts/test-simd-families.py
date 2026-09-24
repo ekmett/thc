@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from core_vectors import OPERATIONS, proof_error, signature_matches
-from simd_family_model import float_operation
+from simd_family_model import cases, entries, float_operation
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location('simd_generator', ROOT / 'scripts/generate-simd-families.py')
@@ -47,9 +47,34 @@ class SimdFamiliesTest(unittest.TestCase):
                         bits = 0x7f800000
                     self.assertEqual(bits, float_operation('divide', left, right, width))
 
+    def test_floating_composites_cover_finite_arithmetic_and_each_lane(self):
+        for width, one, two, three, half, sign in (
+            (32, 0x3f800000, 0x40000000, 0x40400000, 0x3f000000, 0x80000000),
+            (64, 0x3ff0000000000000, 0x4000000000000000, 0x4008000000000000,
+             0x3fe0000000000000, 1 << 63)):
+            self.assertEqual(one, float_operation('broadcast', one, 0, width))
+            self.assertEqual(three, float_operation('plus', one, two, width))
+            self.assertEqual(one, float_operation('minus', two, one, width))
+            self.assertEqual(one, float_operation('times', two, half, width))
+            self.assertEqual(sign, float_operation('minus', sign, 0, width))
+        families = [f for f in GEN.families() if f.get('composite')]
+        self.assertEqual(['FloatX8', 'DoubleX4'], [f['name'] for f in families])
+        self.assertEqual({'floatX8Composite', 'doubleX4Composite'},
+                         {name for name, _, operation in entries() if operation == 'composite'})
+        source = GEN.fixture_sources(families)['fixtures/GeneratedSimdFamilies.hs']
+        for family in families:
+            name = family['name'][0].lower() + family['name'][1:] + 'Composite'
+            branches = source.split(name + 'Worker selector a b = case selector of\n', 1)[1].split('\n  _ -> 0#', 1)[0]
+            operations = [op for op in family['operations'] if op not in ('pack', 'unpack')]
+            self.assertEqual(family['lanes'] * len(operations), branches.count(' -> case unpack'))
+            for operation in operations:
+                self.assertIn(operation + family['name'] + '#', branches)
+                self.assertEqual(family['lanes'] * (28 if operation in ('broadcast', 'negate') else 28 * 28),
+                                 len(cases(family, operation)))
+
     def test_exact_machine_contracts_and_recursive_lanes(self):
         families = GEN.families()
-        self.assertEqual(25, len(GEN.contracts(families)))
+        self.assertEqual(41, len(GEN.contracts(families)))
         for family in families:
             for operation in family['operations']:
                 name = operation + family['name'] + '#'

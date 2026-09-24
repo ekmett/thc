@@ -1,4 +1,4 @@
-"""Integer lane arithmetic and exact rational IEEE division, independent of JVM vectors."""
+"""Independent integer and floating lane arithmetic for generated SIMD fixtures."""
 from fractions import Fraction
 import json
 from pathlib import Path
@@ -11,7 +11,9 @@ def signed(value, width=64):
 
 
 def entries():
-    return [(op + f['name'], f, op) for f in FAMILIES for op in f['operations'] if op not in ('pack', 'unpack')]
+    return [(f['name'][0].lower() + f['name'][1:] + 'Composite', f, 'composite') if f.get('composite') else (op + f['name'], f, op)
+            for f in FAMILIES for op in (['composite'] if f.get('composite') else f['operations'])
+            if op not in ('pack', 'unpack')]
 
 
 def floating(bits, width):
@@ -64,10 +66,31 @@ def float_operation(operation, left, right, width):
     nan = infinity | (1 << (fraction_bits - 1))
     ls, lc, lv = floating(left, width)
     rs, rc, rv = floating(right, width)
+    if operation == 'broadcast':
+        return nan if lc == 'nan' else left
     if operation == 'negate':
         return nan if lc == 'nan' else left ^ (1 << (width - 1))
-    assert operation == 'divide'
     sign = ls ^ rs
+    if operation in ('plus', 'minus'):
+        if operation == 'minus':
+            rs ^= 1
+        if lc == 'nan' or rc == 'nan' or lc == rc == 'infinity' and ls != rs:
+            return nan
+        if lc == 'infinity':
+            return (ls << (width - 1)) | infinity
+        if rc == 'infinity':
+            return (rs << (width - 1)) | infinity
+        value = (-lv if ls else lv) + (-rv if rs else rv)
+        if not value:
+            return (ls << (width - 1)) if not lv and not rv and ls == rs else 0
+        return encode(int(value < 0), abs(value), width)
+    if operation == 'times':
+        if lc == 'nan' or rc == 'nan' or lc == 'infinity' and not rv or rc == 'infinity' and not lv:
+            return nan
+        if lc == 'infinity' or rc == 'infinity':
+            return (sign << (width - 1)) | infinity
+        return encode(sign, lv * rv, width)
+    assert operation == 'divide'
     if lc == 'nan' or rc == 'nan' or lc == rc == 'infinity' or lc == rc == 'finite' and not lv and not rv:
         return nan
     if lc == 'infinity' or rc == 'finite' and not rv:
@@ -82,7 +105,7 @@ def result(family, operation, lane, a, b):
     left = signed(a + lane * 104729)
     right = signed(b - lane * 7919)
     if family['laneRep'] in ('FloatRep', 'DoubleRep'):
-        value = float_operation(operation, left, right, width)
+        value = float_operation(operation, a if operation == 'broadcast' else left, right, width)
     else:
         left = signed(left, width)
         right = signed(right, width)
@@ -99,7 +122,7 @@ INTEGER_EDGES = [-(1 << 63), -(1 << 63) + 1, -(1 << 32), -(1 << 31), -(1 << 31) 
                  (1 << 63) - 1]
 
 
-def cases(family):
+def cases(family, operation=None):
     width = family['bits'] // family['lanes']
     if family['laneRep'] in ('FloatRep', 'DoubleRep'):
         fraction_bits, exponent_bits = (23, 8) if width == 32 else (52, 11)
@@ -109,16 +132,21 @@ def cases(family):
                      one - 1, one, one + 1, one + (1 << fraction_bits), inf - 1, inf,
                      inf + 1, inf + (1 << (fraction_bits - 1)), inf + (1 << fraction_bits) - 1]
         edges = [signed(x | sign << (width - 1)) for x in magnitude for sign in (0, 1)]
-        pairs = [(a, b) for a in edges for b in edges]
+        pairs = [(a, 0) for a in edges] if operation in ('broadcast', 'negate') else [
+            (a, b) for a in edges for b in edges]
     else:
         pairs = [(a, b) for a in INTEGER_EDGES for b in INTEGER_EDGES]
     # Shift each selected lane back to the edge pattern. Other lanes carry
     # distinct dynamic values, so every position and sign-extension is observed.
-    return [(lane, signed(a - lane * 104729), signed(b + lane * 7919))
+    return [(lane, signed(a if operation == 'broadcast' else a - lane * 104729),
+             signed(b + lane * 7919))
             for lane in range(family['lanes']) for a, b in pairs]
 
 
 def rows():
     for name, family, operation in entries():
-        for lane, a, b in cases(family):
-            yield name, lane, a, b, result(family, operation, lane, a, b)
+        operations = [op for op in family['operations'] if op not in ('pack', 'unpack')] if operation == 'composite' else [operation]
+        for index, selected in enumerate(operations):
+            for lane, a, b in cases(family, selected if operation == 'composite' else None):
+                selector = index * family['lanes'] + lane if operation == 'composite' else lane
+                yield name, selector, a, b, result(family, selected, lane, a, b)

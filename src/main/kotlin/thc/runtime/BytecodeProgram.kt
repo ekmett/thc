@@ -2148,6 +2148,80 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val b = e.builder
             b.beginGeneratedDoubleX2Divide(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX2Divide()
         }, GeneratedVectors.proofDoubleX2)
+        "packFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(8) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedFloatX8Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedFloatX8Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofFloatX8)
+        "unpackFloatX8#" -> tupleExpression(GeneratedVectors.unpackedFloatX8) { e, destination ->
+            e.builder.beginGeneratedFloatX8Unpack(destination[0], destination[1], destination[2], destination[3], destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endGeneratedFloatX8Unpack()
+        }
+        "broadcastFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Broadcast()
+        }, GeneratedVectors.proofFloatX8)
+        "plusFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Plus(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Plus()
+        }, GeneratedVectors.proofFloatX8)
+        "minusFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Minus(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Minus()
+        }, GeneratedVectors.proofFloatX8)
+        "timesFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Times(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Times()
+        }, GeneratedVectors.proofFloatX8)
+        "negateFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Negate(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Negate()
+        }, GeneratedVectors.proofFloatX8)
+        "divideFloatX8#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedFloatX8Divide(); operands.forEach { it.emit(e) }; b.endGeneratedFloatX8Divide()
+        }, GeneratedVectors.proofFloatX8)
+        "packDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginBlock()
+            val lanes = List(4) { b.createLocal() }
+            operands[0].emitTuple(e, lanes)
+            b.beginGeneratedDoubleX4Pack(); lanes.forEach(b::emitLoadLocal); b.endGeneratedDoubleX4Pack()
+            b.endBlock()
+        }, GeneratedVectors.proofDoubleX4)
+        "unpackDoubleX4#" -> tupleExpression(GeneratedVectors.unpackedDoubleX4) { e, destination ->
+            e.builder.beginGeneratedDoubleX4Unpack(destination[0], destination[1], destination[2], destination[3])
+            operands[0].emit(e)
+            e.builder.endGeneratedDoubleX4Unpack()
+        }
+        "broadcastDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Broadcast(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Broadcast()
+        }, GeneratedVectors.proofDoubleX4)
+        "plusDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Plus(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Plus()
+        }, GeneratedVectors.proofDoubleX4)
+        "minusDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Minus(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Minus()
+        }, GeneratedVectors.proofDoubleX4)
+        "timesDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Times(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Times()
+        }, GeneratedVectors.proofDoubleX4)
+        "negateDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Negate(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Negate()
+        }, GeneratedVectors.proofDoubleX4)
+        "divideDoubleX4#" -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            b.beginGeneratedDoubleX4Divide(); operands.forEach { it.emit(e) }; b.endGeneratedDoubleX4Divide()
+        }, GeneratedVectors.proofDoubleX4)
         else -> throw UnsupportedCore("Unsupported generated vector primitive $name")
     }
     // END GENERATED SIMD FAMILIES

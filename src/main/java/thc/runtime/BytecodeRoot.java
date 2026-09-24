@@ -1722,5 +1722,83 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class GeneratedDoubleX2Divide {
         @Specialization public static DoubleX2 apply(DoubleX2 left, DoubleX2 right) { return DoubleX2.divide(left, right); }
     }
+    @Operation public static final class GeneratedFloatX8Pack {
+        @Specialization public static FloatX8 apply(float lane0, float lane1, float lane2, float lane3, float lane4, float lane5, float lane6, float lane7) { return new FloatX8(lane0, lane1, lane2, lane3, lane4, lane5, lane6, lane7); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane4")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane5")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane6")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane7")
+    public static final class GeneratedFloatX8Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, FloatX8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setFloat(bytecode, frame, value.lane0);
+            lane1.setFloat(bytecode, frame, value.lane1);
+            lane2.setFloat(bytecode, frame, value.lane2);
+            lane3.setFloat(bytecode, frame, value.lane3);
+            lane4.setFloat(bytecode, frame, value.lane4);
+            lane5.setFloat(bytecode, frame, value.lane5);
+            lane6.setFloat(bytecode, frame, value.lane6);
+            lane7.setFloat(bytecode, frame, value.lane7);
+        }
+    }
+    @Operation public static final class GeneratedFloatX8Broadcast {
+        @Specialization public static FloatX8 apply(float value) { return FloatX8.broadcast(value); }
+    }
+    @Operation public static final class GeneratedFloatX8Plus {
+        @Specialization public static FloatX8 apply(FloatX8 left, FloatX8 right) { return FloatX8.add(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX8Minus {
+        @Specialization public static FloatX8 apply(FloatX8 left, FloatX8 right) { return FloatX8.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX8Times {
+        @Specialization public static FloatX8 apply(FloatX8 left, FloatX8 right) { return FloatX8.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedFloatX8Negate {
+        @Specialization public static FloatX8 apply(FloatX8 value) { return FloatX8.negate(value); }
+    }
+    @Operation public static final class GeneratedFloatX8Divide {
+        @Specialization public static FloatX8 apply(FloatX8 left, FloatX8 right) { return FloatX8.divide(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX4Pack {
+        @Specialization public static DoubleX4 apply(double lane0, double lane1, double lane2, double lane3) { return new DoubleX4(lane0, lane1, lane2, lane3); }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "lane0")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane1")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane2")
+    @ConstantOperand(type = LocalAccessor.class, name = "lane3")
+    public static final class GeneratedDoubleX4Unpack {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, DoubleX4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            lane0.setDouble(bytecode, frame, value.lane0);
+            lane1.setDouble(bytecode, frame, value.lane1);
+            lane2.setDouble(bytecode, frame, value.lane2);
+            lane3.setDouble(bytecode, frame, value.lane3);
+        }
+    }
+    @Operation public static final class GeneratedDoubleX4Broadcast {
+        @Specialization public static DoubleX4 apply(double value) { return DoubleX4.broadcast(value); }
+    }
+    @Operation public static final class GeneratedDoubleX4Plus {
+        @Specialization public static DoubleX4 apply(DoubleX4 left, DoubleX4 right) { return DoubleX4.add(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX4Minus {
+        @Specialization public static DoubleX4 apply(DoubleX4 left, DoubleX4 right) { return DoubleX4.subtract(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX4Times {
+        @Specialization public static DoubleX4 apply(DoubleX4 left, DoubleX4 right) { return DoubleX4.multiply(left, right); }
+    }
+    @Operation public static final class GeneratedDoubleX4Negate {
+        @Specialization public static DoubleX4 apply(DoubleX4 value) { return DoubleX4.negate(value); }
+    }
+    @Operation public static final class GeneratedDoubleX4Divide {
+        @Specialization public static DoubleX4 apply(DoubleX4 left, DoubleX4 right) { return DoubleX4.divide(left, right); }
+    }
     // END GENERATED SIMD FAMILIES
 }
