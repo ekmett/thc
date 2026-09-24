@@ -455,7 +455,35 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 } else {
-                    b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+                    if (checkpoint == null) {
+                        b.beginForceValue(metrics); value.emit(e); b.endForceValue()
+                    } else {
+                        val operand = b.createLocal("saved force operand", null)
+                        val result = b.createLocal("forced value result", null)
+                        val suspended = b.createLocal("forced value suspension", "object")
+                        b.beginBlock()
+                        // Evaluate the producer once, before any child ownership is claimed.
+                        b.beginStoreLocal(operand); value.emit(e); b.endStoreLocal()
+                        b.beginTryCatch()
+                        b.beginStoreLocal(result)
+                        b.beginForceValue(metrics); b.emitLoadLocal(operand); b.endForceValue()
+                        b.endStoreLocal()
+                        b.beginBlock()
+                        b.beginStoreLocal(suspended)
+                        b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly()
+                        b.endStoreLocal()
+                        b.beginStoreLocal(result)
+                        b.beginResumeForcedValue()
+                        b.emitLoadLocal(operand)
+                        b.emitLoadLocal(suspended)
+                        b.beginYield(); b.emitLoadLocal(suspended); b.endYield()
+                        b.endResumeForcedValue()
+                        b.endStoreLocal()
+                        b.endBlock()
+                        b.endTryCatch()
+                        b.emitLoadLocal(result)
+                        b.endBlock()
+                    }
                 }
             }
         }).let { sourced(ProvenExpression(it, value.proof.copy(evaluated = true)), value.source) }

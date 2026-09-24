@@ -171,3 +171,26 @@ uninterruptibleCheckpointAnswer =
       (# s3, inside #) -> (# s3, Box inside #) } }) realWorld# of
     (# s4, Box inside #) -> case getMaskingState# s4 of
       (# _, outside #) -> I# (inside +# 100# *# outside)
+
+{-# OPAQUE delayedTwice #-}
+delayedTwice :: Int# -> Box
+delayedTwice input = case noDuplicate# realWorld# of { s1 ->
+  case noDuplicate# s1 of _ -> Box (input +# 1#) }
+
+-- A global application is a nonlocal, lazy operand of the outer case.
+{-# OPAQUE delayedTwiceGlobal #-}
+delayedTwiceGlobal :: Box
+delayedTwiceGlobal = case delayedTwice 6# of Box result -> Box (result +# 1#)
+
+{-# OPAQUE delayedTwiceWarm #-}
+delayedTwiceWarm :: Box
+delayedTwiceWarm = case delayedTwice 8# of Box result -> Box (result +# 1#)
+
+{-# OPAQUE forceNonlocalAnswer #-}
+forceNonlocalAnswer :: Int
+forceNonlocalAnswer =
+  case noDuplicate# realWorld# of { s0 ->
+    case getMaskingState# s0 of
+      (# _, mask #) -> case mask of
+        0# -> case delayedTwiceGlobal of Box result -> I# (200# +# result)
+        _ -> case delayedTwiceWarm of Box result -> I# (200# +# result) }

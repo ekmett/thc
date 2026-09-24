@@ -274,6 +274,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    /** A cold nonlocal force resumes only the thunk saved before entering it. */
+    @Operation public static final class ResumeForcedValue {
+        @Specialization public static Object resume(Thunk saved, ThunkSuspended suspended, ChildResume resumed) {
+            Thunk child = suspended.getThunk();
+            if (saved != child)
+                throw new IllegalStateException("Forced-value continuation lost its saved child");
+            if (resumed.getFailure() != null) throw resumed.getFailure();
+            if (child.getState() != 2 || child.getValue() != resumed.getValue())
+                throw new IllegalStateException("Forced-value continuation lost its child update");
+            return resumed.getValue();
+        }
+        @Fallback public static Object malformed(Object saved, Object suspended, Object resumed) {
+            throw new IllegalStateException("Forced-value continuation requires its exact saved thunk and ChildResume");
+        }
+    }
+
     /** A successful force updates this activation's mutable binding, not its final capture property. */
     @Operation(forceCached = true)
     @ConstantOperand(type = Metrics.class, name = "metrics")
