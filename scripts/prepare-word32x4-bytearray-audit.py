@@ -182,7 +182,7 @@ def signed_controls(module, path, auditor, capabilities):
             expected = {('malformed-expression', 'Invalid local vector memory intrinsic: '+detail): 1}
             if operation == 'Index':
                 expected.update({('vector-shape', 'Exact vector primitive argument representation required'): 1,
-                                 ('aggregate-shape', 'Conflicting or missing logical tuple representation proofs'): 1})
+                                 ('aggregate-shape', 'Conflicting or missing logical aggregate representation proofs'): 1})
             report = auditor.Audit([(str(path)+' [MUTATED signed '+family+operation+']', changed)], capabilities).run([family+operation+'Case'])
             negative(report, expected, family+operation)
             result[family+operation] = dict(origin='Mutated proof metadata only; never native input', report=report)
