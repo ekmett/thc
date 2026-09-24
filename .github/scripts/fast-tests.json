@@ -30,6 +30,7 @@
       "junit": [
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
+        "thc.runtime.CompiledThunkRetentionTest",
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.DoubleArrayTest",
         "thc.runtime.DoubleVectorMemoryProofTest",
@@ -69,6 +70,7 @@
       "junit": [
         "thc.SumLayoutMetadataTest",
         "thc.runtime.BytecodeTypedTupleInputTest",
+        "thc.runtime.CompiledThunkRetentionTest",
         "thc.runtime.DoubleArrayNativeTest",
         "thc.runtime.DoubleArrayTest",
         "thc.runtime.DoubleVectorMemoryProofTest",
@@ -184,6 +186,26 @@
     }
   },
   "owners": {
+    "scripts/prepare-boxed-arrays.py": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/BoxedArrayAudit.hs": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
+      "python": []
+    },
+    "scripts/prepare-floating-audit.py": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/FloatingAudit.hs": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/FloatingAuditNative.hs": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
+      "python": []
+    },
     "compiler/test-fixtures/OriginalStackAudit.hs": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "python": []

@@ -11,6 +11,21 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "compiled-thunk-retention": {
+      "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest", "thc.runtime.FloatingPrimitiveTest"],
+      "commands": [
+        {"argv": ["python3", "scripts/prepare-boxed-arrays.py"]},
+        {"argv": ["python3", "scripts/prepare-floating-audit.py"]}
+      ],
+      "outputs": ["build/boxed-arrays", "build/floating"],
+      "sources": [
+        "scripts/prepare-boxed-arrays.py",
+        "scripts/prepare-floating-audit.py",
+        "compiler/test-fixtures/BoxedArrayAudit.hs",
+        "compiler/test-fixtures/FloatingAudit.hs",
+        "compiler/test-fixtures/FloatingAuditNative.hs"
+      ]
+    },
     "original-stack": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}],

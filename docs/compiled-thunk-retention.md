@@ -30,3 +30,10 @@ recompilation, disabled speculation, or reduced retention requirements are used.
 Run it alongside `BoxedArrayTest`, `FloatingPrimitiveTest`,
 `ResumableThunkProofTest`, `ThreadedThunkTest`, and `ThunkRetentionTest` in both
 handoff modes, after preparing the existing boxed-array and floating fixtures.
+Also run `CoreContinuationNativeTest` after `thc-fixtures core-continuation` to
+retain its shared-recursive-cell child-resumption race control. Fast-test fixture
+selection prepares both boxed-array and floating inputs for the new regression
+class; its receipt fingerprints both producers, their sources, and both output
+trees. Existing Gradle and full-cache inputs already cover these artifacts.
+Use Gradle's `test --rerun` when changing `JAVA_TOOL_OPTIONS` between handoff
+modes, so an up-to-date task cannot substitute for executing the second mode.

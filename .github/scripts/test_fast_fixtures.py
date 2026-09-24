@@ -188,6 +188,65 @@ class FixturePreparationTest(unittest.TestCase):
         for name in ("Stack/CloneStack.hs", "Stack/Decode.hs"):
             self.assertIn("compiler/pinned-ghc-internal/GHC/Internal/" + name, group["sources"])
 
+    def test_compiled_thunk_retention_prepares_both_native_families(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["compiled-thunk-retention"]
+        self.assertEqual({"thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest",
+                          "thc.runtime.FloatingPrimitiveTest"}, set(group["junit"]))
+        self.assertEqual({"compiled-thunk-retention"}, {owners[name] for name in group["junit"]})
+        self.assertEqual([{"argv": ["python3", "scripts/prepare-boxed-arrays.py"]},
+                          {"argv": ["python3", "scripts/prepare-floating-audit.py"]}], group["commands"])
+        self.assertEqual(["build/boxed-arrays", "build/floating"], group["outputs"])
+        self.assertEqual({"scripts/prepare-boxed-arrays.py", "scripts/prepare-floating-audit.py",
+                          "compiler/test-fixtures/BoxedArrayAudit.hs",
+                          "compiler/test-fixtures/FloatingAudit.hs",
+                          "compiler/test-fixtures/FloatingAuditNative.hs"}, set(group["sources"]))
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        full = (project / "scripts/prepare-tests.sh").read_text().splitlines()
+        for command in group["commands"]:
+            self.assertIn(" ".join(command["argv"]), full)
+        self.assertLessEqual(set(group["outputs"]), fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertLessEqual({"build/boxed-arrays/manifest.json", "build/floating/checks.json"},
+                             fast_fixtures.FULL_REQUIRED)
+        gradle = (project / "build.gradle.kts").read_text()
+        for pattern in ("boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "floating/core/**/*.json",
+                        "floating/checks.json", "floating/oracle.tsv"):
+            self.assertIn('"' + pattern + '"', gradle)
+
+    def test_retention_receipt_rejects_changed_sources_or_either_output_tree(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, _ = fast_fixtures._manifest(project)
+        group = manifest["groups"]["compiled-thunk-retention"]
+        self.manifest["groups"]["compiled-thunk-retention"] = group
+        (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
+        for name in group["sources"]:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture source\n")
+        def run(name, argv, stdout=None):
+            self.fake_run(name, argv, stdout)
+            for command, output in zip(group["commands"], group["outputs"]):
+                if argv == command["argv"]:
+                    directory = self.root / output
+                    directory.mkdir(parents=True, exist_ok=True)
+                    (directory / "oracle.tsv").write_text("native rows\n")
+        def prepare(*classes):
+            return fast_fixtures.prepare(self.root, self.selection(*classes), run, self.toolchain)
+        self.assertEqual(["compiled-thunk-retention"], prepare(*group["junit"])["rebuilt"])
+        for name in group["junit"]:
+            self.assertEqual(["compiled-thunk-retention"], prepare(name)["reused"])
+        for name in group["sources"]:
+            (self.root / name).write_text("changed source\n")
+            self.assertEqual(["compiled-thunk-retention"], prepare(group["junit"][0])["rebuilt"])
+        for output in group["outputs"]:
+            path = self.root / output / "oracle.tsv"
+            path.write_text("changed native rows\n")
+            self.assertEqual(["compiled-thunk-retention"], prepare(group["junit"][0])["rebuilt"])
+            path.unlink()
+            self.assertEqual(["compiled-thunk-retention"], prepare(group["junit"][0])["rebuilt"])
+        self.assertNotIn("fixtures-full", [name for name, _, _ in self.calls])
+
     def test_original_stdio_has_strict_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

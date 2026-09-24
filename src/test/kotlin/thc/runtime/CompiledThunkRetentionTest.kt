@@ -73,6 +73,7 @@ class CompiledThunkRetentionTest {
                     valid("after-$index/${row.first}")
                 }
                 assertEquals(0, language.handoffState.get().results.depth)
+                assertEquals(0, language.handoffState.get().arguments.depth)
             } finally { context.leave() }
         }
     }
