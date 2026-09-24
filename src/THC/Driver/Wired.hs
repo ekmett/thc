@@ -30,6 +30,9 @@ bootSources =
   , "GHC/Internal/IO.hs-boot"
   , "GHC/Internal/Exception/Backtrace.hs-boot"
   , "GHC/Internal/Exception.hs-boot"
+  , "GHC/Internal/Bignum/BigNat.hs-boot"
+  , "GHC/Internal/Bignum/Natural.hs-boot"
+  , "GHC/Internal/Bignum/Integer.hs-boot"
   ]
 
 -- The order is the proven private-overlay compile order. Only these modules
@@ -46,11 +49,14 @@ moduleSources =
   , ("GHC/Internal/Foreign/Storable.hs", "GHC.Internal.Foreign.Storable")
   , ("GHC/Internal/Foreign/Marshal/Alloc.hs", "GHC.Internal.Foreign.Marshal.Alloc")
   , ("GHC/Internal/Bignum/Natural.hs", "GHC.Internal.Bignum.Natural")
+  , ("GHC/Internal/Bignum/Integer.hs", "GHC.Internal.Bignum.Integer")
   , ("GHC/Internal/Base.hs", "GHC.Internal.Base")
   , ("GHC/Internal/IO/Unsafe.hs", "GHC.Internal.IO.Unsafe")
   , ("GHC/Internal/Show.hs", "GHC.Internal.Show")
   , ("GHC/Internal/Err.hs", "GHC.Internal.Err")
   , ("GHC/Internal/Enum.hs", "GHC.Internal.Enum")
+  , ("GHC/Internal/Real.hs", "GHC.Internal.Real")
+  , ("GHC/Internal/Numeric.hs", "GHC.Internal.Numeric")
   , ("GHC/Internal/Ptr.hs", "GHC.Internal.Ptr")
   , ("GHC/Internal/Data/Either.hs", "GHC.Internal.Data.Either")
   , ("GHC/Internal/Word.hs", "GHC.Internal.Word")
@@ -90,7 +96,11 @@ sourceHashes :: [(FilePath, String)]
 sourceHashes =
   [ ("GHC/Internal/Arr.hs", "d91e8d645309242c5a7b849d6d14884816cd4b04f4fc741e21f62d75a4d2bc4d")
   , ("GHC/Internal/Base.hs", "bc38ea9356f90aeb38298ef1269fbdc2dee433528374948375da112b273a89e2")
+  , ("GHC/Internal/Bignum/BigNat.hs-boot", "230a6ac303323e0d0716a39eef450af81bc81494a72192cbe9d20e74f5af45d4")
+  , ("GHC/Internal/Bignum/Integer.hs", "1f8ec2a8e12ecbab7eb0b59f249fae663d8066f2fb14224177a4538653bb17f4")
+  , ("GHC/Internal/Bignum/Integer.hs-boot", "f486bbc9637cbcc4b03ea5dcaab9dba71286cadd4a29df3e4f68d2d098eee779")
   , ("GHC/Internal/Bignum/Natural.hs", "6895337089fc3ab8a5102b0853c28a4b70281b49ba7705b00eb9750a7e13d8df")
+  , ("GHC/Internal/Bignum/Natural.hs-boot", "2e7bb92e28f5fa9601b6874b449cfd75bad66a3144bfddb4a445996eaa991026")
   , ("GHC/Internal/ClosureTypes.hs", "38ca5c8e07a5b807efdce7ac283f42f281347f36195b447067c71dd3c59647ca")
   , ("GHC/Internal/CString.hs", "3b2e7a0fb2880d8f98cb002adfbaa36a8469667b7494f8f695fe1a6f181de573")
   , ("GHC/Internal/Control/Monad/Fail.hs", "695c8290891399db66075b86ecb1fd0a6242788985023d3edfb9c7155b97ecb7")
@@ -133,8 +143,10 @@ sourceHashes =
   , ("GHC/Internal/Ix.hs", "485f592cb602e532a1a13a603aedb7f59b8d215123e8aa8982cd39320fed8c16")
   , ("GHC/Internal/List.hs", "ae9f56a758942b6e937e7b430ac1137e3ebea171762120ad9c31ef1f4904ba39")
   , ("GHC/Internal/Num.hs-boot", "b765e848138b1d4a22710c45db2e446d3e2c5c07c6b774a8d5cf83a5c4a9b92f")
+  , ("GHC/Internal/Numeric.hs", "d4f2fdc9caff154a8c849724736c7acfc2f1e66825409cffd22bbdc54752a8fa")
   , ("GHC/Internal/Ptr.hs", "92ef7f10fc4f23ffa860a729c3b2fe13a269c1288dc3d6a017a358c894ec23c6")
   , ("GHC/Internal/Real.hs-boot", "843ed3133589748fbc65e0d7ef7e5a5491dc131b55ff73b67f6e3c3516bb99f4")
+  , ("GHC/Internal/Real.hs", "7546f4b80b562ba06feaab6be207e5320258f8734d8be870610c57eae4c8c5e1")
   , ("GHC/Internal/Show.hs", "b37f6d9d376e837785d207f2cf784daf0a53a04db26723a456c073616512be98")
   , ("GHC/Internal/Stack/Decode.hs", "0ea6a82ea41bdf14b28aec5cb36a586ed86eb6f87f373ea21095d2b1b018089f")
   , ("GHC/Internal/Stack/Annotation.hs", "96ad02226d0f5a9dd57b4ad873ceb2056e3e27ce788149f1e94ba29d0c83bb15")
