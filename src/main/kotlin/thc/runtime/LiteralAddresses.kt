@@ -146,25 +146,26 @@ internal class ManagedAddress private constructor(
         bytes[index] = value.toByte()
     }
 
-    /** Int16#/Word16# stores use native-endian two-byte elements. Check the
-     * whole range before mutation so a partial pointer-cell overlap cannot
-     * leave behind one modified byte. */
-    fun writeWord16(elementOffset: Long, value: Long) {
-        if (elementOffset < Long.MIN_VALUE / 2 || elementOffset > Long.MAX_VALUE / 2)
+    /** Native-endian scalar stores validate the full element before mutation.
+     * Pointer-bearing allocations retain references except for a complete
+     * overwrite of a pointer cell. */
+    fun writeNativeScalar(elementOffset: Long, width: Int, value: Long) {
+        if (width != 2 && width != 4 && width != 8) fault("Unsupported managed Addr# scalar width")
+        if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
             fault("Managed Addr# element offset overflow")
-        val displacement = elementOffset * 2
-        requireRange(displacement, 2, writable = true)
-        val low = value.toByte()
-        val high = (value ushr 8).toByte()
+        val displacement = elementOffset * width
+        requireRange(displacement, width.toLong(), writable = true)
         val little = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
-        val first = if (little) low else high
-        val second = if (little) high else low
-        owner?.let { it.copyBytesIn(byteArrayOf(first, second), 0, offset + displacement, 2); return }
+        owner?.let { it.writeNativeScalarByteOffset(offset + displacement, width, value, little); return }
         val bytes = mutableBytes ?: fault("Cannot write through an immutable literal Addr#")
         val start = (offset + displacement).toInt()
-        bytes[start] = first
-        bytes[start + 1] = second
+        for (index in 0 until width) {
+            val shift = (if (little) index else width - 1 - index) * 8
+            bytes[start + index] = (value ushr shift).toByte()
+        }
     }
+
+    fun writeWord16(elementOffset: Long, value: Long) = writeNativeScalar(elementOffset, 2, value)
 
     /** Validate a complete byte region before any effect. An empty region may
      * start one past the allocation; an immutable destination is never writable. */

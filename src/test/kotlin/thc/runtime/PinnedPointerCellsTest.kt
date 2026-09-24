@@ -18,7 +18,8 @@ import java.nio.ByteOrder
 class PinnedPointerCellsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private data class Row(val input: Long, val pointer: Long, val array: Long, val order: Long,
-        val char8: Long, val byte8: Long, val halfwordRead: Long, val halfwordWrite: Long)
+        val char8: Long, val byte8: Long, val halfwordRead: Long, val halfwordWrite: Long,
+        val wideBytes: List<Long>)
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
@@ -88,6 +89,39 @@ class PinnedPointerCellsTest {
         assertEquals(255L, base.readWord8(1))
     }
 
+    @Test fun wideScalarStoresCheckWholeElementsAndPointerOverlap() {
+        val base = ManagedAddress.fromAllocation(PinnedMemory.allocate(64, 1))
+        val target = base.plus(56)
+        base.writeAddressElementIndex(1, target)
+        base.writeNativeScalar(4, 4, 0x12345678)
+        base.writeNativeScalar(5, 8, 0x1020304050607080)
+        assertSame(target, base.readAddressElementIndex(1))
+        for (width in listOf(4, 8)) {
+            for (index in listOf(-1L, Long.MIN_VALUE, Long.MAX_VALUE))
+                assertThrows(RuntimeFault::class.java) { base.writeNativeScalar(index, width, -1) }
+        }
+        assertThrows(RuntimeFault::class.java) { base.plus(2).writeNativeScalar(1, 8, -1) }
+        assertSame(target, base.readAddressElementIndex(1))
+        val expected = ByteBuffer.allocate(64).order(ByteOrder.nativeOrder())
+            .putInt(16, 0x12345678).putLong(40, 0x1020304050607080).array()
+        for (index in (16..19).plus(40..47))
+            assertEquals(expected[index].toLong() and 255, base.readWord8(index.toLong()))
+        base.writeNativeScalar(1, 8, -1)
+        assertThrows(RuntimeFault::class.java) { base.readAddressElementIndex(1) }
+        for (index in 8..15) assertEquals(255L, base.readWord8(index.toLong()))
+    }
+
+    private fun wideStoreModel(input: Long): List<Long> {
+        val bytes = ByteBuffer.allocate(64).order(ByteOrder.nativeOrder())
+        bytes.putInt(16, input.toInt())
+        bytes.putInt(20, (input + 17).toInt())
+        bytes.putLong(24, input)
+        bytes.putLong(32, input + 33)
+        bytes.putLong(40, input)
+        bytes.putLong(48, input + 49)
+        return (16..55).map { bytes.get(it).toLong() and 255L }
+    }
+
     private fun halfwordModel(input: Long): Long {
         val bytes = ByteBuffer.allocate(32).order(ByteOrder.nativeOrder())
         bytes.putShort(24, input.toShort())
@@ -109,11 +143,13 @@ class PinnedPointerCellsTest {
             }
         val rows = File(root, "build/pinned-pointer-cells/oracle.tsv").readLines().map { line ->
             val fields = line.split('\t')
-            assertEquals(8, fields.size)
+            assertEquals(9, fields.size)
             Row(fields[0].toLong(), fields[1].toLong(), fields[2].toLong(), fields[3].toLong(),
-                fields[4].toLong(), fields[5].toLong(), fields[6].toLong(), fields[7].toLong())
+                fields[4].toLong(), fields[5].toLong(), fields[6].toLong(), fields[7].toLong(),
+                fields[8].split(',').map(String::toLong))
         }
-        assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, 32767L, 32768L, 65535L, -1L, -32768L),
+        assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, 32767L, 32768L, 65535L,
+            4294967297L, 81985529216486895L, -1L, -32768L),
             rows.map { it.input })
         for (row in rows) {
             assertEquals(1009L + 17L * (row.input and 255L), row.pointer)
@@ -129,6 +165,7 @@ class PinnedPointerCellsTest {
             assertEquals(((signedHalfword + 32768L) shl 48) + ((signedHalfword + 32768L) shl 32) +
                 (halfword shl 16) + halfword, row.halfwordRead)
             assertEquals(halfwordModel(row.input), row.halfwordWrite)
+            assertEquals(wideStoreModel(row.input), row.wideBytes)
         }
         for (stage in listOf("pre", "post")) {
             val directory = File(root, "build/pinned-pointer-cells/$stage")
@@ -145,7 +182,15 @@ class PinnedPointerCellsTest {
                 "readInt8OffAddr#", "writeInt8OffAddr#", "indexInt8OffAddr#", "indexWord8OffAddr#",
                 "readInt16OffAddr#", "readWord16OffAddr#", "indexInt16OffAddr#", "indexWord16OffAddr#",
                 "writeInt16OffAddr#", "writeWord16OffAddr#",
+                "writeInt32OffAddr#", "writeWord32OffAddr#", "writeIntOffAddr#",
+                "writeWordOffAddr#", "writeInt64OffAddr#", "writeWord64OffAddr#",
                 "readWord8OffAddr#", "indexWord8Array#")))
+            for (primitive in setOf("writeInt32OffAddr#", "writeWord32OffAddr#",
+                "writeIntOffAddr#", "writeWordOffAddr#", "writeInt64OffAddr#", "writeWord64OffAddr#")) {
+                val evidence = (audit["primitives"] as List<Map<String, Any?>>).single { it["name"] == primitive }
+                val owners = (evidence["uses"] as List<Map<String, Any?>>).map { it["owner"] }.toSet()
+                assertEquals(setOf("main:PinnedPointerCellsAudit.wideStoreByte"), owners, "$stage/$primitive")
+            }
             for (primitive in setOf("readInt8OffAddr#", "writeInt8OffAddr#", "indexInt8OffAddr#",
                 "indexWord8OffAddr#", "writeInt16OffAddr#", "writeWord16OffAddr#")) {
                 val evidence = (audit["primitives"] as List<Map<String, Any?>>).single { it["name"] == primitive }
@@ -204,6 +249,36 @@ class PinnedPointerCellsTest {
                             }
                             assertTrue(after > before, "$stage/$backend/$entry/${row.input}: $before->$after")
                         }
+                    }
+                    val entry = "wideStoreByte"
+                    val source = CoreModules.reachable(merged, entry) + ("instrument" to true)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, source)
+                        else BytecodeProgram(language, source)
+                    val function = context.asValue(EntryValue(program, entry, 2))
+                    fun checkWide(row: Row, selectors: IntProgression) {
+                        for (selector in selectors) {
+                            assertEquals(row.wideBytes[selector], function.execute(row.input, selector).asLong(),
+                                "$stage/$backend/$entry/${row.input}/$selector")
+                        }
+                        assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                    }
+                    // Profile the compact values before compiling the inner State#
+                    // lambda; replay every native row, including both wide values,
+                    // against the explicitly compiled call target below.
+                    rows.filter { it.input in Int.MIN_VALUE..Int.MAX_VALUE }.forEach { checkWide(it, 0..39) }
+                    assertTrue(function.invokeMember("compile").asBoolean(), "$stage/$backend/$entry compilation")
+                    valid(program.hostEntryTarget(2), "$stage/$backend/$entry host target after compilation")
+                    for (row in rows.asReversed()) {
+                        val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        checkWide(row, 39 downTo 0)
+                        var after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        if (after == before) {
+                            assertTrue(function.invokeMember("compile").asBoolean(),
+                                "$stage/$backend/$entry recompilation")
+                            checkWide(row, 39 downTo 0)
+                            after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        }
+                        assertTrue(after > before, "$stage/$backend/$entry/${row.input}: $before->$after")
                     }
                 } finally { context.leave() }
             }

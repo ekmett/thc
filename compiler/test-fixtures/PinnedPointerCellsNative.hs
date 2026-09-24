@@ -5,6 +5,7 @@
 module Main where
 
 import GHC.Exts (Int(I#))
+import Data.List (intercalate)
 import qualified PinnedPointerCellsAudit as Cells
 
 main :: IO ()
@@ -17,4 +18,6 @@ main = getContents >>= mapM_ answer . lines
         "\t" ++ show (I# (Cells.char8Roundtrip raw)) ++
         "\t" ++ show (I# (Cells.byte8Roundtrip raw)) ++
         "\t" ++ show (I# (Cells.halfwordReadRoundtrip raw)) ++
-        "\t" ++ show (I# (Cells.halfwordWriteRoundtrip raw)))
+        "\t" ++ show (I# (Cells.halfwordWriteRoundtrip raw)) ++
+        "\t" ++ intercalate "," [show (I# (Cells.wideStoreByte raw selector)) |
+          I# selector <- [0..39]])

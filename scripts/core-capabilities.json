@@ -521,6 +521,12 @@
     "writeInt8OffAddr#": 4,
     "writeInt16OffAddr#": 4,
     "writeWord16OffAddr#": 4,
+    "writeInt32OffAddr#": 4,
+    "writeWord32OffAddr#": 4,
+    "writeIntOffAddr#": 4,
+    "writeWordOffAddr#": 4,
+    "writeInt64OffAddr#": 4,
+    "writeWord64OffAddr#": 4,
     "writeCharOffAddr#": 4,
     "writeAddrOffAddr#": 4,
     "writeAddrArray#": 4,
@@ -1192,6 +1198,60 @@
         {"kind": "address", "primReps": ["AddrRep"]},
         {"kind": "long", "primReps": ["IntRep"]},
         {"kind": "long", "primReps": ["Word16Rep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeInt32OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["Int32Rep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeWord32OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["Word32Rep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeIntOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeWordOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["WordRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeInt64OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["Int64Rep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
+    },
+    "writeWord64OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["Word64Rep"]},
         {"kind": "void", "primReps": []}
       ],
       "result": {"kind": "void", "primReps": []}
