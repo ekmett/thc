@@ -11,7 +11,6 @@ import com.oracle.truffle.api.dsl.TypeSystemReference
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
-import com.oracle.truffle.api.exception.AbstractTruffleException
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.*
@@ -339,15 +338,9 @@ internal class Force(private val metrics: Metrics) : Node() {
             publishFailure(thunk, e)
             throw e
         } catch (e: Throwable) {
-            if (e is ThreadDeath || e is InterruptedException || e is AbstractTruffleException ||
-                e is java.util.concurrent.CancellationException) suspendOwned(thunk)
-            else synchronized(thunk.monitor) {
-                // Unexpected host failure retains the body for an actual retry.
-                thunk.value = null
-                thunk.owner = null
-                thunk.state = 0
-                thunk.monitor.notifyAll()
-            }
+            // Any escaping host failure may follow an observable effect. Without
+            // a captured continuation, resetting to state 0 would replay it.
+            suspendOwned(thunk)
             throw e
         }
     }

@@ -124,21 +124,19 @@ class ThreadedThunkTest {
         }
     }
 
-    @Test fun unexpectedHostUnwindWakesWaiterForOneRetry() {
+    @Test fun unexpectedHostUnwindWakesWaiterWithoutReplayingEffects() {
         executionContext().use { context ->
             context.initialize("thc")
             val started = CountDownLatch(1)
             val release = CountDownLatch(1)
-            val evaluations = AtomicInteger()
+            val effects = AtomicInteger()
             val (thunk, driver) = entered(context) {
                 Thunk(object : RootNode(null) {
                     override fun execute(frame: VirtualFrame): Any {
-                        if (evaluations.incrementAndGet() == 1) {
-                            started.countDown()
-                            assertTrue(release.await(5, TimeUnit.SECONDS))
-                            throw IllegalStateException("retry")
-                        }
-                        return 42L
+                        effects.incrementAndGet()
+                        started.countDown()
+                        assertTrue(release.await(5, TimeUnit.SECONDS))
+                        throw IllegalStateException("after effect")
                     }
                 }.callTarget, null) to Driver(Metrics(true))
             }
@@ -147,14 +145,16 @@ class ThreadedThunkTest {
                     assertThrows(IllegalStateException::class.java) { driver.force(thunk) }
                 } }
                 assertTrue(started.await(5, TimeUnit.SECONDS))
-                val waiter = pool.submit<Any?> { entered(context) { driver.force(thunk) } }
+                val waiter = pool.submit<RuntimeFault> { entered(context) {
+                    assertThrows(RuntimeFault::class.java) { driver.force(thunk) }
+                } }
                 release.countDown()
-                assertEquals("retry", owner.get(5, TimeUnit.SECONDS).message)
-                assertEquals(42L, waiter.get(5, TimeUnit.SECONDS))
+                assertEquals("after effect", owner.get(5, TimeUnit.SECONDS).message)
+                assertTrue(waiter.get(5, TimeUnit.SECONDS).message!!.contains("no resumable continuation"))
             }
-            assertEquals(2, evaluations.get())
-            assertEquals(2, thunk.state)
-            assertNull(thunk.target)
+            assertEquals(1, effects.get())
+            assertEquals(4, thunk.state)
+            assertNotNull(thunk.target)
         }
     }
 
