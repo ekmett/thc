@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 module TestSupport
-  ( Env(..), Result(..), setup, withFixture, copyTree, run, runExe, checked, json, readJson
+  ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, checked, json, readJson
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
   , writeText, readText, replaceText, findFiles, requireFile
@@ -57,10 +57,13 @@ setup = do
 -- Directory fixtures must live outside the source tree: the source tree has a
 -- cabal.project, and plan-package intentionally discovers ancestor projects.
 withFixture :: Env -> FilePath -> (FilePath -> IO a) -> IO a
-withFixture env fixture action = do
+withFixture env fixture = withFixtureNamed env fixture "project \"café\""
+
+withFixtureNamed :: Env -> FilePath -> FilePath -> (FilePath -> IO a) -> IO a
+withFixtureNamed env fixture name action = do
   temporary <- getTemporaryDirectory
   bracket (fresh temporary) removePathForcibly $ \base -> do
-    let package = base </> "project \"café\""
+    let package = base </> name
     copyTree (root env </> fixture) package
     action package
   where

@@ -18,7 +18,9 @@ import TestSupport
 
 tests :: Env -> Test
 tests env = TestLabel "three-package project native versus THC run" $ TestCase $
-  withFixture env "test/fixtures/run-project" $ \project ->
+  -- GHC 9.14's Linux -g assembler cannot quote a double quote in .file paths.
+  -- Plan/run tests retain the quoted Unicode path coverage.
+  withFixtureNamed env "test/fixtures/run-project" "project café" $ \project ->
   withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project
         output = base </> "output"
