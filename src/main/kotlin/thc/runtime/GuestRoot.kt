@@ -12,6 +12,9 @@ import com.oracle.truffle.api.nodes.RootNode
 
 /** The calling convention is independent of the interpreter's frame layout. */
 abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescriptor) : RootNode(language, descriptor) {
+    @field:CompilationFinal internal var coreIdentity: CoreFunctionIdentity? = null
+        private set
+    internal fun configureCoreIdentity(identity: CoreFunctionIdentity?) { coreIdentity = identity }
     @field:CompilationFinal(dimensions = 1) internal var entryStrict: BooleanArray = booleanArrayOf()
         private set
     @field:CompilationFinal internal var entryArgumentOffset: Int = 1

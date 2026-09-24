@@ -1188,7 +1188,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             }
         }
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scope.layout.build())
-        bindings.forEachIndexed { index, binding -> globals.getValue(binding["id"] as String).initialize(initializers[index].execute(frame)) }
+        bindings.forEachIndexed { index, binding ->
+            val value = initializers[index].execute(frame)
+            CoreFunctionIdentity.install(moduleData, binding, value)
+            globals.getValue(binding["id"] as String).initialize(value)
+        }
     }
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
         ?: names.entries.singleOrNull { it.key.substringAfterLast('.') == name }?.value?.singleOrNull()

@@ -182,6 +182,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         // Publication stores lazy values, so the initializer deliberately has no WHNF return obligation.
         val initializer = build("Core module initialization", scope.function, body, forceResult = false)
         Calls.target(initializer, arrayOf(0L))
+        bindings.forEach { binding ->
+            CoreFunctionIdentity.install(moduleData, binding, globals.getValue(binding["id"] as String).read())
+        }
     }
 
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
