@@ -132,6 +132,17 @@
         "compiler/test-fixtures/PinnedPointerCellsNative.hs"
       ]
     },
+    "wide-char-address": {
+      "junit": ["thc.runtime.WideCharAddressTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "wide-char-address"]}],
+      "outputs": ["build/wide-char-address"],
+      "sources": [
+        "test/haskell-fixtures/Main.hs",
+        "test/haskell-fixtures/WideCharAddressFixtures.hs",
+        "compiler/test-fixtures/WideCharAddressAudit.hs",
+        "compiler/test-fixtures/WideCharAddressNative.hs"
+      ]
+    },
     "small-arrays": {
       "junit": ["thc.runtime.SmallArrayTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "small-arrays"]}],
