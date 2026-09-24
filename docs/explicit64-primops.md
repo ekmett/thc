@@ -27,15 +27,15 @@ unsigned half. Invalid spelling, negative values and overflow are load errors,
 including in case alternatives and diagnostic mode.
 
 `Explicit64PrimopsAudit.hs` exposes genuine typed scalar entries so conversions
-cannot cancel around an Int# wrapper during optimization. Preparation requires
-every intended primitive to survive, checks the exact argument and result
-register names at the lambda and application, and runs the strict auditor.
+cannot cancel around an Int# wrapper during optimization. The Haskell fixture
+producer exports Core and requires strict audit acceptance; JVM tests check
+each intended primitive and the exact argument and result representations.
 A separately compiled native driver bridges those types only at its I/O boundary.
 
 There are 66,117 native/model rows across the 36 operations and two literal/case
-controls. Independent Python integers and JVM BigInteger check signed endpoints,
+controls. An independent JVM BigInteger model checks signed endpoints,
 unsigned sign transitions, wraparound, neighboring values, alternating and
-reproducible random bit patterns. Every valid shift count from 0 to 63 is used.
+deterministically generated bit patterns. Every valid shift count from 0 to 63 is used.
 Zero divisors, signed minimum divided by minus one, and shifts outside `[0,64)`
 are excluded; no portable numeric result or exception protocol is promised for
 those inputs.

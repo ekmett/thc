@@ -23,7 +23,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "6301dad696d8347720baeea398505a2204666f76bf2f3eaeaa6ea61e3c18c6ee"
+FULL_PREPARATION_PLAN = "cc6515c993770d87632eab6f2bcf3f04210b66a54016c484e7fefd4ca94f059c"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/io-main-pap", "build/managed-mvars", "build/simd-capability-smoke",
 })
@@ -55,6 +55,7 @@ COMMON_SOURCES = (
     "compiler/export.sh",
     "compiler/toolchain.sh",
     "compiler/plugin.py",
+    "test/haskell-fixtures/**/*.hs",
     "scripts/audit-core.py",
     "scripts/core_*.py",
     "scripts/core-capabilities.json",

@@ -73,3 +73,22 @@ executable thc
   ghc-options: -Wall
   if flag(development)
     ghc-options: -Werror
+
+-- Produce real GHC Core and native oracle inputs for JVM semantic tests.
+executable thc-fixtures
+  main-is: Main.hs
+  hs-source-dirs: test/haskell-fixtures
+  build-depends:
+    base >= 4.22 && < 4.23,
+    thc,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13,
+    containers >= 0.8 && < 0.9,
+    cryptohash-sha256 >= 0.11 && < 0.12,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    process >= 1.6.26 && < 1.7
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror

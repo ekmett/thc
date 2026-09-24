@@ -30,9 +30,9 @@ fixed masks/shifts and Java's population-count, zero-count, byte-reversal, and
 bit-reversal operations. No generic boxed arithmetic is added.
 
 `compiler/test-fixtures/BitPrimopsAudit.hs` uses opaque wrappers with dynamic
-inputs. Preparation checks that every requested primitive survives both
-pre-Tidy and post-Tidy export, has the pinned input/result representations,
-and passes the strict dependency auditor. The manifest hashes source inputs,
+inputs. The Haskell fixture producer exports both pre-Tidy and post-Tidy Core
+and requires strict dependency audit acceptance. JVM tests check retained
+primitive names and the pinned input/result representations. The manifest hashes source inputs,
 exported Core, audit reports, the native driver, and its 11,923 result rows.
 Samples include every bit position and transition, zero, all ones, alternating
 bits, signed-carrier extremes, and exhaustive byte inputs with several upper
@@ -51,7 +51,7 @@ From a clean checkout with the pinned GHC and Graal toolchains:
 
 ```sh
 compiler/build.sh
-python3 scripts/prepare-bit-primops.py
+cabal run exe:thc-fixtures --offline -- bit
 ./gradlew test --tests thc.runtime.BitPrimopsTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.BitPrimopsTest --rerun
 ```

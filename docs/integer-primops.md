@@ -19,9 +19,9 @@ division and comparison operands. Each bytecode operation has a constant width
 mask and primitive operands/results. No aggregate transport changed.
 
 `IntegerPrimopsAudit.hs` wraps every primitive with dynamic operands and the
-existing Int# host boundary. `prepare-integer-primops.py` rejects any wrapper
-whose intended primop disappears during GHC optimization, performs strict Core
-auditing, and generates 56,791 native oracle rows. Inputs include every bit
+existing Int# host boundary. The Cabal `thc-fixtures` executable exports the
+Core, runs the strict auditor, and generates 56,791 native oracle rows. The JVM
+test checks that every intended primop survives GHC optimization. Inputs include every bit
 position and its neighbors, zero, alternating patterns, the sign bit, all-ones
 and equal/neighbor operands. Every byte is checked for complement and every
 valid byte shift count; wider shifts cover every count and bit transition.

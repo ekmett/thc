@@ -25,8 +25,8 @@ not add narrow shifts, cross-signedness conversions, tuple-producing operations,
 or new aggregate argument/capture support.
 
 `SignedNarrowPrimopsAudit.hs` contains dynamic wrappers around the actual primops.
-The preparation script checks that every requested name survives in reachable
-Core, requires strict audit acceptance, and compiles a native GHC driver with
+The Haskell `thc-fixtures` executable requires strict Core audit acceptance and
+compiles a native GHC driver with
 Core/STG lint enabled. The 73,453 oracle rows include signed endpoints, zero,
 equal and adjacent operands, every bit boundary and its neighbors, overflow
 products, both signs of quotient/remainder, and 64-bit host values that truncate
@@ -48,7 +48,7 @@ GHC/GraalVM environment:
 
 ```sh
 compiler/build.sh
-python3 scripts/prepare-signed-narrow-primops.py
+cabal run exe:thc-fixtures --offline -- signed-narrow
 ./gradlew test --tests thc.SignedNarrowPrimopsTest
 ```
 

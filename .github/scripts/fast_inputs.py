@@ -180,7 +180,7 @@ def toolchain(root):
 
 def identity(root):
     tracked = tracked_files(root)
-    sources = {name for name in tracked if name.startswith(("compiler/", "scripts/", "examples/", "src/main/resources/"))}
+    sources = {name for name in tracked if name.startswith(("compiler/", "scripts/", "examples/", "src/main/resources/", "test/haskell-fixtures/"))}
     sources.update((SELF, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS))
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
     require("scripts/prepare-tests.sh" in sources and "compiler/export-boot.py" in sources

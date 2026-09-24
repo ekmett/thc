@@ -45,11 +45,11 @@
     "explicit64-primops": {
       "junit": ["thc.runtime.Explicit64PrimopsTest"],
       "commands": [
-        {"argv": ["python3", "scripts/prepare-explicit64-primops.py"]}
+        {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "explicit64"]}
       ],
       "outputs": ["build/explicit64-primops"],
       "sources": [
-        "scripts/prepare-explicit64-primops.py",
+        "test/haskell-fixtures/Main.hs",
         "compiler/test-fixtures/Explicit64PrimopsAudit.hs"
       ]
     },
@@ -68,33 +68,33 @@
     "integer-primops": {
       "junit": ["thc.IntegerPrimopsTest"],
       "commands": [
-        {"argv": ["python3", "scripts/prepare-integer-primops.py"]}
+        {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "integer"]}
       ],
       "outputs": ["build/integer-primops"],
       "sources": [
-        "scripts/prepare-integer-primops.py",
+        "test/haskell-fixtures/Main.hs",
         "compiler/test-fixtures/IntegerPrimopsAudit.hs"
       ]
     },
     "signed-narrow-primops": {
       "junit": ["thc.SignedNarrowPrimopsTest"],
       "commands": [
-        {"argv": ["python3", "scripts/prepare-signed-narrow-primops.py"]}
+        {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "signed-narrow"]}
       ],
       "outputs": ["build/signed-narrow-primops"],
       "sources": [
-        "scripts/prepare-signed-narrow-primops.py",
+        "test/haskell-fixtures/Main.hs",
         "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs"
       ]
     },
     "bit-primops": {
       "junit": ["thc.runtime.BitPrimopsTest"],
       "commands": [
-        {"argv": ["python3", "scripts/prepare-bit-primops.py"]}
+        {"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bit"]}
       ],
       "outputs": ["build/bit-primops"],
       "sources": [
-        "scripts/prepare-bit-primops.py",
+        "test/haskell-fixtures/Main.hs",
         "compiler/test-fixtures/BitPrimopsAudit.hs"
       ]
     },

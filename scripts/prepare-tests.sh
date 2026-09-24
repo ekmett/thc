@@ -29,8 +29,10 @@ python3 scripts/prepare-empty-tuple-input-audit.py
 python3 scripts/prepare-tuple-input-audit.py
 python3 scripts/prepare-tuple-join-audit.py
 python3 scripts/prepare-empty-join-input.py
-python3 scripts/prepare-integer-primops.py
-python3 scripts/prepare-bit-primops.py
+cabal build exe:thc-fixtures --offline
+fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
+"$fixture_bin" integer
+"$fixture_bin" bit
 python3 scripts/prepare-bytearray.py
 python3 scripts/prepare-mutable-bytearrays.py
 python3 scripts/prepare-resize-bytearrays.py
@@ -70,7 +72,7 @@ case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;
   *) python3 scripts/prepare-int16x8-audit.py ;;
 esac
-python3 scripts/prepare-signed-narrow-primops.py
+"$fixture_bin" signed-narrow
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int8x16-audit.py --export-only ;;
   *) python3 scripts/prepare-int8x16-audit.py ;;
@@ -107,7 +109,7 @@ case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-doublex2-bytearray-audit.py --export-only ;;
   *) python3 scripts/prepare-doublex2-bytearray-audit.py ;;
 esac
-python3 scripts/prepare-explicit64-primops.py
+"$fixture_bin" explicit64
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CBVAudit.hs compiler/test-fixtures/CBVJoinAudit.hs compiler/test-fixtures/CBVCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs
 python3 scripts/check-speculation-metadata.py
 python3 scripts/check-representation-metadata.py
