@@ -5,7 +5,9 @@ package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleSafepoint
+import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.ControlFlowException
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
 import thc.Language
@@ -51,12 +53,26 @@ internal object CoreGuestThreads {
 }
 
 /** Discards a fork action's lifted result and releases its tuple loan. */
+private class UncaughtForkAsync(val request: AsyncRequest) : ControlFlowException()
+
 private class ForkDestination(shape: TupleShape, private val language: Language) : TupleDestination(shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
+        val continuation = when (result) {
+            is ContinuationResult -> result
+            is TailYield -> result.continuation
+            else -> null
+        }
+        if (continuation != null) {
+            val request = AsyncContinuations.request(continuation)
+                ?: fault("Fork action suspended without an async request")
+            throw UncaughtForkAsync(request)
+        }
         if (result === TupleComplete) {
             val pool = language.handoffState.get().results
             val storage = pool.completed()
-            pool.releaseChecked(storage, shape.layout)
+            try {
+                if (storage.layout !== shape.layout) fault("Fork action returned the wrong tuple layout")
+            } finally { pool.releaseChecked(storage, shape.layout) }
         } else {
             val storage = result as? HandoffStorage ?: fault("Fork action returned no tuple")
             if (storage.layout !== shape.layout) fault("Fork action returned the wrong tuple layout")
@@ -81,6 +97,7 @@ internal object GuestThreadOps {
     private fun actionResult(action: Closure): TupleShape {
         val root = action.target.rootNode as? BytecodeRoot
             ?: fault("fork# requires an async-capable bytecode action")
+        if (!root.isAsyncEnabled) fault("fork# action has no async continuation capture")
         val shape = root.tupleResult ?: fault("fork# action has no tuple result proof")
         val fields = shape.proof.components
         if (fields?.size != 2 || fields[0].kind != CoreKind.VOID ||
@@ -110,6 +127,10 @@ internal object GuestThreadOps {
                 registered = true
                 ready.countDown()
                 root.call(action)
+            } catch (uncaught: UncaughtForkAsync) {
+                // No catch# accepted the payload. The child terminates, so the
+                // sender may complete without treating a control yield as a tuple.
+                uncaught.request.acknowledge()
             } catch (failure: Throwable) {
                 if (!registered) registrationFailure.set(failure)
                 throw failure

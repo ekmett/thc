@@ -64,12 +64,14 @@ internal class GuestThreads internal constructor(
                 ?: return@synchronized AsyncRequest(this, targetId, null, payload).also {
                     it.transition(AsyncRequestState.TARGET_FINISHED)
                 }
-            AsyncRequest(this, targetId, target.thread, payload).also {
-                target.queue.addLast(it)
+            val self = target.thread === Thread.currentThread()
+            AsyncRequest(this, targetId, target.thread, payload, self).also {
+                if (self) target.queue.addFirst(it) else target.queue.addLast(it)
                 target.pending = target.claimed == null
             }
         }
         val thread = request.target ?: return request
+        if (request.forceSelf) return request
         try {
             wake(thread)
         } catch (failure: Throwable) {
@@ -95,13 +97,13 @@ internal class GuestThreads internal constructor(
         val current = Thread.currentThread()
         if (target.thread !== current || threads[current.threadId()] !== target ||
             target.claimed != null || target.queue.isEmpty()) return null
-        val allowed = when (maskingState.get()) {
+        val request = target.queue.first()
+        val allowed = request.forceSelf || when (maskingState.get()) {
             MaskingState.UNMASKED -> true
             MaskingState.MASKED_INTERRUPTIBLE -> interruptible
             MaskingState.MASKED_UNINTERRUPTIBLE -> false
         }
         if (!allowed) return null
-        val request = target.queue.first()
         check(request.state == AsyncRequestState.PENDING)
         request.transition(AsyncRequestState.CLAIMED)
         target.claimed = request
@@ -176,13 +178,16 @@ internal class AsyncRequest internal constructor(
     private val owner: GuestThreads,
     val targetId: Long,
     val target: Thread?,
-    val payload: Any?
+    val payload: Any?,
+    internal val forceSelf: Boolean = false
 ) {
     private val monitor = java.lang.Object()
     @Volatile var state = AsyncRequestState.PENDING
         private set
     @Volatile var failure: Throwable? = null
         internal set
+    /** Set by the bytecode poll before crossing into the mailbox boundary. */
+    @JvmField @Volatile var compiledCapture = false
 
     internal fun transition(next: AsyncRequestState) = synchronized(monitor) {
         state = next
