@@ -205,6 +205,123 @@ class Int16ArrayNativeTest {
             reject(lines+"")
         }
     }
+    private fun exactAliasPrimitives(name: String): Map<String, Int> {
+        require(name in listOf("aliasInt16Bytes", "aliasWord16Bytes"))
+        val kind = if (name.contains("Word16")) "Word16" else "Int16"
+        return mapOf("newByteArray#" to 1, "unsafeFreezeByteArray#" to 1, "write${kind}Array#" to 2,
+            "read${kind}Array#" to 3, "index${kind}Array#" to 2, "writeWord8Array#" to 2, "indexWord8Array#" to 4,
+            "*#" to 9, "+#" to 10, "xorI#" to 1, "word8ToWord#" to 4, "wordToWord8#" to 2) +
+            if (kind == "Int16") mapOf("int2Word#" to 2, "word2Int#" to 4, "intToInt16#" to 2, "int16ToInt#" to 5)
+            else mapOf("int2Word#" to 4, "word2Int#" to 9, "wordToWord16#" to 2, "word16ToWord#" to 5)
+    }
+    private fun requiredPrimitives(name: String): Set<String> {
+        require(name in names)
+        if (name.startsWith("alias")) return exactAliasPrimitives(name).keys
+        val kind = if (name.contains("Word16")) "Word16" else "Int16"
+        val conversions = if (kind == "Int16") setOf("intToInt16#", "int16ToInt#")
+            else setOf("wordToWord16#", "word16ToWord#", "int2Word#", "word2Int#")
+        return setOf("newByteArray#", "unsafeFreezeByteArray#", "read${kind}Array#", "write${kind}Array#",
+            "index${kind}Array#", "plus$kind#") + conversions +
+            if (name.endsWith("ST")) setOf("sub$kind#", "times$kind#") else emptySet()
+    }
+    private fun checkedCalls(module: Map<String, Any?>, name: String): Long {
+        val evidence = ArrayCoreEvidence(module, name)
+        require(evidence.primitiveCounts.keys.containsAll(requiredPrimitives(name))) { "$name missing required primitive" }
+        if (name.startsWith("alias")) require(evidence.primitiveCounts == exactAliasPrimitives(name)) { "$name exact alias primitive counts changed" }
+        return evidence.immediateStateCalls().toLong()
+    }
+    private fun literalCalls(module: Map<String, Any?>, name: String): Long {
+        val value = literalValues.getValue(name)
+        val signed = name == "noinlineInt16Literal"
+        val kind = if (signed) "int16" else "word16"
+        val payload = if (signed) "Int16Rep" else "Word16Rep"
+        val workerName = if (signed) "literalInt16Worker" else "literalWord16Worker"
+        val evidence = ArrayCoreEvidence(module, name)
+        val workers = evidence.bindings.filter { it["name"] == workerName }
+        require(workers.size == 1) { "$name required literal worker disappeared" }
+        val worker = workers.single(); val root = evidence.root
+        require(evidence.bindings.map { it["id"] }.toSet() == setOf(root["id"], worker["id"])) { "$name literal closure changed" }
+        for ((binding, reps) in listOf(root to listOf("IntRep"), worker to listOf("IntRep", payload))) {
+            val expr = binding["expr"] as List<*>
+            require(expr.firstOrNull() == "lam") { "$name expected literal lambda" }
+            val formals = expr[1] as List<Map<String, Any?>>
+            require(formals.size == reps.size && formals.zip(reps).all { (formal, rep) ->
+                formal["rep"] == mapOf("kind" to "long", "primReps" to listOf(rep), "evaluated" to true)
+            }) { "$name literal formal shape changed" }
+            require(evidence.guestLambdas(expr).size == 1) { "$name extra literal guest lambda" }
+            require(evidence.globalReferences(expr) == if (binding === root) listOf(worker["id"]) else emptyList<String>()) {
+                "$name unexpected literal global call"
+            }
+        }
+        val rootExpr = root["expr"] as List<Any?>
+        val call = rootExpr[2] as List<*>
+        require(call.size >= 6 && call[0] == "app" && (call[1] as? List<*>)?.take(2) == listOf("var", worker["id"]) &&
+            call[3] == listOf(false, false) && call[4] == false && call[5] == false) { "$name literal worker must be called directly" }
+        val args = call[2] as List<List<Any?>>
+        require(args.size == 2) { "$name literal worker must be saturated" }
+        val formal = (rootExpr[1] as List<Map<String, Any?>>).single()
+        require(args[0].take(2) == listOf("var", formal["id"])) { "$name lost dynamic input" }
+        require(args[1].take(3) == listOf("lit", kind, value.toString()) && CoreRepresentations.metadata(args[1])?.get("rep") ==
+            mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)) { "$name literal intrinsic proof changed" }
+        val expected = if (signed) mapOf("+#" to 1, "int16ToInt#" to 1)
+            else mapOf("+#" to 1, "word16ToWord#" to 1, "word2Int#" to 1)
+        require(evidence.primitiveCounts == expected) { "$name literal worker primitives changed" }
+        return evidence.bindings.sumOf { evidence.guestLambdas(it["expr"]).size }.toLong()
+    }
+    @Test fun genuineCoreMustRetainRequiredAndExactAliasPrimitives() {
+        for ((_, paths) in manifest()["stages"] as Map<String, List<String>>) for (name in names) {
+            val module = merged(paths)
+            assertEquals(2L, checkedCalls(module, name))
+            for (primitive in requiredPrimitives(name)) {
+                val changed = Json.parse(Json.stringify(module)) as Map<String, Any?>
+                val nodes = ArrayCoreEvidence(changed, name).nodes(changed)
+                    .filter { it.take(2) == listOf("prim", primitive) }
+                assertTrue(nodes.isNotEmpty(), "$name/$primitive")
+                for (node in nodes) (node as MutableList<Any?>)[1] = "missingArrayPrimitive#"
+                assertThrows(IllegalArgumentException::class.java, { checkedCalls(changed, name) }, "$name/$primitive")
+            }
+            if (name.startsWith("alias")) for (replacement in listOf("+#", "readIntArray#")) {
+                val changed = Json.parse(Json.stringify(module)) as Map<String, Any?>
+                val primitive = ArrayCoreEvidence(changed, name).nodes(CoreModules.reachable(changed, name))
+                    .first { it.take(2) == listOf("prim", "*#") } as MutableList<Any?>
+                primitive[1] = replacement
+                assertThrows(IllegalArgumentException::class.java, { checkedCalls(changed, name) }, "$name/$replacement")
+            }
+        }
+    }
+    @Test fun genuineLiteralProofAndDirectWorkerControlsRejectMutations() {
+        for ((stage, paths) in manifest()["stages"] as Map<String, List<String>>) for (name in literalValues.keys) {
+            val module = merged(paths)
+            assertEquals(2L, literalCalls(module, name))
+            for (mutation in listOf("conditional", "arity", "dynamic", "kind", "value", "known-proof", "wrong-formal",
+                "extra-lambda", "worker", "flags", "extra-global", "primitives")) {
+                val changed = Json.parse(Json.stringify(module)) as Map<String, Any?>
+                val evidence = ArrayCoreEvidence(changed, name)
+                val rootExpr = evidence.root["expr"] as MutableList<Any?>
+                val worker = evidence.bindings.single { it["id"] != evidence.root["id"] } as MutableMap<String, Any?>
+                val workerExpr = worker["expr"] as MutableList<Any?>
+                val call = rootExpr[2] as MutableList<Any?>; val args = call[2] as MutableList<Any?>
+                val literal = args[1] as MutableList<Any?>
+                when (mutation) {
+                    "conditional" -> rootExpr[2] = listOf("case", listOf("lit", "int", "0"), "v", listOf(listOf("default", null, emptyList<Any?>(), call)))
+                    "arity" -> args.removeAt(1)
+                    "dynamic" -> args[0] = listOf("lit", "int", "0")
+                    "kind" -> literal[1] = if (name == "noinlineInt16Literal") "int" else "word"
+                    "value" -> literal[2] = "1"
+                    "known-proof" -> (CoreRepresentations.metadata(literal) as MutableMap<String, Any?>)["rep"] =
+                        mapOf("kind" to "long", "primReps" to listOf(if (name == "noinlineInt16Literal") "Int16Rep" else "Word16Rep"), "evaluated" to true)
+                    "wrong-formal" -> ((workerExpr[1] as List<*>)[1] as MutableMap<String, Any?>)["rep"] =
+                        mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
+                    "extra-lambda" -> workerExpr[2] = listOf("lam", emptyList<Any?>(), workerExpr[2])
+                    "worker" -> worker["name"] = "wrongWorker"
+                    "flags" -> call[3] = listOf(true, false)
+                    "extra-global" -> workerExpr[2] = listOf("var", evidence.root["id"])
+                    "primitives" -> (evidence.nodes(workerExpr).first { it.take(2) == listOf("prim", "+#") } as MutableList<Any?>)[1] = "-#"
+                }
+                assertThrows(IllegalArgumentException::class.java, { literalCalls(changed, name) }, "$stage/$name/$mutation")
+            }
+        }
+    }
     @Test fun nativePublicArraysAndByteAliasesWithInlining() = native(true)
     @Test fun nativePublicArraysAndByteAliasesAcrossResidualCalls() = native(false)
     @Test fun genuineNoinlineNarrowLiteralsRefineUnknownProofsInCompiledCode() {
@@ -212,19 +329,17 @@ class Int16ArrayNativeTest {
         val entries = literalValues.keys.toList()
         assertEquals(entries, manifest["literalEntries"])
         assertEquals(literalInputs, manifest["literalInputs"])
-        assertEquals(entries.associateWith { 2L },
-            (manifest["literalExpectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
-        assertEquals(listOf("pre", "post").flatMap { stage -> entries.map { "$stage/$it" } }.associateWith { 2L },
-            (manifest["checkedLiteralGuestCallsByStage"] as Map<String, Number>).mapValues { it.value.toLong() })
+        assertEquals(setOf("pre", "post"), (manifest["stages"] as Map<*, *>).keys)
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale literal fixture: $path")
         }
         val rows = checkedRows(File(root, "build/int16-arrays/literal-oracle.tsv").readText(), literals=true)
-        assertEquals(14, (manifest["literalNativeRows"] as Number).toInt())
+        assertEquals(14L, manifest["literalNativeRows"])
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) for (name in entries) {
             val cases = rows.getValue(name)
+            val expectedCalls = literalCalls(merged(paths), name)
             assertEquals((manifest["literalInputs"] as List<Number>).map { it.toLong() }, cases.map { it.first })
             for ((input, answer) in cases) assertEquals(input + if (name == entries[0]) -32768L else 65535L, answer)
             for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining).use { context ->
@@ -241,7 +356,7 @@ class Int16ArrayNativeTest {
                         released(language)
                     }
                     val targets = activeTargets(entry)
-                    assertEquals(2, targets.size, "$stage/$backend/$name entry and opaque worker")
+                    assertEquals(expectedCalls.toInt(), targets.size, "$stage/$backend/$name entry and opaque worker")
                     val labels = bindings.map {
                         val expression = it["expr"] as List<*>
                         assertEquals("lam", expression[0])
@@ -254,7 +369,7 @@ class Int16ArrayNativeTest {
                         val label = "$stage/$backend/$name/$input/inlining=$inlining"
                         val before = count()
                         assertEquals(answer, Calls.target(entry, arrayOf(0L, input)), label)
-                        assertEquals(2L, count()-before, "$label exact compiled entries")
+                        assertEquals(expectedCalls, count()-before, "$label exact compiled entries")
                         val active = activeTargets(entry)
                         assertEquals(targets.size, active.size, "$label active target count")
                         assertTrue(active.all { current -> targets.any { it === current } }, "$label active identities")
@@ -281,14 +396,13 @@ class Int16ArrayNativeTest {
             assertEquals(expected, actual, "Stale 16-bit-array fixture: $path; rerun prepare-int16-arrays.py")
         }
         val rows = checkedRows(File(root, "build/int16-arrays/oracle.tsv").readText())
-        val expectedCalls = names.associateWith { 2L }
-        assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
         val stages = manifest["stages"] as Map<String, List<String>>
         assertEquals(setOf("pre", "post"), stages.keys)
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
                 val cases = rows.getValue(name)
+                val expectedCalls = checkedCalls(module, name)
                 for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
                     context.initialize("thc"); context.enter()
                     try {
@@ -314,7 +428,7 @@ class Int16ArrayNativeTest {
                                 val before = count()
                                 assertEquals(native, Calls.target(entry, arrayOf(0L, input)), label)
                                 if (compiled) {
-                                    assertEquals(expectedCalls.getValue(name), count()-before, "$label exact compiled entries")
+                                    assertEquals(expectedCalls, count()-before, "$label exact compiled entries")
                                     val active = activeTargets(entry)
                                     assertEquals(targets.size, active.size, "$label active target count")
                                     assertTrue(active.all { target -> targets.any { it === target } }, "$label active target identities")
@@ -325,7 +439,7 @@ class Int16ArrayNativeTest {
                         }
                         check(false)
                         targets = activeTargets(entry)
-                        assertEquals(expectedCalls.getValue(name).toInt(), targets.size, "$stage/$backend/$name active guest roots")
+                        assertEquals(expectedCalls.toInt(), targets.size, "$stage/$backend/$name active guest roots")
                         assertEquals(expectedLabels, targets.map { it.rootNode.name }.toSet(), "$stage/$backend/$name guest root labels")
                         targets.forEach(::compile)
                         val allocations = language.handoffState.get().results.allocations

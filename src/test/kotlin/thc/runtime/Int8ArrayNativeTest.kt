@@ -157,6 +157,40 @@ class Int8ArrayNativeTest {
         reject(lines+"")
     }
 
+    private fun requiredPrimitives(name: String): Set<String> = when (name) {
+        "aliasBytes" -> setOf("newByteArray#", "unsafeFreezeByteArray#", "readInt8Array#", "writeInt8Array#",
+            "indexInt8Array#", "readWord8Array#", "writeWord8Array#", "indexWord8Array#")
+        "emptyBytes" -> setOf("newByteArray#", "unsafeFreezeByteArray#", "sizeofByteArray#")
+        "rawSignedRead", "rawUnsignedRead", "rawSignedIndex" -> setOf("newByteArray#", "writeInt8Array#",
+            when (name) { "rawSignedRead" -> "readInt8Array#"; "rawUnsignedRead" -> "readWord8Array#"; else -> "indexInt8Array#" }) +
+            if (name == "rawSignedIndex") setOf("unsafeFreezeByteArray#") else emptySet()
+        else -> {
+            require(name in names)
+            val kind = if (name.contains("Word8")) "Word8" else "Int8"
+            setOf("newByteArray#", "unsafeFreezeByteArray#", "read${kind}Array#", "write${kind}Array#",
+                "index${kind}Array#", "plus$kind#") + if (name.endsWith("ST")) setOf("sub$kind#", "times$kind#") else emptySet()
+        }
+    }
+    private fun checkedCalls(module: Map<String, Any?>, name: String): Long {
+        val evidence = ArrayCoreEvidence(module, name)
+        require(evidence.primitiveCounts.keys.containsAll(requiredPrimitives(name))) { "$name missing required primitive" }
+        return evidence.immediateStateCalls().toLong()
+    }
+    @Test fun genuineCoreMustRetainEveryRequiredPrimitive() {
+        for ((_, paths) in manifest()["stages"] as Map<String, List<String>>) for (name in names) {
+            val module = merged(paths)
+            assertEquals(2L, checkedCalls(module, name))
+            for (primitive in requiredPrimitives(name)) {
+                val changed = Json.parse(Json.stringify(module)) as Map<String, Any?>
+                val nodes = ArrayCoreEvidence(changed, name).nodes(changed)
+                    .filter { it.take(2) == listOf("prim", primitive) }
+                assertTrue(nodes.isNotEmpty(), "$name/$primitive")
+                for (node in nodes) (node as MutableList<Any?>)[1] = "missingArrayPrimitive#"
+                assertThrows(IllegalArgumentException::class.java, { checkedCalls(changed, name) }, "$name/$primitive")
+            }
+        }
+    }
+
     @Test fun nativePublicArraysAndByteAliasesWithInlining() = native(true)
     @Test fun nativePublicArraysAndByteAliasesAcrossResidualCalls() = native(false)
     private fun native(inlining: Boolean) {
@@ -172,14 +206,13 @@ class Int8ArrayNativeTest {
             assertEquals(expected, actual, "Stale 8-bit-array fixture: $path; rerun prepare-int8-arrays.py")
         }
         val rows = checkedRows(File(root, "build/int8-arrays/oracle.tsv").readText())
-        val expectedCalls = names.associateWith { 2L }
-        assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
         val stages = manifest["stages"] as Map<String, List<String>>
         assertEquals(setOf("pre", "post"), stages.keys)
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
                 val cases = rows.getValue(name)
+                val expectedCalls = checkedCalls(module, name)
                 for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
                     context.initialize("thc"); context.enter()
                     try {
@@ -205,7 +238,7 @@ class Int8ArrayNativeTest {
                                 val before = count()
                                 assertEquals(native, Calls.target(entry, arrayOf(0L, input)), label)
                                 if (compiled) {
-                                    assertEquals(expectedCalls.getValue(name), count()-before, "$label exact compiled entries")
+                                    assertEquals(expectedCalls, count()-before, "$label exact compiled entries")
                                     val active = activeTargets(entry)
                                     assertEquals(targets.size, active.size, "$label active target count")
                                     assertTrue(active.all { target -> targets.any { it === target } }, "$label active target identities")
@@ -216,7 +249,7 @@ class Int8ArrayNativeTest {
                         }
                         check(false)
                         targets = activeTargets(entry)
-                        assertEquals(expectedCalls.getValue(name).toInt(), targets.size, "$stage/$backend/$name active guest roots")
+                        assertEquals(expectedCalls.toInt(), targets.size, "$stage/$backend/$name active guest roots")
                         assertEquals(expectedLabels, targets.map { it.rootNode.name }.toSet(), "$stage/$backend/$name guest root labels")
                         targets.forEach(::compile)
                         val allocations = language.handoffState.get().results.allocations
