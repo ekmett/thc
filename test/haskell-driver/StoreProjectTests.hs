@@ -19,7 +19,7 @@ tests env = TestLabel "source-built Cabal store Core" $ TestCase $
   withCache (takeDirectory project </> "cache") $ do
     let base = takeDirectory project
         source = base </> "dependency-source"
-        answer = source </> "src/Answer.hs"
+        answer = source </> "src/SafeDependency.hs"
         output = base </> "output"
         archive = project </> "dep-data-0.1.0.0.tar.gz"
         invoke backend = run env base (Just backend) 240
@@ -62,7 +62,7 @@ tests env = TestLabel "source-built Cabal store Core" $ TestCase $
     assertEqual "store ZIP not rewritten" firstTime secondTime
 
     original <- readText answer
-    writeText answer (replaceText "answerValue = 42" "answerValue = 41" original)
+    writeText answer (replaceText "stableValue = 42" "stableValue = 41" original)
     removeFile archive
     sourceDist env source project
     changed <- invoke "ast"
