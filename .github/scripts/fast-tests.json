@@ -181,117 +181,81 @@
   },
   "owners": {
     "compiler/test-fixtures/IoMainPapAudit.hs": {
-      "junit": [
-        "thc.runtime.IoMainPapNativeTest"
-      ],
-      "python": [
-        "scripts/test-audit-core.py"
-      ]
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "python": ["scripts/test-audit-core.py"]
     },
     "compiler/test-fixtures/IoMainPapNative.hs": {
-      "junit": [
-        "thc.runtime.IoMainPapNativeTest"
-      ],
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
       "python": []
     },
     "scripts/prepare-io-main-pap.py": {
-      "junit": [
-        "thc.runtime.IoMainPapNativeTest"
-      ],
-      "python": [
-        "scripts/test-audit-core.py"
-      ]
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "python": ["scripts/test-audit-core.py"]
     },
     "app/Main.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Cabal.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Json.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "src/THC/Driver/Run.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/tiny-fixture.cabal": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/words/Words.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/src/Greeting.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/src/Platform/Linux.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/src/Platform/Other.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/loud/Message.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/quiet/Message.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/app/Main.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/tiny/test/Main.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "compiler/test-fixtures/BitPrimopsAudit.hs": {
       "junit": [
@@ -300,38 +264,23 @@
       "python": []
     },
     "compiler/test-fixtures/CBVAudit.hs": {
-      "junit": [
-        "thc.RealCoreEntryContractTest"
-      ],
+      "junit": ["thc.RealCoreEntryContractTest"],
       "python": []
     },
     "compiler/test-fixtures/CBVJoinAudit.hs": {
-      "junit": [
-        "thc.RealCoreEntryContractTest"
-      ],
+      "junit": ["thc.RealCoreEntryContractTest"],
       "python": []
     },
     "compiler/test-fixtures/CBVCoercionAudit.hs": {
-      "junit": [
-        "thc.RealCoreEntryContractTest",
-        "thc.runtime.ScalarLexicalProofTest",
-        "thc.runtime.BoxedLexicalProofTest",
-        "thc.runtime.ScalarPrimitiveSignatureTest"
-      ],
+      "junit": ["thc.RealCoreEntryContractTest", "thc.runtime.ScalarLexicalProofTest", "thc.runtime.BoxedLexicalProofTest", "thc.runtime.ScalarPrimitiveSignatureTest"],
       "python": []
     },
     "compiler/test-fixtures/DataToTagAudit.hs": {
-      "junit": [
-        "thc.runtime.DataToTagTest"
-      ],
-      "python": [
-        "scripts/test-core-data-tags.py"
-      ]
+      "junit": ["thc.runtime.DataToTagTest"],
+      "python": ["scripts/test-core-data-tags.py"]
     },
     "compiler/test-fixtures/DemandAudit.hs": {
-      "junit": [
-        "thc.RealCoreEntryContractTest"
-      ],
+      "junit": ["thc.RealCoreEntryContractTest"],
       "python": []
     },
     "compiler/test-fixtures/Explicit64PrimopsAudit.hs": {
@@ -342,28 +291,16 @@
       "python": []
     },
     "compiler/test-fixtures/Int8ArrayAudit.hs": {
-      "junit": [
-        "thc.runtime.Int8ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int8-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int8ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py"]
     },
     "compiler/test-fixtures/Int16ArrayAudit.hs": {
-      "junit": [
-        "thc.runtime.Int16ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int16-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int16ArrayNativeTest"],
+      "python": ["scripts/test-int16-array-model.py"]
     },
     "compiler/test-fixtures/Int32ArrayAudit.hs": {
-      "junit": [
-        "thc.runtime.Int32ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int32-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int32ArrayNativeTest"],
+      "python": ["scripts/test-int32-array-model.py"]
     },
     "compiler/test-fixtures/IntegerPrimopsAudit.hs": {
       "junit": [
@@ -372,12 +309,8 @@
       "python": []
     },
     "compiler/test-fixtures/MutableByteArraySizeAudit.hs": {
-      "junit": [
-        "thc.runtime.MutableByteArraySizeTest"
-      ],
-      "python": [
-        "scripts/test-mutable-bytearray-size.py"
-      ]
+      "junit": ["thc.runtime.MutableByteArraySizeTest"],
+      "python": ["scripts/test-mutable-bytearray-size.py"]
     },
     "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs": {
       "junit": [
@@ -431,39 +364,23 @@
       "python": []
     },
     "examples/THC/Unboxed8Arrays.hs": {
-      "junit": [
-        "thc.runtime.Int8ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int8-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int8ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py"]
     },
     "examples/THC/Unboxed16Arrays.hs": {
-      "junit": [
-        "thc.runtime.Int16ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int16-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int16ArrayNativeTest"],
+      "python": ["scripts/test-int16-array-model.py"]
     },
     "examples/THC/Unboxed32Arrays.hs": {
-      "junit": [
-        "thc.runtime.Int32ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int32-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int32ArrayNativeTest"],
+      "python": ["scripts/test-int32-array-model.py"]
     },
     "scripts/check-cbv-metadata.py": {
-      "junit": [
-        "thc.RealCoreEntryContractTest"
-      ],
+      "junit": ["thc.RealCoreEntryContractTest"],
       "python": []
     },
     "scripts/check-demand-metadata.py": {
-      "junit": [
-        "thc.RealCoreEntryContractTest"
-      ],
+      "junit": ["thc.RealCoreEntryContractTest"],
       "python": []
     },
     "scripts/native-oracle.sh": {
@@ -475,12 +392,8 @@
       "python": []
     },
     "scripts/generate-simd-families.py": {
-      "junit": [
-        "thc.runtime.SimdCapabilitySmokeTest"
-      ],
-      "python": [
-        "scripts/test-simd-families.py"
-      ]
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
     },
     "scripts/prepare-bit-primops.py": {
       "junit": [
@@ -489,12 +402,8 @@
       "python": []
     },
     "scripts/prepare-data-to-tag.py": {
-      "junit": [
-        "thc.runtime.DataToTagTest"
-      ],
-      "python": [
-        "scripts/test-core-data-tags.py"
-      ]
+      "junit": ["thc.runtime.DataToTagTest"],
+      "python": ["scripts/test-core-data-tags.py"]
     },
     "scripts/prepare-explicit64-primops.py": {
       "junit": [
@@ -509,54 +418,28 @@
       "python": []
     },
     "scripts/prepare-int8-arrays.py": {
-      "junit": [
-        "thc.runtime.Int8ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int8-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int8ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py"]
     },
     "scripts/prepare-int16-arrays.py": {
-      "junit": [
-        "thc.runtime.Int8ArrayNativeTest",
-        "thc.runtime.Int16ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int8-array-model.py",
-        "scripts/test-int16-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int8ArrayNativeTest", "thc.runtime.Int16ArrayNativeTest"],
+      "python": ["scripts/test-int8-array-model.py", "scripts/test-int16-array-model.py"]
     },
     "scripts/prepare-int32-arrays.py": {
-      "junit": [
-        "thc.runtime.Int32ArrayNativeTest"
-      ],
-      "python": [
-        "scripts/test-int32-array-model.py"
-      ]
+      "junit": ["thc.runtime.Int32ArrayNativeTest"],
+      "python": ["scripts/test-int32-array-model.py"]
     },
     "scripts/prepare-mutable-bytearray-size.py": {
-      "junit": [
-        "thc.runtime.MutableByteArraySizeTest"
-      ],
-      "python": [
-        "scripts/test-mutable-bytearray-size.py"
-      ]
+      "junit": ["thc.runtime.MutableByteArraySizeTest"],
+      "python": ["scripts/test-mutable-bytearray-size.py"]
     },
     "scripts/prepare-simd-capability-smoke.py": {
-      "junit": [
-        "thc.runtime.SimdCapabilitySmokeTest"
-      ],
-      "python": [
-        "scripts/test-simd-families.py"
-      ]
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
     },
     "scripts/prepare-simd-families.py": {
-      "junit": [
-        "thc.runtime.SimdCapabilitySmokeTest"
-      ],
-      "python": [
-        "scripts/test-simd-families.py"
-      ]
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
     },
     "scripts/prepare-signed-narrow-primops.py": {
       "junit": [
@@ -571,20 +454,12 @@
       "python": []
     },
     "scripts/simd-families.json": {
-      "junit": [
-        "thc.runtime.SimdCapabilitySmokeTest"
-      ],
-      "python": [
-        "scripts/test-simd-families.py"
-      ]
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
     },
     "scripts/simd_family_model.py": {
-      "junit": [
-        "thc.runtime.SimdCapabilitySmokeTest"
-      ],
-      "python": [
-        "scripts/test-simd-families.py"
-      ]
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
     },
     "src/test/kotlin/thc/PrimopTestContext.kt": {
       "junit": [
@@ -621,121 +496,87 @@
     "src/THC/Driver/Project.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-pure/run-pure.cabal": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-pure/app/Main.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-pure/app/Answer.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/cabal.project": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/th-helper/th-helper.cabal": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/app-run/app-run.cabal": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/dep-data/dep-data.cabal": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/dep-data/src/Answer.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/app-run/app/Main.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/app-run/src/Bridge.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/fixtures/run-project/th-helper/src/THHelper.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/haskell-driver/ProjectTests.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/haskell-driver/RunTests.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/haskell-driver/PlanTests.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/haskell-driver/Main.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     },
     "test/haskell-driver/TestSupport.hs": {
       "junit": [],
       "python": [],
-      "haskell": [
-        "driver-tests"
-      ]
+      "haskell": ["driver-tests"]
     }
   },
   "automation": {

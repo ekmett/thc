@@ -4,7 +4,8 @@
 module ProjectTests (tests) where
 
 import Data.Aeson (Value)
-import System.Directory (canonicalizePath)
+import Control.Monad (forM_)
+import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, doesFileExist)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
@@ -15,8 +16,9 @@ tests env = TestLabel "three-package project native versus THC run" $ TestCase $
     let base = takeDirectory project
         output = base </> "output"
         source = project </> "dep-data/src/Answer.hs"
+        sourceOnlyRoot = base </> "THC source only"
         invoke backend target = run env base (Just backend) 240
-          ["run", project, "--exe", target, "--thc-root", thcRoot env,
+          ["run", project, "--exe", target, "--thc-root", sourceOnlyRoot,
            "--runtime", runtime env, "--dist-dir", output]
         entryOf plan = one (\value -> string (field value "pkg-name") == "app-run" &&
                                       string (field value "component-name") == "exe:completed")
@@ -25,7 +27,19 @@ tests env = TestLabel "three-package project native versus THC run" $ TestCase $
                                    (objects manifest "units")
         modulePaths manifest identifier = map (string . (`field` "path"))
                                       (objects (unit manifest identifier) "modules")
+    -- The first project run must bootstrap the ordinary Cabal plugin library.
+    -- Keep this source-only root private so shared compiler artifacts and other
+    -- worktrees are never renamed or deleted during the test.
+    forM_ ["compiler", "scripts", "src", "app", "test"] $ \directory ->
+      copyTree (root env </> directory) (sourceOnlyRoot </> directory)
+    forM_ ["thc.cabal", "cabal.project", "Setup.hs", "LICENSE", "LICENSE.txt", "README.md"] $ \name ->
+      copyFile (root env </> name) (sourceOnlyRoot </> name)
+    createDirectoryIfMissing True (sourceOnlyRoot </> "docs")
+    copyFile (root env </> "docs/driver.md") (sourceOnlyRoot </> "docs/driver.md")
+    initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
+    assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
     firstPaths <- forBackends env invoke output project entryOf unit modulePaths
+    requireFile (sourceOnlyRoot </> "build/compiler/plugin.json")
     original <- readText source
     assertContains "I# 42#" original
     writeText source (replaceText "I# 42#" "I# 41#" original)

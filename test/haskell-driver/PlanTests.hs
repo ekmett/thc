@@ -5,7 +5,7 @@ module PlanTests (tests) where
 
 import Control.Monad (forM, forM_)
 import qualified Data.ByteString as BS
-import Data.List (sort)
+import Data.List (sort, sortOn)
 import System.Directory
   ( createDirectory, createDirectoryLink, doesFileExist, renameDirectory
   , removeFile, canonicalizePath )
@@ -201,4 +201,4 @@ tests env = TestList
 fileTree :: FilePath -> IO [(FilePath, BS.ByteString)]
 fileTree directory = do
   files <- findFiles directory ""
-  forM files $ \path -> (,) path <$> BS.readFile path
+  sortOn fst <$> forM files (\path -> (,) path <$> BS.readFile path)

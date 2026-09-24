@@ -91,7 +91,9 @@ independent `plan-package` and explicit `.cabal` path keep their existing scope.
 first, then the tests copy fixtures into isolated temporary directories outside
 this repository's `cabal.project`. Set `THC_TEST_RUNTIME` and
 `THC_TEST_THC_ROOT` to use an existing JVM launcher and compiler artifacts from
-another checkout. Command output is retained in `build/driver-haskell-tests`.
+another checkout for the single-package case. The project case builds the plugin
+from a private source-only root, then checks its new manifest. Command output is
+retained in `build/driver-haskell-tests`.
 
 The printed evidence directory retains the fresh driver build, `commands.jsonl`
 (commands, working directories, stdout/stderr, exit statuses and timeout errors),

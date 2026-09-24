@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 module TestSupport
-  ( Env(..), Result(..), setup, withFixture, run, runExe, checked, json, readJson
+  ( Env(..), Result(..), setup, withFixture, copyTree, run, runExe, checked, json, readJson
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
   , writeText, readText, replaceText, findFiles, requireFile
@@ -19,7 +19,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
 import System.Directory
-  ( copyFile, createDirectory, createDirectoryIfMissing, doesDirectoryExist
+  ( copyFileWithMetadata, createDirectory, createDirectoryIfMissing, doesDirectoryExist
   , doesFileExist, findExecutable, getCurrentDirectory, getTemporaryDirectory
   , listDirectory, removeFile, removePathForcibly
   )
@@ -79,7 +79,7 @@ copyTree source target = do
     let src = source </> name
         dst = target </> name
     directory <- doesDirectoryExist src
-    if directory then copyTree src dst else copyFile src dst) children
+    if directory then copyTree src dst else copyFileWithMetadata src dst) children
 
 run :: Env -> FilePath -> Maybe String -> Int -> [String] -> IO Result
 run env cwd backend seconds = runExe env cwd backend seconds (driver env)
