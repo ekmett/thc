@@ -13,7 +13,6 @@ import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameDescriptor
-import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.*
 import com.oracle.truffle.api.profiles.BranchProfile
@@ -294,6 +293,7 @@ internal class Force(private val metrics: Metrics) : Node() {
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
     @CompilationFinal @Volatile private var seenThunk = false
+    @Suppress("UNUSED_PARAMETER")
     fun execute(frame: VirtualFrame, original: Any?): Any? {
         if (!seenThunk) {
             if (original !is Thunk) return original
@@ -312,13 +312,16 @@ internal class Force(private val metrics: Metrics) : Node() {
             }
             val observed = if (original.state == 5) original.value as? ContinuationResult else null
             val child = (observed?.result as? ThunkSuspended)?.thunk
-            if (child != null) return resumeChain(frame.materialize(), original)
-            val result = executeOne(frame, original, observed, Unit)
+            // The continuation owns its captured callee frame. None of the
+            // update/resume helpers needs this caller's frame; materializing
+            // it here poisons frame-access speculation on ordinary loop exits.
+            if (child != null) return resumeChain(original)
+            val result = executeOne(original, observed, Unit)
             if (result !== Retry) return result
         }
     }
 
-    private fun executeOne(frame: VirtualFrame, original: Thunk,
+    private fun executeOne(original: Thunk,
                            observed: ContinuationResult?, resumeValue: Any?): Any? {
         while (true) {
             when (original.state) {
@@ -365,7 +368,7 @@ internal class Force(private val metrics: Metrics) : Node() {
     }
 
     @CompilerDirectives.TruffleBoundary
-    private fun resumeChain(frame: MaterializedFrame, original: Thunk): Any? {
+    private fun resumeChain(original: Thunk): Any? {
         val parked = java.util.ArrayDeque<Parked>()
         val seen = java.util.IdentityHashMap<Thunk, Boolean>()
         while (true) {
@@ -385,7 +388,7 @@ internal class Force(private val metrics: Metrics) : Node() {
             var input: Any? = Unit
             while (true) {
                 val outcome = try {
-                    val answer = executeOne(frame, current, expected, input)
+                    val answer = executeOne(current, expected, input)
                     if (answer === Retry) null else ChildResume(answer, null)
                 } catch (suspension: ThunkSuspended) {
                     // The requested thunk is still parked even if a deeper
