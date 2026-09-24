@@ -169,21 +169,23 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest["groups"]["original-stdio"]
-        command = ["python3", "scripts/prepare-original-stdio.py", "--require-supported"]
+        command = ["scripts/prepare-original-stdio.sh", "--require-supported"]
         self.assertEqual("original-stdio", owners["thc.runtime.OriginalStdioNativeTest"])
         self.assertEqual([{"argv": command}], group["commands"])
         self.assertEqual(["build/original-stdio"], group["outputs"])
         self.assertEqual({"compiler/test-fixtures/OriginalStdioAudit.hs",
                           "compiler/test-fixtures/OriginalStdioAuditNative.hs",
-                          "scripts/prepare-original-stdio.py", "scripts/original_stdio_model.py",
-                          "scripts/test-original-stdio-fixtures.py"}, set(group["sources"]))
+                          "scripts/prepare-original-stdio.sh", "test/haskell-fixtures/Main.hs",
+                          "test/haskell-fixtures/FixtureSupport.hs",
+                          "test/haskell-fixtures/OriginalStdioFixtures.hs", "thc.cabal"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn(" ".join(command), (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-stdio --require-supported',
+                      (project / "scripts/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/original-stdio", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn("build/original-stdio/manifest.json", fast_fixtures.FULL_REQUIRED)
 
-    def test_original_stdio_selected_receipt_covers_model_checker_and_all_outputs(self):
+    def test_original_stdio_selected_receipt_covers_haskell_producer_and_all_outputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, _ = fast_fixtures._manifest(project)
         group = manifest["groups"]["original-stdio"]
@@ -213,7 +215,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(["original-stdio"], prepare()["rebuilt"])
         (self.root / "build/original-stdio/manifest.json").unlink()
         self.assertEqual(["original-stdio"], prepare()["rebuilt"])
-        self.assertEqual(8, len(prepared))
+        self.assertEqual(len(group["sources"]) + 3, len(prepared))
         self.assertNotIn("fixtures-full", [name for name, _, _ in self.calls])
 
     def test_pr80_affected_classes_have_focused_preparation(self):

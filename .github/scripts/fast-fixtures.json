@@ -13,14 +13,16 @@
   "groups": {
     "original-stdio": {
       "junit": ["thc.runtime.OriginalStdioNativeTest"],
-      "commands": [{"argv": ["python3", "scripts/prepare-original-stdio.py", "--require-supported"]}],
+      "commands": [{"argv": ["scripts/prepare-original-stdio.sh", "--require-supported"]}],
       "outputs": ["build/original-stdio"],
       "sources": [
         "compiler/test-fixtures/OriginalStdioAudit.hs",
         "compiler/test-fixtures/OriginalStdioAuditNative.hs",
-        "scripts/prepare-original-stdio.py",
-        "scripts/original_stdio_model.py",
-        "scripts/test-original-stdio-fixtures.py"
+        "scripts/prepare-original-stdio.sh",
+        "test/haskell-fixtures/Main.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/OriginalStdioFixtures.hs",
+        "thc.cabal"
       ]
     },
     "address-identity": {

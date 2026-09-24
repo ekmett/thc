@@ -81,6 +81,7 @@ class CoreOriginalStdioTest {
             Input(name).also { it.arguments.removeAt(0); reject(it) }
             Input(name).also { it.declared.removeAt(0); reject(it) }
             Input(name).also { it.flags.add(false); reject(it) }
+            Input(name).also { it.flags.removeAt(0); reject(it) }
             Input(name).also { it.arguments.add(it.arguments[0]); reject(it) }
         }
     }
@@ -116,5 +117,22 @@ class CoreOriginalStdioTest {
             }
         }
         Input("safe_write").also { (it.descriptor["resultRep"] as MutableMap<String, Any?>)["evaluated"] = true; reject(it) }
+    }
+
+    @Test fun foreignHeadsAreUnboundDeclarationsNotCallerNameAliases() {
+        fun head(id: Any? = "foreign") = listOf("var", id, mapOf("rep" to OriginalStdioFixtures.closure()))
+        for (name in listOf("arbitrary", "other-package:Caller.inlined", "write"))
+            CoreOriginalStdio.validateHead(head(name), false)
+        val malformed = listOf(emptyList(), listOf("var", "foreign"), listOf("prim", "foreign"),
+            head(null), head(""), head(3), listOf("var", "foreign", emptyMap<String, Any?>()))
+        for (value in malformed) assertThrows(RuntimeFault::class.java) { CoreOriginalStdio.validateHead(value, false) }
+        assertThrows(RuntimeFault::class.java) { CoreOriginalStdio.validateHead(head(), true) }
+        for ((field, value) in listOf("kind" to "long", "primReps" to listOf("IntRep"),
+            "evaluated" to false, "evaluated" to 1, "extra" to null)) {
+            val proof = OriginalStdioFixtures.closure().also { it[field] = value }
+            assertThrows(RuntimeFault::class.java) {
+                CoreOriginalStdio.validateHead(listOf("var", "foreign", mapOf("rep" to proof)), false)
+            }
+        }
     }
 }
