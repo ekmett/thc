@@ -1094,6 +1094,21 @@ class Audit:
                     if (len(arguments) != len(expected) or flags != [False] * len(expected) or
                             any(not exact(self.expression_rep(a), e) for a, e in zip(arguments, expected))):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray arguments required')
+                    for index, (argument, required) in enumerate(zip(arguments, expected)):
+                        stored = None
+                        if argument[0] == 'var':
+                            stored = (bound.get(argument[1]) if argument[1] in bound else
+                                      self.bindings.get(argument[1], {}).get('rep'))
+                        elif argument[0] in ('lit', 'void'):
+                            stored = self.literal_rep(argument)
+                        # Unknown metadata may refine from the exact occurrence;
+                        # known lexical/intrinsic facts cannot be relabelled by it.
+                        if isinstance(stored, dict) and (
+                                'aggregate' in stored or is_vector(stored) or
+                                stored.get('kind') not in (None, 'unknown', required['kind']) or
+                                stored.get('primReps') is not None and stored['primReps'] != required['primReps']):
+                            self.issue('primitive-representation', owner, path + f'/args/{index}',
+                                       function[1] + ': stored ByteArray operand contradicts its required representation')
                     if not exact(proof, bytearray_primitive['result']):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray result required')
                 mutvar = self.cap.get('managedMutVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None

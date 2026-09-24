@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.MutableByteArrayContentsTest",
     "thc.runtime.CallMaskSegmentsTest",
     "thc.CoreZipBundleTest",
     "thc.CoreLinkerTest",

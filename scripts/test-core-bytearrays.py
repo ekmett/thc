@@ -22,7 +22,7 @@ def evaluated(proof):
 
 
 def fixture(name):
-    contract = CAP['managedByteArrayPrimitives'][name]
+    contract = (CAP['managedByteArrayPrimitives'].get(name) or CAP['managedPinnedMemoryPrimitives'][name])
     parameters = [dict(id=f'x{i}', lifted=False, rep=evaluated(proof))
                   for i, proof in enumerate(contract['arguments'])]
     body = ['app', ['prim', name], [['var', p['id'], dict(rep=copy.deepcopy(p['rep']))] for p in parameters],
@@ -63,7 +63,7 @@ class ByteArrayContracts(unittest.TestCase):
                 if mutation == 'missing':
                     app[6].pop('rep')
                 elif mutation == 'wrong-result':
-                    wrong = 'IntRep' if name == 'indexWordArray#' else 'WordRep'
+                    wrong = 'IntRep' if app[6]['rep'].get('primReps') == ['WordRep'] else 'WordRep'
                     app[6]['rep'] = dict(kind='long', primReps=[wrong], evaluated=True)
                 elif mutation == 'unknown-argument':
                     app[2][0][2]['rep']['kind'] = 'unknown'
@@ -76,6 +76,32 @@ class ByteArrayContracts(unittest.TestCase):
                 report = check(module)
                 self.assertFalse(report['accepted'], (name, mutation))
                 self.assertIn('primitive-representation', {i['code'] for i in report['issues']}, (name, mutation))
+
+    def test_mutable_contents_requires_exact_unlifted_reference_and_address_result(self):
+        for name in ('byteArrayContents#', 'mutableByteArrayContents#'):
+            self.assertTrue(check(fixture(name)[0])['accepted'])
+            for mutation in ('lifted-argument', 'unknown-argument', 'wrong-result', 'tuple-result',
+                             'lifted-flag', 'missing-argument', 'extra-state', 'stored-scalar'):
+                module, app = fixture(name)
+                if mutation == 'lifted-argument':
+                    app[2][0][2]['rep']['primReps'] = ['BoxedRep (Just Lifted)']
+                elif mutation == 'unknown-argument':
+                    app[2][0][2]['rep'] = dict(kind='unknown', primReps=None, evaluated=False)
+                elif mutation == 'wrong-result':
+                    app[6]['rep'] = dict(kind='long', primReps=['WordRep'], evaluated=True)
+                elif mutation == 'tuple-result':
+                    app[6]['rep'] = dict(kind='unknown', aggregate='unboxed-tuple', primReps=['AddrRep'],
+                        components=[dict(kind='void', primReps=[], evaluated=True), app[6]['rep']], evaluated=True)
+                elif mutation == 'lifted-flag':
+                    app[3][0] = True
+                elif mutation == 'missing-argument':
+                    app[2].clear(); app[3].clear()
+                elif mutation == 'extra-state':
+                    app[2].append(['void', dict(rep=dict(kind='void', primReps=[], evaluated=True))])
+                    app[3].append(False)
+                else:
+                    module['bindings'][0]['expr'][1][0]['rep'] = dict(kind='long', primReps=['IntRep'], evaluated=True)
+                self.assertFalse(check(module)['accepted'], (name, mutation))
 
     def test_state_is_not_an_empty_tuple_and_reference_is_not_lifted(self):
         for name in ('newByteArray#', 'unsafeFreezeByteArray#', 'resizeMutableByteArray#',

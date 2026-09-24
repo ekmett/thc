@@ -1387,7 +1387,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
-                        PinnedMemoryOp.CONTENTS -> e.builder.beginByteArrayContents()
+                        PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.beginByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray()
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.beginIndexAddrOffAddr()
@@ -1396,7 +1396,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                     operands.forEach { it.emit(e) }
                     when (operation) {
-                        PinnedMemoryOp.CONTENTS -> e.builder.endByteArrayContents()
+                        PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.endByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.endIndexAddrOffAddr()

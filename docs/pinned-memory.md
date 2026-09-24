@@ -1,7 +1,7 @@
 # Managed pinned memory and bounded MD5 calls
 
 This slice supports `newPinnedByteArray#`, `newAlignedPinnedByteArray#`,
-`byteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
+`byteArrayContents#`, `mutableByteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
 `readAddrOffAddr#`, `writeAddrOffAddr#` and `keepAlive#`
 in both backends. Byte loads/stores retain GHC 9.14.1's exact `Word8Rep`, not
 `WordRep`. Existing address arithmetic and character loads work on either
@@ -12,6 +12,13 @@ unsafe-frozen byte arrays observe the same storage. Immutable literals retain
 their trailing NUL and cannot be written. Full-width bounds are checked before
 narrowing or effects. One-past addresses are valid only for empty ranges.
 Mutable contents are never compilation-final.
+
+`mutableByteArrayContents#` returns a managed address directly from a mutable
+array without copying or first freezing it. It requires an exact unlifted object
+operand and an `AddrRep` result, with no State argument or tuple result. Both
+contents operations preserve the same backing allocation and offset identity;
+addresses keep that storage alive and retain pointer-cell protections. This is
+stable managed address access, not a physical JVM address or native heap pin.
 
 Pinned `ByteArray#` values have one allocation owner shared by frozen values
 and every address alias. An owner stores managed `Addr#` references in sparse

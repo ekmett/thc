@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 291 | Implemented fixed numeric/character scalar forms. |
-| Partial | 261 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 939 | No declared lowering. |
+| Partial | 262 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 938 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -431,6 +431,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `mutableByteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `neAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `negateDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -1018,7 +1019,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `mkWeak#` — arity 4
 - [ ] `mkWeakNoFinalizer#` — arity 3
 - [ ] `mulIntMayOflo#` — arity 2
-- [ ] `mutableByteArrayContents#` — arity 1
 - [ ] `myThreadId#` — arity 1
 - [ ] `negateDoubleX8#` — arity 1
 - [ ] `negateFloatX16#` — arity 1
