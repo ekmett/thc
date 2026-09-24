@@ -2402,6 +2402,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class RemainderNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(signedNarrow(x, shift) % signedNarrow(y, shift), shift); } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class ShiftLeftNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x << (int) y, shift); } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class ShiftRightNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) >> (int) y; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class EqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) == signedNarrow(y, shift) ? 1L : 0L; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class NotEqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) != signedNarrow(y, shift) ? 1L : 0L; } }

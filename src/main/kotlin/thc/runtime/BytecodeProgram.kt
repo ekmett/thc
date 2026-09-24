@@ -2416,6 +2416,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "leInt8#", "leInt16#", "leInt32#" -> "LessEqualNarrowInt"
             "gtInt8#", "gtInt16#", "gtInt32#" -> "GreaterThanNarrowInt"
             "geInt8#", "geInt16#", "geInt32#" -> "GreaterEqualNarrowInt"
+            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" -> "ShiftLeftNarrowInt"
+            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" -> "ShiftRightNarrowInt"
 
             "quotWord#" -> "QuotientUnsigned"
             "remWord#" -> "RemainderUnsigned"
@@ -2468,7 +2470,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> "Narrow16"
             "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> "Narrow32"
             "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
-            "wordToWord32#", "word32ToWord#", "int32ToWord32#" -> "NarrowWord"
+            "wordToWord32#", "word32ToWord#", "int32ToWord32#",
+            "narrow8Word#", "narrow16Word#", "narrow32Word#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
             "plusAddr#" -> "AddressPlus"
@@ -2497,6 +2500,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "LessEqualNarrowInt" -> b.beginLessEqualNarrowInt(intShift)
                 "GreaterThanNarrowInt" -> b.beginGreaterThanNarrowInt(intShift)
                 "GreaterEqualNarrowInt" -> b.beginGreaterEqualNarrowInt(intShift)
+                "ShiftLeftNarrowInt" -> b.beginShiftLeftNarrowInt(intShift)
+                "ShiftRightNarrowInt" -> b.beginShiftRightNarrowInt(intShift)
                 "QuotientUnsigned" -> b.beginQuotientUnsigned()
                 "RemainderUnsigned" -> b.beginRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
@@ -2557,6 +2562,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "LessEqualNarrowInt" -> b.endLessEqualNarrowInt()
                 "GreaterThanNarrowInt" -> b.endGreaterThanNarrowInt()
                 "GreaterEqualNarrowInt" -> b.endGreaterEqualNarrowInt()
+                "ShiftLeftNarrowInt" -> b.endShiftLeftNarrowInt()
+                "ShiftRightNarrowInt" -> b.endShiftRightNarrowInt()
                 "QuotientUnsigned" -> b.endQuotientUnsigned()
                 "RemainderUnsigned" -> b.endRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()

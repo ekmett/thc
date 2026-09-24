@@ -8,9 +8,9 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 280 | Implemented fixed numeric/character scalar forms. |
+| Supported | 289 | Implemented fixed numeric/character scalar forms. |
 | Partial | 252 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 959 | No declared lowering. |
+| Missing | 950 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -193,8 +193,11 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `minusFloat#` — arity 2
 - [x] `minusWord#` — arity 2
 - [x] `narrow16Int#` — arity 1
+- [x] `narrow16Word#` — arity 1
 - [x] `narrow32Int#` — arity 1
+- [x] `narrow32Word#` — arity 1
 - [x] `narrow8Int#` — arity 1
+- [x] `narrow8Word#` — arity 1
 - [x] `neChar#` — arity 2
 - [x] `neFloat#` — arity 2
 - [x] `neInt16#` — arity 2
@@ -298,9 +301,15 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [x] `uncheckedIShiftRL64#` — arity 2
 - [x] `uncheckedShiftL#` — arity 2
 - [x] `uncheckedShiftL64#` — arity 2
+- [x] `uncheckedShiftLInt16#` — arity 2
+- [x] `uncheckedShiftLInt32#` — arity 2
+- [x] `uncheckedShiftLInt8#` — arity 2
 - [x] `uncheckedShiftLWord16#` — arity 2
 - [x] `uncheckedShiftLWord32#` — arity 2
 - [x] `uncheckedShiftLWord8#` — arity 2
+- [x] `uncheckedShiftRAInt16#` — arity 2
+- [x] `uncheckedShiftRAInt32#` — arity 2
+- [x] `uncheckedShiftRAInt8#` — arity 2
 - [x] `uncheckedShiftRL#` — arity 2
 - [x] `uncheckedShiftRL64#` — arity 2
 - [x] `uncheckedShiftRLWord16#` — arity 2
@@ -1003,9 +1012,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `mulIntMayOflo#` — arity 2
 - [ ] `mutableByteArrayContents#` — arity 1
 - [ ] `myThreadId#` — arity 1
-- [ ] `narrow16Word#` — arity 1
-- [ ] `narrow32Word#` — arity 1
-- [ ] `narrow8Word#` — arity 1
 - [ ] `negateDoubleX8#` — arity 1
 - [ ] `negateFloatX16#` — arity 1
 - [ ] `negateInt16X16#` — arity 1
@@ -1353,12 +1359,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `traceBinaryEvent#` — arity 3
 - [ ] `traceEvent#` — arity 2
 - [ ] `traceMarker#` — arity 2
-- [ ] `uncheckedShiftLInt16#` — arity 2
-- [ ] `uncheckedShiftLInt32#` — arity 2
-- [ ] `uncheckedShiftLInt8#` — arity 2
-- [ ] `uncheckedShiftRAInt16#` — arity 2
-- [ ] `uncheckedShiftRAInt32#` — arity 2
-- [ ] `uncheckedShiftRAInt8#` — arity 2
 - [ ] `uncheckedShiftRLInt16#` — arity 2
 - [ ] `uncheckedShiftRLInt32#` — arity 2
 - [ ] `uncheckedShiftRLInt8#` — arity 2
