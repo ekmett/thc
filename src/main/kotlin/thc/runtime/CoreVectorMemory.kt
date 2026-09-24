@@ -62,6 +62,15 @@ internal object CoreVectorMemory {
         return value.keys == setOf("lanes", "element") &&
             exactInteger(value["lanes"], 4) && value["element"] == proof.vector!!.element
     }
+    /** Direct memory sites also need the original shape, before generic parsing
+     * normalizes numeric lane counts. This does not change generic vector policy. */
+    fun validateDirectAnnotations(operation: VectorByteArrayOp, arguments: List<List<Any?>>, result: Any?) {
+        if (operation.isRead) throw UnsupportedCore("Vector ByteArray read requires an immediate exact case")
+        val raw = if (operation.isWrite) arguments.getOrNull(2)?.let { CoreRepresentations.metadata(it)?.get("rep") }
+            else result
+        if (!vectorAnnotation((raw as? Map<*, *>)?.get("vector"), operation.vectorProof))
+            throw RuntimeFault("Vector ByteArray primitive requires exact raw vector annotation: ${operation.primitive}")
+    }
     /** The pinned exporter annotates this aggregate with its sole physical VecRep.
      * Validate the original map without admitting it to generic CoreVector.parse. */
     private fun readResult(raw: Any?, binder: Boolean, proof: CoreRepresentation) {
