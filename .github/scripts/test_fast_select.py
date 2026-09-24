@@ -134,7 +134,7 @@ private val text = "class FakeString { @Test }"
         self.assertEqual(["example.LeafTest", "example.SmokeTest"], result["junit"]["classes"])
 
     def test_unknown_production_configuration_resources_and_compiler_widen(self):
-        for path in ("src/main/kotlin/Critical.kt", "src/main/kotlin/ArgumentLayout.kt", "compiler/Thc/Plugin.hs",
+        for path in ("src/main/kotlin/Critical.kt", "src/main/kotlin/ArgumentLayout.kt", "compiler/THC/Plugin.hs",
                      "build.gradle.kts", "src/main/resources/proof.json", ".github/workflows/fast.yml", "scripts/helper.py"):
             with self.subTest(path=path):
                 self.write(path, "changed")
@@ -339,10 +339,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"BitPrimitives", "RawBitCasts", "FloatingPrimitives", "VectorExpressions",
-                          "Vector32Expressions", "Vector16Expressions", "Vector8Expressions",
-                          "VectorWord8Expressions", "VectorWord16Expressions", "VectorWord32Expressions",
-                          "VectorFloatExpressions", "VectorDoubleExpressions"},
+        self.assertEqual({"BitPrimitives", "RawBitCasts", "FloatingPrimitives",
+                          "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
                          {Path(path).stem for path in self.families})
         classes = {name for path in (self.root / "src/test").rglob("*.kt")
                    for name in select.junit_info(path.read_text())[0]}
@@ -374,31 +372,34 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                              "scripts/test-doublex2-bytearray-model.py", "scripts/test-floatx4-bytearray-model.py"},
                             set(floating["python"]))
 
-    def test_each_vector_family_keeps_native_storage_proof_and_multiply_consumers(self):
+    def test_grouped_vectors_keep_the_union_of_all_former_family_consumers(self):
         expected = {
-            "VectorExpressions": ["SimdVectorTest"],
-            "Vector8Expressions": ["SimdInt8VectorTest"],
-            "Vector16Expressions": ["SimdInt16VectorTest"],
-            "VectorWord8Expressions": ["SimdWord8VectorTest"],
-            "VectorWord16Expressions": ["SimdWord16VectorTest"],
-            "Vector32Expressions": ["SimdInt32VectorTest", "SimdInt32MultiplyTest", "SimdInt32ByteArrayTest",
-                                    "Int32VectorMemoryProofTest", "Int32VectorStorageTest"],
-            "VectorWord32Expressions": ["SimdWord32VectorTest", "SimdWord32ByteArrayTest",
-                                        "Word32VectorMemoryProofTest", "Word32VectorStorageTest"],
-            "VectorFloatExpressions": ["SimdFloatVectorTest", "SimdFloatByteArrayTest",
-                                       "FloatVectorMemoryProofTest", "FloatVectorStorageTest"],
-            "VectorDoubleExpressions": ["SimdDoubleVectorTest", "SimdDoubleByteArrayTest",
-                                        "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest"],
+            "IntegerVectorPrimitives": ["SimdVectorTest", "SimdInt8VectorTest", "SimdInt16VectorTest",
+                "SimdWord8VectorTest", "SimdWord16VectorTest", "SimdInt32VectorTest", "SimdInt32MultiplyTest",
+                "SimdInt32ByteArrayTest", "Int32VectorMemoryProofTest", "Int32VectorStorageTest",
+                "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
+                "Word32VectorStorageTest"],
+            "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatByteArrayTest",
+                "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "SimdDoubleVectorTest",
+                "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest"],
+        }
+        python = {
+            "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory",
+                "int16x8-model", "int32x4-bytearray-model", "int32x4-multiply-model", "int8x16-model",
+                "word16x8-model", "word32x4-bytearray-model", "word32x4-model", "word8x16-model"],
+            "FloatingVectorPrimitives": ["core-double-vector-memory", "core-float-vector-memory", "core-vectors",
+                "doublex2-bytearray-model", "doublex2-model", "floatx4-bytearray-model", "floatx4-model"],
         }
         for name, tests in expected.items():
             with self.subTest(name=name):
                 self.assertEqual({"thc.runtime." + test for test in tests}, set(self.family(name)["junit"]))
-                self.assertIn("scripts/test-core-vectors.py", self.family(name)["python"])
+                self.assertEqual({"scripts/test-" + test + ".py" for test in python[name]},
+                                 set(self.family(name)["python"]))
 
     def test_shared_dispatch_loaders_memory_proofs_layouts_and_carriers_stay_full(self):
         # Scalar64's identity fallback processes every ordinary scalar operation;
         # the shared state/vector memory node and durable layouts are not leaves.
-        names = ("Scalar64Primitives", "VectorByteArrayExpressions", "CoreVectorMemory", "CoreVectors",
+        names = ("Scalar64Primitives", "VectorMemoryPrimitives", "DataTagPrimitives", "CoreVectors",
                  "Program", "BytecodeProgram", "CoreRepresentations", "ArgumentLayout", "TupleResults", "Handoff")
         self.assertFalse({"src/main/kotlin/thc/runtime/" + name + ".kt" for name in names} & self.families.keys())
         self.assertFalse(any(path.startswith(("compiler/", "src/main/java/")) for path in self.families))
