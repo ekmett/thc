@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = 'compiler/test-fixtures/SynchronousExceptionsAudit.hs'
 NATIVE = 'compiler/test-fixtures/SynchronousExceptionsNative.hs'
 ENTRIES = ['preciseCatch', 'actionHeadCatch', 'ignoredBottomPayload', 'nestedRethrow',
-           'unusedHandler', 'lazyResultBoundary', 'restoreAndRethrow', 'handlerMaskState']
+           'unusedHandler', 'lazyResultBoundary', 'restoreAndRethrow', 'handlerMaskState',
+           'maskNested', 'maskRethrowRestore', 'noDuplicateProbe']
 FRONTIER = set()
 REQUIRED = {
     'preciseCatch': {'catch#', 'raiseIO#'},
@@ -28,6 +29,9 @@ REQUIRED = {
     'lazyResultBoundary': {'catch#', 'raise#'},
     'restoreAndRethrow': {'catch#', 'raiseIO#', 'newMVar#', 'putMVar#', 'takeMVar#', 'readMVar#', 'tryPutMVar#'},
     'handlerMaskState': {'catch#', 'raiseIO#', 'getMaskingState#', 'unmaskAsyncExceptions#'},
+    'maskNested': {'maskAsyncExceptions#', 'maskUninterruptible#', 'getMaskingState#'},
+    'maskRethrowRestore': {'maskUninterruptible#', 'catch#', 'raiseIO#', 'getMaskingState#'},
+    'noDuplicateProbe': {'noDuplicate#'},
 }
 COMMAND_LABELS = ('ghc-version', 'python-version', 'cabal-plugin-build', 'plugin-metadata',
                   'pre-export', 'post-export', 'native-build', 'native-word-bits', 'native-oracle')
@@ -83,6 +87,12 @@ def mathematical(name, value):
         result = value * 257 + value + 41
     elif name == 'handlerMaskState':
         result = 34  # Unmasked=0, handler MaskedInterruptible=2, restored=0.
+    elif name == 'maskNested':
+        result = value + 212  # Base-3 tags: 2, 1, 2, 1, 2, 0.
+    elif name == 'maskRethrowRestore':
+        result = value + 7  # Inner uninterruptible=1; outer catch handler=2; restored=0.
+    elif name == 'noDuplicateProbe':
+        result = value + 5
     else:
         raise ValueError('Unknown oracle entry: ' + name)
     return signed(result)
@@ -102,7 +112,8 @@ def validate_rows(text, inputs):
 def applications(value):
     if isinstance(value, list):
         if len(value) >= 7 and value[0] == 'app' and isinstance(value[1], list) and value[1][:1] == ['prim']:
-            if value[1][1] in {'catch#', 'raiseIO#', 'raise#'}:
+            if value[1][1] in {'catch#', 'raiseIO#', 'raise#', 'maskAsyncExceptions#',
+                               'maskUninterruptible#', 'unmaskAsyncExceptions#', 'noDuplicate#'}:
                 yield value
         for child in value:
             yield from applications(child)
@@ -118,7 +129,9 @@ def representation(expression):
 def validate_contract(app):
     """Only the observed lifted exception/boxed result fixture slice, not the full primop type."""
     primitive, args, flags = app[1][1], app[2], app[3]
-    roles = {'catch#': ['closure', 'closure', 'state'], 'raiseIO#': ['boxed', 'state'], 'raise#': ['boxed']}[primitive]
+    roles = {'catch#': ['closure', 'closure', 'state'], 'raiseIO#': ['boxed', 'state'], 'raise#': ['boxed'],
+             'maskAsyncExceptions#': ['closure', 'state'], 'maskUninterruptible#': ['closure', 'state'],
+             'unmaskAsyncExceptions#': ['closure', 'state'], 'noDuplicate#': ['state']}[primitive]
     require(isinstance(args, list) and isinstance(flags, list), primitive + ': missing arguments or flags')
     require(len(args) == len(roles) and len(flags) == len(roles), primitive + ': wrong logical arity')
     def state(proof):
@@ -133,13 +146,16 @@ def validate_contract(app):
         if role == 'closure':
             require(proof['kind'] == 'closure', primitive + ': expected closure argument')
     result = representation(app)
-    if primitive in {'catch#', 'raiseIO#'}:
+    if primitive in {'catch#', 'raiseIO#', 'maskAsyncExceptions#', 'maskUninterruptible#',
+                     'unmaskAsyncExceptions#'}:
         require(isinstance(result, dict) and result.get('aggregate') == 'unboxed-tuple' and result.get('kind') == 'unknown',
                 primitive + ': exact tuple required')
         fields = result.get('components')
         require(isinstance(fields, list) and len(fields) == 2 and state(fields[0]) and boxed(fields[1]),
                 primitive + ': exact logical State#/boxed result required')
         require(result.get('primReps') == ['BoxedRep (Just Lifted)'], primitive + ': wrong flattened tuple')
+    elif primitive == 'noDuplicate#':
+        require(state(result), 'noDuplicate#: exact State# result required')
     # raise# may produce the action/handler function or a lazy boxed result.
     else:
         require(boxed(result), 'raise#: expected lifted boxed result')
@@ -309,6 +325,7 @@ def main():
         artifactHashes=hash_files(artifacts), installedArtifactsHashed=False,
         limits=['Observed exception payloads/results are lifted boxed values, not every RuntimeRep.',
                 'Masking-state observations do not imply asynchronous exception delivery or throwTo support.',
+                'noDuplicate# relies on exclusive thunk ownership; THC does not clone an active guest stack.',
                 'Synchronous MVar restoration is not asynchronous-exception-safe bracket or Handle IO.']))
     check_prepared(build)
     print(json.dumps({'nativeRows': len(rows), 'stages': list(stages), 'auditStatus': statuses}, indent=2))

@@ -949,7 +949,8 @@ class Audit:
                             self.compare_shapes(proof, returned, owner, path + '/continuation-result', component=True)
                         elif not kept_reference(proof) or proof.get('primReps') != ['BoxedRep (Just Lifted)']:
                             self.issue('primitive-representation', owner, path, 'keepAlive#: partial continuation returns a lifted function')
-                if function[0] == 'prim' and function[1] in ('raiseIO#', 'catch#', 'unmaskAsyncExceptions#', 'getMaskingState#'):
+                if function[0] == 'prim' and function[1] in ('raiseIO#', 'catch#',
+                        'unmaskAsyncExceptions#', 'maskAsyncExceptions#', 'maskUninterruptible#', 'getMaskingState#'):
                     def exception_role(rep, role):
                         if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
                             return False
@@ -962,6 +963,8 @@ class Audit:
                                 rep.get('primReps') == ['BoxedRep (Just Lifted)'])
                     roles = {'raiseIO#': ('boxed', 'state'), 'catch#': ('closure', 'closure', 'state'),
                              'unmaskAsyncExceptions#': ('closure', 'state'),
+                             'maskAsyncExceptions#': ('closure', 'state'),
+                             'maskUninterruptible#': ('closure', 'state'),
                              'getMaskingState#': ('state',)}[function[1]]
                     actual = [self.expression_rep(argument) for argument in arguments]
                     if (len(actual) != len(roles) or flags != [role != 'state' for role in roles] or
@@ -977,6 +980,14 @@ class Audit:
                             proof.get('primReps') == output_reps):
                         self.issue('primitive-representation', owner, path,
                                    function[1] + ': exact State#/result tuple required')
+                if function[0] == 'prim' and function[1] == 'noDuplicate#':
+                    def exact_state(rep):
+                        return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
+                                rep.get('kind') == 'void' and rep.get('primReps') == [])
+                    if (len(arguments) != 1 or flags != [False] or
+                            not exact_state(self.expression_rep(arguments[0])) or not exact_state(proof)):
+                        self.issue('primitive-representation', owner, path,
+                                   'noDuplicate#: exact State# input and result required')
                 bytearray_primitive = (self.cap.get('managedByteArrayPrimitives', {}).get(function[1]) or
                                        self.cap.get('managedPinnedMemoryPrimitives', {}).get(function[1])) if function[0] == 'prim' else None
                 if bytearray_primitive is not None:
