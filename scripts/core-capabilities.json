@@ -9,6 +9,7 @@
   ],
   "externalBindings": [],
   "managedForeignCalls": [
+    "stg_cloneMyStackzh",
     "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "__hscore_get_errno",

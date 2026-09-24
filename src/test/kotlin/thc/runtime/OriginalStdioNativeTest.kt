@@ -42,7 +42,7 @@ class OriginalStdioNativeTest {
             "compiler/test-fixtures/OriginalStdioAudit.hs", "compiler/test-fixtures/OriginalStdioAuditNative.hs",
             "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs",
             "scripts/prepare-original-stdio.sh", "thc.cabal",
-            "scripts/audit-core.py", "scripts/core_original_stdio.py", "scripts/core-capabilities.json"))
+            "scripts/audit-core.py", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"))
         val required = mutableSetOf("build/original-stdio/oracle.json")
         for (stage in listOf("pre", "post")) {
             required.addAll(listOf("OriginalStdioAudit", "THC.InterfaceClosure").map { "build/original-stdio/$stage/core/$it.json" })

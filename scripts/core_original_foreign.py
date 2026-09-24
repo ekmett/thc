@@ -1,7 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact original GHC 9.14.1 stdout write declarations; no wrapper-pattern aliases."""
+"""Closed original GHC 9.14.1 foreign declarations, never wrapper-pattern aliases.
+
+Only implemented runtime seams belong here. Stack getters, IPE decoding and
+remote capture stay unsupported until their own typed runtime paths exist.
+"""
+
+STACK_CLONE = 'stg_cloneMyStackzh'
 
 OPERATIONS = {
     'ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
@@ -9,6 +15,7 @@ OPERATIONS = {
     'ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), 'Int64Rep'),
     '__hscore_get_errno': ('ccall', 'unsafe', (None,), 'Int32Rep'),
+    STACK_CLONE: ('prim', 'safe', (None,), 'BoxedRep (Just Unlifted)'),
 }
 SCALAR_KEYS = {'kind', 'primReps', 'evaluated'}
 TUPLE_KEYS = SCALAR_KEYS | {'aggregate', 'components'}
@@ -17,11 +24,12 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 
 def require(condition, detail):
     if not condition:
-        raise ValueError('Invalid original stdio call: ' + detail)
+        raise ValueError('Invalid original foreign call: ' + detail)
 
 
 def scalar(raw, primitive, declared=False):
-    kind = 'void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long'
+    kind = ('void' if primitive is None else 'address' if primitive == 'AddrRep'
+            else 'object' if primitive == 'BoxedRep (Just Unlifted)' else 'long')
     return (isinstance(raw, dict) and raw.keys() == SCALAR_KEYS and raw.get('kind') == kind
             and raw.get('primReps') == ([] if primitive is None else [primitive])
             and type(raw.get('evaluated')) is bool and (not declared or raw['evaluated'] is False))
@@ -46,6 +54,24 @@ def validate_head(function, defined):
             and isinstance(proof, dict) and proof.keys() == SCALAR_KEYS
             and proof['kind'] == 'closure' and proof['primReps'] == ['BoxedRep (Just Lifted)']
             and proof['evaluated'] is True, 'unresolved declared foreign variable required')
+
+
+def raw_rep(expression):
+    """Foreign provenance uses the raw certificate, never intrinsic fallback."""
+    if not isinstance(expression, list) or not expression:
+        return None
+    index = {'var': 2, 'lit': 3, 'app': 6, 'lam': 3, 'let': 4,
+             'case': 4, 'con': 3, 'prim': 2, 'void': 1}.get(expression[0])
+    metadata = expression[index] if index is not None and len(expression) > index else None
+    return metadata.get('rep') if isinstance(metadata, dict) else None
+
+
+def validate_state_binding(raw):
+    """Match CoreStackForeign: a State occurrence cannot erase a stored value."""
+    if raw is not None:
+        require(isinstance(raw, dict) and raw.get('kind') in ('void', 'unknown')
+                and raw.get('primReps') in (None, []) and 'aggregate' not in raw and 'vector' not in raw,
+                'stored State argument')
 
 
 def validate(metadata, argument_reps, flags, result_rep):
