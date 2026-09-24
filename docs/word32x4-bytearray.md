@@ -58,8 +58,8 @@ The ten entry families contain 9,666 rows. Across pre/post Core, AST/bytecode
 and inlining on/off, the strict native test requires 77,328 compiled calls and
 229,536 guest entries per handoff configuration, with exact target identities
 and counter deltas after every row. No retries or settling calls are allowed.
-The main corpus uses ordinary automatic compilation triggers. Only the separate
-cold bounds-transition test suppresses automatic compilation to keep its host
+The main corpus uses ordinary automatic compilation triggers. Among the JVM
+correctness tests, only the cold bounds-transition test suppresses automatic compilation to keep its host
 bridge interpreted while checking deoptimization and recovery.
 
 The four graph roots are vector/scalar index workers and vector/scalar store
@@ -70,6 +70,11 @@ four zero-extensions from loaded 32-bit lanes to 64 bits, or four exact low-32-b
 store inputs. It rejects private carrier/vector/payload allocation and unexpected
 calls. Existing narrowly checked interpreter/frame/bloom deoptimization metadata
 exceptions do not permit live scalar payload arrays.
+The graph-only harness separately suppresses automatic compilation to capture
+exactly one explicitly requested guest target, following the signed harness.
+It checks installed-target identity and validity, not compiled-entry counters;
+those counters are required separately by the instrumented native tests. Neither
+test setting increases a compiler graph budget or changes production policy.
 
 `scripts/prepare-word32x4-bytearray-audit.py` prepares fresh native/pre/post
 inputs, fourteen strict positive roots, seven exact frontier negatives and six
