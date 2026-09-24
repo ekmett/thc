@@ -97,6 +97,8 @@ class AstContinuationTest {
                 state = Language.currentState()
                 program = Program(language, directMVarModule(), true)
                 target = program.entryTarget("direct")
+                assertNull((target.rootNode as FunctionRoot).handoff,
+                    "An async AST root must not receive a typed caller loan without caller capture")
                 shape = TupleShape(CoreRepresentations.parse(tupleRep), language)
                 repeat(5) {
                     val ready = ManagedMVar()
@@ -169,6 +171,7 @@ class AstContinuationTest {
                 state = Language.currentState()
                 program = Program(language, directMVarModule(caseLiteral = true), true)
                 target = program.entryTarget("direct")
+                assertNull((target.rootNode as FunctionRoot).handoff)
                 repeat(5) {
                     val ready = ManagedMVar()
                     assertTrue(ready.tryPut("discarded"))
