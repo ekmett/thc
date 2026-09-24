@@ -86,6 +86,19 @@ internal class ManagedAllocation private constructor(
         bytes[start] = value.toByte()
     }
 
+    /** Write one complete native-endian numeric element without exposing raw
+     * backing bytes or allocating a temporary buffer. */
+    @Synchronized fun writeNativeScalarByteOffset(offset: Long, width: Int, value: Long, little: Boolean) {
+        mutable()
+        if (width != 2 && width != 4 && width != 8) fault("Unsupported managed scalar width")
+        val start = range(offset, width.toLong())
+        if (pointerCapable) invalidate(start, width)
+        for (index in 0 until width) {
+            val shift = (if (little) index else width - 1 - index) * 8
+            bytes[start + index] = (value ushr shift).toByte()
+        }
+    }
+
     @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
         mutable()
         if (exposedToNative || exposedAsRawBytes)

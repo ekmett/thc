@@ -611,6 +611,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = int.class, name = "width")
+    public static final class WriteNativeScalarOffAddr {
+        @Specialization public static Object write(int width, ManagedAddress address, long offset,
+                long value, Object state) {
+            ManagedByteArray.requireState(state);
+            address.writeNativeScalar(offset, width, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
     public static final class WriteAddrOffAddr {
         @Specialization public static Object write(ManagedAddress address, long offset,
                 ManagedAddress value, Object state) {

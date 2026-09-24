@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 301 | Implemented fixed numeric/character scalar forms. |
-| Partial | 267 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 923 | No declared lowering. |
+| Partial | 273 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 917 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -602,20 +602,26 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt32Array#` — arity 4 — Managed byte storage
 - [ ] `writeInt32ArrayAsInt32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
+- [ ] `writeInt32OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
+- [ ] `writeInt64OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeInt8Array#` — arity 4 — Managed byte storage
 - [ ] `writeInt8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeIntArray#` — arity 4 — Managed byte storage
+- [ ] `writeIntOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeMutVar#` — arity 3 — Managed lazy reference cells
 - [ ] `writeSmallArray#` — arity 4 — Managed lifted arrays
 - [ ] `writeWord16Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord32Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord32ArrayAsWord32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
+- [ ] `writeWord32OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
+- [ ] `writeWord64OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord8Array#` — arity 4 — Managed byte storage
 - [ ] `writeWord8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWordArray#` — arity 4 — Managed byte storage
+- [ ] `writeWordOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 
 ## Missing forms
 
@@ -1425,7 +1431,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt16X8OffAddr#` — arity 4
 - [ ] `writeInt32ArrayAsInt32X16#` — arity 4
 - [ ] `writeInt32ArrayAsInt32X8#` — arity 4
-- [ ] `writeInt32OffAddr#` — arity 4
 - [ ] `writeInt32OffAddrAsInt32X16#` — arity 4
 - [ ] `writeInt32OffAddrAsInt32X4#` — arity 4
 - [ ] `writeInt32OffAddrAsInt32X8#` — arity 4
@@ -1438,7 +1443,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt64ArrayAsInt64X2#` — arity 4
 - [ ] `writeInt64ArrayAsInt64X4#` — arity 4
 - [ ] `writeInt64ArrayAsInt64X8#` — arity 4
-- [ ] `writeInt64OffAddr#` — arity 4
 - [ ] `writeInt64OffAddrAsInt64X2#` — arity 4
 - [ ] `writeInt64OffAddrAsInt64X4#` — arity 4
 - [ ] `writeInt64OffAddrAsInt64X8#` — arity 4
@@ -1460,7 +1464,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt8X32OffAddr#` — arity 4
 - [ ] `writeInt8X64Array#` — arity 4
 - [ ] `writeInt8X64OffAddr#` — arity 4
-- [ ] `writeIntOffAddr#` — arity 4
 - [ ] `writeStablePtrArray#` — arity 4
 - [ ] `writeStablePtrOffAddr#` — arity 4
 - [ ] `writeTVar#` — arity 3
@@ -1480,7 +1483,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord16X8OffAddr#` — arity 4
 - [ ] `writeWord32ArrayAsWord32X16#` — arity 4
 - [ ] `writeWord32ArrayAsWord32X8#` — arity 4
-- [ ] `writeWord32OffAddr#` — arity 4
 - [ ] `writeWord32OffAddrAsWord32X16#` — arity 4
 - [ ] `writeWord32OffAddrAsWord32X4#` — arity 4
 - [ ] `writeWord32OffAddrAsWord32X8#` — arity 4
@@ -1493,7 +1495,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord64ArrayAsWord64X2#` — arity 4
 - [ ] `writeWord64ArrayAsWord64X4#` — arity 4
 - [ ] `writeWord64ArrayAsWord64X8#` — arity 4
-- [ ] `writeWord64OffAddr#` — arity 4
 - [ ] `writeWord64OffAddrAsWord64X2#` — arity 4
 - [ ] `writeWord64OffAddrAsWord64X4#` — arity 4
 - [ ] `writeWord64OffAddrAsWord64X8#` — arity 4
@@ -1543,7 +1544,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord8X32OffAddr#` — arity 4
 - [ ] `writeWord8X64Array#` — arity 4
 - [ ] `writeWord8X64OffAddr#` — arity 4
-- [ ] `writeWordOffAddr#` — arity 4
 - [ ] `yield#` — arity 1
 
 </details>

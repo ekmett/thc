@@ -159,3 +159,26 @@ halfwordWriteRoundtrip raw = runRW# (\s0 ->
         +# word2Int# (word8ToWord# d)) #)
     } } } } } } } }) of { (# _, I# answer #) -> answer }
   } } })
+
+-- Six scalar stores fill bytes 16..55. A live pointer at 8..15 and a
+-- byte-by-byte selector expose native layout and reject overlapping writes.
+{-# OPAQUE wideStoreByte #-}
+wideStoreByte :: Int# -> Int# -> Int#
+wideStoreByte raw selector = runRW# (\s0 ->
+  case newPinnedByteArray# 64# s0 of { (# s1, mutable #) ->
+  case unsafeFreezeByteArray# mutable s1 of { (# s2, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s2 (\s3 ->
+    case writeAddrOffAddr# base 1# (plusAddr# base 56#) s3 of { s4 ->
+    case writeInt32OffAddr# base 4# (intToInt32# raw) s4 of { s5 ->
+    case writeWord32OffAddr# base 5# (wordToWord32# (int2Word# (raw +# 17#))) s5 of { s6 ->
+    case writeIntOffAddr# base 3# raw s6 of { s7 ->
+    case writeWordOffAddr# base 4# (int2Word# (raw +# 33#)) s7 of { s8 ->
+    case writeInt64OffAddr# base 5# (intToInt64# raw) s8 of { s9 ->
+    case writeWord64OffAddr# base 6# (wordToWord64# (int2Word# (raw +# 49#))) s9 of { s10 ->
+    case readAddrOffAddr# base 1# s10 of { (# s11, target #) ->
+    case indexWord8Array# bytes (16# +# selector) of { byte ->
+      (# s11, I# (case eqAddr# target (plusAddr# base 56#) of {
+        1# -> word2Int# (word8ToWord# byte); _ -> -1# }) #)
+    } } } } } } } } }) of { (# _, I# answer #) -> answer }
+  } } })

@@ -1424,6 +1424,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr()
+                        PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32 -> e.builder.beginWriteNativeScalarOffAddr(4)
+                        PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
+                        PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.beginWriteNativeScalarOffAddr(8)
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.beginIndexAddrOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.beginIndexAddrArray()
                         else -> e.builder.beginWriteWord8OffAddr()
@@ -1434,6 +1437,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.endWriteWord16OffAddr()
+                        PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
+                        PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
+                        PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.endWriteNativeScalarOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.endIndexAddrOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.endIndexAddrArray()
                         else -> e.builder.endWriteWord8OffAddr()
