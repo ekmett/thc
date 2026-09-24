@@ -111,11 +111,11 @@ internal object CoreRepresentations {
         }
         visit(bindings, emptyList(), emptySet())
     }
-    /** Known host aliases and partial applications retain their remaining ABI. */
-    fun knownFunctionSignature(expression: List<Any?>, bindings: List<Map<String, Any?>>): Pair<List<CoreRepresentation>, CoreRepresentation>? {
+    /** Keep original formal metadata: equal physical width does not establish State# identity. */
+    private fun knownFunctionBinders(expression: List<Any?>, bindings: List<Map<String, Any?>>): Pair<List<Map<String, Any?>>, CoreRepresentation>? {
         val globals = bindings.associateBy { it["id"] as String }
-        fun resolve(expr: List<Any?>, seen: Set<String>): Pair<List<CoreRepresentation>, CoreRepresentation>? = when (expr.firstOrNull()) {
-            "lam" -> (expr[1] as List<Map<String, Any?>>).map(::binder) to lambdaResult(expr)
+        fun resolve(expr: List<Any?>, seen: Set<String>): Pair<List<Map<String, Any?>>, CoreRepresentation>? = when (expr.firstOrNull()) {
+            "lam" -> (expr[1] as List<Map<String, Any?>>) to lambdaResult(expr)
             "var" -> (expr[1] as String).let { id ->
                 if (id in seen) null else (globals[id]?.get("expr") as? List<Any?>)?.let { resolve(it, seen + id) }
             }
@@ -127,24 +127,20 @@ internal object CoreRepresentations {
         }
         return resolve(expression, emptySet())
     }
+    /** Known host aliases and partial applications retain their remaining ABI. */
+    fun knownFunctionSignature(expression: List<Any?>, bindings: List<Map<String, Any?>>): Pair<List<CoreRepresentation>, CoreRepresentation>? =
+        knownFunctionBinders(expression, bindings)?.let { (formals, result) -> formals.map(::binder) to result }
     fun knownFunctionResult(expression: List<Any?>, bindings: List<Map<String, Any?>>): CoreRepresentation? =
         knownFunctionSignature(expression, bindings)?.second
     /** The only currently supported executable boundary: GHC's erased IO () action. */
     fun ioUnitMainResult(binding: Map<String, Any?>, bindings: List<Map<String, Any?>>): CoreRepresentation {
         if (binding["type"] != "IO ()") throw UnsupportedCore("THC run requires main :: IO ()")
         val expression = binding["expr"] as? List<Any?> ?: throw UnsupportedCore("IO main lacks Core expression")
-        val globals = bindings.associateBy { it["id"] as String }
-        fun stateBinder(expr: List<Any?>, seen: Set<String>): Map<String, Any?>? = when (expr.firstOrNull()) {
-            "lam" -> (expr[1] as? List<Map<String, Any?>>)?.singleOrNull()
-            "var" -> (expr[1] as? String)?.takeIf { it !in seen }?.let { id ->
-                (globals[id]?.get("expr") as? List<Any?>)?.let { stateBinder(it, seen + id) }
-            }
-            else -> null
-        }
-        if (stateBinder(expression, emptySet())?.get("type") != "State# RealWorld")
-            throw UnsupportedCore("IO main requires an exact State# RealWorld binder")
-        val (inputs, result) = knownFunctionSignature(expression, bindings)
+        val (formals, result) = knownFunctionBinders(expression, bindings)
             ?: throw UnsupportedCore("IO main lacks an exact state-transformer signature")
+        if (formals.singleOrNull()?.get("type") != "State# RealWorld")
+            throw UnsupportedCore("IO main requires an exact State# RealWorld binder")
+        val inputs = formals.map(::binder)
         if (inputs.size != 1 || inputs[0].kind != CoreKind.VOID || inputs[0].primReps != emptyList<String>())
             throw UnsupportedCore("IO main requires one exact State# RealWorld input")
         val fields = result.components

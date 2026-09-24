@@ -1243,15 +1243,22 @@ class Audit:
 
     def io_main_contract(self, key, expression, formals, result):
         """Only GHC's erased IO () state transformer may cross this host boundary."""
-        def state_binder(expr, seen=frozenset()):
+        def remaining_binders(expr, seen=frozenset()):
             if not isinstance(expr, list) or not expr:
                 return None
-            if expr[0] == 'lam' and len(expr) > 1 and isinstance(expr[1], list) and len(expr[1]) == 1:
-                return expr[1][0]
-            if expr[0] == 'var' and len(expr) > 1 and expr[1] not in seen:
-                return state_binder(self.bindings.get(expr[1], {}).get('expr'), seen | {expr[1]})
+            if expr[0] == 'lam' and len(expr) > 1 and isinstance(expr[1], list):
+                return expr[1]
+            if expr[0] == 'var' and len(expr) > 1 and isinstance(expr[1], str) and expr[1] not in seen:
+                return remaining_binders(self.bindings.get(expr[1], {}).get('expr'), seen | {expr[1]})
+            if expr[0] == 'app' and len(expr) > 2 and isinstance(expr[2], list):
+                original = remaining_binders(expr[1], seen)
+                # Drop logical operands, including zero-width ones, but never
+                # infer a returned function's signature after saturation.
+                if original is not None and len(expr[2]) < len(original):
+                    return original[len(expr[2]):]
             return None
-        binder = state_binder(expression)
+        remaining = remaining_binders(expression)
+        binder = remaining[0] if isinstance(remaining, list) and len(remaining) == 1 else None
         state = formals[0] if isinstance(formals, list) and len(formals) == 1 else None
         components = result.get('components') if isinstance(result, dict) and result.get('aggregate') == 'unboxed-tuple' else None
         state_result = components[0] if isinstance(components, list) and len(components) == 2 else None
