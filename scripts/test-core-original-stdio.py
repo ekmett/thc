@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import unittest
 
-from core_original_stdio import validate, validate_head
+from core_original_foreign import validate, validate_head
 
 ROOT = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
@@ -72,7 +72,7 @@ def module(name):
 
 class OriginalStdioProofTest(unittest.TestCase):
     def reject(self, sample):
-        with self.assertRaisesRegex(ValueError, '^Invalid original stdio call: '):
+        with self.assertRaisesRegex(ValueError, '^Invalid original foreign call: '):
             validate(*sample)
 
     def test_all_three_exact_contracts(self):
