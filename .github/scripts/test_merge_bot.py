@@ -7,7 +7,7 @@ from urllib.error import HTTPError
 
 from merge_bot import (ACTIONS_APP, CHECKS, REQUIRED_STATUS, BUILD_GATE, FAST_GATE, PR_GATE,
                        BULK_LABEL, BULK_PREFIX, bulk_chain, candidate_manifest, select_bulk,
-                       mark_solo_retest, solo_retest_cutoff,
+                       discard_candidate, mark_solo_retest, solo_retest_cutoff,
                        build_result, main_build_health, owner_authorized,
                        publish_run as publish_selected_run, reconcile, workflow_result, dispatch, ensure_main_checks)
 
@@ -1246,6 +1246,68 @@ class BulkMergeTest(unittest.TestCase):
         api.runs.append(run)
         return run
 
+    def retire(self, api):
+        messages = []
+        discard_candidate(api, api.prs[2], messages.append, "test retirement")
+        return messages
+
+    def test_retired_candidate_cancels_its_active_fast_runs_only(self):
+        api = self.pending_batch()
+        candidate = api.prs[2]
+        api.runs.append({**api.runs[0], "id": 4, "event": "pull_request"})
+        self.add_member_run(api)
+        messages = self.retire(api)
+        self.assertEqual(api.prs[2]["state"], "closed")
+        self.assertNotIn(candidate["head"]["ref"], api.refs)
+        self.assertEqual([path for _, path, _ in api.actions if path.endswith("/cancel")],
+                         ["actions/runs/3/cancel", "actions/runs/4/cancel"])
+        self.assertEqual(api.runs[2]["status"], "queued")  # Member check is independent.
+        self.assertTrue(any("cancelled retired candidate Fast run 3" in line for line in messages))
+
+    def test_retired_candidate_ignores_other_or_completed_runs(self):
+        changes = ({"workflow_id": 17}, {"head_sha": "9" * 40},
+                   {"head_branch": "thc-bulk/other"},
+                   {"head_repository": {"full_name": "fork/thc"}},
+                   {"head_repository": None}, {"event": "push"},
+                   {"status": "completed", "conclusion": "success"})
+        for change in changes:
+            with self.subTest(change=change):
+                api = self.pending_batch()
+                api.runs[0].update(change)
+                self.retire(api)
+                self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_retired_candidate_rechecks_run_and_attempt_before_cancel(self):
+        for change in ({"status": "completed", "conclusion": "success"},
+                       {"run_attempt": 2}, {"head_sha": "9" * 40},
+                       {"head_branch": "thc-bulk/other"},
+                       {"head_repository": {"full_name": "fork/thc"}}):
+            with self.subTest(change=change):
+                api = self.pending_batch()
+                original = api.call
+                def call(method, path, body=None):
+                    if method == "GET" and path == "actions/runs/3":
+                        api.runs[0].update(change)
+                    return original(method, path, body)
+                api.call = call
+                self.retire(api)
+                self.assertFalse(any(path.endswith("/cancel") for _, path, _ in api.actions))
+
+    def test_retired_candidate_cancel_refusal_does_not_change_solo_retest(self):
+        api = self.pending_batch()
+        original = api.call
+        error = HTTPError("", 409, "already completed", {}, None)
+        self.addCleanup(error.close)
+        def call(method, path, body=None):
+            if method == "POST" and path == "actions/runs/3/cancel":
+                raise error
+            return original(method, path, body)
+        api.call = call
+        messages = self.retire(api)
+        self.assertEqual(api.prs[2]["state"], "closed")
+        self.assertIsNone(solo_retest_cutoff(api, api.first_sha))
+        self.assertTrue(any("cancellation unavailable (HTTP 409)" in line for line in messages))
+
     def test_pending_batch_replaces_individual_fast_without_green_status(self):
         for status in ("queued", "in_progress", "waiting", "pending"):
             api = self.pending_batch()
@@ -1337,6 +1399,7 @@ class BulkMergeTest(unittest.TestCase):
         self.run_bot(api)
         api.prs[1]["labels"] = []
         self.run_bot(api)  # Invalid candidate is discarded.
+        self.assertIn(("POST", "actions/runs/3/cancel", None), api.actions)
         self.run_bot(api)  # Remaining member receives a fresh individual run.
         self.assertIn(("POST", "actions/workflows/fast.yml/dispatches", {
             "ref": "feature/first", "inputs": {"expected_sha": api.first_sha, "base_sha": api.base_sha}}),

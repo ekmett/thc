@@ -509,6 +509,43 @@ def discard_candidate(api, pr, report, reason):
             raise
         error.close()
     report(f"bulk #{pr['number']}: {reason}; candidate closed")
+    cancel_retired_candidate_checks(api, pr, report)
+
+
+def cancel_retired_candidate_checks(api, pr, report):
+    """Best-effort cleanup of this retired candidate's own active Fast runs."""
+    if (candidate_manifest(pr) is None
+            or (pr["head"].get("repo") or {}).get("full_name") != api.repo):
+        return
+    branch, sha = pr["head"]["ref"], pr["head"]["sha"]
+    active = ("queued", "in_progress", "waiting", "pending")
+    try:
+        workflow = api.call("GET", "actions/workflows/fast.yml")
+        def matching(item):
+            return (item["workflow_id"] == workflow["id"]
+                    and item["head_sha"] == sha
+                    and item.get("head_branch") == branch
+                    and (item.get("head_repository") or {}).get("full_name") == api.repo
+                    and item["event"] in ("pull_request", "workflow_dispatch")
+                    and item["status"] in active)
+        runs = api.pages(f"actions/workflows/fast.yml/runs?head_sha={sha}", "workflow_runs")
+        for run in runs:
+            if not matching(run):
+                continue
+            try:
+                fresh = api.call("GET", f"actions/runs/{run['id']}")
+                if (not matching(fresh) or fresh["id"] != run["id"]
+                        or fresh["run_attempt"] != run["run_attempt"]):
+                    continue
+                api.call("POST", f"actions/runs/{run['id']}/cancel")
+                report(f"bulk #{pr['number']}: cancelled retired candidate Fast run {run['id']}")
+            except HTTPError as error:
+                error.close()
+                report(f"bulk #{pr['number']}: retired candidate Fast cancellation unavailable "
+                       f"(HTTP {error.code})")
+    except HTTPError as error:
+        error.close()
+        report(f"bulk #{pr['number']}: retired candidate Fast lookup unavailable (HTTP {error.code})")
 
 
 def create_candidate(api, members, base, report):
