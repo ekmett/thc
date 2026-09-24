@@ -345,7 +345,10 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 }
             }
         }
-        return dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized))
+        val threads = Language.currentState(dispatch).threads
+        threads.enterCurrent()
+        try { return dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)) }
+        finally { threads.leaveCurrent() }
     }
     @ExportMessage fun hasMembers() = true
     @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(
@@ -367,7 +370,10 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                      @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any {
         if (member == "runIO" && ioTarget != null) {
             require(arguments.isEmpty()) { "runIO takes no arguments" }
-            dispatch.execute(ioTarget, arrayOf(guestEntry))
+            val threads = Language.currentState(dispatch).threads
+            threads.enterCurrent()
+            try { dispatch.execute(ioTarget, arrayOf(guestEntry)) }
+            finally { threads.leaveCurrent() }
             return true
         }
         if (member != "compile") throw UnknownIdentifierException.create(member)
