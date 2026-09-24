@@ -23,3 +23,6 @@ main = do
   print compactScalarAnswer
   print typedScalarAnswer
   print overapplicationThunk
+  print overapplicationTail
+  case directOverapplicationTailThunk of Box value -> print (I# value)
+  print tupleOverapplicationThunk

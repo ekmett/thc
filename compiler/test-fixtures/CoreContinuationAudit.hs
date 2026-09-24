@@ -40,7 +40,7 @@ typedScalarAnswer = case typedScalarDelayed (# 7#, Box 2# #) of Box result -> I#
 checkpointValue :: Box
 checkpointValue = case noDuplicate# realWorld# of _ -> Box 8#
 
--- A separately called root has no captured caller segment. It must stay rejected.
+-- A tail call has no caller suffix; its nested yield forwards the exact callee.
 {-# OPAQUE uncaptured #-}
 uncaptured :: Box
 uncaptured = delayed 7#
@@ -66,6 +66,18 @@ overapplicationAnswer input = case stagedFunction input 1# of Box result -> I# (
 {-# OPAQUE overapplicationThunk #-}
 overapplicationThunk :: Int
 overapplicationThunk = case overapplicationAnswer 7# of I# value -> I# (value +# 1#)
+
+{-# OPAQUE overapplicationTail #-}
+overapplicationTail :: Int
+overapplicationTail = overapplicationAnswer 7#
+
+{-# OPAQUE directOverapplicationTail #-}
+directOverapplicationTail :: Int# -> Box
+directOverapplicationTail input = stagedFunction input 1#
+
+{-# OPAQUE directOverapplicationTailThunk #-}
+directOverapplicationTailThunk :: Box
+directOverapplicationTailThunk = directOverapplicationTail 7#
 
 -- The private checkpoint may suspend an original catch# IO action before it
 -- produces its unboxed tuple. The handler remains a genuine GHC Core handler.
@@ -130,6 +142,23 @@ tupleApplicationAnswer =
   case noDuplicate# realWorld# of { s0 ->
     case tupleDelayed 6# (Box 7#) s0 of
       (# _, left, (# _, Box right #) #) -> I# (100# +# left +# right) }
+
+{-# OPAQUE tupleStage #-}
+tupleStage :: Int# -> Int# -> (# State# RealWorld, Int#, (# State# RealWorld, Box #) #)
+tupleStage input = case noDuplicate# realWorld# of { _ ->
+  case input ==# 6# of
+    1# -> \suffix -> (# realWorld#, input +# suffix, (# realWorld#, Box 7# #) #)
+    _  -> \suffix -> (# realWorld#, input -# suffix, (# realWorld#, Box 7# #) #) }
+
+{-# OPAQUE tupleOverapplicationAnswer #-}
+tupleOverapplicationAnswer :: Int# -> Int
+tupleOverapplicationAnswer input =
+  case tupleStage input 1# of
+    (# _, left, (# _, Box right #) #) -> I# (100# +# left +# right)
+
+{-# OPAQUE tupleOverapplicationThunk #-}
+tupleOverapplicationThunk :: Int
+tupleOverapplicationThunk = tupleOverapplicationAnswer 6#
 
 {-# OPAQUE tupleApplicationFailure #-}
 tupleApplicationFailure :: Int
