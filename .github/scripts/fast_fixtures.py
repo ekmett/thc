@@ -65,6 +65,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/uncaught-self/manifest.json", "build/uncaught-self/native/oracle",
     "build/uncaught-self/pre/core/UncaughtSelfAudit.json", "build/uncaught-self/post/core/UncaughtSelfAudit.json",
     "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",
+    "build/uncaught-self/pre/io-audit.json", "build/uncaught-self/post/io-audit.json",
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",

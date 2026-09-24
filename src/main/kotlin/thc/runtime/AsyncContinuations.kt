@@ -73,14 +73,12 @@ internal object AsyncContinuations {
     }
 
     @JvmStatic fun publicSuspension(suspended: ThunkSuspended, node: Node): Nothing {
-        val pending = suspended.asyncRequest ?: (suspended.thunk.value as? ContinuationResult)?.let(::request)
-            ?: fault("Guest thunk suspension escaped without an async request")
+        val pending = suspended.asyncRequest ?: fault("Guest thunk suspension escaped without an async request")
         uncaught(pending, node)
     }
 
     @JvmStatic fun publicSuspension(suspended: CallSegmentSuspended, node: Node): Nothing {
-        val pending = suspended.asyncRequest ?: (suspended.segment.value as? ContinuationResult)?.let(::request)
-            ?: fault("Guest call suspension escaped without an async request")
+        val pending = suspended.asyncRequest ?: fault("Guest call suspension escaped without an async request")
         uncaught(pending, node)
     }
 }

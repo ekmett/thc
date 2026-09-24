@@ -63,6 +63,14 @@ class CallMaskSegmentsTest {
                 val parked = BytecodeRoot.ParkCallMask.park(captured, MaskingState.UNMASKED,
                     MaskingState.UNMASKED, Driver())
                 assertSame(request, parked.asyncRequest)
+                // A later evaluator may replace a segment's mutable answer. A
+                // missing immutable delivery token must not be recovered from it.
+                val changed = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
+                val noToken = CallSegmentSuspended(changed, asyncRequest = null)
+                changed.value = Calls.target(target, arrayOf(0L)) as ContinuationResult
+                assertThrows(RuntimeFault::class.java) {
+                    AsyncContinuations.publicSuspension(noToken, Driver())
+                }
             }
         }
     }

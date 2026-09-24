@@ -774,7 +774,6 @@
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
-        "thc.runtime.LiveAsyncNativeTest",
         "thc.runtime.AsyncStrictEntryNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
