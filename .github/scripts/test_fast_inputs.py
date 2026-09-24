@@ -40,11 +40,11 @@ class FastInputTests(unittest.TestCase):
     def test_formatter_catalog_and_exact_artifact_admission(self):
         project = Path(__file__).resolve().parents[2]
         modules, pins = cache.wired_catalog(project)
-        self.assertEqual((37, 49), (len(modules), len(pins)))
+        self.assertEqual((38, 50), (len(modules), len(pins)))
         for name, expected in pins.items():
             self.assertEqual(expected, cache.digest(project / 'compiler/pinned-ghc-internal' / name), name)
         files = cache.original_stack_formatter_files(project)
-        self.assertEqual(77, len(files))
+        self.assertEqual(78, len(files))
         self.assertIn('build/original-stack-formatter/manifest.json', DECLARED_REQUIRED)
         for attempt in ('run-1', 'run-42'):
             for suffix in files:
