@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test
 import thc.CoreModules
 import thc.Json
 import thc.Language
+import thc.NumericPrimopCoreEvidence
 import thc.ScalarPrimopModel
 import java.io.File
 import java.security.MessageDigest
@@ -53,12 +54,22 @@ class Explicit64PrimopsTest {
         assertEquals(36, entries.count { it["primitive"] != null })
         val rows = File(root, "build/explicit64-primops/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
+        val exported = module()
+        val casesByName = entries.associate { entry ->
+            val name = entry["name"] as String
+            val cases = rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
+            for ((x, y, native) in cases) assertEquals(mathematical(entry, x, y), native, "native $name($x,$y)")
+            val primitive = entry["primitive"] as? String
+            if (primitive != null) NumericPrimopCoreEvidence.assertCall(
+                NumericPrimopCoreEvidence.calls(exported, name), primitive,
+                entry["arguments"] as List<String>, entry["result"] as String, name)
+            name to cases
+        }
         visit { language, backend ->
             for (entry in entries) {
                 val name=entry["name"] as String; val arity=(entry["arity"] as Number).toInt()
-                val cases=rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
-                for ((x,y,native) in cases) assertEquals(mathematical(entry,x,y), native, "native $name($x,$y)")
-                val module=CoreModules.reachable(module(),name)
+                val cases=casesByName.getValue(name)
+                val module=CoreModules.reachable(exported,name)
                 val lambda=((module["bindings"] as List<Map<String,Any?>>).single()["expr"] as List<Any?>)
                 assertEquals((entry["arguments"] as List<String>).map { listOf(it) },
                     (lambda[1] as List<Map<String,Any?>>).map { CoreRepresentations.binder(it).primReps })
