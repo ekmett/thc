@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Exact FloatX4 local memory proofs, including integer-family rejection."""
+"""Exact DoubleX2 local memory proofs, including rejection by other registered families."""
 import copy
 import importlib.util
 import json
 from pathlib import Path
 import unittest
 
-from core_vector_memory import ARRAY, INDEX, STATE, FLOAT_OPERATIONS as OPERATIONS, FLOAT_READS as READS, FLOAT_INDICES as INDICES, FLOAT_WRITES as WRITES, read_case, validate_direct
-from core_vectors import VECTOR_FLOAT_REP, VECTOR32_REP, TUPLE_FLOAT_REP, LANE_FLOAT_REP, proof_error
+from core_vector_memory import ARRAY, INDEX, STATE, DOUBLE_OPERATIONS as OPERATIONS, DOUBLE_READS as READS, DOUBLE_INDICES as INDICES, DOUBLE_WRITES as WRITES, read_case, validate_direct
+from core_vectors import VECTOR_DOUBLE_REP, VECTOR32_REP, TUPLE_DOUBLE_REP, LANE_DOUBLE_REP, proof_error
 
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
@@ -31,34 +31,33 @@ def call(name, args, proof):
 
 
 def result(evaluated=False):
-    return dict(kind='unknown', primReps=['VecRep 4 FloatElemRep'], evaluated=evaluated,
-                aggregate='unboxed-tuple', vector=copy.deepcopy(VECTOR_FLOAT_REP['vector']),
-                components=[copy.deepcopy(STATE), copy.deepcopy(VECTOR_FLOAT_REP)])
+    return dict(kind='unknown', primReps=['VecRep 2 DoubleElemRep'], evaluated=evaluated,
+                aggregate='unboxed-tuple', vector=copy.deepcopy(VECTOR_DOUBLE_REP['vector']),
+                components=[copy.deepcopy(STATE), copy.deepcopy(VECTOR_DOUBLE_REP)])
 
 
-def fixture(name='readFloatX4Array#'):
+def fixture(name='readDoubleX2Array#'):
     params = [binder('array', ARRAY), binder('offset', INDEX), binder('state', STATE)]
-    constructors = [dict(id='Tuple2', kind='unboxed-tuple', arity=2),
-                    dict(id='Tuple4', kind='unboxed-tuple', arity=4)]
-    lane_ids = ['lane0', 'lane1', 'lane2', 'lane3']
+    constructors = [dict(id='Tuple2', kind='unboxed-tuple', arity=2)]
+    lane_ids = ['lane0', 'lane1']
     def consume(vector):
-        unpack = call('unpackFloatX4#', [vector], TUPLE_FLOAT_REP)
-        return ['case', unpack, 'lanes', [['data', 'Tuple4', lane_ids,
-            call('float2Int#', [var('lane0', LANE_FLOAT_REP)], INDEX),
-            dict(binders=[binder(i, LANE_FLOAT_REP) for i in lane_ids])]],
-            dict(rep=copy.deepcopy(INDEX), binder=binder('lanes', TUPLE_FLOAT_REP))]
+        unpack = call('unpackDoubleX2#', [vector], TUPLE_DOUBLE_REP)
+        return ['case', unpack, 'lanes', [['data', 'Tuple2', lane_ids,
+            call('double2Int#', [var('lane0', LANE_DOUBLE_REP)], INDEX),
+            dict(binders=[binder(i, LANE_DOUBLE_REP) for i in lane_ids])]],
+            dict(rep=copy.deepcopy(INDEX), binder=binder('lanes', TUPLE_DOUBLE_REP))]
     args = [var('array', ARRAY), var('offset', INDEX)]
     if name in READS:
         app = call(name, args + [var('state', STATE)], result())
         body = ['case', app, 'whole', [['data', 'Tuple2', ['nextState', 'vector'],
-            consume(var('vector', VECTOR_FLOAT_REP)),
-            dict(binders=[binder('nextState', STATE), binder('vector', VECTOR_FLOAT_REP)])]],
+            consume(var('vector', VECTOR_DOUBLE_REP)),
+            dict(binders=[binder('nextState', STATE), binder('vector', VECTOR_DOUBLE_REP)])]],
             dict(rep=copy.deepcopy(INDEX), binder=binder('whole', result(True)))]
     elif name in INDICES:
-        app = call(name, args, VECTOR_FLOAT_REP)
+        app = call(name, args, VECTOR_DOUBLE_REP)
         body = consume(app)
     else:
-        vector = call('broadcastFloatX4#', [['lit', 'float', '1.25', dict(rep=copy.deepcopy(LANE_FLOAT_REP))]], VECTOR_FLOAT_REP)
+        vector = call('broadcastDoubleX2#', [['lit', 'double', '1.25', dict(rep=copy.deepcopy(LANE_DOUBLE_REP))]], VECTOR_DOUBLE_REP)
         app = call(name, args + [vector, var('state', STATE)], STATE)
         body = ['case', app, 'nextState', [['default', None, [], ['lit', 'int', '7', dict(rep=copy.deepcopy(INDEX))], dict(binders=[])]],
                 dict(rep=copy.deepcopy(INDEX), binder=binder('nextState', STATE))]
@@ -72,7 +71,7 @@ def check(module):
     return audit.Audit([('vector-memory', module)], CAP).run(['root'])
 
 
-class FloatVectorMemoryProofTest(unittest.TestCase):
+class DoubleVectorMemoryProofTest(unittest.TestCase):
     def test_all_six_contracts_and_no_generic_field_expansion(self):
         self.assertEqual(len(OPERATIONS), 6)
         for name in sorted(OPERATIONS):
@@ -80,13 +79,14 @@ class FloatVectorMemoryProofTest(unittest.TestCase):
             report = check(module)
             self.assertTrue(report['accepted'], (name, report['issues']))
             self.assertEqual(CAP['primitives'][name], len(app[2]))
-        self.assertNotIn('VecRep 4 FloatElemRep', CAP['fieldRepresentations'])
+        self.assertNotIn('VecRep 2 DoubleElemRep', CAP['fieldRepresentations'])
 
-    def test_float_proofs_cannot_be_used_by_integer_memory_operations(self):
+    def test_double_proofs_cannot_be_used_by_other_memory_families(self):
         for name in OPERATIONS:
-            for family in ('Int32', 'Word32'):
+            for family in ('Int32', 'Word32', 'Float'):
                 module, app, _ = fixture(name)
-                app[1][1] = name.replace('Float', family)
+                app[1][1] = name.replace('DoubleX2', family+'X4').replace('DoubleArray', family+'Array')
+                self.assertIn(app[1][1], CAP['primitives'])
                 self.assertNotEqual(app[1][1], name)
                 self.assertFalse(check(module)['accepted'], (name, family))
 
@@ -94,8 +94,8 @@ class FloatVectorMemoryProofTest(unittest.TestCase):
         from core_vector_memory import VECTOR_PROOFS, vector_proof
         self.assertEqual(len(VECTOR_PROOFS), 24)
         for name in OPERATIONS:
-            self.assertEqual(vector_proof(name), VECTOR_FLOAT_REP)
-        for name in ('indexDoubleX4Array#', 'readFloatX8Array#', 'writeFloatOffAddrAsFloatX4#'):
+            self.assertEqual(vector_proof(name), VECTOR_DOUBLE_REP)
+        for name in ('indexDoubleX4Array#', 'readDoubleX8Array#', 'writeDoubleOffAddrAsDoubleX2#'):
             self.assertNotIn(name, CAP['primitives'])
             with self.assertRaises(ValueError):
                 vector_proof(name)
@@ -121,12 +121,12 @@ class FloatVectorMemoryProofTest(unittest.TestCase):
         mutations = [
             lambda p: p.pop('vector'),
             lambda p: p.update(vector=dict(lanes=4, element='Int32ElemRep')),
-            lambda p: p.update(vector=dict(lanes=2, element='FloatElemRep')),
-            lambda p: p.update(vector=dict(lanes=True, element='FloatElemRep')),
+            lambda p: p.update(vector=dict(lanes=4, element='DoubleElemRep')),
+            lambda p: p.update(vector=dict(lanes=True, element='DoubleElemRep')),
             lambda p: p.update(kind='vector'),
             lambda p: p.update(kind='object'),
             lambda p: p.update(aggregate='unboxed-sum'),
-            lambda p: p.update(primReps=['FloatRep'] * 4),
+            lambda p: p.update(primReps=['DoubleRep'] * 2),
             lambda p: p.update(evaluated=0),
             lambda p: p['components'].reverse(),
             lambda p: p['components'].pop(),
@@ -145,7 +145,7 @@ class FloatVectorMemoryProofTest(unittest.TestCase):
 
         for name in READS:
             for site in ('producer', 'binder', 'producer-component', 'binder-component', 'pattern'):
-                for count in (4.0, 4.5, True, '4', None):
+                for count in (2.0, 2.5, True, '2', None):
                     module, app, body = fixture(name)
                     producer, whole = app[6]['rep'], body[4]['binder']['rep']
                     proof = {'producer': producer, 'binder': whole,
@@ -161,7 +161,7 @@ class FloatVectorMemoryProofTest(unittest.TestCase):
 
     def test_all_operations_require_exact_flags_arity_and_arguments(self):
         for name in INDICES | WRITES:
-            for count in (4.0, 4.5, True, '4', None):
+            for count in (2.0, 2.5, True, '2', None):
                 module, app, _ = fixture(name)
                 proof = app[2][2][6]['rep'] if name in WRITES else app[6]['rep']
                 proof['vector']['lanes'] = count
@@ -242,27 +242,27 @@ class FloatVectorMemoryProofTest(unittest.TestCase):
         module['bindings'][0]['expr'][3]['resultRep'] = result(True)
         self.assertFalse(check(module)['accepted'])
         with self.assertRaises(ValueError):
-            validate_direct('readFloatX4Array#', app[2], app[3], result())
+            validate_direct('readDoubleX2Array#', app[2], app[3], result())
 
     def test_vector_function_join_constructor_and_capture_boundaries_stay_closed(self):
         for mode in ('result', 'argument', 'capture', 'join', 'constructor'):
             module, _, body = fixture()
-            vector = var('vector', VECTOR_FLOAT_REP)
+            vector = var('vector', VECTOR_DOUBLE_REP)
             if mode == 'result':
                 body[3][0][3] = vector
-                body[4]['rep'] = copy.deepcopy(VECTOR_FLOAT_REP)
-                module['bindings'][0]['expr'][3]['resultRep'] = copy.deepcopy(VECTOR_FLOAT_REP)
+                body[4]['rep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
+                module['bindings'][0]['expr'][3]['resultRep'] = copy.deepcopy(VECTOR_DOUBLE_REP)
             elif mode == 'argument':
                 body[3][0][3] = ['app', ['var', 'unknownFunction'], [vector], [False], False, False, dict(rep=INDEX)]
             elif mode == 'capture':
-                body[3][0][3] = ['lam', [], vector, dict(rep=CLOSURE, resultRep=VECTOR_FLOAT_REP)]
+                body[3][0][3] = ['lam', [], vector, dict(rep=CLOSURE, resultRep=VECTOR_DOUBLE_REP)]
             elif mode == 'join':
                 body[3][0][3] = ['let', False, [dict(id='join', lifted=True, rep=CLOSURE,
-                    joinValueArity=0, joinResultRep=VECTOR_FLOAT_REP, info=dict(joinArity=0), expr=vector)],
-                    ['var', 'join', dict(rep=VECTOR_FLOAT_REP)], dict(rep=VECTOR_FLOAT_REP)]
+                    joinValueArity=0, joinResultRep=VECTOR_DOUBLE_REP, info=dict(joinArity=0), expr=vector)],
+                    ['var', 'join', dict(rep=VECTOR_DOUBLE_REP)], dict(rep=VECTOR_DOUBLE_REP)]
             else:
                 module['constructors'].append(dict(id='Box', kind='boxed', arity=1,
-                    fieldReps=[VECTOR_FLOAT_REP['primReps']], fieldLifted=[False], strictFields=[False]))
+                    fieldReps=[VECTOR_DOUBLE_REP['primReps']], fieldLifted=[False], strictFields=[False]))
                 body[3][0][3] = ['app', ['con', 'Box', 1], [vector], [False], False, True,
                     dict(rep=dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True))]
             self.assertFalse(check(module)['accepted'], mode)
