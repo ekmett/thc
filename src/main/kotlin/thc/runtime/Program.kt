@@ -117,7 +117,9 @@ internal class CallSegment @JvmOverloads constructor(
     continuation: ContinuationResult,
     var logicalMask: MaskingState = MaskingState.UNMASKED,
     val callerMask: MaskingState = MaskingState.UNMASKED,
-    val tupleShape: TupleShape? = null
+    val tupleShape: TupleShape? = null,
+    /** This cold token was captured inside a real catch# action boundary. */
+    val caughtIOAction: Boolean = false
 ) {
     @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
     var value: Any? = continuation
@@ -128,6 +130,13 @@ internal class CallSegment @JvmOverloads constructor(
 private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 /** Async delivery must carry its origin separately from its guest payload. */
 internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
+/** Cold claim token for one exact original catch# action, never supplied by Core. */
+internal class PrivateIOUnwind(val action: CallSegment, val payload: Any?) :
+    RuntimeException("Private captured IO-handler unwind", null, false, false)
+/** Private origin tag; only checkpointed catch# may unwrap it for its handler. */
+internal class CapturedAsyncDelivery(val payload: Any?) :
+    com.oracle.truffle.api.exception.AbstractTruffleException(
+        "Private captured IO-handler delivery", null, 0, null)
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
 internal class ThunkSuspended(val thunk: Thunk) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
@@ -366,6 +375,59 @@ internal class Force(private val metrics: Metrics) : Node() {
         } catch (failure: Throwable) {
             if (claimed) suspendOwned(original)
             throw failure
+        }
+    }
+
+    /** Private test cut at a captured original catch# frame; its action remains shared and parked. */
+    @CompilerDirectives.TruffleBoundary
+    internal fun deliverAtCapturedIOHandler(original: Any, child: CallSegment, payload: Any?): Any? {
+        fun exact(saved: ContinuationResult?): Boolean =
+            saved != null && saved.continuationRootNode.sourceRootNode is BytecodeRoot &&
+                (saved.result as? CallSegmentSuspended)?.segment === child &&
+                child.caughtIOAction && child.tupleShape != null && child.state == 5 &&
+                child.value is ContinuationResult
+        return when (original) {
+            is Thunk -> {
+                var claimed = false
+                try {
+                    val continuation = synchronized(original.monitor) {
+                        val saved = original.value as? ContinuationResult
+                        if (original.state != 5 || !exact(saved))
+                            fault("Async IO handler cut requires the exact parked action")
+                        original.value = null
+                        original.owner = Thread.currentThread()
+                        original.state = 1
+                        claimed = true
+                        checkNotNull(saved)
+                    }
+                    evaluateOwned(original, continuation, PrivateIOUnwind(child, payload))
+                } catch (failure: Throwable) {
+                    if (claimed) suspendOwned(original)
+                    throw failure
+                }
+            }
+            is CallSegment -> {
+                var claimed = false
+                try {
+                    var mask = MaskingState.UNMASKED
+                    val continuation = synchronized(original.monitor) {
+                        val saved = original.value as? ContinuationResult
+                        if (original.state != 5 || !exact(saved))
+                            fault("Async IO handler cut requires the exact parked action")
+                        mask = original.logicalMask
+                        original.value = null
+                        original.owner = Thread.currentThread()
+                        original.state = 1
+                        claimed = true
+                        checkNotNull(saved)
+                    }
+                    evaluateCallSegment(original, continuation, mask, PrivateIOUnwind(child, payload))
+                } catch (failure: Throwable) {
+                    if (claimed) suspendCallOwned(original)
+                    throw failure
+                }
+            }
+            else -> fault("Async IO handler cut requires a captured thunk or call segment")
         }
     }
 
