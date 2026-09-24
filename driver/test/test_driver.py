@@ -16,6 +16,108 @@ import unittest
 HERE = Path(__file__).resolve().parent
 DRIVER_ROOT = HERE.parent
 FIXTURE = HERE / "fixtures" / "tiny"
+REPO_ROOT = DRIVER_ROOT.parent
+GHC_VERSION = "9.14.1"
+CABAL_VERSION = "3.16.0.0"
+
+
+class CommandLog:
+    """Keep command output and exit/timeout details after scratch fixtures vanish."""
+
+    def __init__(self, directory, environment):
+        self.path = directory / "commands.jsonl"
+        self.environment = environment
+
+    def run(self, command, *, cwd, timeout=60):
+        command = list(map(str, command))
+        record = {"command": command, "cwd": str(cwd), "timeoutSeconds": timeout}
+        try:
+            result = subprocess.run(command, cwd=cwd, env=self.environment,
+                                    text=True, capture_output=True, timeout=timeout)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            record["error"] = str(error)
+            for name in ("stdout", "stderr"):
+                output = getattr(error, name, None)
+                record[name] = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else output
+            self.save(record)
+            raise RuntimeError(f"{error}\nCommand evidence: {self.path}") from error
+        record.update(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr)
+        self.save(record)
+        return result
+
+    def save(self, record):
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def checked(self, command, *, cwd, timeout=60):
+        result = self.run(command, cwd=cwd, timeout=timeout)
+        if result.returncode:
+            raise RuntimeError(
+                f"Command exited {result.returncode}: {result.args!r}\n"
+                f"{result.stdout}{result.stderr}\nCommand evidence: {self.path}"
+            )
+        return result.stdout
+
+
+class Tee:
+    def __init__(self, *streams):
+        self.streams = streams
+
+    def write(self, text):
+        for stream in self.streams:
+            stream.write(text)
+        return len(text)
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
+
+
+def resolve_tool(variable, default):
+    requested = os.environ.get(variable, default)
+    found = shutil.which(requested)
+    if not found:
+        raise RuntimeError(f"{variable} executable not found: {requested!r}; GHC {GHC_VERSION} is required")
+    return str(Path(found).resolve())
+
+
+def bootstrap_driver(directory, commands):
+    """Use only the pinned installed toolchain; never acquire a nested CI lease."""
+    ghc = resolve_tool("GHC", "ghc")
+    suffix = ".exe" if os.name == "nt" else ""
+    sibling_pkg = Path(ghc).parent / ("ghc-pkg" + suffix)
+    ghc_pkg = resolve_tool("GHC_PKG", str(sibling_pkg) if sibling_pkg.is_file() else "ghc-pkg")
+    version = commands.checked([ghc, "--numeric-version"], cwd=DRIVER_ROOT).strip()
+    pkg_version = commands.checked([ghc_pkg, "--version"], cwd=DRIVER_ROOT).strip()
+    if version != GHC_VERSION or pkg_version != f"GHC package manager version {GHC_VERSION}":
+        raise RuntimeError(f"Expected GHC and ghc-pkg {GHC_VERSION}; found {version!r} / {pkg_version!r}")
+    for package in ("Cabal", "Cabal-syntax"):
+        version = commands.checked(
+            [ghc_pkg, "--global", "--no-user-package-db", "field", package, "version", "--simple-output"],
+            cwd=DRIVER_ROOT,
+        ).split()
+        if version != [CABAL_VERSION]:
+            raise RuntimeError(f"Expected global {package}-{CABAL_VERSION}; found {version!r}")
+    setup_directory = directory / "setup"
+    setup_directory.mkdir()
+    setup = setup_directory / ("setup" + suffix)
+    commands.checked(
+        [ghc, "--make", "-clear-package-db", "-global-package-db", "-package-env", "-",
+         "-package", f"Cabal-{CABAL_VERSION}", "-package", f"Cabal-syntax-{CABAL_VERSION}",
+         "-outputdir", setup_directory, "-o", setup, DRIVER_ROOT / "Setup.hs"],
+        cwd=DRIVER_ROOT, timeout=180,
+    )
+    dist = directory / "dist"
+    commands.checked(
+        [setup, "configure", f"--builddir={dist}", f"--with-compiler={ghc}",
+         f"--with-hc-pkg={ghc_pkg}", "--package-db=clear", "--package-db=global"],
+        cwd=DRIVER_ROOT, timeout=180,
+    )
+    commands.checked([setup, "build", f"--builddir={dist}"], cwd=DRIVER_ROOT, timeout=180)
+    driver = dist / "build" / "thc" / ("thc" + suffix)
+    if not driver.is_file():
+        raise RuntimeError(f"Cabal build did not produce {driver}")
+    return driver, ghc, ghc_pkg, [str(setup)]
 
 
 def source_hashes(directory):
@@ -37,10 +139,8 @@ class DriverTest(unittest.TestCase):
         self.dist = self.root / "configuration"
 
     def invoke(self, *args, ok=True):
-        result = subprocess.run(
-            [str(self.driver), *map(str, args)],
-            cwd=self.root, text=True, capture_output=True, timeout=60,
-        )
+        extra = self.compiler_options if args and args[0] == "plan-package" else []
+        result = self.commands.run([self.driver, *args, *extra], cwd=self.root)
         if ok:
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         else:
@@ -64,6 +164,8 @@ class DriverTest(unittest.TestCase):
         plan = self.plan("--enable-tests", "--enable-benchmarks")
         self.assertEqual(plan["schema"], "thc.cabal-package-plan.v1")
         self.assertEqual(plan["stage"], "cabal-installed-package-configuration")
+        self.assertEqual(plan["compiler"], "ghc-" + GHC_VERSION)
+        self.assertEqual(plan["cabalVersion"], CABAL_VERSION)
         self.assertFalse(plan["solvedProjectPlan"])
         self.assertFalse(plan["artifactsBuilt"])
         self.assertEqual(plan["package"], "tiny-fixture-0.1.0.0")
@@ -89,9 +191,9 @@ class DriverTest(unittest.TestCase):
         self.assertEqual(exe["internalDependencies"], [lib["unitId"]])
         self.assertEqual(exe["mainSource"], "Main.hs")
         # Ask GHC for the installed base unit independently of the driver.
-        base_id = subprocess.check_output(
+        base_id = self.commands.checked(
             [self.ghc_pkg, "--global", "--no-user-package-db", "field", "base", "id", "--simple-output"],
-            text=True,
+            cwd=self.root,
         ).strip()
         self.assertIn(base_id, [d["unitId"] for d in exe["dependencies"]])
         self.assertEqual(len({c["unitId"] for c in components.values()}), 5)
@@ -99,9 +201,9 @@ class DriverTest(unittest.TestCase):
             self.assertFalse(Path(component["plannedArtifact"]).exists())
         # Cabal consumes the exact LocalBuildInfo persisted by plan-package.
         # This is a test oracle, not a THC build command implementation.
-        build = subprocess.run(
-            [self.runghc, str(DRIVER_ROOT / "Setup.hs"), "build", f"--builddir={self.dist}"],
-            cwd=self.package, text=True, capture_output=True, timeout=180,
+        build = self.commands.run(
+            [*self.setup_command, "build", f"--builddir={self.dist}"],
+            cwd=self.package, timeout=180,
         )
         self.assertEqual(build.returncode, 0, build.stderr + build.stdout)
         for component in components.values():
@@ -114,8 +216,8 @@ class DriverTest(unittest.TestCase):
             for module in modules:
                 object_path = Path(component["objectDirectory"]) / (module.replace(".", "/") + ".o")
                 self.assertTrue(object_path.is_file(), object_path)
-        self.assertEqual(subprocess.check_output([exe["plannedArtifact"]], text=True), "hello Cabal\n")
-        subprocess.run([components["test:greeting-test"]["plannedArtifact"]], check=True)
+        self.assertEqual(self.commands.checked([exe["plannedArtifact"]], cwd=self.package), "hello Cabal\n")
+        self.commands.checked([components["test:greeting-test"]["plannedArtifact"]], cwd=self.package)
         self.assertEqual(source_hashes(self.package), before)
 
     def test_default_components_and_explicit_flag(self):
@@ -209,14 +311,45 @@ class DriverTest(unittest.TestCase):
                 self.reject(*args, contains="Usage:")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--driver", type=Path, required=True)
-    parser.add_argument("--scratch", type=Path, required=True)
+    parser.add_argument("--driver", type=Path, help="Prebuilt driver (requires --scratch); omit both to bootstrap")
+    parser.add_argument("--scratch", type=Path, help="Fixture scratch directory (requires --driver)")
     args = parser.parse_args()
-    DriverTest.driver = args.driver.resolve()
-    DriverTest.scratch = args.scratch.resolve()
+    if (args.driver is None) != (args.scratch is None):
+        parser.error("--driver and --scratch must be supplied together, or both omitted")
+    base = args.scratch.resolve() if args.scratch else REPO_ROOT / "build" / "driver-test-bootstrap"
+    base.mkdir(parents=True, exist_ok=True)
+    mode = "optimized" if sys.flags.optimize else "normal"
+    directory = Path(tempfile.mkdtemp(prefix=mode + "-", dir=base))
+    print(f"Cabal driver test evidence: {directory}", file=sys.stderr, flush=True)
+    environment = os.environ.copy()
+    environment.pop("GHC_PACKAGE_PATH", None)
+    environment["GHC_ENVIRONMENT"] = "-"
+    commands = CommandLog(directory, environment)
+    DriverTest.commands = commands
+    try:
+        if args.driver:
+            DriverTest.driver = args.driver.resolve()
+            DriverTest.scratch = args.scratch.resolve()
+            DriverTest.ghc_pkg = os.environ.get("GHC_PKG", "ghc-pkg")
+            DriverTest.setup_command = [shutil.which("runghc") or "runghc", str(DRIVER_ROOT / "Setup.hs")]
+            DriverTest.compiler_options = []
+        else:
+            DriverTest.driver, ghc, DriverTest.ghc_pkg, DriverTest.setup_command = bootstrap_driver(directory, commands)
+            DriverTest.scratch = directory / "scratch"
+            DriverTest.compiler_options = ["--with-ghc", ghc, "--with-ghc-pkg", DriverTest.ghc_pkg]
+    except (OSError, RuntimeError) as error:
+        message = f"Cabal driver bootstrap failed: {error}\nEvidence: {directory}\n"
+        (directory / "failure.log").write_text(message, encoding="utf-8")
+        print(message, file=sys.stderr)
+        return 1
     DriverTest.scratch.mkdir(parents=True, exist_ok=True)
-    DriverTest.ghc_pkg = os.environ.get("GHC_PKG", "ghc-pkg")
-    DriverTest.runghc = shutil.which("runghc") or "runghc"
-    unittest.main(argv=[sys.argv[0]], verbosity=2)
+    with (directory / "tests.log").open("w", encoding="utf-8") as log:
+        runner = unittest.TextTestRunner(stream=Tee(sys.stderr, log), verbosity=2)
+        result = runner.run(unittest.defaultTestLoader.loadTestsFromTestCase(DriverTest))
+    return 0 if result.wasSuccessful() else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

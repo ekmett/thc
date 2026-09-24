@@ -37,6 +37,34 @@ shared `resource_run.py --build-dir /absolute/checkout/build -- COMMAND` gate.
 The test command holds one lease while it runs its serial native fixture build;
 do not wrap its child commands in another lease.
 
+The Python test entrypoint also works without arguments, as required by the
+repository's full Python inventory:
+
+```sh
+python3 driver/test/test_driver.py
+python3 -O driver/test/test_driver.py
+```
+
+Run these from the repository root (or use an absolute script path from any
+directory). Each invocation creates a fresh isolated directory beneath
+`build/driver-test-bootstrap/`, compiles the ordinary Cabal `Setup.hs`, and uses
+it to configure/build the driver before running the same integration tests.
+It checks GHC/ghc-pkg **9.14.1** and the bundled global Cabal/Cabal-syntax
+**3.16.0.0**, honors `GHC` and `GHC_PKG` executable overrides, and excludes user
+package databases and ambient GHC package environments. The fixture uses the
+same selected compiler and compiled Setup executable. There is no download,
+project solver, source mutation or nested resource gate; CI/the caller owns the
+enclosing build lease. `unittest` assertions remain active under Python `-O`.
+
+The printed evidence directory retains the fresh driver build, `commands.jsonl`
+(commands, working directories, stdout/stderr, exit statuses and timeout errors),
+and `tests.log`. Bootstrap errors additionally produce `failure.log` and a
+nonzero exit status; unavailable or mismatched tools are failures, not skips.
+These directories are retained for diagnosis and may be removed when no longer
+needed. Passing both `--driver` and `--scratch` keeps the prebuilt-binary workflow
+above, with command/test evidence retained under its scratch directory. Supplying
+only one of those two arguments is a usage error.
+
 The driver also accepts an explicit `.cabal` path:
 
 ```sh
