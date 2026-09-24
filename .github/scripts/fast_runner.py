@@ -41,7 +41,7 @@ def ci_only_paths(changes):
         except UnicodeDecodeError:
             return False
         if not (CI_SCRIPT.fullmatch(path) or CI_WORKFLOW.fullmatch(path)
-                or path == "docs/contributing.md"):
+                or path in ("docs/contributing.md", "docs/fast-ci.md")):
             return False
     return True
 
