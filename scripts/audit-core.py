@@ -14,6 +14,7 @@ from collections import deque
 import json
 import core_data_tags
 import core_md5_foreign
+import core_managed_files
 import core_package_manifest
 from pathlib import Path
 import sys
@@ -515,7 +516,7 @@ class Audit:
         check(signature['result'], result, 'rep')
 
     def polyglot_call(self, expr, bound, owner, path):
-        """Accept only closed MD5 or exact saturated polyglot FCallId applications."""
+        """Accept closed managed ABI or exact saturated polyglot FCallId applications."""
         function, arguments = expr[1:3]
         metadata = expr[6] if len(expr) > 6 and isinstance(expr[6], dict) else {}
         call = metadata.get('foreignCall')
@@ -524,6 +525,19 @@ class Audit:
 
         target = call.get('target') if isinstance(call, dict) else None
         symbol = target.get('symbol') if isinstance(target, dict) else None
+        if isinstance(symbol, str) and symbol.startswith(core_managed_files.PREFIX):
+            try:
+                core_managed_files.validate(metadata, [self.expression_rep(arg) for arg in arguments],
+                                            expr[3], self.expression_rep(expr))
+                head_id = function[1] if isinstance(function, list) and len(function) > 1 else None
+                defined = isinstance(head_id, str) and (head_id in bound or head_id in self.bindings)
+                core_managed_files.validate_head(function, defined)
+                if symbol not in self.cap.get('managedForeignCalls', []):
+                    raise ValueError('Managed file foreign-call capability disabled')
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+            except ValueError as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
         if isinstance(symbol, str) and symbol in core_md5_foreign.OPERATIONS:
             try:
                 core_md5_foreign.validate(metadata, [self.expression_rep(arg) for arg in arguments],
