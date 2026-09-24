@@ -4,6 +4,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.PolyglotAccess
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -151,10 +152,24 @@ class PolyglotFFITest {
         }
     }
 
-    private fun context(): Context = Context.newBuilder("thc", "js").allowExperimentalOptions(true).build()
+    private fun context(): Context = Context.newBuilder("thc", "js").allowExperimentalOptions(true)
+        .allowPolyglotAccess(PolyglotAccess.ALL).build()
     private fun root(): AccessRoot {
         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
         return AccessRoot(language)
+    }
+
+    @Test fun javascriptParsingRequiresExplicitCrossLanguageAccess() {
+        Context.newBuilder("thc", "js").build().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val denied = assertThrows(IllegalStateException::class.java) {
+                    Calls.target(root().callTarget, arrayOf<Any?>("eval", "1"))
+                }
+                assertTrue(denied.message.orEmpty().contains("No language for id js"), denied.message)
+            } finally { context.leave() }
+        }
     }
 
     @Test fun javascriptEvaluationMemberReadAndIntegerCallHonorTheContextBoundary() {
@@ -165,22 +180,22 @@ class PolyglotFFITest {
             try {
                 val target = root().callTarget
                 val state = assertThrows(RuntimeFault::class.java) {
-                    Calls.target(target, arrayOf("evalBadState", "1"))
+                    Calls.target(target, arrayOf<Any?>("evalBadState", "1"))
                 }
                 assertTrue(state.message.orEmpty().contains("zero-width scalar carrier"), state.message)
-                value = Calls.target(target, arrayOf("eval", "({twice: x => x * 2})")) as ForeignValue
-                val function = Calls.target(target, arrayOf("read", value, "twice")) as ForeignValue
-                assertEquals(42L, Calls.target(target, arrayOf("execute", function, 21L)) as Long)
+                value = Calls.target(target, arrayOf<Any?>("eval", "({twice: x => x * 2})")) as ForeignValue
+                val function = Calls.target(target, arrayOf<Any?>("read", value, "twice")) as ForeignValue
+                assertEquals(42L, Calls.target(target, arrayOf<Any?>("execute", function, 21L)) as Long)
                 val missing = assertThrows(RuntimeFault::class.java) {
-                    Calls.target(target, arrayOf("read", value, "absent"))
+                    Calls.target(target, arrayOf<Any?>("read", value, "absent"))
                 }
                 assertTrue(missing.message.orEmpty().contains("readMember"), missing.message)
                 val fakeHandle = assertThrows(RuntimeFault::class.java) {
-                    Calls.target(target, arrayOf("read", 42L, "twice"))
+                    Calls.target(target, arrayOf<Any?>("read", 42L, "twice"))
                 }
                 assertTrue(fakeHandle.message.orEmpty().contains("THC.Polyglot.Value"), fakeHandle.message)
                 val range = assertThrows(RuntimeFault::class.java) {
-                    Calls.target(target, arrayOf("execute", function, 9_007_199_254_740_992L))
+                    Calls.target(target, arrayOf<Any?>("execute", function, 9_007_199_254_740_992L))
                 }
                 assertTrue(range.message.orEmpty().contains("exact Number integer range"), range.message)
             } finally { first.leave() }
@@ -189,7 +204,7 @@ class PolyglotFFITest {
                 second.enter()
                 try {
                     val foreign = assertThrows(RuntimeFault::class.java) {
-                        Calls.target(root().callTarget, arrayOf("read", value, "twice"))
+                        Calls.target(root().callTarget, arrayOf<Any?>("read", value, "twice"))
                     }
                     assertTrue(foreign.message.orEmpty().contains("different context"), foreign.message)
                 } finally { second.leave() }
@@ -203,18 +218,18 @@ class PolyglotFFITest {
             context.enter()
             try {
                 val target = root().callTarget
-                val value = Calls.target(target, arrayOf("eval",
+                val value = Calls.target(target, arrayOf<Any?>("eval",
                     "({text: x => 'no', fractional: x => x + 0.5, boom: x => { throw new Error('boom from JS') }})"))
                 for (name in listOf("text", "fractional")) {
-                    val function = Calls.target(target, arrayOf("read", value, name))
+                    val function = Calls.target(target, arrayOf<Any?>("read", value, name))
                     val error = assertThrows(RuntimeFault::class.java) {
-                        Calls.target(target, arrayOf("execute", function, 1L))
+                        Calls.target(target, arrayOf<Any?>("execute", function, 1L))
                     }
                     assertTrue(error.message.orEmpty().contains("not an exact Int#"), "$name: ${error.message}")
                 }
-                val boom = Calls.target(target, arrayOf("read", value, "boom"))
+                val boom = Calls.target(target, arrayOf<Any?>("read", value, "boom"))
                 val error = assertThrows(RuntimeException::class.java) {
-                    Calls.target(target, arrayOf("execute", boom, 1L))
+                    Calls.target(target, arrayOf<Any?>("execute", boom, 1L))
                 }
                 assertTrue(error.message.orEmpty().contains("boom from JS"), error.message)
             } finally { context.leave() }
