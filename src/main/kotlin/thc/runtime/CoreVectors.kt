@@ -20,6 +20,7 @@ internal data class CoreVector(val lanes: Int, val element: String) {
             }
             val record = raw as? Map<*, *> ?: throw RuntimeFault("Missing Core vector shape")
             val lanes = record["lanes"] as? Number ?: throw RuntimeFault("Invalid vector lane count")
+            if (lanes !is Int && lanes !is Long) throw RuntimeFault("Invalid vector lane count")
             val element = record["element"] as? String ?: throw RuntimeFault("Invalid vector element kind")
             if (lanes.toDouble() != lanes.toInt().toDouble() || components != null)
                 throw RuntimeFault("Invalid Core vector shape")

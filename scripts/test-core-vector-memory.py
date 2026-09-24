@@ -166,6 +166,12 @@ class VectorMemoryProofTest(unittest.TestCase):
             module, app, _ = fixture(name)
             app[2][1][2]['rep']['primReps'] = ['WordRep']
             self.assertFalse(check(module)['accepted'])
+            if name in INDICES | WRITES:
+                for count in (4.0, 4.5, True, '4', None):
+                    module, app, _ = fixture(name)
+                    proof = app[6]['rep'] if name in INDICES else app[2][2][6]['rep']
+                    proof['vector']['lanes'] = count
+                    self.assertFalse(check(module)['accepted'], (name, count))
 
     def test_lexical_array_identity_cannot_be_relabelled(self):
         for name in OPERATIONS:

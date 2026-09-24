@@ -29,6 +29,9 @@ Both pattern binders and the whole binder must be unlifted non-coercion values.
 Vector lane counts at both exceptional raw annotation sites, their vector
 components/pattern, and the tuple constructor arity must be JSON integers;
 floating-point, Boolean and string counts are rejected before normalization.
+The shared vector parser applies the same integer-count rule to ordinary vector
+proofs, including direct index results and write operands. Genuine Int/Long
+metadata and all supported vector identities remain unchanged.
 Generic tuple validation, result handoff storage and vector function/join/
 capture/constructor boundaries are not broadened. Addr and foreign memory remain
 unsupported. State is evaluated and checked before memory or local publication.
