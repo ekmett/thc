@@ -62,6 +62,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/thread-async/pre/forkAndThrow-audit.json", "build/thread-async/post/forkAndThrow-audit.json",
     "build/thread-async/pre/killUncaught-audit.json", "build/thread-async/post/killUncaught-audit.json",
     "build/thread-async/pre/selfThrow-audit.json", "build/thread-async/post/selfThrow-audit.json",
+    "build/thread-async/pre/maskedUnmaskSelf-audit.json", "build/thread-async/post/maskedUnmaskSelf-audit.json",
     "build/uncaught-self/manifest.json", "build/uncaught-self/native/oracle",
     "build/uncaught-self/pre/core/UncaughtSelfAudit.json", "build/uncaught-self/post/core/UncaughtSelfAudit.json",
     "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",
