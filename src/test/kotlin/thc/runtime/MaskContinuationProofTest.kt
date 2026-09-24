@@ -24,6 +24,7 @@ class MaskContinuationProofTest {
         @Child private var force = Force(Metrics(true))
         override fun execute(frame: VirtualFrame): Any? = force.execute(frame, frame.arguments[0])
         fun force(thunk: Thunk): Any? = Calls.target(callTarget, arrayOf(thunk))
+        fun deliver(thunk: Thunk, child: Thunk, payload: Any?): Any? = force.deliverAtCapturedHandler(thunk, child, payload)
     }
 
     private fun <T> entered(context: Context, action: () -> T): T {
@@ -36,6 +37,94 @@ class MaskContinuationProofTest {
         assertTrue(type.isInstance(target))
         type.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
+    }
+
+    @Test fun privateAsyncCutRunsNearestCapturedHandlerAndLeavesSharedChildResumable() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val payload = Any()
+            val childEffects = AtomicInteger()
+            val innerEffects = AtomicInteger()
+            val outerEffects = AtomicInteger()
+            val innerProbe = ThunkYieldProofRoot.MaskProbe()
+            val outerProbe = ThunkYieldProofRoot.MaskProbe()
+            val (child, inner, outer) = entered(context) {
+                val child = Thunk(ThunkYieldProofRoot.target(language, childEffects, AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), Any()), null)
+                val inner = Thunk(ThunkYieldProofRoot.privateAsyncHandlerCaller(language,
+                    AtomicReference(child), innerEffects, AtomicInteger(),
+                    MaskingState.MASKED_INTERRUPTIBLE, MaskingState.UNMASKED, innerProbe), null)
+                val outer = Thunk(ThunkYieldProofRoot.maskedCaller(language,
+                    AtomicReference(inner), outerEffects, AtomicInteger(),
+                    MaskingState.MASKED_UNINTERRUPTIBLE, MaskingState.MASKED_INTERRUPTIBLE, outerProbe), null)
+                Triple(child, inner, outer)
+            }
+            entered(context) {
+                assertSame(outer, assertThrows(ThunkSuspended::class.java) { driver.force(outer) }.thunk)
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+                assertThrows(RuntimeFault::class.java) { driver.deliver(inner, outer, payload) }
+                assertEquals(5, inner.state, "A wrong child cannot claim the handler continuation")
+            }
+            assertEquals(5, child.state)
+            assertEquals(5, inner.state)
+            assertEquals(5, outer.state)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val result = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                    try {
+                        assertEquals(77L, driver.deliver(inner, child, payload))
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(177L, driver.force(outer))
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                        177L
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(177L, result.get(5, TimeUnit.SECONDS))
+            }
+            assertSame(payload, innerProbe.handlerPayload.get())
+            assertEquals(MaskingState.MASKED_INTERRUPTIBLE, innerProbe.handlerMask.get())
+            assertNull(outerProbe.handlerPayload.get(), "The nearest handler consumes this delivery")
+            assertEquals(5, child.state, "The shared child is suspended, not poisoned by delivery")
+            assertEquals(2, inner.state)
+            assertEquals(2, outer.state)
+            entered(context) {
+                assertSame(child, assertThrows(ThunkSuspended::class.java) { driver.force(child) }.thunk)
+                assertEquals(42L, (driver.force(child) as ThunkYieldProofRoot.Answer).number())
+            }
+            assertEquals(1, childEffects.get(), "The shared child's prefix cannot replay")
+            assertEquals(1, innerEffects.get())
+            assertEquals(1, outerEffects.get())
+        }
+    }
+
+    @Test fun unhandledPrivateDeliveryNeverBecomesMemoizedGuestFailure() {
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val probe = ThunkYieldProofRoot.MaskProbe()
+            val (child, caller) = entered(context) {
+                val child = Thunk(ThunkYieldProofRoot.target(language, AtomicInteger(), AtomicInteger(),
+                    ThunkYieldProofRoot.Gate(), Any()), null)
+                val caller = Thunk(ThunkYieldProofRoot.maskedCaller(language, AtomicReference(child),
+                    AtomicInteger(), AtomicInteger(), MaskingState.MASKED_INTERRUPTIBLE,
+                    MaskingState.UNMASKED, probe), null)
+                child to caller
+            }
+            entered(context) {
+                assertSame(caller, assertThrows(ThunkSuspended::class.java) { driver.force(caller) }.thunk)
+                assertThrows(ThunkYieldProofRoot.PrivateAsyncDelivery::class.java) {
+                    driver.deliver(caller, child, Any())
+                }
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(driver))
+                assertNull(probe.handlerPayload.get(), "The ordinary guest handler must reject async origin")
+                assertEquals(5, child.state)
+                assertEquals(4, caller.state)
+                assertThrows(RuntimeFault::class.java) { driver.force(caller) }
+            }
+        }
     }
 
     @Test fun compiledNestedMasksParkToAmbientAndResumeOnAnotherCarrier() {

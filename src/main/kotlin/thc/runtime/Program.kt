@@ -339,6 +339,29 @@ internal class Force(private val metrics: Metrics) : Node() {
         }
     }
 
+    /** Private proof seam: deliver at this captured caller, leaving its exact shared child parked. */
+    @CompilerDirectives.TruffleBoundary
+    internal fun deliverAtCapturedHandler(original: Thunk, child: Thunk, payload: Any?): Any? {
+        var claimed = false
+        try {
+            val continuation = synchronized(original.monitor) {
+                val saved = original.value as? ContinuationResult
+                if (original.state != 5 || (saved?.result as? ThunkSuspended)?.thunk !== child ||
+                    child.state != 5)
+                    fault("Async handler cut requires the exact parked shared child")
+                original.value = null
+                original.owner = Thread.currentThread()
+                original.state = 1
+                claimed = true
+                checkNotNull(saved)
+            }
+            return evaluateOwned(original, continuation, AsyncThunkUnwind(payload))
+        } catch (failure: Throwable) {
+            if (claimed) suspendOwned(original)
+            throw failure
+        }
+    }
+
     private fun executeOne(original: Thunk,
                            observed: ContinuationResult?, resumeValue: Any?): Any? {
         while (true) {
