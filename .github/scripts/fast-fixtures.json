@@ -306,6 +306,19 @@
         "compiler/test-fixtures/SynchronousExceptionsNative.hs"
       ]
     },
+    "mask-functions": {
+      "junit": ["thc.runtime.MaskFunctionNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mask-functions"]}],
+      "outputs": ["build/mask-functions"],
+      "sources": [
+        "test/haskell-fixtures/MaskFunctionFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "compiler/test-fixtures/MaskFunctionAudit.hs",
+        "compiler/test-fixtures/MaskFunctionNative.hs"
+      ]
+    },
     "core-continuation": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "core-continuation"]}],
