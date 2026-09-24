@@ -418,7 +418,8 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
 
 /** Replay-specific BytecodeLocal accessors, never a frame or guest payload. */
 internal class BytecodeTupleSlots(shape: TupleShape,
-    @field:CompilationFinal(dimensions = 1) private val slots: Array<com.oracle.truffle.api.bytecode.LocalAccessor>) : TupleDestination(shape) {
+    @field:CompilationFinal(dimensions = 1) private val slots: Array<com.oracle.truffle.api.bytecode.LocalAccessor>,
+    val capturesYield: Boolean = false) : TupleDestination(shape) {
     @ExplodeLoop private fun write(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode, output: HandoffStorage) {
         for (index in slots.indices) {
             if (shape.layout.isLong(index)) shape.layout.setLong(output, index, slots[index].getLong(node, frame))

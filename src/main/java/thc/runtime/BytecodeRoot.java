@@ -1074,7 +1074,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Metrics metrics, Closure function, @Bind("$node") Node node,
                 @Cached(value = "create(source, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
             try {
-                return dispatch.execute(frame, function, null);
+                return tailResult(dispatch.execute(frame, function, null), function,
+                        source.getLayout().getLogicalArity(), tail);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -1095,21 +1096,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class ApplyTypedInputTuple {
         @Specialization public static Object apply(VirtualFrame frame, BytecodeInputSource source,
-                BytecodeTupleSlots destination, boolean tail, Metrics metrics, Closure function, @Bind("$node") Node node,
+                BytecodeTupleSlots destination, boolean tail, Metrics metrics,
+                Closure function, @Bind("$node") Node node,
                 @Cached(value = "create(source, destination, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
+            boolean checkpoint = destination.getCapturesYield();
+            MaskingState callerMask = checkpoint ? SynchronousMasking.current(node) : null;
             try {
-                return dispatch.execute(frame, function, null);
+                Object result = dispatch.execute(frame, function, null);
+                if (checkpoint && SynchronousMasking.current(node) != callerMask) {
+                    SynchronousMasking.set(node, callerMask);
+                    throw new IllegalStateException("Completed typed tuple application did not restore its caller mask");
+                }
+                return result;
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
+            } catch (TupleCallYield yielded) {
+                if (!checkpoint) throw yielded;
+                throw captureTupleCall(function, source.getLayout().getLogicalArity(),
+                        destination, yielded, node, callerMask);
             } finally {
                 BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
             }
         }
         public static InputDispatch create(BytecodeInputSource source, BytecodeTupleSlots destination,
                 boolean tail, Metrics metrics) {
-            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics, destination, 0);
+            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics,
+                    destination.getCapturesYield() ? new ContinuationTupleDestination(destination) : destination, 0);
         }
     }
 
@@ -1317,6 +1331,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Exact tail calls have no caller suffix; a nested yield carries its actual callee identity. */
+    private static Object tailResult(Object result, Closure function, int supplied, boolean tail) {
+        return tail && function.arity == supplied && result instanceof ContinuationResult continuation
+                ? new TailYield(continuation, function.target) : result;
+    }
+
     /** Logical arity includes a PAP's remaining formals, not its physical prefix width. */
     @Operation
     public static final class ClosureArity {
@@ -1351,7 +1371,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Bind("$node") Node node,
                 @Cached(value = "createDispatch(arity, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
             try {
-                return dispatch.execute(frame, function, arguments);
+                return tailResult(dispatch.execute(frame, function, arguments), function, arity, tail);
             } catch (TailCall call) {
                 // A -> B -> ... -> A unwinds to the owning activation. The compiler
                 // consumes this internal result and restores locals before a real
@@ -1377,7 +1397,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Bind("$node") Node node,
                 @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
             try {
-                return dispatch.execute(frame, function, arguments);
+                return tailResult(dispatch.execute(frame, function, arguments), function,
+                        layout.getLogicalArity(), tail);
             } catch (TailCall call) {
                 // A -> B -> ... -> A unwinds to the owning activation. The compiler
                 // consumes this internal result and restores locals before a real
