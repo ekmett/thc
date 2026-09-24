@@ -82,6 +82,49 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     companion object { fun named(name: String): PinnedMemoryOp? = entries.firstOrNull { it.primitive == name } }
 }
 
+/** Keep the two pure index operands as adopted children so compiled Truffle
+ * does not have to materialize a virtual frame through an array-selected Expr. */
+internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation,
+    @field:Child private var base: Expr, @field:Child private var index: Expr) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = executeAddress(frame)
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress = when (operation) {
+        PinnedMemoryOp.INDEX_ADDR_OFF -> base.executeRequiredAddress(frame)
+            .readAddressElementIndex(index.executeRequiredLong(frame))
+        PinnedMemoryOp.INDEX_ADDR_ARRAY -> PinnedMemory.readAddressArray(base.execute(frame),
+            index.executeRequiredLong(frame))
+        else -> fault("Expected a pointer index primitive")
+    }
+}
+
+internal class PinnedPointerArrayWrite(proof: CoreRepresentation,
+    @field:Child private var array: Expr, @field:Child private var index: Expr,
+    @field:Child private var address: Expr, @field:Child private var state: Expr) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any {
+        val allocation = array.execute(frame)
+        val element = index.executeRequiredLong(frame)
+        val value = address.executeRequiredAddress(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        PinnedMemory.writeAddressArray(allocation, element, value)
+        return Unit
+    }
+}
+
+internal class PinnedPointerArrayRead(proof: CoreRepresentation,
+    @field:Child private var array: Expr, @field:Child private var index: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = fault("AddrArray# read requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val allocation = array.execute(frame)
+        val element = index.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        FrameAccess.write(frame, slots[offset], PinnedMemory.readAddressArray(allocation, element))
+        return null
+    }
+}
+
 internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation,
     @field:Children private var operands: Array<Expr>) : Expr() {
     init { representation = proof.copy(evaluated = true) }
@@ -103,27 +146,11 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             address.writeAddressElementIndex(offset, value)
             Unit
         }
-        PinnedMemoryOp.WRITE_ADDR_ARRAY -> {
-            val array = operands[0].execute(frame)
-            val index = operands[1].executeRequiredLong(frame)
-            val address = operands[2].executeRequiredAddress(frame)
-            ManagedByteArray.requireState(operands[3].execute(frame))
-            PinnedMemory.writeAddressArray(array, index, address)
-            Unit
-        }
-        PinnedMemoryOp.INDEX_ADDR_OFF -> operands[0].executeRequiredAddress(frame)
-            .readAddressElementIndex(operands[1].executeRequiredLong(frame))
-        PinnedMemoryOp.INDEX_ADDR_ARRAY -> PinnedMemory.readAddressArray(operands[0].execute(frame),
-            operands[1].executeRequiredLong(frame))
         else -> fault("Pinned memory tuple operation requires a destination")
     }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress =
         when (operation) {
             PinnedMemoryOp.CONTENTS -> ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
-            PinnedMemoryOp.INDEX_ADDR_OFF -> operands[0].executeRequiredAddress(frame)
-                .readAddressElementIndex(operands[1].executeRequiredLong(frame))
-            PinnedMemoryOp.INDEX_ADDR_ARRAY -> PinnedMemory.readAddressArray(operands[0].execute(frame),
-                operands[1].executeRequiredLong(frame))
             else -> super.executeAddress(frame)
         }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
@@ -147,12 +174,6 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))
                 FrameAccess.write(frame, slots[offset], address.readAddressElementIndex(index))
-            }
-            PinnedMemoryOp.READ_ADDR_ARRAY -> {
-                val array = operands[0].execute(frame)
-                val index = operands[1].executeRequiredLong(frame)
-                ManagedByteArray.requireState(operands[2].execute(frame))
-                FrameAccess.write(frame, slots[offset], PinnedMemory.readAddressArray(array, index))
             }
             else -> fault("Pinned memory scalar operation has no tuple destination")
         }
