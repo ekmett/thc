@@ -30,10 +30,10 @@ fixed masks/shifts and Java's population-count, zero-count, byte-reversal, and
 bit-reversal operations. No generic boxed arithmetic is added.
 
 `compiler/test-fixtures/BitPrimopsAudit.hs` uses opaque wrappers with dynamic
-inputs. The Haskell fixture producer exports both pre-Tidy and post-Tidy Core
-and requires strict dependency audit acceptance. JVM tests check retained
+inputs. The Haskell fixture producer exports both pre-Tidy and post-Tidy Core.
+JVM tests load both exports and check retained
 primitive names and the pinned input/result representations. The manifest hashes source inputs,
-exported Core, audit reports, the native driver, and its 11,923 result rows.
+exported Core, the native driver, and its 11,923 result rows.
 Samples include every bit position and transition, zero, all ones, alternating
 bits, signed-carrier extremes, and exhaustive byte inputs with several upper
 bit patterns. Native GHC results are independently checked with an unbounded

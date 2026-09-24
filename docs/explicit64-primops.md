@@ -28,7 +28,7 @@ including in case alternatives and diagnostic mode.
 
 `Explicit64PrimopsAudit.hs` exposes genuine typed scalar entries so conversions
 cannot cancel around an Int# wrapper during optimization. The Haskell fixture
-producer exports Core and requires strict audit acceptance; JVM tests check
+producer exports Core; JVM tests check
 each intended primitive and the exact argument and result representations.
 A separately compiled native driver bridges those types only at its I/O boundary.
 
@@ -46,5 +46,5 @@ exact target remains valid. Other tests reject wrong arities, malformed literals
 and contradictory Int64/Word64 lexical proofs. Normal clean-checkout preparation
 runs the fixture; SHA-256 manifests cover source/exporter inputs, Core and oracle,
 with full `ghc --info` provenance. Gradle tracks the inputs and CI retains the
-manifest, oracle and strict reports. Tuple results, counts, byte swaps, bit
+manifest, Core export, and oracle. Tuple results, counts, byte swaps, bit
 reversal, floating point, SIMD and 32-bit target semantics are separate slices.

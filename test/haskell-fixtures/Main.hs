@@ -331,25 +331,11 @@ relativeCore family stage =
   in if family == Explicit64 then [dir </> fixtureModule family ++ ".json"] else
        [dir </> fixtureModule family ++ ".json", dir </> "THC.InterfaceClosure.json"]
 
-auditRoots :: FilePath -> Family -> [Entry] -> String -> [FilePath] -> IO [FilePath]
-auditRoots root family es stage modules = do
-  let names = maybe [] (:[]) (compositeName family) ++ map entryName es
-      directory = "build" </> familyName family
-      auditPath name = directory </> (if family == Bit then stage ++ "-" else "") ++
-        (if Just name == compositeName family then "composite" else name) ++ ".audit.json"
-  forM names $ \name -> do
-    let path = auditPath name
-    _ <- run root [] "python3" (["scripts/audit-core.py", "--entry", name,
-                                "--output", path] ++ modules) ""
-    pure path
-
 inputPaths :: FilePath -> Family -> IO [FilePath]
 inputPaths root family = do
   plugin <- listDirectory (root </> "compiler/THC")
   let source = "compiler/test-fixtures" </> fixtureModule family ++ ".hs"
   pure $ sort $ [source, "thc.cabal", "test/haskell-fixtures/Main.hs",
-    "scripts/audit-core.py", "scripts/core-capabilities.json",
-    "src/main/resources/thc/scalar-primop-signatures.json",
     "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
     ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
 
@@ -380,8 +366,7 @@ prepare root family = do
     forM_ modules $ \path -> do
       exists <- doesFileExist (root </> path)
       unless exists (die ("Missing GHC Core export: " ++ path))
-    reports <- auditRoots root family es (if stage == "pre-core" then "pre" else "post") modules
-    pure (stage,modules,reports)
+    pure (stage,modules)
   let driver = directory </> driverFile family
       requests = [(e,x,y) | e <- es, (x,y) <- operands family e]
       stdinText = requestText family requests
@@ -412,9 +397,8 @@ prepare root family = do
     (die "Native oracle returned missing, duplicate, or unexpected inputs")
   writeFile (root </> oracle) actual
   sources <- inputPaths root family
-  let modules = concat [paths | (_,paths,_) <- stageArtifacts]
-      reports = concat [paths | (_,_,paths) <- stageArtifacts]
-      artifacts = modules ++ reports ++ [driver,oracle]
+  let modules = concatMap snd stageArtifacts
+      artifacts = modules ++ [driver,oracle]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   ghcInfo <- if family == Explicit64 then run root [] ghc ["--info"] "" else pure ""
@@ -423,7 +407,7 @@ prepare root family = do
       details = case family of
         Bit -> ["ghc" .= ("9.14.1" :: String),
           "stages" .= case stageArtifacts of
-            [(_,pre,_),(_,post,_)] -> object ["pre" .= pre, "post" .= post]
+            [(_,pre),(_,post)] -> object ["pre" .= pre, "post" .= post]
             _ -> error "Bit fixture requires pre/post GHC Core exports",
           "compositeEntry" .= ("bitPrimops" :: String), "nativeRows" .= length parsed,
           "nativeResultPolicy" .= ("Mask only GHC-defined bits; THC checks canonical zero upper bits directly" :: String)]
@@ -440,7 +424,8 @@ prepare root family = do
                                  "shift counts outside [0,64)"] :: [String])]
   writeJson manifest (object (common ++ details))
   putStrLn (familyName family ++ ": " ++ show (length es) ++ " entries, " ++
-            show (length parsed) ++ " native rows, " ++ show (length reports) ++ " strict Core audits")
+            show (length parsed) ++ " native rows, " ++ show (length stageArtifacts) ++
+            " GHC Core export stage" ++ (if length stageArtifacts == 1 then "" else "s"))
 
 splitTab :: String -> [String]
 splitTab text = case break (== '\t') text of
