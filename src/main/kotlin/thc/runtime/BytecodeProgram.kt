@@ -2426,6 +2426,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "plusAddr#" -> "AddressPlus"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
+            "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
@@ -2487,6 +2488,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus(); "AddressIndexChar" -> b.beginAddressIndexChar()
                 "AddressEqual" -> b.beginAddressEqual(); "AddressNotEqual" -> b.beginAddressNotEqual()
+                "AddressOrder" -> b.beginAddressOrder(when (name) {
+                    "ltAddr#" -> ManagedAddressOrder.LT
+                    "leAddr#" -> ManagedAddressOrder.LE
+                    "gtAddr#" -> ManagedAddressOrder.GT
+                    else -> ManagedAddressOrder.GE
+                })
             }
             args.forEach { it.emit(e) }
             when (operation) {
@@ -2541,6 +2548,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.endNarrowWord()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
+                "AddressOrder" -> b.endAddressOrder()
             }
         })
     }
