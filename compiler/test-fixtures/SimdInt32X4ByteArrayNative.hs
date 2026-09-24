@@ -1,19 +1,36 @@
 {-# LANGUAGE MagicHash #-}
 module Main where
 
-import GHC.Exts (Int(I#))
-import qualified SimdInt32X4ByteArray as P
+import GHC.Exts
+import Data.Bits (finiteBitSize)
+import Data.List (intercalate)
+import SimdInt32X4ByteArray
 
-seeds :: [Int]
-seeds = [minBound, -4294967297, -2147483649, -2147483648, -2147483647,
-         -1, 0, 1, 127, 128, 255, 256, 2147483646, 2147483647,
-         2147483648, 4294967295, 4294967296, maxBound]
+emit :: [String] -> Int -> IO ()
+emit fields answer = putStrLn (intercalate "\t" (fields ++ [show answer]))
+
+dispatch :: [String] -> IO ()
+dispatch fields@[name, a, b] = case (read a, read b) of
+  (I# offset, I# seed) -> emit fields (I# (case name of
+    "vectorUnitCase" -> vectorUnitCase offset seed
+    "scalarUnitCase" -> scalarUnitCase offset seed
+    _ -> error "unknown alias entry"))
+dispatch fields@[name, a, b, c, d, e] = case (read a, read b, read c, read d, read e) of
+  (I# offset, I# x0, I# x1, I# x2, I# x3) -> emit fields (I# (case name of
+    "vectorIndexCase" -> vectorIndexCase offset x0 x1 x2 x3
+    "scalarIndexCase" -> scalarIndexCase offset x0 x1 x2 x3
+    "vectorReadCase" -> vectorReadCase offset x0 x1 x2 x3
+    "scalarReadCase" -> scalarReadCase offset x0 x1 x2 x3
+    _ -> error "unknown load entry"))
+dispatch fields@[name, a, b, c, d, e, f] = case (read a, read b, read c, read d, read e, read f) of
+  (I# offset, I# x0, I# x1, I# x2, I# x3, I# byte) -> emit fields (I# (case name of
+    "vectorWriteCase" -> vectorWriteCase offset x0 x1 x2 x3 byte
+    "scalarWriteCase" -> scalarWriteCase offset x0 x1 x2 x3 byte
+    "vectorStoreCase" -> vectorStoreCase offset x0 x1 x2 x3 byte
+    "scalarStoreCase" -> scalarStoreCase offset x0 x1 x2 x3 byte
+    _ -> error "unknown store entry"))
+dispatch _ = error "invalid input"
 
 main :: IO ()
-main = do
-  mapM_ (\(offset@(I# i), seed@(I# x)) ->
-    putStrLn ("vectorUnitCase\t" ++ show offset ++ "\t" ++ show seed ++ "\t" ++ show (I# (P.vectorUnitCase i x))))
-    [(offset, seed) | offset <- [0..3], seed <- seeds]
-  mapM_ (\(offset@(I# i), seed@(I# x)) ->
-    putStrLn ("scalarUnitCase\t" ++ show offset ++ "\t" ++ show seed ++ "\t" ++ show (I# (P.scalarUnitCase i x))))
-    [(offset, seed) | offset <- [0..12], seed <- seeds]
+main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"
+       else getContents >>= mapM_ (dispatch . words) . lines
