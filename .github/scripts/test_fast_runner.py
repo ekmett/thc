@@ -58,7 +58,8 @@ class FastRunnerTest(unittest.TestCase):
     def test_exact_ci_automation_merge_uses_hosted_capacity(self):
         merge, event = self.merge({".github/scripts/merge_bot.py": "updated\n",
                                    ".github/workflows/fast.yml": "name: Fast\n",
-                                   "docs/contributing.md": "CI queue\n"})
+                                   "docs/contributing.md": "CI queue\n",
+                                   "docs/fast-ci.md": "Fixture reuse\n"})
         self.assertTrue(runner.hosted_ci_only(self.root, event, merge, REPO))
         with tempfile.TemporaryDirectory() as temporary:
             shallow = Path(temporary) / "checkout"
@@ -70,6 +71,7 @@ class FastRunnerTest(unittest.TestCase):
         merge, event = self.merge({"src/main/kotlin/thc/Language.kt": "changed\n"})
         self.assertFalse(runner.hosted_ci_only(self.root, event, merge, REPO))
         self.assertFalse(runner.ci_only_paths(b"M\0scripts/prepare-tests.sh\0"))
+        self.assertFalse(runner.ci_only_paths(b"M\0docs/pinned-memory.md\0"))
 
     def test_deletion_and_rename_fail_closed(self):
         merge, event = self.merge({".github/scripts/new_bot.py": "initial\n"},
