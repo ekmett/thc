@@ -1106,6 +1106,12 @@ class EmptyTupleInputTests(unittest.TestCase):
 class TouchAuditTest(unittest.TestCase):
     state = dict(kind='void', primReps=[], evaluated=True)
 
+    def test_production_admits_the_proven_touch_protocol(self):
+        self.assertEqual(2, CAP['primitives'].get('touch#'))
+        for lifted in (False, True):
+            report = audit_core.Audit([('touch-production.json', self.fixture(lifted=lifted))], CAP).run(['root'])
+            self.assertTrue(report['accepted'], report)
+
     def fixture(self, kind='object', lifted=True):
         kept = dict(kind=kind, primReps=['BoxedRep (Just Lifted)' if lifted else 'BoxedRep (Just Unlifted)'], evaluated=False)
         args = [[*var('kept'), dict(rep=copy.deepcopy(kept))], [*var('s'), dict(rep=copy.deepcopy(self.state))]]

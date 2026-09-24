@@ -520,6 +520,7 @@
     "writeAddrOffAddr#": 4,
     "writeAddrArray#": 4,
     "keepAlive#": 3,
+    "touch#": 2,
     "newByteArray#": 2,
     "resizeMutableByteArray#": 3,
     "getSizeofMutableByteArray#": 2,

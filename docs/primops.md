@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 301 | Implemented fixed numeric/character scalar forms. |
-| Partial | 262 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 928 | No declared lowering. |
+| Partial | 263 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 927 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -560,6 +560,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `timesWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `touch#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `tryPutMVar#` — arity 3 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `tryReadMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `tryTakeMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
@@ -1360,7 +1361,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `timesWord64X8#` — arity 2
 - [ ] `timesWord8X32#` — arity 2
 - [ ] `timesWord8X64#` — arity 2
-- [ ] `touch#` — arity 2
 - [ ] `traceBinaryEvent#` — arity 3
 - [ ] `traceEvent#` — arity 2
 - [ ] `traceMarker#` — arity 2

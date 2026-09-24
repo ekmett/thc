@@ -2,7 +2,7 @@
 
 This slice supports `newPinnedByteArray#`, `newAlignedPinnedByteArray#`,
 `byteArrayContents#`, `mutableByteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
-`readAddrOffAddr#`, `writeAddrOffAddr#` and `keepAlive#`
+`readAddrOffAddr#`, `writeAddrOffAddr#`, `keepAlive#` and `touch#`
 in both backends. Byte loads/stores retain GHC 9.14.1's exact `Word8Rep`, not
 `WordRep`. Existing address arithmetic and character loads work on either
 immutable literal bytes or mutable byte-array backing.
@@ -78,6 +78,13 @@ one logical State argument. A Java reachability fence follows actual return or
 throw. Scalar results follow the existing call-root WHNF convention; tuple
 components retain their own evaluatedness. Existing tuple and binary-sum result
 ABIs are reused, without extending aggregate inputs, captures or vector ABIs.
+
+`touch#` preserves an exact lifted or unlifted reference until its State-thread
+position, without entering a lifted thunk. It validates the State carrier before
+issuing a Java reachability fence and returns bare State, not a singleton tuple.
+Raw operand/result proofs and levity flags are checked before lowering; known
+stored or intrinsic representations cannot be disguised by occurrence metadata.
+This does not add weak pointers, finalizers or asynchronous exception semantics.
 
 ## Three closed foreign contracts
 
