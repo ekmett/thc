@@ -223,6 +223,7 @@ class Language : TruffleLanguage<Language.State>() {
         }
     }
     override fun createContext(env: Env): State = State(env, this)
+    override fun isThreadAccessAllowed(thread: Thread, singleThreaded: Boolean): Boolean = true
     override fun initializeThread(context: State, thread: Thread) = context.noteThread(thread)
     override fun initializeMultiThreading(context: State) = context.markMultithreaded()
     companion object {

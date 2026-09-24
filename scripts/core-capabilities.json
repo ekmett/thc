@@ -306,7 +306,10 @@
     "raiseIO#": 2,
     "catch#": 3,
     "unmaskAsyncExceptions#": 2,
+    "maskAsyncExceptions#": 2,
+    "maskUninterruptible#": 2,
     "getMaskingState#": 1,
+    "noDuplicate#": 1,
     "packInt64X2#": 1,
     "unpackInt64X2#": 1,
     "broadcastInt64X2#": 1,
@@ -452,6 +455,10 @@
     "newAlignedPinnedByteArray#": 3,
     "byteArrayContents#": 1,
     "readWord8OffAddr#": 3,
+    "readWord32OffAddr#": 3,
+    "readWordOffAddr#": 3,
+    "readInt32OffAddr#": 3,
+    "readIntOffAddr#": 3,
     "writeWord8OffAddr#": 4,
     "keepAlive#": 3,
     "newByteArray#": 2,
@@ -822,6 +829,62 @@
         "kind": "address",
         "primReps": [
           "AddrRep"
+        ]
+      }
+    },
+    "readWord32OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["Word32Rep"],
+        "components": [
+          {"kind": "void", "primReps": []},
+          {"kind": "long", "primReps": ["Word32Rep"]}
+        ]
+      }
+    },
+    "readWordOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["WordRep"],
+        "components": [
+          {"kind": "void", "primReps": []},
+          {"kind": "long", "primReps": ["WordRep"]}
+        ]
+      }
+    },
+    "readInt32OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["Int32Rep"],
+        "components": [
+          {"kind": "void", "primReps": []},
+          {"kind": "long", "primReps": ["Int32Rep"]}
+        ]
+      }
+    },
+    "readIntOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {
+        "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["IntRep"],
+        "components": [
+          {"kind": "void", "primReps": []},
+          {"kind": "long", "primReps": ["IntRep"]}
         ]
       }
     },

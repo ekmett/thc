@@ -99,3 +99,48 @@ handlerMaskState raw = runRW# (\s0 ->
       (# s7, Payload (before +# during *# 17# +# after *# 257#) #)
     } } }) s0 of
       (# _, Payload result #) -> result)
+
+-- Raw maskAsyncExceptions# inside maskUninterruptible# sets interruptible
+-- masking, unlike the high-level mask wrapper. The base-3 digits record
+-- states before, during, and after the nested actions.
+{-# OPAQUE maskNested #-}
+maskNested :: Int# -> Int#
+maskNested raw = runRW# (\s0 ->
+  case maskAsyncExceptions# (\s1 ->
+    case getMaskingState# s1 of { (# s2, outer #) ->
+    case maskUninterruptible# (\s3 ->
+      case getMaskingState# s3 of { (# s4, inner #) ->
+      case maskAsyncExceptions# (\s5 ->
+        case getMaskingState# s5 of { (# s6, deepest #) ->
+          (# s6, Payload (raw +# outer +# inner *# 3# +# deepest *# 9#) #)
+        }) s4 of { (# s7, Payload partial #) ->
+      case getMaskingState# s7 of { (# s8, afterDeep #) ->
+        (# s8, Payload (partial +# afterDeep *# 27#) #)
+      } } }) s2 of { (# s9, Payload partial #) ->
+    case getMaskingState# s9 of { (# s10, afterInner #) ->
+      (# s10, Payload (partial +# afterInner *# 81#) #)
+    } } }) s0 of { (# s11, Payload partial #) ->
+  case getMaskingState# s11 of { (# _, afterOuter #) ->
+    partial +# afterOuter *# 243#
+  } })
+
+-- Unwinding an uninterruptible mask restores the prior state before catch#
+-- enters its handler; a handler entered from unmasked runs interruptibly masked.
+{-# OPAQUE maskRethrowRestore #-}
+maskRethrowRestore :: Int# -> Int#
+maskRethrowRestore raw = runRW# (\s ->
+  case catch# (\s0 -> maskUninterruptible# (\s1 ->
+        case getMaskingState# s1 of { (# s2, inside #) ->
+          raiseIO# (Payload (raw +# inside)) s2
+        }) s0)
+      (\(Payload value) s3 -> case getMaskingState# s3 of
+        (# s4, during #) -> (# s4, Payload (value +# during *# 3#) #)) s of
+    (# s5, Payload result #) -> case getMaskingState# s5 of
+      (# _, after #) -> result +# after *# 9#)
+
+-- Force's exclusive thunk ownership supplies noDuplicate#'s guarantee; this
+-- source probe retains GHC's actual state-token primop in Core.
+{-# OPAQUE noDuplicateProbe #-}
+noDuplicateProbe :: Int# -> Int#
+noDuplicateProbe raw = runRW# (\s ->
+  case noDuplicate# s of _ -> raw +# 5#)

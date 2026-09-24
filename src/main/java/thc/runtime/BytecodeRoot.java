@@ -65,7 +65,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class EnterRoot {
         @Specialization public static void enter(Metrics metrics) {
             if (metrics.getEnabled() && CompilerDirectives.inCompiledCode()) {
-                metrics.setCompiledEntries(metrics.getCompiledEntries() + 1);
+                metrics.incrementCompiledEntries();
             }
         }
     }
@@ -74,7 +74,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = Metrics.class, name = "metrics")
     public static final class JoinTransfer {
         @Specialization public static void record(Metrics metrics) {
-            if (metrics.getEnabled()) metrics.setLocalJoinTransfers(metrics.getLocalJoinTransfers() + 1);
+            if (metrics.getEnabled()) metrics.incrementLocalJoinTransfers();
         }
     }
 
@@ -386,6 +386,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadManagedAddress {
+        @Specialization public static void read(VirtualFrame frame, ManagedAddressRead operation,
+                LocalAccessor destination, ManagedAddress address, long offset, Object state,
+                @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            long value = operation.read(address, offset);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation
     public static final class WriteWord8OffAddr {
         @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
             ManagedByteArray.requireState(state);
@@ -449,7 +462,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return dispatch.execute(frame, function, null);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             } finally {
                 BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
@@ -473,7 +486,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return dispatch.execute(frame, function, null);
             } catch (TailCall transfer) {
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             } finally {
                 BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
@@ -548,7 +561,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return null;
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             }
         }
@@ -585,7 +598,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return null;
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return transfer;
             }
         }
@@ -645,7 +658,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 // consumes this internal result and restores locals before a real
                 // bytecode backedge. Never intercept a call with pending non-tail work.
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(call.getTarget())) throw call;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return call;
             }
         }
@@ -671,7 +684,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 // consumes this internal result and restores locals before a real
                 // bytecode backedge. Never intercept a call with pending non-tail work.
                 if (!tail || !((GuestRoot) node.getRootNode()).isSelf(call.getTarget())) throw call;
-                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
                 return call;
             }
         }
@@ -792,7 +805,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Unsupported {
         @Specialization public static Object trap(String message, Metrics metrics) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            metrics.setUnsupportedTraps(metrics.getUnsupportedTraps() + 1);
+            metrics.incrementUnsupportedTraps();
             throw fail("Diagnostic unsupported path reached: " + message);
         }
     }
@@ -880,6 +893,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    private static void runMaskAction(VirtualFrame frame, Object action, Object state,
+            TupleDispatch actionCall, Force force, MaskingState target) {
+        TupleResultsKt.requireVoidCarrier(state);
+        MaskingState prior = SynchronousMasking.current(force);
+        SynchronousMasking.set(force, target);
+        try {
+            actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
+                    new Object[]{kotlin.Unit.INSTANCE});
+        } finally {
+            SynchronousMasking.set(force, prior);
+        }
+    }
+
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = Metrics.class, name = "metrics")
@@ -888,20 +914,52 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object action, Object state,
                 @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
                 @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
-            TupleResultsKt.requireVoidCarrier(state);
-            MaskingState prior = SynchronousMasking.current(force);
-            SynchronousMasking.set(force, MaskingState.UNMASKED);
-            try {
-                actionCall.execute(frame, RequireClosure.require(force.execute(frame, action)),
-                        new Object[]{kotlin.Unit.INSTANCE});
-            } finally {
-                SynchronousMasking.set(force, prior);
-            }
+            runMaskAction(frame, action, state, actionCall, force, MaskingState.UNMASKED);
         }
         public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
             return new TupleDispatch(destination, metrics, 1, false);
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class MaskAsyncExceptions {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, Object state,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            runMaskAction(frame, action, state, actionCall, force, MaskingState.MASKED_INTERRUPTIBLE);
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class MaskUninterruptible {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action, Object state,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            runMaskAction(frame, action, state, actionCall, force, MaskingState.MASKED_UNINTERRUPTIBLE);
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** Force already grants each suspended thunk one evaluator across guest threads. */
+    @Operation public static final class NoDuplicate {
+        @Specialization public static Object preserve(Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            return kotlin.Unit.INSTANCE;
+        }
     }
 
     @Operation public static final class AddressPlus {

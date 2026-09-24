@@ -70,7 +70,7 @@ internal class LeadingCaseReturnNode(private val recipe: LeadingCaseReturn, priv
         val scrutinee = arguments[recipe.scrutineeIndex]
         if (!recipe.layout.matches(scrutinee) || arguments[recipe.resultIndex] !is Long)
             return null
-        if (metrics.enabled) metrics.leadingCaseReturns++
+        if (metrics.enabled) metrics.incrementLeadingCaseReturns()
         // Keep the original reference ABI value; do not unbox and rebox a cached result.
         return arguments[recipe.resultIndex]
     }

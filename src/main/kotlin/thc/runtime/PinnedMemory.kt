@@ -16,11 +16,16 @@ internal object PinnedMemory {
     }
 }
 
-internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<List<String>>, val tuple: Boolean) {
+internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<List<String>>, val tuple: Boolean,
+    val addressRead: ManagedAddressRead? = null) {
     NEW("newPinnedByteArray#", listOf(listOf("IntRep"), emptyList()), true),
     NEW_ALIGNED("newAlignedPinnedByteArray#", listOf(listOf("IntRep"), listOf("IntRep"), emptyList()), true),
     CONTENTS("byteArrayContents#", listOf(listOf("BoxedRep (Just Unlifted)")), false),
     READ("readWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
+    READ_WORD32("readWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD32),
+    READ_WORD("readWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD),
+    READ_INT32("readInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT32),
+    READ_INT("readIntOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT),
     WRITE("writeWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Word8Rep"), emptyList()), false);
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
@@ -34,7 +39,8 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
         if (actual.size != arguments.size || flags != List(arguments.size) { false } ||
             actual.indices.any { !exact(actual[it], arguments[it]) })
             throw RuntimeFault("Pinned memory argument representation mismatch: $primitive")
-        val payload = if (this == READ) listOf("Word8Rep") else listOf("BoxedRep (Just Unlifted)")
+        val payload = addressRead?.let { listOf(it.payload) }
+            ?: if (this == READ) listOf("Word8Rep") else listOf("BoxedRep (Just Unlifted)")
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
             exact(result.components[0], emptyList()) && exact(result.components[1], payload) && result.primReps == payload
         else exact(result, if (this == CONTENTS) listOf("AddrRep") else emptyList())
@@ -70,11 +76,13 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 ManagedByteArray.requireState(operands.last().execute(frame))
                 FrameAccess.write(frame, slots[offset], PinnedMemory.allocate(size, alignment))
             }
-            PinnedMemoryOp.READ -> {
+            PinnedMemoryOp.READ, PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+            PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> {
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))
-                FrameAccess.writeLong(frame, slots[offset], address.readWord8(index))
+                val value = operation.addressRead?.read(address, index) ?: address.readWord8(index)
+                FrameAccess.writeLong(frame, slots[offset], value)
             }
             else -> fault("Pinned memory scalar operation has no tuple destination")
         }

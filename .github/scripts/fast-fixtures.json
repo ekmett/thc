@@ -21,6 +21,16 @@
         "compiler/test-fixtures/AddressIdentityAuditNative.hs"
       ]
     },
+    "managed-address-reads": {
+      "junit": ["thc.runtime.ManagedAddressReadTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-managed-address-reads.py"]}],
+      "outputs": ["build/managed-address-reads"],
+      "sources": [
+        "scripts/prepare-managed-address-reads.py",
+        "compiler/test-fixtures/ManagedAddressReadAudit.hs",
+        "compiler/test-fixtures/ManagedAddressReadNative.hs"
+      ]
+    },
     "synchronous-exceptions": {
       "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
       "commands": [

@@ -22,6 +22,9 @@ dispatch [name, value] = case name of
   "lazyResultBoundary" -> emit name P.lazyResultBoundary input
   "restoreAndRethrow" -> emit name P.restoreAndRethrow input
   "handlerMaskState" -> emit name P.handlerMaskState input
+  "maskNested" -> emit name P.maskNested input
+  "maskRethrowRestore" -> emit name P.maskRethrowRestore input
+  "noDuplicateProbe" -> emit name P.noDuplicateProbe input
   _ -> error "unknown synchronous exception oracle entry"
   where input = read value
 dispatch _ = error "malformed synchronous exception oracle request"

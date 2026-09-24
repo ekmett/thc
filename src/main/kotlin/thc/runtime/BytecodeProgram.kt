@@ -187,7 +187,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
         ?: names.entries.singleOrNull { it.key.substringAfterLast('.') == name }?.value?.singleOrNull()
         ?: throw RuntimeFault("Unknown or ambiguous entry $name")
-    override fun hostEntryTarget(arity: Int): RootCallTarget = hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
+    @Synchronized override fun hostEntryTarget(arity: Int): RootCallTarget =
+        hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
     override fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
@@ -199,7 +200,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
         "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
         "localJoinTransfers" to metrics.localJoinTransfers,
-        "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkEvaluationsByLabel.toMap(),
+        "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkCountsSnapshot(),
         "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces,
@@ -921,7 +922,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreVectors.validate(name, args.map(CoreVectors::argumentProof), tupleProof)
                 CoreVectors.validateFlags(flags)
                 vectorPrimitive(name, args.map { compile(it, scope, false) })
-            } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#", "unmaskAsyncExceptions#")) {
+            } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
+                    "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String
                 CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
@@ -930,6 +932,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         "raiseIO#" -> e.builder.beginRaiseIO()
                         "catch#" -> e.builder.beginCatchIO(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
                         "getMaskingState#" -> e.builder.beginGetMaskingState(destination[0])
+                        "maskAsyncExceptions#" -> e.builder.beginMaskAsyncExceptions(
+                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                        "maskUninterruptible#" -> e.builder.beginMaskUninterruptible(
+                            tupleSlots(TupleShape(tupleProof, language), destination), metrics)
                         else -> e.builder.beginUnmaskAsyncExceptions(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
                     }
                     operands.forEach { it.emit(e) }
@@ -937,9 +943,17 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         "raiseIO#" -> e.builder.endRaiseIO()
                         "catch#" -> e.builder.endCatchIO()
                         "getMaskingState#" -> e.builder.endGetMaskingState()
+                        "maskAsyncExceptions#" -> e.builder.endMaskAsyncExceptions()
+                        "maskUninterruptible#" -> e.builder.endMaskUninterruptible()
                         else -> e.builder.endUnmaskAsyncExceptions()
                     }
                 }
+            } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
+                CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args[0], scope, false)
+                ProvenExpression(Expression { e ->
+                    e.builder.beginNoDuplicate(); operand.emit(e); e.builder.endNoDuplicate()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 argument(args[0], scope, true) // Compile/prove the lifted dummy, never enter it.
@@ -1047,6 +1061,9 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
                         PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT ->
+                            e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
                         else -> error("Scalar pinned memory operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -1054,6 +1071,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
                         PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+                        PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
                     }
                 } else ProvenExpression(Expression { e ->

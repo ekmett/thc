@@ -17,6 +17,24 @@ not physical JVM heap pinning or native process pointers. There is no address
 to integer conversion, arbitrary memory dereference, allocation/free FFI, or
 general foreign-call machinery in this slice.
 
+`readWord32OffAddr#`, `readWordOffAddr#`, `readInt32OffAddr#` and
+`readIntOffAddr#` also read managed literal or byte-array storage. Their offsets
+count four-byte or eight-byte elements on the pinned 64-bit target. Negative
+offsets from a derived address are valid when the complete element remains
+inside its allocation. Multiplication overflow and partial elements reject
+before reading; Word32 results zero-extend and Int32 results sign-extend into
+the runtime's Long carrier. Reads use native byte order and observe intervening
+writes through aliases, including after unsafe freeze. The exact State/payload
+tuple keeps Word32, Word, Int32 and Int representation proofs distinct.
+
+`scripts/prepare-managed-address-reads.py` prepares 1,800 native/model cases,
+eight accepted pre/post-Tidy closure audits and 48 rejected genuine-Core proof
+mutations. `ManagedAddressReadTest` checks those exports on AST and bytecode,
+then checks compiled mutable reads, bounds/overflow, State-before-read order,
+failure-before-publication and malformed loader proofs. Native inputs are
+aligned live allocations; adversarial out-of-bounds inputs are managed-only
+tests. These reads do not enable arbitrary native pointer dereferences.
+
 `keepAlive#` preserves a lifted kept reference without forcing it, validates
 State before the action, and invokes the continuation non-tail with exactly
 one logical State argument. A Java reachability fence follows actual return or
