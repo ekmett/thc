@@ -11,6 +11,21 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "original-stack-formatter": {
+      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
+      "outputs": ["build/original-stack-formatter"],
+      "sources": [
+        "compiler/test-fixtures/OriginalStackFormatter.hs",
+        "compiler/test-fixtures/OriginalStackFormatterNative.hs",
+        "test/haskell-fixtures/StackFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "src/THC/Driver/Wired.hs",
+        "compiler/target-layout.c"
+      ]
+    },
     "boxed-array-extensions": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-array-extensions"]}],

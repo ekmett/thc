@@ -186,6 +186,14 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/OriginalStackFormatter.hs": {
+      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalStackFormatterNative.hs": {
+      "junit": ["thc.runtime.OriginalStackFormatterTest"],
+      "python": []
+    },
     "scripts/prepare-boxed-arrays.py": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
       "python": []
@@ -219,7 +227,7 @@
       "python": []
     },
     "test/haskell-fixtures/StackFixtures.hs": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
     "src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt": {
@@ -634,6 +642,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",

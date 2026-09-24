@@ -350,6 +350,7 @@ jobs:
             build/mutvar/*/core/*.json
             build/boxed-arrays/
             build/boxed-array-extensions/
+            build/original-stack-formatter/
             build/address-fields/
             build/data-to-tag/
             build/scalar-bitcasts/

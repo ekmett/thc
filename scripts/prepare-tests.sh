@@ -34,6 +34,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" original-stack
+"$fixture_bin" original-stack-formatter
 "$fixture_bin" boxed-array-extensions
 python3 scripts/prepare-bytearray.py
 python3 scripts/prepare-mutable-bytearrays.py
