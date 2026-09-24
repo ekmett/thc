@@ -460,6 +460,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         "double" -> value.toDouble()
         "word8", "word16", "word32" -> narrowWordLiteral(kind, value)
         "string-bytes" -> LiteralAddress.fromHex(value)
+        "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
@@ -820,7 +821,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> constant(literal(expr[1] as String, expr[2] as String)).let {
-            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr)) else it
+            if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr))
+            else if (expr[1] == "bignat") ProvenExpression(it, BigNatLiterals.proof(expr)) else it
         }
         "void" -> constant(Unit)
         "lam" -> {
@@ -1131,6 +1133,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
                     "lit" -> (alt[1] as List<String>).let {
+                        if (it[0] == "bignat") throw UnsupportedCore("BigNat literal alternatives are invalid GHC Core")
                         if (it[0] in setOf("float", "double")) throw UnsupportedCore("Floating literal alternatives are invalid GHC Core")
                         literal(it[0], it[1])
                     }

@@ -222,7 +222,12 @@ internal object CoreRepresentations {
         }
         return expr.getOrNull(index) as? Map<String, Any?>
     }
-    fun expression(expr: List<Any?>): CoreRepresentation = parse(metadata(expr)?.get("rep"))
+    fun expression(expr: List<Any?>): CoreRepresentation =
+        // BigNat syntax intrinsically denotes an unlifted ByteArray#, including
+        // when an exporter identity rewrite erased occurrence metadata. All
+        // consumers (not just literal lowering) need the same concrete proof.
+        if (expr.firstOrNull() == "lit" && expr.getOrNull(1) == "bignat") BigNatLiterals.proof(expr)
+        else parse(metadata(expr)?.get("rep"))
     /** Narrow literals have intrinsic signed/unsigned identity, not merely a
      * Long carrier. Missing legacy metadata is fine; a contradictory proof is not. */
     fun narrowLiteralProof(expr: List<Any?>): CoreRepresentation {
