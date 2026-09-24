@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import random
+import shutil
 import subprocess
 import sys
 
@@ -237,14 +238,25 @@ def check_prepared(build, root=ROOT):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, default=ROOT / 'build/managed-mvars')
-    parser.add_argument('--check-only', action='store_true', help='Verify existing hashes, complete audits, and actual native/model rows without building')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--check-only', action='store_true', help='Verify existing hashes, complete audits, and actual native/model rows without building')
+    mode.add_argument('--refresh', action='store_true', help='Rebuild stale generated output under build/')
     args = parser.parse_args()
     build = args.out.resolve()
     require(build.is_relative_to(ROOT), 'Output directory must be inside this checkout')
     if args.check_only or build.exists():
-        manifest = check_prepared(build)
-        print(f'Verified complete preparation: {manifest["nativeRows"]} native/model rows; no outputs changed')
-        return
+        try:
+            manifest = check_prepared(build)
+        except ValueError:
+            if not args.refresh:
+                raise
+            generated = (ROOT / 'build').resolve()
+            require(build != generated and build.is_relative_to(generated) and not args.out.is_symlink(),
+                    'Refresh requires a generated directory below build/')
+            shutil.rmtree(build)
+        else:
+            print(f'Verified complete preparation: {manifest["nativeRows"]} native/model rows; no outputs changed')
+            return
     build.mkdir(parents=True)
     artifacts = []
 
