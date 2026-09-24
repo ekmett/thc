@@ -160,7 +160,8 @@ internal object GuestThreadOps {
             AsyncRequestState.ACKNOWLEDGED, AsyncRequestState.TARGET_FINISHED -> Unit
             AsyncRequestState.FAILED -> fault("killThread# delivery failed")
             AsyncRequestState.CANCELLED -> fault("killThread# was cancelled")
-            AsyncRequestState.PENDING, AsyncRequestState.CLAIMED -> error("Await returned before async completion")
+            AsyncRequestState.PENDING, AsyncRequestState.CLAIMED, AsyncRequestState.PAUSED ->
+                error("Await returned before async completion")
         }
     }
 

@@ -153,4 +153,28 @@ class GuestThreadsTest {
             }
         } finally { threads.leaveCurrent() }
     }
+
+    @Test fun interruptedSenderPausesOnlyUnclaimedOutboundAndResumesSameToken() {
+        val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val wakes = AtomicInteger()
+        val threads = GuestThreads(masks) { wakes.incrementAndGet() }
+        val id = threads.enterCurrent()
+        try {
+            val submitted = AtomicReference<AsyncRequest>()
+            val sender = Thread { submitted.set(threads.send(id, "outbound")) }
+            sender.start()
+            sender.join(5000)
+            assertFalse(sender.isAlive)
+            val request = submitted.get()
+            assertTrue(threads.pause(request))
+            assertEquals(AsyncRequestState.PAUSED, request.state)
+            assertNull(threads.poll(node), "Native throwTo removes an uncommitted send during sender unwind")
+            threads.resume(request)
+            assertSame(request, threads.poll(node))
+            assertFalse(threads.pause(request), "A claimed send cannot be revoked")
+            request.acknowledge()
+            assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+            assertEquals(2, wakes.get())
+        } finally { threads.leaveCurrent() }
+    }
 }
