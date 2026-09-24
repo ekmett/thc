@@ -21,11 +21,9 @@ internal enum class ManagedAddressRead(val width: Int, val payload: String) {
             val shift = if (littleEndian) byte * 8 else (width - 1 - byte) * 8
             value = value or (address.readWord8(displacement + byte) shl shift)
         }
-        return when (this) {
-            INT16 -> value.toShort().toLong()
-            INT32 -> value.toInt().toLong()
-            else -> value
-        }
+        return if (this == INT16) value.toShort().toLong()
+            else if (this == INT32) value.toInt().toLong()
+            else value
     }
 
     companion object {
