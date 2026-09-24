@@ -26,6 +26,18 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def test_all_vector_families_require_integer_json_lane_counts(self):
+        for original in (VECTOR_REP, VECTOR32_REP, VECTOR16_REP, VECTOR8_REP,
+                         VECTOR_WORD8_REP, VECTOR_WORD16_REP, VECTOR_WORD32_REP,
+                         VECTOR_FLOAT_REP, VECTOR_DOUBLE_REP):
+            self.assertIsNone(proof_error(original))
+            self.assertIsNone(proof_error(json.loads(json.dumps(original))))
+            lanes = original['vector']['lanes']
+            for count in (float(lanes), lanes + 0.5, True, str(lanes), None):
+                proof = copy.deepcopy(original)
+                proof['vector']['lanes'] = count
+                self.assertIsNotNone(proof_error(proof), (original, count))
+
     def test_int32_multiply_requires_two_exact_signed_vectors(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         def broadcast(value):

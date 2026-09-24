@@ -41,6 +41,21 @@ class SimdVectorTest {
         assertEquals(CoreVectors.proof, CoreVectors.caseResult(listOf(CoreVectors.proof, CoreVectors.proof)))
         assertThrows(RuntimeFault::class.java) { CoreVectors.caseResult(listOf(CoreVectors.proof, CoreVectors.unpacked)) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.caseResult(listOf(CoreVectors.proof, CoreRepresentation.UNKNOWN)) }
+        // Every supported family enters through the same parser, before lane-count
+        // normalization. Genuine JSON integer counts keep their existing identity.
+        for (expected in listOf(CoreVectors.proof, CoreVectors.proof32, CoreVectors.proof16,
+            CoreVectors.proof8, CoreVectors.proofWord8, CoreVectors.proofWord16,
+            CoreVectors.proofWord32, CoreVectors.proofFloat, CoreVectors.proofDouble)) {
+            val vector = requireNotNull(expected.vector)
+            fun record(count: Any?) = mapOf("kind" to "vector", "primReps" to expected.primReps,
+                "evaluated" to true, "vector" to mapOf("lanes" to count, "element" to vector.element))
+            for (count in listOf(vector.lanes, vector.lanes.toLong())) {
+                assertEquals(expected, CoreRepresentations.parse(record(count)))
+                assertEquals(expected, CoreRepresentations.parse(Json.parse(Json.stringify(record(count)))))
+            }
+            for (count in listOf(vector.lanes.toDouble(), vector.lanes + 0.5, true, vector.lanes.toString(), null))
+                assertThrows(RuntimeFault::class.java, { CoreRepresentations.parse(record(count)) }, "$vector lanes=$count")
+        }
     }
     @Test fun vectorCallAndResultBoundariesStayExplicitlyUnsupported() = withLanguage { language ->
         for (backend in listOf("ast", "bytecode")) {
