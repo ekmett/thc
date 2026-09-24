@@ -442,10 +442,32 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    @Operation public static final class AsyncBlockedOnly {
-        @Specialization public static AsyncRequest request(AbstractTruffleException failure) {
-            if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
-            throw failure;
+    public enum ThreadPrimitiveKind { MY, FORK, BEGIN_KILL, FINISH_KILL }
+
+    /** One cold instruction keeps the generated interpreter below its partition limit. */
+    @Operation
+    @ConstantOperand(type = ThreadPrimitiveKind.class, name = "kind")
+    public static final class ThreadPrimitive {
+        @Specialization public static Object execute(ThreadPrimitiveKind kind, Object first, Object second,
+                Object third, @Bind Node node) {
+            return switch (kind) {
+                case MY -> {
+                    TupleResultsKt.requireVoidCarrier(second);
+                    yield GuestThreadOps.myThreadId(node);
+                }
+                case FORK -> {
+                    TupleResultsKt.requireVoidCarrier(second);
+                    yield GuestThreadOps.fork(node, RequireClosure.require(first));
+                }
+                case BEGIN_KILL -> {
+                    TupleResultsKt.requireVoidCarrier(third);
+                    yield GuestThreadOps.beginKill(node, first, second);
+                }
+                case FINISH_KILL -> {
+                    GuestThreadOps.finishKill(node, (AsyncRequest) first);
+                    yield kotlin.Unit.INSTANCE;
+                }
+            };
         }
     }
 
@@ -474,8 +496,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     public static final class CallSuspensionOnly {
-        @Specialization public static CallSegmentSuspended capture(AbstractTruffleException failure) {
+        @Specialization public static Object capture(AbstractTruffleException failure) {
             if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
+            if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
             throw failure;
         }
     }
