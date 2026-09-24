@@ -7,8 +7,11 @@
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 import unittest
+import warnings
+from zipfile import ZipFile
 
 import core_package_manifest
 
@@ -33,6 +36,21 @@ class PackageManifestTest(unittest.TestCase):
         path.write_text(json.dumps(dict(format='thc-core-packages', schema=1,
                                         ghc='9.14.1', units=units)) + '\n')
         return path
+
+    def bundled(self, unit, members=None, inner=None):
+        module = unit['modules'][0]
+        data = (self.root / module['path']).read_bytes()
+        module['path'] = 'core/' + module['name'] + '.json'
+        contents = {module['path']: data} if members is None else members
+        inner = inner or dict(format='thc-core-bundle', schema=1, unit=unit['id'],
+                              buildKey='a' * 64, exportKey='b' * 64, modules=unit['modules'])
+        bundle = self.root / 'bundle.zip'
+        with ZipFile(bundle, 'w') as archive:
+            archive.writestr('manifest.json', json.dumps(inner))
+            for name, value in contents.items():
+                archive.writestr(name, value)
+        unit['bundle'] = dict(path=str(bundle), sha256=hashlib.sha256(bundle.read_bytes()).hexdigest())
+        return self.manifest([unit])
 
     def test_same_module_name_in_distinct_units_is_unambiguous(self):
         path = self.manifest([self.unit('first'), self.unit('second')])
@@ -82,6 +100,115 @@ class PackageManifestTest(unittest.TestCase):
         unit['modules'][0]['path'] = '../first.json'
         with self.assertRaisesRegex(ValueError, 'stay inside'):
             core_package_manifest.load(self.manifest([unit]))
+
+    def test_bundle_modules_are_read_directly_and_audited_by_exact_unit(self):
+        unit = self.unit('first')
+        source = self.root / 'first.json'
+        document = json.loads(source.read_text())
+        document['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
+                                     arity=0, expr=['lit', 'int', '42'])]
+        source.write_text(json.dumps(document))
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        path = self.bundled(unit)
+        source.unlink()  # A loose-file fallback would fail here.
+        loaded = core_package_manifest.load(path)
+        self.assertEqual(['first:Shared.entry'], [binding['id'] for _, module in loaded
+                          for binding in module['bindings']])
+        self.assertIn('bundle.zip!/core/Shared.json', loaded[0][0])
+        command = ['python3', str(Path(__file__).with_name('audit-core.py')),
+                   '--package-manifest', str(path), '--entry', 'first:Shared.entry']
+        result = subprocess.run(command, text=True, capture_output=True, check=True)
+        self.assertTrue(json.loads(result.stdout)['accepted'])
+
+    def test_bundle_hash_inventory_members_and_core_identity_fail_closed(self):
+        unit = self.unit('first')
+        path = self.bundled(unit)
+        bundle = self.root / 'bundle.zip'
+        bundle.write_bytes(bundle.read_bytes() + b'changed')
+        with self.assertRaisesRegex(ValueError, 'bundle hash mismatch'):
+            core_package_manifest.load(path)
+
+        unit = self.unit('first')
+        with self.assertRaisesRegex(ValueError, 'missing, or extra ZIP entry'):
+            core_package_manifest.load(self.bundled(unit, members={}))
+        unit = self.unit('first')
+        with self.assertRaisesRegex(ValueError, 'missing, or extra ZIP entry'):
+            core_package_manifest.load(self.bundled(unit, members={
+                'core/Shared.json': (self.root / 'first.json').read_bytes(),
+                '../escape': b'no extraction'}))
+
+        unit = self.unit('first')
+        inner = dict(format='thc-core-bundle', schema=1, unit='wrong',
+                     buildKey='a' * 64, exportKey='b' * 64, modules=[dict(unit['modules'][0])])
+        inner['modules'][0]['path'] = 'core/Shared.json'
+        with self.assertRaisesRegex(ValueError, 'bundle manifest disagrees'):
+            core_package_manifest.load(self.bundled(unit, inner=inner))
+
+        unit = self.unit('first')
+        self.bundled(unit)
+        unit['modules'][0]['sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'bundle manifest disagrees'):
+            core_package_manifest.load(self.manifest([unit]))
+        unit = self.unit('first')
+        unit['modules'][0]['sha256'] = '0' * 64
+        path = self.bundled(unit)
+        with self.assertRaisesRegex(ValueError, 'content hash mismatch'):
+            core_package_manifest.load(path)
+
+    def test_bundle_rejects_duplicate_and_unsafe_member_names(self):
+        unit = self.unit('first')
+        path = self.bundled(unit)
+        bundle = self.root / 'bundle.zip'
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            with ZipFile(bundle, 'a') as archive:
+                archive.writestr('core/Shared.json', b'duplicate')
+        unit['bundle']['sha256'] = hashlib.sha256(bundle.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'duplicate, unsafe'):
+            core_package_manifest.load(self.manifest([unit]))
+        for unsafe in ('../Shared.json', '/absolute.json', 'core/../Shared.json', 'core\\Shared.json'):
+            with self.subTest(unsafe=unsafe):
+                unit = self.unit('first')
+                path = self.bundled(unit)
+                unit['modules'][0]['path'] = unsafe
+                with self.assertRaisesRegex(ValueError, 'unsafe ZIP member path'):
+                    core_package_manifest.load(self.manifest([unit]))
+
+    def test_bundle_rejects_corrupt_zip_and_wrong_core_unit(self):
+        unit = self.unit('first')
+        path = self.bundled(unit)
+        bundle = self.root / 'bundle.zip'
+        bundle.write_bytes(b'not a ZIP')
+        unit['bundle']['sha256'] = hashlib.sha256(bundle.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'invalid ZIP bundle'):
+            core_package_manifest.load(self.manifest([unit]))
+
+        unit = self.unit('first')
+        source = self.root / 'first.json'
+        document = json.loads(source.read_text())
+        document['unit'] = 'another-unit'
+        source.write_text(json.dumps(document))
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'unit/module/boundary mismatch'):
+            core_package_manifest.load(self.bundled(unit))
+
+    def test_audit_keeps_strict_missing_global_closure_for_bundle(self):
+        unit = self.unit('first')
+        source = self.root / 'first.json'
+        document = json.loads(source.read_text())
+        document['bindings'] = [dict(id='first:Shared.entry', name='entry', lifted=True,
+                                     arity=0, expr=['var', 'second:Other.absent'])]
+        source.write_text(json.dumps(document))
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        path = self.bundled(unit)
+        command = ['python3', str(Path(__file__).with_name('audit-core.py')),
+                   '--package-manifest', str(path), '--entry', 'first:Shared.entry']
+        result = subprocess.run(command, text=True, capture_output=True)
+        self.assertEqual(1, result.returncode)
+        report = json.loads(result.stdout)
+        self.assertFalse(report['accepted'])
+        self.assertEqual(1, report['summary']['missingGlobals'])
+        self.assertEqual('second:Other.absent', report['missingGlobals'][0]['id'])
 
 
 if __name__ == '__main__':
