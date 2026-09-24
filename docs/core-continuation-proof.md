@@ -25,7 +25,7 @@ The application proof captures only an exactly saturated scalar call whose
 continuation belongs to the directly invoked callee root, including a cloned
 target with the same body identity. A cold call segment lets the existing
 worklist resume the callee before feeding its result to the caller. An unrelated
-nested root and an active mask fail closed; overapplication, aggregate calls,
+nested root fails closed; overapplication, aggregate calls,
 and tail transfers remain outside this seam. No call packet is added to the
 ordinary path.
 
@@ -40,7 +40,15 @@ Only a yielded call allocates a segment. Its continuation is claimed once,
 published with a wakeup for competing readers, and retained across repeated
 yields. Guest failure data is memoized without sharing a mutable Truffle
 exception trace; an unsupported host unwind closes the segment without
-replaying its prefix. Active masking still fails closed at capture.
+replaying its prefix. A cold segment now records its logical mask and its
+caller's mask. Each yielding caller parks to its root-entry mask before
+unwinding, while the yielded signal carries the active mask that cannot be
+read back from the carrier thread. Resumption reinstalls that logical mask;
+completion and guest failure restore the caller's mask, and the host carrier's
+ambient mask is restored even on another thread. A three-root
+masked→unmasked→masked test exercises repeated yields and failure. The ordinary
+non-suspending nested call still explicitly compiles; only the cold path
+allocates mask metadata.
 
 These are two boundaries enabled only by the private test control. Other
 force, tuple, mask, and handler edges do not yet capture caller segments.
