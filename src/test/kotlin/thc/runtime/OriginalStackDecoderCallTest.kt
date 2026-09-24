@@ -92,17 +92,26 @@ class OriginalStackDecoderCallTest {
         override fun getName() = "decoder-caller"
     }
 
-    @Test fun retainedApplicationsAreExactOriginalProofExcerptsIncludingLiftedClosureResult() {
-        val proof = Json.parse(File(System.getProperty("thc.projectRoot"),
-            "compiler/test-fixtures/OriginalStackProof.json").readText()) as Map<String, Any?>
-        val originals = (proof.getValue("calls") as List<Map<String, Any?>>).map { it.getValue("expression") }
-        val resource = resource()
+    private fun digest(text: String) = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+    private fun checkProvenance(resource: Map<String, Any?>) {
+        val text = File(System.getProperty("thc.projectRoot"), "compiler/test-fixtures/OriginalStackProof.json").readText()
+        assertEquals("db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f", digest(text))
+        val proof = Json.parse(text) as Map<String, Any?>
+        fun symbol(app: List<Any?>) = (((app[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["symbol"]
+        val source = "GHC.Internal.Stack.Decode/GHC.Internal.Stack.Decode.json"
+        val expected = (proof.getValue("calls") as List<Map<String, Any?>>)
+            .filter { symbol(it["expression"] as List<Any?>) in hot + cold }
+            .distinctBy { symbol(it["expression"] as List<Any?>) }.map { record ->
+                mapOf("source" to source, "owner" to record["owner"], "application" to record["expression"],
+                    "path" to "/" + (record["path"] as List<*>).drop(2).joinToString("/"))
+            }
         assertEquals("902339d332fb4ce2b3c87dcac1ee6495d41ad886", resource["ghcRevision"])
         assertEquals("62e3400c5b889d3971cb4047709c408fd270255f", resource["exporterRevision"])
         val calls = resource.getValue("calls") as List<Map<String, Any?>>
+        assertEquals(expected, calls) // Identity, owner-relative path and raw application together.
         val symbols = calls.map { record ->
             val app = record.getValue("application") as List<Any?>
-            assertTrue(app in originals, record["owner"].toString())
             val meta = app[6] as Map<String, Any?>
             val descriptor = meta.getValue("foreignCall") as Map<String, Any?>
             val symbol = (descriptor.getValue("target") as Map<String, Any?>).getValue("symbol") as String
@@ -111,13 +120,56 @@ class OriginalStackDecoderCallTest {
             symbol
         }
         assertEquals(hot + cold, symbols.toSet()); assertEquals(11, symbols.size)
-        val files = (resource.getValue("sourceFiles") as List<Map<String, Any?>>).associateBy { it["id"] }
+        val files = resource.getValue("sourceFiles") as List<Map<String, Any?>>
+        assertEquals(1, files.size)
+        val file = files.single()
+        assertEquals(setOf("id", "path", "content"), file.keys)
+        assertEquals(file["id"], file["path"])
+        val content = file["content"] as String
         assertEquals("0ea6a82ea41bdf14b28aec5cb36a586ed86eb6f87f373ea21095d2b1b018089f",
-            MessageDigest.getInstance("SHA-256").digest((files.values.single()["content"] as String).toByteArray())
-                .joinToString("") { "%02x".format(it) })
-        for (span in resource.getValue("sourceSpans") as List<Map<String, Any?>>) assertTrue(span["file"] in files)
-        val sources = resource.getValue("sources") as List<Map<String, Any?>>
-        assertEquals("c3762b0e2ed8bb2bb50b748144fcc7da01dec204c0cc48adade79962e8b35c42", sources.single()["sha256"])
+            digest(content))
+        val referenced = linkedSetOf<String>()
+        fun references(value: Any?) {
+            when (value) {
+                is Map<*, *> -> {
+                    (value["source"] as? String)?.let(referenced::add)
+                    (value["sourceNotes"] as? List<String>)?.let(referenced::addAll)
+                    value.values.forEach(::references)
+                }
+                is List<*> -> value.forEach(::references)
+            }
+        }
+        calls.forEach { references(it["application"]) }
+        val spans = resource.getValue("sourceSpans") as List<Map<String, Any?>>
+        assertEquals(referenced, spans.map { it["id"] }.toSet())
+        assertEquals(referenced.size, spans.size)
+        assertEquals(files.map { it["id"] }.toSet(), spans.map { it["file"] }.toSet())
+        // Pin records COPIED from the sourceFiles/sourceSpans tables of the full
+        // c3762b0e... export, not reconstructed from note IDs. Sorted JSON object
+        // keys make formatting irrelevant while preserving original record order.
+        assertEquals("a3c80947a99ee3a53fc4bbe415ad20b21f9a76852b8324a73d14baf240379dd2",
+            digest(Json.stringify(mapOf("sourceFiles" to files.map { it.toSortedMap() },
+                "sourceSpans" to spans.map { it.toSortedMap() }))))
+        assertEquals(listOf(mapOf("file" to source, "sha256" to "c3762b0e2ed8bb2bb50b748144fcc7da01dec204c0cc48adade79962e8b35c42",
+            "boundary" to "optimized-Core-after-Tidy-before-CorePrep")), resource["sources"])
+    }
+
+    @Test fun retainedApplicationsAreExactOriginalProofExcerptsIncludingLiftedClosureResult() { checkProvenance(resource()) }
+
+    @Test fun retainedOwnerPathsAndSourceProjectionRejectMutation() {
+        val original = resource()
+        val calls = original["calls"] as List<Map<String, Any?>>
+        for (field in listOf("owner", "path", "source")) assertThrows(AssertionError::class.java) {
+            checkProvenance(original + ("calls" to (listOf(calls[0] + (field to "forged")) + calls.drop(1))))
+        }
+        val spans = original["sourceSpans"] as List<Map<String, Any?>>
+        for (changed in listOf(spans.drop(1), spans + spans[0],
+                listOf(spans[0] + ("label" to "forged")) + spans.drop(1),
+                listOf(spans[0] + ("charIndex" to -1L)) + spans.drop(1)))
+            assertThrows(AssertionError::class.java) { checkProvenance(original + ("sourceSpans" to changed)) }
+        val files = original["sourceFiles"] as List<Map<String, Any?>>
+        for (changed in listOf(emptyList(), files + files[0], listOf(files[0] + ("path" to "forged"))))
+            assertThrows(AssertionError::class.java) { checkProvenance(original + ("sourceFiles" to changed)) }
     }
 
     @Test fun originalAstGettersExecuteInFirstInstalledCompiledEntries() { exerciseBackend("ast") }
