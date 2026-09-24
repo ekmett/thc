@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Prepare the bounded generated SIMD experiment; repository capability stays unchanged.
 
 Use --export-only for pre-Tidy Core and model on hosts without native GHC SIMD

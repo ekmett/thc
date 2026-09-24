@@ -35,7 +35,7 @@ Prepare the genuine scalar-entry fixture without native code generation:
 python3 scripts/prepare-simd-families.py --export-only
 ```
 
-This produces pre-Tidy Core, independent model rows and an explicitly
+This produces pre-Tidy Core, 84,162 independent model rows and an explicitly
 experimental audit profile. Integer arithmetic uses mathematical modular
 arithmetic. Floating arithmetic uses rational arithmetic with ties-to-even
 rounding for this fixed corpus; arithmetic NaNs are normalized. JVM behavior

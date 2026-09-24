@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 """Independent integer and floating lane arithmetic for generated SIMD fixtures."""
 from fractions import Fraction
 import json
