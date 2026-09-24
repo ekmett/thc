@@ -25,16 +25,16 @@ class OriginalStackFormatterTest {
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun hash(file: File) = hash(file.readBytes())
     private val sourceRoot = "compiler/pinned-ghc-internal/"
-    // Pin the complete path/hash catalog independently, without duplicating its 50 entries.
+    // Pin the complete path/hash catalog independently, without duplicating its 51 entries.
     // A changed exporter catalog cannot silently drop or repin a source in the fixture receipt.
     private val pinned by lazy {
         val text = contained("src/THC/Driver/Wired.hs", true).readText()
             .substringAfter("sourceHashes =").substringBefore("\ndata WiredArtifacts")
         val entries = Regex("\\(\"([^\"]+)\", \"([0-9a-f]{64})\"\\)").findAll(text)
             .map { it.groupValues[1] to it.groupValues[2] }.toList()
-        require(entries.size == 50 && entries.map { it.first }.toSet().size == 50)
+        require(entries.size == 51 && entries.map { it.first }.toSet().size == 51)
         require(hash(entries.sortedBy { it.first }.joinToString("") { (path, digest) -> "$path\u0000$digest\n" }.toByteArray()) ==
-            "ed2e9430d434f6ed4ffa84cd5e5631be4520482fd949f7d0e47650f6e9c3fa4c")
+            "38c045e6eae0e503560d9c0e31e5da49054d781a30aac388afb8809e44ab07f0")
         entries.associate { (path, digest) -> sourceRoot + path to digest }
     }
     private val requiredInputs by lazy {
@@ -156,6 +156,51 @@ class OriginalStackFormatterTest {
         }
     }
 
+    @Test fun freshOriginalInfoTableWorkerHasExactCallersAndTargetGeneratedSource() {
+        val receipt = manifest()
+        val paths = receipt["originals"] as List<String>
+        val full = json(paths.single { it.endsWith("/GHC.Internal.Heap.InfoTable.Types.json") })
+        val id = "ghc-internal:GHC.Internal.Heap.InfoTable.Types.\$w\$cshowsPrec"
+        val original = (full["bindings"] as List<Map<String, Any?>>).single { it["id"] == id }
+        assertEquals("\$w\$cshowsPrec", original["name"])
+        val lambda = original["expr"] as List<Any?>
+        assertEquals("lam", lambda[0], "The original worker must be a body, not a name alias")
+        val formals = lambda[1] as List<Map<String, Any?>>
+        assertEquals(listOf("long", "data", "object", "object", "data", "object", "data", "data"),
+            formals.map { (it["rep"] as Map<*, *>)["kind"] })
+        assertEquals(listOf(false) + List(7) { true }, formals.map { it["lifted"] })
+        assertEquals(listOf(listOf("IntRep")) + List(7) { listOf("BoxedRep (Just Lifted)") },
+            formals.map { (it["rep"] as Map<*, *>)["primReps"] })
+        fun references(value: Any?): Int = when (value) {
+            is List<*> -> if (value.getOrNull(0) == "var" && value.getOrNull(1) == id) 1 else value.sumOf(::references)
+            is Map<*, *> -> value.values.sumOf(::references)
+            else -> 0
+        }
+        val closures = json(paths.single { it.endsWith("/GHC.Internal.Heap.Closures.json") })
+        val callers = (closures["bindings"] as List<Map<String, Any?>>)
+            .map { it["id"] as String to references(it["expr"]) }.filter { it.second != 0 }.toMap()
+        assertEquals(mapOf(
+            "ghc-internal:GHC.Internal.Heap.Closures.\$w\$cshowsPrec4" to 1,
+            "ghc-internal:GHC.Internal.Heap.Closures.\$w\$cshowsPrec3" to 13,
+            "ghc-internal:GHC.Internal.Heap.Closures.\$w\$cshowsPrec1" to 22), callers)
+
+        val attempt = (receipt["nativeOutput"] as String).substringBefore("/logs/")
+        val source = "GHC/Internal/Heap/InfoTable/Types.hsc"
+        val generated = "$attempt/originals/generated/${source.removeSuffix(".hsc")}.hs"
+        assertTrue((json("$attempt/originals/generated.json")["sources"] as List<*>)
+            .contains(listOf(source, generated)))
+        val layout = json("$attempt/originals/target-layout.json")
+        val wordBytes = (layout.getValue("wordBytes") as Number).toInt()
+        assertTrue(wordBytes in listOf(4, 8))
+        assertEquals(wordBytes / 2, (layout.getValue("infoTablePtrsBytes") as Number).toInt())
+        val generatedText = contained(generated, false).readText()
+        assertTrue(generatedText.startsWith("{-# LINE 1 \"$source\" #-}"))
+        assertEquals(listOf("type HalfWord' = Word${wordBytes * 4}"),
+            generatedText.lines().filter { it.startsWith("type HalfWord' = ") })
+        // This is source identity/target preprocessing evidence, not execution of
+        // the full Show closure: its missing Ptr/Word/Either helpers stay missing.
+    }
+
     @Test fun freshOriginalUnsafeWorkerLinksWithoutAliasAndDefersItsAction() {
         val receipt = manifest()
         val full = json((receipt["originals"] as List<String>).single { it.endsWith("/GHC.Internal.IO.Unsafe.json") })
@@ -240,8 +285,8 @@ class OriginalStackFormatterTest {
         val value = manifest()
         val inputs = value["inputHashes"] as Map<String, String>
         val artifacts = value["artifactHashes"] as Map<String, String>
-        assertEquals(79, requiredInputs.size)
-        assertEquals(78, artifacts.size)
+        assertEquals(80, requiredInputs.size)
+        assertEquals(80, artifacts.size)
         for (path in requiredInputs)
             assertThrows(IllegalArgumentException::class.java, {
                 checked(value + ("inputHashes" to (inputs - path)))
