@@ -87,9 +87,11 @@ class ManagedAddressReadTest {
         return when (operation) {
             ManagedAddressRead.WORD16 -> buffer.getShort(start).toLong() and 0xffffL
             ManagedAddressRead.INT16 -> buffer.getShort(start).toLong()
-            ManagedAddressRead.WORD32 -> buffer.getInt(start).toLong() and 0xffffffffL
+            ManagedAddressRead.WORD32, ManagedAddressRead.WIDE_CHAR ->
+                buffer.getInt(start).toLong() and 0xffffffffL
             ManagedAddressRead.INT32 -> buffer.getInt(start).toLong()
-            else -> buffer.getLong(start)
+            ManagedAddressRead.WORD, ManagedAddressRead.INT,
+            ManagedAddressRead.WORD64, ManagedAddressRead.INT64 -> buffer.getLong(start)
         }
     }
 
@@ -116,6 +118,7 @@ class ManagedAddressReadTest {
         assertEquals(65535L, ManagedAddressRead.WORD16.read(allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.INT16.read(allOnes, 0))
         assertEquals(4294967295L, ManagedAddressRead.WORD32.read(allOnes, 0))
+        assertEquals(4294967295L, ManagedAddressRead.WIDE_CHAR.read(allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.INT32.read(allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.WORD.read(allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.INT.read(allOnes, 0))
