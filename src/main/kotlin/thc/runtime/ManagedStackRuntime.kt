@@ -7,7 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import thc.Language
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.IdentityHashMap
+import java.util.WeakHashMap
 
 /** Original stack/IPE service boundary. Images describe managed diagnostics, not continuations. */
 internal object ManagedStackRuntime {
@@ -28,18 +28,22 @@ internal object ManagedStackRuntime {
 internal class ManagedStackRegistry {
     val token = Any()
     private var closed = false
-    private class FrameInfo(val standard: ManagedAddress, val key: ManagedAddress,
-        val frame: ManagedStackFrame, val layout: TargetLayout) {
-        var ipeImage: ManagedAllocation? = null // Built once, private and never subsequently mutated.
+    private class Provenance(val frame: ManagedStackFrame, val layout: TargetLayout) {
+        // Contains stable literal strings but never the registered info-table key.
+        var ipeTemplate: ManagedAllocation? = null
     }
+    private class FrameInfo(val standard: ManagedAddress, val key: ManagedAddress, val provenance: Provenance)
     private data class Images(val layout: TargetLayout, val stack: ManagedAddress, val frames: List<FrameInfo>)
-    private val snapshots = IdentityHashMap<ManagedStackSnapshot, Images>()
-    private val entries = ArrayList<FrameInfo>()
+    // ManagedStackSnapshot has identity equality; values never refer to their snapshot.
+    private val snapshots = WeakHashMap<ManagedStackSnapshot, Images>()
+    private val entries = ManagedAddress.WeakLocations<Provenance>()
     private val layouts = HashSet<TargetLayout>()
     private val textFields = listOf("Name", "TyDesc", "Label", "Unit", "Module", "File", "Span")
 
     private fun validate(layout: TargetLayout) {
         if (closed) fault("Managed stack registry is closed")
+        snapshots.size // Drain dead snapshots, releasing their image addresses.
+        entries.size // Reap dead allocation registrations even on a cached getter.
         if (layout in layouts) return
         try {
             ManagedStackInfoImage.stack(layout)
@@ -73,11 +77,11 @@ internal class ManagedStackRegistry {
             ManagedAddress.fromAllocation(ManagedAllocation.immutable(image.copyBytes(), layout.wordBytes))
         val frames = snapshot.frames.map { frame ->
             val standard = address(ManagedStackInfoImage.frame(layout))
-            FrameInfo(standard, standard.plus(layout.offset("infoTableBytes").toLong()), frame, layout)
+            FrameInfo(standard, standard.plus(layout.offset("infoTableBytes").toLong()), Provenance(frame, layout))
         }
         return Images(layout, address(ManagedStackInfoImage.stack(layout)), frames).also {
             snapshots[snapshot] = it
-            entries += frames
+            frames.forEach { frame -> entries[frame.key] = frame.provenance }
         }
     }
 
@@ -93,21 +97,24 @@ internal class ManagedStackRegistry {
 
     @Synchronized fun lookupIpe(key: ManagedAddress, destination: ManagedAddress, layout: TargetLayout): Long {
         validate(layout)
-        val entry = entries.firstOrNull { it.key.sameLocation(key) } ?: return 0L
+        val entry = entries[key] ?: return 0L
         if (entry.layout != layout) fault("IPE key target layout changed")
         val count = layout.offset("infoProvEntBytes").toLong()
         destination.requireRange(0, count, writable = true)
-        val scratch = entry.ipeImage ?: buildIpe(entry).also { entry.ipeImage = it }
+        val template = entry.ipeTemplate ?: buildIpeTemplate(entry).also { entry.ipeTemplate = it }
+        // A cached image containing key would strongly retain the weak index's owner.
+        val scratch = ManagedAllocation.mutable(count, layout.wordBytes)
+        scratch.copyFrom(template, 0, 0, count)
+        scratch.writeAddressByteOffset(layout.offset("infoProvEntInfoOffset").toLong(), key)
         // The only destination mutation: all ranges/cells/aliases are validated by the owner.
         destination.copyFromAllocationBytes(scratch, 0, count)
         return 1L
     }
 
-    private fun buildIpe(entry: FrameInfo): ManagedAllocation {
+    private fun buildIpeTemplate(entry: Provenance): ManagedAllocation {
         val layout = entry.layout
         val count = layout.offset("infoProvEntBytes").toLong()
         val scratch = ManagedAllocation.mutable(count, layout.wordBytes)
-        scratch.writeAddressByteOffset(layout.offset("infoProvEntInfoOffset").toLong(), entry.key)
         val frame = entry.frame
         val identity = frame.coreIdentity
         val source = frame.location?.takeIf { it.available }

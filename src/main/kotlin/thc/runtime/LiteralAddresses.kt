@@ -6,6 +6,9 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
+import java.lang.ref.Reference
+import java.lang.ref.ReferenceQueue
+import java.lang.ref.WeakReference
 
 /** A managed Addr#, never a native pointer. Non-null addresses have exactly one
  * final backing reference. Literal contents are immutable compilation constants;
@@ -36,6 +39,38 @@ internal class ManagedAddress private constructor(
             literalBytes != null -> literalBytes === other.literalBytes
             else -> mutableBytes != null && mutableBytes === other.mutableBytes
         }
+
+    /** Weak allocation/offset index. Aliases keep entries alive without exposing
+     * an owner; values must not retain addresses into their indexed allocation.
+     * The owning service serializes access. */
+    internal class WeakLocations<V> {
+        private class Key(owner: ManagedAllocation, val offset: Long, queue: ReferenceQueue<ManagedAllocation>?) :
+            WeakReference<ManagedAllocation>(owner, queue) {
+            private val hash = 31 * System.identityHashCode(owner) + offset.hashCode()
+            override fun hashCode() = hash
+            override fun equals(other: Any?): Boolean = this === other ||
+                other is Key && offset == other.offset && get()?.let { it === other.get() } == true
+        }
+        private val queue = ReferenceQueue<ManagedAllocation>()
+        private val entries = HashMap<Key, V>()
+        private fun reap() {
+            while (true) entries.remove(queue.poll() ?: return)
+        }
+        val size: Int get() { reap(); return entries.size }
+        operator fun get(address: ManagedAddress): V? {
+            reap()
+            val owner = address.owner ?: return null
+            return try { entries[Key(owner, address.offset, null)] }
+                finally { Reference.reachabilityFence(address) }
+        }
+        operator fun set(address: ManagedAddress, value: V) {
+            reap()
+            val owner = address.owner ?: fault("Weak location registration requires an allocation-owned Addr#")
+            try { entries[Key(owner, address.offset, queue)] = value }
+            finally { Reference.reachabilityFence(address) }
+        }
+        fun clear() { entries.clear(); reap() }
+    }
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
     fun plus(displacement: Long): ManagedAddress {

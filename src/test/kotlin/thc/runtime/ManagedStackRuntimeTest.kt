@@ -11,6 +11,7 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
+import java.lang.ref.WeakReference
 import java.nio.ByteOrder
 
 /** Real live Truffle frames with synthetic metadata/layouts; not native GHC frame equivalence. */
@@ -79,6 +80,105 @@ class ManagedStackRuntimeTest {
     }
     private fun text(storage: ManagedAllocation, view: Long, layout: TargetLayout, field: String): ManagedAddress =
         storage.readAddressByteOffset(view + layout.offset("infoProvEntProvOffset") + layout.offset("infoProv${field}Offset"))
+
+    private fun registrations(): Int {
+        val field = ManagedStackRegistry::class.java.getDeclaredField("entries").apply { isAccessible = true }
+        return (field.get(Language.currentState().stackSnapshots) as ManagedAddress.WeakLocations<*>).size
+    }
+
+    private fun reclaimed(references: List<WeakReference<*>>, layout: TargetLayout, remaining: Int = 0) {
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (true) {
+            System.gc()
+            // Exercise normal queue draining, including snapshot values that held images
+            // until the preceding collection. No private references are cleared by tests.
+            assertEquals(0L, ManagedStackRuntime.lookupIpe(ManagedAddress.nullAddress(), ManagedAddress.nullAddress(), layout))
+            if (references.all { it.get() == null } && registrations() == remaining) return
+            assertTrue(System.nanoTime() < deadline, "Discarded snapshots, addresses or provenance were retained")
+            Thread.sleep(10)
+        }
+    }
+
+    private data class Alias(val address: ManagedAddress, val discarded: List<WeakReference<*>>,
+        val provenance: WeakReference<ManagedStackFrame>)
+
+    private fun registeredAlias(language: Language, layout: TargetLayout): Alias {
+        val snapshot = capture(language)
+        val pair = ManagedStackRuntime.frameInfo(snapshot, 0, layout)
+        val output = ManagedAllocation.mutable(91, 8)
+        // Populate the cache before discarding the canonical key: cached IPE must
+        // not introduce a strong registry -> image -> key -> allocation cycle.
+        assertEquals(1L, ManagedStackRuntime.lookupIpe(pair.second, ManagedAddress.fromAllocation(output), layout))
+        return Alias(pair.first.plus(7), listOf(WeakReference(snapshot), WeakReference(pair.first),
+            WeakReference(pair.second), WeakReference(snapshot.frames[1])), WeakReference(snapshot.frames[0]))
+    }
+
+    private fun exerciseRetainedAlias(language: Language, layout: TargetLayout): List<WeakReference<*>> {
+        val retained = registeredAlias(language, layout)
+        reclaimed(retained.discarded, layout, remaining = 1)
+        assertNotNull(retained.provenance.get())
+        assertEquals(1, registrations())
+        val output = ManagedAllocation.mutable(91, 8)
+        val destination = ManagedAddress.fromAllocation(output)
+        assertEquals(0L, ManagedStackRuntime.lookupIpe(retained.address, destination, layout)) // Offset is part of identity.
+        val forged = ManagedAddress.fromAllocation(ManagedAllocation.immutable(ByteArray(16), 8)).plus(16)
+        assertEquals(0L, ManagedStackRuntime.lookupIpe(forged, destination, layout)) // Equal bytes are not identity.
+        val key = retained.address.plus(9)
+        assertEquals(1L, ManagedStackRuntime.lookupIpe(key, destination, layout))
+        val label = text(output, 0, layout, "Label")
+        assertEquals("workλ", label.utf8())
+        assertEquals(1L, ManagedStackRuntime.lookupIpe(key, destination, layout))
+        assertSame(label, text(output, 0, layout, "Label"))
+        return retained.discarded + listOf(retained.provenance, WeakReference(retained.address), WeakReference(key))
+    }
+
+    @Test fun derivedAliasKeepsOnlyItsRegistrationAliveAfterSnapshotCollection() = context { language ->
+        val layout = layout()
+        val discarded = exerciseRetainedAlias(language, layout)
+        reclaimed(discarded, layout)
+        assertEquals(0, registrations())
+    }
+
+    private fun copiedKey(language: Language, layout: TargetLayout): Pair<ManagedAllocation, WeakReference<ManagedStackSnapshot>> {
+        val snapshot = capture(language)
+        val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).second
+        val output = ManagedAllocation.mutable(91, 8)
+        assertEquals(1L, ManagedStackRuntime.lookupIpe(key, ManagedAddress.fromAllocation(output), layout))
+        return output to WeakReference(snapshot)
+    }
+
+    private fun exerciseCopiedKey(language: Language, layout: TargetLayout): List<WeakReference<*>> {
+        val (output, snapshot) = copiedKey(language, layout)
+        reclaimed(listOf(snapshot), layout, remaining = 1)
+        val key = output.readAddressByteOffset(3)
+        val label = text(output, 0, layout, "Label")
+        assertEquals(1L, ManagedStackRuntime.lookupIpe(key, ManagedAddress.fromAllocation(output), layout))
+        assertSame(label, text(output, 0, layout, "Label"))
+        return listOf(snapshot, WeakReference(key), WeakReference(output))
+    }
+
+    @Test fun copiedOutputPointerRetainsIpeWithoutRetainingItsSnapshot() = context { language ->
+        val layout = layout()
+        reclaimed(exerciseCopiedKey(language, layout), layout)
+        assertEquals(0, registrations())
+    }
+
+    private fun discardedRegistrations(language: Language, layout: TargetLayout): List<WeakReference<*>> =
+        (0 until 32).flatMap {
+            val snapshot = capture(language)
+            val key = ManagedStackRuntime.frameInfo(snapshot, 0, layout).second
+            val output = ManagedAddress.fromAllocation(ManagedAllocation.mutable(91, 8))
+            assertEquals(1L, ManagedStackRuntime.lookupIpe(key, output, layout))
+            listOf(WeakReference(snapshot), WeakReference(key), WeakReference(snapshot.frames[0]))
+        }
+
+    @Test fun repeatedCaptureAndLookupDoesNotRetainHistoricalFrames() = context { language ->
+        val layout = layout()
+        repeat(3) {
+            reclaimed(discardedRegistrations(language, layout), layout)
+            assertEquals(0, registrations())
+        }
+    }
 
     @Test fun liveFramesHaveStableDistinctImmutableInfoImagesAndWordOffsets() = context { language ->
         val snapshot = capture(language); val layout = layout()
