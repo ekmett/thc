@@ -69,6 +69,8 @@ class SignedNarrowPrimopsTest {
         }
         assertEquals((manifest["nativeRows"] as Number).toLong(), cases.values.sumOf { it.size.toLong() })
         for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
+            NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
+                entries.map { it["name"] as String }, backend)
             val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
                 "entry" to manifest["compositeEntry"], "backend" to backend, "instrument" to true)))
             fun check(entry: Map<String, Any?>, row: List<Long>) {

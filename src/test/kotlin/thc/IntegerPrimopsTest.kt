@@ -75,6 +75,8 @@ class IntegerPrimopsTest {
                 assertEquals(mathematical(name, width, left, right), native, "Native $name($left, $right)")
         }
         for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
+            NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
+                entries.map { it["name"] as String }, backend)
             val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
                 "entry" to composite["name"], "backend" to backend, "instrument" to true)))
             fun check(entry: Map<String, Any?>, row: List<Long>) {

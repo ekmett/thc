@@ -22,6 +22,7 @@ import System.Environment (getArgs, getEnvironment, lookupEnv)
 import System.Exit (ExitCode (..), die)
 import System.FilePath ((</>), takeExtension)
 import System.Process (CreateProcess (..), proc, readCreateProcessWithExitCode)
+import System.Timeout (timeout)
 
 data Family = Bit | IntegerWord | SignedNarrow | Explicit64 deriving (Eq, Show)
 
@@ -302,12 +303,19 @@ hostWrapper e =
     output rep _ = error ("Unsupported output rep: " ++ rep)
 
 run :: FilePath -> [(String,String)] -> FilePath -> [String] -> String -> IO String
-run root overrides program args input = do
+run = runWithTimeout Nothing
+
+runWithTimeout :: Maybe Int -> FilePath -> [(String,String)] -> FilePath -> [String] -> String -> IO String
+runWithTimeout limit root overrides program args input = do
   environment <- getEnvironment
   let updated = foldr (uncurry replace) environment overrides
       replace key value rest = (key,value) : filter ((/= key) . fst) rest
       command = (proc program args) {cwd = Just root, env = Just updated}
-  (code,stdout,stderr) <- readCreateProcessWithExitCode command input
+  let execute = readCreateProcessWithExitCode command input
+  completed <- maybe (Just <$> execute) (\micros -> timeout micros execute) limit
+  -- readCreateProcessWithExitCode brackets the child; the timeout exception
+  -- terminates and reaps it before we report the failure.
+  (code,stdout,stderr) <- maybe (die (program ++ " timed out")) pure completed
   case code of
     ExitSuccess -> pure stdout
     ExitFailure n -> die (unlines [program ++ " failed (" ++ show n ++ ")",
@@ -380,7 +388,7 @@ prepare root family = do
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
      "-i" ++ (root </> "compiler/test-fixtures"), "-odir", root </> nativeDir,
      "-hidir", root </> nativeDir, root </> driver, "-o", root </> executable] ""
-  actual <- run root [] (root </> executable) [] stdinText
+  actual <- runWithTimeout (Just (60 * 1000000)) root [] (root </> executable) [] stdinText
   let expectedKeys = Set.fromList [(entryName e,x,y) | (e,x,y) <- requests]
       rows = map (splitTab . takeWhile (/= '\r')) (lines actual)
       parseRow fields = case fields of

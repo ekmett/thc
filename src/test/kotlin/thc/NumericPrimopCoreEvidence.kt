@@ -3,11 +3,40 @@
 
 package thc
 
+import com.oracle.truffle.api.TruffleLanguage
+import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.assertEquals
+import thc.runtime.BytecodeProgram
 import thc.runtime.CoreRepresentations
+import thc.runtime.Program
 
 /** Direct calls in one exported binding, without following references to other bindings. */
 internal object NumericPrimopCoreEvidence {
+    @Suppress("UNCHECKED_CAST")
+    fun assertLoadableWrappers(context: Context, module: Map<String, Any?>, names: List<String>, backend: String) {
+        val bindings = linkedMapOf<String, Map<String, Any?>>()
+        for (name in names) {
+            // The old per-entry audit checked every wrapper's complete dependency
+            // closure, including branches that the native input corpus never takes.
+            val reachable = CoreModules.reachable(module, name, strictLink = true)
+            for (binding in reachable["bindings"] as List<Map<String, Any?>>)
+                bindings.putIfAbsent(binding["id"] as String, binding)
+        }
+        val wrappers = module + ("bindings" to bindings.values.toList())
+        context.initialize("thc")
+        context.enter()
+        try {
+            val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+            when (backend) {
+                "ast" -> Program(language, wrappers)
+                "bytecode" -> BytecodeProgram(language, wrappers)
+                else -> error("Unknown numeric primop backend: $backend")
+            }
+        } finally {
+            context.leave()
+        }
+    }
+
     @Suppress("UNCHECKED_CAST")
     fun calls(module: Map<String, Any?>, entry: String, singleBinding: Boolean = false): List<List<Any?>> {
         val reachable = CoreModules.reachable(module, entry)
