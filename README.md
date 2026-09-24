@@ -116,6 +116,9 @@ lane observations, without widening vector calling conventions.
 The [Int32X4 ByteArray slice](docs/int32x4-bytearray.md) adds six managed packed
 index/read/write operations with vector- or scalar-element offsets and bounded
 immediate local destructuring of mutable reads.
+The [Word32X4 ByteArray slice](docs/word32x4-bytearray.md) adds the six unsigned
+counterparts, with high-bit native checks and packed loads that zero-extend all
+four observed lanes.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 concrete Float/Double leaves, local join results and zero-width State# components.

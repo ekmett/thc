@@ -1,0 +1,7 @@
+{
+  "argv": [
+    "compiler/build.sh"
+  ],
+  "environment": {},
+  "log": "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/prepare-run-jtkxd61f/1.log"
+}

@@ -1,0 +1,13 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/install/thc/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+GRAPH_TARGET={"root":"lambda bytes, offset","backend":"bytecode","entry":"vectorIndexWorker"}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+Dumping IGV graphs in /home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/word32x4-bytearray-runtime/post-bytecode-vectorIndexWorker/graphs
+PASS entry=vectorIndexWorker backend=bytecode mode=inline oracleOrigin=native oracleRows=36 arity=2 compiledPasses=2 backingBytes=64 freshArrayEveryCall=true validAfterExecution=true
+diagnostics={"backend":"bytecode","bytecodeRootCount":2,"sourceNotesEnabled":true,"sourceSpanCount":199,"sourceRootCount":1,"localJoinCount":0,"localJoinTransfers":0,"instrumented":false,"thunkEvaluationsByLabel":{},"compiledEntries":0,"leadingCaseReturns":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":0,"indirectCalls":0,"tailBounces":0,"selfTailReentries":0,"trampolineIterations":0,"papAllocations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"single guest thread"}

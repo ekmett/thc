@@ -1570,7 +1570,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun compileVectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expr {
         val local = scope.child()
         local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
-        val vector = local.bind(read.vectorBinder, false, CoreVectors.proof32)
+        val vector = local.bind(read.vectorBinder, false, read.operation.vectorProof)
         val operands = read.arguments.map { compile(it, scope, false) }.toTypedArray()
         val value = VectorByteArrayExpression(read.operation, operands).located(currentSource)
         val body = compile(read.body, local, tail)

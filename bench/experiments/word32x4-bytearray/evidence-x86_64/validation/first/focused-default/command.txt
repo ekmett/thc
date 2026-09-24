@@ -1,0 +1,1 @@
+scripts/gradle.sh --offline --no-daemon --max-workers=4 installDist test --tests thc.runtime.Word32VectorStorageTest --tests thc.runtime.Word32VectorMemoryProofTest --tests thc.runtime.SimdWord32ByteArrayTest 

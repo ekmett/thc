@@ -75,7 +75,7 @@ internal object CoreInputCalls {
                         read.arguments.forEach { visit(it, scope) }
                         visit(read.body, scope + mapOf(
                             read.stateBinder to Binding(CoreVectorMemory.stateProof, null),
-                            read.vectorBinder to Binding(CoreVectors.proof32, null)))
+                            read.vectorBinder to Binding(read.operation.vectorProof, null)))
                         return
                     }
                     visit(expr[1] as List<Any?>, scope)

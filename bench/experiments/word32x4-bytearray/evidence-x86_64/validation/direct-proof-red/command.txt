@@ -1,0 +1,1 @@
+scripts/gradle.sh --offline --no-daemon --max-workers=4 test --tests thc.runtime.Int32VectorMemoryProofTest.allOperationsRejectWrongArgumentsFlagsArityAndResultProofs --tests thc.runtime.Word32VectorMemoryProofTest.allOperationsRejectWrongArgumentsFlagsArityAndResultProofs 

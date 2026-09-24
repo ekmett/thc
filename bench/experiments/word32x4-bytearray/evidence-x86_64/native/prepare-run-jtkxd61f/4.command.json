@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/ghc-9.14.1-installed/bin/ghc",
+    "--make",
+    "-O2",
+    "-fforce-recomp",
+    "-dcore-lint",
+    "-icompiler/test-fixtures",
+    "-odir",
+    "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/native",
+    "-hidir",
+    "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/native",
+    "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/compiler/test-fixtures/SimdWord32X4ByteArrayNative.hs",
+    "-o",
+    "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/native/word32x4-bytearray-oracle"
+  ],
+  "environment": {},
+  "log": "/home/ekmett/ai/thc-word32x4-bytearray-01a0cdeb/build/simd-word32x4-bytearray/prepare-run-jtkxd61f/4.log"
+}

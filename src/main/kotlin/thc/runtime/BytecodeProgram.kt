@@ -1602,23 +1602,29 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
         ProvenExpression(Expression { e ->
             val b = e.builder
             when {
+                operation.unsigned && operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset)
+                operation.unsigned && operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset)
+                operation.unsigned -> b.beginIndexVectorWord32Array(operation.scalarOffset)
                 operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
                 operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
                 else -> b.beginIndexVector32Array(operation.scalarOffset)
             }
             operands.forEach { it.emit(e) }
             when {
+                operation.unsigned && operation.isWrite -> b.endWriteVectorWord32Array()
+                operation.unsigned && operation.isRead -> b.endReadVectorWord32Array()
+                operation.unsigned -> b.endIndexVectorWord32Array()
                 operation.isWrite -> b.endWriteVector32Array()
                 operation.isRead -> b.endReadVector32Array()
                 else -> b.endIndexVector32Array()
             }
-        }, if (operation.isWrite) CoreVectorMemory.stateProof else CoreVectors.proof32)
+        }, if (operation.isWrite) CoreVectorMemory.stateProof else operation.vectorProof)
     private fun vectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expression {
         val operands = read.arguments.map { compile(it, scope, false) }
         val value = vectorByteArray(read.operation, operands)
         val local = scope.child()
         local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
-        val vector = bind(local, read.vectorBinder, false, CoreVectors.proof32)
+        val vector = bind(local, read.vectorBinder, false, read.operation.vectorProof)
         val body = compile(read.body, local, tail)
         // No whole-tuple local or result handoff is ever created here.
         return LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
