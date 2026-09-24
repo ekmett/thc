@@ -4,6 +4,7 @@ import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.interop.InteropLibrary
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
@@ -205,7 +206,7 @@ class ThunkRetentionTest {
                         Calls.target(program.hostEntryTarget(1), arrayOf(thunk, arrayOf<Any?>(3_000_000_000L))))
                 }
                 val entry = EntryValue(program, name, if (result is Closure) 1 else 0)
-                assertEquals(true, assertDoesNotThrow<Any>({ entry.invokeMember("compile", emptyArray()) },
+                assertEquals(true, assertDoesNotThrow<Any>({ InteropLibrary.getUncached().invokeMember(entry, "compile") },
                     "$backend updated $name must install guest code"))
                 if (name == "failure") assertSame(result, assertThrows(RuntimeFault::class.java) { invokeEntry() })
                 else assertSame(result, invokeEntry(), "$backend retains the already evaluated answer")

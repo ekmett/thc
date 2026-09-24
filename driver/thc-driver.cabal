@@ -1,0 +1,40 @@
+cabal-version: 3.0
+name: thc-driver
+version: 0.1.0.0
+synopsis: Cabal-library configuration inspection for THC
+license: UPL-1.0 AND BSD-3-Clause
+license-files: LICENSE, LICENSE.txt
+author: Edward Kmett
+maintainer: Edward Kmett
+category: Development
+description: A bounded Cabal-library-backed package configuration inspector.
+extra-source-files:
+  README.md
+  test/test_driver.py
+  test/run_integration.py
+  test/fixtures/run-pure/run-pure.cabal
+  test/fixtures/run-pure/app/Main.hs
+  test/fixtures/tiny/tiny-fixture.cabal
+  test/fixtures/tiny/words/Words.hs
+  test/fixtures/tiny/src/Greeting.hs
+  test/fixtures/tiny/src/Platform/Linux.hs
+  test/fixtures/tiny/src/Platform/Other.hs
+  test/fixtures/tiny/loud/Message.hs
+  test/fixtures/tiny/quiet/Message.hs
+  test/fixtures/tiny/app/Main.hs
+  test/fixtures/tiny/test/Main.hs
+build-type: Simple
+
+executable thc
+  main-is: Main.hs
+  hs-source-dirs: app, src
+  other-modules:
+    THC.Driver.Cabal
+    THC.Driver.Json
+    THC.Driver.Run
+  build-depends:
+    base >= 4.22 && < 4.23,
+    Cabal == 3.16.*, Cabal-syntax == 3.16.*,
+    bytestring, directory, filepath, process
+  default-language: Haskell2010
+  ghc-options: -Wall -Werror

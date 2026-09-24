@@ -1,8 +1,10 @@
 # Cabal integration
 
 The intended interface is `thc build`, `thc run` and `thc repl` inside an ordinary
-Cabal project. These commands are planned; the current entry points are the
-scripts described in the README.
+Cabal project. A limited `thc run` now builds and executes a selected executable
+whose `Main.main :: IO ()` passes the strict Core audit; see the
+[driver instructions](../driver/README.md). General `thc build` and `thc repl`
+remain planned.
 
 The goal is to run those projects with no unimplemented paths in their complete
 dependency closure, including cold exceptions and library internals. A successful
@@ -34,8 +36,9 @@ Keep THC artifacts separate from Cabal's native outputs. A native object file or
 an interface file is not evidence that the corresponding Core export exists.
 
 `thc build [target]` would run the build, assemble the selected component's Core
-and report any unsupported requirements. `thc run [target] -- args` would build
-as needed and launch it on the JVM. General executables still require the full
+and report any unsupported requirements. The current `thc run` builds one Cabal
+executable and launches accepted `IO ()` Core on the JVM. General executables
+still require the full
 `Main`/IO/error path. The first useful test is an unchanged Cabal project with a
 library, an executable and a `containers` dependency, running without diagnostic
 mode and with its error paths exercised as well as normal execution.

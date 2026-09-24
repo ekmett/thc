@@ -126,6 +126,33 @@ internal object CoreRepresentations {
     }
     fun knownFunctionResult(expression: List<Any?>, bindings: List<Map<String, Any?>>): CoreRepresentation? =
         knownFunctionSignature(expression, bindings)?.second
+    /** The only currently supported executable boundary: GHC's erased IO () action. */
+    fun ioUnitMainResult(binding: Map<String, Any?>, bindings: List<Map<String, Any?>>): CoreRepresentation {
+        if (binding["type"] != "IO ()") throw UnsupportedCore("THC run requires main :: IO ()")
+        val expression = binding["expr"] as? List<Any?> ?: throw UnsupportedCore("IO main lacks Core expression")
+        val globals = bindings.associateBy { it["id"] as String }
+        fun stateBinder(expr: List<Any?>, seen: Set<String>): Map<String, Any?>? = when (expr.firstOrNull()) {
+            "lam" -> (expr[1] as? List<Map<String, Any?>>)?.singleOrNull()
+            "var" -> (expr[1] as? String)?.takeIf { it !in seen }?.let { id ->
+                (globals[id]?.get("expr") as? List<Any?>)?.let { stateBinder(it, seen + id) }
+            }
+            else -> null
+        }
+        if (stateBinder(expression, emptySet())?.get("type") != "State# RealWorld")
+            throw UnsupportedCore("IO main requires an exact State# RealWorld binder")
+        val (inputs, result) = knownFunctionSignature(expression, bindings)
+            ?: throw UnsupportedCore("IO main lacks an exact state-transformer signature")
+        if (inputs.size != 1 || inputs[0].kind != CoreKind.VOID || inputs[0].primReps != emptyList<String>())
+            throw UnsupportedCore("IO main requires one exact State# RealWorld input")
+        val fields = result.components
+        if (result.kind != CoreKind.UNKNOWN || fields?.size != 2 || result.primReps != listOf("BoxedRep (Just Lifted)") ||
+            fields[0].kind != CoreKind.VOID || fields[0].primReps != emptyList<String>() ||
+            fields[1].primReps != listOf("BoxedRep (Just Lifted)") ||
+            fields[1].kind !in setOf(CoreKind.DATA, CoreKind.OBJECT))
+            throw UnsupportedCore("IO main requires the exact (# State#, () #) result")
+        TupleShape.validate(result)
+        return result
+    }
     fun requireInput(proof: CoreRepresentation) {
         if (proof.isTuple) {
             TupleShape.validate(proof)

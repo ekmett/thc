@@ -110,8 +110,8 @@ separate run.
 * [Development](docs/contributing.md) covers local checks and the tested merge
   queue. Update the [primop checklist](docs/primops.md#updating-the-list) when
   adding a primitive.
-* [Cabal integration](docs/cabal.md) describes the planned `thc build`, `thc run`
-  and GHCi-based `thc repl` commands.
+* [Cabal integration](docs/cabal.md) describes the limited working `thc run`
+  path and the planned `thc build` and GHCi-based `thc repl` commands.
 
 The older runtime experiments live on the
 [legacy branch](https://github.com/ekmett/thc/tree/legacy).
