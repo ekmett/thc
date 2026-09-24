@@ -254,3 +254,28 @@ Managed mutable byte storage also supports `setByteArray#`,
 public ShortByteString replicate/fold consumer and defined-domain native models
 are described in [mutable byte-array operations](mutable-bytearray-ops.md).
 The immutable-to-mutable `copyByteArray#` keeps its distinct-storage requirement.
+
+## Public ShortByteString slices
+
+`ShortByteStringSliceAudit` exercises ordinary `Data.ByteString.Short.take`,
+`drop` and `splitAt` through installed bytestring-0.12.2.0 bodies, with the
+complete original GHC List module supplying the pack worker's `$wlenAcc`
+dependency. No primitive or runtime capability is added. Fresh pre/post exports
+and strict per-entry audits retain the real `copyByteArray#` path.
+
+The native/list model observes every result byte, length, checksum and end
+sentinel, including both split parts, all 256 byte patterns, empty inputs and
+negative/oversized machine-width counts. The AST/bytecode tests cover inlined
+and residual calls, actual compiled entries, original/active target validity
+and released result/argument storage. Preparation is
+`scripts/prepare-short-bytes-slices.py`; its `--check-only` mode verifies hashes,
+all native rows and the exact strict audits.
+
+Neighboring `append`/`concat` stay rejected with the genuine missing
+`Data.ByteString.Internal.Type.overflowError` after original CString/List
+composition; their cold overflow branches remain intact. Text remains a
+separate frontier: installed pack needs `Data.Text.Internal.$wouter`/`empty`,
+unpack additionally needs `Data.Text.Show.$wunpack`, and public length uses the
+foreign `_hs_text_measure_off` entry. The original text-2.1.3 pack source also
+uses mutable-byte-array shrink/resize operations. These gaps are not covered by
+the slice fixture or its native oracle.

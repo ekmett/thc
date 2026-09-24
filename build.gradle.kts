@@ -45,6 +45,7 @@ tasks.test {
             "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
             "show-int/**/*.json", "show-int/*.tsv", "show-int/native/**",
             "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
+            "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
             "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
             "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
@@ -99,7 +100,7 @@ tasks.test {
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
-        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-scalar-bitcasts.py", "scalar_bitcast_model.py", "test-scalar-bitcasts.py", "prepare-tag-to-enum-audit.py", "prepare-unsafe-equality-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "test-core-enums.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutable-bytearrays.py", "mutable_bytearray_model.py", "test-mutable-bytearray-model.py", "prepare-compare-byte-arrays.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
+        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-scalar-bitcasts.py", "scalar_bitcast_model.py", "test-scalar-bitcasts.py", "prepare-tag-to-enum-audit.py", "prepare-unsafe-equality-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutable-bytearrays.py", "mutable_bytearray_model.py", "test-mutable-bytearray-model.py", "prepare-compare-byte-arrays.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-double-arrays.py", "test-double-array-model.py",
