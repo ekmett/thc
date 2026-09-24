@@ -130,6 +130,20 @@ internal class ManagedAllocation private constructor(
         return action(bytes)
     }
 
+    /** Word8ArrayAs* offsets count bytes, including unaligned starts. Keep the
+     * entire scalar access under the pointer-cell monitor. */
+    @Synchronized fun <T> accessByteRange(offset: Long, width: Int, writable: Boolean,
+        action: (ByteArray) -> T): T {
+        if (width != 4 && width != 8) fault("Unsupported floating byte-range width")
+        val start = range(offset, width.toLong())
+        if (writable) {
+            mutable()
+            if (pointerCapable) invalidate(start, width)
+        } else if (intersectsPointer(start, width))
+            fault("Scalar read overlaps a managed pointer cell")
+        return action(bytes)
+    }
+
     @Synchronized fun copyBytesOut(offset: Long, count: Long): ByteArray {
         val start = range(offset, count)
         if (intersectsPointer(start, count.toInt()))

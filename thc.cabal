@@ -203,6 +203,7 @@ executable thc-fixtures
     FixtureSupport
     WordFloatingFixtures
     FloatingAddressFixtures
+    FloatingByteOffsetFixtures
     FusedFloatingFixtures
     OriginalStdioFixtures
     SmallArrayFixtures

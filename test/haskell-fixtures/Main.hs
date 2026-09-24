@@ -10,6 +10,7 @@ module Main (main) where
 import AggregateFixtures (prepareAggregate)
 import WordFloatingFixtures (prepareWordFloating)
 import FloatingAddressFixtures (prepareFloatingAddress)
+import FloatingByteOffsetFixtures (prepareFloatingByteOffset)
 import FusedFloatingFixtures (prepareFusedFloating)
 import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
@@ -827,6 +828,7 @@ main = do
   unless handled $ case args of
     ["word-floating"] -> prepareWordFloating root
     ["floating-address"] -> prepareFloatingAddress root
+    ["floating-byte-offset"] -> prepareFloatingByteOffset root
     ["fused-floating"] -> prepareFusedFloating root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
@@ -842,4 +844,4 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|fused-floating|floating-address|floating-byte-offset|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
