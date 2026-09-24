@@ -242,10 +242,10 @@ class DataLayout(
             else -> throw UnsupportedCore("Unsupported constructor field representation: $representation")
         }
         private val address = representation == "AddrRep"
-        private val referenceType = if (address) LiteralAddress::class.java else referenceType ?: Any::class.java
+        private val referenceType = if (address) ManagedAddress::class.java else referenceType ?: Any::class.java
         init {
             require(referenceType == null || kind == OBJECT)
-            require(!address || referenceType == null || referenceType == LiteralAddress::class.java)
+            require(!address || referenceType == null || referenceType == ManagedAddress::class.java)
         }
         private val property = DefaultStaticProperty("field_$index")
 
@@ -266,7 +266,7 @@ class DataLayout(
                 FLOAT -> property.setFloat(value, field as? Float ?: fault("Expected primitive Float constructor field"))
                 DOUBLE -> property.setDouble(value, field as? Double ?: fault("Expected primitive Double constructor field"))
                 OBJECT -> property.setObject(value, if (address)
-                    field as? LiteralAddress ?: fault("Expected a managed literal Addr# constructor field") else field)
+                    field as? ManagedAddress ?: fault("Expected a managed Addr# constructor field") else field)
                 VOID -> if (field !== Unit) fault("Expected zero-width constructor field")
             }
         }

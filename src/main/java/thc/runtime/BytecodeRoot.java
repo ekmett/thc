@@ -260,6 +260,55 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewPinnedByteArray {
+        @Specialization public static void allocate(VirtualFrame frame, LocalAccessor destination,
+                long size, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            byte[] bytes = PinnedMemory.allocate(size, 1L);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, bytes);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewAlignedPinnedByteArray {
+        @Specialization public static void allocate(VirtualFrame frame, LocalAccessor destination,
+                long size, long alignment, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            byte[] bytes = PinnedMemory.allocate(size, alignment);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, bytes);
+        }
+    }
+
+    @Operation
+    public static final class ByteArrayContents {
+        @Specialization public static ManagedAddress address(Object array) {
+            return ManagedAddress.Companion.fromByteArray(ManagedByteArray.require(array));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadWord8OffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            long value = address.readWord8(offset);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation
+    public static final class WriteWord8OffAddr {
+        @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
+            ManagedByteArray.requireState(state);
+            address.writeWord8(offset, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
     public static final class RestoreTypedInput {
         @Specialization public static void restore(VirtualFrame frame, BytecodeTypedInputSlots slots,
@@ -324,6 +373,62 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 boolean tail, Metrics metrics) {
             return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics, destination, 0);
         }
+    }
+
+    @Operation
+    public static final class Md5Init {
+        @Specialization public static void apply(ManagedAddress context, Object state) {
+            ManagedByteArray.requireState(state);
+            ManagedMd5.INSTANCE.init(context);
+        }
+    }
+    @Operation
+    public static final class Md5Update {
+        @Specialization public static void apply(ManagedAddress context, ManagedAddress input, long length, Object state) {
+            ManagedByteArray.requireState(state);
+            ManagedMd5.INSTANCE.update(context, input, length);
+        }
+    }
+    @Operation
+    public static final class Md5Final {
+        @Specialization public static void apply(ManagedAddress output, ManagedAddress context, Object state) {
+            ManagedByteArray.requireState(state);
+            ManagedMd5.INSTANCE.finish(output, context);
+        }
+    }
+
+    /** Invoke exactly one logical State argument, with a fence after real return/throw. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class KeepAlive {
+        @Specialization public static Object apply(VirtualFrame frame, Metrics metrics,
+                Object kept, Object state, Object function,
+                @Cached(value = "create(metrics)", neverDefault = true) Dispatch dispatch,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            ManagedByteArray.requireState(state);
+            try { return dispatch.execute(frame, RequireClosure.require(force.execute(frame, function)), new Object[]{kotlin.Unit.INSTANCE}); }
+            finally { java.lang.ref.Reference.reachabilityFence(kept); }
+        }
+        public static Dispatch create(Metrics metrics) { return Dispatch.Companion.create(1, false, metrics); }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class KeepAliveTuple {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeTupleSlots destination,
+                Metrics metrics, Object kept, Object state, Object function,
+                @Cached(value = "create(destination, metrics)", neverDefault = true) TupleDispatch dispatch,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            ManagedByteArray.requireState(state);
+            try { dispatch.execute(frame, RequireClosure.require(force.execute(frame, function)), new Object[]{kotlin.Unit.INSTANCE}); }
+            finally { java.lang.ref.Reference.reachabilityFence(kept); }
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(destination, metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
     /** Tuple operands are scalar inputs; each dispatch arm consumes into typed locals. */
@@ -429,9 +534,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     public static final class RequireAddress {
-        @Specialization public static LiteralAddress require(Object value) {
-            if (value instanceof LiteralAddress address) return address;
-            throw fail("Expected a managed literal Addr#");
+        @Specialization public static ManagedAddress require(Object value) {
+            if (value instanceof ManagedAddress address) return address;
+            throw fail("Expected a managed Addr#");
         }
     }
 
@@ -619,16 +724,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class AddressPlus {
-        @Specialization public static LiteralAddress plus(LiteralAddress address, long displacement) { return address.plus(displacement); }
-        @Fallback public static LiteralAddress invalid(Object address, Object displacement) {
-            if (!(address instanceof LiteralAddress)) throw fail("Expected a managed literal Addr#");
+        @Specialization public static ManagedAddress plus(ManagedAddress address, long displacement) { return address.plus(displacement); }
+        @Fallback public static ManagedAddress invalid(Object address, Object displacement) {
+            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed Addr#");
             throw fail("Expected primitive Long");
         }
     }
     @Operation public static final class AddressIndexChar {
-        @Specialization public static long index(LiteralAddress address, long displacement) { return address.indexChar(displacement); }
+        @Specialization public static long index(ManagedAddress address, long displacement) { return address.indexChar(displacement); }
         @Fallback public static long invalid(Object address, Object displacement) {
-            if (!(address instanceof LiteralAddress)) throw fail("Expected a managed literal Addr#");
+            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed Addr#");
             throw fail("Expected primitive Long");
         }
     }

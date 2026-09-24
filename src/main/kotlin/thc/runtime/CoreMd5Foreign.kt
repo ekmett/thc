@@ -18,6 +18,32 @@ internal object CoreMd5Foreign {
     private fun exactInteger(value: Any?, expected: Int): Boolean =
         (value is Int || value is Long) && (value as Number).toLong() == expected.toLong()
 
+    fun validateHead(function: List<Any?>, defined: Boolean) {
+        val proof = CoreRepresentations.metadata(function)?.get("rep") as? Map<*, *>
+        requireProof(function.size == 3 && function[0] == "var" && function[1] is String &&
+            (function[1] as String).isNotEmpty() && !defined && proof?.keys == scalarKeys &&
+            proof["kind"] == "closure" && proof["primReps"] == listOf("BoxedRep (Just Lifted)") &&
+            proof["evaluated"] == true, "unresolved declared foreign variable required")
+    }
+
+    /** Run before generic call/capture analysis casts ordinary variable IDs. */
+    fun validateHeads(value: Any?) {
+        when (value) {
+            is Map<*, *> -> value.values.forEach(::validateHeads)
+            is List<*> -> {
+                if (value.firstOrNull() == "app") {
+                    val meta = value.getOrNull(6) as? Map<*, *>
+                    val descriptor = meta?.get("foreignCall") as? Map<*, *>
+                    val target = descriptor?.get("target") as? Map<*, *>
+                    if (Md5ForeignOp.entries.any { it.symbol == target?.get("symbol") })
+                        validateHead(value.getOrNull(1) as? List<Any?>
+                            ?: throw RuntimeFault("Invalid MD5 foreign call: missing variable head"), false)
+                }
+                value.forEach(::validateHeads)
+            }
+        }
+    }
+
     private fun scalar(raw: Any?, primitive: String?, declared: Boolean = false): Boolean {
         val value = raw as? Map<*, *> ?: return false
         val kind = when (primitive) { "AddrRep" -> "address"; "Int32Rep" -> "long"; else -> "void" }

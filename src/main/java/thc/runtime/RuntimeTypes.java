@@ -17,7 +17,7 @@ import kotlin.Unit;
         boolean.class,
         Closure.class,
         DataValue.class,
-        LiteralAddress.class,
+        ManagedAddress.class,
         Thunk.class,
         Unit.class
 })

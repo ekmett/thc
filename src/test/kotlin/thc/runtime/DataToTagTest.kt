@@ -140,7 +140,7 @@ class DataToTagTest {
                 assertThrows(RuntimeFault::class.java) { Calls.target(target,arrayOf(0L,failure)) };released(language)
                 assertEquals(0L,Calls.target(target,arrayOf(0L,values[0])))
                 val other=DataLayout(language,"Other","Other",emptyArray()).allocate()
-                for(value in listOf(17L,Unit,LiteralAddress.fromHex("6100"),other))
+                for(value in listOf(17L,Unit,ManagedAddress.fromHex("6100"),other))
                     assertThrows(RuntimeException::class.java) { Calls.target(target,arrayOf(0L,value)) }
                 released(language)
             } finally { context.leave() }

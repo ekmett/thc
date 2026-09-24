@@ -380,7 +380,7 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
     override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return body.executeDataValue(frame) }
-    override fun executeAddress(frame: VirtualFrame): LiteralAddress { prepare(frame); return body.executeAddress(frame) }
+    override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepare(frame); return body.executeAddress(frame) }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? { prepare(frame); return body.executeTuple(frame, slots, offset) }
 }
 

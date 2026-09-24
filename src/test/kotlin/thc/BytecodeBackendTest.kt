@@ -277,7 +277,7 @@ class BytecodeBackendTest {
             assertFailure(function, "outside its backing storage", 4L)
             val fakeRead = primitive("indexCharOffAddr#", variable("input"), integer(0))
             val fake = context.eval("thc", request(module(listOf(binding("entry", lambda("input", fakeRead), 1)))))
-            assertFailure(fake, "Expected a managed literal Addr#", 0L)
+            assertFailure(fake, "Expected a managed Addr#", 0L)
         }
     }
 
