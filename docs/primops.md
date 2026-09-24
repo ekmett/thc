@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 244 | Implemented fixed numeric/character scalar forms. |
-| Partial | 213 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1034 | No declared lowering. |
+| Partial | 217 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 1030 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -425,18 +425,22 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt16Array#` — arity 3 — Managed byte storage
 - [ ] `readInt32Array#` — arity 3 — Managed byte storage
 - [ ] `readInt32ArrayAsInt32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `readInt32OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt32X4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readInt8Array#` — arity 3 — Managed byte storage
 - [ ] `readIntArray#` — arity 3 — Managed byte storage
+- [ ] `readIntOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `readMutVar#` — arity 2 — Managed lazy reference cells
 - [ ] `readWord16Array#` — arity 3 — Managed byte storage
 - [ ] `readWord32Array#` — arity 3 — Managed byte storage
 - [ ] `readWord32ArrayAsWord32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `readWord32OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord32X4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord8Array#` — arity 3 — Managed byte storage
 - [ ] `readWord8OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWordArray#` — arity 3 — Managed byte storage
+- [ ] `readWordOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `resizeMutableByteArray#` — arity 3 — Managed byte storage
 - [ ] `setByteArray#` — arity 5 — Managed byte storage
@@ -1123,7 +1127,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt16X8OffAddr#` — arity 3
 - [ ] `readInt32ArrayAsInt32X16#` — arity 3
 - [ ] `readInt32ArrayAsInt32X8#` — arity 3
-- [ ] `readInt32OffAddr#` — arity 3
 - [ ] `readInt32OffAddrAsInt32X16#` — arity 3
 - [ ] `readInt32OffAddrAsInt32X4#` — arity 3
 - [ ] `readInt32OffAddrAsInt32X8#` — arity 3
@@ -1159,7 +1162,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt8X32OffAddr#` — arity 3
 - [ ] `readInt8X64Array#` — arity 3
 - [ ] `readInt8X64OffAddr#` — arity 3
-- [ ] `readIntOffAddr#` — arity 3
 - [ ] `readSmallArray#` — arity 3
 - [ ] `readStablePtrArray#` — arity 3
 - [ ] `readStablePtrOffAddr#` — arity 3
@@ -1182,7 +1184,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord16X8OffAddr#` — arity 3
 - [ ] `readWord32ArrayAsWord32X16#` — arity 3
 - [ ] `readWord32ArrayAsWord32X8#` — arity 3
-- [ ] `readWord32OffAddr#` — arity 3
 - [ ] `readWord32OffAddrAsWord32X16#` — arity 3
 - [ ] `readWord32OffAddrAsWord32X4#` — arity 3
 - [ ] `readWord32OffAddrAsWord32X8#` — arity 3
@@ -1245,7 +1246,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord8X32OffAddr#` — arity 3
 - [ ] `readWord8X64Array#` — arity 3
 - [ ] `readWord8X64OffAddr#` — arity 3
-- [ ] `readWordOffAddr#` — arity 3
 - [ ] `remAddr#` — arity 2
 - [ ] `remInt16X16#` — arity 2
 - [ ] `remInt16X32#` — arity 2

@@ -386,6 +386,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadManagedAddress {
+        @Specialization public static void read(VirtualFrame frame, ManagedAddressRead operation,
+                LocalAccessor destination, ManagedAddress address, long offset, Object state,
+                @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            long value = operation.read(address, offset);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+        }
+    }
+
+    @Operation
     public static final class WriteWord8OffAddr {
         @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
             ManagedByteArray.requireState(state);
