@@ -41,12 +41,12 @@ prepareThreadAsync root = do
     (status, _, errors) <- readCreateProcessWithExitCode
       ((proc "python3" ["scripts/audit-core.py", "--entry", "forkAndThrow",
         "--output", report, core </> "ThreadAsyncAudit.json"]) { cwd = Just root }) ""
-    unless (status == ExitSuccess || status == ExitFailure 1)
+    unless (status == ExitSuccess)
       (die ("Public thread Core audit failed: " ++ errors))
     bytes <- BS.readFile (root </> report)
     case decodeStrict' bytes of
-      Just value | supportedOrExactFrontier value -> pure ()
-      _ -> die "Public thread Core audit changed beyond the three known primops"
+      Just value | supportedThreadContract value -> pure ()
+      _ -> die "Public thread Core audit did not accept the exact threading contract"
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
@@ -72,19 +72,13 @@ prepareThreadAsync root = do
     "entry" .= ("forkAndThrow" :: String), "stages" .= stages,
     "native" .= ([43, 44] :: [Int]), "inputHashes" .= sourceHashes,
     "artifactHashes" .= artifactHashes, "installedArtifactsHashed" .= False]
-  putStrLn "thread-async: native fork#/myThreadId#/killThread#, strict pre/post Core frontier"
+  putStrLn "thread-async: native fork#/myThreadId#/killThread#, strict pre/post Core"
 
-supportedOrExactFrontier :: Value -> Bool
-supportedOrExactFrontier (Object report) = hasPublicThreadPrimitives && case KeyMap.lookup "accepted" report of
+supportedThreadContract :: Value -> Bool
+supportedThreadContract (Object report) = hasPublicThreadPrimitives && case KeyMap.lookup "accepted" report of
   Just (Bool True) ->
     KeyMap.lookup "missingGlobals" report == Just (Array mempty) &&
     KeyMap.lookup "issues" report == Just (Array mempty)
-  Just (Bool False) ->
-    KeyMap.lookup "missingGlobals" report == Just (Array mempty) &&
-    case KeyMap.lookup "issues" report of
-      Just (Array issues) -> sort (map issueName (toList issues)) ==
-        map Just ["fork#", "killThread#", "myThreadId#"]
-      _ -> False
   _ -> False
   where
     hasPublicThreadPrimitives = case KeyMap.lookup "primitives" report of
@@ -95,8 +89,4 @@ supportedOrExactFrontier (Object report) = hasPublicThreadPrimitives && case Key
       _ -> False
     primitiveName (Object primitive) = KeyMap.lookup "name" primitive
     primitiveName _ = Nothing
-    issueName (Object issue) = case (KeyMap.lookup "code" issue, KeyMap.lookup "detail" issue) of
-      (Just (String "unsupported-primitive"), Just (String name)) -> Just name
-      _ -> Nothing
-    issueName _ = Nothing
-supportedOrExactFrontier _ = False
+supportedThreadContract _ = False

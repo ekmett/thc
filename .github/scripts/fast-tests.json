@@ -324,6 +324,18 @@
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "python": []
     },
+    "compiler/test-fixtures/ThreadAsyncAudit.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ThreadAsyncNative.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ThreadAsyncFixtures.hs": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []

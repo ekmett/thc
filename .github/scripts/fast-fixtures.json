@@ -319,6 +319,19 @@
         "compiler/test-fixtures/CoreContinuationNative.hs"
       ]
     },
+    "thread-async": {
+      "junit": ["thc.runtime.ThreadAsyncNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-async"]}],
+      "outputs": ["build/thread-async"],
+      "sources": [
+        "test/haskell-fixtures/ThreadAsyncFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/ThreadAsyncAudit.hs",
+        "compiler/test-fixtures/ThreadAsyncNative.hs",
+        "thc.cabal"
+      ]
+    },
     "io-main-pap": {
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "commands": [{"argv": ["python3", "scripts/prepare-io-main-pap.py"]}],
