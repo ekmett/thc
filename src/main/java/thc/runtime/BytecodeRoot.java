@@ -465,6 +465,42 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    public static final class OriginalStackInfo {
+        @Specialization public static ManagedAddress apply(TargetLayout layout, Object snapshot) {
+            return ManagedStackRuntime.stackInfo(snapshot, layout);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = LocalAccessor.class, name = "standard")
+    @ConstantOperand(type = LocalAccessor.class, name = "key")
+    public static final class OriginalStackFrameInfo {
+        @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
+                LocalAccessor standard, LocalAccessor key, Object snapshot, long offset,
+                @Bind("$node") Node node) {
+            kotlin.Pair<ManagedAddress, ManagedAddress> result = ManagedStackRuntime.frameInfo(snapshot, offset, layout);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            standard.setObject(bytecode, frame, result.getFirst());
+            key.setObject(bytecode, frame, result.getSecond());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = TargetLayout.class, name = "layout")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalStackLookupIpe {
+        @Specialization public static void apply(VirtualFrame frame, TargetLayout layout,
+                LocalAccessor destination, ManagedAddress key, ManagedAddress output, Object state,
+                @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = ManagedStackRuntime.lookupIpe(key, output, layout);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalStdioWrite {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

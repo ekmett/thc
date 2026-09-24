@@ -1,0 +1,678 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "ghcRevision": "902339d332fb4ce2b3c87dcac1ee6495d41ad886",
+  "exporterRevision": "62e3400c5b889d3971cb4047709c408fd270255f",
+  "claim": "Exact unchanged raw application excerpts and only their referenced original source-file/span records, projected from the retained hash-pinned exports; not a fresh export, executable Core module, or runtime-support claim.",
+  "sourceFiles": [
+    {
+      "id": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "path": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "content": "{-# LANGUAGE CPP #-}\n{-# LANGUAGE BangPatterns #-}\n{-# LANGUAGE DuplicateRecordFields #-}\n{-# LANGUAGE FlexibleInstances #-}\n{-# LANGUAGE GHCForeignImportPrim #-}\n{-# LANGUAGE MagicHash #-}\n{-# LANGUAGE NamedFieldPuns #-}\n{-# LANGUAGE RankNTypes #-}\n{-# LANGUAGE RecordWildCards #-}\n{-# LANGUAGE ScopedTypeVariables #-}\n{-# LANGUAGE TypeFamilies #-}\n{-# LANGUAGE TypeInType #-}\n{-# LANGUAGE UnboxedTuples #-}\n{-# LANGUAGE UnliftedFFITypes #-}\n\nmodule GHC.Internal.Stack.Decode (\n  -- * High-level stack decoders\n  decode,\n  decodeStack,\n  decodeStackWithIpe,\n  -- * Stack decoder helpers\n  decodeStackWithFrameUnpack,\n  -- * StackEntry\n  StackEntry(..),\n  -- * Pretty printing\n  prettyStackEntry,\n  prettyStackFrameWithIpe,\n  )\nwhere\n\nimport GHC.Internal.Base\nimport GHC.Internal.Show\nimport GHC.Internal.Real\nimport GHC.Internal.Word\nimport GHC.Internal.Num\nimport GHC.Internal.Data.Bits\nimport GHC.Internal.Data.Functor\nimport GHC.Internal.Data.Maybe (catMaybes)\nimport GHC.Internal.Data.List\nimport GHC.Internal.Data.Tuple\nimport GHC.Internal.Foreign.Ptr\nimport GHC.Internal.Foreign.Storable\nimport GHC.Internal.Exts\nimport GHC.Internal.Unsafe.Coerce\n\nimport GHC.Internal.ClosureTypes\nimport GHC.Internal.Heap.Closures\n  ( Box (..),\n    StackFrame,\n    GenStackFrame (..),\n    StgStackClosure,\n    GenStgStackClosure (..),\n    StackField,\n    GenStackField(..)\n  )\nimport GHC.Internal.Heap.Constants (wORD_SIZE_IN_BITS)\nimport GHC.Internal.Stack.Annotation\n-- See Note [No way-dependent imports]\n#if defined(PROFILING)\nimport GHC.Internal.Stack.Constants ()\nimport GHC.Internal.Stack.ConstantsProf\nimport GHC.Internal.Heap.InfoTable ()\nimport GHC.Internal.Heap.InfoTableProf\n#else\nimport GHC.Internal.Heap.InfoTable\nimport GHC.Internal.Heap.InfoTableProf ()\nimport GHC.Internal.Stack.Constants\nimport GHC.Internal.Stack.ConstantsProf ()\n#endif\nimport GHC.Internal.Stack.CloneStack\nimport GHC.Internal.InfoProv.Types (InfoProv (..), ipLoc, lookupIPE)\n\n{- Note [Decoding the stack]\n   ~~~~~~~~~~~~~~~~~~~~~~~~~\n\nThe stack is represented by a chain of StgStack closures. Each of these closures\nis subject to garbage collection. I.e. they can be moved in memory (in a\nsimplified perspective) at any time.\n\nThe array of closures inside an StgStack (that makeup the execution stack; the\nstack frames) is moved as bare memory by the garbage collector. References\n(pointers) to stack frames are not updated by the garbage collector.\n\nAs the StgStack closure is moved as whole, the relative offsets inside it stay\nthe same. (Though, the absolute addresses change!)\n\nDecoding\n========\n\nStack frames are defined by their `StackSnapshot#` (`StgStack*` in RTS) and\ntheir relative offset. This tuple is described by `StackFrameLocation`.\n\n`StackFrame` is an ADT for decoded stack frames. Regarding payload and fields we\nhave to deal with three cases:\n\n- If the payload can only be a closure, we put it in a `Box` for later decoding\n  by the heap closure functions.\n\n- If the payload can either be a closure or a word-sized value (this happens for\n  bitmap-encoded payloads), we use a `StackField` which is a sum type to\n  represent either a `Word` or a `Box`.\n\n- Fields that are just simple (i.e. non-closure) values are decoded as such.\n\nThe decoding happens in two phases:\n\n1. The whole stack is decoded into `StackFrameLocation`s.\n\n2. All `StackFrameLocation`s are decoded into `StackFrame`s.\n\n`StackSnapshot#` parameters are updated by the garbage collector and thus safe\nto hand around.\n\nThe head of the stack frame array has offset (index) 0. To traverse the stack\nframes the latest stack frame's offset is incremented by the closure size. The\nunit of the offset is machine words (32bit or 64bit.)\n\nIO\n==\n\nUnfortunately, ghc-heap decodes `Closure`s in `IO`. This leads to `StackFrames`\nalso being decoded in `IO`, due to references to `Closure`s.\n\nTechnical details\n=================\n\n- All access to StgStack/StackSnapshot# closures is made through Cmm code. This\n  keeps the closure from being moved by the garbage collector during the\n  operation.\n\n- As StgStacks are mainly used in Cmm and C code, much of the decoding logic is\n  implemented in Cmm and C. It's just easier to reuse existing helper macros and\n  functions, than reinventing them in Haskell.\n\n- Offsets and sizes of closures are imported from DerivedConstants.h via HSC.\n  This keeps the code very portable.\n-}\n\nforeign import prim \"getUnderflowFrameNextChunkzh\"\n  getUnderflowFrameNextChunk# ::\n    StackSnapshot# -> Word# -> StackSnapshot#\n\ngetUnderflowFrameNextChunk :: StackSnapshot# -> WordOffset -> StackSnapshot\ngetUnderflowFrameNextChunk stackSnapshot# index =\n  StackSnapshot (getUnderflowFrameNextChunk# stackSnapshot# (wordOffsetToWord# index))\n\nforeign import prim \"getWordzh\"\n  getWord# ::\n    StackSnapshot# -> Word# -> Word#\n\ngetWord :: StackSnapshot# -> WordOffset -> Word\ngetWord stackSnapshot# index =\n  W# (getWord# stackSnapshot# (wordOffsetToWord# index))\n\nforeign import prim \"isArgGenBigRetFunTypezh\" isArgGenBigRetFunType# :: StackSnapshot# -> Word# -> Int#\n\nisArgGenBigRetFunType :: StackSnapshot# -> WordOffset -> Bool\nisArgGenBigRetFunType stackSnapshot# index =\n  I# (isArgGenBigRetFunType# stackSnapshot# (wordOffsetToWord# index)) > 0\n\n-- | Gets contents of a `LargeBitmap` (@StgLargeBitmap@)\n--\n-- The first two arguments identify the location of the frame on the stack.\n-- Returned is the `Addr#` of the @StgWord[]@ (bitmap) and it's size.\ntype LargeBitmapGetter = StackSnapshot# -> Word# -> (# Addr#, Word# #)\n\nforeign import prim \"getLargeBitmapzh\" getLargeBitmap# :: LargeBitmapGetter\n\nforeign import prim \"getBCOLargeBitmapzh\" getBCOLargeBitmap# :: LargeBitmapGetter\n\nforeign import prim \"getRetFunLargeBitmapzh\" getRetFunLargeBitmap# :: LargeBitmapGetter\n\n-- | Gets contents of a small bitmap (fitting in one @StgWord@)\n--\n-- The first two arguments identify the location of the frame on the stack.\n-- Returned is the bitmap and it's size.\ntype SmallBitmapGetter = StackSnapshot# -> Word# -> (# Word#, Word# #)\n\nforeign import prim \"getSmallBitmapzh\" getSmallBitmap# :: SmallBitmapGetter\n\nforeign import prim \"getRetFunSmallBitmapzh\" getRetFunSmallBitmap# :: SmallBitmapGetter\n\nforeign import prim \"getInfoTableAddrszh\" getInfoTableAddrs# :: StackSnapshot# -> Word# -> (# Addr#, Addr# #)\n\nforeign import prim \"getStackInfoTableAddrzh\" getStackInfoTableAddr# :: StackSnapshot# -> Addr#\n\n-- | Get the 'StgInfoTable' of the stack frame.\n-- Additionally, provides 'InfoProv' for the 'StgInfoTable' if there is any.\ngetInfoTableOnStack :: StackSnapshot# -> WordOffset -> IO (StgInfoTable, Maybe InfoProv)\ngetInfoTableOnStack stackSnapshot# index =\n  let !(# itbl_struct#, itbl_ptr_ipe_key# #) = getInfoTableAddrs# stackSnapshot# (wordOffsetToWord# index)\n   in\n    (,) <$> peekItbl (Ptr itbl_struct#) <*> lookupIPE (Ptr itbl_ptr_ipe_key#)\n\ngetInfoTableForStack :: StackSnapshot# -> IO StgInfoTable\ngetInfoTableForStack stackSnapshot# =\n  peekItbl $\n    Ptr (getStackInfoTableAddr# stackSnapshot#)\n\nforeign import prim \"getStackClosurezh\"\n  getStackClosure# ::\n    StackSnapshot# -> Word# ->  Any\n\nforeign import prim \"getStackFieldszh\"\n  getStackFields# ::\n    StackSnapshot# -> Word32#\n\ngetStackFields :: StackSnapshot# -> Word32\ngetStackFields stackSnapshot# =\n  case getStackFields# stackSnapshot# of\n    sSize# -> W32# sSize#\n\n-- | `StackFrameLocation` of the top-most stack frame\nstackHead :: StackSnapshot# -> StackFrameLocation\nstackHead s# = (StackSnapshot s#, 0) -- GHC stacks are never empty\n\n-- | Advance to the next stack frame (if any)\n--\n-- The last `Int#` in the result tuple is meant to be treated as bool\n-- (has_next).\nforeign import prim \"advanceStackFrameLocationzh\"\n  advanceStackFrameLocation# ::\n    StackSnapshot# -> Word# -> (# StackSnapshot#, Word#, Int# #)\n\n-- | Advance to the next stack frame (if any)\nadvanceStackFrameLocation :: StackFrameLocation -> Maybe StackFrameLocation\nadvanceStackFrameLocation ((StackSnapshot stackSnapshot#), index) =\n  let !(# s', i', hasNext #) = advanceStackFrameLocation# stackSnapshot# (wordOffsetToWord# index)\n   in if I# hasNext > 0\n        then Just (StackSnapshot s', primWordToWordOffset i')\n        else Nothing\n  where\n    primWordToWordOffset :: Word# -> WordOffset\n    primWordToWordOffset w# = fromIntegral (W# w#)\n\ngetClosureBox :: StackSnapshot# -> WordOffset -> Box\ngetClosureBox stackSnapshot# index =\n        case getStackClosure# stackSnapshot# (wordOffsetToWord# index) of\n          -- c needs to be strictly evaluated, otherwise a thunk gets boxed (and\n          -- will later be decoded as such)\n          !c -> Box c\n\n-- | Representation of @StgLargeBitmap@ (RTS)\ndata LargeBitmap = LargeBitmap\n  { largeBitmapSize :: Word,\n    largebitmapWords :: Ptr Word\n  }\n\n-- | Is a bitmap entry a closure pointer or a primitive non-pointer?\ndata Pointerness = Pointer | NonPointer\n  deriving (Show)\n\ndecodeLargeBitmap :: LargeBitmapGetter -> StackSnapshot# -> WordOffset -> WordOffset -> IO [StackField]\ndecodeLargeBitmap getterFun# stackSnapshot# index relativePayloadOffset = do\n  let largeBitmap = case getterFun# stackSnapshot# (wordOffsetToWord# index) of\n        (# wordsAddr#, size# #) -> LargeBitmap (W# size#) (Ptr wordsAddr#)\n  bitmapWords <- largeBitmapToList largeBitmap\n  pure $ decodeBitmaps\n          stackSnapshot#\n          (index + relativePayloadOffset)\n          (bitmapWordsPointerness (largeBitmapSize largeBitmap) bitmapWords)\n  where\n    largeBitmapToList :: LargeBitmap -> IO [Word]\n    largeBitmapToList LargeBitmap {..} =\n      cWordArrayToList largebitmapWords $\n        (usedBitmapWords . fromIntegral) largeBitmapSize\n\n    cWordArrayToList :: Ptr Word -> Int -> IO [Word]\n    cWordArrayToList ptr size = mapM (peekElemOff ptr) [0 .. (size - 1)]\n\n    usedBitmapWords :: Int -> Int\n    usedBitmapWords 0 = error \"Invalid large bitmap size 0.\"\n    usedBitmapWords size = (size `div` fromIntegral wORD_SIZE_IN_BITS) + 1\n\n    bitmapWordsPointerness :: Word -> [Word] -> [Pointerness]\n    bitmapWordsPointerness size _ | size <= 0 = []\n    bitmapWordsPointerness _ [] = []\n    bitmapWordsPointerness size (w : wds) =\n      bitmapWordPointerness (min size (fromIntegral wORD_SIZE_IN_BITS)) w\n        ++ bitmapWordsPointerness (size - fromIntegral wORD_SIZE_IN_BITS) wds\n\nbitmapWordPointerness :: Word -> Word -> [Pointerness]\nbitmapWordPointerness 0 _ = []\nbitmapWordPointerness bSize bitmapWord =\n  ( if (bitmapWord .&. 1) /= 0\n      then NonPointer\n      else Pointer\n  )\n    : bitmapWordPointerness\n      (bSize - 1)\n      (bitmapWord `shiftR` 1)\n\ndecodeBitmaps :: StackSnapshot# -> WordOffset -> [Pointerness] -> [StackField]\ndecodeBitmaps stack# index ps =\n  zipWith toPayload ps [index ..]\n  where\n    toPayload :: Pointerness -> WordOffset -> StackField\n    toPayload p i = case p of\n      NonPointer -> StackWord (getWord stack# i)\n      Pointer -> StackBox (getClosureBox stack# i)\n\ndecodeSmallBitmap :: SmallBitmapGetter -> StackSnapshot# -> WordOffset -> WordOffset -> [StackField]\ndecodeSmallBitmap getterFun# stackSnapshot# index relativePayloadOffset =\n  let (bitmap, size) = case getterFun# stackSnapshot# (wordOffsetToWord# index) of\n        (# b#, s# #) -> (W# b#, W# s#)\n  in decodeBitmaps\n      stackSnapshot#\n      (index + relativePayloadOffset)\n      (bitmapWordPointerness size bitmap)\n\nunpackStackFrame :: StackFrameLocation -> IO StackFrame\nunpackStackFrame stackFrameLoc = do\n  unpackStackFrameTo stackFrameLoc\n    (\\ info _ nextChunk -> do\n      stackClosure <- decodeStack nextChunk\n      pure $\n        UnderflowFrame\n          { info_tbl = info,\n            nextChunk = stackClosure\n          }\n    )\n    (\\ frame _ -> pure frame)\n\nunpackStackFrameWithIpe :: StackFrameLocation -> IO [(StackFrame, Maybe InfoProv)]\nunpackStackFrameWithIpe stackFrameLoc = do\n  unpackStackFrameTo stackFrameLoc\n    (\\ info mIpe nextChunk@(StackSnapshot stack#) -> do\n      framesWithIpe <- decodeStackWithIpe nextChunk\n      pure\n        [ ( UnderflowFrame\n            { info_tbl = info,\n              nextChunk =\n                GenStgStackClosure\n                  { ssc_info = info,\n                    ssc_stack_size = getStackFields stack#,\n                    ssc_stack = map fst framesWithIpe\n                  }\n            }\n          , mIpe\n          )\n        ]\n    )\n    (\\ frame mIpe -> pure [(frame, mIpe)])\n\nunpackStackFrameTo ::\n  forall a .\n  StackFrameLocation ->\n  -- ^ Decode the given 'StackFrame'.\n  (StgInfoTable -> Maybe InfoProv -> StackSnapshot -> IO a) ->\n  -- ^ How to handle 'UNDERFLOW_FRAME's.\n  (StackFrame -> Maybe InfoProv -> IO a) ->\n  -- ^ How to handle all other 'StackFrame' values.\n  IO a\nunpackStackFrameTo (StackSnapshot stackSnapshot#, index) unpackUnderflowFrame finaliseStackFrame = do\n  (info, m_info_prov) <- getInfoTableOnStack stackSnapshot# index\n  unpackStackFrame' info\n    (unpackUnderflowFrame info m_info_prov)\n    (`finaliseStackFrame` m_info_prov)\n  where\n    unpackStackFrame' ::\n      StgInfoTable ->\n      (StackSnapshot -> IO a) ->\n      (StackFrame -> IO a) ->\n      IO a\n    unpackStackFrame' info mkUnderflowResult mkStackFrameResult =\n      case tipe info of\n        RET_BCO -> do\n          let bco' = getClosureBox stackSnapshot# (index + offsetStgClosurePayload)\n          -- The arguments begin directly after the payload's one element\n          bcoArgs' <- decodeLargeBitmap getBCOLargeBitmap# stackSnapshot# index (offsetStgClosurePayload + 1)\n          mkStackFrameResult\n            RetBCO\n              { info_tbl = info,\n                bco = bco',\n                bcoArgs = bcoArgs'\n              }\n        RET_SMALL ->\n          let payload' = decodeSmallBitmap getSmallBitmap# stackSnapshot# index offsetStgClosurePayload\n          in\n            mkStackFrameResult $\n              RetSmall\n                { info_tbl = info,\n                  stack_payload = payload'\n                }\n        RET_BIG -> do\n          payload' <- decodeLargeBitmap getLargeBitmap# stackSnapshot# index offsetStgClosurePayload\n          mkStackFrameResult $\n            RetBig\n              { info_tbl = info,\n                stack_payload = payload'\n              }\n        RET_FUN -> do\n          let retFunSize' = getWord stackSnapshot# (index + offsetStgRetFunFrameSize)\n              retFunFun' = getClosureBox stackSnapshot# (index + offsetStgRetFunFrameFun)\n          retFunPayload' <-\n            if isArgGenBigRetFunType stackSnapshot# index == True\n              then decodeLargeBitmap getRetFunLargeBitmap# stackSnapshot# index offsetStgRetFunFramePayload\n              else pure $ decodeSmallBitmap getRetFunSmallBitmap# stackSnapshot# index offsetStgRetFunFramePayload\n          mkStackFrameResult $\n            RetFun\n              { info_tbl = info,\n                retFunSize = retFunSize',\n                retFunFun = retFunFun',\n                retFunPayload = retFunPayload'\n              }\n        UPDATE_FRAME ->\n          let updatee' = getClosureBox stackSnapshot# (index + offsetStgUpdateFrameUpdatee)\n          in\n            mkStackFrameResult $\n              UpdateFrame\n                { info_tbl = info,\n                  updatee = updatee'\n                }\n        CATCH_FRAME -> do\n          let handler' = getClosureBox stackSnapshot# (index + offsetStgCatchFrameHandler)\n          mkStackFrameResult $\n            CatchFrame\n              { info_tbl = info,\n                handler = handler'\n              }\n        UNDERFLOW_FRAME -> do\n          let nextChunk' = getUnderflowFrameNextChunk stackSnapshot# index\n          mkUnderflowResult nextChunk'\n        STOP_FRAME -> mkStackFrameResult $ StopFrame {info_tbl = info}\n        ATOMICALLY_FRAME -> do\n          let atomicallyFrameCode' = getClosureBox stackSnapshot# (index + offsetStgAtomicallyFrameCode)\n              result' = getClosureBox stackSnapshot# (index + offsetStgAtomicallyFrameResult)\n          mkStackFrameResult $\n            AtomicallyFrame\n              { info_tbl = info,\n                atomicallyFrameCode = atomicallyFrameCode',\n                result = result'\n              }\n        CATCH_RETRY_FRAME ->\n          let running_alt_code' = getWord stackSnapshot# (index + offsetStgCatchRetryFrameRunningAltCode)\n              first_code' = getClosureBox stackSnapshot# (index + offsetStgCatchRetryFrameRunningFirstCode)\n              alt_code' = getClosureBox stackSnapshot# (index + offsetStgCatchRetryFrameAltCode)\n          in\n            mkStackFrameResult $\n              CatchRetryFrame\n                { info_tbl = info,\n                  running_alt_code = running_alt_code',\n                  first_code = first_code',\n                  alt_code = alt_code'\n                }\n        CATCH_STM_FRAME ->\n          let catchFrameCode' = getClosureBox stackSnapshot# (index + offsetStgCatchSTMFrameCode)\n              handler' = getClosureBox stackSnapshot# (index + offsetStgCatchSTMFrameHandler)\n          in\n            mkStackFrameResult $\n              CatchStmFrame\n                { info_tbl = info,\n                  catchFrameCode = catchFrameCode',\n                  handler = handler'\n                }\n        ANN_FRAME ->\n          let annotation = getClosureBox stackSnapshot# (index + offsetStgAnnFrameAnn)\n           in\n             mkStackFrameResult $\n               AnnFrame\n                { info_tbl = info,\n                  annotation = annotation\n                }\n        x -> error $ \"Unexpected closure type on stack: \" ++ show x\n\n-- | Unbox 'Int#' from 'Int'\ntoInt# :: Int -> Int#\ntoInt# (I# i) = i\n\n-- | Convert `Int` to `Word#`\nintToWord# :: Int -> Word#\nintToWord# i = int2Word# (toInt# i)\n\nwordOffsetToWord# :: WordOffset -> Word#\nwordOffsetToWord# wo = intToWord# (fromIntegral wo)\n\n-- ----------------------------------------------------------------------------\n-- Simplified source location representation of provenance information\n-- ----------------------------------------------------------------------------\n\n-- | Representation for the source location where a return frame was pushed on the stack.\n-- This happens every time when a @case ... of@ scrutinee is evaluated.\ndata StackEntry = StackEntry\n  { functionName :: String,\n    moduleName :: String,\n    srcLoc :: String,\n    closureType :: ClosureType\n  }\n  deriving (Show, Eq)\n\ntoStackEntry :: InfoProv -> StackEntry\ntoStackEntry infoProv =\n  StackEntry\n  { functionName = ipLabel infoProv,\n    moduleName = ipMod infoProv,\n    srcLoc = ipLoc infoProv,\n    closureType = ipDesc infoProv\n  }\n\n-- ----------------------------------------------------------------------------\n-- Stack decoders\n-- ----------------------------------------------------------------------------\n\n-- | Decode a 'StackSnapshot' to a stacktrace (a list of 'StackEntry').\n-- The stack trace is created from return frames with according 'InfoProvEnt'\n-- entries. To generate them, use the GHC flag @-finfo-table-map@. If there are\n-- no 'InfoProvEnt' entries, an empty list is returned.\n--\n-- Please note:\n--\n--   * To gather 'StackEntry' from libraries, these have to be\n--     compiled with @-finfo-table-map@, too.\n--   * Due to optimizations by GHC (e.g. inlining) the stacktrace may change\n--     with different GHC parameters and versions.\n--   * The stack trace is empty (by design) if there are no return frames on\n--     the stack. (These are pushed every time when a @case ... of@ scrutinee\n--     is evaluated.)\n--\n-- @since base-4.17.0.0\ndecode :: StackSnapshot -> IO [StackEntry]\ndecode stackSnapshot =\n  (map toStackEntry . catMaybes . map snd . reverse) <$> decodeStackWithIpe stackSnapshot\n\n\n-- | Location of a stackframe on the stack\n--\n-- It's defined by the `StackSnapshot` (@StgStack@) and the offset to the bottom\n-- of the stack.\ntype StackFrameLocation = (StackSnapshot, WordOffset)\n\n-- | Decode `StackSnapshot` to a `StgStackClosure`\n--\n-- The return value is the representation of the @StgStack@ itself.\n--\n-- See /Note [Decoding the stack]/.\ndecodeStack :: StackSnapshot -> IO StgStackClosure\ndecodeStack snapshot@(StackSnapshot stack#) = do\n  (stackInfo, ssc_stack) <- decodeStackWithFrameUnpack unpackStackFrame snapshot\n  pure\n    GenStgStackClosure\n      { ssc_info = stackInfo,\n        ssc_stack_size = getStackFields stack#,\n        ssc_stack = ssc_stack\n      }\n\ndecodeStackWithIpe :: StackSnapshot -> IO [(StackFrame, Maybe InfoProv)]\ndecodeStackWithIpe snapshot =\n  concat . snd <$> decodeStackWithFrameUnpack unpackStackFrameWithIpe snapshot\n\n-- ----------------------------------------------------------------------------\n-- Write your own stack decoder!\n-- ----------------------------------------------------------------------------\n\ndecodeStackWithFrameUnpack :: (StackFrameLocation -> IO a) -> StackSnapshot -> IO (StgInfoTable, [a])\ndecodeStackWithFrameUnpack unpackFrame (StackSnapshot stack#) = do\n  info <- getInfoTableForStack stack#\n  case tipe info of\n    STACK -> do\n      let sfls = stackFrameLocations stack#\n      stack' <- mapM unpackFrame sfls\n      pure (info, stack')\n    _ -> error $ \"Expected STACK closure, got \" ++ show info\n  where\n    stackFrameLocations :: StackSnapshot# -> [StackFrameLocation]\n    stackFrameLocations s# =\n      stackHead s#\n        : go (advanceStackFrameLocation (stackHead s#))\n      where\n        go :: Maybe StackFrameLocation -> [StackFrameLocation]\n        go Nothing = []\n        go (Just r) = r : go (advanceStackFrameLocation r)\n\n-- ----------------------------------------------------------------------------\n-- Pretty printing functions for stack entries, stack frames and provenance info\n-- ----------------------------------------------------------------------------\n\nprettyStackFrameWithIpe :: (StackFrame, Maybe InfoProv) -> Maybe String\nprettyStackFrameWithIpe (frame, mipe) =\n  case frame of\n    AnnFrame {annotation = Box someStackAnno } ->\n      case unsafeCoerce someStackAnno of\n        SomeStackAnnotation ann ->\n          Just $ displayStackAnnotation ann\n    _ ->\n      (prettyStackEntry . toStackEntry) <$> mipe\n\nprettyStackEntry :: StackEntry -> String\nprettyStackEntry (StackEntry {moduleName=mod_nm, functionName=fun_nm, srcLoc=loc}) =\n  mod_nm ++ \".\" ++ fun_nm ++ \" (\" ++ loc ++ \")\"\n"
+    },
+    {
+      "id": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+      "path": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+      "content": "{-# LANGUAGE TypeApplications #-}\n{-# LANGUAGE Trustworthy #-}\n{-# LANGUAGE UnboxedTuples #-}\n{-# LANGUAGE MagicHash #-}\n{-# LANGUAGE NoImplicitPrelude #-}\n\n#include \"Rts.h\"\n\nmodule GHC.Internal.InfoProv.Types\n    ( InfoProv(..)\n    , ipLoc\n    , ipeProv\n    , InfoProvEnt\n    , peekInfoProv\n    , getIPE\n    , StgInfoTable\n    , lookupIPE\n    ) where\n\nimport GHC.Internal.Base\nimport GHC.Internal.Enum\nimport GHC.Internal.Real (fromIntegral)\nimport GHC.Internal.Word (Word32)\nimport GHC.Internal.Show (Show)\nimport GHC.Internal.Ptr (Ptr(..), plusPtr)\nimport GHC.Internal.Foreign.C.String.Encoding (CString, peekCString)\nimport GHC.Internal.Foreign.C.Types (CBool(..))\nimport GHC.Internal.Foreign.Marshal.Alloc (allocaBytes)\nimport GHC.Internal.IO.Encoding (utf8)\nimport GHC.Internal.Foreign.Storable (peekByteOff)\nimport GHC.Internal.ClosureTypes\nimport GHC.Internal.Prim (whereFrom##)\n\ndata InfoProv = InfoProv {\n  ipName :: String,\n  ipDesc :: ClosureType,\n  ipTyDesc :: String,\n  ipLabel :: String,\n  -- | @since base-4.20.0.0\n  ipUnitId :: String,\n  ipMod :: String,\n  ipSrcFile :: String,\n  ipSrcSpan :: String\n} deriving (Eq, Show)\n\nipLoc :: InfoProv -> String\nipLoc ipe = ipSrcFile ipe ++ \":\" ++ ipSrcSpan ipe\n\ndata InfoProvEnt\n\ndata StgInfoTable\n\nforeign import ccall \"lookupIPE\" c_lookupIPE :: Ptr StgInfoTable -> Ptr InfoProvEnt -> IO CBool\n\nlookupIPE :: Ptr StgInfoTable -> IO (Maybe InfoProv)\nlookupIPE itbl = allocaBytes (#size InfoProvEnt) $ \\p -> do\n  res <- c_lookupIPE itbl p\n  case res of\n    1 -> Just `fmap` peekInfoProv (ipeProv p)\n    _ -> return Nothing\n\ngetIPE :: a -> r -> (Ptr InfoProvEnt -> IO r) -> IO r\ngetIPE obj fail k = allocaBytes (#size InfoProvEnt) $ \\p -> IO $ \\s ->\n  case whereFrom## obj (unPtr p) s of\n    (## s', 1## ##) -> unIO (k p) s'\n    (## s', _   ##) -> (## s', fail ##)\n  where\n    unPtr (Ptr p) = p\n\nipeProv :: Ptr InfoProvEnt -> Ptr InfoProv\nipeProv p = (#ptr InfoProvEnt, prov) p\n\npeekIpDesc :: Ptr InfoProv -> IO Word32\npeekIpDesc p    =  (# peek InfoProv, closure_desc) p\n\npeekIpName, peekIpLabel, peekIpUnitId, peekIpModule, peekIpSrcFile, peekIpSrcSpan, peekIpTyDesc :: Ptr InfoProv -> IO CString\npeekIpName p    =  (# peek InfoProv, table_name) p\npeekIpLabel p   =  (# peek InfoProv, label) p\npeekIpUnitId p  =  (# peek InfoProv, unit_id) p\npeekIpModule p  =  (# peek InfoProv, module) p\npeekIpSrcFile p =  (# peek InfoProv, src_file) p\npeekIpSrcSpan p =  (# peek InfoProv, src_span) p\npeekIpTyDesc p  =  (# peek InfoProv, ty_desc) p\n\npeekInfoProv :: Ptr InfoProv -> IO InfoProv\npeekInfoProv infop = do\n  name <- peekCString utf8 =<< peekIpName infop\n  desc <- peekIpDesc infop\n  tyDesc <- peekCString utf8 =<< peekIpTyDesc infop\n  label <- peekCString utf8 =<< peekIpLabel infop\n  unit_id <- peekCString utf8 =<< peekIpUnitId infop\n  mod <- peekCString utf8 =<< peekIpModule infop\n  file <- peekCString utf8 =<< peekIpSrcFile infop\n  span <- peekCString utf8 =<< peekIpSrcSpan infop\n  return InfoProv {\n      ipName = name,\n      -- The INVALID_OBJECT case should be impossible as we\n      -- control the C code generating these values.\n      ipDesc = toEnum $ fromIntegral desc,\n      ipTyDesc = tyDesc,\n      ipLabel = label,\n      ipUnitId = unit_id,\n      ipMod = mod,\n      ipSrcFile = file,\n      ipSrcSpan = span\n    }\n\n"
+    }
+  ],
+  "sourceSpans": [
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,32,556,38,\"decodeStackWithFrameUnpack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 556,
+      "startColumn": 32,
+      "endLine": 556,
+      "endColumn": 38,
+      "charIndex": 20817,
+      "charLength": 6,
+      "label": "decodeStackWithFrameUnpack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,11,556,38,\"decodeStackWithFrameUnpack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 556,
+      "startColumn": 11,
+      "endLine": 556,
+      "endColumn": 38,
+      "charIndex": 20796,
+      "charLength": 27,
+      "label": "decodeStackWithFrameUnpack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",555,1,571,59,\"decodeStackWithFrameUnpack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 555,
+      "startColumn": 1,
+      "endLine": 571,
+      "endColumn": 59,
+      "charIndex": 20719,
+      "charLength": 645,
+      "label": "decodeStackWithFrameUnpack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 355,
+      "startColumn": 46,
+      "endLine": 355,
+      "endColumn": 60,
+      "charIndex": 12777,
+      "charLength": 14,
+      "label": "unpackStackFrameTo"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,26,355,66,\"unpackStackFrameTo\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 355,
+      "startColumn": 26,
+      "endLine": 355,
+      "endColumn": 66,
+      "charIndex": 12757,
+      "charLength": 40,
+      "label": "unpackStackFrameTo"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",354,1,464,68,\"unpackStackFrameTo\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 354,
+      "startColumn": 1,
+      "endLine": 464,
+      "endColumn": 68,
+      "charIndex": 12630,
+      "charLength": 4805,
+      "label": "unpackStackFrameTo"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",198,5,198,48,\"getInfoTableForStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 198,
+      "startColumn": 5,
+      "endLine": 198,
+      "endColumn": 48,
+      "charIndex": 6948,
+      "charLength": 43,
+      "label": "getInfoTableForStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",196,1,198,48,\"getInfoTableForStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 196,
+      "startColumn": 1,
+      "endLine": 198,
+      "endColumn": 48,
+      "charIndex": 6893,
+      "charLength": 98,
+      "label": "getInfoTableForStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,67,191,81,\"getInfoTableOnStack.(...)\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 191,
+      "startColumn": 67,
+      "endLine": 191,
+      "endColumn": 81,
+      "charIndex": 6709,
+      "charLength": 14,
+      "label": "getInfoTableOnStack.(...)"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,48,191,107,\"getInfoTableOnStack.(...)\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 191,
+      "startColumn": 48,
+      "endLine": 191,
+      "endColumn": 107,
+      "charIndex": 6690,
+      "charLength": 59,
+      "label": "getInfoTableOnStack.(...)"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",190,1,193,78,\"getInfoTableOnStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+      "startLine": 190,
+      "startColumn": 1,
+      "endLine": 193,
+      "endColumn": 78,
+      "charIndex": 6600,
+      "charLength": 233,
+      "label": "getInfoTableOnStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+      "startLine": 57,
+      "startColumn": 27,
+      "endLine": 57,
+      "endColumn": 28,
+      "charIndex": 1492,
+      "charLength": 1,
+      "label": "lookupIPE"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,10,57,28,\"lookupIPE\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+      "startLine": 57,
+      "startColumn": 10,
+      "endLine": 57,
+      "endColumn": 28,
+      "charIndex": 1475,
+      "charLength": 18,
+      "label": "lookupIPE"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,39,60,24,\"lookupIPE\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+      "startLine": 56,
+      "startColumn": 39,
+      "endLine": 60,
+      "endColumn": 24,
+      "charIndex": 1444,
+      "charLength": 133,
+      "label": "lookupIPE"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,1,60,24,\"lookupIPE\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+      "startLine": 56,
+      "startColumn": 1,
+      "endLine": 60,
+      "endColumn": 24,
+      "charIndex": 1406,
+      "charLength": 171,
+      "label": "lookupIPE"
+    }
+  ],
+  "sources": [
+    {
+      "file": "GHC.Internal.Stack.Decode/GHC.Internal.Stack.Decode.json",
+      "sha256": "c3762b0e2ed8bb2bb50b748144fcc7da01dec204c0cc48adade79962e8b35c42",
+      "boundary": "optimized-Core-after-Tidy-before-CorePrep"
+    },
+    {
+      "file": "GHC.Internal.InfoProv.Types/GHC.Internal.InfoProv.Types.json",
+      "sha256": "63fe524cfd81c88ebd4f835c8718a30b86828c9e53549a2c001cbffac5ab2d1e",
+      "boundary": "optimized-Core-after-Tidy-before-CorePrep"
+    }
+  ],
+  "calls": [
+    {
+      "source": "GHC.Internal.Stack.Decode/GHC.Internal.Stack.Decode.json",
+      "owner": "ghc-internal:GHC.Internal.Stack.Decode.$wdecodeStackWithFrameUnpack",
+      "path": "/expr/2/3/2/1/2/1/1",
+      "application": [
+        "app",
+        [
+          "var",
+          "ghc-internal:GHC.Internal.Stack.Decode.{__ffi_static_ccall_safe ghc-internal:getStackInfoTableAddrzh \"getStackInfoTableAddrzh\" :: StackSnapshot#\n                                                                                           -> Addr#}_d35m",
+          {
+            "rep": {
+              "primReps": [
+                "BoxedRep (Just Lifted)"
+              ],
+              "kind": "closure",
+              "evaluated": true
+            },
+            "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,32,556,38,\"decodeStackWithFrameUnpack\")",
+            "sourceNotes": [
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",555,1,571,59,\"decodeStackWithFrameUnpack\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,11,556,38,\"decodeStackWithFrameUnpack\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",196,1,198,48,\"getInfoTableForStack\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",198,5,198,48,\"getInfoTableForStack\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,32,556,38,\"decodeStackWithFrameUnpack\")"
+            ]
+          }
+        ],
+        [
+          [
+            "var",
+            "ghc-internal:GHC.Internal.Stack.Decode.ww_s3eg",
+            {
+              "rep": {
+                "primReps": [
+                  "BoxedRep (Just Unlifted)"
+                ],
+                "kind": "object",
+                "evaluated": true
+              },
+              "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,32,556,38,\"decodeStackWithFrameUnpack\")",
+              "sourceNotes": [
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",555,1,571,59,\"decodeStackWithFrameUnpack\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,11,556,38,\"decodeStackWithFrameUnpack\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",196,1,198,48,\"getInfoTableForStack\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",198,5,198,48,\"getInfoTableForStack\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,32,556,38,\"decodeStackWithFrameUnpack\")"
+              ]
+            }
+          ]
+        ],
+        [
+          false
+        ],
+        false,
+        false,
+        {
+          "rep": {
+            "primReps": [
+              "AddrRep"
+            ],
+            "kind": "address",
+            "evaluated": false
+          },
+          "callDemand": {
+            "arity": 1,
+            "strictArgs": [
+              false
+            ]
+          },
+          "foreignCall": {
+            "schema": 1,
+            "target": {
+              "kind": "static",
+              "symbol": "getStackInfoTableAddrzh",
+              "unit": "ghc-internal",
+              "isFunction": true
+            },
+            "convention": "prim",
+            "safety": "safe",
+            "arity": 1,
+            "suppliedArity": 1,
+            "argumentReps": [
+              {
+                "primReps": [
+                  "BoxedRep (Just Unlifted)"
+                ],
+                "kind": "object",
+                "evaluated": false
+              }
+            ],
+            "resultRep": {
+              "primReps": [
+                "AddrRep"
+              ],
+              "kind": "address",
+              "evaluated": false
+            }
+          },
+          "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,32,556,38,\"decodeStackWithFrameUnpack\")",
+          "sourceNotes": [
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",555,1,571,59,\"decodeStackWithFrameUnpack\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,11,556,38,\"decodeStackWithFrameUnpack\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",196,1,198,48,\"getInfoTableForStack\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",198,5,198,48,\"getInfoTableForStack\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",556,32,556,38,\"decodeStackWithFrameUnpack\")"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "GHC.Internal.Stack.Decode/GHC.Internal.Stack.Decode.json",
+      "owner": "ghc-internal:GHC.Internal.Stack.Decode.$wunpackStackFrameTo",
+      "path": "/expr/2/3/3/3/3/3/3/3/3/3/3/3/3/3/3/3/3/3/3/2/1/3/0/3/1",
+      "application": [
+        "app",
+        [
+          "var",
+          "ghc-internal:GHC.Internal.Stack.Decode.{__ffi_static_ccall_safe ghc-internal:getInfoTableAddrszh \"getInfoTableAddrszh\" :: StackSnapshot#\n                                                                                   -> Word#\n                                                                                   -> (# Addr#,\n                                                                                         Addr# #)}_d35p",
+          {
+            "rep": {
+              "primReps": [
+                "BoxedRep (Just Lifted)"
+              ],
+              "kind": "closure",
+              "evaluated": true
+            },
+            "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")",
+            "sourceNotes": [
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",354,1,464,68,\"unpackStackFrameTo\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,26,355,66,\"unpackStackFrameTo\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",190,1,193,78,\"getInfoTableOnStack\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,48,191,107,\"getInfoTableOnStack.(...)\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,67,191,81,\"getInfoTableOnStack.(...)\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")"
+            ]
+          }
+        ],
+        [
+          [
+            "var",
+            "ghc-internal:GHC.Internal.Stack.Decode.ww_s3eX",
+            {
+              "rep": {
+                "primReps": [
+                  "BoxedRep (Just Unlifted)"
+                ],
+                "kind": "object",
+                "evaluated": true
+              },
+              "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")",
+              "sourceNotes": [
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",354,1,464,68,\"unpackStackFrameTo\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,26,355,66,\"unpackStackFrameTo\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",190,1,193,78,\"getInfoTableOnStack\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,48,191,107,\"getInfoTableOnStack.(...)\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,67,191,81,\"getInfoTableOnStack.(...)\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")"
+              ]
+            }
+          ],
+          [
+            "var",
+            "ghc-internal:GHC.Internal.Stack.Decode.ds_d35o",
+            {
+              "rep": {
+                "primReps": [
+                  "WordRep"
+                ],
+                "kind": "long",
+                "evaluated": true
+              },
+              "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")",
+              "sourceNotes": [
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",354,1,464,68,\"unpackStackFrameTo\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,26,355,66,\"unpackStackFrameTo\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",190,1,193,78,\"getInfoTableOnStack\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,48,191,107,\"getInfoTableOnStack.(...)\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,67,191,81,\"getInfoTableOnStack.(...)\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")"
+              ]
+            }
+          ]
+        ],
+        [
+          false,
+          false
+        ],
+        false,
+        false,
+        {
+          "rep": {
+            "primReps": [
+              "AddrRep",
+              "AddrRep"
+            ],
+            "kind": "unknown",
+            "evaluated": false,
+            "aggregate": "unboxed-tuple",
+            "components": [
+              {
+                "primReps": [
+                  "AddrRep"
+                ],
+                "kind": "address",
+                "evaluated": true
+              },
+              {
+                "primReps": [
+                  "AddrRep"
+                ],
+                "kind": "address",
+                "evaluated": true
+              }
+            ]
+          },
+          "callDemand": {
+            "arity": 2,
+            "strictArgs": [
+              false,
+              false
+            ]
+          },
+          "foreignCall": {
+            "schema": 1,
+            "target": {
+              "kind": "static",
+              "symbol": "getInfoTableAddrszh",
+              "unit": "ghc-internal",
+              "isFunction": true
+            },
+            "convention": "prim",
+            "safety": "safe",
+            "arity": 2,
+            "suppliedArity": 2,
+            "argumentReps": [
+              {
+                "primReps": [
+                  "BoxedRep (Just Unlifted)"
+                ],
+                "kind": "object",
+                "evaluated": false
+              },
+              {
+                "primReps": [
+                  "WordRep"
+                ],
+                "kind": "long",
+                "evaluated": false
+              }
+            ],
+            "resultRep": {
+              "primReps": [
+                "AddrRep",
+                "AddrRep"
+              ],
+              "kind": "unknown",
+              "evaluated": false,
+              "aggregate": "unboxed-tuple",
+              "components": [
+                {
+                  "primReps": [
+                    "AddrRep"
+                  ],
+                  "kind": "address",
+                  "evaluated": true
+                },
+                {
+                  "primReps": [
+                    "AddrRep"
+                  ],
+                  "kind": "address",
+                  "evaluated": true
+                }
+              ]
+            }
+          },
+          "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")",
+          "sourceNotes": [
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",354,1,464,68,\"unpackStackFrameTo\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,26,355,66,\"unpackStackFrameTo\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",190,1,193,78,\"getInfoTableOnStack\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,48,191,107,\"getInfoTableOnStack.(...)\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",191,67,191,81,\"getInfoTableOnStack.(...)\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs\",355,46,355,60,\"unpackStackFrameTo\")"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "GHC.Internal.InfoProv.Types/GHC.Internal.InfoProv.Types.json",
+      "owner": "ghc-internal:GHC.Internal.InfoProv.Types.lookupIPE",
+      "path": "/expr/2/2/1/2/3/2/1/2/3/0/3/3/0/3/1",
+      "application": [
+        "app",
+        [
+          "var",
+          "ghc-internal:GHC.Internal.InfoProv.Types.{__ffi_static_ccall_safe ghc-internal:lookupIPE :: Addr#\n                                                   -> Addr#\n                                                   -> State# RealWorld\n                                                   -> (# State# RealWorld, Word8# #)}_d2V9",
+          {
+            "rep": {
+              "primReps": [
+                "BoxedRep (Just Lifted)"
+              ],
+              "kind": "closure",
+              "evaluated": true
+            },
+            "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")",
+            "sourceNotes": [
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,1,60,24,\"lookupIPE\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,39,60,24,\"lookupIPE\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,10,57,28,\"lookupIPE\")",
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")"
+            ]
+          }
+        ],
+        [
+          [
+            "var",
+            "ghc-internal:GHC.Internal.InfoProv.Types.ds1_d2V3",
+            {
+              "rep": {
+                "primReps": [
+                  "AddrRep"
+                ],
+                "kind": "address",
+                "evaluated": true
+              },
+              "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")",
+              "sourceNotes": [
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,1,60,24,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,39,60,24,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,10,57,28,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")"
+              ]
+            }
+          ],
+          [
+            "var",
+            "ghc-internal:GHC.Internal.InfoProv.Types.ds3_d2V5",
+            {
+              "rep": {
+                "primReps": [
+                  "AddrRep"
+                ],
+                "kind": "address",
+                "evaluated": true
+              },
+              "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")",
+              "sourceNotes": [
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,1,60,24,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,39,60,24,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,10,57,28,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")"
+              ]
+            }
+          ],
+          [
+            "var",
+            "ghc-internal:GHC.Internal.InfoProv.Types.eta_B0",
+            {
+              "rep": {
+                "primReps": [],
+                "kind": "void",
+                "evaluated": true
+              },
+              "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")",
+              "sourceNotes": [
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,1,60,24,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,39,60,24,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,10,57,28,\"lookupIPE\")",
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")"
+              ]
+            }
+          ]
+        ],
+        [
+          false,
+          false,
+          false
+        ],
+        false,
+        false,
+        {
+          "rep": {
+            "primReps": [
+              "Word8Rep"
+            ],
+            "kind": "unknown",
+            "evaluated": false,
+            "aggregate": "unboxed-tuple",
+            "components": [
+              {
+                "primReps": [],
+                "kind": "void",
+                "evaluated": true
+              },
+              {
+                "primReps": [
+                  "Word8Rep"
+                ],
+                "kind": "long",
+                "evaluated": true
+              }
+            ]
+          },
+          "callDemand": {
+            "arity": 3,
+            "strictArgs": [
+              false,
+              false,
+              false
+            ]
+          },
+          "foreignCall": {
+            "schema": 1,
+            "target": {
+              "kind": "static",
+              "symbol": "lookupIPE",
+              "unit": "ghc-internal",
+              "isFunction": true
+            },
+            "convention": "ccall",
+            "safety": "safe",
+            "arity": 3,
+            "suppliedArity": 3,
+            "argumentReps": [
+              {
+                "primReps": [
+                  "AddrRep"
+                ],
+                "kind": "address",
+                "evaluated": false
+              },
+              {
+                "primReps": [
+                  "AddrRep"
+                ],
+                "kind": "address",
+                "evaluated": false
+              },
+              {
+                "primReps": [],
+                "kind": "void",
+                "evaluated": false
+              }
+            ],
+            "resultRep": {
+              "primReps": [
+                "Word8Rep"
+              ],
+              "kind": "unknown",
+              "evaluated": false,
+              "aggregate": "unboxed-tuple",
+              "components": [
+                {
+                  "primReps": [],
+                  "kind": "void",
+                  "evaluated": true
+                },
+                {
+                  "primReps": [
+                    "Word8Rep"
+                  ],
+                  "kind": "long",
+                  "evaluated": true
+                }
+              ]
+            }
+          },
+          "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")",
+          "sourceNotes": [
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,1,60,24,\"lookupIPE\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",56,39,60,24,\"lookupIPE\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,10,57,28,\"lookupIPE\")",
+            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc\",57,27,57,28,\"lookupIPE\")"
+          ]
+        }
+      ]
+    }
+  ]
+}

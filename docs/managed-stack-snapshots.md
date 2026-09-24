@@ -56,13 +56,14 @@ auditor tests use the unchanged exported worker with an explicitly synthetic
 scalar-result consumer. No stack getter, IPE, decoder, or remote-capture symbol
 is admitted by this capability.
 
-This does not attach snapshots to exceptions, emulate `StgStack`/info-table/IPE
-memory, capture remote threads, or freeze backtrace configuration. The remaining
+This does not attach snapshots to exceptions, emulate native `StgStack` memory,
+capture remote threads, or freeze backtrace configuration. The remaining
 GHC compatibility layer must preserve original primitive and foreign protocols:
 GHC may have already inlined its decoder or formatter into a dependency. A managed
 stack image must expose captured provenance to that unchanged Haskell code.
-Stack annotations and context ownership checks at that runtime boundary
-are separate work; this snapshot deliberately retains no guest payloads.
+Stack annotations are separate work; this snapshot deliberately retains no guest
+payloads. Context-owned captures carry an empty identity token, not a reference
+to the language state or registry. Standalone diagnostic captures have no token.
 
 `ManagedStackSnapshotTest` exercises synthetic Core through real AST and bytecode
 loaders, with a test capture callback as the newest guest frame. It checks frame
@@ -81,6 +82,51 @@ identity, and verifies first post-installation compiled calls with inlining
 enabled/disabled. Its wrapper and moved-body consumer control are explicitly
 synthetic, not fresh GHC inline exports. Raw contract and state-relabel controls
 fail closed. These are JVM protocol tests, not native GHC snapshot comparisons
-or a complete library bridge. Strict package linking currently still treats
-unresolved foreign heads as missing Haskell globals before lowering; this
-separate linker limitation is not bypassed by the clone adapter.
+or a complete library bridge. Strict package linking preserves the original
+foreign head for its exact protocol validation at lowering.
+
+## Original stack-info and IPE boundary
+
+The bounded managed service implements `getStackInfoTableAddrzh`,
+`getInfoTableAddrszh`, and `lookupIPE` through their unchanged original foreign
+applications in both backends. Recognition requires the exact static
+`ghc-internal` declaration, calling convention, saturation, raw representation
+proofs and unshadowed foreign head. A stored operand cannot be relabeled by its
+occurrence proof. A validated, typed, tables-next-to-code `TargetLayout` is
+required; no host offsets or executable entry addresses are inferred.
+
+The image is explicitly diagnostic: every captured live guest frame occupies
+one virtual word and has a zero-payload `RET_SMALL` record. The stack itself has
+a `STACK` info image. These immutable standard info-table bytes use target field
+offsets and widths. A frame's readable standard table and its stable one-past
+tables-next-to-code IPE key are distinct managed addresses. Frame offsets count
+virtual words, not bytes. This representation is not a native frame-kind map,
+an `AP_STACK`, or an asynchronous continuation.
+
+Registrations belong to the capturing context. A foreign-context or standalone
+snapshot is rejected, and a registered snapshot/key cannot change target layout.
+Unknown IPE keys return zero without changing the destination. Known keys return
+one only after a complete checked pointer-aware copy of `InfoProvEnt`; invalid
+State carriers, ranges, immutable/raw-exposed storage and partial pointer cells
+fail before any destination mutation. Field offsets include the output view's
+base and embedded `InfoProv` base exactly once. `closure_desc` is a Word32 field,
+not a pointer cell.
+
+IPE strings retain actual copied binding and source provenance. Missing fields
+stay empty; debug names do not establish module identity. The table name says
+`THC managed diagnostic frame`, and the type description is empty. Strings and
+info images remain immutable and usable after context disposal without retaining
+guest frames or the context. The snapshot cache and allocation/offset index use
+weak keys: discarded snapshots and unreferenced frame registrations are reclaimed
+during a long-lived context. Any surviving address alias or copied output pointer
+keeps its registration usable. Cached provenance excludes the info-table key to
+avoid a weak-key/value retention cycle. Disposal clears all registrations.
+
+`CoreStackInfoForeignTest`, `ManagedStackInfoImageTest`, and
+`ManagedStackRuntimeTest` cover the raw contracts, target bytes and ownership/
+transactional-copy rules. `OriginalStackInfoCallTest` places unchanged original
+call excerpts in explicitly synthetic scalar-result consumers, exercising AST
+and bytecode entries before and immediately after compilation, with inlining
+enabled and disabled. This is protocol execution, not execution of the complete
+original decoder or formatter. Remaining payload/bitmap/advance getters and
+remote capture are still unsupported.
