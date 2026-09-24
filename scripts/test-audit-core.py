@@ -1216,7 +1216,7 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
     """Genuine unchanged FCall applications in explicitly synthetic scalar consumers.
 
     This is a raw-proof audit, not execution of GHC's complete Decode closure.
-    Temporary capabilities exercise validators before runtime admission lands.
+    Production capabilities admit only the independently implemented protocols.
     """
     symbols = ('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'lookupIPE')
     resource = ROOT.parent / 'src/test/resources/core/original-stack-info-calls.json'
@@ -1237,8 +1237,7 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
         return module['bindings'][0]['expr'][2][1]
 
     def audit(self, module, enabled=True):
-        capabilities = [s for s in CAP['managedForeignCalls'] if s not in self.symbols]
-        if enabled: capabilities.extend(self.symbols)
+        capabilities = [s for s in CAP['managedForeignCalls'] if enabled or s not in self.symbols]
         return audit_core.Audit([('genuine-stack-info-app-with-synthetic-consumer.json', module)],
             dict(CAP, managedForeignCalls=capabilities)).run(['synthetic-consumer'])
 
@@ -1251,6 +1250,7 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
 
     def test_exact_original_applications_accept_with_explicit_capability_only(self):
         resource = json.loads(self.resource.read_text())
+        self.assertTrue(set(self.symbols) <= set(CAP['managedForeignCalls']))
         self.assertEqual('902339d332fb4ce2b3c87dcac1ee6495d41ad886', resource['ghcRevision'])
         self.assertEqual('62e3400c5b889d3971cb4047709c408fd270255f', resource['exporterRevision'])
         self.assertEqual(set(self.symbols), {r['application'][6]['foreignCall']['target']['symbol'] for r in resource['calls']})

@@ -15,11 +15,12 @@ import thc.Language
 
 /** Unchanged original FCall applications in synthetic scalar-result consumers. */
 class OriginalStackInfoCallTest {
-    private fun originals() = (Json.parse(javaClass.getResource("/core/original-stack-info-calls.json")!!.readText())
-        as Map<String, Any?>).getValue("calls") as List<Map<String, Any?>>
+    private fun original() = Json.parse(javaClass.getResource("/core/original-stack-info-calls.json")!!.readText())
+        as Map<String, Any?>
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
     private fun module(layout: Any? = StackInfoTestLayout.layout(), mutate: (MutableMap<String, Any?>) -> Unit = {}): Map<String, Any?> {
-        val bindings = originals().flatMap { record ->
+        val source = original()
+        val bindings = (source.getValue("calls") as List<Map<String, Any?>>).flatMap { record ->
             val call = record.getValue("application") as List<Any?>
             val tuple = (call[6] as Map<String, Any?>).getValue("rep") as Map<String, Any?>
             val foreign = (call[6] as Map<String, Any?>).getValue("foreignCall") as Map<String, Any?>
@@ -50,7 +51,10 @@ class OriginalStackInfoCallTest {
             }
         }
         return mapOf("schema" to 1, "module" to "OriginalStackInfo", "unit" to "test", "ghc" to "9.14.1",
-            "instrument" to true, "bindings" to bindings, "targetLayout" to layout)
+            "instrument" to true, "bindings" to bindings, "targetLayout" to layout,
+            "constructors" to listOf(mapOf("id" to "ghc-internal:GHC.Internal.Types.(#,#)",
+                "name" to "(#,#)", "kind" to "unboxed-tuple", "arity" to 2, "tag" to 1)),
+            "sourceFiles" to source.getValue("sourceFiles"), "sourceSpans" to source.getValue("sourceSpans"))
     }
 
     private fun load(language: Language, backend: String, module: Map<String, Any?>): ExecutableProgram =
@@ -59,7 +63,8 @@ class OriginalStackInfoCallTest {
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
         .option("engine.SingleTierCompilationThreshold", "10000000").build()
-    private fun valid(target: RootCallTarget) = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+    private fun valid(target: RootCallTarget, label: String) =
+        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), label)
     private fun released(language: Language) {
         val handoff = language.handoffState.get()
         assertEquals(0, handoff.arguments.depth); assertEquals(0, handoff.results.depth)
@@ -91,7 +96,7 @@ class OriginalStackInfoCallTest {
                     val result = Calls.target(target, arrayOf(0L, *arguments))
                     if (compiled) {
                         assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(), name)
-                        valid(target)
+                        valid(target, "$backend/inlining=$inlining/$name")
                     }
                     released(language)
                     return result
@@ -113,10 +118,10 @@ class OriginalStackInfoCallTest {
                     assertEquals(0L, call("lookup", ManagedAddress.nullAddress(), output, Unit))
                     assertSame(before, storage.readAddressByteOffset(13))
                 }
-                exercise()
-                targets.values.forEach { target ->
+                repeat(3) { exercise() }
+                targets.forEach { (name, target) ->
                     target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-                    valid(target)
+                    valid(target, "$backend/inlining=$inlining/$name installation")
                 }
                 compiled = true
                 exercise() // first call after installation; no settling or recompilation

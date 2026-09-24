@@ -20,22 +20,20 @@ internal class OriginalStackInfoExpression(private val operation: OriginalStackI
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        when (operation) {
-            OriginalStackInfoOp.FRAME_INFO -> {
-                val snapshot = operands[0].execute(frame)
-                val wordOffset = operands[1].executeRequiredLong(frame)
-                val (standard, key) = ManagedStackRuntime.frameInfo(snapshot, wordOffset, layout)
-                FrameAccess.write(frame, slots[offset], standard)
-                FrameAccess.write(frame, slots[offset + 1], key)
-            }
-            OriginalStackInfoOp.LOOKUP_IPE -> {
-                val key = operands[0].executeRequiredAddress(frame)
-                val destination = operands[1].executeRequiredAddress(frame)
-                requireVoidCarrier(operands[2].execute(frame))
-                FrameAccess.writeLong(frame, slots[offset], ManagedStackRuntime.lookupIpe(key, destination, layout))
-            }
-            else -> fault("Original stack info scalar cannot write a tuple")
-        }
+        // Enum `when` introduces a mutable ordinal table that partial evaluation
+        // cannot fold; keep the operation and its destination shape constant.
+        if (operation == OriginalStackInfoOp.FRAME_INFO) {
+            val snapshot = operands[0].execute(frame)
+            val wordOffset = operands[1].executeRequiredLong(frame)
+            val (standard, key) = ManagedStackRuntime.frameInfo(snapshot, wordOffset, layout)
+            FrameAccess.writeObject(frame, slots[offset], standard)
+            FrameAccess.writeObject(frame, slots[offset + 1], key)
+        } else if (operation == OriginalStackInfoOp.LOOKUP_IPE) {
+            val key = operands[0].executeRequiredAddress(frame)
+            val destination = operands[1].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            FrameAccess.writeLong(frame, slots[offset], ManagedStackRuntime.lookupIpe(key, destination, layout))
+        } else fault("Original stack info scalar cannot write a tuple")
         return null
     }
 }
