@@ -57,9 +57,9 @@ class IntArrayNativeTest {
         else -> setOf("newByteArray#", "unsafeFreezeByteArray#", "readIntArray#", "writeIntArray#", "indexIntArray#") +
             when (name) { "orderedInts" -> setOf("sizeofByteArray#"); "aliasIntBytes" -> setOf("writeWord8Array#", "indexWord8Array#"); else -> emptySet() }
     }
-    private fun checkedReport(name: String, report: Map<String, Any?>): Map<String, Int> {
-        require(name in names && report["accepted"] == true) { "Int-array strict audit failed: $name" }
-        val counts = (report["primitives"] as List<Map<String, Any?>>).associate { it["name"] as String to (it["uses"] as List<*>).size }
+    private fun checkedCore(name: String, evidence: ArrayCoreEvidence): Map<String, Int> {
+        require(name in names) { "Unknown Int-array root: $name" }
+        val counts = evidence.primitiveCounts
         require(counts.keys.containsAll(required(name))) { "Missing Int-array primitive: $name" }
         require(exactCounts[name].orEmpty().all { (primitive, count) -> counts[primitive] == count }) { "Int-array use count changed: $name" }
         return counts
@@ -156,17 +156,21 @@ class IntArrayNativeTest {
         }
     }
 
-    @Test fun primitiveReportsRequireAcceptanceRequiredNamesAndExactUseCounts() {
+    @Test fun exportedCoreRequiresAllPrimitiveNamesAndExactUseCounts() {
+        val source = merged(paths())
         for (name in names) {
-            val counts = required(name).associateWith { 1 } + exactCounts[name].orEmpty()
-            fun report(values: Map<String, Int>, accepted: Boolean = true) = mapOf("accepted" to accepted,
-                "primitives" to values.map { (primitive, count) -> mapOf("name" to primitive, "uses" to List(count) { emptyMap<String, Any?>() }) })
-            assertEquals(counts, checkedReport(name, report(counts)))
-            assertThrows(IllegalArgumentException::class.java) { checkedReport(name, report(counts, false)) }
-            for (primitive in required(name))
-                assertThrows(IllegalArgumentException::class.java) { checkedReport(name, report(counts-primitive)) }
-            for ((primitive, count) in exactCounts[name].orEmpty())
-                assertThrows(IllegalArgumentException::class.java) { checkedReport(name, report(counts+(primitive to count-1))) }
+            checkedCore(name, ArrayCoreEvidence(source, name))
+            for (primitive in required(name)) for (all in listOf(false, true)) {
+                if (!all && (exactCounts[name]?.get(primitive) ?: 0) < 2) continue
+                val module = Json.parse(Json.stringify(source)) as Map<String, Any?>
+                val evidence = ArrayCoreEvidence(module, name)
+                val uses = evidence.bindings.flatMap { evidence.nodes(it["expr"]) }
+                    .filter { it.take(2) == listOf("prim", primitive) }
+                assertTrue(uses.isNotEmpty())
+                for (node in if (all) uses else uses.take(1)) (node as MutableList<Any?>)[1] = "missingArrayPrimitive#"
+                assertThrows(IllegalArgumentException::class.java, { checkedCore(name, ArrayCoreEvidence(module, name)) },
+                    "$name/$primitive/all=$all")
+            }
         }
     }
 
@@ -190,9 +194,7 @@ class IntArrayNativeTest {
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
-                val report = Json.parse(File(root, "build/int-arrays/$stage/$name.audit.json").readText()) as Map<String, Any?>
-                val counts = checkedReport(name, report)
-                assertEquals(counts, (manifest["primitiveCounts"] as Map<String, Map<String, Number>>).getValue("$stage/$name").mapValues { it.value.toInt() })
+                checkedCore(name, ArrayCoreEvidence(module, name))
                 val cases = rows.getValue(name).map { it.input to it.answer }
                 assertEquals(cases.size, cases.map { it.first }.toSet().size)
                 assertEquals((manifest["inputs"] as List<Number>).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
