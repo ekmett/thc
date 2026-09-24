@@ -1,3 +1,4 @@
+@file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary

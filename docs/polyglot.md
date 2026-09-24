@@ -1,5 +1,41 @@
 # Polyglot calls from Haskell
 
+THC accepts synchronous JavaScript imports through its GHC plugin:
+
+```haskell
+{-# LANGUAGE ForeignFunctionInterface #-}
+
+foreign import javascript "(x, y) => x + y"
+  add :: Int -> Int -> IO Int
+
+foreign import javascript "(x) => x * 0.5"
+  half :: Double -> IO Double
+```
+
+Run `scripts/javascript-demo.sh` for the complete example. It checks unary,
+binary, floating-point, zero-argument, and unit-returning calls using real GHC
+exports before and after Tidy, on both THC backends with explicit compilation.
+
+The initial declaration syntax accepts `Int` and `Double` arguments and
+`IO Int`, `IO Double`, or `IO ()` results. Both `safe` and `unsafe` synchronous
+imports are accepted. Pure imports, `interruptible`, callbacks, and the
+`dynamic`/`wrapper` forms are rejected. The quoted JavaScript must denote an
+unapplied function, following GHC's JavaScript backend syntax.
+
+The plugin rewrites the parsed declaration before native GHC rejects the
+JavaScript calling convention. GHC supplies the ordinary scalar FFI wrappers;
+the resulting Core contains a versioned intrinsic with the exact JavaScript
+source and machine representations. THC checks that contract and implements
+the call through Truffle. It caches a call wrapper per source/arity and context,
+while evaluating the imported function expression on each invocation, so
+rebinding a JavaScript global remains observable. Operands and results use
+primitive THC slots; the argument array at the Truffle interop boundary is
+still required by that API.
+
+These declarations run under THC. Their generated symbols have no native
+implementation for linking an ordinary GHC executable. The plugin also rejects
+source-level `ccall` declarations that try to use the reserved JavaScript marker.
+
 `THC.Polyglot` is a small Haskell module that lets code running in THC call
 another language in the same GraalVM Polyglot Context. The current example
 evaluates JavaScript, reads a function member, calls it with an `Int`, and
@@ -42,7 +78,7 @@ access permissions, numeric conversion, missing members, and foreign exceptions.
 The host must permit the requested language through `PolyglotAccess`; the demo
 does so explicitly. THC uses `Env.parsePublic`, so the bridge obeys that policy.
 
-The module uses three versioned `foreign import prim` symbols:
+This lower-level module uses three versioned `foreign import prim` symbols:
 `thc_polyglot_v1_eval`, `thc_polyglot_v1_read_member`, and
 `thc_polyglot_v1_execute_int`. GHC retains their `State# RealWorld` input and
 unboxed state/result tuple output, so optimized Core still represents the

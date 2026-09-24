@@ -24,9 +24,10 @@ bindings, typed constructor fields, local joins, and unboxed tuple inputs and
 results. There is also bounded support for unboxed sum results, scalar arithmetic,
 local SIMD operations, and managed arrays and mutable references.
 
-The [polyglot example](docs/polyglot.md) calls JavaScript from Haskell through a
-small `THC.Polyglot` module. GHC checks the foreign declarations; THC implements
-them with Truffle interop. Run `scripts/polyglot-demo.sh` to try it.
+The [polyglot example](docs/polyglot.md) calls JavaScript from Haskell with
+`foreign import javascript`. GHC checks the declarations; THC implements them
+with Truffle interop. Run `scripts/javascript-demo.sh` to try it. A lower-level
+`THC.Polyglot` module also exposes language evaluation and opaque foreign values.
 
 The tests include ordinary list, `STRef`, array, `ShortByteString`, `IntMap`,
 `IntSet` and `Sequence` programs. They compare native GHC results with both

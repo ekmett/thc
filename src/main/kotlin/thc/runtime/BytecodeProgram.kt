@@ -836,8 +836,33 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
-            val polyglot = CorePolyglot.validate(expr, fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals))
-            if (polyglot != null) {
+            val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            val javascript = CoreJavaScript.validate(expr, defined)
+            val polyglot = if (javascript == null) CorePolyglot.validate(expr, defined) else null
+            if (javascript != null) {
+                val operands = args.map { argument(it, scope, false) }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val locals = operands.mapIndexed { index, operand ->
+                        val local = b.createLocal("JavaScript operand $index", null)
+                        b.beginStoreLocal(local)
+                        when (javascript.arguments.getOrNull(index)) {
+                            CoreKind.LONG -> { b.beginToLong(); operand.emit(e); b.endToLong() }
+                            CoreKind.DOUBLE -> { b.beginToDouble(); operand.emit(e); b.endToDouble() }
+                            else -> operand.emit(e)
+                        }
+                        b.endStoreLocal()
+                        LocalAccessor.constantOf(local)
+                    }
+                    val source = BytecodeJavaScriptArguments(javascript, locals.dropLast(1).toTypedArray(), locals.last())
+                    when (javascript.result) {
+                        CoreKind.LONG -> b.emitJavaScriptInt(source, destination.single())
+                        CoreKind.DOUBLE -> b.emitJavaScriptDouble(source, destination.single())
+                        CoreKind.VOID -> b.emitJavaScriptVoid(source)
+                        else -> throw RuntimeFault("Unsupported JavaScript result")
+                    }
+                }
+            } else if (polyglot != null) {
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 tupleExpression(tupleProof) { e, destination ->
                     when (polyglot) {

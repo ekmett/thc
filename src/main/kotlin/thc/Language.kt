@@ -136,7 +136,9 @@ object CoreModules {
 class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
-    class State(val env: Env)
+    class State(val env: Env) {
+        internal val javaScriptImports = thc.runtime.JavaScriptImports()
+    }
     override fun createContext(env: Env): State = State(env)
     companion object {
         private val contexts = ContextReference.create(Language::class.java)

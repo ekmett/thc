@@ -120,6 +120,50 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
     }
 
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class JavaScriptInt {
+        @Specialization public static void call(VirtualFrame frame, BytecodeJavaScriptArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) JavaScriptAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setLong(bytecode, frame, access.executeLong(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static JavaScriptAccess createAccess(BytecodeJavaScriptArguments arguments) {
+            return new JavaScriptAccess(arguments.getDeclaration());
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class JavaScriptDouble {
+        @Specialization public static void call(VirtualFrame frame, BytecodeJavaScriptArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) JavaScriptAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setDouble(bytecode, frame, access.executeDouble(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static JavaScriptAccess createAccess(BytecodeJavaScriptArguments arguments) {
+            return new JavaScriptAccess(arguments.getDeclaration());
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
+    public static final class JavaScriptVoid {
+        @Specialization public static void call(VirtualFrame frame, BytecodeJavaScriptArguments arguments,
+                @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) JavaScriptAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            access.executeVoid(arguments.read(bytecode, frame), arguments.state(bytecode, frame));
+        }
+        public static JavaScriptAccess createAccess(BytecodeJavaScriptArguments arguments) {
+            return new JavaScriptAccess(arguments.getDeclaration());
+        }
+    }
+
     /** Core's single-register integer representation guarantees a primitive value. */
     @Operation
     @ConstantOperand(type = GlobalBinding.class, name = "binding")

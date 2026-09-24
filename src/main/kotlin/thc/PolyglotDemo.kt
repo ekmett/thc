@@ -15,7 +15,10 @@ import java.io.File
 fun main(arguments: Array<String>) {
     val directory = File(arguments.firstOrNull() ?: "build/polyglot")
     val stages = listOf("pre-core", "post-core")
-    val moduleNames = listOf("THC.Polyglot.json", "THC.PolyglotDemo.json", "THC.InterfaceClosure.json")
+    val entry = arguments.getOrNull(1) ?: "main:THC.PolyglotDemo.main"
+    val moduleNames = arguments.drop(2).ifEmpty {
+        listOf("THC.Polyglot.json", "THC.PolyglotDemo.json", "THC.InterfaceClosure.json")
+    }
     for (stage in stages) for (backend in listOf("ast", "bytecode")) {
         val modules = moduleNames.map { name ->
             val file = File(File(directory, stage), name)
@@ -36,7 +39,6 @@ fun main(arguments: Array<String>) {
                 context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val entry = "main:THC.PolyglotDemo.main"
                     val linked = CoreModules.reachable(CoreModules.merge(modules), entry) + ("instrument" to true)
                     val bindings = linked["bindings"] as List<Map<String, Any?>>
                     val binding = bindings.single { it["id"] == entry }
