@@ -4,6 +4,10 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.UnexpectedResultException
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -19,6 +23,39 @@ class FloatingAddressTest {
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
+
+    @Test fun wrongTypedSpecializationPreservesActualWidthAndTupleEffects() {
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
+        val base = ManagedAddress.fromAllocation(PinnedMemory.allocate(32, 1))
+        FloatingAddresses.writeFloat(base, 2, -0.0f)
+        FloatingAddresses.writeDouble(base, 2, -0.0)
+        fun operand(value: Any): Expr = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any = value
+        }
+        fun node(op: FloatingAddressOp, vararg operands: Expr) =
+            FloatingAddressExpression(op, CoreRepresentation.UNKNOWN, arrayOf(*operands))
+        val floatIndex = node(FloatingAddressOp.INDEX_FLOAT, operand(base), operand(2L))
+        val floatMiss = assertThrows(UnexpectedResultException::class.java) { floatIndex.executeDouble(frame) }
+        assertTrue(floatMiss.result is Float)
+        assertEquals(0x80000000L, RawBitCasts.floatToWord32(floatMiss.result as Float))
+        val doubleIndex = node(FloatingAddressOp.INDEX_DOUBLE, operand(base), operand(2L))
+        val doubleMiss = assertThrows(UnexpectedResultException::class.java) { doubleIndex.executeFloat(frame) }
+        assertTrue(doubleMiss.result is Double)
+        assertEquals(Long.MIN_VALUE, RawBitCasts.doubleToWord64(doubleMiss.result as Double))
+        var stateEvaluations = 0
+        val state = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any { stateEvaluations++; return Unit }
+        }
+        val read = node(FloatingAddressOp.READ_FLOAT, operand(base), operand(2L), state)
+        assertThrows(RuntimeFault::class.java) { read.execute(frame) }
+        assertThrows(RuntimeFault::class.java) { read.executeFloat(frame) }
+        assertEquals(0, stateEvaluations)
+        assertThrows(RuntimeFault::class.java) { floatIndex.executeTuple(frame, intArrayOf(0), 0) }
+        val write = node(FloatingAddressOp.WRITE_FLOAT, operand(base), operand(2L), operand(1.0f), state)
+        assertThrows(RuntimeFault::class.java) { write.executeDouble(frame) }
+        assertEquals(0, stateEvaluations)
+        assertEquals(0x80000000L, RawBitCasts.floatToWord32(FloatingAddresses.readFloat(base, 2)))
+    }
 
     @Test fun nativeEndianFloatingStoragePreservesBitsAndChecksWholeElement() {
         val base = ManagedAddress.fromAllocation(PinnedMemory.allocate(64, 1))

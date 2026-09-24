@@ -53,6 +53,7 @@ internal class FloatingAddressExpression(private val operation: FloatingAddressO
     @field:Children private var operands: Array<Expr>) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any {
+        if (operation.tuple) fault("Floating Addr# tuple read requires a destination")
         if (operation.write) {
             val address = operands[0].executeRequiredAddress(frame)
             val index = operands[1].executeRequiredLong(frame)
@@ -67,13 +68,24 @@ internal class FloatingAddressExpression(private val operation: FloatingAddressO
             }
             return Unit
         }
-        return if (operation.floating) executeFloat(frame) else executeDouble(frame)
+        return if (operation == FloatingAddressOp.INDEX_FLOAT) executeFloat(frame) else executeDouble(frame)
     }
-    override fun executeFloat(frame: VirtualFrame): Float =
-        FloatingAddresses.readFloat(operands[0].executeRequiredAddress(frame), operands[1].executeRequiredLong(frame))
-    override fun executeDouble(frame: VirtualFrame): Double =
-        FloatingAddresses.readDouble(operands[0].executeRequiredAddress(frame), operands[1].executeRequiredLong(frame))
+    override fun executeFloat(frame: VirtualFrame): Float {
+        if (operation == FloatingAddressOp.INDEX_FLOAT)
+            return FloatingAddresses.readFloat(operands[0].executeRequiredAddress(frame),
+                operands[1].executeRequiredLong(frame))
+        if (operation == FloatingAddressOp.INDEX_DOUBLE) return super.executeFloat(frame)
+        fault("Floating Addr# operation does not produce a scalar Float")
+    }
+    override fun executeDouble(frame: VirtualFrame): Double {
+        if (operation == FloatingAddressOp.INDEX_DOUBLE)
+            return FloatingAddresses.readDouble(operands[0].executeRequiredAddress(frame),
+                operands[1].executeRequiredLong(frame))
+        if (operation == FloatingAddressOp.INDEX_FLOAT) return super.executeDouble(frame)
+        fault("Floating Addr# operation does not produce a scalar Double")
+    }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (!operation.tuple) fault("Floating Addr# operation does not produce a tuple")
         val address = operands[0].executeRequiredAddress(frame)
         val index = operands[1].executeRequiredLong(frame)
         ManagedByteArray.requireState(operands[2].execute(frame))
