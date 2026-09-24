@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 """Pure Git/source selection tests: never compile or execute guest/JUnit code."""
-import ast
 import copy
 import importlib.util
 import json
@@ -58,6 +57,7 @@ class FastSelectionTest(unittest.TestCase):
             "src/main/kotlin/Critical.kt": "package example\nclass Critical\n",
             "scripts/test-smoke.py": PYTHON_TEST,
             "scripts/test-other.py": PYTHON_TEST,
+            "test/haskell-driver/Main.hs": "module Main where\nmain = pure ()\n",
             "README.md": "Documentation\n",
         }
         for path, text in files.items():
@@ -94,6 +94,7 @@ class FastSelectionTest(unittest.TestCase):
 
     def test_no_diff_and_documentation_keep_nonempty_smoke(self):
         self.assertEqual("narrow", self.plan()["mode"])
+        self.assertEqual([], self.plan()["haskell"]["suites"])
         self.assertEqual({"required": False, "classes": []}, self.plan()["polyglot"])
         self.write("README.md", "New documentation\n")
         head = self.commit()
@@ -105,6 +106,19 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["README.md"], result["changedPaths"])
         self.assertRegex(result["policySha256"], "^[0-9a-f]{64}$")
         self.assertEqual(result, self.plan())
+
+    def test_driver_source_selects_cabal_suite(self):
+        self.policy["owners"]["src/THC/Driver/Project.hs"] = dict(
+            junit=[], python=[], haskell=["driver-tests"])
+        self.write(select.POLICY, json.dumps(self.policy))
+        self.write("src/THC/Driver/Project.hs", "module THC.Driver.Project where\n")
+        before = self.commit()
+        self.write("src/THC/Driver/Project.hs", "module THC.Driver.Project where\nchanged = True\n")
+        self.commit()
+        selected = self.plan(base=before)
+        self.assertEqual("narrow", selected["mode"], selected)
+        self.assertEqual(["driver-tests"], selected["haskell"]["suites"])
+        self.assertEqual(["driver-tests"], selected["affected"]["haskell"])
 
     def test_polyglot_changes_select_actual_optional_class_without_all_regular_tests(self):
         path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
@@ -610,28 +624,17 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for group in [*self.policy["owners"].values(), *self.policy["primopFamilies"].values(),
                       *self.policy["automation"].values()]:
             self.assertLessEqual(set(group["junit"]), self.classes)
+            for suite in group.get("haskell", []):
+                self.assertEqual("driver-tests", suite)
+                self.assertTrue((self.root / "test/haskell-driver/Main.hs").is_file())
+                self.assertIn("test-suite driver-tests", (self.root / "thc.cabal").read_text())
             for path in group["python"]:
                 if path in checked_python:
                     continue
                 checked_python.add(path)
                 self.assertTrue((self.root / path).is_file(), path)
                 source = (self.root / path).read_text()
-                if path == "test/test_driver.py":
-                    # This test has a custom unittest runner to preserve command
-                    # evidence, so it cannot use the usual unittest.main shape.
-                    calls = [node.func for node in ast.walk(ast.parse(source))
-                             if isinstance(node, ast.Call)]
-                    self.assertTrue(any(isinstance(fn, ast.Attribute) and fn.attr == "TextTestRunner"
-                                        for fn in calls), path)
-                    self.assertTrue(any(isinstance(fn, ast.Attribute) and fn.attr == "loadTestsFromTestCase"
-                                        for fn in calls), path)
-                    help_result = subprocess.run([sys.executable, path, "--help"], cwd=self.root,
-                                                 capture_output=True, text=True, check=False)
-                    self.assertEqual(0, help_result.returncode, help_result.stderr)
-                    self.assertIn("--driver", help_result.stdout)
-                    self.assertIn("--scratch", help_result.stdout)
-                else:
-                    self.assertTrue(select.standalone_python_test(source), path)
+                self.assertTrue(select.standalone_python_test(source), path)
 
     def test_fast_automation_sources_have_control_owners(self):
         automation = self.policy["automation"]
