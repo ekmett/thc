@@ -55,7 +55,8 @@ class SimdFamiliesTest {
     @Test fun generatedCarriersHaveOnlyFinalPrimitiveLanes() {
         for ((carrier, count, primitive) in listOf(Triple(Word64X2::class.java, 2, Long::class.javaPrimitiveType),
             Triple(Word32X8::class.java, 8, Int::class.javaPrimitiveType),
-            Triple(Int32X8::class.java, 8, Int::class.javaPrimitiveType), Triple(Int32X16::class.java, 16, Int::class.javaPrimitiveType))) {
+            Triple(Int32X8::class.java, 8, Int::class.javaPrimitiveType), Triple(Int32X16::class.java, 16, Int::class.javaPrimitiveType),
+            Triple(FloatX8::class.java, 8, Float::class.javaPrimitiveType), Triple(DoubleX4::class.java, 4, Double::class.javaPrimitiveType))) {
             val fields = carrier.declaredFields
             assertEquals(count, fields.size)
             assertTrue(fields.all { it.type == primitive && Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
@@ -64,12 +65,14 @@ class SimdFamiliesTest {
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
-        assertEquals(31, GeneratedVectors.operations.size)
+        assertEquals(47, GeneratedVectors.operations.size)
         for ((name, tuple, vector) in listOf(
             Triple("Word64X2", GeneratedVectors.unpackedWord64X2, GeneratedVectors.proofWord64X2),
             Triple("Word32X8", GeneratedVectors.unpackedWord32X8, GeneratedVectors.proofWord32X8),
             Triple("Int32X8", GeneratedVectors.unpackedInt32X8, GeneratedVectors.proofInt32X8),
-            Triple("Int32X16", GeneratedVectors.unpackedInt32X16, GeneratedVectors.proofInt32X16))) {
+            Triple("Int32X16", GeneratedVectors.unpackedInt32X16, GeneratedVectors.proofInt32X16),
+            Triple("FloatX8", GeneratedVectors.unpackedFloatX8, GeneratedVectors.proofFloatX8),
+            Triple("DoubleX4", GeneratedVectors.unpackedDoubleX4, GeneratedVectors.proofDoubleX4))) {
             CoreVectors.validate("pack$name#", listOf(tuple), vector)
             CoreVectors.validate("times$name#", listOf(vector, vector), vector)
             CoreVectors.validate("unpack$name#", listOf(vector), tuple)
@@ -92,7 +95,7 @@ class SimdFamiliesTest {
         }
     }
 
-    // These two early gates use actual pre-Tidy Core and the independent model.
+    // These early gates use actual pre-Tidy Core and the independent model.
     // They are deliberately separate from native evidence and capability enablement.
     @Test fun widerPreparedCoreCompilesWithInlining() = execute(true, true)
     @Test fun widerPreparedCoreCompilesAcrossResidualCalls() = execute(false, true)
@@ -112,7 +115,8 @@ class SimdFamiliesTest {
             assertEquals(listOf("pre", "post"), manifest["stages"])
         }
         val rows = expectedText.lineSequence().filter(String::isNotEmpty).map { it.split('\t') }.groupBy { it[0] }
-        val names = if (earlyWideGate) listOf("timesInt32X8", "timesInt32X16", "timesWord64X2", "timesWord32X8") else rows.keys.toList()
+        val names = if (earlyWideGate) listOf("timesInt32X8", "timesInt32X16", "timesWord64X2",
+            "timesWord32X8", "floatX8Composite", "doubleX4Composite") else rows.keys.toList()
         for (stage in manifest["stages"] as List<String>) {
             val module = Json.parse(File(directory, "$stage-core/GeneratedSimdFamilies.json").readText()) as Map<String, Any?>
             val calls = ((manifest["structures"] as Map<String, Map<String, Any?>>).getValue(stage)["expectedGuestCalls"] as Map<String, Number>)
@@ -124,7 +128,16 @@ class SimdFamiliesTest {
                     val program: ExecutableProgram = if (backend == "ast") Program(language, input) else BytecodeProgram(language, input)
                     val entry = program.entryTarget(name); val host = program.hostEntryTarget(3)
                     val function = context.asValue(EntryValue(program, name, 3))
-                    val cases = rows.getValue(name).filterIndexed { i, _ -> !earlyWideGate || i % 225 in listOf(0, 112, 224) }
+                    val cases = when {
+                        !earlyWideGate -> rows.getValue(name)
+                        name.endsWith("Composite") -> rows.getValue(name).groupBy { it[1] }.values.flatMap { selectorRows ->
+                            // Each selector reaches a distinct operation and output lane. Use finite
+                            // normal inputs in the early JVM gate; the native oracle retains every edge row.
+                            val indices = if (selectorRows.size == 28) listOf(12, 14, 16) else listOf(348, 350, 404)
+                            indices.map(selectorRows::get)
+                        }
+                        else -> rows.getValue(name).filterIndexed { i, _ -> i % 225 in listOf(0, 112, 224) }
+                    }
                     val label = "$stage/$backend/$name/inline=$inlining"
                     fun check(row: List<String>) {
                         assertEquals(row[4].toLong(), function.execute(row[1].toLong(), row[2].toLong(), row[3].toLong()).asLong(), "$label/${row.drop(1)}")

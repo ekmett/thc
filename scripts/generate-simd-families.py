@@ -41,8 +41,12 @@ def families():
         stem = f['laneRep'].removesuffix('Rep')
         if f['element'] != stem + 'ElemRep' or f['name'] != f'{stem}X{f["lanes"]}' or f['bits'] != width * f['lanes'] or f['bits'] not in (128, 256, 512):
             raise ValueError('Contradictory vector identity/layout')
-        if f['name'] in names or not f['operations'] or len(set(f['operations'])) != len(f['operations']) or not set(f['operations']) <= OPS or type(f['newCarrier']) is not bool:
+        if (f['name'] in names or not f['operations'] or len(set(f['operations'])) != len(f['operations'])
+                or not set(f['operations']) <= OPS or type(f['newCarrier']) is not bool
+                or type(f.get('composite', False)) is not bool):
             raise ValueError('Malformed SIMD operation family')
+        if f.get('composite') and (not f['newCarrier'] or not {'pack', 'unpack'} <= set(f['operations'])):
+            raise ValueError('Composite fixture needs a new carrier and pack/unpack')
         if 'divide' in f['operations'] and scalar not in ('float', 'double'):
             raise ValueError('Integer vector division is a separate semantic family')
         if 'negate' in f['operations'] and f['laneRep'].startswith('Word'):
@@ -246,9 +250,27 @@ def fixture_sources(fs):
     names = []
     for family in fs:
         n = family['name']; count = family['lanes']; rep = family['laneRep']
-        for op in family['operations']:
-            if op in ('pack', 'unpack'):
-                continue
+        operations = [op for op in family['operations'] if op not in ('pack', 'unpack')]
+        def selected_lane(op, lane):
+            if op == 'broadcast':
+                vector = f'broadcast{n}# ({convert[rep]("a")})'
+            else:
+                left = f'pack{n}# (# ' + ', '.join(convert[rep](f'a +# {i * 104729}#') for i in range(count)) + ' #)'
+                right = f'pack{n}# (# ' + ', '.join(convert[rep](f'b -# {i * 7919}#') for i in range(count)) + ' #)'
+                vector = f'{op}{n}# ({left})' + (f' ({right})' if op in BINARY else '')
+            value = f'word2Int# (word64ToWord# p{lane})' if rep == 'Word64Rep' else f'{observe[rep]} p{lane}'
+            return f'case unpack{n}# ({vector}) of {{ (# '+', '.join(f'p{i}' for i in range(count))+f' #) -> {value} }}'
+        if family.get('composite'):
+            name = n[0].lower() + n[1:] + 'Composite'; worker = name + 'Worker'; names.append(name)
+            source += [f'{{-# OPAQUE {worker} #-}}', f'{worker} :: Int# -> Int# -> Int# -> Int#',
+                       f'{worker} selector a b = case selector of']
+            for op_index, op in enumerate(operations):
+                for lane in range(count):
+                    source.append(f'  {op_index * count + lane}# -> {selected_lane(op, lane)}')
+            source += ['  _ -> 0#', f'{name} :: Int# -> Int# -> Int# -> Int#',
+                       f'{name} selector a b = case {worker} selector a b of value -> value +# 17#', '']
+            continue
+        for op in operations:
             name = op + n; worker = name + 'Worker'; names.append(name)
             source += [f'{{-# OPAQUE {worker} #-}}', f'{worker} :: Int# -> Int# -> Int# -> Int#',
                        f'{worker} lane a b =']

@@ -9,6 +9,8 @@
     {"name": "Int32X16", "element": "Int32ElemRep", "laneRep": "Int32Rep", "lanes": 16, "bits": 512, "newCarrier": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate"]},
     {"name": "Int64X2", "element": "Int64ElemRep", "laneRep": "Int64Rep", "lanes": 2, "bits": 128, "newCarrier": false, "operations": ["times"]},
     {"name": "FloatX4", "element": "FloatElemRep", "laneRep": "FloatRep", "lanes": 4, "bits": 128, "newCarrier": false, "operations": ["negate", "divide"]},
-    {"name": "DoubleX2", "element": "DoubleElemRep", "laneRep": "DoubleRep", "lanes": 2, "bits": 128, "newCarrier": false, "operations": ["negate", "divide"]}
+    {"name": "DoubleX2", "element": "DoubleElemRep", "laneRep": "DoubleRep", "lanes": 2, "bits": 128, "newCarrier": false, "operations": ["negate", "divide"]},
+    {"name": "FloatX8", "element": "FloatElemRep", "laneRep": "FloatRep", "lanes": 8, "bits": 256, "newCarrier": true, "composite": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate", "divide"]},
+    {"name": "DoubleX4", "element": "DoubleElemRep", "laneRep": "DoubleRep", "lanes": 4, "bits": 256, "newCarrier": true, "composite": true, "operations": ["pack", "unpack", "broadcast", "plus", "minus", "times", "negate", "divide"]}
   ]
 }

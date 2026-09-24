@@ -65,10 +65,14 @@ def structure(module, audits, primitives):
             check(all(a['rep'].get('primReps') == [expected_rep] for a in expression[1]), f'{name}: scalar boundary changed')
             check(expression[-1].get('resultRep', {}).get('primReps') == ['IntRep'], f'{name}: scalar result changed')
         used = {p['name'] for p in report['primitives']}
-        check(operation + family['name'] + '#' in used and 'unpack' + family['name'] + '#' in used,
-              f'{name}: operation or unpack eliminated')
-        if operation != 'broadcast':
-            check('pack' + family['name'] + '#' in used, f'{name}: pack eliminated')
+        if operation == 'composite':
+            expected = {op + family['name'] + '#' for op in family['operations']}
+            check(expected <= used, f'{name}: composite operation eliminated: {expected - used}')
+        else:
+            check(operation + family['name'] + '#' in used and 'unpack' + family['name'] + '#' in used,
+                  f'{name}: operation or unpack eliminated')
+            if operation != 'broadcast':
+                check('pack' + family['name'] + '#' in used, f'{name}: pack eliminated')
         seen.update(used & primitives)
         calls[name] = len(expected_reachable)
     check(set(seen) == primitives, f'Selected operations not retained: {primitives - set(seen)}')
