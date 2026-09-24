@@ -25,6 +25,7 @@ bootSources =
   , "GHC/Internal/Fingerprint.hs-boot"
   , "GHC/Internal/Exception/Type.hs-boot"
   , "GHC/Internal/Stack.hs-boot"
+  , "GHC/Internal/IO/Handle/Types.hs-boot"
   , "GHC/Internal/IO/Exception.hs-boot"
   , "GHC/Internal/IO.hs-boot"
   , "GHC/Internal/Exception/Backtrace.hs-boot"
@@ -61,6 +62,9 @@ moduleSources =
   , ("GHC/Internal/Stack/Constants.hsc", "GHC.Internal.Stack.Constants")
   , ("GHC/Internal/Stack/Annotation.hs", "GHC.Internal.Stack.Annotation")
   , ("GHC/Internal/Stack/CloneStack.hs", "GHC.Internal.Stack.CloneStack")
+  , ("GHC/Internal/ForeignPtr.hs", "GHC.Internal.ForeignPtr")
+  , ("GHC/Internal/Foreign/C/String/Encoding.hs", "GHC.Internal.Foreign.C.String.Encoding")
+  , ("GHC/Internal/IO/Encoding/UTF8.hs", "GHC.Internal.IO.Encoding.UTF8")
   , ("GHC/Internal/InfoProv/Types.hsc", "GHC.Internal.InfoProv.Types")
   , ("GHC/Internal/Data/Maybe.hs", "GHC.Internal.Data.Maybe")
   , ("GHC/Internal/Data/OldList.hs", "GHC.Internal.Data.OldList")
@@ -76,6 +80,7 @@ moduleSources =
   , ("GHC/Internal/Exception.hs", "GHC.Internal.Exception")
   , ("GHC/Internal/Stack.hs", "GHC.Internal.Stack")
   , ("GHC/Internal/IO/Handle/Types.hs", "GHC.Internal.IO.Handle.Types")
+  , ("GHC/Internal/IO/Encoding.hs", "GHC.Internal.IO.Encoding")
   , ("GHC/Internal/Exception/Backtrace.hs", "GHC.Internal.Exception.Backtrace")
   , ("GHC/Internal/CString.hs", "GHC.Internal.CString")
   ]
@@ -106,8 +111,10 @@ sourceHashes =
   , ("GHC/Internal/Exception.hs", "890128de0336c4762b44f709131a8959bf47bc0313b55bed4c071a17b62a9327")
   , ("GHC/Internal/Exception.hs-boot", "7422fa92308439db3c0ca034b02522c96e7961cff00754d0bdca964a4f98bc15")
   , ("GHC/Internal/Fingerprint.hs", "d97e24beb911ef802c3020690480eb4ac59ec0757ab9b482337c94a6963a7e5b")
+  , ("GHC/Internal/Foreign/C/String/Encoding.hs", "a1956c04e77737b5796af679df63e884fdb8d0acc6bff40373dbbbd732837d57")
   , ("GHC/Internal/Foreign/Marshal/Alloc.hs", "76bbfcaf09561b667f49c595b9669f1e0808ac495b5754184bd6daa2a961458f")
   , ("GHC/Internal/Foreign/Storable.hs", "dda27f3c55cda6fbce4d44c127b6b26f5f18aa1e8b7ade6510e51cd4eec9e9cd")
+  , ("GHC/Internal/ForeignPtr.hs", "8b7b040cd30b3e72c81957b616c13587e14caf9db9dec25e4a7580dac3ca3272")
   , ("GHC/Internal/Heap/Closures.hs", "d2e891979f6c561db40168bdb736a9f3ce67e915459f7ca301a57b1a547c0539")
   , ("GHC/Internal/Heap/Constants.hsc", "fe6012d406045f3808c8e2cb693b0bdc627a0bd524b44e0708769e59317a5b77")
   , ("GHC/Internal/Heap/InfoTable.hsc", "3936cce70289fa88996eed01ecef793faa4a5f750eb182d195b9e6dbd33ee5a0")
@@ -115,8 +122,11 @@ sourceHashes =
   , ("GHC/Internal/InfoProv/Types.hsc", "63f455d41df424cf2dc20713a34d43991a261fb012a3f7f56895233a9b594315")
   , ("GHC/Internal/Fingerprint.hs-boot", "72b19673ee571ca87ebc67470efc62b1ec75c4d4dfe579b4c33d7ac1a90bb246")
   , ("GHC/Internal/IO/Exception.hs", "39aded90d3cce7be4282ea6df2fa0cbf754942ab1aa7c740b5409021170b7ce6")
+  , ("GHC/Internal/IO/Encoding.hs", "1b517e6f7c3cd2753c5dd9fe210873cfed7a545eaaf92605d8909d2643539b64")
+  , ("GHC/Internal/IO/Encoding/UTF8.hs", "00db78df7e4a9a5404bd3dc9e379d59392ab698c907393a5fe61d74b9020194a")
   , ("GHC/Internal/IO/Exception.hs-boot", "bda7e1dd1ac680f0f1126b467207fd4682175ecf1e6871c7b2786b7a25506dcf")
   , ("GHC/Internal/IO/Handle/Types.hs", "4c719b6081b5e689219380974f72ed294b231521312f5b9a53bd5202019c9c35")
+  , ("GHC/Internal/IO/Handle/Types.hs-boot", "8a319eb137cc03c8dbbb9d37b77703f3a962d894092cbd4d4e44c8381eaf3767")
   , ("GHC/Internal/IO/Unsafe.hs", "407dad2a8abda44be6e689f6ac45079c9f6cdf6147e847a4a0f9147ecfb8330f")
   , ("GHC/Internal/IO.hs", "e621ee438883f255d6a540ef761b9d462060f2ad3ed9557e118d55cf964ea25e")
   , ("GHC/Internal/IO.hs-boot", "a687801a14b3b423d45bca16ea03facd5fa0a428f049bcf04c2d3726e272c702")
