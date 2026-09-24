@@ -8,6 +8,21 @@ This is a deliberately version-pinned experiment, **not** a lossless, stable, ge
 
 ## Executable schema
 
+Both export boundaries precede CorePrep's mandatory primitive saturation.
+For genuine `maskAsyncExceptions#`, `unmaskAsyncExceptions#`, and
+`maskUninterruptible#` IDs, the exporter uses GHC's typed, capture-avoiding
+`etaExpand` to supply missing value arguments before erasing types. A mask
+applied only to its action becomes an ordinary `State#` lambda containing an
+exactly saturated primitive call; a type-instantiated bare mask gets both
+parameters. Its supplied action remains lazy until the state token arrives.
+The lambda, binder and result proofs come from the resulting Core types, using
+the existing schema. Saturated primitive calls and their runtime contract are
+unchanged. `sourceCore` retains the original unexpanded GHC definitions, and
+native GHC compilation is unchanged. This bounded lowering does not implement
+general primop partial applications or establish support for full `bracket`.
+`cabal run exe:thc-fixtures --offline -- mask-functions` prepares the native and
+pre/post Core evidence consumed by `thc.runtime.MaskFunctionNativeTest`.
+
 A module object carries `schema`, `ghc`, `module`, `unit`, `boundary`, `bindings`, `constructors`, and top-level `groups`. Top-level and local let bindings have `{id,name,type,lifted,arity,info,rep,expr}`. Top-level exported/external IDs use `unit:Module.occ`; private/local IDs additionally retain the GHC unique and a module namespace. A unique is not stable across recompilations. GHC units are part of identities so equal module names in different packages remain distinct.
 
 Expressions are tagged arrays:

@@ -23,13 +23,13 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "72234430c1c8944e75f7551f68252dfcd80e5e0eae24911c205db91c8e357815"
+FULL_PREPARATION_PLAN = "fca3a3e90e6923cdd8581245319a8e5cbf286b0a49ef904ed307a6d25bfdb84f"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/core-continuation", "build/small-arrays", "build/floating-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
-    "build/explicit64-arrays",
+    "build/explicit64-arrays", "build/mask-functions",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
@@ -37,6 +37,10 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/core-continuation/application-audit.json",
     "build/core-continuation/nested-audit.json",
     "build/core-continuation/native-output.txt",
+    "build/mask-functions/manifest.json",
+    "build/mask-functions/pre/core/MaskFunctionAudit.json",
+    "build/mask-functions/post/core/MaskFunctionAudit.json",
+    "build/mask-functions/logs/native-oracle.stdout",
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",

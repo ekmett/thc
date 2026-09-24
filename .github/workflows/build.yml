@@ -332,6 +332,7 @@ jobs:
             build/short-bytes-slices/native/short-bytes-slices-oracle
             build/unsafe-equality/
             build/test-results/
+            build/mask-functions/
             build/aggregate-frontier.json
             build/primop-coverage.json
             build/scalar-signatures/provenance.json

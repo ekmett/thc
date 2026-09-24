@@ -23,7 +23,7 @@ import qualified THC.Sources as Sources
 import qualified THC.CBV as CBV
 import qualified THC.Demands as Demands
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
-import GHC.Types.Tickish (CoreTickish)
+import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
@@ -31,7 +31,8 @@ import GHC.Builtin.Types (tupleRepDataConTyCon, sumRepDataConTyCon)
 import GHC.Core.TyCo.Rep (scaledThing)
 import GHC.Core.TyCo.Compare (eqType)
 import GHC.Core.Utils (exprIsHNF, exprOkForSpecEval)
-import GHC.Builtin.PrimOps (PrimOp(TagToEnumOp), primOpOcc)
+import GHC.Core.Opt.Arity (etaExpand)
+import GHC.Builtin.PrimOps (PrimOp(TagToEnumOp, MaskAsyncExceptionsOp, MaskUninterruptibleOp, UnmaskAsyncExceptionsOp), primOpOcc)
 import GHC.StgToCmm.Closure (isSmallFamily)
 import GHC.Cmm.Utils (mAX_PTR_TAG)
 import qualified Data.ByteString as BS
@@ -510,7 +511,27 @@ expr d original
   | Just lowered <- wiredApplication original = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
   | Var v <- original, isWiredVoid v = A [S "void",O (("rep",voidRep) : sourceFields d)]
   | Var v <- original, Just lowered <- wiredRhs v = expr (d { canCertify = canCertify d && preservesWiredTypes original lowered }) lowered
+  | canCertify d, Just saturated <- saturateMask original = expr d saturated
   | otherwise = exprRaw d original
+
+-- These primops have no callable runtime closure. CorePrep normally saturates
+-- them, but both export boundaries precede CorePrep. In particular bracket1
+-- passes a mask applied only to its action as a State# -> (# State#, a #)
+-- function. Use GHC's capture-avoiding, typed eta expansion before erasure;
+-- the ordinary lambda path then exports the missing binder and tuple proof.
+-- Supplied actions stay beneath the lambda and are not evaluated at creation.
+saturateMask :: CoreExpr -> Maybe CoreExpr
+saturateMask original
+  | (Var v,args,ticks) <- collectArgsTicks tickishFloatable original
+  , Just op <- isPrimOpId_maybe v
+  , op `elem` [MaskAsyncExceptionsOp, MaskUninterruptibleOp, UnmaskAsyncExceptionsOp]
+  , let missing = idArity v - length (filter (not . isTypeArg) args)
+  , missing > 0
+  = Just (foldr Tick (etaExpand missing (mkApps (Var v) args)) ticks)
+  | otherwise = Nothing
+  where
+    isTypeArg Type{} = True
+    isTypeArg _ = False
 
 -- Erasing a cast, tick or type-only application preserves the original result
 -- type, without moving the metadata of lambda bodies or case binders.
@@ -589,13 +610,19 @@ exprRaw d original = case original of
   Lit l -> let (k,v) = literal d l in node [S "lit",S k,S v] []
   a@App{} -> let (f,args) = collectArgs a
                  vals = filter (not . isTypeArg) args
+                 -- Saturate the complete application, never its bare head.
+                 -- Otherwise an already saturated primop would become an
+                 -- indirect call through an unnecessary wrapper lambda.
+                 function = case f of
+                   Var v | Just _ <- isPrimOpId_maybe v -> exprRaw d f
+                   _ -> expr d f
                  demand = case if canCertify d then Demands.callDemand f args else Nothing of
                    Just (arity,strict) -> [("callDemand",O [("arity",num arity),("strictArgs",A (map B strict))])]
                    Nothing -> []
              -- Analyse the original Core application, before erasing type or
              -- coercion information. A false result is conservative.
              in if null vals then withRep (exprRep d a) (expr d f) else node
-               [S "app",expr d f,A (map (expr d) vals),A (map argLifted vals)
+               [S "app",function,A (map (expr d) vals),A (map argLifted vals)
                ,B (canCertify d && exprIsHNF a)
                ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]]
                  ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]]
