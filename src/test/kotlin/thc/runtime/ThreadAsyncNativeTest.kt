@@ -31,7 +31,7 @@ class ThreadAsyncNativeTest {
     @Test fun publicForkAndThrowResumeTheSharedThunk() {
         checkReceipt()
         for (stage in listOf("pre", "post")) {
-            val context = Context.newBuilder("thc").allowExperimentalOptions(true)
+            val context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()
             val executor = Executors.newSingleThreadExecutor { task ->

@@ -54,7 +54,17 @@ class LiveAsyncNativeTest {
         try { return action() } finally { context.leave() }
     }
 
-    private fun exercise(stage: String, running: Boolean) {
+    private fun awaitBoundary(thread: Thread, result: CompletableFuture<Long>, method: String) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (System.nanoTime() < deadline) {
+            if (result.isDone) fail<Unit>("Target returned before $method: ${result.get()}")
+            if (thread.state == Thread.State.WAITING && thread.stackTrace.any { it.methodName == method }) return
+            Thread.sleep(1)
+        }
+        fail<Unit>("Target did not reach $method: ${thread.stackTrace.toList()}")
+    }
+
+    private fun exercise(stage: String, running: Boolean, ownerWait: Boolean = false, repeat: Boolean = false) {
         val module = fixture(stage)
         Context.newBuilder("thc").allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false")
@@ -86,30 +96,56 @@ class LiveAsyncNativeTest {
             entered(context) { compile(loop) }
             if (running) assertEquals(1L, call("releaseGate"))
 
-            val result = CompletableFuture<Long>()
-            val target = Thread({
-                try { result.complete(call("forceShared")) }
-                catch (failure: Throwable) { result.completeExceptionally(failure) }
-            }, "thc-async-target")
-            target.isDaemon = true
-            target.start()
+            val targets = mutableListOf<Thread>()
+            fun startTarget(): Pair<Thread, CompletableFuture<Long>> {
+                val answer = CompletableFuture<Long>()
+                val thread = Thread({
+                    try { answer.complete(call("forceShared")) }
+                    catch (failure: Throwable) { answer.completeExceptionally(failure) }
+                }, "thc-async-target").apply { isDaemon = true }
+                targets.add(thread)
+                thread.start()
+                return thread to answer
+            }
+            val (target, result) = startTarget()
             try {
-                assertEquals(1007L, call("takeReady"))
-                if (running) assertEquals(1007L, call("takeRunning"))
+                assertEquals(1007L, CompletableFuture.supplyAsync { call("takeReady") }.get(10, TimeUnit.SECONDS))
+                if (running) assertEquals(1007L,
+                    CompletableFuture.supplyAsync { call("takeRunning") }.get(10, TimeUnit.SECONDS))
                 assertFalse(result.isDone, "Interruption must target the live computation")
                 assertSame(loop, program.entryTarget("longLoop"))
                 assertEquals(true, loop.javaClass.getMethod("isValidLastTier").invoke(loop),
                     "The actual loop remains compiled before delivery")
-                val request = state.threads.send(target.threadId(), program.entryValue("asyncPayload"))
-                assertEquals(-1L, result.get(15, TimeUnit.SECONDS), "Original catch# must handle delivery")
-                target.join(5000)
-                assertFalse(target.isAlive)
+                val (victim, answer) = if (ownerWait) startTarget().also {
+                    awaitBoundary(it.first, it.second, "awaitOwner")
+                } else target to result
+                val request = state.threads.send(victim.threadId(), program.entryValue("asyncPayload"))
+                assertEquals(-1L, answer.get(15, TimeUnit.SECONDS), "Original catch# must handle delivery")
+                victim.join(5000)
+                assertFalse(victim.isAlive)
                 assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
                 if (running) assertTrue(request.compiledCapture,
                     "The executing compiled loop must claim the exception")
-                assertEquals(5, shared.state, "The abandoned shared thunk retains its continuation")
+                assertEquals(if (ownerWait) 1 else 5, shared.state,
+                    "An interrupted waiter must not change the other thread's ownership")
                 assertEquals(1L, call("prefixCount"))
+                if (repeat) {
+                    val (retry, retryResult) = startTarget()
+                    awaitBoundary(retry, retryResult, "await")
+                    val second = state.threads.send(retry.threadId(), program.entryValue("asyncPayload"))
+                    assertEquals(-1L, retryResult.get(15, TimeUnit.SECONDS))
+                    retry.join(5000)
+                    assertFalse(retry.isAlive)
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, second.state)
+                    assertEquals(5, shared.state)
+                    assertEquals(1L, call("prefixCount"))
+                }
                 if (!running) assertEquals(1L, call("releaseGate"))
+                if (ownerWait) {
+                    assertEquals(10000007L, result.get(15, TimeUnit.SECONDS))
+                    target.join(5000)
+                    assertFalse(target.isAlive)
+                }
                 // This call uses a different Java thread from the original owner.
                 assertEquals(10000008L, call("forceShared", 1))
                 assertEquals(2, shared.state)
@@ -120,7 +156,7 @@ class LiveAsyncNativeTest {
             } finally {
                 // Context cancellation is only a failed-test escape hatch; it is
                 // not how asynchronous guest delivery is implemented or tested.
-                if (target.isAlive) context.close(true)
+                if (targets.any { it.isAlive }) context.close(true)
             }
         }
     }
@@ -131,5 +167,13 @@ class LiveAsyncNativeTest {
 
     @Test fun compiledLoopPreservesSharedThunk() {
         for (stage in listOf("pre", "post")) exercise(stage, true)
+    }
+
+    @Test fun interruptedWaiterLeavesTheOtherThunkOwnerIntact() {
+        for (stage in listOf("pre", "post")) exercise(stage, false, ownerWait = true)
+    }
+
+    @Test fun resumedThunkCanBeInterruptedAgain() {
+        for (stage in listOf("pre", "post")) exercise(stage, false, repeat = true)
     }
 }

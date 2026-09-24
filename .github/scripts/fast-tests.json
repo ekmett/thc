@@ -731,6 +731,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ThreadAsyncNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
         "thc.runtime.NarrowByteOffsetTest",
         "thc.runtime.Explicit64ArrayTest",
