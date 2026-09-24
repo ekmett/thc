@@ -6,7 +6,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -143,56 +142,6 @@ class FastRunnerTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             ci.gradle_command(selection)
 
-    def test_bulk_dispatch_uses_origin_main_merge_base_not_later_caller_base(self):
-        def git(*args):
-            return subprocess.check_output(["git", "-C", str(self.root), *args],
-                                           text=True, stderr=subprocess.PIPE).strip()
-        git("init", "-q", "-b", "main")
-        git("config", "user.name", "Fixture")
-        git("config", "user.email", "fixture@example.invalid")
-        (self.root / "base.txt").write_text("base\n")
-        git("add", "base.txt")
-        git("commit", "-qm", "base")
-        base = git("rev-parse", "HEAD")
-        git("update-ref", "refs/remotes/origin/main", base)
-        git("checkout", "-q", "-b", "thc-bulk/example")
-        (self.root / "first.txt").write_text("first component\n")
-        git("add", "first.txt")
-        git("commit", "-qm", "first component")
-        later_base = git("rev-parse", "HEAD")
-        (self.root / "second.txt").write_text("second component\n")
-        git("add", "second.txt")
-        git("commit", "-qm", "second component")
-        event = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/thc-bulk/example"}
-        self.assertEqual(set(git("diff", "--name-only", later_base, "HEAD").splitlines()), {"second.txt"})
-        self.assertEqual(ci.selection_base(self.root, later_base, event), base)
-        self.assertEqual(set(git("diff", "--name-only", base, "HEAD").splitlines()),
-                         {"first.txt", "second.txt"})
-        self.assertEqual(ci.selection_base(self.root, later_base,
-                                           event | {"GITHUB_REF": "refs/heads/feature"}), later_base)
-        self.assertEqual(ci.selection_base(self.root, later_base,
-                                           event | {"GITHUB_EVENT_NAME": "pull_request"}), later_base)
-        git("checkout", "-q", "main")
-        (self.root / "main.txt").write_text("main advanced\n")
-        git("add", "main.txt")
-        git("commit", "-qm", "main advanced")
-        git("update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD"))
-        git("checkout", "-q", "thc-bulk/example")
-        self.assertEqual(ci.selection_base(self.root, later_base, event), base)
-        git("update-ref", "-d", "refs/remotes/origin/main")
-        with self.assertRaisesRegex(RuntimeError, "available origin/main merge base"):
-            ci.selection_base(self.root, later_base, event)
-
-    def test_bulk_dispatch_rejects_ambiguous_base_and_empty_diff(self):
-        head = "a" * 40
-        event = {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/thc-bulk/example"}
-        with patch.object(ci, "git", side_effect=[head, "b" * 40 + "\n" + "c" * 40]):
-            with self.assertRaisesRegex(RuntimeError, "unique origin/main merge base"):
-                ci.selection_base(self.root, "c" * 40, event)
-        with patch.object(ci, "git", side_effect=[head, head]):
-            with self.assertRaisesRegex(RuntimeError, "no changes"):
-                ci.selection_base(self.root, "c" * 40, event)
-
     def test_python_runs_normal_and_optimized_without_shell(self):
         selected = {"python": {"commands": [["python3", "odd name/test_me.py"]]}}
         self.assertEqual(list(ci.python_commands(selected, "/python")),
@@ -268,11 +217,9 @@ class FastRunnerTest(unittest.TestCase):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]) as run:
-            with patch.object(ci, "selection_base", return_value="b" * 40) as choose, \
-                    patch.object(ci, "run_mode", return_value={"cases": [["example.Test", "works"]]}), \
+            with patch.object(ci, "run_mode", return_value={"cases": [["example.Test", "works"]]}), \
                     patch.object(ci.fixtures, "prepare", return_value={"mode": "selected", "reused": ["smoke"]}) as prepare:
-                ci.execute(recorder, "HEAD", "HEAD", identity_path)
-                choose.assert_called_once_with(self.root, "HEAD", os.environ)
+                ci.execute(recorder, "b" * 40, "HEAD", identity_path)
                 prepare.assert_called_once_with(self.root, selection, run, identity)
         self.assertEqual(run.call_args_list[0].args[1][2:4], ["--base", "b" * 40])
         self.assertEqual(run.call_args_list[1].args[0], "primop-checklist")
@@ -281,7 +228,7 @@ class FastRunnerTest(unittest.TestCase):
                           str(recorder.directory / "primop-coverage.json")])
         self.assertEqual(run.call_count, 2)
         self.assertEqual(recorder.data["nativeInputs"]["reused"], ["smoke"])
-        self.assertEqual((recorder.data["requestedBase"], recorder.data["selectionBase"]), ("HEAD", "b" * 40))
+        self.assertEqual((recorder.data["requestedBase"], recorder.data["selectionBase"]), ("b" * 40, "b" * 40))
         self.assertTrue(recorder.data["passed"])
 
     def test_selected_haskell_suite_builds_runtime_and_runs_after_fixtures(self):
