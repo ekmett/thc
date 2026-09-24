@@ -38,7 +38,8 @@ jobs:
             --output "$RUNNER_TEMP/actionlint.tar.gz"
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint"
+          # GitHub supports queue: max; the pinned linter does not yet know this key.
+          "$RUNNER_TEMP/actionlint" -ignore '^unexpected key "queue" for "concurrency" section\.'
   build:
     strategy:
       fail-fast: false

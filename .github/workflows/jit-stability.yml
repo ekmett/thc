@@ -54,6 +54,7 @@ jobs:
       - name: Check compiled-code stability with ordinary handoffs
         id: ordinary
         continue-on-error: true
+        shell: bash
         run: |
           mkdir -p build/jit-stability/ordinary
           status=0
@@ -66,6 +67,7 @@ jobs:
         id: dense
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         continue-on-error: true
+        shell: bash
         env:
           JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
         run: |
