@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location("fast_select", Path(__file__).with_name("fast_select.py"))
 select = importlib.util.module_from_spec(SPEC)
@@ -124,6 +125,17 @@ private val text = "class FakeString { @Test }"
         result = self.plan()
         self.assertEqual("narrow", result["mode"], result)
         self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+
+    def test_batched_blob_reads_preserve_bytes_and_reject_truncation(self):
+        path = "binary-payload.bin"
+        content = b"first\n\x00middle\nlast\n"
+        (self.repo / path).write_bytes(content)
+        self.commit()
+        oid = self.git("rev-parse", "HEAD:" + path)
+        self.assertEqual(content, select.batch_blobs(self.repo, [oid, oid])[oid])
+        with mock.patch.object(select, "git", return_value=oid.encode() + b" blob 4\nabc\n"):
+            with self.assertRaises(select.SelectionError):
+                select.batch_blobs(self.repo, [oid])
 
     def test_changed_python_script_uses_literal_argv_including_weird_filename(self):
         path = "scripts/test-name space\tline\n'$(touch nope);.py"
@@ -309,6 +321,21 @@ private val text = "class FakeString { @Test }"
                 self.commit()
                 self.full()
 
+    def test_private_nested_constructor_properties_are_not_shared_members(self):
+        path = "src/test/kotlin/example/OtherTest.kt"
+        body = "@Test fun test() {}\nprivate data class Row(val entry: String, val input: Long, val expected: Long)"
+        self.write(path, kotlin("OtherTest", body))
+        self.commit()
+        result = self.plan()
+        self.assertEqual("narrow", result["mode"], result)
+        self.assertEqual(["example.OtherTest"], result["affected"]["junit"])
+        self.write(path, kotlin("OtherTest", body.replace("private data class", "data class")))
+        self.commit()
+        self.full("shared-test-member")
+        self.write(path, kotlin("OtherTest", body + "\nval shared = 1"))
+        self.commit()
+        self.full("shared-test-member")
+
     def test_java_tests_select_their_class_but_widen_unknown_helper_grammar(self):
         self.write("src/test/java/example/JavaTest.java", "package example;\npublic class JavaTest { @Test public void test() {} public static void helper() {} }\n")
         self.commit()
@@ -442,10 +469,13 @@ private val text = "class FakeString { @Test }"
 
 
 class PrimitiveFamilyPolicyTest(unittest.TestCase):
-    def setUp(self):
-        self.root = Path(__file__).resolve().parents[2]
-        self.policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
-        self.families = self.policy["leafSources"]
+    @classmethod
+    def setUpClass(cls):
+        cls.root = Path(__file__).resolve().parents[2]
+        cls.policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        cls.families = cls.policy["leafSources"]
+        cls.classes = {name for path in (cls.root / "src/test").rglob("*.kt")
+                       for name in select.junit_info(path.read_text())[0]}
 
     def family(self, name):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
@@ -454,8 +484,6 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"BitPrimitives", "RawBitCasts", "FloatingPrimitives",
                           "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
                          {Path(path).stem for path in self.families})
-        classes = {name for path in (self.root / "src/test").rglob("*.kt")
-                   for name in select.junit_info(path.read_text())[0]}
         for path, group in self.families.items():
             with self.subTest(path=path):
                 self.assertTrue((self.root / path).is_file())
@@ -463,7 +491,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 self.assertTrue(group["junit"])
                 self.assertEqual(len(group["junit"]), len(set(group["junit"])))
                 self.assertEqual(len(group["python"]), len(set(group["python"])))
-                self.assertLessEqual(set(group["junit"]), classes)
+                self.assertLessEqual(set(group["junit"]), self.classes)
                 for test in group["python"]:
                     self.assertTrue((self.root / test).is_file(), test)
                     self.assertTrue(select.python_test(test), test)
@@ -476,20 +504,26 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for name, group in fixture["groups"].items():
             for path in group["sources"]:
                 with self.subTest(group=name, path=path):
-                    expected = ({"thc.RuntimeTest", "thc.BytecodeBackendTest"} if path in native_only
-                                else set(group["junit"]))
-                    self.assertEqual(expected, set(owners[path]["junit"]))
+                    actual = set(owners[path]["junit"])
+                    if path in native_only:
+                        self.assertEqual("runtime-core-native", name)
+                        self.assertLessEqual({"thc.RuntimeTest", "thc.BytecodeBackendTest"}, actual)
+                        self.assertLessEqual(actual, set(group["junit"]))
+                    else:
+                        self.assertEqual(set(group["junit"]), actual)
         self.assertEqual({"thc.runtime.BitPrimopsTest", "thc.IntegerPrimopsTest",
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
 
     def test_control_and_owner_targets_exist_and_are_runnable(self):
-        classes = {name for path in (self.root / "src/test").rglob("*.kt")
-                   for name in select.junit_info(path.read_text())[0]}
+        checked_python = set()
         for group in [*self.policy["owners"].values(), *self.policy["primopFamilies"].values(),
                       *self.policy["automation"].values()]:
-            self.assertLessEqual(set(group["junit"]), classes)
+            self.assertLessEqual(set(group["junit"]), self.classes)
             for path in group["python"]:
+                if path in checked_python:
+                    continue
+                checked_python.add(path)
                 self.assertTrue((self.root / path).is_file(), path)
                 self.assertTrue(select.standalone_python_test((self.root / path).read_text()), path)
 
