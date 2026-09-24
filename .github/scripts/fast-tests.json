@@ -257,6 +257,10 @@
       ],
       "python": []
     },
+    "scripts/generate-simd-families.py": {
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
+    },
     "scripts/prepare-bit-primops.py": {
       "junit": [
         "thc.runtime.BitPrimopsTest"
@@ -275,6 +279,14 @@
       ],
       "python": []
     },
+    "scripts/prepare-simd-capability-smoke.py": {
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
+    },
+    "scripts/prepare-simd-families.py": {
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
+    },
     "scripts/prepare-signed-narrow-primops.py": {
       "junit": [
         "thc.SignedNarrowPrimopsTest"
@@ -286,6 +298,14 @@
         "thc.runtime.TupleInputNativeTest"
       ],
       "python": []
+    },
+    "scripts/simd-families.json": {
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
+    },
+    "scripts/simd_family_model.py": {
+      "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
+      "python": ["scripts/test-simd-families.py"]
     },
     "src/test/kotlin/thc/PrimopTestContext.kt": {
       "junit": [

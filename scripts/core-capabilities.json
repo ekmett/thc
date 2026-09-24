@@ -2,7 +2,10 @@
   "name": "THC schema1 runtime capability contract",
   "reviewedAgainst": [
     "src/main/kotlin/thc/runtime/Program.kt",
-    "src/main/kotlin/thc/runtime/DataValues.kt"
+    "src/main/kotlin/thc/runtime/DataValues.kt",
+    "src/main/kotlin/thc/runtime/CoreVectors.kt",
+    "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+    "src/main/java/thc/runtime/BytecodeRoot.java"
   ],
   "externalBindings": [],
   "tagToEnum": "concrete-nullary-family",
@@ -465,6 +468,53 @@
     "plusDoubleX2#": 2,
     "minusDoubleX2#": 2,
     "timesDoubleX2#": 2,
+    "packWord64X2#": 1,
+    "unpackWord64X2#": 1,
+    "broadcastWord64X2#": 1,
+    "plusWord64X2#": 2,
+    "minusWord64X2#": 2,
+    "timesWord64X2#": 2,
+    "packWord32X8#": 1,
+    "unpackWord32X8#": 1,
+    "broadcastWord32X8#": 1,
+    "plusWord32X8#": 2,
+    "minusWord32X8#": 2,
+    "timesWord32X8#": 2,
+    "packInt32X8#": 1,
+    "unpackInt32X8#": 1,
+    "broadcastInt32X8#": 1,
+    "plusInt32X8#": 2,
+    "minusInt32X8#": 2,
+    "timesInt32X8#": 2,
+    "negateInt32X8#": 1,
+    "packInt32X16#": 1,
+    "unpackInt32X16#": 1,
+    "broadcastInt32X16#": 1,
+    "plusInt32X16#": 2,
+    "minusInt32X16#": 2,
+    "timesInt32X16#": 2,
+    "negateInt32X16#": 1,
+    "timesInt64X2#": 2,
+    "negateFloatX4#": 1,
+    "divideFloatX4#": 2,
+    "negateDoubleX2#": 1,
+    "divideDoubleX2#": 2,
+    "packFloatX8#": 1,
+    "unpackFloatX8#": 1,
+    "broadcastFloatX8#": 1,
+    "plusFloatX8#": 2,
+    "minusFloatX8#": 2,
+    "timesFloatX8#": 2,
+    "negateFloatX8#": 1,
+    "divideFloatX8#": 2,
+    "packDoubleX4#": 1,
+    "unpackDoubleX4#": 1,
+    "broadcastDoubleX4#": 1,
+    "plusDoubleX4#": 2,
+    "minusDoubleX4#": 2,
+    "timesDoubleX4#": 2,
+    "negateDoubleX4#": 1,
+    "divideDoubleX4#": 2,
     "newArray#": 3,
     "readArray#": 3,
     "writeArray#": 4,
@@ -516,6 +566,36 @@
     "unboxed-tuple"
   ],
   "vectorRepresentations": [
+    {
+      "lanes": 2,
+      "element": "Word64ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 8,
+      "element": "Word32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 8,
+      "element": "Int32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 16,
+      "element": "Int32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 8,
+      "element": "FloatElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
+    {
+      "lanes": 4,
+      "element": "DoubleElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
     {
       "lanes": 4,
       "element": "Word32ElemRep",

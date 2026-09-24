@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
 # Generate the real GHC inputs required by all JVM tests, from a fresh checkout.
 set -eu
 cd "$(dirname "$0")/.."
@@ -59,6 +62,7 @@ case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-doublex2-audit.py --export-only ;;
   *) python3 scripts/prepare-doublex2-audit.py ;;
 esac
+python3 scripts/prepare-simd-capability-smoke.py
 python3 scripts/prepare-tuple-arithmetic.py
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;

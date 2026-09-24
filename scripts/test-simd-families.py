@@ -19,9 +19,37 @@ ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location('simd_generator', ROOT / 'scripts/generate-simd-families.py')
 GEN = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GEN)
+AUDIT_SPEC = importlib.util.spec_from_file_location('simd_audit', ROOT / 'scripts/audit-core.py')
+AUDIT = importlib.util.module_from_spec(AUDIT_SPEC)
+AUDIT_SPEC.loader.exec_module(AUDIT)
 
 
 class SimdFamiliesTest(unittest.TestCase):
+    def test_canonical_local_capability_keeps_vector_formals_excluded(self):
+        capability = json.loads((ROOT / 'scripts/core-capabilities.json').read_text())
+        contracts = GEN.contracts(GEN.families())
+        self.assertEqual({name: proof['arity'] for name, proof in contracts.items()},
+                         {name: capability['primitives'].get(name) for name in contracts})
+        declared = {(shape['lanes'], shape['element']) for shape in capability['vectorRepresentations']}
+        closure = dict(kind='closure', evaluated=True, primReps=['BoxedRep (Just Lifted)'])
+        scalar = dict(kind='long', evaluated=True, primReps=['IntRep'])
+        for family in GEN.families():
+            if not family['newCarrier']:
+                continue
+            self.assertIn((family['lanes'], family['element']), declared)
+            vector = dict(kind='vector', evaluated=True,
+                          primReps=[f"VecRep {family['lanes']} {family['element']}"],
+                          vector=dict(lanes=family['lanes'], element=family['element']))
+            source = dict(schema=1, ghc='9.14.1', constructors=[], bindings=[
+                dict(id='root', name='root', lifted=True, arity=1, rep=closure,
+                     expr=['lam', [dict(id='vector', lifted=False, rep=vector)],
+                           ['lit', 'int', '1', dict(rep=scalar)],
+                           dict(rep=closure, resultRep=scalar)])])
+            report = AUDIT.Audit([('simd-formal', source)], capability).run(['root'])
+            self.assertFalse(report['accepted'], family['name'])
+            self.assertIn(('vector-boundary', 'vector formal argument'),
+                          {(issue['code'], issue['detail']) for issue in report['issues']}, family['name'])
+
     def test_independent_ieee_model_signed_zeros_subnormals_and_ties(self):
         # Known bit identities include ties-to-even at the subnormal boundary.
         for width, one, two, sign, infinity, nan in (
