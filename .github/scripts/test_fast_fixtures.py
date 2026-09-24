@@ -322,6 +322,22 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn("thc.runtime.WordFloatingTest",
                       policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"])
 
+    def test_floating_address_fixture_is_selected_and_receipted(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["floating-address"]
+        self.assertEqual("floating-address", owners["thc.runtime.FloatingAddressTest"])
+        self.assertEqual(["build/floating-address"], group["outputs"])
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn('"$fixture_bin" floating-address',
+                      (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn("build/floating-address", fast_fixtures.FULL_OUTPUT_ROOTS)
+        for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
+                     "pre/core/FloatingAddressAudit.json", "post/core/FloatingAddressAudit.json"):
+            self.assertIn("build/floating-address/" + name, fast_fixtures.FULL_REQUIRED)
+        self.assertIn('"floating-address/*.tsv"', (project / "build.gradle.kts").read_text())
+
     def test_original_stack_has_portable_focused_and_full_preparation(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

@@ -1391,6 +1391,33 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     kept.emit(e); state.emit(e); function.emit(e)
                     e.builder.endKeepAlive()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
+                val operation = FloatingAddressOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    if (operation.floating) e.builder.beginReadFloatOffAddr(destination[0])
+                    else e.builder.beginReadDoubleOffAddr(destination[0])
+                    operands.forEach { it.emit(e) }
+                    if (operation.floating) e.builder.endReadFloatOffAddr()
+                    else e.builder.endReadDoubleOffAddr()
+                } else ProvenExpression(Expression { e ->
+                    if (operation.write) {
+                        if (operation.floating) e.builder.beginWriteFloatOffAddr()
+                        else e.builder.beginWriteDoubleOffAddr()
+                    } else {
+                        if (operation.floating) e.builder.beginIndexFloatOffAddr()
+                        else e.builder.beginIndexDoubleOffAddr()
+                    }
+                    operands.forEach { it.emit(e) }
+                    if (operation.write) {
+                        if (operation.floating) e.builder.endWriteFloatOffAddr()
+                        else e.builder.endWriteDoubleOffAddr()
+                    } else {
+                        if (operation.floating) e.builder.endIndexFloatOffAddr()
+                        else e.builder.endIndexDoubleOffAddr()
+                    }
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

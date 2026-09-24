@@ -18,6 +18,19 @@
       "outputs": ["build/word-floating"],
       "sources": ["test/haskell-fixtures/WordFloatingFixtures.hs", "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs"]
     },
+    "floating-address": {
+      "junit": ["thc.runtime.FloatingAddressTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-address"]}],
+      "outputs": ["build/floating-address"],
+      "sources": [
+        "test/haskell-fixtures/FloatingAddressFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/FloatingAddressAudit.hs",
+        "compiler/test-fixtures/FloatingAddressNative.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stack-formatter": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],

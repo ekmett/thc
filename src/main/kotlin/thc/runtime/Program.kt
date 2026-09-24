@@ -2001,6 +2001,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     TupleShape(tupleProof, language), function, stateArgument, false, metrics)
                 else Application(function, stateArgument, false, metrics)
                 KeepAliveExpression(kept, state, action, tupleProof)
+            } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
+                val operation = FloatingAddressOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                FloatingAddressExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

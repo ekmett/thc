@@ -592,6 +592,49 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadFloatOffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long index, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setFloat(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                FloatingAddresses.readFloat(address, index));
+        }
+    }
+    @Operation @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadDoubleOffAddr {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress address, long index, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                FloatingAddresses.readDouble(address, index));
+        }
+    }
+    @Operation public static final class IndexFloatOffAddr {
+        @Specialization public static float read(ManagedAddress address, long index) {
+            return FloatingAddresses.readFloat(address, index);
+        }
+    }
+    @Operation public static final class IndexDoubleOffAddr {
+        @Specialization public static double read(ManagedAddress address, long index) {
+            return FloatingAddresses.readDouble(address, index);
+        }
+    }
+    @Operation public static final class WriteFloatOffAddr {
+        @Specialization public static Object write(ManagedAddress address, long index, float value, Object state) {
+            ManagedByteArray.requireState(state);
+            FloatingAddresses.writeFloat(address, index, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class WriteDoubleOffAddr {
+        @Specialization public static Object write(ManagedAddress address, long index, double value, Object state) {
+            ManagedByteArray.requireState(state);
+            FloatingAddresses.writeDouble(address, index, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
     @Operation
     @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
     public static final class IndexManagedAddress {
