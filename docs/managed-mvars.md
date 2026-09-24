@@ -79,8 +79,8 @@ python3 scripts/prepare-managed-mvars.py
 python3 scripts/prepare-managed-mvars.py --check-only
 python3 scripts/test-managed-mvars.py
 python3 scripts/test-managed-mvar-fixtures.py
-scripts/gradle.sh --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true scripts/gradle.sh --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
+./gradlew --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests 'thc.runtime.ManagedMVar*' --rerun
 ```
 
 The manifest records source/generated-artifact hashes and native/audit results;

@@ -8,6 +8,7 @@ thc_probe="$thc_root/bench/experiments/sulong-cbits"
 thc_output="$thc_root/build/sulong-cbits"
 thc_clang=${THC_CLANG:-clang}
 mkdir -p "$thc_output"
+make -C "$thc_root" check-java >/dev/null
 
 "$thc_clang" -std=c11 -Wall -Wextra -Werror -O1 -g -emit-llvm -c \
     "$thc_probe/cbits.c" -o "$thc_output/cbits.bc"
@@ -15,5 +16,5 @@ mkdir -p "$thc_output"
     "$thc_probe/cbits.c" -o "$thc_output/native"
 "$thc_output/native" > "$thc_output/native.tsv"
 for thc_mode in interpreted compiled; do
-    "$thc_root/scripts/gradle.sh" -p "$thc_probe" run -PprobeMode="$thc_mode" --console=plain
+    "$thc_root/gradlew" -p "$thc_probe" run -PprobeMode="$thc_mode" --console=plain
 done

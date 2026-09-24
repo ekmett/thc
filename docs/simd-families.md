@@ -37,7 +37,7 @@ Prepare the ordinary compact smoke without native code generation:
 
 ```sh
 python3 scripts/prepare-simd-capability-smoke.py
-scripts/gradle.sh --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --rerun
+./gradlew --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --rerun
 ```
 
 The preparer requires GHC 9.14.1, verifies its 47 machine signatures, and
@@ -67,7 +67,7 @@ A full native preparation omits `--export-only` on a suitable GHC9.14.1 x86 host
 Target flags may be passed explicitly as `--ghc-option=...`; the manifest records
 them, toolchain identity, generated sources, exact inputs, oracle and exported
 Core. Run the prepared experiment explicitly with
-`scripts/gradle.sh --no-daemon simdFamiliesExperimentTest --rerun` after full
+`./gradlew --no-daemon simdFamiliesExperimentTest --rerun` after full
 native preparation. Ordinary `test` keeps the fixture-free carrier and proof
 checks; it excludes the four prepared experiment methods. The native JVM gates
 require both pre/post Core and byte-identical native/model TSVs. Early wider-shape

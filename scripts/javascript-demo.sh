@@ -7,7 +7,7 @@ set -eu
 cd "$(dirname "$0")/.."
 root=$(pwd)
 . "$root/compiler/toolchain.sh"
-. "$root/scripts/java-home.sh"
+make check-java >/dev/null
 
 compiler/build.sh
 for stage in pre post; do
@@ -23,5 +23,5 @@ for stage in pre post; do
     --output "build/javascript/$stage-audit.json"
 done
 
-exec scripts/gradle.sh polyglotDemo --console=plain \
+exec ./gradlew polyglotDemo --console=plain \
   --args='build/javascript main:THC.JavaScriptDemo.main THC.JavaScriptDemo.json THC.InterfaceClosure.json'

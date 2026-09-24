@@ -78,11 +78,20 @@ def inventory():
             else:
                 # Keep the complete installed GMP arithmetic closure unsupported.
                 check(not report['accepted'],'Arithmetic frontier unexpectedly accepted')
-                expected=(7,6) if entry=='integerAddFrontier' else (5,3)
-                check((len(report['issues']),len(report['missingGlobals']))==expected,'Arithmetic frontier changed: '+str(report['summary']))
-                check({i['code'] for i in report['issues']}=={'unsupported-primitive'},'Arithmetic issue kind changed')
-                wanted_issues={'shrinkMutableByteArray#':7} if entry=='integerAddFrontier' else {'shrinkMutableByteArray#':5}
-                check(Counter(i['detail'] for i in report['issues'])==Counter(wanted_issues),'Changed exact arithmetic primitive frontier')
+                # The strict foreign-call audit now reports each unsupported GMP
+                # target as well as the unresolved worker global. Keep both
+                # independent frontiers exact; accepting extra calls here would
+                # make this negative control weaker.
+                calls={'__gmpn_add':2,'__gmpn_add_1':1}
+                if entry=='integerAddFrontier': calls.update(__gmpn_cmp=1,__gmpn_sub=1)
+                wanted_issues=Counter({('unsupported-primitive','shrinkMutableByteArray#'):
+                                       7 if entry=='integerAddFrontier' else 5})
+                wanted_issues.update({('foreign-call',"Unsupported foreign target '"+symbol+"'"):count
+                                      for symbol,count in calls.items()})
+                check(Counter((issue['code'],issue['detail']) for issue in report['issues'])==wanted_issues,
+                      'Changed exact arithmetic primitive/foreign-call frontier: '+str(report['summary']))
+                check(len(report['missingGlobals'])==(6 if entry=='integerAddFrontier' else 3),
+                      'Arithmetic missing-global frontier changed: '+str(report['summary']))
                 symbols=[re.search(r'__ffi_static_ccall_unsafe ghc-internal:([^ ]+)', m['id']).group(1)
                          if '__ffi_static_ccall_unsafe ghc-internal:' in m['id'] else m['id'] for m in report['missingGlobals']]
                 wanted=['__gmpn_add','__gmpn_add','__gmpn_add_1']

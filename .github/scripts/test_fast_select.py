@@ -118,7 +118,8 @@ class FastSelectionTest(unittest.TestCase):
     def test_shared_core_and_frontend_changes_require_polyglot_but_leaf_does_not(self):
         for path in ("src/main/kotlin/thc/runtime/CoreRepresentations.kt",
                      "compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
-                     "scripts/audit-core.py", "build.gradle.kts"):
+                     "scripts/audit-core.py", "build.gradle.kts", "Makefile",
+                     "compiler/plugin.py", "gradlew", "gradle/wrapper/gradle-wrapper.properties"):
             with self.subTest(path=path):
                 self.write(path, "changed\n")
                 self.commit()

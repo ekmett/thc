@@ -5,6 +5,7 @@
 """Prove one registered GHC dependency links in native code and compiled THC."""
 
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,9 @@ ENTRY = APP + ':Main.score#'
 BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 GHC = os.environ.get('GHC', 'ghc')
 GHC_PKG = os.environ.get('GHC_PKG', 'ghc-pkg')
+PLUGIN_SPEC = importlib.util.spec_from_file_location('thc_plugin', ROOT / 'compiler/plugin.py')
+PLUGIN = importlib.util.module_from_spec(PLUGIN_SPEC)
+PLUGIN_SPEC.loader.exec_module(PLUGIN)
 
 
 def run(argv, *, check=True, env=None):
@@ -32,8 +36,9 @@ def run(argv, *, check=True, env=None):
 
 
 def export_flags(destination, post=True):
-    flags = ['-package-db', ROOT / 'build/compiler/package.conf.d',
-             '-plugin-package-id', 'thc-core-plugin-0.1',
+    plugin = PLUGIN.read(ROOT)
+    flags = ['-package-db', plugin['packageDb'],
+             '-plugin-package-id', plugin['unitId'],
              '-fplugin=THC.Plugin', '-fplugin-opt=THC.Plugin:' + str(destination),
              '-fplugin-opt=THC.Plugin:unit-qualified', '-fplugin-opt=THC.Plugin:source-notes']
     if post:

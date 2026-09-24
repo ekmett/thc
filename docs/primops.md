@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 244 | Implemented fixed numeric/character scalar forms. |
-| Partial | 203 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 1044 | No declared lowering. |
+| Partial | 209 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 1038 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,8 +39,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
-- Address operations support immutable managed literal backing only; no raw pointers or foreign address access.
-- Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors, addresses and unresolved leaves cannot appear in tuple inputs.
+- Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.
+- Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
 ## Supported scalar forms
@@ -309,6 +309,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastWord32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastWord64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `broadcastWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `byteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `cloneArray#` — arity 3 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
@@ -343,6 +344,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord8Array#` — arity 2 — Managed byte storage
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
+- [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -368,10 +370,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateInt32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateInt64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `negateInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
+- [ ] `newAlignedPinnedByteArray#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `newArray#` — arity 3 — Managed lifted arrays
 - [ ] `newByteArray#` — arity 2 — Managed byte storage
 - [ ] `newMVar#` — arity 1 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `newMutVar#` — arity 2 — Managed lazy reference cells
+- [ ] `newPinnedByteArray#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `packFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
@@ -428,6 +432,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord32ArrayAsWord32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord32X4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWord8Array#` — arity 3 — Managed byte storage
+- [ ] `readWord8OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `readWordArray#` — arity 3 — Managed byte storage
 - [ ] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `resizeMutableByteArray#` — arity 3 — Managed byte storage
@@ -494,6 +499,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord32ArrayAsWord32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWord8Array#` — arity 4 — Managed byte storage
+- [ ] `writeWord8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
 - [ ] `writeWordArray#` — arity 4 — Managed byte storage
 
 ## Missing forms
@@ -550,7 +556,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastWord64X8#` — arity 1
 - [ ] `broadcastWord8X32#` — arity 1
 - [ ] `broadcastWord8X64#` — arity 1
-- [ ] `byteArrayContents#` — arity 1
 - [ ] `casArray#` — arity 5
 - [ ] `casInt16Array#` — arity 5
 - [ ] `casInt32Array#` — arity 5
@@ -865,7 +870,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `isCurrentThreadBound#` — arity 1
 - [ ] `isMutableByteArrayPinned#` — arity 1
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
-- [ ] `keepAlive#` — arity 3
 - [ ] `killThread#` — arity 3
 - [ ] `labelThread#` — arity 3
 - [ ] `leAddr#` — arity 2
@@ -977,9 +981,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `negateInt64X8#` — arity 1
 - [ ] `negateInt8X32#` — arity 1
 - [ ] `negateInt8X64#` — arity 1
-- [ ] `newAlignedPinnedByteArray#` — arity 3
 - [ ] `newBCO#` — arity 6
-- [ ] `newPinnedByteArray#` — arity 2
 - [ ] `newPromptTag#` — arity 1
 - [ ] `newSmallArray#` — arity 3
 - [ ] `newTVar#` — arity 2
@@ -1219,7 +1221,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord8ArrayAsWord8X16#` — arity 3
 - [ ] `readWord8ArrayAsWord8X32#` — arity 3
 - [ ] `readWord8ArrayAsWord8X64#` — arity 3
-- [ ] `readWord8OffAddr#` — arity 3
 - [ ] `readWord8OffAddrAsAddr#` — arity 3
 - [ ] `readWord8OffAddrAsChar#` — arity 3
 - [ ] `readWord8OffAddrAsDouble#` — arity 3
@@ -1519,7 +1520,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord8ArrayAsWord8X16#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X32#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X64#` — arity 4
-- [ ] `writeWord8OffAddr#` — arity 4
 - [ ] `writeWord8OffAddrAsAddr#` — arity 4
 - [ ] `writeWord8OffAddrAsChar#` — arity 4
 - [ ] `writeWord8OffAddrAsDouble#` — arity 4

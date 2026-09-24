@@ -90,6 +90,7 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIsNone(ci.polyglot_command(self.selection()))
         selected = self.selection() | {"polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}
         command = ci.polyglot_command(selected)
+        self.assertEqual("./gradlew", command[0])
         self.assertIn("polyglotTest", command)
         self.assertIn("--rerun", command)
         self.assertNotIn("--tests", command)

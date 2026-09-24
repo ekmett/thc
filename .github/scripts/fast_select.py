@@ -26,7 +26,10 @@ PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
 BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
 POLYGLOT_EXACT_INPUTS = {
-    "build.gradle.kts", "scripts/gradle.sh", "scripts/audit-core.py",
+    "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "gradlew",
+    "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
+    "Makefile", "thc.cabal", "cabal.project", "Setup.hs", "compiler/plugin.py",
+    "compiler/toolchain.sh", "scripts/audit-core.py",
     "scripts/polyglot-demo.sh", "scripts/javascript-demo.sh",
     "compiler/build.sh", "compiler/export.sh", "compiler/test-javascript-ffi.py",
     "src/main/kotlin/thc/Language.kt", "src/main/kotlin/thc/Json.kt",

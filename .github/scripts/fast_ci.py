@@ -170,7 +170,7 @@ def polyglot_command(selection):
     require(bool(classes) == optional["required"], "Polyglot selection has no exact classes")
     if not optional["required"]:
         return None
-    return ["scripts/gradle.sh", "--daemon", "--max-workers=4", "--build-cache",
+    return ["./gradlew", "--daemon", "--max-workers=4", "--build-cache",
             "--init-script", ".github/scripts/fast_ci.init.gradle", "polyglotTest", "--rerun"]
 
 

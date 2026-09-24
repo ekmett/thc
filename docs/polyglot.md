@@ -73,7 +73,7 @@ post-core / ast: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled
 post-core / bytecode: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled)
 ```
 
-`scripts/gradle.sh polyglotTest` checks the declaration contract, context ownership,
+`./gradlew polyglotTest` checks the declaration contract, context ownership,
 access permissions, numeric conversion, missing members, and foreign exceptions.
 The host must permit the requested language through `PolyglotAccess`; the demo
 does so explicitly. THC uses `Env.parsePublic`, so the bridge obeys that policy.

@@ -98,7 +98,7 @@ jobs:
           scripts/polyglot-demo.sh
           python3 compiler/test-javascript-ffi.py
           scripts/javascript-demo.sh
-          scripts/gradle.sh polyglotTest
+          ./gradlew polyglotTest
       - name: Build and exercise the Cabal driver
         shell: bash
         run: |

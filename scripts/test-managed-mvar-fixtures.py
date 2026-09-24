@@ -93,7 +93,9 @@ class PreparationReuseTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        # macOS exposes /var through /private/var; match the recipe's resolved
+        # containment checks while keeping every synthetic artifact in this temp tree.
+        self.root = Path(temporary.name).resolve()
         self.build = self.root / 'build/fixture'
 
     def prepared(self):

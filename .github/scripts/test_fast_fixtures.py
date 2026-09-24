@@ -202,6 +202,7 @@ class FullFixtureReceiptTest(unittest.TestCase):
             path.write_text("prepare reviewed fixtures\n")
         self.fail_preparation = False
         self.extra_output = False
+        self.generated_fixture = False
         self.prepared = 0
         self.patches = ExitStack()
         self.addCleanup(self.patches.close)
@@ -234,6 +235,11 @@ class FullFixtureReceiptTest(unittest.TestCase):
             output = self.root / "build/new-family/proof.tsv"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text("new preparer output\n")
+        if self.generated_fixture:
+            for name in ("GeneratedSimdFamilies.hs", "GeneratedSimdFamiliesNative.hs"):
+                output = self.root / "build/generated/simd/fixtures" / name
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(f"generated {self.prepared}\n")
 
     def test_full_miss_then_hit_for_full_and_unknown_selection(self):
         self.assertEqual(self.prepare("thc.AlphaTest", mode="full"),
@@ -252,6 +258,18 @@ class FullFixtureReceiptTest(unittest.TestCase):
         generated.write_text("class Generated { int changed; }\n")
         self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])
         self.assertEqual(self.prepared, 1)
+
+    def test_generated_haskell_fixture_is_verified_without_jvm_codegen(self):
+        self.generated_fixture = True
+        names = {"build/generated/simd/fixtures/GeneratedSimdFamilies.hs",
+                 "build/generated/simd/fixtures/GeneratedSimdFamiliesNative.hs"}
+        with mock.patch.object(fast_fixtures, "FULL_REQUIRED", fast_fixtures.FULL_REQUIRED | names):
+            self.prepare("thc.UnknownTest")
+            self.assertEqual(self.prepare("thc.UnknownTest")["reused"], ["full"])
+            generated = self.root / "build/generated/simd/fixtures/GeneratedSimdFamilies.hs"
+            generated.write_text("changed generated fixture\n")
+            self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
+            self.assertEqual(self.prepared, 2)
 
     def test_root_cabal_inputs_invalidate_full_fixture_receipt(self):
         self.prepare("thc.UnknownTest")

@@ -12,11 +12,11 @@ This is an executed IO () proof, not a general Fingerprint/IO-result ABI.
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 import urllib.request
 
 
@@ -62,10 +62,11 @@ def pinned_source():
 
 
 def ghc_plugin():
-    suffix = 'dylib' if sys.platform == 'darwin' else 'so'
-    library = ROOT / f'build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.{suffix}'
-    require(library.is_file(), 'Build the GHC plugin with compiler/build.sh first')
-    return library
+    spec = importlib.util.spec_from_file_location('thc_plugin_manifest', ROOT / 'compiler/plugin.py')
+    require(spec is not None and spec.loader is not None, 'Cannot load THC plugin manifest helper')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.read(ROOT)
 
 
 def export_storable(stage, source, installed, plugin):
@@ -83,7 +84,7 @@ def export_storable(stage, source, installed, plugin):
     command = [os.environ.get('GHC', 'ghc'), '-c', '-dynamic', '-fforce-recomp',
                '-this-unit-id', 'ghc-internal', '-package', 'ghc-internal',
                '-odir', overlay, '-hidir', overlay, '-O2', '-dcore-lint',
-               '-fplugin-library=' + str(plugin) + ';thc-core-plugin-0.1;THC.Plugin;' +
+               '-fplugin-library=' + plugin['sharedLibrary'] + ';' + plugin['unitId'] + ';THC.Plugin;' +
                json.dumps(options), source]
     run(command, output=stage_dir / 'storable-export.log')
     result = core / 'GHC.Internal.Foreign.Storable.json'
