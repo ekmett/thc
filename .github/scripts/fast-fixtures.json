@@ -3,6 +3,7 @@
   "fixtureFreeJunit": [
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
+    "thc.runtime.SimdFamiliesTest",
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {

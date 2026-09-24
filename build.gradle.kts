@@ -7,6 +7,20 @@ plugins {
     kotlin("kapt") version "2.4.20"
 }
 repositories { mavenCentral() }
+// The checked family table generates concrete primitive carriers and typed nodes.
+// BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
+// never rewritten by a build. Refresh them explicitly with the generator --write.
+val generateSimdFamilies = tasks.register<Exec>("generateSimdFamilies") {
+    inputs.files("scripts/generate-simd-families.py", "scripts/simd-families.json",
+        "src/main/java/thc/runtime/BytecodeRoot.java", "src/main/kotlin/thc/runtime/BytecodeProgram.kt")
+    outputs.dir(layout.buildDirectory.dir("generated/simd"))
+    commandLine("python3", "scripts/generate-simd-families.py", "--check")
+}
+sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
+kotlin.sourceSets.main { kotlin.srcDir(layout.buildDirectory.dir("generated/simd/kotlin")) }
+tasks.matching { it.name in setOf("compileKotlin", "compileJava", "kaptGenerateStubsKotlin") }.configureEach {
+    dependsOn(generateSimdFamilies)
+}
 val graalVersion = "25.3.4.1"
 // Additional languages are opt-in; the ordinary runtime stays language-neutral.
 val polyglotDemoRuntime by configurations.creating
@@ -92,6 +106,7 @@ tasks.withType<Test>().configureEach {
             "int16-arrays/NativeInt16Array.hs", "int16-arrays/native/int16-array-oracle",
             "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
             "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
+            "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**", "generated/simd/fixtures/*.hs",
             "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
             "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
             "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
@@ -113,6 +128,7 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
+        include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py", "simd_family_model.py", "test-simd-families.py")
         include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-sqrt-audit.py", "prepare-scalar-bitcasts.py", "scalar_bitcast_model.py", "test-scalar-bitcasts.py", "prepare-tag-to-enum-audit.py", "prepare-unsafe-equality-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-narrow-literal-proofs.py", "test-narrow-literal-proofs.py", "prepare-bignat-literals.py", "bignat_literal_model.py", "test-bignat-literals.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-integer-primops.py", "prepare-bit-primops.py", "prepare-bytearray.py", "prepare-mutable-bytearray-size.py", "mutable_bytearray_size_model.py", "test-mutable-bytearray-size.py", "prepare-resize-bytearrays.py", "resize_bytearray_model.py", "test-resize-bytearrays.py", "prepare-mutable-bytearrays.py", "mutable_bytearray_model.py", "test-mutable-bytearray-model.py", "prepare-compare-byte-arrays.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py", "prepare-mutvar.py", "prepare-int-arrays.py", "test-int-array-model.py", "prepare-tuple-arithmetic.py",
             "prepare-signed-narrow-primops.py", "prepare-explicit64-primops.py", "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
@@ -144,7 +160,16 @@ tasks.withType<Test>().configureEach {
     testLogging { events("failed", "skipped", "passed") }
 }
 tasks.test {
-    useJUnitPlatform { excludeTags("jit-stability") }
+    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+}
+tasks.register<Test>("simdFamiliesExperimentTest") {
+    group = "verification"
+    description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("simd-families-experiment") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("SIMD evidence must be checked in a fresh test process") { true }
 }
 // Keep optional language tests outside the ordinary test inventory and classpath.
 val polyglotTests = sourceSets.create("polyglotTest")

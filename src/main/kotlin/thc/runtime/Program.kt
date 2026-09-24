@@ -1329,6 +1329,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreVectors.validateFlags(flags)
                 val operands = args.map { compile(it, scope, false) }.toTypedArray()
                 when (name) {
+                    in GeneratedVectors.operations -> GeneratedVectors.expression(name, operands) { count ->
+                        IntArray(count) { scope.layout.bind("<vector lane $it>") }
+                    }
                     "packInt64X2#" -> VectorPack(operands[0], IntArray(2) { scope.layout.bind("<vector lane $it>") })
                     "unpackInt64X2#" -> VectorUnpack(operands[0])
                     "packInt32X4#" -> Vector32Pack(operands[0], IntArray(4) { scope.layout.bind("<vector lane $it>") })
