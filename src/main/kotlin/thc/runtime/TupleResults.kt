@@ -406,8 +406,18 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
     @field:Child private var body: Expr) : Expr() {
     init { representation = body.representation }
     private fun prepare(frame: VirtualFrame) { scrutinee.executeTuple(frame, slots, 0) }
+    private class ResumeLong(private val owner: TupleCase) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input != null) fault("Invalid AST tuple-case resume value")
+            return owner.body.executeLong(frame)
+        }
+    }
     override fun execute(frame: VirtualFrame): Any? { prepare(frame); return body.execute(frame) }
-    override fun executeLong(frame: VirtualFrame): Long { prepare(frame); return body.executeLong(frame) }
+    override fun executeLong(frame: VirtualFrame): Long {
+        try { prepare(frame) }
+        catch (cut: AstCapture) { throw cut.append(ResumeLong(this)) }
+        return body.executeLong(frame)
+    }
     override fun executeFloat(frame: VirtualFrame): Float { prepare(frame); return body.executeFloat(frame) }
     override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return body.executeDouble(frame) }
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return body.executeClosure(frame) }
