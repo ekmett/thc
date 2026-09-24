@@ -631,14 +631,15 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
-    def test_stack_info_layout_helper_selects_both_consumers(self):
+    def test_stack_info_layout_helper_selects_all_consumers(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt"]
         consumers = set()
         for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
             source = path.read_text()
             if "StackInfoTestLayout" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest"}, consumers)
+        self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest",
+                          "thc.runtime.OriginalStackDecoderCallTest"}, consumers)
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 

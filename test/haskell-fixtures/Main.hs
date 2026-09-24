@@ -11,8 +11,8 @@ import AggregateFixtures (prepareAggregate)
 import WordFloatingFixtures (prepareWordFloating)
 import ContinuationFixtures (prepareCoreContinuation)
 import OriginalStdioFixtures (prepareOriginalStdio)
+import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import SmallArrayFixtures (prepareSmallArrays)
-import StackFixtures (prepareOriginalStack)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
@@ -816,6 +816,8 @@ main = do
     ["word-floating"] -> prepareWordFloating root
     "original-stdio":options -> prepareOriginalStdio root options
     ["original-stack"] -> prepareOriginalStack root
+    ["original-stack-formatter"] -> prepareOriginalStackFormatter root
+    ["original-stack-source-export", directory] -> exportOriginalStackSource root directory
     ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
@@ -825,4 +827,4 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (core-continuation|original-stack|original-stack-formatter|boxed-array-extensions|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|word-floating|tuple-arithmetic|pinned-pointer-cells|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

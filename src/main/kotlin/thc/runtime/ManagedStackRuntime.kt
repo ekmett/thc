@@ -20,9 +20,28 @@ internal object ManagedStackRuntime {
         Language.currentState().stackSnapshots.frameInfo(snapshot, wordOffset, layout)
 
     @JvmStatic @TruffleBoundary
+    fun stackFields(snapshot: Any?, layout: TargetLayout): Long =
+        Language.currentState().stackSnapshots.stackFields(snapshot, layout)
+
+    @JvmStatic @TruffleBoundary
+    fun smallBitmap(snapshot: Any?, wordOffset: Long, layout: TargetLayout): ManagedStackBitmap =
+        Language.currentState().stackSnapshots.smallBitmap(snapshot, wordOffset, layout)
+
+    @JvmStatic @TruffleBoundary
+    fun advance(snapshot: Any?, wordOffset: Long, layout: TargetLayout): ManagedStackAdvance =
+        Language.currentState().stackSnapshots.advance(snapshot, wordOffset, layout)
+
+    @JvmStatic @TruffleBoundary
+    fun incompatibleGetter(operation: OriginalStackInfoOp, snapshot: Any?, wordOffset: Long, layout: TargetLayout): Nothing =
+        Language.currentState().stackSnapshots.incompatibleGetter(operation, snapshot, wordOffset, layout)
+
+    @JvmStatic @TruffleBoundary
     fun lookupIpe(key: ManagedAddress, destination: ManagedAddress, layout: TargetLayout): Long =
         Language.currentState().stackSnapshots.lookupIpe(key, destination, layout)
 }
+
+internal class ManagedStackBitmap(val bitmap: Long, val size: Long)
+internal class ManagedStackAdvance(val snapshot: ManagedStackSnapshot?, val wordOffset: Long, val hasNext: Long)
 
 /** Context owns registrations; snapshots carry only this registry's empty identity token. */
 internal class ManagedStackRegistry {
@@ -95,6 +114,47 @@ internal class ManagedStackRegistry {
         return frame.standard to frame.key
     }
 
+    private fun diagnosticFrames(snapshot: Any?, layout: TargetLayout): Images {
+        val images = images(snapshot, layout)
+        // These images are zero-slack, one-word RET_SMALL records. They do not
+        // expose native stack allocation capacity, heap payloads or chunk links.
+        if (layout.offset("stackHeaderBytes") != layout.wordBytes ||
+            layout.offset("stackClosurePayloadBytes") != layout.wordBytes)
+            fault("Managed diagnostic frames require a one-word nonprofiling header")
+        return images
+    }
+
+    private fun diagnosticFrame(snapshot: Any?, wordOffset: Long, layout: TargetLayout): Images {
+        val images = diagnosticFrames(snapshot, layout)
+        if (wordOffset < 0 || wordOffset >= images.frames.size.toLong())
+            fault("Managed stack frame offset outside snapshot")
+        return images
+    }
+
+    /** Exact capacity of the zero-slack virtual image, not the native stack's capacity. */
+    @Synchronized fun stackFields(snapshot: Any?, layout: TargetLayout): Long =
+        diagnosticFrames(snapshot, layout).frames.size.toLong()
+
+    @Synchronized fun smallBitmap(snapshot: Any?, wordOffset: Long, layout: TargetLayout): ManagedStackBitmap {
+        diagnosticFrame(snapshot, wordOffset, layout)
+        return emptyBitmap
+    }
+
+    @Synchronized fun advance(snapshot: Any?, wordOffset: Long, layout: TargetLayout): ManagedStackAdvance {
+        val images = diagnosticFrame(snapshot, wordOffset, layout)
+        val next = wordOffset + 1
+        // Original Stack.cmm returns three null/zero carriers at the end, not
+        // the old snapshot or a one-past frame location. Null is not a snapshot.
+        return if (next < images.frames.size.toLong()) ManagedStackAdvance(snapshot as ManagedStackSnapshot, next, 1)
+            else endOfStack
+    }
+
+    @Synchronized fun incompatibleGetter(operation: OriginalStackInfoOp, snapshot: Any?, wordOffset: Long,
+        layout: TargetLayout): Nothing {
+        diagnosticFrame(snapshot, wordOffset, layout)
+        fault("${operation.symbol} cannot read a payload, bitmap kind or chunk absent from a managed diagnostic RET_SMALL frame")
+    }
+
     @Synchronized fun lookupIpe(key: ManagedAddress, destination: ManagedAddress, layout: TargetLayout): Long {
         validate(layout)
         val entry = entries[key] ?: return 0L
@@ -142,4 +202,9 @@ internal class ManagedStackRegistry {
     }
 
     @Synchronized fun dispose() { closed = true; snapshots.clear(); entries.clear(); layouts.clear() }
+
+    companion object {
+        private val emptyBitmap = ManagedStackBitmap(0, 0)
+        private val endOfStack = ManagedStackAdvance(null, 0, 0)
+    }
 }

@@ -976,14 +976,33 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.beginOriginalStackInfo(layout)
                     operands.single().emit(e)
                     e.builder.endOriginalStackInfo()
+                }, tupleProof.copy(evaluated = true)) else if (stackInfo == OriginalStackInfoOp.STACK_FIELDS)
+                    ProvenExpression(Expression { e ->
+                        e.builder.beginOriginalStackFields(layout)
+                        operands.single().emit(e)
+                        e.builder.endOriginalStackFields()
+                    }, tupleProof.copy(evaluated = true))
+                else if (!stackInfo.tupleResult) ProvenExpression(Expression { e ->
+                    e.builder.beginOriginalStackIncompatibleGetter(layout, stackInfo)
+                    operands.forEach { it.emit(e) }
+                    e.builder.endOriginalStackIncompatibleGetter()
                 }, tupleProof.copy(evaluated = true)) else tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     if (stackInfo == OriginalStackInfoOp.FRAME_INFO)
                         b.beginOriginalStackFrameInfo(layout, destination[0], destination[1])
-                    else b.beginOriginalStackLookupIpe(layout, destination.single())
+                    else if (stackInfo == OriginalStackInfoOp.SMALL_BITMAP)
+                        b.beginOriginalStackSmallBitmap(layout, destination[0], destination[1])
+                    else if (stackInfo == OriginalStackInfoOp.ADVANCE)
+                        b.beginOriginalStackAdvance(layout, destination[0], destination[1], destination[2])
+                    else if (stackInfo == OriginalStackInfoOp.LOOKUP_IPE)
+                        b.beginOriginalStackLookupIpe(layout, destination.single())
+                    else b.beginOriginalStackIncompatibleTupleGetter(layout, stackInfo)
                     operands.forEach { it.emit(e) }
                     if (stackInfo == OriginalStackInfoOp.FRAME_INFO) b.endOriginalStackFrameInfo()
-                    else b.endOriginalStackLookupIpe()
+                    else if (stackInfo == OriginalStackInfoOp.SMALL_BITMAP) b.endOriginalStackSmallBitmap()
+                    else if (stackInfo == OriginalStackInfoOp.ADVANCE) b.endOriginalStackAdvance()
+                    else if (stackInfo == OriginalStackInfoOp.LOOKUP_IPE) b.endOriginalStackLookupIpe()
+                    else b.endOriginalStackIncompatibleTupleGetter()
                 }
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

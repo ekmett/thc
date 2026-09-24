@@ -10,15 +10,22 @@ import thc.Json
 
 /** Every baseline is a retained original FCall application, not a fresh FFI fixture. */
 class CoreStackInfoForeignTest {
-    private val symbols = linkedMapOf(
-        "getStackInfoTableAddrzh" to OriginalStackInfoOp.STACK_INFO,
-        "getInfoTableAddrszh" to OriginalStackInfoOp.FRAME_INFO,
-        "lookupIPE" to OriginalStackInfoOp.LOOKUP_IPE)
+    private val symbols = OriginalStackInfoOp.entries.associateBy { it.symbol }
     private fun original() = Json.parse(javaClass.getResource("/core/original-stack-info-calls.json")!!.readText()) as Map<String, Any?>
+    private val getterProof by lazy {
+        val file = java.io.File(System.getProperty("thc.projectRoot"), "compiler/test-fixtures/OriginalStackProof.json")
+        val bytes = file.readBytes()
+        assertEquals("db63661c12a6ecb757697e759fcb95e4d51f3689619bdb7682a041788eb41d4f",
+            java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)))
+        Json.parse(bytes.toString(Charsets.UTF_8)) as Map<String, Any?>
+    }
+    private val applications by lazy {
+        (getterProof["calls"] as List<Map<String, Any?>>).map { it["expression"] as List<Any?> }
+            .groupBy { (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["symbol"] }
+    }
     private fun copy(value: Any?) = Json.parse(Json.stringify(value))
     private inner class Input(val symbol: String) {
-        val application = (original()["calls"] as List<Map<String, Any?>>).map { it["application"] as MutableList<Any?> }
-            .single { (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["symbol"] == symbol }
+        val application = copy(applications.getValue(symbol).first()) as MutableList<Any?>
         val metadata = application[6] as MutableMap<String, Any?>
         val descriptor = metadata["foreignCall"] as MutableMap<String, Any?>
         val target get() = descriptor["target"] as MutableMap<String, Any?>
@@ -45,7 +52,7 @@ class CoreStackInfoForeignTest {
         "kind" to when (rep) { null -> "void"; "AddrRep" -> "address"; "BoxedRep (Just Unlifted)", "BoxedRep (Just Lifted)" -> "object"; else -> "long" },
         "primReps" to (rep?.let { listOf(it) } ?: emptyList<String>()), "evaluated" to evaluated)
 
-    @Test fun retainedProofProvenanceAndAllThreeExactContracts() {
+    @Test fun retainedProofProvenanceAndAllFourteenExactContracts() {
         val source = original()
         assertEquals(1L, source["schema"]); assertEquals("9.14.1", source["ghc"])
         assertEquals("902339d332fb4ce2b3c87dcac1ee6495d41ad886", source["ghcRevision"])
@@ -62,6 +69,7 @@ class CoreStackInfoForeignTest {
             "ghc-internal:GHC.Internal.Stack.Decode.\$wunpackStackFrameTo", "ghc-internal:GHC.Internal.InfoProv.Types.lookupIPE"), calls.map { it["owner"] }.toSet())
         calls.forEach { assertTrue((it["path"] as String).startsWith("/expr/")); assertTrue((it["source"] as String) in expectedHashes) }
         assertEquals(symbols.values.toSet(), OriginalStackInfoOp.entries.toSet())
+        assertEquals(symbols.keys + "stg_cloneMyStackzh", applications.keys)
         for ((symbol, operation) in symbols) {
             val input = Input(symbol)
             assertEquals(operation, input.validate())
@@ -73,9 +81,9 @@ class CoreStackInfoForeignTest {
         }
     }
 
-    @Test fun unknownSymbolsAndOtherColdGettersStayUnrecognized() {
+    @Test fun unknownSymbolsAliasesAndSeparateCloneProtocolStayUnrecognized() {
         for (unknown in listOf("getStackInfoTableAddr", "getInfoTableAddrszh64", "stg_getInfoTableAddrszh", "lookUpIPE",
-            "getSmallBitmapzh", "advanceStackFrameLocationzh", "getWordzh", "getStackClosurezh", "stg_cloneMyStackzh", "")) {
+            "getSmallBitmapzh2", "advanceStackFrameLocationzh2", "getWordzh2", "getStackClosurezh2", "stg_cloneMyStackzh", "")) {
             val input = Input("lookupIPE"); input.target["symbol"] = unknown
             input.application[1] = 7L // An unrelated unknown symbol must retain ordinary unsupported handling.
             assertNull(input.validate()); assertDoesNotThrow { CoreStackInfoForeign.validateHeads(input.application) }
@@ -166,10 +174,11 @@ class CoreStackInfoForeignTest {
     }
 
     @Test fun tupleFieldsAreOrderedExactEvaluatedAndKeepZeroWidthState() {
-        for (symbol in listOf("getInfoTableAddrszh", "lookupIPE")) for (site in 0..2) {
+        for (symbol in symbols.filterValues { it.tupleResult }.keys) for (site in 0..2) {
             fun fields(input: Input) = input.resultAt(site)["components"] as MutableList<MutableMap<String, Any?>>
-            for (index in 0..1) {
-                for ((key, value) in listOf("evaluated" to false, "evaluated" to 1L, "primReps" to listOf("IntRep"),
+            for (index in symbols.getValue(symbol).results.indices) {
+                val wrongPrimitive = if (symbols.getValue(symbol).results[index] == "IntRep") "WordRep" else "IntRep"
+                for ((key, value) in listOf("evaluated" to false, "evaluated" to 1L, "primReps" to listOf(wrongPrimitive),
                     "kind" to "unknown", "components" to emptyList<Any?>(), "vector" to null))
                     Input(symbol).also { fields(it)[index][key] = value; reject(it) }
                 Input(symbol).also { fields(it).removeAt(index); reject(it) }

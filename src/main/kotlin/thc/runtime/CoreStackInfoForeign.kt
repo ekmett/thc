@@ -8,6 +8,18 @@ internal enum class OriginalStackInfoOp(val symbol: String, val convention: Stri
     val arguments: List<String?>, val results: List<String?>, val tupleResult: Boolean) {
     STACK_INFO("getStackInfoTableAddrzh", "prim", listOf("BoxedRep (Just Unlifted)"), listOf("AddrRep"), false),
     FRAME_INFO("getInfoTableAddrszh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("AddrRep", "AddrRep"), true),
+    STACK_FIELDS("getStackFieldszh", "prim", listOf("BoxedRep (Just Unlifted)"), listOf("Word32Rep"), false),
+    SMALL_BITMAP("getSmallBitmapzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("WordRep", "WordRep"), true),
+    ADVANCE("advanceStackFrameLocationzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"),
+        listOf("BoxedRep (Just Unlifted)", "WordRep", "IntRep"), true),
+    WORD("getWordzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("WordRep"), false),
+    CLOSURE("getStackClosurezh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("BoxedRep (Just Lifted)"), false),
+    LARGE_BITMAP("getLargeBitmapzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("AddrRep", "WordRep"), true),
+    BCO_LARGE_BITMAP("getBCOLargeBitmapzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("AddrRep", "WordRep"), true),
+    RET_FUN_LARGE_BITMAP("getRetFunLargeBitmapzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("AddrRep", "WordRep"), true),
+    RET_FUN_SMALL_BITMAP("getRetFunSmallBitmapzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("WordRep", "WordRep"), true),
+    RET_FUN_BIG("isArgGenBigRetFunTypezh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("IntRep"), false),
+    UNDERFLOW("getUnderflowFrameNextChunkzh", "prim", listOf("BoxedRep (Just Unlifted)", "WordRep"), listOf("BoxedRep (Just Unlifted)"), false),
     LOOKUP_IPE("lookupIPE", "ccall", listOf("AddrRep", "AddrRep", null), listOf(null, "Word8Rep"), true);
 }
 
@@ -36,7 +48,7 @@ internal object CoreStackInfoForeign {
         val kind = when (primitive) {
             null -> CoreKind.VOID
             "AddrRep" -> CoreKind.ADDRESS
-            "BoxedRep (Just Unlifted)" -> CoreKind.OBJECT
+            "BoxedRep (Just Unlifted)", "BoxedRep (Just Lifted)" -> CoreKind.OBJECT
             else -> CoreKind.LONG
         }
         val reps = listOfNotNull(primitive)
@@ -53,7 +65,7 @@ internal object CoreStackInfoForeign {
         val kind = when (primitive) {
             null -> "void"
             "AddrRep" -> "address"
-            "BoxedRep (Just Unlifted)" -> "object"
+            "BoxedRep (Just Unlifted)", "BoxedRep (Just Lifted)" -> "object"
             else -> "long"
         }
         return value.keys == scalarKeys && value["kind"] == kind &&

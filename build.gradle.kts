@@ -97,6 +97,13 @@ tasks.withType<Test>().configureEach {
             "original-stdio/logs/*.stdout", "original-stdio/logs/*.stderr",
             "managed-md5-native/**",
             "original-stack/manifest.json", "original-stack/run-*/**",
+            "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
+            "original-stack-formatter/run-*/pre-core/*.json", "original-stack-formatter/run-*/post-core/*.json",
+            "original-stack-formatter/run-*/*-audit.json", "original-stack-formatter/run-*/native/formatter",
+            "original-stack-formatter/run-*/originals/core/*.json",
+            "original-stack-formatter/run-*/originals/generated/**/*.hs",
+            "original-stack-formatter/run-*/originals/generated.json",
+            "original-stack-formatter/run-*/originals/target-layout.json",
             "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**",
             "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
@@ -148,6 +155,10 @@ tasks.withType<Test>().configureEach {
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
     inputs.file("compiler/test-fixtures/OriginalStackProof.json")
+    inputs.files("src/THC/Driver/Wired.hs", "compiler/target-layout.c")
+    inputs.files(fileTree("compiler/pinned-ghc-internal") {
+        include("**/*.hs", "**/*.hs-boot", "**/*.hsc", "include/WordSize.h", "LICENSE")
+    })
     inputs.files("thc.cabal", "compiler/pinned-ghc-internal/LICENSE",
         "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
         "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc")

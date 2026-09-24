@@ -256,6 +256,12 @@ internal class LocalRead(private val slot: Int, private val cell: Boolean = true
 
     override fun execute(frame: VirtualFrame): Any? {
         val value = if (!cell && representation.isEvaluatedReference) frame.getObject(slot) else FrameAccess.read(frame, slot)
+        // A proved, nonrecursive unlifted reference can carry the null sentinel
+        // returned by original foreign protocols (the terminal stack location).
+        // It is already bound; unlike unknown locals or unpublished RecCells,
+        // null here describes the value, not its initialization state.
+        if (!cell && representation.evaluated && representation.kind == CoreKind.OBJECT &&
+            representation.primReps == listOf("BoxedRep (Just Unlifted)")) return value
         if (!cell || value !is RecCell) return value ?: fault("Uninitialized local binding")
         if (!value.initialized) fault("Recursive binding read before initialization")
         return value.value
