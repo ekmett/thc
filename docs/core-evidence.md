@@ -94,18 +94,21 @@ older records that retain `fieldReps` but omit `fieldTypes`. Retained exact fiel
 types must identify an evaluated, unlifted address. Allocation rejects numeric,
 null and foreign carriers; the supported value is an immutable managed GHC string
 literal plus a checked offset, never a native pointer. Lazy neighboring fields
-remain untouched. Heap-field capabilities are separate from aggregate-leaf
-capabilities, so this does not enable address-containing tuple or sum results.
+remain untouched. An exact evaluated `AddrRep` leaf is also accepted in an
+unboxed tuple. Its physical result and typed-input field is a managed reference;
+tuple construction and consumption reject null, numeric, and foreign carriers.
+Unboxed sums and native pointers remain outside this capability.
 
 [AddressFieldAudit.hs](../compiler/test-fixtures/AddressFieldAudit.hs) and
 [its preparation](../scripts/prepare-address-fields.py) retain opaque constructor
 calls, cases, returned records and captured addresses before and after Tidy.
-Two hundred native rows agree with an independent bounded byte-index model,
+Two hundred twenty-five native rows agree with an independent bounded byte-index model,
 including high bytes, embedded/final NUL and negative offsets within the literal.
 Natural optimized examples are separate; GHC eta-expands the source constructor
 partial application, while a synthetic runtime control checks the actual PAP.
 Both backends check each compiled row's guest entry and host/original/active
 target validity with inlining enabled and disabled. Address aggregate frontiers
+now include an opaque `(# Addr#, Int# #)` producer and consumer; address sums
 remain rejected. This removes the `TrNameS` field obstacle in the genuine
 `arrEleBottom` source chain; its Typeable/unsafe-equality globals and `tagToEnum#`
 frontier still prevent strict acceptance.

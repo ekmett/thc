@@ -1075,7 +1075,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                             e.builder.beginDiscardVoid(); operand.emit(e); e.builder.endDiscardVoid()
                         }
                         else {
-                            e.builder.beginStoreLocal(destination[offset]); operand.emit(e); e.builder.endStoreLocal()
+                            e.builder.beginStoreLocal(destination[offset])
+                            if (component.kind == CoreKind.ADDRESS) e.builder.beginRequireAddress()
+                            operand.emit(e)
+                            if (component.kind == CoreKind.ADDRESS) e.builder.endRequireAddress()
+                            e.builder.endStoreLocal()
                         }
                     }
                     e.builder.endBlock()

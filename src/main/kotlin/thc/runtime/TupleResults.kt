@@ -34,7 +34,7 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             if (layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], layout.getLong(storage, index))
             else if (layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], layout.getFloat(storage, index))
             else if (layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], layout.getDouble(storage, index))
-            else FrameAccess.write(frame, slots[offset + index], layout.getObject(storage, index))
+            else FrameAccess.write(frame, slots[offset + index], checkedReference(index, layout.getObject(storage, index)))
         }
     }
     @ExplodeLoop private fun write(frame: VirtualFrame, slots: IntArray, storage: HandoffStorage) {
@@ -42,9 +42,13 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             if (layout.isLong(index)) layout.setLong(storage, index, frame.getLong(slots[index]))
             else if (layout.isFloat(index)) layout.setFloat(storage, index, frame.getFloat(slots[index]))
             else if (layout.isDouble(index)) layout.setDouble(storage, index, frame.getDouble(slots[index]))
-            else layout.setObject(storage, index, frame.getObject(slots[index]))
+            else layout.setObject(storage, index, checkedReference(index, frame.getObject(slots[index])))
         }
     }
+    fun checkedReference(index: Int, value: Any?): Any? =
+        if (leaves[index].kind == CoreKind.ADDRESS)
+            value as? LiteralAddress ?: fault("Expected a managed literal Addr# tuple field")
+        else value
     fun finish(frame: VirtualFrame, slots: IntArray): Any {
         if (inlineResult()) {
             val virtual = layout.create()
@@ -94,9 +98,11 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved fields")
             val fields = flatten(proof)
             if (fields.any { (it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE,
-                    CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
+                    CoreKind.ADDRESS, CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT)) ||
                     it.primReps?.singleOrNull()?.let(HandoffLayout::supportsResult) != true })
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unsupported fields")
+            if (fields.any { it.kind == CoreKind.ADDRESS && !it.evaluated })
+                throw UnsupportedCore("Unsupported Core aggregate representation: AddrRep tuple field needs an evaluated carrier")
             val reps = fields.map { it.primReps!!.single() }
             if (proof.primReps != reps) throw RuntimeFault("Tuple components disagree with primitive representations")
         }
@@ -320,7 +326,7 @@ internal class TupleLocalRead(private val shape: TupleShape,
             if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(sources[index]))
             else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], frame.getFloat(sources[index]))
             else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], frame.getDouble(sources[index]))
-            else FrameAccess.write(frame, slots[offset + index], frame.getObject(sources[index]))
+            else FrameAccess.write(frame, slots[offset + index], shape.checkedReference(index, frame.getObject(sources[index])))
         }
         return null
     }
@@ -337,6 +343,7 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
             else if (component.isFloat) FrameAccess.writeFloat(frame, slots[target], fields[index].executeRequiredFloat(frame))
             else if (component.isDouble) FrameAccess.writeDouble(frame, slots[target], fields[index].executeRequiredDouble(frame))
             else if (component.kind == CoreKind.VOID) requireVoidCarrier(fields[index].execute(frame))
+            else if (component.kind == CoreKind.ADDRESS) FrameAccess.write(frame, slots[target], fields[index].executeRequiredAddress(frame))
             else FrameAccess.write(frame, slots[target], fields[index].execute(frame))
         }
         return null
@@ -392,7 +399,7 @@ internal class BytecodeTupleSlots(shape: TupleShape,
             if (shape.layout.isLong(index)) shape.layout.setLong(output, index, slots[index].getLong(node, frame))
             else if (shape.layout.isFloat(index)) shape.layout.setFloat(output, index, slots[index].getFloat(node, frame))
             else if (shape.layout.isDouble(index)) shape.layout.setDouble(output, index, slots[index].getDouble(node, frame))
-            else shape.layout.setObject(output, index, slots[index].getObject(node, frame))
+            else shape.layout.setObject(output, index, shape.checkedReference(index, slots[index].getObject(node, frame)))
         }
     }
     fun finish(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode): Any {
@@ -412,7 +419,7 @@ internal class BytecodeTupleSlots(shape: TupleShape,
             if (shape.layout.isLong(index)) slots[index].setLong(node, frame, shape.layout.getLong(receiver, index))
             else if (shape.layout.isFloat(index)) slots[index].setFloat(node, frame, shape.layout.getFloat(receiver, index))
             else if (shape.layout.isDouble(index)) slots[index].setDouble(node, frame, shape.layout.getDouble(receiver, index))
-            else slots[index].setObject(node, frame, shape.layout.getObject(receiver, index))
+            else slots[index].setObject(node, frame, shape.checkedReference(index, shape.layout.getObject(receiver, index)))
         }
     }
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
