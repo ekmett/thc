@@ -73,10 +73,12 @@ class OriginalStackConsumerProofTest {
     }
     private fun calls(module: Map<String, Any?>, entry: String): List<Call> {
         val reached = CoreModules.reachable(module, entry)["bindings"] as List<Map<String, Any?>>
-        return reached.flatMap { binding -> nodes(binding["expr"]).filter {
+        return callsIn(reached)
+    }
+    private fun callsIn(bindings: Collection<Map<String, Any?>>): List<Call> =
+        bindings.flatMap { binding -> nodes(binding["expr"]).filter {
             it.firstOrNull() == "app" && (it.getOrNull(6) as? Map<*, *>)?.get("foreignCall") is Map<*, *>
         }.map { Call(binding.getValue("id") as String, it) } }
-    }
     private fun scalar(rep: String?, evaluated: Boolean = false): Map<String, Any?> = mapOf(
         "kind" to when (rep) { null -> "void"; "AddrRep" -> "address"; "BoxedRep (Just Unlifted)", "BoxedRep (Just Lifted)" -> "object"; else -> "long" },
         "primReps" to listOfNotNull(rep), "evaluated" to evaluated)
@@ -123,7 +125,10 @@ class OriginalStackConsumerProofTest {
     }
     private val originalEntries = listOf("cloneMyStack", "decodeStackWithIpe", "prettyStackFrameWithIpe", "peekItbl", "lookupIPE", "peekInfoProv")
     private fun inventory(module: Map<String, Any?>): List<Call> {
-        val calls = originalEntries.flatMap { calls(module, it) }.distinctBy { it.owner to it.expression }
+        val reached = originalEntries.flatMap { CoreModules.reachable(module, it)["bindings"] as List<Map<String, Any?>> }
+            .associateBy { it.getValue("id") as String }
+        // De-duplicate shared bindings, never equal call occurrences within a binding.
+        val calls = callsIn(reached.values)
         require(calls.map { it.symbol }.toSet() == specs.keys) { "Original reachable stack ABI inventory changed" }
         calls.forEach(::checkCall)
         return calls
@@ -183,6 +188,11 @@ class OriginalStackConsumerProofTest {
         assertThrows(IllegalArgumentException::class.java) { checkCall(Call(cold.owner, badCall)) }
         val withoutDecode = module + ("bindings" to (module["bindings"] as List<Map<String, Any?>>).filter { it["id"] != cold.owner })
         assertThrows(IllegalArgumentException::class.java) { inventory(withoutDecode) }
+        val duplicated = module + ("bindings" to (module["bindings"] as List<Map<String, Any?>>).map { binding ->
+            if (binding["id"] != cold.owner) binding else binding + ("expr" to listOf("case", binding["expr"],
+                "duplicate-proof", listOf(listOf("default", null, emptyList<String>(), binding["expr"]))))
+        })
+        assertEquals(2 * all.count { it.owner == cold.owner }, inventory(duplicated).count { it.owner == cold.owner })
         for (symbol in specs.keys) {
             val call = all.first { it.symbol == symbol }
             val changed = call.expression.toMutableList().also { it[3] = List((call.expression[3] as List<*>).size) { true } }
