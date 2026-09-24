@@ -13,9 +13,10 @@ on:
         required: false
 
 concurrency:
-  # Keep full main checks running as new PRs land. Branch dispatches may cancel
-  # an older revision of that branch, but a new main commit cannot starve them.
-  group: build-${{ github.repository }}-${{ github.ref_name }}-${{ github.ref_name == 'main' && github.sha || 'branch' }}
+  # Finish the running main check, then check the newest pending revision.
+  # A shared group keeps rapid merges from starting a full build per commit;
+  # the default single pending slot replaces revisions that have not started.
+  group: build-${{ github.repository }}-${{ github.ref_name }}
   cancel-in-progress: ${{ github.ref_name != 'main' }}
 permissions:
   contents: read
