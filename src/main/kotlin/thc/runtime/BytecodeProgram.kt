@@ -86,6 +86,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private class Emission(val builder: BytecodeRootGen.Builder) {
         val locals = mutableMapOf<Int, BytecodeLocal>()
+        var checkpointRootEntry: BytecodeLocal? = null
         var continueLabel: BytecodeLabel? = null
         var typedInputSlots: BytecodeTypedInputSlots? = null
         val joins = mutableMapOf<JoinRegion, JoinEmission>()
@@ -310,6 +311,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginRoot()
             val e = Emission(b)
             b.emitEnterRoot(metrics)
+            if (checkpoint != null) {
+                // Only proof roots pay for a mask snapshot. A yielded caller
+                // parks to this root's entry mask before its frame is captured.
+                e.checkpointRootEntry = b.createLocal("checkpoint root entry mask", "object").also {
+                    b.beginStoreLocal(it); b.emitCurrentMask(); b.endStoreLocal()
+                }
+            }
             for (local in context.captures + context.typedArguments.map { it.second }.ifEmpty { context.arguments.filterNotNull() }) {
                 e.locals[local.id] = b.createLocal(local.name, if (local.primitive) "primitive" else "object")
             }
@@ -621,9 +629,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val b = e.builder
         b.beginBlock()
         val fn = b.createLocal("captured application function", "object")
+        val callerMask = b.createLocal("captured application caller mask", "object")
         val result = b.createLocal("captured application result", "object")
         val suspended = b.createLocal("captured application suspension", "object")
         b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal()
+        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
         b.beginTryCatch()
         b.beginStoreLocal(result)
         b.beginCaptureApplicationResult(arguments.size)
@@ -632,6 +642,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.emitLoadLocal(fn)
         arguments.forEach { it.emit(e) }
         b.endApply()
+        b.emitLoadLocal(callerMask)
         b.endCaptureApplicationResult()
         b.endStoreLocal()
         b.beginBlock()
@@ -641,7 +652,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginStoreLocal(result)
         b.beginResumeApplication()
         b.emitLoadLocal(suspended)
-        b.beginYield(); b.emitLoadLocal(suspended); b.endYield()
+        b.beginReenterCallMask()
+        b.beginYield()
+        b.beginParkCallMask()
+        b.emitLoadLocal(suspended)
+        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.emitLoadLocal(callerMask)
+        b.endParkCallMask()
+        b.endYield()
+        b.emitLoadLocal(callerMask)
+        b.endReenterCallMask()
         b.endResumeApplication()
         b.endStoreLocal()
         b.endBlock()
