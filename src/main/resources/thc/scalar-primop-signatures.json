@@ -1279,6 +1279,76 @@
       ],
       "result": "IntRep"
     },
+    "pdep#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "pdep16#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "pdep32#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "pdep64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "pdep8#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "pext#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "pext16#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "pext32#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
+    "pext64#": {
+      "arguments": [
+        "Word64Rep",
+        "Word64Rep"
+      ],
+      "result": "Word64Rep"
+    },
+    "pext8#": {
+      "arguments": [
+        "WordRep",
+        "WordRep"
+      ],
+      "result": "WordRep"
+    },
     "plusAddr#": {
       "arguments": [
         "AddrRep",

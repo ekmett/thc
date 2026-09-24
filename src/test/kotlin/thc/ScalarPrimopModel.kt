@@ -21,6 +21,19 @@ internal object ScalarPrimopModel {
         return if (residue.testBit(width - 1)) residue - modulus(width) else residue
     }
 
+    /** Bit-walk oracle independent of the JVM's compress/expand operations. */
+    private fun depositOrExtract(deposit: Boolean, width: Int, source: BigInteger, mask: BigInteger): BigInteger {
+        var result = BigInteger.ZERO
+        var packedBit = 0
+        for (position in 0 until width) if (mask.testBit(position)) {
+            if (deposit) {
+                if (source.testBit(packedBit)) result = result.setBit(position)
+            } else if (source.testBit(position)) result = result.setBit(packedBit)
+            packedBit++
+        }
+        return result
+    }
+
     /** All arithmetic is unbounded until the final GHC-width truncation. */
     fun scalar(operation: String, width: Int, isUnsigned: Boolean, left: Long, right: Long): Long {
         val x = if (isUnsigned) unsigned(left, width) else signed(BigInteger.valueOf(left), width)
@@ -47,6 +60,8 @@ internal object ScalarPrimopModel {
             "shiftL", "uncheckedShiftL" -> x.shiftLeft(right.toInt())
             "shiftRA" -> x.shiftRight(right.toInt())
             "shiftRL", "uncheckedShiftRL" -> unsigned(left, width).shiftRight(right.toInt())
+            "pdep" -> depositOrExtract(true, width, x, y)
+            "pext" -> depositOrExtract(false, width, x, y)
             else -> error("Unknown scalar primop operation: $operation")
         }
         return (if (isUnsigned) result.mod(modulus(width)) else signed(result, width)).toLong()

@@ -11,22 +11,28 @@ The first missing unsigned families now execute in both AST and bytecode:
 | Word# | `quotWord#`, `remWord#`, `gtWord#`, `geWord#` |
 | Word8#/Word16#/Word32# | `quotWordN#`, `remWordN#`, `eqWordN#`, `neWordN#`, `gtWordN#`, `geWordN#` |
 | Word8#/Word16#/Word32# | `andWordN#`, `orWordN#`, `xorWordN#`, `notWordN#`, `uncheckedShiftLWordN#`, `uncheckedShiftRLWordN#` |
+| Word# / Word64# | `pdep#`, `pext#`, and their 8/16/32/64-bit variants |
 
-There are 40 additions. Machine words retain all 64 bits in a Long, using Java's
+There are 50 additions. Machine words retain all 64 bits in a Long, using Java's
 unsigned division/remainder and comparison facilities. Narrow unsigned words
 remain zero-extended Longs; masks truncate left shifts and complements and bound
-division and comparison operands. Each bytecode operation has a constant width
+division and comparison operands. Bit deposit/extract use `Long.expand` and
+`Long.compress` with exact-width masks; the 8/16/32 variants consume and return
+`Word#`, while the 64-bit variant uses `Word64#`. Each bytecode operation has a constant width
 mask and primitive operands/results. No aggregate transport changed.
 
 `IntegerPrimopsAudit.hs` wraps every primitive with dynamic operands and the
 existing Int# host boundary. The Cabal `thc-fixtures` executable exports the
-Core and generates 56,791 native oracle rows. The JVM
+Core and generates 58,559 native oracle rows. The JVM
 test checks that every intended primop survives GHC optimization. Inputs include every bit
 position and its neighbors, zero, alternating patterns, the sign bit, all-ones
 and equal/neighbor operands. Every byte is checked for complement and every
 valid byte shift count; wider shifts cover every count and bit transition.
+Deposit/extract rows additionally cover empty, full, alternating, sparse and
+high-bit masks, including inputs outside narrow widths.
 
-`IntegerPrimopsTest` independently checks those native results with BigInteger,
+`IntegerPrimopsTest` independently checks those native results with BigInteger
+and a per-bit deposit/extract model,
 then executes every row on both runtimes before and after compilation. It
 requires exactly one installed guest entry for every oracle row and checks wrong
 arities in strict and diagnostic modes. Preparation is part of the normal

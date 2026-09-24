@@ -1107,6 +1107,8 @@ private class Primitive(private val name: String, @field:Children private var ar
             "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> 1
             "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> 1
             "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> 1
+            "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#",
+            "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> 2
 
             "negateInt8#", "negateInt16#", "negateInt32#" -> 1
             "plusInt8#", "plusInt16#", "plusInt32#" -> 2
@@ -1167,6 +1169,10 @@ private class Primitive(private val name: String, @field:Children private var ar
             "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> minOf(java.lang.Long.numberOfTrailingZeros(x and bitMask), 64 - bitShift).toLong()
             "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> java.lang.Long.reverseBytes(x) ushr bitShift
             "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> java.lang.Long.reverse(x) ushr bitShift
+            "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#" ->
+                java.lang.Long.expand(x and bitMask, y and bitMask) and bitMask
+            "pext8#", "pext16#", "pext32#", "pext64#", "pext#" ->
+                java.lang.Long.compress(x and bitMask, y and bitMask) and bitMask
             "negateInt8#", "negateInt16#", "negateInt32#" -> signedNarrow(-x, intShift)
             "plusInt8#", "plusInt16#", "plusInt32#" -> signedNarrow(x + y, intShift)
             "subInt8#", "subInt16#", "subInt32#" -> signedNarrow(x - y, intShift)

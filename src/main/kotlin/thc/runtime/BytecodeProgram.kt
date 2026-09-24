@@ -2431,6 +2431,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> "CountTrailingZerosWidth"
             "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> "ByteSwapWidth"
             "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> "BitReverseWidth"
+            "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#" -> "BitDepositWidth"
+            "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> "BitExtractWidth"
 
             "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
             "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
@@ -2562,6 +2564,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CountTrailingZerosWidth" -> b.beginCountTrailingZerosWidth(bitShift)
                 "ByteSwapWidth" -> b.beginByteSwapWidth(bitShift)
                 "BitReverseWidth" -> b.beginBitReverseWidth(bitShift)
+                "BitDepositWidth" -> b.beginBitDepositWidth(bitShift)
+                "BitExtractWidth" -> b.beginBitExtractWidth(bitShift)
                 "CountLeadingZeros" -> b.beginCountLeadingZeros()
                 "CountTrailingZeros" -> b.beginCountTrailingZeros(); "PopulationCount" -> b.beginPopulationCount()
                 "ShiftLeft" -> b.beginShiftLeft(); "ShiftRight" -> b.beginShiftRight(); "ShiftRightUnsigned" -> b.beginShiftRightUnsigned()
@@ -2625,6 +2629,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "CountTrailingZerosWidth" -> b.endCountTrailingZerosWidth()
                 "ByteSwapWidth" -> b.endByteSwapWidth()
                 "BitReverseWidth" -> b.endBitReverseWidth()
+                "BitDepositWidth" -> b.endBitDepositWidth()
+                "BitExtractWidth" -> b.endBitExtractWidth()
                 "CountLeadingZeros" -> b.endCountLeadingZeros()
                 "CountTrailingZeros" -> b.endCountTrailingZeros(); "PopulationCount" -> b.endPopulationCount()
                 "ShiftLeft" -> b.endShiftLeft(); "ShiftRight" -> b.endShiftRight(); "ShiftRightUnsigned" -> b.endShiftRightUnsigned()
