@@ -22,7 +22,9 @@ prepareCoreContinuation root = do
       ["scripts/audit-core.py", base </> "core/LazyIOCallbackAudit.json",
        "--entry", entry, "--output", base </> report] "")
       [("catchLazyActionHead", "lazy-action-audit.json"),
-       ("catchLazyHandlerHead", "lazy-handler-audit.json")]
+       ("catchLazyHandlerHead", "lazy-handler-audit.json"),
+       ("keepAliveScalar", "keep-alive-scalar-audit.json"),
+       ("keepAliveTuple", "keep-alive-tuple-audit.json")]
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
        "--entry", "sharedAnswer", "--output", base </> "audit.json"] ""
   _ <- run root [] "python3" ["scripts/audit-core.py", base </> "core/CoreContinuationAudit.json",
@@ -76,5 +78,5 @@ prepareCoreContinuation root = do
        "-hidir", base </> "native", "-o", base </> "lazy-native-oracle",
        "compiler/test-fixtures/LazyIOCallbackNative.hs", lazySource] ""
   lazyNative <- run root [] (base </> "lazy-native-oracle") [] ""
-  unless (lazyNative == "42\n77\n") (die "lazy IO callback heads disagree with native GHC")
+  unless (lazyNative == "42\n77\n43\n44\n") (die "lazy IO callbacks disagree with native GHC")
   writeFile (base </> "lazy-native-output.txt") lazyNative

@@ -35,3 +35,17 @@ catchLazyHandlerHead =
   case catch# (\s -> raiseIO# (Box 7#) s)
               (lazyHandlerHead (Box 70#)) realWorld# of
     (# _, Box result #) -> I# result
+
+{-# OPAQUE keepAliveScalar #-}
+keepAliveScalar :: Int
+keepAliveScalar =
+  case keepAlive# (Box 0#) realWorld#
+         (\s -> case noDuplicate# s of _ -> Box 43#) of
+    Box result -> I# result
+
+{-# OPAQUE keepAliveTuple #-}
+keepAliveTuple :: Int
+keepAliveTuple =
+  case keepAlive# (Box 0#) realWorld#
+         (\s -> case noDuplicate# s of s' -> (# s', Box 44# #)) of
+    (# _, Box result #) -> I# result

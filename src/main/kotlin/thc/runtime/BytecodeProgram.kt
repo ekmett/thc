@@ -1879,14 +1879,25 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     // before the Java KeepAlive operation can be entered.
                     b.beginRequireIOState(); b.emitLoadLocal(stateLocal); b.endRequireIOState()
                     b.beginTryFinally(Runnable {
-                        b.beginReachabilityFence(); b.emitLoadLocal(reference); b.endReachabilityFence()
+                        b.beginStoreLocal(b.createLocal("keepAlive fence", null))
+                        b.beginTouch(); b.emitLoadLocal(reference); b.emitLoadLocal(stateLocal); b.endTouch()
+                        b.endStoreLocal()
                     })
                     val result = if (destination == null) b.createLocal("keepAlive result", null) else null
                     if (result != null) b.beginStoreLocal(result)
-                    if (destination != null) b.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
-                    else b.beginKeepAlive(metrics)
-                    b.emitLoadLocal(reference); b.emitLoadLocal(stateLocal); force(function).emit(e)
-                    if (destination != null) b.endKeepAliveTuple() else b.endKeepAlive()
+                    if (resumable) {
+                        val stateArgument = ProvenExpression(Expression { it.builder.emitLoadLocal(stateLocal) },
+                            state.proof.copy(evaluated = true))
+                        if (destination != null) {
+                            checkpointedTupleApplication(e, TupleShape(tupleProof, language), function,
+                                listOf(stateArgument), null, destination)
+                        } else checkpointedApplication(e, function, listOf(stateArgument), booleanArrayOf(true), null)
+                    } else {
+                        if (destination != null) b.beginKeepAliveTuple(tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                        else b.beginKeepAlive(metrics)
+                        b.emitLoadLocal(reference); b.emitLoadLocal(stateLocal); force(function).emit(e)
+                        if (destination != null) b.endKeepAliveTuple() else b.endKeepAlive()
+                    }
                     if (result != null) b.endStoreLocal()
                     b.endTryFinally()
                     if (result != null) b.emitLoadLocal(result)
