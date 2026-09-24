@@ -1233,6 +1233,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
+        CoreStackForeign.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
@@ -1468,13 +1469,23 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            val stackClone = CoreStackForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags)
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val javascript = if (managedFile == null) CoreJavaScript.validate(expr, defined) else null
+            val javascript = if (!stackClone && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
-            if (managedFile != null) {
+            val polyglot = if (!stackClone && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (stackClone) {
+                CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val state = args.single()
+                CoreStackForeign.validateBinding(if (state[0] == "var")
+                    scope.locals[state[1]]?.proof ?: globalProofs[state[1]] else null)
+                val operand = compile(state, scope, false)
+                CoreStackForeign.validateState(operand.representation)
+                CloneStackExpression(operand, tupleProof)
+            } else if (managedFile != null) {
                 CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (md5 != null) {

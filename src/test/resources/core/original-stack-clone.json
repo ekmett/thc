@@ -1,0 +1,686 @@
+{
+  "schema": 1,
+  "ghc": "9.14.1",
+  "module": "GHC.Internal.Stack.CloneStack",
+  "unit": "ghc-internal",
+  "boundary": "optimized-Core-after-Tidy-before-CorePrep",
+  "sourceCore": "[StackSnapshot [InlPrag=CONLIKE]\n   :: StackSnapshot# %1 -> StackSnapshot\n [GblId[DataCon], Arity=1, Caf=NoCafRefs, Str=<L>, Unf=OtherCon []]\n StackSnapshot\n   = src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:30:22-50>\n     StackSnapshot,\n $trModule4 :: Addr#\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 40 0}]\n $trModule4 = \"ghc-internal\"#,\n $trModule3 :: TrName\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 10 10}]\n $trModule3 = TrNameS $trModule4,\n $trModule2 :: Addr#\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 90 0}]\n $trModule2 = \"GHC.Internal.Stack.CloneStack\"#,\n $trModule1 :: TrName\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 10 10}]\n $trModule1 = TrNameS $trModule2,\n $trModule :: Module\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 10 10}]\n $trModule = Module $trModule3 $trModule1,\n $krep :: KindRep\n [GblId, Unf=OtherCon []]\n $krep = KindRepTyConApp $tcStackSnapshot# ([] @KindRep),\n $tcStackSnapshot2 :: Addr#\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 50 0}]\n $tcStackSnapshot2 = \"StackSnapshot\"#,\n $tcStackSnapshot1 :: TrName\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 10 10}]\n $tcStackSnapshot1 = TrNameS $tcStackSnapshot2,\n $tcStackSnapshot :: TyCon\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 10 10}]\n $tcStackSnapshot\n   = TyCon\n       540015400944809849#Word64\n       14356431595600946742#Word64\n       $trModule\n       $tcStackSnapshot1\n       0#\n       krep$*,\n $krep1 :: KindRep\n [GblId, Unf=OtherCon []]\n $krep1 = KindRepTyConApp $tcStackSnapshot ([] @KindRep),\n $tc'StackSnapshot1 [InlPrag=[~]] :: KindRep\n [GblId, Unf=OtherCon []]\n $tc'StackSnapshot1 = KindRepFun $krep $krep1,\n $tc'StackSnapshot3 :: Addr#\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 50 0}]\n $tc'StackSnapshot3 = \"'StackSnapshot\"#,\n $tc'StackSnapshot2 :: TrName\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 10 10}]\n $tc'StackSnapshot2 = TrNameS $tc'StackSnapshot3,\n $tc'StackSnapshot :: TyCon\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [] 10 10}]\n $tc'StackSnapshot\n   = TyCon\n       8030527205949532162#Word64\n       14565268331362793806#Word64\n       $trModule\n       $tc'StackSnapshot2\n       0#\n       $tc'StackSnapshot1,\n cloneMyStack2\n   :: (State# RealWorld -> (# State# RealWorld, StackSnapshot #))\n      -> State# RealWorld -> (# State# RealWorld, StackSnapshot #)\n [GblId,\n  Arity=1,\n  Str=<1L>,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=True)}]\n cloneMyStack2\n   = \\ (ds\n          :: State# RealWorld -> (# State# RealWorld, StackSnapshot #)) ->\n       src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:178:16-17>\n       ds,\n cloneMyStack1\n   :: State# RealWorld -> (# State# RealWorld, StackSnapshot #)\n [GblId,\n  Arity=1,\n  Str=<L>,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [0] 30 10}]\n cloneMyStack1\n   = \\ (s :: State# RealWorld) ->\n       src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:(178,21)-(179,77)>\n       case {__ffi_static_ccall_safe ghc-internal:stg_cloneMyStackzh \"stg_cloneMyStackzh\" :: State#\n                                                                                   RealWorld\n                                                                                 -> (# State#\n                                                                                         RealWorld,\n                                                                                       StackSnapshot# #)}\n              s\n       of\n       { (# ipv, ipv1 #) ->\n       src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:179:49-77>\n       (# src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:179:52-53>\n          ipv,\n          src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:179:56-74>\n          StackSnapshot\n            (src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:179:70-74>\n             ipv1) #)\n       },\n cloneMyStack :: IO StackSnapshot\n [GblId,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=False, ConLike=False, WorkFree=False, Expandable=False,\n          Guidance=IF_ARGS [] 30 0}]\n cloneMyStack\n   = src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:(178,1)-(179,77)>\n     $ @LiftedRep\n       @LiftedRep\n       @(State# RealWorld -> (# State# RealWorld, StackSnapshot #))\n       @(IO StackSnapshot)\n       (cloneMyStack2\n        `cast` (<State# RealWorld\n                 -> (# State# RealWorld, StackSnapshot #)>_R\n                %<'Many>_N ->_R Sym (N:IO <StackSnapshot>_R)\n                :: Coercible\n                     ((State# RealWorld -> (# State# RealWorld, StackSnapshot #))\n                      -> State# RealWorld -> (# State# RealWorld, StackSnapshot #))\n                     ((State# RealWorld -> (# State# RealWorld, StackSnapshot #))\n                      -> IO StackSnapshot)))\n       cloneMyStack1,\n cloneThreadStack1\n   :: (State# RealWorld -> (# State# RealWorld, () #))\n      -> State# RealWorld -> (# State# RealWorld, () #)\n [GblId,\n  Arity=1,\n  Str=<1L>,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=True)}]\n cloneThreadStack1\n   = \\ (ds :: State# RealWorld -> (# State# RealWorld, () #)) ->\n       src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:191:3-4>\n       ds,\n $wcloneThreadStack [InlPrag=[2]] :: ThreadId# -> IO StackSnapshot\n [GblId,\n  Arity=1,\n  Str=<L>,\n  Unf=Unf{Src=<vanilla>, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=IF_ARGS [0] 330 0}]\n $wcloneThreadStack\n   = \\ (ww :: ThreadId#) ->\n       src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:(185,1)-(193,20)>\n       >>=\n         @IO\n         $fMonadIO\n         @(MVar StackSnapshot)\n         @StackSnapshot\n         ((src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:186:16-42>\n           newEmptyMVar)\n            @StackSnapshot)\n         (\\ (resultVar :: MVar StackSnapshot) ->\n            let {\n              lvl :: IO StackSnapshot\n              [LclId]\n              lvl\n                = takeMVar\n                    @StackSnapshot\n                    (src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:193:12-20>\n                     resultVar) } in\n            src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:187:3-60>\n            >>=\n              @IO\n              $fMonadIO\n              @(StablePtr PrimMVar)\n              @StackSnapshot\n              (src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:187:31-60>\n               newStablePtrPrimMVar\n                 @StackSnapshot\n                 (src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:187:52-60>\n                  resultVar))\n              (\\ (boxedPtr :: StablePtr PrimMVar) ->\n                 case boxedPtr of wild { StablePtr ptr ->\n                 src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:191:3-86>\n                 >>\n                   @IO\n                   $fMonadIO\n                   @()\n                   @StackSnapshot\n                   ($ @LiftedRep\n                      @LiftedRep\n                      @(State# RealWorld -> (# State# RealWorld, () #))\n                      @(IO ())\n                      (cloneThreadStack1\n                       `cast` (<State# RealWorld -> (# State# RealWorld, () #)>_R\n                               %<'Many>_N ->_R Sym (N:IO <()>_R)\n                               :: Coercible\n                                    ((State# RealWorld -> (# State# RealWorld, () #))\n                                     -> State# RealWorld -> (# State# RealWorld, () #))\n                                    ((State# RealWorld -> (# State# RealWorld, () #)) -> IO ())))\n                      (\\ (s :: State# RealWorld) ->\n                         src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:191:8-86>\n                         case {__ffi_static_ccall_safe ghc-internal:stg_sendCloneStackMessagezh \"stg_sendCloneStackMessagezh\" :: ThreadId#\n                                                                                                   -> StablePtr#\n                                                                                                        PrimMVar\n                                                                                                   -> State#\n                                                                                                        RealWorld\n                                                                                                   -> (# State#\n                                                                                                           RealWorld,\n                                                                                                         (# #) #)}\n                                ww ptr s\n                         of\n                         { (# ipv, _ [Occ=Dead] #) ->\n                         src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:191:75-86>\n                         (# src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:191:78-79>\n                            ipv,\n                            src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:191:82-83>\n                            () #)\n                         }))\n                   (src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:192:3-24>\n                    >>\n                      @IO\n                      $fMonadIO\n                      @()\n                      @StackSnapshot\n                      (freeStablePtr\n                         @PrimMVar\n                         (src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:192:17-24>\n                          wild))\n                      (src</home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs:193:3-20>\n                       lvl))\n                 })),\n cloneThreadStack [InlPrag=[2]] :: ThreadId -> IO StackSnapshot\n [GblId,\n  Arity=1,\n  Str=<1!P(L)>,\n  Unf=Unf{Src=StableSystem, TopLvl=True,\n          Value=True, ConLike=True, WorkFree=True, Expandable=True,\n          Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=False)\n          Tmpl= \\ (ds [Occ=Once1!] :: ThreadId) ->\n                  case ds of { ThreadId ww [Occ=Once1] -> $wcloneThreadStack ww }}]\n cloneThreadStack\n   = \\ (ds :: ThreadId) ->\n       case ds of { ThreadId ww -> $wcloneThreadStack ww }]",
+  "bindings": [
+    {
+      "id": "ghc-internal:GHC.Internal.Stack.CloneStack.cloneMyStack1",
+      "name": "cloneMyStack1",
+      "type": "State# RealWorld -> (# State# RealWorld, StackSnapshot #)",
+      "lifted": true,
+      "arity": 1,
+      "expr": [
+        "lam",
+        [
+          {
+            "id": "ghc-internal:GHC.Internal.Stack.CloneStack.s_aBX",
+            "name": "s",
+            "type": "State# RealWorld",
+            "lifted": false,
+            "coercion": false,
+            "rep": {
+              "primReps": [],
+              "kind": "void",
+              "evaluated": true
+            },
+            "info": {
+              "callArity": 0,
+              "demand": "L",
+              "strictness": "",
+              "cpr": "",
+              "occurrence": "",
+              "oneShot": "NoOS",
+              "joinArity": null,
+              "inline": "",
+              "cbvEligible": false,
+              "cbvMarks": null
+            }
+          }
+        ],
+        [
+          "case",
+          [
+            "app",
+            [
+              "var",
+              "ghc-internal:GHC.Internal.Stack.CloneStack.{__ffi_static_ccall_safe ghc-internal:stg_cloneMyStackzh \"stg_cloneMyStackzh\" :: State#\n                                                                                   RealWorld\n                                                                                 -> (# State#\n                                                                                         RealWorld,\n                                                                                       StackSnapshot# #)}_dHb",
+              {
+                "rep": {
+                  "primReps": [
+                    "BoxedRep (Just Lifted)"
+                  ],
+                  "kind": "closure",
+                  "evaluated": true
+                },
+                "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                "sourceNotes": [
+                  "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")"
+                ]
+              }
+            ],
+            [
+              [
+                "var",
+                "ghc-internal:GHC.Internal.Stack.CloneStack.s_aBX",
+                {
+                  "rep": {
+                    "primReps": [],
+                    "kind": "void",
+                    "evaluated": true
+                  },
+                  "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                  "sourceNotes": [
+                    "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")"
+                  ]
+                }
+              ]
+            ],
+            [
+              false
+            ],
+            false,
+            false,
+            {
+              "rep": {
+                "primReps": [
+                  "BoxedRep (Just Unlifted)"
+                ],
+                "kind": "unknown",
+                "evaluated": false,
+                "aggregate": "unboxed-tuple",
+                "components": [
+                  {
+                    "primReps": [],
+                    "kind": "void",
+                    "evaluated": true
+                  },
+                  {
+                    "primReps": [
+                      "BoxedRep (Just Unlifted)"
+                    ],
+                    "kind": "object",
+                    "evaluated": true
+                  }
+                ]
+              },
+              "callDemand": {
+                "arity": 1,
+                "strictArgs": [
+                  false
+                ]
+              },
+              "foreignCall": {
+                "schema": 1,
+                "target": {
+                  "kind": "static",
+                  "symbol": "stg_cloneMyStackzh",
+                  "unit": "ghc-internal",
+                  "isFunction": true
+                },
+                "convention": "prim",
+                "safety": "safe",
+                "arity": 1,
+                "suppliedArity": 1,
+                "argumentReps": [
+                  {
+                    "primReps": [],
+                    "kind": "void",
+                    "evaluated": false
+                  }
+                ],
+                "resultRep": {
+                  "primReps": [
+                    "BoxedRep (Just Unlifted)"
+                  ],
+                  "kind": "unknown",
+                  "evaluated": false,
+                  "aggregate": "unboxed-tuple",
+                  "components": [
+                    {
+                      "primReps": [],
+                      "kind": "void",
+                      "evaluated": true
+                    },
+                    {
+                      "primReps": [
+                        "BoxedRep (Just Unlifted)"
+                      ],
+                      "kind": "object",
+                      "evaluated": true
+                    }
+                  ]
+                }
+              },
+              "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+              "sourceNotes": [
+                "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")"
+              ]
+            }
+          ],
+          "ghc-internal:GHC.Internal.Stack.CloneStack.ds_dH2",
+          [
+            [
+              "data",
+              "ghc-internal:GHC.Internal.Types.(#,#)",
+              [
+                "ghc-internal:GHC.Internal.Stack.CloneStack.ipv_sHk",
+                "ghc-internal:GHC.Internal.Stack.CloneStack.ipv1_sHl"
+              ],
+              [
+                "app",
+                [
+                  "con",
+                  "ghc-internal:GHC.Internal.Types.(#,#)",
+                  2,
+                  {
+                    "rep": {
+                      "primReps": [
+                        "BoxedRep (Just Lifted)"
+                      ],
+                      "kind": "closure",
+                      "evaluated": true
+                    },
+                    "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")",
+                    "sourceNotes": [
+                      "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                      "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")"
+                    ]
+                  }
+                ],
+                [
+                  [
+                    "var",
+                    "ghc-internal:GHC.Internal.Stack.CloneStack.ipv_sHk",
+                    {
+                      "rep": {
+                        "primReps": [],
+                        "kind": "void",
+                        "evaluated": true
+                      },
+                      "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,52,179,54,\"cloneMyStack\")",
+                      "sourceNotes": [
+                        "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                        "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")",
+                        "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,52,179,54,\"cloneMyStack\")"
+                      ]
+                    }
+                  ],
+                  [
+                    "app",
+                    [
+                      "con",
+                      "ghc-internal:GHC.Internal.Stack.CloneStack.StackSnapshot",
+                      1,
+                      {
+                        "rep": {
+                          "primReps": [
+                            "BoxedRep (Just Lifted)"
+                          ],
+                          "kind": "closure",
+                          "evaluated": true
+                        },
+                        "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,56,179,75,\"cloneMyStack\")",
+                        "sourceNotes": [
+                          "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                          "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")",
+                          "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,56,179,75,\"cloneMyStack\")"
+                        ]
+                      }
+                    ],
+                    [
+                      [
+                        "var",
+                        "ghc-internal:GHC.Internal.Stack.CloneStack.ipv1_sHl",
+                        {
+                          "rep": {
+                            "primReps": [
+                              "BoxedRep (Just Unlifted)"
+                            ],
+                            "kind": "object",
+                            "evaluated": true
+                          },
+                          "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,70,179,75,\"cloneMyStack\")",
+                          "sourceNotes": [
+                            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")",
+                            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,56,179,75,\"cloneMyStack\")",
+                            "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,70,179,75,\"cloneMyStack\")"
+                          ]
+                        }
+                      ]
+                    ],
+                    [
+                      false
+                    ],
+                    true,
+                    true,
+                    {
+                      "rep": {
+                        "primReps": [
+                          "BoxedRep (Just Lifted)"
+                        ],
+                        "kind": "data",
+                        "evaluated": true
+                      },
+                      "callDemand": {
+                        "arity": 1,
+                        "strictArgs": [
+                          false
+                        ]
+                      },
+                      "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,56,179,75,\"cloneMyStack\")",
+                      "sourceNotes": [
+                        "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                        "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")",
+                        "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,56,179,75,\"cloneMyStack\")"
+                      ]
+                    }
+                  ]
+                ],
+                [
+                  false,
+                  true
+                ],
+                true,
+                true,
+                {
+                  "rep": {
+                    "primReps": [
+                      "BoxedRep (Just Lifted)"
+                    ],
+                    "kind": "unknown",
+                    "evaluated": true,
+                    "aggregate": "unboxed-tuple",
+                    "components": [
+                      {
+                        "primReps": [],
+                        "kind": "void",
+                        "evaluated": true
+                      },
+                      {
+                        "primReps": [
+                          "BoxedRep (Just Lifted)"
+                        ],
+                        "kind": "data",
+                        "evaluated": false
+                      }
+                    ]
+                  },
+                  "callDemand": {
+                    "arity": 2,
+                    "strictArgs": [
+                      false,
+                      false
+                    ]
+                  },
+                  "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")",
+                  "sourceNotes": [
+                    "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+                    "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")"
+                  ]
+                }
+              ],
+              {
+                "binders": [
+                  {
+                    "id": "ghc-internal:GHC.Internal.Stack.CloneStack.ipv_sHk",
+                    "name": "ipv",
+                    "type": "State# RealWorld",
+                    "lifted": false,
+                    "coercion": false,
+                    "rep": {
+                      "primReps": [],
+                      "kind": "void",
+                      "evaluated": true
+                    },
+                    "info": {
+                      "callArity": 0,
+                      "demand": "L",
+                      "strictness": "",
+                      "cpr": "",
+                      "occurrence": "",
+                      "oneShot": "NoOS",
+                      "joinArity": null,
+                      "inline": "",
+                      "cbvEligible": false,
+                      "cbvMarks": null
+                    }
+                  },
+                  {
+                    "id": "ghc-internal:GHC.Internal.Stack.CloneStack.ipv1_sHl",
+                    "name": "ipv1",
+                    "type": "StackSnapshot#",
+                    "lifted": false,
+                    "coercion": false,
+                    "rep": {
+                      "primReps": [
+                        "BoxedRep (Just Unlifted)"
+                      ],
+                      "kind": "object",
+                      "evaluated": true
+                    },
+                    "info": {
+                      "callArity": 0,
+                      "demand": "L",
+                      "strictness": "",
+                      "cpr": "",
+                      "occurrence": "",
+                      "oneShot": "NoOS",
+                      "joinArity": null,
+                      "inline": "",
+                      "cbvEligible": false,
+                      "cbvMarks": null
+                    }
+                  }
+                ]
+              }
+            ]
+          ],
+          {
+            "rep": {
+              "primReps": [
+                "BoxedRep (Just Lifted)"
+              ],
+              "kind": "unknown",
+              "evaluated": false,
+              "aggregate": "unboxed-tuple",
+              "components": [
+                {
+                  "primReps": [],
+                  "kind": "void",
+                  "evaluated": true
+                },
+                {
+                  "primReps": [
+                    "BoxedRep (Just Lifted)"
+                  ],
+                  "kind": "data",
+                  "evaluated": false
+                }
+              ]
+            },
+            "binder": {
+              "id": "ghc-internal:GHC.Internal.Stack.CloneStack.ds_dH2",
+              "name": "ds",
+              "type": "(# State# RealWorld, StackSnapshot# #)",
+              "lifted": false,
+              "coercion": false,
+              "rep": {
+                "primReps": [
+                  "BoxedRep (Just Unlifted)"
+                ],
+                "kind": "unknown",
+                "evaluated": true,
+                "aggregate": "unboxed-tuple",
+                "components": [
+                  {
+                    "primReps": [],
+                    "kind": "void",
+                    "evaluated": true
+                  },
+                  {
+                    "primReps": [
+                      "BoxedRep (Just Unlifted)"
+                    ],
+                    "kind": "object",
+                    "evaluated": true
+                  }
+                ]
+              },
+              "info": {
+                "callArity": 0,
+                "demand": "L",
+                "strictness": "",
+                "cpr": "",
+                "occurrence": "Dead",
+                "oneShot": "NoOS",
+                "joinArity": null,
+                "inline": "",
+                "cbvEligible": false,
+                "cbvMarks": null
+              }
+            },
+            "source": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+            "sourceNotes": [
+              "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")"
+            ]
+          }
+        ],
+        {
+          "rep": {
+            "primReps": [
+              "BoxedRep (Just Lifted)"
+            ],
+            "kind": "closure",
+            "evaluated": true
+          },
+          "resultRep": {
+            "primReps": [
+              "BoxedRep (Just Lifted)"
+            ],
+            "kind": "unknown",
+            "evaluated": false,
+            "aggregate": "unboxed-tuple",
+            "components": [
+              {
+                "primReps": [],
+                "kind": "void",
+                "evaluated": true
+              },
+              {
+                "primReps": [
+                  "BoxedRep (Just Lifted)"
+                ],
+                "kind": "data",
+                "evaluated": false
+              }
+            ]
+          },
+          "entryStrict": [
+            false
+          ],
+          "entryStrictSource": "none"
+        }
+      ],
+      "rep": {
+        "primReps": [
+          "BoxedRep (Just Lifted)"
+        ],
+        "kind": "closure",
+        "evaluated": true
+      },
+      "info": {
+        "callArity": 0,
+        "demand": "L",
+        "strictness": "<L>",
+        "cpr": "",
+        "occurrence": "",
+        "oneShot": "NoOS",
+        "joinArity": null,
+        "inline": "",
+        "cbvEligible": false,
+        "cbvMarks": null
+      },
+      "entryStrict": [
+        false
+      ],
+      "entryStrictSource": "none"
+    }
+  ],
+  "constructors": [
+    {
+      "id": "ghc-internal:GHC.Internal.Stack.CloneStack.StackSnapshot",
+      "name": "StackSnapshot",
+      "arity": 1,
+      "tag": 1,
+      "kind": "boxed",
+      "type": "StackSnapshot# %1 -> StackSnapshot",
+      "strictFields": [
+        false
+      ],
+      "fieldLifted": [
+        false
+      ],
+      "fieldReps": [
+        [
+          "BoxedRep (Just Unlifted)"
+        ]
+      ],
+      "fieldTypes": [
+        {
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ],
+          "kind": "object",
+          "evaluated": true
+        }
+      ],
+      "dataToTagFamily": {
+        "typeConstructor": "ghc-internal:GHC.Internal.Stack.CloneStack.StackSnapshot",
+        "constructors": [
+          "ghc-internal:GHC.Internal.Stack.CloneStack.StackSnapshot"
+        ],
+        "smallFamilyLimit": 7,
+        "smallFamily": true
+      }
+    },
+    {
+      "id": "ghc-internal:GHC.Internal.Types.(#,#)",
+      "name": "(#,#)",
+      "arity": 2,
+      "tag": 1,
+      "kind": "unboxed-tuple",
+      "type": "forall a b. a %1 -> b %1 -> (# a, b #)",
+      "strictFields": [
+        false,
+        false
+      ],
+      "fieldLifted": [
+        null,
+        null
+      ],
+      "fieldReps": [
+        null,
+        null
+      ],
+      "fieldTypes": [
+        {
+          "primReps": null,
+          "kind": "unknown",
+          "evaluated": false
+        },
+        {
+          "primReps": null,
+          "kind": "unknown",
+          "evaluated": false
+        }
+      ]
+    }
+  ],
+  "sourceFiles": [
+    {
+      "id": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "path": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "content": "{-# LANGUAGE MagicHash #-}\n{-# LANGUAGE TypeApplications #-}\n{-# LANGUAGE UnboxedTuples #-}\n{-# LANGUAGE UnliftedFFITypes#-}\n{-# LANGUAGE GHCForeignImportPrim #-}\n\n-- |\n-- This module exposes an interface for capturing the state of a thread's\n-- execution stack for diagnostics purposes: 'cloneMyStack',\n-- 'cloneThreadStack'.\n--\n-- Such a \"cloned\" stack can be decoded with 'decode' to a stack trace, given\n-- that the @-finfo-table-map@ is enabled.\n--\n-- @since base-4.17.0.0\nmodule GHC.Internal.Stack.CloneStack (\n  StackSnapshot(..),\n  cloneMyStack,\n  cloneThreadStack,\n  ) where\n\nimport GHC.Internal.MVar\nimport GHC.Internal.Base\nimport GHC.Internal.Conc.Sync\nimport GHC.Internal.Stable\n\n-- | A frozen snapshot of the state of an execution stack.\n--\n-- @since base-4.17.0.0\ndata StackSnapshot = StackSnapshot !StackSnapshot#\n\nforeign import prim \"stg_cloneMyStackzh\" cloneMyStack# :: State# RealWorld -> (# State# RealWorld, StackSnapshot# #)\n\nforeign import prim \"stg_sendCloneStackMessagezh\" sendCloneStackMessage# :: ThreadId# -> StablePtr# PrimMVar -> State# RealWorld -> (# State# RealWorld, (# #) #)\n\n{-\nNote [Stack Cloning]\n~~~~~~~~~~~~~~~~~~~~\n\"Cloning\" a stack means that it's `StgStack` closure is copied including the\nstack memory (`stack[]`). Closures referenced by stack closures are not copied,\ni.e. pointer payloads are still referred to by the same pointer.\nIn other words: Only those parts that are affected by stack evaluation are\n\"cloned\".\n\nThe stack pointer (sp) of the clone is adjusted to be valid, i.e. to point into\nthe cloned stack.\n\nThe clone is \"offline\"/\"cold\", i.e. it won't be evaluated any further. This is\nuseful for further analyses like stack unwinding or traversal because all\npointers stay valid.\n\nStackSnapshot#\n--------------\nA cloned stack is represented in Haskell by `StackSnapshot !StackSnapshot#`.\n`StackSnapshot#` is a primitive type, it's value is a pointer to the stack in\nRTS (`StgStack*`).\n\nTo take advantage of the garbage collector, the representation cannot be `Ptr`\nor `StablePtr`:\n- Closures referenced by a `Ptr` may be garbage collected at any time (without\n  checking if it's still in use).\n- `StablePtr` has to be freed explictly, which would introduce nasty state\n   handling.\n\nBy using a primitive type, the stack closure (and its transitive closures) is\nkept and managed by the garbage collector as long as it's in use and\nautomatically freed later.\nAs closures referred to by stack closures (e.g. payloads) may be used by other\nclosures that are not related to stack cloning, the memory has to be managed by\nthe garbage collector; i.e. one cannot simply call free() in the RTS C code\nbecause it's hard to figure out what to free while the garbage collector is\nbuilt to do this job.\n\nRTS interface\n-------------\nThere are two different ways to clone a stack:\n1. `cloneMyStack#` - A primop for cloning the active thread's stack.\n2. `sendCloneStackMessage#` - A primop for cloning another thread's stack.\n   Sends a RTS message (Messages.c) with a MVar to that thread. The cloned\n   stack is received by taking it out of this MVar.\n\n`cloneMyStack#` has to be a primop, because new primitive types\n(`StackSnapshot#`) cannot be marshalled by FFI. Using a `Ptr StackSnapshot` as\nFFI return type would not save the snapshot from being garbage collected, as\ndiscussed in the section above.\n\nC API\n-------------\n`cloneStack` is the function that really clones a given stack and returns\nthe clone:\n`StgStack* cloneStack(Capability* capability, const StgStack* stack)`\n\nIt's called directly by `stg_cloneMyStackzh` (`PrimOps.cmm`), the\n`cloneMyStack#` primop.\n\nTo clone another thread's stack, there's a message passing mechanism such that\nthe receiver's capability clones its. So, there's no need to stop/pause the\nother thread as it's capability will fulfill the cloning request when it's\nready to do so.\n\nThe message is defined in `Closures.h`:\n\n```\ntypedef struct MessageCloneStack_ {\n    StgHeader header;\n    Message   *link;\n    StgMVar   *result;\n    StgTSO    *tso;\n} MessageCloneStack;\n```\n\nThe fields are:\n- `header`: It's a closure and thus subject to garbage collection (no manual\n   memory management needed)\n- `link`: Messages form a singly linked list in `Capability`, referred to by\n  `capability->inbox`.\n- `result`: An `MVar`. When the message is sent it's empty, after cloning the\n  `StackSnapshot` is put into it.\n- `tso`: `tso->stackobj` is the stack to clone.\n\nThe asynchronous flow can be split into sending this message and putting the\ncloned stack into the MVar (expecting the sender to get it from there).\n\nSending:\nThe public C function to send is\n`void sendCloneStackMessage(StgTSO *tso, HsStablePtr mvar)`.\nIt prepares the message for the thread to clone (identified by it's `tso`) and\nsets the `result` MVar (pointed to by `mvar`). Then it sends the message by\ncalling `sendMessage` which puts it into the Capabilities `inbox`.\n\nReceiving:\nInbox processing is part of the big work finding loop in `schedule`. The\nfunction that dispatches messages is `executeMessage`. From there\n`void handleCloneStackMessage(MessageCloneStack *msg)` is called.\n\n`handleCloneStackMessage` clones the stack, lifts the result to `StackSnapshot`\n(MVar needs a lifted value, no primitive) and puts it into the MVar\n(`msg->mvar`).\n-}\n\n{-\nNote [Stack Decoding]\n~~~~~~~~~~~~~~~~~~~~~\nA cloned stack is decoded (unwound) by looking up the Info Table Provenance\nEntries (IPE) for every stack frame with `lookupIPE` in the RTS.\n\nThe IPEs contain source locations and are pulled from the RTS/C world into\nHaskell.\n\nRTS interface\n-------------\n\nThe primop decodeStack# returns an array of IPE pointers that are later\nunmarshalled with HSC. If there is no IPE for a return frame (which can easily\nhappen when a library wasn't compiled with `-finfo-table-map`), it's\nrepresented by a null pointer.\n\nCaveats:\n- decodeStack# has to be a primop (not a simple C FFI function), because\n  there always has to be at least one active `TSO`. Otherwise, allocating\n  memory with the garbage collector for the returned value fails.\n- decodeStack# has to be defined outside of `primops.txt.pp` because its\n  return type `Array# (Ptr InfoProvEnt)` cannot be defined there:\n  `InfoProvEnt` and `Ptr` would have to be imported which seems to be too\n  specific for this file.\n\nNotes\n-----\nThe relevant notes are:\n  - Note [Mapping Info Tables to Source Positions]\n  - Note [Stacktraces from Info Table Provenance Entries (IPE based stack unwinding)]\n-}\n\n-- | Clone the stack of the executing thread\n--\n-- @since base-4.17.0.0\ncloneMyStack :: IO StackSnapshot\ncloneMyStack = IO $ \\s ->\n   case (cloneMyStack# s) of (# s1, stack #) -> (# s1, StackSnapshot stack #)\n\n-- | Clone the stack of a thread identified by its 'ThreadId'\n--\n-- @since base-4.17.0.0\ncloneThreadStack :: ThreadId -> IO StackSnapshot\ncloneThreadStack (ThreadId tid#) = do\n  resultVar <- newEmptyMVar @StackSnapshot\n  boxedPtr@(StablePtr ptr) <- newStablePtrPrimMVar resultVar\n  -- Use the RTS's \"message\" mechanism to request that\n  -- the thread captures its stack, saving the result\n  -- into resultVar.\n  IO $ \\s -> case sendCloneStackMessage# tid# ptr s of (# s', (# #) #) -> (# s', () #)\n  freeStablePtr boxedPtr\n  takeMVar resultVar\n"
+    }
+  ],
+  "sourceSpans": [
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,70,179,75,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 179,
+      "startColumn": 70,
+      "endLine": 179,
+      "endColumn": 75,
+      "charIndex": 6693,
+      "charLength": 5,
+      "label": "cloneMyStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,56,179,75,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 179,
+      "startColumn": 56,
+      "endLine": 179,
+      "endColumn": 75,
+      "charIndex": 6679,
+      "charLength": 19,
+      "label": "cloneMyStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,52,179,54,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 179,
+      "startColumn": 52,
+      "endLine": 179,
+      "endColumn": 54,
+      "charIndex": 6675,
+      "charLength": 2,
+      "label": "cloneMyStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",179,49,179,78,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 179,
+      "startColumn": 49,
+      "endLine": 179,
+      "endColumn": 78,
+      "charIndex": 6672,
+      "charLength": 29,
+      "label": "cloneMyStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,21,179,78,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 178,
+      "startColumn": 21,
+      "endLine": 179,
+      "endColumn": 78,
+      "charIndex": 6618,
+      "charLength": 83,
+      "label": "cloneMyStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,16,178,18,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 178,
+      "startColumn": 16,
+      "endLine": 178,
+      "endColumn": 18,
+      "charIndex": 6613,
+      "charLength": 2,
+      "label": "cloneMyStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,1,179,78,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 178,
+      "startColumn": 1,
+      "endLine": 179,
+      "endColumn": 78,
+      "charIndex": 6598,
+      "charLength": 103,
+      "label": "cloneMyStack"
+    },
+    {
+      "id": "(\"/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs\",178,1,178,13,\"cloneMyStack\")",
+      "file": "/home/ekmett/ai/thc-putstrln-ghc-source-01a0cdeb/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+      "startLine": 178,
+      "startColumn": 1,
+      "endLine": 178,
+      "endColumn": 13,
+      "charIndex": 6598,
+      "charLength": 12,
+      "label": "cloneMyStack"
+    }
+  ],
+  "projectionProvenance": {
+    "originalExportSha256": "d0733836485a57ebc40a4ae52ce77319e4dbc44f617cbd396335ae977e5810e4",
+    "ghcSourceRevision": "902339d332fb4ce2b3c87dcac1ee6495d41ad886",
+    "exporterRevision": "62e3400c5b889d3971cb4047709c408fd270255f",
+    "description": "Unchanged cloneMyStack1 binding, both referenced constructors, and original source metadata selected from preserved source-only export; not a fresh export or native snapshot equivalence."
+  }
+}
