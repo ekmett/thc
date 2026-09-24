@@ -15,7 +15,7 @@ import thc.Language
 import java.nio.ByteOrder
 
 class Word32VectorMemoryProofTest {
-    private val operations = VectorByteArrayOp.entries.filter { it.unsigned }
+    private val operations = VectorByteArrayOp.entries.filter { it.family == VectorMemoryFamily.WORD32 }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to if (rep == null) emptyList<String>() else listOf(rep), "evaluated" to true)
     private val state = scalar("void", null)

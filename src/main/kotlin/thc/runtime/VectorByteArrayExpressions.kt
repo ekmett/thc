@@ -11,19 +11,30 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
         val bytes = ManagedByteArray.require(arguments[0].execute(frame))
         val index = arguments[1].executeRequiredLong(frame)
         if (operation.isWrite) {
-            if (operation.unsigned) {
-                val value = arguments[2].execute(frame) as? Word32X4 ?: fault("Expected Word32X4#")
-                ManagedByteArray.requireState(arguments[3].execute(frame))
-                Word32X4.writeArray(bytes, index, value, operation.scalarOffset)
-            } else {
-                val value = arguments[2].execute(frame) as? Int32X4 ?: fault("Expected Int32X4#")
-                ManagedByteArray.requireState(arguments[3].execute(frame))
-                Int32X4.writeArray(bytes, index, value, operation.scalarOffset)
+            when (operation.family) {
+                VectorMemoryFamily.INT32 -> {
+                    val value = arguments[2].execute(frame) as? Int32X4 ?: fault("Expected Int32X4#")
+                    ManagedByteArray.requireState(arguments[3].execute(frame))
+                    Int32X4.writeArray(bytes, index, value, operation.scalarOffset)
+                }
+                VectorMemoryFamily.WORD32 -> {
+                    val value = arguments[2].execute(frame) as? Word32X4 ?: fault("Expected Word32X4#")
+                    ManagedByteArray.requireState(arguments[3].execute(frame))
+                    Word32X4.writeArray(bytes, index, value, operation.scalarOffset)
+                }
+                VectorMemoryFamily.FLOAT32 -> {
+                    val value = arguments[2].execute(frame) as? FloatX4 ?: fault("Expected FloatX4#")
+                    ManagedByteArray.requireState(arguments[3].execute(frame))
+                    FloatX4.writeArray(bytes, index, value, operation.scalarOffset)
+                }
             }
             return Unit
         }
         if (operation.isRead) ManagedByteArray.requireState(arguments[2].execute(frame))
-        return if (operation.unsigned) Word32X4.readArray(bytes, index, operation.scalarOffset)
-            else Int32X4.readArray(bytes, index, operation.scalarOffset)
+        return when (operation.family) {
+            VectorMemoryFamily.INT32 -> Int32X4.readArray(bytes, index, operation.scalarOffset)
+            VectorMemoryFamily.WORD32 -> Word32X4.readArray(bytes, index, operation.scalarOffset)
+            VectorMemoryFamily.FLOAT32 -> FloatX4.readArray(bytes, index, operation.scalarOffset)
+        }
     }
 }
