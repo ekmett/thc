@@ -1606,22 +1606,40 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private fun vectorByteArray(operation: VectorByteArrayOp, operands: List<Expression>): Expression =
         ProvenExpression(Expression { e ->
             val b = e.builder
-            when {
-                operation.unsigned && operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset)
-                operation.unsigned && operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset)
-                operation.unsigned -> b.beginIndexVectorWord32Array(operation.scalarOffset)
-                operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
-                operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
-                else -> b.beginIndexVector32Array(operation.scalarOffset)
+            when (operation.family) {
+                VectorMemoryFamily.INT32 -> when {
+                    operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
+                    else -> b.beginIndexVector32Array(operation.scalarOffset)
+                }
+                VectorMemoryFamily.WORD32 -> when {
+                    operation.isWrite -> b.beginWriteVectorWord32Array(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorWord32Array(operation.scalarOffset)
+                    else -> b.beginIndexVectorWord32Array(operation.scalarOffset)
+                }
+                VectorMemoryFamily.FLOAT32 -> when {
+                    operation.isWrite -> b.beginWriteVectorFloatArray(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorFloatArray(operation.scalarOffset)
+                    else -> b.beginIndexVectorFloatArray(operation.scalarOffset)
+                }
             }
             operands.forEach { it.emit(e) }
-            when {
-                operation.unsigned && operation.isWrite -> b.endWriteVectorWord32Array()
-                operation.unsigned && operation.isRead -> b.endReadVectorWord32Array()
-                operation.unsigned -> b.endIndexVectorWord32Array()
-                operation.isWrite -> b.endWriteVector32Array()
-                operation.isRead -> b.endReadVector32Array()
-                else -> b.endIndexVector32Array()
+            when (operation.family) {
+                VectorMemoryFamily.INT32 -> when {
+                    operation.isWrite -> b.endWriteVector32Array()
+                    operation.isRead -> b.endReadVector32Array()
+                    else -> b.endIndexVector32Array()
+                }
+                VectorMemoryFamily.WORD32 -> when {
+                    operation.isWrite -> b.endWriteVectorWord32Array()
+                    operation.isRead -> b.endReadVectorWord32Array()
+                    else -> b.endIndexVectorWord32Array()
+                }
+                VectorMemoryFamily.FLOAT32 -> when {
+                    operation.isWrite -> b.endWriteVectorFloatArray()
+                    operation.isRead -> b.endReadVectorFloatArray()
+                    else -> b.endIndexVectorFloatArray()
+                }
             }
         }, if (operation.isWrite) CoreVectorMemory.stateProof else operation.vectorProof)
     private fun vectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expression {

@@ -1,25 +1,45 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+/** Closed local memory families, independent of their scalar lane carriers. */
+internal enum class VectorMemoryFamily {
+    INT32, WORD32, FLOAT32;
+    val vectorProof: CoreRepresentation get() = when (this) {
+        INT32 -> CoreVectors.proof32
+        WORD32 -> CoreVectors.proofWord32
+        FLOAT32 -> CoreVectors.proofFloat
+    }
+}
+
 /** These are local intrinsics, not vector function or aggregate ABIs. */
-internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: Boolean, val unsigned: Boolean = false) {
+internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: Boolean,
+    val family: VectorMemoryFamily = VectorMemoryFamily.INT32) {
     INDEX("indexInt32X4Array#", false),
     INDEX_SCALAR("indexInt32ArrayAsInt32X4#", true),
     READ("readInt32X4Array#", false),
     READ_SCALAR("readInt32ArrayAsInt32X4#", true),
     WRITE("writeInt32X4Array#", false),
     WRITE_SCALAR("writeInt32ArrayAsInt32X4#", true),
-    INDEX_WORD("indexWord32X4Array#", false, true),
-    INDEX_WORD_SCALAR("indexWord32ArrayAsWord32X4#", true, true),
-    READ_WORD("readWord32X4Array#", false, true),
-    READ_WORD_SCALAR("readWord32ArrayAsWord32X4#", true, true),
-    WRITE_WORD("writeWord32X4Array#", false, true),
-    WRITE_WORD_SCALAR("writeWord32ArrayAsWord32X4#", true, true);
+    INDEX_WORD("indexWord32X4Array#", false, VectorMemoryFamily.WORD32),
+    INDEX_WORD_SCALAR("indexWord32ArrayAsWord32X4#", true, VectorMemoryFamily.WORD32),
+    READ_WORD("readWord32X4Array#", false, VectorMemoryFamily.WORD32),
+    READ_WORD_SCALAR("readWord32ArrayAsWord32X4#", true, VectorMemoryFamily.WORD32),
+    WRITE_WORD("writeWord32X4Array#", false, VectorMemoryFamily.WORD32),
+    WRITE_WORD_SCALAR("writeWord32ArrayAsWord32X4#", true, VectorMemoryFamily.WORD32),
+    INDEX_FLOAT("indexFloatX4Array#", false, VectorMemoryFamily.FLOAT32),
+    INDEX_FLOAT_SCALAR("indexFloatArrayAsFloatX4#", true, VectorMemoryFamily.FLOAT32),
+    READ_FLOAT("readFloatX4Array#", false, VectorMemoryFamily.FLOAT32),
+    READ_FLOAT_SCALAR("readFloatArrayAsFloatX4#", true, VectorMemoryFamily.FLOAT32),
+    WRITE_FLOAT("writeFloatX4Array#", false, VectorMemoryFamily.FLOAT32),
+    WRITE_FLOAT_SCALAR("writeFloatArrayAsFloatX4#", true, VectorMemoryFamily.FLOAT32);
 
-    val isRead: Boolean get() = this == READ || this == READ_SCALAR || this == READ_WORD || this == READ_WORD_SCALAR
-    val isWrite: Boolean get() = this == WRITE || this == WRITE_SCALAR || this == WRITE_WORD || this == WRITE_WORD_SCALAR
-    val isIndex: Boolean get() = this == INDEX || this == INDEX_SCALAR || this == INDEX_WORD || this == INDEX_WORD_SCALAR
-    val vectorProof: CoreRepresentation get() = if (unsigned) CoreVectors.proofWord32 else CoreVectors.proof32
+    val isRead: Boolean get() = this == READ || this == READ_SCALAR || this == READ_WORD || this == READ_WORD_SCALAR ||
+        this == READ_FLOAT || this == READ_FLOAT_SCALAR
+    val isWrite: Boolean get() = this == WRITE || this == WRITE_SCALAR || this == WRITE_WORD || this == WRITE_WORD_SCALAR ||
+        this == WRITE_FLOAT || this == WRITE_FLOAT_SCALAR
+    val isIndex: Boolean get() = this == INDEX || this == INDEX_SCALAR || this == INDEX_WORD || this == INDEX_WORD_SCALAR ||
+        this == INDEX_FLOAT || this == INDEX_FLOAT_SCALAR
+    val vectorProof: CoreRepresentation get() = family.vectorProof
     internal fun validateArguments(actual: List<CoreRepresentation>, flags: List<*>) {
         val expected = listOf(CoreVectorMemory.arrayProof, CoreVectorMemory.indexProof) + when {
             isRead -> listOf(CoreVectorMemory.stateProof)
@@ -60,7 +80,7 @@ internal object CoreVectorMemory {
     private fun vectorAnnotation(raw: Any?, proof: CoreRepresentation): Boolean {
         val value = raw as? Map<*, *> ?: return false
         return value.keys == setOf("lanes", "element") &&
-            exactInteger(value["lanes"], 4) && value["element"] == proof.vector!!.element
+            exactInteger(value["lanes"], proof.vector!!.lanes.toLong()) && value["element"] == proof.vector.element
     }
     /** The pinned exporter annotates this aggregate with its sole physical VecRep.
      * Validate the original map without admitting it to generic CoreVector.parse. */

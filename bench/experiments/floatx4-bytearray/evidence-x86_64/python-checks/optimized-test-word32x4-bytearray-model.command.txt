@@ -1,0 +1,1 @@
+python3 -O scripts/test-word32x4-bytearray-model.py 

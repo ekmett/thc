@@ -1,9 +1,9 @@
-"""Exact local Int32X4/Word32X4 ByteArray intrinsics; no vector aggregate transport.
+"""Exact local Int32X4/Word32X4/FloatX4 ByteArray intrinsics; no vector aggregate transport.
 
 The pinned exporter places its sole physical vector annotation on the logical
 State/vector tuple too. Only an immediate, exactly checked read case accepts it.
 """
-from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, signature_matches
+from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, VECTOR_FLOAT_REP, signature_matches
 
 STATE = dict(kind='void', primReps=[], evaluated=True)
 ARRAY = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
@@ -16,10 +16,17 @@ UNSIGNED_READS = {'readWord32X4Array#', 'readWord32ArrayAsWord32X4#'}
 UNSIGNED_INDICES = {'indexWord32X4Array#', 'indexWord32ArrayAsWord32X4#'}
 UNSIGNED_WRITES = {'writeWord32X4Array#', 'writeWord32ArrayAsWord32X4#'}
 UNSIGNED_OPERATIONS = UNSIGNED_READS | UNSIGNED_INDICES | UNSIGNED_WRITES
-READS = SIGNED_READS | UNSIGNED_READS
-INDICES = SIGNED_INDICES | UNSIGNED_INDICES
-WRITES = SIGNED_WRITES | UNSIGNED_WRITES
+FLOAT_READS = {'readFloatX4Array#', 'readFloatArrayAsFloatX4#'}
+FLOAT_INDICES = {'indexFloatX4Array#', 'indexFloatArrayAsFloatX4#'}
+FLOAT_WRITES = {'writeFloatX4Array#', 'writeFloatArrayAsFloatX4#'}
+FLOAT_OPERATIONS = FLOAT_READS | FLOAT_INDICES | FLOAT_WRITES
+READS = SIGNED_READS | UNSIGNED_READS | FLOAT_READS
+INDICES = SIGNED_INDICES | UNSIGNED_INDICES | FLOAT_INDICES
+WRITES = SIGNED_WRITES | UNSIGNED_WRITES | FLOAT_WRITES
 OPERATIONS = READS | INDICES | WRITES
+VECTOR_PROOFS = {**dict.fromkeys(SIGNED_OPERATIONS, VECTOR32_REP),
+                 **dict.fromkeys(UNSIGNED_OPERATIONS, VECTOR_WORD32_REP),
+                 **dict.fromkeys(FLOAT_OPERATIONS, VECTOR_FLOAT_REP)}
 
 
 def require(condition, detail):
@@ -29,7 +36,7 @@ def require(condition, detail):
 
 def vector_proof(name):
     require(name in OPERATIONS, 'unknown memory operation')
-    return VECTOR_WORD32_REP if name in UNSIGNED_OPERATIONS else VECTOR32_REP
+    return VECTOR_PROOFS[name]
 
 
 def representation(expr):

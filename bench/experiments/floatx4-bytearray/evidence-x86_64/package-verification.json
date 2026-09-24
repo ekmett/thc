@@ -1,0 +1,52 @@
+{
+  "acceptedCaptureCount": 16,
+  "nativeRows": 6720,
+  "selectedNativeSignalingNaNRows": 640,
+  "signalingNaNClaim": "Selected pinned-host native observations only; not portable JVM corpus",
+  "suiteCounts": {
+    "first-focused": 10,
+    "focused-default": 15,
+    "full-default": 530,
+    "full-dense": 530,
+    "before-family-dispatch/focused-default": 15,
+    "before-family-dispatch/full-default": 530,
+    "before-family-dispatch/full-dense": 530
+  },
+  "floatLaneProducts": 32,
+  "packedStoreLanes": 32,
+  "physicalPackedMemoryInstructions": 16,
+  "installedTargetComparisons": 1024,
+  "rawGraphsRehashed": true,
+  "compactGraphContentsRehashed": true,
+  "junitArchivesMatchOriginals": true,
+  "preparationArchivesMatchOriginals": true,
+  "preparationRunArchives": 2,
+  "firstEnvironmentAndTestConstructionFailuresPreserved": true,
+  "firstGenuineAstDispatchFailuresPreserved": 8,
+  "firstBytecodeGraphAndLirPasses": 8,
+  "correctedRuntime": "4281921a0422404185212acbfb1cd7aadd85b3f6",
+  "offlineReaderCorrection": "1dff41f3a7bf04009e5eff7d35c8f368e60b082d",
+  "noReaderCorrectionGuestReplay": true,
+  "integerFamilyRegressions": {
+    "int32x4": {
+      "captures": 16,
+      "installedTargetComparisons": 1152,
+      "physicalPackedMemoryInstructions": 16
+    },
+    "word32x4": {
+      "captures": 16,
+      "installedTargetComparisons": 1152,
+      "physicalPackedMemoryInstructions": 16
+    }
+  },
+  "pythonTests": {
+    "final": {
+      "normal": 220,
+      "optimized": 220
+    },
+    "before-family-dispatch": {
+      "normal": 217,
+      "optimized": 217
+    }
+  }
+}
