@@ -2352,6 +2352,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class ByteSwapWidth { @Specialization public static long apply(int shift, long x) { return Long.reverseBytes(x) >>> shift; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class BitReverseWidth { @Specialization public static long apply(int shift, long x) { return Long.reverse(x) >>> shift; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class BitDepositWidth { @Specialization public static long apply(int shift, long x, long mask) {
+        long widthMask = -1L >>> shift;
+        return Long.expand(x & widthMask, mask & widthMask) & widthMask;
+    } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class BitExtractWidth { @Specialization public static long apply(int shift, long x, long mask) {
+        long widthMask = -1L >>> shift;
+        return Long.compress(x & widthMask, mask & widthMask) & widthMask;
+    } }
     @Operation public static final class ShiftLeft { @Specialization public static long apply(long x, long y) { return x << (int) y; } }
     @Operation public static final class ShiftRight { @Specialization public static long apply(long x, long y) { return x >> (int) y; } }
     @Operation public static final class ShiftRightUnsigned { @Specialization public static long apply(long x, long y) { return x >>> (int) y; } }
