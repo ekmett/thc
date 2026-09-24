@@ -27,9 +27,10 @@ class ThreadAsyncNativeTest {
             }
         assertEquals(listOf("43", "44"), File(root, "build/thread-async/oracle.txt").readLines())
         assertEquals(listOf("5", "-1"), File(root, "build/thread-async/extra-oracle.txt").readLines())
+        assertEquals(listOf("52", "53"), File(root, "build/thread-async/lazy-oracle.txt").readLines())
     }
 
-    private fun exercise(name: String, expected: List<Long>) {
+    private fun exercise(name: String, expected: List<Long>, module: String = "ThreadAsyncAudit") {
         checkReceipt()
         for (stage in listOf("pre", "post")) {
             val context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
@@ -39,7 +40,7 @@ class ThreadAsyncNativeTest {
                 Thread(task, "thc-public-thread-test").apply { isDaemon = true }
             }
             try {
-                val core = File(root, "build/thread-async/$stage/core/ThreadAsyncAudit.json")
+                val core = File(root, "build/thread-async/$stage/core/$module.json")
                 val entry = context.eval("thc", CoreModules.request(listOf(core.path), name, backend = "bytecode"))
                 val result = executor.submit<List<Long>> {
                     val interpreted = entry.execute(0L).asLong()
@@ -59,4 +60,6 @@ class ThreadAsyncNativeTest {
     @Test fun publicForkAndThrowResumeTheSharedThunk() = exercise("forkAndThrow", listOf(43, 44))
     @Test fun uncaughtChildDeliveryReleasesTheSender() = exercise("killUncaught", listOf(5, 6))
     @Test fun selfDirectedThrowEntersTheOriginalHandler() = exercise("selfThrow", listOf(-1, 0))
+    @Test fun forkedChildOwnsAndResumesTheSharedLazyActionHead() =
+        exercise("lazyFork", listOf(52, 53), "LazyForkAudit")
 }
