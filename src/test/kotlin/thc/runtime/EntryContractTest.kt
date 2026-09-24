@@ -167,6 +167,7 @@ class EntryContractTest {
                         "kind" to "boxed", "fieldReps" to listOf(listOf("IntRep")),
                         "strictFields" to listOf(false), "fieldLifted" to listOf(false))))
                 val program = BytecodeProgram(language, module, true)
+                assertThrows(RuntimeFault::class.java) { run(program, "worker", 7L, 9L) }
                 assertEquals(7L, run(program, "generic", 7L))
                 assertEquals(1L, count(program, "thunkEvaluations"), "Unused strict formal must still be demanded")
                 val pap = run(program, "partial", 3_000_000_017L) as Closure
