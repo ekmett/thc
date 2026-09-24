@@ -221,3 +221,17 @@ still exposes those implementations and further numeric/encoding/error
 dependencies, installed GMP foreign calls, tuple captures, `timesInt2#`,
 `addr2Int#`, libdw and cold decoder branches. This source addition does not
 admit those paths or select a bignum backend.
+
+The unchanged `IO.Encoding.Types` and `IO.Encoding.Failure` sources from the
+same pinned revision supply `Types.close#` and eight original Failure workers:
+`recoverDecode2`, `recoverDecode3`, `recoverDecode5`, `recoverDecode#`,
+`recoverEncode#`, and `codingFailureModeSuffix1`, `codingFailureModeSuffix3`,
+`codingFailureModeSuffix5`. The source proof checks their exact original
+CString/UTF8/encoding caller references and preserves each exported binding
+through module merging. These modules use the existing private installed-interface
+overlay for `IO.Buffer`, `Char`, and `Num`; their implementations are not added.
+No new boot interface or target-layout receipt is needed. This is source
+availability, not execution or admission of the buffer-recovery/error closure.
+In particular, the original error probe's unsaturated mask in `IO.bracket1`
+remains a strict/dynamic boundary; this source slice does not rewrite its call
+or change the backtrace, libdw, masking, or exception policies.
