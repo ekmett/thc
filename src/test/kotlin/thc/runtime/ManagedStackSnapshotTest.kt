@@ -57,23 +57,34 @@ class ManagedStackSnapshotTest {
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
         .option("engine.SingleTierCompilationThreshold", "10000000").build()
 
-    private fun module(enabled: Boolean = true): Map<String, Any?> {
+    private val entryIdentity = ManagedStackFunctionIdentity("app-unit:Entry.Owner.\$wentry_r17", "app-unit", "Entry.Owner", "\$wentry_r17")
+    private val workerIdentity = ManagedStackFunctionIdentity("library-unit:Worker.Owner.worker", "library-unit", "Worker.Owner", "worker")
+
+    private fun module(enabled: Boolean = true, named: Boolean = false): Map<String, Any?> {
         val text = "entry outerCallback =\n  worker outerCallback + 1\nworker innerCallback =\n  innerCallback 0 + 1\n"
+        fun bindingId(id: String) = if (!named) id else when (id) {
+            "entry" -> entryIdentity.bindingId
+            "worker" -> workerIdentity.bindingId
+            else -> id
+        }
         fun metadata(id: String, outer: String) = mapOf("source" to id, "sourceNotes" to listOf(outer, id).distinct())
         fun span(id: String, line: Int, length: Int) = mapOf("id" to id, "file" to "fixture",
             "startLine" to line, "startColumn" to 1, "endLine" to line, "endColumn" to length+1,
             "charIndex" to text.lineSequence().take(line-1).sumOf { it.length+1 }, "charLength" to length, "label" to id)
         fun function(id: String, formal: String, target: String, arg: List<Any?>, lifted: Boolean): Map<String, Any?> {
             val outer = "$id-root"; val site = "$id-call"
-            val call = listOf("app", listOf("var", target), listOf(arg), listOf(lifted), false, false, metadata(site, outer))
+            val call = listOf("app", listOf("var", bindingId(target)), listOf(arg), listOf(lifted), false, false, metadata(site, outer))
             val add = listOf("app", listOf("prim", "+#"), listOf(listOf("var", "$id-result"), listOf("lit", "int", "1")),
                 listOf(false, false), false, false, metadata(outer, outer))
             // Keep both calls non-tail so both guest frames are live during capture.
             val body = listOf("case", call, "$id-result", listOf(listOf("default", null, emptyList<String>(), add)), metadata(outer, outer))
-            return mapOf("id" to id, "name" to id, "lifted" to true, "source" to outer,
+            return mapOf("id" to bindingId(id), "name" to id, "lifted" to true, "source" to outer,
                 "expr" to listOf("lam", listOf(mapOf("id" to formal, "name" to formal, "lifted" to true)), body, metadata(outer, outer)))
         }
         return mapOf("sourceNotesEnabled" to enabled, "instrument" to true,
+            "bindingOrigins" to if (named) listOf(entryIdentity, workerIdentity).associate {
+                it.bindingId to mapOf("unit" to it.unitId, "module" to it.moduleName)
+            } else emptyMap(),
             "sourceFiles" to listOf(mapOf("id" to "fixture", "path" to "Snapshot.hs", "content" to text)),
             "sourceSpans" to listOf(span("entry-root", 1, 21), span("entry-call", 2, 24),
                 span("worker-root", 3, 22), span("worker-call", 4, 21)),
@@ -110,7 +121,8 @@ class ManagedStackSnapshotTest {
             if (value == null || value is String || value is Number || value is Boolean || value is Enum<*>) return
             if (!seen.add(value)) return
             if (value is List<*>) { value.forEach(::visit); return }
-            assertTrue(value is ManagedStackSnapshot || value is ManagedStackFrame || value is ManagedStackSource || value is ManagedStackNote,
+            assertTrue(value is ManagedStackSnapshot || value is ManagedStackFrame || value is ManagedStackSource ||
+                value is ManagedStackNote || value is ManagedStackFunctionIdentity,
                 "Snapshot must not retain ${value.javaClass.name}")
             for (field in value.javaClass.declaredFields.filter { !Modifier.isStatic(it.modifiers) }) {
                 assertTrue(Modifier.isFinal(field.modifiers), field.name)
@@ -140,6 +152,7 @@ class ManagedStackSnapshotTest {
                 fun check(snapshot: ManagedStackSnapshot) {
                     assertEquals(listOf("capture-probe", "lambda innerCallback", "lambda outerCallback"), snapshot.frames.map { it.functionName }, backend)
                     assertEquals(listOf(91, 4, 2), snapshot.frames.map { it.location?.startLine }, "$backend/$inlining callsite ownership")
+                    assertTrue(snapshot.frames.all { it.coreIdentity == null }, "Source/debug labels must not invent binding owners")
                     assertEquals(7, snapshot.frames[0].location?.startColumn)
                     assertEquals(ManagedStackLocationKind.CURRENT_NODE, snapshot.frames[0].locationKind)
                     for (frame in snapshot.frames.drop(1)) {
@@ -168,6 +181,61 @@ class ManagedStackSnapshotTest {
                 assertEquals(0, handoff.results.depth); assertEquals(0, handoff.results.retainedReferences())
                 assertEquals(0, handoff.arguments.depth); assertEquals(0, handoff.arguments.retainedReferences())
             } finally { context.leave() }
+        }
+    }
+
+    @Test fun exactBindingIdentitiesSurviveCompilationInliningAndContextCloseWithoutChangingDebugNames() {
+        val expected = listOf(null, workerIdentity, entryIdentity)
+        for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) {
+            val retained = mutableListOf<ManagedStackSnapshot>()
+            val rendered = mutableListOf<List<String>>()
+            context(inlining).use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, module(named = true))
+                        else BytecodeProgram(language, module(named = true))
+                    // Even a plausible qualified debug name is not binding provenance.
+                    val probe = Probe(language, location()).also { it.label = "invented-unit:Fake.Module.capture" }
+                    val callback = Closure(null, arity = 1, target = probe.callTarget)
+                    val entry = program.entryTarget(entryIdentity.bindingId)
+                    fun invoke(): ManagedStackSnapshot {
+                        assertEquals(9L, Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue(entryIdentity.bindingId),
+                            arrayOf<Any?>(callback))))
+                        return requireNotNull(probe.body.snapshot)
+                    }
+                    fun check(snapshot: ManagedStackSnapshot) {
+                        assertEquals(expected, snapshot.frames.map { it.coreIdentity }, "$backend/$inlining")
+                        assertEquals(listOf(probe.label, "lambda innerCallback", "lambda outerCallback"), snapshot.frames.map { it.functionName })
+                        assertEquals(listOf(91, 4, 2), snapshot.frames.map { it.location?.startLine })
+                        assertEquals(listOf("Capture.hs", "Snapshot.hs", "Snapshot.hs"), snapshot.frames.map { it.location?.name })
+                        assertTrue(snapshot.renderLines()[1].startsWith("lambda innerCallback ("))
+                        detached(snapshot)
+                    }
+                    retained += invoke().also(::check)
+                    assertEquals(0L, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                    assertEquals(0, probe.body.compiledEntries)
+                    repeat(5) { check(invoke()) }
+                    val targets = activeTargets(entry)
+                    assertEquals(3, targets.size)
+                    targets.forEach(::compile)
+                    val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    val probeBefore = probe.body.compiledEntries
+                    retained += invoke().also(::check)
+                    assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                    assertEquals(probeBefore + 1, probe.body.compiledEntries)
+                    targets.forEach(::valid)
+                    rendered += retained.map { it.renderLines() }
+                    val handoff = language.handoffState.get()
+                    assertEquals(0, handoff.results.depth); assertEquals(0, handoff.results.retainedReferences())
+                    assertEquals(0, handoff.arguments.depth); assertEquals(0, handoff.arguments.retainedReferences())
+                } finally { context.leave() }
+            }
+            for ((index, snapshot) in retained.withIndex()) {
+                assertEquals(expected, snapshot.frames.map { it.coreIdentity })
+                assertEquals(rendered[index], snapshot.renderLines(), "$backend/$inlining after context close")
+                detached(snapshot)
+            }
         }
     }
 

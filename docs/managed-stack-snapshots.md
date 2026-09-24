@@ -13,6 +13,13 @@ original exclusive end coordinates. Missing source metadata remains explicit.
 `renderLines()` gives a small source-only rendering for JVM diagnostics.
 The returned frame, section, note and line lists are unmodifiable.
 
+`coreIdentity` separately copies a root's explicit original binding identity:
+`bindingId`, `unitId`, `moduleName`, and `occurrence`. It is null when the root has
+no such identity, including anonymous roots. Neither a debug `functionName`
+(often `lambda <args>`) nor a source path establishes an owner. Identity strings
+are detached from the runtime metadata; debug rendering and source coordinates
+are unchanged.
+
 The current frame uses the explicit capture node. Older frames use their own
 `FrameInstance.callNode`: that node belongs to the caller and invokes the next
 newer frame. Moving it to the next frame would misattribute every callsite.
@@ -32,6 +39,8 @@ concrete, but does not retain those original note IDs/labels/exclusive ends.
 Bytecode snapshots preserve the sections without inventing the missing notes.
 The runtime may elide tail frames; this API records the live guest frames the
 Truffle iterator exposes, not a historical call log or a one-to-one GHC stack.
+These records are diagnostic only: they contain no resumable `AP_STACK`,
+continuation, or `throwTo` unwinding/resumption state.
 
 This is capture infrastructure only. It does not enable a GHC primop or foreign
 symbol, attach snapshots to exceptions, emulate `StgStack`/info-table/IPE memory,
@@ -48,5 +57,7 @@ order and caller source locations before and after explicit compilation with
 inlining enabled/disabled, missing source metadata, root-fallback provenance,
 original AST note coordinates, immutability after return and synchronous unwind
 through both backends (including context close), and fail-closed invalid capture
-sites. The current-frame bytecode operation path is not yet exercised. These are JVM
+sites. Explicit cross-unit binding identities are checked before and after
+compilation/inlining and context close, independently of the debug names and
+source paths. The current-frame bytecode operation path is not yet exercised. These are JVM
 protocol tests, not native GHC snapshot comparisons or a complete library bridge.
