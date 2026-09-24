@@ -26,9 +26,10 @@ class ThreadAsyncNativeTest {
                 assertEquals(expected, bytes.joinToString("") { "%02x".format(it) }, "Stale $path")
             }
         assertEquals(listOf("43", "44"), File(root, "build/thread-async/oracle.txt").readLines())
+        assertEquals(listOf("5", "-1"), File(root, "build/thread-async/extra-oracle.txt").readLines())
     }
 
-    @Test fun publicForkAndThrowResumeTheSharedThunk() {
+    private fun exercise(name: String, expected: List<Long>) {
         checkReceipt()
         for (stage in listOf("pre", "post")) {
             val context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
@@ -39,13 +40,13 @@ class ThreadAsyncNativeTest {
             }
             try {
                 val core = File(root, "build/thread-async/$stage/core/ThreadAsyncAudit.json")
-                val entry = context.eval("thc", CoreModules.request(listOf(core.path), "forkAndThrow", backend = "bytecode"))
+                val entry = context.eval("thc", CoreModules.request(listOf(core.path), name, backend = "bytecode"))
                 val result = executor.submit<List<Long>> {
                     val interpreted = entry.execute(0L).asLong()
                     assertTrue(entry.invokeMember("compile").asBoolean())
                     listOf(interpreted, entry.execute(1L).asLong())
                 }
-                assertEquals(listOf(43L, 44L), result.get(30, TimeUnit.SECONDS), stage)
+                assertEquals(expected, result.get(30, TimeUnit.SECONDS), "$stage $name")
                 val diagnostics = Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>
                 assertEquals(0L, (diagnostics["unsupportedTraps"] as Number).toLong())
             } finally {
@@ -54,4 +55,8 @@ class ThreadAsyncNativeTest {
             }
         }
     }
+
+    @Test fun publicForkAndThrowResumeTheSharedThunk() = exercise("forkAndThrow", listOf(43, 44))
+    @Test fun uncaughtChildDeliveryReleasesTheSender() = exercise("killUncaught", listOf(5, 6))
+    @Test fun selfDirectedThrowEntersTheOriginalHandler() = exercise("selfThrow", listOf(-1, 0))
 }
