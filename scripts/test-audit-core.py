@@ -1318,6 +1318,19 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
                 self.assertFalse(disabled['accepted']); self.assertEqual([], disabled['foreignCalls'])
                 self.assertTrue(any('capability disabled' in str(i['detail']) for i in disabled['issues']))
 
+    def test_production_admits_only_proven_diagnostic_getters(self):
+        hot = set(self.info_symbols) | {'getSmallBitmapzh', 'getStackFieldszh', 'advanceStackFrameLocationzh'}
+        self.assertEqual(hot, set(self.symbols) & set(CAP['managedForeignCalls']))
+        for symbol in self.symbols:
+            with self.subTest(symbol=symbol):
+                report = audit_core.Audit([('original-getter-production-capability.json', self.fixture(symbol))],
+                    CAP).run(['synthetic-consumer'])
+                self.assertEqual(symbol in hot, report['accepted'], report)
+                self.assertEqual([symbol] if symbol in hot else [],
+                    [call['symbol'] for call in report['foreignCalls']])
+                if symbol not in hot:
+                    self.assertTrue(any('capability disabled' in str(i['detail']) for i in report['issues']))
+
     def test_projected_source_records_exactly_cover_original_application_notes(self):
         resource = json.loads(self.resource.read_text())
         # Canonical hashes of records copied directly from the two pinned source

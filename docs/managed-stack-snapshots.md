@@ -137,6 +137,10 @@ contracts, including the lifted `Any` result of `getStackClosurezh`, the Word32
 result of `getStackFieldszh`, and all three ordered components of
 `advanceStackFrameLocationzh`. Recognition and lowering do not by themselves
 admit these calls through the capability auditor or prove complete Decode.
+Only `getSmallBitmapzh`, `advanceStackFrameLocationzh` and `getStackFieldszh`
+are newly admitted after unchanged original-call proofs pass in both backends,
+both handoff modes and immediately after explicit compilation. The eight cold
+getter capabilities remain disabled.
 
 The managed image has no unused stack capacity: it is a zero-slack sequence of
 one-word, zero-payload `RET_SMALL` records. `getStackFieldszh` reports that virtual
@@ -152,5 +156,29 @@ The eight payload/large-bitmap/BCO/RET_FUN/underflow getters have exact protocol
 boundaries but reject these incompatible managed frames. No heap closure, raw
 pointer word, native bitmap, chunk link or native frame kind is fabricated.
 These restrictions are a diagnostic representation boundary, not native stack
-introspection or resumable `AP_STACK` support. Complete unchanged decoder and
-formatter execution remains a separate proof requirement.
+introspection or resumable `AP_STACK` support. Complete unchanged decoder
+execution remains a separate proof requirement.
+
+`OriginalStackDecoderCallTest` retains all eleven remaining original getter
+applications with exact original source tables. Its explicitly synthetic scalar
+consumers inspect every hot result component (including the terminal null),
+exercise one- and two-frame snapshots, and check cold failures and invalid
+offsets without replacing the original GHC applications. It is a protocol proof,
+not complete decoder execution.
+
+## Original formatter execution
+
+The shared Haskell fixture command `original-stack-formatter` exports the pinned
+original source closure and calls unchanged `prettyStackEntry` with six explicit
+`StackEntry` inputs. Native GHC supplies 606 code-point observations, including
+empty fields, Unicode, punctuation and embedded NUL characters. Both pre- and
+post-Tidy consumers pass strict audits. `OriginalStackFormatterTest` checks those
+observations through both backends, before and immediately after explicit
+compilation, with inlining enabled and disabled.
+
+The fixture records exactly 78 source inputs and 77 artifacts from one export
+attempt. Provenance tests independently pin the upstream source catalog and
+reject omissions, changed pins and escaped paths. Focused preparation and cache
+receipts reuse this exact inventory; installed-interface symlink overlays are
+neither hashed nor cached. This executes the original formatter on constructed
+entries, not the full original decoder on captured snapshots.

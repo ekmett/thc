@@ -55,7 +55,7 @@
       ]
     },
     "original-stack": {
-      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}],
       "outputs": ["build/original-stack"],
       "sources": [
