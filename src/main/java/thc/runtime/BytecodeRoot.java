@@ -1022,6 +1022,47 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Private non-tail tuple checkpoint. Ordinary calls still use ApplyTuple. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = int.class, name = "arity")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyTupleCheckpoint {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeTupleSlots destination, int arity, Metrics metrics,
+                Closure function, @Variadic Object[] arguments, @Bind Node node,
+                @Cached(value = "create(destination, arity, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            MaskingState callerMask = SynchronousMasking.current(node);
+            try { dispatch.execute(frame, function, arguments); }
+            catch (TupleCallYield yielded) { throw captureTupleCall(function, arity, destination, yielded, node, callerMask); }
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, int arity, Metrics metrics) {
+            return new TupleDispatch(new ContinuationTupleDestination(destination), metrics, arity, false);
+        }
+    }
+
+    /** Only an exact callee tuple root may become a resumable cold call segment. */
+    private static RuntimeException captureTupleCall(Closure function, int arity, BytecodeTupleSlots destination,
+            TupleCallYield yielded, Node node, MaskingState callerMask) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        try {
+            ContinuationResult continuation = yielded.getContinuation();
+            Object source = continuation.getContinuationRootNode().getSourceRootNode();
+            if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
+                    !callee.isSelf(function.target) || !callee.hasTupleResult(destination.getShape()) ||
+                    !(continuation.getResult() == kotlin.Unit.INSTANCE ||
+                            continuation.getResult() instanceof ThunkSuspended ||
+                            continuation.getResult() instanceof CallSegmentSuspended))
+                throw new IllegalStateException("Tuple application returned an unrelated continuation");
+            MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+                    ? suspended.getParkedActiveMask() : null;
+            if (parked != null && SynchronousMasking.current(node) != callerMask)
+                throw new IllegalStateException("Parked tuple application did not restore its caller mask");
+            MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
+            return new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
+                    destination.getShape()));
+        } finally { SynchronousMasking.set(node, callerMask); }
+    }
+
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = int.class, name = "arity")
@@ -1056,6 +1097,26 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
             return new TupleDispatch(destination, metrics, layout.getLogicalArity(), false, layout);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = ArgumentLayout.class, name = "layout")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyCompactTupleCheckpoint {
+        @Specialization public static void apply(VirtualFrame frame, BytecodeTupleSlots destination,
+                ArgumentLayout layout, Metrics metrics, Closure function, @Variadic Object[] arguments, @Bind Node node,
+                @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            MaskingState callerMask = SynchronousMasking.current(node);
+            try { dispatch.execute(frame, function, arguments); }
+            catch (TupleCallYield yielded) {
+                throw captureTupleCall(function, layout.getLogicalArity(), destination, yielded, node, callerMask);
+            }
+        }
+        public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
+            return new TupleDispatch(new ContinuationTupleDestination(destination), metrics,
+                    layout.getLogicalArity(), false, layout);
         }
     }
 
@@ -1400,6 +1461,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {
             throw new IllegalStateException("IO action continuation requires an owned ChildResume tuple");
+        }
+    }
+
+    /** A cold tuple segment owns its producer result before crossing threads. */
+    @Operation
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    public static final class ResumeTupleApplication {
+        @Specialization public static void resume(VirtualFrame frame, BytecodeTupleSlots destination,
+                CallSegmentSuspended suspended, ChildResume resumed, @Bind Node node) {
+            if (resumed.getFailure() != null) throw resumed.getFailure();
+            CallSegment segment = suspended.getSegment();
+            if (segment.getCaughtIOAction() || segment.getTupleShape() != destination.getShape() ||
+                    segment.getState() != 2 || segment.getValue() != resumed.getValue() ||
+                    !(resumed.getValue() instanceof HandoffStorage owned))
+                throw new IllegalStateException("Tuple application continuation lost its result update");
+            destination.consume(frame, node, owned);
+        }
+        @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {
+            throw new IllegalStateException("Tuple application continuation requires an owned ChildResume tuple");
         }
     }
 

@@ -454,7 +454,8 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77", "43"), File(root, "build/core-continuation/native-output.txt").readLines())
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114"),
+            File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
         executionContext().use { context ->
@@ -503,7 +504,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun genuineCatchActionResumesOwnedTupleAcrossThreads() {
-        assertEquals(listOf("108", "208", "42", "77", "43"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -685,6 +686,175 @@ class CoreContinuationNativeTest {
             assertEquals(2, parent.state)
             assertEquals(2, child.state)
             assertEquals(2, checkpoint.visits.get(), "The shared action prefix is never replayed")
+        }
+    }
+
+    @Test fun originalNestedTupleApplicationResumesTypedFieldsAcrossCarriers() {
+        assertEquals("114", File(root, "build/core-continuation/native-output.txt").readLines()[5])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "tupleApplicationAnswer", strictLink = true)
+            entered(context) {
+                for (program in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val answer = driver.force(program.entryValue("tupleApplicationAnswer") as Thunk) as DataValue
+                    assertEquals(114L, answer.layout.readLong(answer, 0))
+                }
+            }
+            val checkpoint = BytecodeCheckpoint()
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            entered(context) {
+                val target = program.entryTarget("tupleApplicationAnswer")
+                assertEquals(114L, (Calls.target(target, arrayOf(0L)) as DataValue).let { it.layout.readLong(it, 0) })
+                compile(target)
+                assertEquals(114L, (Calls.target(target, arrayOf(0L)) as DataValue).let { it.layout.readLong(it, 0) })
+                compile((program.entryValue("tupleDelayed") as Closure).target)
+            }
+            val compiledVisitsBefore = checkpoint.compiledVisits.get()
+            checkpoint.armed = true
+            val parent = entered(context) { program.entryValue("tupleApplicationAnswer") as Thunk }
+            entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                assertEquals(5, parent.state, "The caller's prefix checkpoint is itself resumable")
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+            }
+            val continuation = parent.value as ContinuationResult
+            val child = (continuation.result as CallSegmentSuspended).segment
+            val shape = requireNotNull(child.tupleShape)
+            assertEquals(listOf(CoreKind.VOID, CoreKind.LONG, CoreKind.UNKNOWN), shape.components.map { it.kind })
+            assertEquals(listOf(CoreKind.LONG, CoreKind.DATA), shape.leaves.map { it.kind })
+            assertEquals(2, shape.width, "Both erased State# fields occupy zero physical slots")
+            assertTrue(checkpoint.compiledVisits.get() >= compiledVisitsBefore + 2,
+                "Both installed caller and exact tuple callee reached their suspension checkpoints")
+            Executors.newSingleThreadExecutor().use { pool ->
+                val resumed = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                        assertEquals(5, child.state, "The exact child segment re-yields")
+                        val answer = driver.force(parent) as DataValue
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        answer.layout.readLong(answer, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(114L, resumed.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(2, parent.state)
+            assertEquals(2, child.state)
+            assertEquals(3, checkpoint.visits.get(), "Caller prefix and two child checkpoints execute once each")
+        }
+    }
+
+    @Test fun nestedTupleResultIsReleasedBeforePostCallGuestFailure() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "tupleApplicationFailure", strictLink = true)
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            val parent = entered(context) { program.entryValue("tupleApplicationFailure") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            Executors.newSingleThreadExecutor().use { pool ->
+                val failed = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_UNINTERRUPTIBLE)
+                    try {
+                        assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                        val failure = assertThrows(GuestException::class.java) { driver.force(parent) }
+                        val payload = driver.force(failure.payload as Thunk) as DataValue
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        payload.layout.readLong(payload, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(9L, failed.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(3, parent.state, "The ordinary guest failure is memoized after tuple consumption")
+            assertEquals(2, child.state)
+            assertEquals(2, checkpoint.visits.get(), "The child's pre-failure work is never replayed")
+            entered(context) { assertThrows(GuestException::class.java) { driver.force(parent) } }
+        }
+    }
+
+    @Test fun originalCompactTupleArgumentKeepsLogicalArityOnResume() {
+        assertEquals("114", File(root, "build/core-continuation/native-output.txt").readLines()[6])
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "tupleCompactAnswer", strictLink = true)
+            entered(context) {
+                for (program in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                    val answer = driver.force(program.entryValue("tupleCompactAnswer") as Thunk) as DataValue
+                    assertEquals(114L, answer.layout.readLong(answer, 0))
+                }
+            }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            val parent = entered(context) { program.entryValue("tupleCompactAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            assertEquals(5, child.state)
+            entered(context) {
+                val result = driver.force(parent) as DataValue
+                assertEquals(114L, result.layout.readLong(result, 0))
+                assertEquals(0, language.handoffState.get().results.depth)
+                assertEquals(0, language.handoffState.get().results.retainedReferences())
+            }
+            assertEquals(2, parent.state)
+            assertEquals(2, child.state)
+            assertEquals(1, checkpoint.visits.get())
+        }
+    }
+
+    @Test fun originalTupleCalleeGuestFailurePropagatesWithoutPublishingAResult() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val driver = entered(context) { Driver() }
+            val linked = CoreModules.reachable(module, "tupleRaiseAnswer", strictLink = true)
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linked, checkpoint) }
+            val parent = entered(context) { program.entryValue("tupleRaiseAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            Executors.newSingleThreadExecutor().use { pool ->
+                val failed = pool.submit<Long> { entered(context) {
+                    SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
+                    try {
+                        val failure = assertThrows(GuestException::class.java) { driver.force(parent) }
+                        val payload = driver.force(failure.payload as Thunk) as DataValue
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(driver))
+                        assertEquals(0, language.handoffState.get().results.depth)
+                        assertEquals(0, language.handoffState.get().results.retainedReferences())
+                        payload.layout.readLong(payload, 0)
+                    } finally { SynchronousMasking.set(driver, MaskingState.UNMASKED) }
+                } }
+                assertEquals(9L, failed.get(5, TimeUnit.SECONDS))
+            }
+            assertEquals(3, child.state, "The child memoizes an ordinary guest failure")
+            assertEquals(3, parent.state, "The caller propagates the same failure without a tuple update")
+            assertEquals(1, checkpoint.visits.get(), "The child prefix is not replayed")
+            entered(context) { assertThrows(GuestException::class.java) { driver.force(parent) } }
         }
     }
 
