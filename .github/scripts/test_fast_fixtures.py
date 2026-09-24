@@ -92,12 +92,13 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['original-stack-formatter'], prepare()['reused'])
         self.assertEqual([], self.calls)
         outputs = fast_fixtures._output_hashes(self.root, group)
-        self.assertEqual(78, len(outputs))
+        self.assertEqual(79, len(outputs))
         self.assertFalse(any('interfaces/' in path for path in outputs))
         # Includes the production exporter, all pinned source kinds and the
         # target-layout C probe, without a second hand-maintained source list.
         for name in (*group['sources'],
                      'compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs',
+                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Unsafe.hs',
                      'compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc',
                      'compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot',
                      'compiler/pinned-ghc-internal/include/WordSize.h',

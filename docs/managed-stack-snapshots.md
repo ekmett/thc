@@ -176,9 +176,23 @@ post-Tidy consumers pass strict audits. `OriginalStackFormatterTest` checks thos
 observations through both backends, before and immediately after explicit
 compilation, with inlining enabled and disabled.
 
-The fixture records exactly 78 source inputs and 77 artifacts from one export
+The fixture records exactly 79 source inputs and 78 artifacts from one export
 attempt. Provenance tests independently pin the upstream source catalog and
 reject omissions, changed pins and escaped paths. Focused preparation and cache
 receipts reuse this exact inventory; installed-interface symlink overlays are
 neither hashed nor cached. This executes the original formatter on constructed
 entries, not the full original decoder on captured snapshots.
+
+The source overlay also includes unchanged `GHC.Internal.IO.Unsafe` from GHC
+commit `902339d332fb4ce2b3c87dcac1ee6495d41ad886`, covered by the pinned source
+license and hash catalog. Fresh export supplies the exact
+`ghc-internal:GHC.Internal.IO.Unsafe.unsafeDupableInterleaveIO1` binding needed
+by original callers, without a worker-name alias. A separate test uses explicitly
+synthetic scalar consumers and confirms both original `ExecutionStack.Internal.stackFrames`
+references name that exact worker. The scalar consumers wrap the unchanged
+binding: strict linking rejects its removal, discarding its delayed result does
+not run the action, and demanding
+the result runs it, through both backends and explicit compilation. This is not
+a native oracle for those synthetic consumers, nor full decoder support. The
+worker itself still has an unboxed-tuple result and is not a scalar host entry;
+the libdw-based `stackFrames` closure remains unsupported.
