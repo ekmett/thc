@@ -723,6 +723,20 @@
       ],
       "result": "WordRep"
     },
+    "indexInt8OffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Int8Rep"
+    },
+    "indexWord8OffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Word8Rep"
+    },
     "int16ToInt#": {
       "arguments": [
         "Int16Rep"

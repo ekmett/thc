@@ -326,6 +326,8 @@
     "gtAddr#": 2,
     "geAddr#": 2,
     "indexCharOffAddr#": 2,
+    "indexWord8OffAddr#": 2,
+    "indexInt8OffAddr#": 2,
     "getCurrentCCS#": 2,
     "raise#": 1,
     "raiseIO#": 2,
@@ -486,6 +488,7 @@
     "newAlignedPinnedByteArray#": 3,
     "byteArrayContents#": 1,
     "readWord8OffAddr#": 3,
+    "readInt8OffAddr#": 3,
     "readCharOffAddr#": 3,
     "readWord32OffAddr#": 3,
     "readWordOffAddr#": 3,
@@ -496,6 +499,7 @@
     "indexAddrArray#": 2,
     "readAddrArray#": 3,
     "writeWord8OffAddr#": 4,
+    "writeInt8OffAddr#": 4,
     "writeCharOffAddr#": 4,
     "writeAddrOffAddr#": 4,
     "writeAddrArray#": 4,
@@ -1116,6 +1120,24 @@
       ],
       "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["WordRep"],
         "components": [{"kind": "void", "primReps": []}, {"kind": "long", "primReps": ["WordRep"]}]}
+    },
+    "readInt8OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["Int8Rep"],
+        "components": [{"kind": "void", "primReps": []}, {"kind": "long", "primReps": ["Int8Rep"]}]}
+    },
+    "writeInt8OffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["Int8Rep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
     },
     "writeCharOffAddr#": {
       "arguments": [

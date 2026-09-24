@@ -43,6 +43,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     NEW_ALIGNED("newAlignedPinnedByteArray#", listOf(listOf("IntRep"), listOf("IntRep"), emptyList()), true),
     CONTENTS("byteArrayContents#", listOf(listOf("BoxedRep (Just Unlifted)")), false),
     READ("readWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
+    READ_INT8("readInt8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     READ_CHAR("readCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     READ_WORD32("readWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD32),
     READ_WORD("readWordOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.WORD),
@@ -53,6 +54,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     INDEX_ADDR_ARRAY("indexAddrArray#", listOf(listOf("BoxedRep (Just Unlifted)"), listOf("IntRep")), false),
     READ_ADDR_ARRAY("readAddrArray#", listOf(listOf("BoxedRep (Just Unlifted)"), listOf("IntRep"), emptyList()), true),
     WRITE("writeWord8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Word8Rep"), emptyList()), false),
+    WRITE_INT8("writeInt8OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("Int8Rep"), emptyList()), false),
     WRITE_CHAR("writeCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("WordRep"), emptyList()), false),
     WRITE_ADDR("writeAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), listOf("AddrRep"), emptyList()), false),
     WRITE_ADDR_ARRAY("writeAddrArray#", listOf(listOf("BoxedRep (Just Unlifted)"), listOf("IntRep"),
@@ -73,6 +75,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
             addressRead != null -> listOf(addressRead.payload)
             this == READ_ADDR || this == READ_ADDR_ARRAY -> listOf("AddrRep")
             this == READ -> listOf("Word8Rep")
+            this == READ_INT8 -> listOf("Int8Rep")
             this == READ_CHAR -> listOf("WordRep")
             else -> listOf("BoxedRep (Just Unlifted)")
         }
@@ -133,7 +136,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any = when (operation) {
         PinnedMemoryOp.CONTENTS -> ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
-        PinnedMemoryOp.WRITE, PinnedMemoryOp.WRITE_CHAR -> {
+        PinnedMemoryOp.WRITE, PinnedMemoryOp.WRITE_INT8, PinnedMemoryOp.WRITE_CHAR -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredLong(frame)
@@ -164,12 +167,14 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 ManagedByteArray.requireState(operands.last().execute(frame))
                 FrameAccess.write(frame, slots[offset], PinnedMemory.allocate(size, alignment))
             }
-            PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR, PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
+            PinnedMemoryOp.READ, PinnedMemoryOp.READ_INT8, PinnedMemoryOp.READ_CHAR,
+            PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
             PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> {
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))
-                val value = operation.addressRead?.read(address, index) ?: address.readWord8(index)
+                val value = operation.addressRead?.read(address, index)
+                    ?: address.readWord8(index).let { if (operation == PinnedMemoryOp.READ_INT8) it.toByte().toLong() else it }
                 FrameAccess.writeLong(frame, slots[offset], value)
             }
             PinnedMemoryOp.READ_ADDR -> {
