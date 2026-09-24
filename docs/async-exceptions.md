@@ -18,7 +18,8 @@ synchronous even under an uninterruptible mask, as it is in GHC.
 
 The target acknowledges delivery when its original `catch#` accepts the
 exception, before executing the handler. An uncaught child delivery terminates
-the child and releases the sender. A completed target is a successful no-op.
+the child and releases the sender. At a public host entry, an uncaught delivery
+becomes a guest exception with the original payload. A completed target is a successful no-op.
 Only one request is claimed at a time; queued requests retain their order.
 
 ## Saved evaluation
@@ -36,7 +37,7 @@ the ordinary memoization rules.
 
 Strict entry arguments are forced in the callee's bytecode frame, including
 arguments supplied earlier by a partial application. A suspension therefore
-preserves the call as well as the argument being forced. Return values are
+preserves the call as well as the argument being forced. Forced arguments are
 checked against their declared runtime representation after resumption.
 
 Calls through `keepAlive#` retain the protected reference in the saved caller
