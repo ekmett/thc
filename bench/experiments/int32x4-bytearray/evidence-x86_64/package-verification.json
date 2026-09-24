@@ -1,0 +1,20 @@
+{
+  "acceptedCaptureCount": 16,
+  "preservedRejectedCaptureCount": 16,
+  "nativeRows": 9666,
+  "suiteCounts": {
+    "initial/focused-default": 11,
+    "initial/full-default": 498,
+    "initial/full-dense": 498,
+    "hardened/focused-default": 13,
+    "hardened/full-default": 500,
+    "hardened/full-dense": 500,
+    "deopt-transition/focused-default": 14,
+    "deopt-transition/full-default": 501,
+    "deopt-transition/full-dense": 501
+  },
+  "rawGraphsRehashed": true,
+  "compactGraphContentsRehashed": true,
+  "originalFailedArtifactsRehashed": true,
+  "junitArchivesMatchOriginals": true
+}

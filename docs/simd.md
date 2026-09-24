@@ -15,6 +15,9 @@ Int32X4 also supports [signed wrapping multiplication](int32x4-multiply.md):
 the low 32 product bits are retained and unpack sign-extends them. The newer
 slice has its own native/model corpus and strict compiled-code checks, separate
 from the original add/subtract evidence below.
+The [Int32X4 ByteArray slice](int32x4-bytearray.md) adds six managed packed memory
+operations, including immediate local mutable-read cases; it does not extend
+vector function, capture, join or general tuple boundaries.
 
 An interpreter/deoptimized Int64X2 value has two immutable primitive `long`
 fields. Int32X4 has four immutable primitive `int` fields, also a 16-byte payload.
@@ -31,9 +34,10 @@ that execute vectors must add `--add-modules=jdk.incubator.vector` too.
 
 This first slice rejects vector function arguments/results, PAP prefixes,
 closure captures, ordinary let bindings, join arguments/results, constructor
-fields, vector leaves inside unboxed tuples, and other lane types/widths. Arrays,
-loads/stores, shuffle, insertion, Int64X2 multiplication, quotient and remainder primops
-remain unsupported. A vector-valued case/local expression is supported when GHC
+fields, vector leaves inside transported unboxed tuples, and other lane types/widths.
+Apart from the separate bounded Int32X4 ByteArray slice, vector arrays and
+loads/stores remain unsupported, as do shuffle, insertion, Int64X2 multiplication,
+quotient and remainder primops. A vector-valued case/local expression is supported when GHC
 retains it within one scalar root. GHC can turn a source-local expression into a
 join with vector formals; the native `branchCase` fixture records that explicit
 frontier.

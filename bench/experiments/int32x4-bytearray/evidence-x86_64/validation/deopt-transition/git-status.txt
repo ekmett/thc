@@ -1,0 +1,5 @@
+ M README.md
+ M bench/experiments/int32x4-bytearray/README.md
+ M docs/coverage.md
+ M docs/int32x4-bytearray.md
+ M docs/simd.md

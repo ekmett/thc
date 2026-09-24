@@ -152,7 +152,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
 
     init {
         if (!diagnosticUnsupported) {
-            CoreRepresentations.validateAggregates(bindings)
+            CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
         }
         val scope = Scope(FunctionContext(0))
@@ -877,6 +877,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     operands.forEach { it.emit(e) }
                     if (operation == ArrayOp.CLONE) e.builder.endCloneArray() else e.builder.endWriteArray()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
+                val operation = VectorByteArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                vectorByteArray(operation, args.map { compile(it, scope, false) })
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -1091,6 +1095,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             }
         }
         "case" -> {
+            CoreVectorMemory.readCase(expr, constructors)?.let { vectorReadCase(it, scope, tail) } ?: run {
             val local = scope.child()
             val scrutineeExpr = expr[1] as List<Any?>
             val scrutinee = force(compile(scrutineeExpr, scope, false))
@@ -1186,6 +1191,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 b.endBlock()
                 e.locals.remove(binder.id)
             }, mergedProof))
+            }
             }
         }
         "con" -> {
@@ -1574,6 +1580,39 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             b.endBlock()
             fields.forEach { e.locals.remove(it.id) }
         }, result.copy(evaluated = arms.all { it.body.proof.evaluated }))
+    }
+    private fun vectorByteArray(operation: VectorByteArrayOp, operands: List<Expression>): Expression =
+        ProvenExpression(Expression { e ->
+            val b = e.builder
+            when {
+                operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
+                operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
+                else -> b.beginIndexVector32Array(operation.scalarOffset)
+            }
+            operands.forEach { it.emit(e) }
+            when {
+                operation.isWrite -> b.endWriteVector32Array()
+                operation.isRead -> b.endReadVector32Array()
+                else -> b.endIndexVector32Array()
+            }
+        }, if (operation.isWrite) CoreVectorMemory.stateProof else CoreVectors.proof32)
+    private fun vectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expression {
+        val operands = read.arguments.map { compile(it, scope, false) }
+        val value = vectorByteArray(read.operation, operands)
+        val local = scope.child()
+        local.bindVoid(read.stateBinder, CoreVectorMemory.stateProof)
+        val vector = bind(local, read.vectorBinder, false, CoreVectors.proof32)
+        val body = compile(read.body, local, tail)
+        // No whole-tuple local or result handoff is ever created here.
+        return LoweredCaseExpression(ProvenExpression(ResultExpression { e, destination ->
+            val b = e.builder
+            b.beginBlock()
+            e.locals[vector.id] = b.createLocal(vector.name, "object")
+            b.beginStoreLocal(e.locals.getValue(vector.id)); value.emit(e); b.endStoreLocal()
+            emitResult(body, e, destination)
+            b.endBlock()
+            e.locals.remove(vector.id)
+        }, body.proof))
     }
     private fun tupleCase(expr: List<Any?>, scrutinee: Expression, proof: CoreRepresentation, scope: Scope, tail: Boolean): Expression {
         val shape = TupleShape(proof, language)

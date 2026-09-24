@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/bench/experiments/int32x4-bytearray/runtime-audit.py", line 610, in <module>
+    main()
+  File "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/bench/experiments/int32x4-bytearray/runtime-audit.py", line 606, in main
+    check_capture(args.root.resolve(), args.out.resolve(), args.java_home.resolve(), args.recheck_after_checker_fix)
+  File "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/bench/experiments/int32x4-bytearray/runtime-audit.py", line 567, in check_capture
+    memory = inspect_graph(graph, entry)
+  File "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/bench/experiments/int32x4-bytearray/runtime-audit.py", line 348, in inspect_graph
+    require(not reference or n['id'] in allowed_bytes, 'Residual private carrier/vector/payload reference: ' + stamp)
+  File "/home/ekmett/ai/thc-int32x4-bytearray-01a0cdeb/bench/experiments/int32x4-bytearray/runtime-audit.py", line 20, in require
+    raise AssertionError(message)
+AssertionError: Residual private carrier/vector/payload reference: a!# byte[]

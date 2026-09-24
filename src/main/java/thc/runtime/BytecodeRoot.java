@@ -825,6 +825,29 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class IndexVector32Array {
+        @Specialization public static Int32X4 index(boolean scalarOffset, Object value, long index) {
+            return Int32X4.readArray(ManagedByteArray.require(value), index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class ReadVector32Array {
+        @Specialization public static Int32X4 read(boolean scalarOffset, Object value, long index, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            return Int32X4.readArray(array, index, scalarOffset);
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    public static final class WriteVector32Array {
+        @Specialization public static Object write(boolean scalarOffset, Object value, long index, Int32X4 vector, Object state) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            Int32X4.writeArray(array, index, vector, scalarOffset);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
     @Operation public static final class WriteIntArray {
         @Specialization public static Object write(Object value, long index, long integer, Object state) {
             byte[] array = ManagedByteArray.require(value);
