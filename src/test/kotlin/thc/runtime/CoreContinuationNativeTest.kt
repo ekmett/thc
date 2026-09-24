@@ -1791,4 +1791,45 @@ class CoreContinuationNativeTest {
             } finally { context.leave() }
         }
     }
+
+    @Test fun asyncEnabledOrdinaryCoreKeepsTypedTuplesAndStagedCalls() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        val oracle = File(root, "build/core-continuation/native-output.txt").readLines()
+        // These are ordinary GHC roots with no async request. The public parser
+        // enables continuation capture even for their tuple and staged-call paths.
+        val cases = listOf(
+            Triple("applicationAnswer", 1, 208L),
+            Triple("typedScalarAnswer", 13, 209L),
+            Triple("overapplicationThunk", 14, 209L),
+            Triple("tupleApplicationAnswer", 5, 114L),
+            Triple("tupleOverapplicationThunk", 6, 114L))
+        executionContext().use { context ->
+            context.initialize("thc")
+            entered(context) {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for ((entry, oracleLine, expected) in cases) {
+                    assertEquals(expected.toString(), oracle[oracleLine], "$entry native result")
+                    val linked = CoreModules.reachable(module, entry, strictLink = true)
+                    val ordinary = BytecodeProgram(language, linked)
+                    val async = BytecodeProgram(language, linked, true)
+                    fun result(program: BytecodeProgram): Long {
+                        val target = program.entryTarget(entry)
+                        val answer = Calls.target(target, arrayOf(0L)) as DataValue
+                        return answer.layout.readLong(answer, 0)
+                    }
+                    assertEquals(expected, result(ordinary), "$entry ordinary interpreted")
+                    assertEquals(expected, result(async), "$entry async interpreted")
+                    val target = async.entryTarget(entry)
+                    assertTrue((target.rootNode as BytecodeRoot).isAsyncEnabled, "$entry uses public parser mode")
+                    compile(target)
+                    val before = (async.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    assertEquals(expected, result(async), "$entry async compiled")
+                    assertTrue((async.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
+                        "$entry must enter installed guest code")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), entry)
+                }
+            }
+        }
+    }
 }
