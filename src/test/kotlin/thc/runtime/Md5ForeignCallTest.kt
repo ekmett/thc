@@ -40,7 +40,7 @@ class Md5ForeignCallTest {
             "bindings" to listOf(mapOf("id" to "root", "name" to "root", "arity" to reps.size, "lifted" to true, "rep" to closure,
                 "expr" to listOf("lam", formals, body, mapOf("rep" to closure, "resultRep" to long)))))
     }
-    private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
+    private fun context() = Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
     private fun valid(target: RootCallTarget) = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))

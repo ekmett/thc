@@ -42,16 +42,39 @@ foreign calls retain their unsupported-global boundary. Wrong contracts for
 these known symbols fail explicitly, including main-unit declarations, safe or
 interruptible calls, CApi, dynamic targets and wrong CInt width.
 
-The port follows the pinned GHC 9.14.1 public-domain `md5.c`/`md5.h`, preserved
-with their original notice under `bench/experiments/pinned-addresses/reference`.
+The implementation executes the pinned GHC 9.14.1 public-domain `md5.c`/`md5.h`
+through Sulong 25.3.4.1. The original files and notice remain unchanged under
+`bench/experiments/pinned-addresses/reference`. `scripts/build-cbits.py` checks
+their pinned Git blob hashes and compiles them with a small byte-buffer ABI
+adapter during the Gradle resource build. Clang and the installed GHC 9.14.1
+headers are required. The compiler target must match the current Linux/macOS
+64-bit host; a packaged runtime also rejects bitcode for a different platform.
+`THC_CLANG` can select the compiler; no local bitcode is committed for other hosts.
 The entire 88-byte context is guest-visible: four hash words, two counter words
 and 64 scratch bytes. Init leaves scratch untouched; Final emits 16 bytes then
 clears the context. Native-endian context words, little-endian MD5 input and the
 original Haskell Fingerprint's separate big-endian Storable layout are distinct.
 No Java digest object or hidden context-identity table substitutes for this ABI.
 All range and memcpy-overlap checks precede effects; negative/out-of-range CInt
-lengths reject. The MD5 kernel is an explicit Truffle boundary, not a claim of
-fully guest-inlined hashing or a cryptographic security recommendation.
+lengths reject. The THC call is an explicit Truffle boundary; Sulong executes
+the C body. This establishes no cross-language inlining or hashing-throughput
+claim.
+
+Each THC context caches its C executable values. A byte-buffer interop view
+shares the existing allocation and exposes typed, byte-addressed accesses;
+array-element interop would give incorrect C word reinterpretation. C adapters
+receive a canonical base and explicit byte offset, preserving zero-offset and
+alias behavior without treating a buffer as named C struct members. Both keys
+and values in the context's view cache are weak, so the cache cannot keep dead
+allocations alive. Live calls strongly retain their views. Literals remain
+read-only; no process pointer is invented and no payload is copied.
+
+Embedding contexts that execute cbits must explicitly enable native access for
+Sulong's runtime libraries (`allowNativeAccess(true)`); the command-line context
+does so. The buffer protocol requires no host-object/member access. Other RTS,
+libc and foreign entry points remain outside the exact descriptor gate. Full
+public Fingerprint execution still depends on composing its original source
+closure.
 
 ## Verification and remaining source frontier
 

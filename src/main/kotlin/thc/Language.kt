@@ -128,12 +128,23 @@ object CoreModules {
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = ["application/x-thc-core"], defaultMimeType = "application/x-thc-core",
-    contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
+    dependentLanguages = ["llvm"], contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
 class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
-    class State
-    override fun createContext(env: Env): State = State()
+    class State(private val env: Env) {
+        private var cbits: thc.runtime.SulongCbits? = null
+        @CompilerDirectives.TruffleBoundary
+        internal fun cbits(): thc.runtime.SulongCbits {
+            if (!env.isNativeAccessAllowed) throw thc.runtime.RuntimeFault("C bitcode requires native access for the Sulong runtime")
+            return cbits ?: thc.runtime.SulongCbits(env).also { cbits = it }
+        }
+    }
+    companion object {
+        private val state = ContextReference.create(Language::class.java)
+        internal fun currentState(): State = state.get(null)
+    }
+    override fun createContext(env: Env): State = State(env)
     @Suppress("UNCHECKED_CAST")
     override fun parse(request: ParsingRequest): CallTarget {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>

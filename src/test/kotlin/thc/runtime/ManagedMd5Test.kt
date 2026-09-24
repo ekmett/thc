@@ -10,6 +10,17 @@ import thc.Json
 
 /** Direct checked C ABI tests, not public Haskell Fingerprint/FFI execution. */
 class ManagedMd5Test {
+    private lateinit var cbitsContext: org.graalvm.polyglot.Context
+    @org.junit.jupiter.api.BeforeEach fun enterCbitsContext() {
+        cbitsContext = org.graalvm.polyglot.Context.newBuilder("thc").allowNativeAccess(true).build()
+        cbitsContext.initialize("thc")
+        cbitsContext.enter()
+    }
+    @org.junit.jupiter.api.AfterEach fun closeCbitsContext() {
+        cbitsContext.leave()
+        cbitsContext.close()
+    }
+
     private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
     private fun unhex(value: String) = value.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
     private fun address(bytes: ByteArray, offset: Int = 0) = ManagedAddress.fromByteArray(bytes).plus(offset.toLong())

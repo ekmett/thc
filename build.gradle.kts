@@ -10,6 +10,7 @@ dependencies {
     implementation("org.graalvm.polyglot:polyglot:$graalVersion")
     implementation("org.graalvm.truffle:truffle-api:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    runtimeOnly("org.graalvm.polyglot:llvm-native:$graalVersion")
     kapt("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -142,3 +143,16 @@ tasks.register<JavaExec>("probe") {
 
 // Vector intrinsics are isolated in Java; floating vectors retain fixed species.
 tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }
+
+// Compile the pinned original cbits, never a translated implementation.
+val compileCbits by tasks.registering(Exec::class) {
+    inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c",
+        "bench/experiments/pinned-addresses/reference/md5.c",
+        "bench/experiments/pinned-addresses/reference/md5.h")
+    outputs.dir(layout.buildDirectory.dir("generated/cbits"))
+    // Native compiler/header/host identity is checked on every build.
+    outputs.upToDateWhen { false }
+    commandLine("python3", "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
+tasks.processResources { dependsOn(compileCbits) }

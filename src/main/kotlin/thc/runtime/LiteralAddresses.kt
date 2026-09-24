@@ -13,6 +13,12 @@ internal class ManagedAddress private constructor(
     private val mutableBytes: ByteArray?,
     private val offset: Long
 ) {
+    // Package-internal views for original C bitcode; callers never obtain a
+    // process pointer and the byte storage is not copied or replaced.
+    internal fun cbitsBacking(): ByteArray = literalBytes ?: mutableBytes!!
+    internal fun cbitsWritable(): Boolean = mutableBytes != null
+    internal fun cbitsOffset(): Long = offset
+
     private fun size(): Long = (literalBytes?.size ?: mutableBytes!!.size).toLong()
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
