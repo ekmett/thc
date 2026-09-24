@@ -17,9 +17,13 @@ The current frame uses the explicit capture node. Older frames use their own
 `FrameInstance.callNode`: that node belongs to the caller and invokes the next
 newer frame. Moving it to the next frame would misattribute every callsite.
 Bytecode callers use `BytecodeLocation.get(frameInstance)` and materialize source
-information when necessary. A bytecode-adopted current node uses its current
-frame and operation node to resolve the location. Frame access is temporary and
-read-only. No frame, arguments, call target, node, bytecode location, `Source`,
+information when necessary. A bytecode-adopted current node must pass the actual
+operation frame to `capture(currentNode, currentBytecodeFrame)`; omitting it
+fails. The documented `BytecodeNode.getBytecodeLocation(frame, node)` resolves
+that location. `FrameInstance.getFrame` is deliberately not used: the Bytecode
+DSL may execute a different frame, for example in a resumed continuation. Frame
+access is temporary and read-only. Root-only source fallbacks are marked `ROOT`,
+not as current/caller source locations. No frame, arguments, call target, node, bytecode location, `Source`,
 or `SourceSection` is retained in the result.
 
 AST nodes expose Core note IDs, labels and original coordinates. The current
@@ -40,6 +44,8 @@ are separate work; this snapshot deliberately retains no guest payloads.
 `ManagedStackSnapshotTest` exercises synthetic Core through real AST and bytecode
 loaders, with a test capture callback as the newest guest frame. It checks frame
 order and caller source locations before and after explicit compilation with
-inlining enabled/disabled, missing source metadata, original AST note coordinates,
-immutability after return, and fail-closed invalid capture sites. These are JVM
+inlining enabled/disabled, missing source metadata, root-fallback provenance,
+original AST note coordinates, immutability after return and synchronous unwind
+through both backends (including context close), and fail-closed invalid capture
+sites. The current-frame bytecode operation path is not yet exercised. These are JVM
 protocol tests, not native GHC snapshot comparisons or a complete library bridge.

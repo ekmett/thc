@@ -12,6 +12,7 @@ import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.NodeUtil
 import com.oracle.truffle.api.source.Source
+import com.oracle.truffle.api.source.SourceSection
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -26,18 +27,25 @@ class ManagedStackSnapshotTest {
         var snapshot: ManagedStackSnapshot? = null
         var differentNode: Node? = null
         var compiledEntries = 0
+        var throwAfterCapture = false
+        var beforeUnwind: List<String>? = null
         override fun execute(frame: VirtualFrame): Any {
             if (CompilerDirectives.inCompiledCode()) compiledEntries++
             snapshot = ManagedStackSnapshot.capture(differentNode ?: this)
+            if (throwAfterCapture) {
+                beforeUnwind = snapshot!!.renderLines()
+                throw GuestException(snapshot, this)
+            }
             return 7L
         }
     }
-    private class Probe(language: Language?, location: CoreSourceLocation?) : GuestRoot(language, FrameLayout().build()) {
+    private class Probe(language: Language?, location: CoreSourceLocation?, private val rootSection: SourceSection? = null) : GuestRoot(language, FrameLayout().build()) {
         @Child var body = Capture().also { it.located(location) }
         var label = "capture-probe"
         override fun execute(frame: VirtualFrame): Any = body.execute(frame)
         override fun bloom(frame: VirtualFrame) = 0L
         override fun getName() = label
+        override fun getSourceSection() = rootSection
     }
 
     private fun location(notes: List<CoreSourceNote> = emptyList()): CoreSourceLocation {
@@ -194,6 +202,58 @@ class ManagedStackSnapshotTest {
         assertEquals(92, note.endLine); assertEquals(1, note.endColumn)
         assertEquals(91, note.source.endLine); assertEquals(11, note.source.endColumn)
         detached(snapshot)
+    }
+
+    @Test fun rootFallbackIsNotMislabelledAsCurrentOrCallerLocation() {
+        val section = location().section
+        val probe = Probe(null, null, section)
+        val caller = object : GuestRoot(null, FrameLayout().build()) {
+            @Child var call = DirectCallNode.create(probe.callTarget)
+            override fun execute(frame: VirtualFrame): Any? = Calls.direct(call, arrayOf(0L))
+            override fun bloom(frame: VirtualFrame) = 0L
+            override fun getName() = "root-only-caller"
+            override fun getSourceSection() = section
+        }
+        assertEquals(7L, Calls.target(caller.callTarget, arrayOf(0L)))
+        val snapshot = requireNotNull(probe.body.snapshot)
+        assertEquals(listOf("capture-probe", "root-only-caller"), snapshot.frames.map { it.functionName })
+        assertEquals(listOf(ManagedStackLocationKind.ROOT, ManagedStackLocationKind.ROOT), snapshot.frames.map { it.locationKind })
+        assertTrue(snapshot.frames.all { it.location?.startLine == 91 })
+        probe.body.differentNode = probe
+        assertEquals(7L, Calls.target(probe.callTarget, arrayOf(0L)))
+        assertEquals(ManagedStackLocationKind.ROOT, probe.body.snapshot!!.frames.single().locationKind)
+    }
+
+    @Test fun captureBeforeSynchronousUnwindRemainsStableAfterGuestFramesAndContextReturn() {
+        for (backend in listOf("ast", "bytecode")) {
+            lateinit var retained: ManagedStackSnapshot
+            lateinit var rendered: List<String>
+            context(false).use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, module()) else BytecodeProgram(language, module())
+                    val probe = Probe(language, location())
+                    probe.body.throwAfterCapture = true
+                    val failure = assertThrows(GuestException::class.java) {
+                        Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("entry"),
+                            arrayOf<Any?>(Closure(null, arity = 1, target = probe.callTarget))))
+                    }
+                    retained = requireNotNull(probe.body.snapshot)
+                    assertSame(retained, failure.payload)
+                    rendered = requireNotNull(probe.body.beforeUnwind)
+                    assertEquals(listOf("capture-probe", "lambda innerCallback", "lambda outerCallback"), retained.frames.map { it.functionName })
+                    assertEquals(listOf(91, 4, 2), retained.frames.map { it.location?.startLine })
+                    assertEquals(rendered, retained.renderLines())
+                    probe.label = "changed-after-unwind"; probe.body.coreSourceLocation = null
+                    val handoff = language.handoffState.get()
+                    assertEquals(0, handoff.results.depth); assertEquals(0, handoff.results.retainedReferences())
+                    assertEquals(0, handoff.arguments.depth); assertEquals(0, handoff.arguments.retainedReferences())
+                } finally { context.leave() }
+            }
+            assertEquals(rendered, retained.renderLines(), "$backend snapshot survives unwinding and context close")
+            detached(retained)
+        }
     }
 
     @Test fun absentInactiveAndWrongCurrentGuestNodesFailInsteadOfReturningEmptySnapshots() {

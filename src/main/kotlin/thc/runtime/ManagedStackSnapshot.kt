@@ -8,7 +8,7 @@ import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.bytecode.BytecodeLocation
 import com.oracle.truffle.api.bytecode.BytecodeNode
-import com.oracle.truffle.api.frame.FrameInstance
+import com.oracle.truffle.api.frame.Frame
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.source.SourceSection
 import java.util.Collections
@@ -57,11 +57,29 @@ class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>) 
     })
 
     companion object {
-        /** [current] must belong to the newest live GuestRoot, not a caller or an inactive tree. */
-        @JvmStatic @TruffleBoundary
-        fun capture(current: Node): ManagedStackSnapshot {
+        /**
+         * [current] must belong to the newest live GuestRoot, not a caller or an inactive tree.
+         * Bytecode operations must also pass their actual execution frame, used only during capture.
+         */
+        @JvmStatic @JvmOverloads
+        fun capture(current: Node, currentBytecodeFrame: Frame? = null): ManagedStackSnapshot {
             val currentRoot = current.rootNode as? GuestRoot
                 ?: throw RuntimeFault("Stack capture requires an adopted current guest node")
+            // Resolve the actual operation frame before crossing the boundary; Frames must not
+            // escape compiled code into a TruffleBoundary, even for temporary read-only access.
+            val currentBytecodeLocation = if (currentRoot is BytecodeRoot) {
+                val executionFrame = currentBytecodeFrame
+                    ?: throw RuntimeFault("Top bytecode stack capture requires its current execution frame")
+                val bytecodeNode = BytecodeNode.get(current)
+                    ?: throw RuntimeFault("Top bytecode stack capture requires an adopted operation node")
+                bytecodeNode.getBytecodeLocation(executionFrame, current)
+            } else null
+            return captureFrames(current, currentRoot, currentBytecodeLocation)
+        }
+
+        @TruffleBoundary
+        private fun captureFrames(current: Node, currentRoot: GuestRoot,
+                                  currentBytecodeLocation: BytecodeLocation?): ManagedStackSnapshot {
             val captured = ArrayList<ManagedStackFrame>()
             Truffle.getRuntime().iterateFrames<Any?> { frame ->
                 val root = (frame.callTarget as? RootCallTarget)?.rootNode as? GuestRoot
@@ -73,19 +91,17 @@ class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>) 
                     // target, not this target's caller. The top frame needs the explicit current node.
                     val node = if (top) current else frame.callNode
                     val bytecode = if (root is BytecodeRoot) {
-                        if (top) BytecodeNode.get(current)?.getBytecodeLocation(
-                            frame.getFrame(FrameInstance.FrameAccess.READ_ONLY), current)
+                        if (top) currentBytecodeLocation
                         else BytecodeLocation.get(frame)
                     } else null
                     val bytecodeSections = bytecode?.ensureSourceInformation()?.sourceLocations?.toList().orEmpty()
                     val core = coreLocation(node)
-                    val section = bytecodeSections.firstOrNull() ?: core?.section ?: node?.encapsulatingSourceSection
-                        ?: root.sourceSection
+                    val localSection = core?.section ?: nodeSection(node, root)
+                    val section = bytecodeSections.firstOrNull() ?: localSection ?: root.sourceSection
                     val kind = when {
                         bytecodeSections.isNotEmpty() -> ManagedStackLocationKind.BYTECODE
                         section == null -> ManagedStackLocationKind.UNAVAILABLE
-                        top -> ManagedStackLocationKind.CURRENT_NODE
-                        node != null -> ManagedStackLocationKind.CALL_NODE
+                        localSection != null -> if (top) ManagedStackLocationKind.CURRENT_NODE else ManagedStackLocationKind.CALL_NODE
                         else -> ManagedStackLocationKind.ROOT
                     }
                     val notes = core?.notes ?: (root as? FunctionRoot)?.getCoreSourceNotes().orEmpty()
@@ -107,6 +123,18 @@ class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>) 
             var cursor = node
             while (cursor != null) {
                 if (cursor is Expr && cursor.coreSourceLocation != null) return cursor.coreSourceLocation
+                cursor = cursor.parent
+            }
+            return null
+        }
+
+        private fun nodeSection(node: Node?, root: GuestRoot): SourceSection? {
+            var cursor = node
+            while (cursor != null && cursor !== root) {
+                // Expr.getSourceSection inherits its parent's encapsulating section, possibly the
+                // root's. Inspect its own metadata so that root fallback keeps ROOT provenance.
+                val section = if (cursor is Expr) cursor.coreSourceLocation?.section else cursor.sourceSection
+                if (section != null) return section
                 cursor = cursor.parent
             }
             return null
