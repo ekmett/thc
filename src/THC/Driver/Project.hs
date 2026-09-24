@@ -6,7 +6,8 @@
 module THC.Driver.Project (runProject) where
 
 import Control.Exception (bracket, finally)
-import Control.Monad (filterM, forM, unless, when)
+import Control.Monad (filterM, forM, forM_, unless, when)
+import Data.Char (isAlphaNum, isHexDigit)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (FromJSON, Value(..), eitherDecodeStrict', encode, object, (.=))
 import qualified Data.Aeson as Aeson
@@ -20,8 +21,10 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Numeric (showHex)
 import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMissing,
-                         doesDirectoryExist, doesFileExist, listDirectory, makeAbsolute,
-                         removeFile, removePathForcibly, renameFile)
+                         doesDirectoryExist, doesFileExist, findExecutable, getPermissions,
+                         listDirectory, makeAbsolute, removeFile, removePathForcibly,
+                         renameFile, setPermissions)
+import qualified System.Directory as Directory
 import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath)
 import System.FilePath ((</>), isAbsolute, makeRelative, normalise, splitDirectories,
@@ -58,7 +61,8 @@ data ExportContext = ExportContext
   { contextCompiler :: String, contextAbi :: String, contextPlatform :: String
   , contextPluginDb :: FilePath, contextPluginUnit :: String
   , contextPluginLibrary :: FilePath, contextOutput :: FilePath
-  , contextNative :: FilePath, contextCache :: FilePath, contextDriverHash :: String }
+  , contextNative :: FilePath, contextCache :: FilePath, contextDriverHash :: String
+  , contextGhc :: FilePath, contextDriver :: FilePath }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -102,14 +106,17 @@ runProject opts target = do
                   maybe [] (\path -> ["--with-compiler", path]) (ghcPath flags) ++
                   maybe [] (\path -> ["--with-hc-pkg", path]) (ghcPkgPath flags)
   createDirectoryIfMissing True output
+  compiler <- case ghcPath flags of
+    Just path -> canonicalizePath path
+    Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") canonicalizePath
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
-                    pluginDb pluginUnit pluginLibrary
+                    pluginDb pluginUnit pluginLibrary compiler
 
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
-                   String -> [String] -> FilePath -> String -> FilePath -> IO ()
+                   String -> [String] -> FilePath -> String -> FilePath -> FilePath -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
-                pluginDb pluginUnit pluginLibrary = do
+                pluginDb pluginUnit pluginLibrary ghc = do
   runCommand True "cabal" cabalArgs project
   plan <- readJson (native </> "cache/plan.json")
   cabalVersion <- field plan "cabal-version"
@@ -120,9 +127,10 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   os <- field plan "os"
   arch <- field plan "arch"
   cacheRoot <- coreCacheDirectory
-  driverHash <- getExecutablePath >>= digestFile
+  driver <- getExecutablePath
+  driverHash <- digestFile driver
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary output native cacheRoot driverHash
+                              pluginLibrary output native cacheRoot driverHash ghc driver
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -130,15 +138,18 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   selected <- selectExecutable executable units
   closures <- mapM (dependencyClosure byId . unitId) (filter unitLocal units)
   let ordered = nubBy (\a b -> unitId a == unitId b) (concat closures)
+      globals = [unit | unit <- ordered, not (unitLocal unit),
+                       jsonField (unitValue unit) "type" == Just ("configured" :: String)]
+  globalBundles <- prepareGlobalBundles context project globals
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
     bundle <- if unitLocal unit
       then Just <$> exportUnit context keys unit
       else do
-        require (kind /= "configured")
-          ("Cabal store component " ++ unitId unit ++
-           " has no retained build-info; THC cannot export its source Core yet")
-        pure Nothing
+        if kind == "configured" then Just <$> maybe
+          (fail ("Core bundle missing for Cabal store component " ++ unitId unit)) pure
+          (Map.lookup (unitId unit) globalBundles)
+        else pure Nothing
     let modules = maybe [] bundleModules bundle
         fields = ["id" .= unitId unit, "depends" .= unitDepends unit, "modules" .= modules] ++
                  maybe [] (\item -> ["bundle" .= object ["path" .= bundlePath item,
@@ -205,6 +216,172 @@ dependencyClosure units target = snd <$> visit Set.empty Set.empty target
               (more, result) <- visit (Set.insert identifier active) found dependency
               pure (more, ordered ++ result)) (seen, []) (unitDepends unit)
             pure (Set.insert identifier visited, dependencies ++ [unit])
+
+-- Cabal's source-built store ID is the immutable package identity. Unlike
+-- local -inplace IDs, it already includes Cabal's source/configuration hash.
+globalLocation :: ExportContext -> Unit -> IO (String, String, FilePath)
+globalLocation context unit = do
+  sourceHash <- field (unitValue unit) "pkg-src-sha256" :: IO String
+  require (length sourceHash == 64 && all isHexDigit sourceHash &&
+           all (\c -> isAlphaNum c || c `elem` ("-._" :: String)) (unitId unit))
+    ("Cabal store source identity is invalid for " ++ unitId unit)
+  let buildKey = shaHex (BL.toStrict (encode
+        ("thc-core-store-build-v1" :: String, contextCompiler context,
+         contextAbi context, contextPlatform context, unitId unit,
+         sourceHash, unitDepends unit)))
+  exporter <- exporterIdentity context
+  let exportKey = shaHex (BL.toStrict (encode
+        ("thc-core-export-v1" :: String, buildKey, exporter)))
+      destination = contextCache context </> "core-bundles/v1" </>
+        (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context) </>
+        exportKey </> (unitId unit ++ ".zip")
+  pure (buildKey, exportKey, destination)
+
+exporterIdentity :: ExportContext -> IO Value
+exporterIdentity context = do
+  pluginHash <- digestFile (contextPluginLibrary context)
+  pure $ object ["pluginUnit" .= contextPluginUnit context,
+                 "pluginDb" .= contextPluginDb context,
+                 "pluginHash" .= pluginHash,
+                 "driverHash" .= contextDriverHash context,
+                 "options" .= (["post-tidy", "unit-qualified", "source-notes",
+                                "-g", "-dynamic", "-dcore-lint"] :: [String])]
+
+prepareGlobalBundles :: ExportContext -> FilePath -> [Unit] -> IO (Map.Map String Bundle)
+prepareGlobalBundles _ _ [] = pure Map.empty
+prepareGlobalBundles context project units = do
+  let lockDir = contextCache context </> "core-bundles/v1"
+  createDirectoryIfMissing True lockDir
+  withLock (lockDir </> "global-export.lock") $ do
+    located <- forM units $ \unit -> do
+      (buildKey, exportKey, path) <- globalLocation context unit
+      cached <- doesFileExist path
+      hit <- if cached then readGlobalBundle path (unitId unit) buildKey exportKey
+             else pure Nothing
+      pure (unit, buildKey, exportKey, path, hit)
+    let missing = [(unit, buildKey, exportKey, path)
+                  | (unit, buildKey, exportKey, path, Nothing) <- located]
+    when (not (null missing)) $ captureGlobalUnits context project (map first4 missing) missing
+    pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
+      bundle <- case hit of
+        Just value -> pure value
+        Nothing -> do
+          ready <- readGlobalBundle path (unitId unit) buildKey exportKey
+          maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
+      pure (unitId unit, bundle)
+    pure (Map.fromList pairs)
+  where first4 (unit, _, _, _) = unit
+
+captureGlobalUnits :: ExportContext -> FilePath -> [Unit] ->
+                      [(Unit, String, String, FilePath)] -> IO ()
+captureGlobalUnits context project requested missing = do
+  let stagingRoot = contextOutput context </> "core/staging"
+  createDirectoryIfMissing True stagingRoot
+  (staging, handle) <- openTempFile stagingRoot "store-export-"
+  hClose handle
+  removeFile staging
+  createDirectory staging
+  let cleanup = do exists <- doesDirectoryExist staging
+                   when exists (removePathForcibly staging)
+  (do
+    let wrapper = staging </> "ghc-proxy.sh"
+        store = staging </> "store"
+        dist = staging </> "dist"
+        capture = staging </> "capture"
+        arguments = ["--store-dir=" ++ store, "build", "all", "--offline",
+                     "--enable-build-info", "--project-file", "cabal.project",
+                     "--builddir", dist, "--with-compiler", wrapper]
+    writeFile wrapper "#!/bin/sh\nexec \"$THC_PROXY_DRIVER\" ghc-proxy \"$@\"\n"
+    permissions <- getPermissions wrapper
+    setPermissions wrapper (permissions {Directory.executable = True})
+    inherited <- getEnvironment
+    let overrides = [("THC_PROXY_DRIVER", contextDriver context),
+                     ("THC_PROXY_GHC", contextGhc context),
+                     ("THC_PROXY_CAPTURE", capture),
+                     ("THC_PROXY_PLUGIN_DB", contextPluginDb context),
+                     ("THC_PROXY_PLUGIN_UNIT", contextPluginUnit context),
+                     ("THC_PROXY_GLOBAL_UNITS", unlines (map unitId requested))]
+        environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
+    runCommandWithEnv True "cabal" arguments project (Just environment)
+    plan <- readJson (dist </> "cache/plan.json")
+    isolated <- mapM readUnit =<< field plan "install-plan"
+    let byId = Map.fromList [(unitId unit, unit) | unit <- isolated]
+    forM_ missing $ \(unit, buildKey, exportKey, path) -> do
+      rebuilt <- maybe (fail ("isolated Cabal plan omitted store unit " ++ unitId unit)) pure
+                 (Map.lookup (unitId unit) byId)
+      originalHash <- field (unitValue unit) "pkg-src-sha256" :: IO String
+      rebuiltHash <- field (unitValue rebuilt) "pkg-src-sha256" :: IO String
+      require (originalHash == rebuiltHash && unitDepends unit == unitDepends rebuilt)
+        ("isolated Cabal build changed store identity for " ++ unitId unit)
+      createDirectoryIfMissing True (takeDirectory path)
+      withLock (path ++ ".lock") $
+        packGlobalBundle capture unit buildKey exportKey path
+    ) `finally` cleanup
+
+packGlobalBundle :: FilePath -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundle capture unit buildKey exportKey destination = do
+  let core = capture </> unitId unit </> "core"
+  exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
+  require (not (null exported))
+    ("Cabal store build did not export Core for " ++ unitId unit)
+  checked <- forM exported $ \path -> do
+    value <- readJson path
+    foundUnit <- field value "unit"
+    foundBoundary <- field value "boundary" :: IO String
+    name <- field value "module" :: IO String
+    require (foundUnit == unitId unit && foundBoundary == boundary)
+      ("store Core artifact has wrong owner or boundary: " ++ path)
+    bytes <- BS.readFile path
+    pure (name, bytes)
+  let sorted = sortOn fst checked
+      names = map fst sorted
+  require (length names == length (nub names))
+    ("duplicate exported store modules for " ++ unitId unit)
+  let members = [("core/" ++ show index ++ ".json", bytes)
+                | (index, (_, bytes)) <- zip [0 :: Int ..] sorted]
+      modules = [object ["name" .= name, "boundary" .= boundary,
+                         "path" .= member, "sha256" .= shaHex bytes]
+                | ((name, bytes), (member, _)) <- zip sorted members]
+      inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+                      "unit" .= unitId unit, "buildKey" .= buildKey,
+                      "exportKey" .= exportKey, "modules" .= modules]
+  archive <- either fail pure (encodeZip (("manifest.json", BL.toStrict (encode inner)) : members))
+  atomicBytes destination (BL.toStrict archive)
+
+readGlobalBundle :: FilePath -> String -> String -> String -> IO (Maybe Bundle)
+readGlobalBundle path unit buildKey exportKey = do
+  bytes <- BS.readFile path
+  decoded <- decodeZip bytes
+  pure $ do
+    entries <- either (const Nothing) Just decoded
+    raw <- lookup "manifest.json" entries
+    inner <- either (const Nothing) Just (eitherDecodeStrict' raw)
+    modules <- jsonField inner "modules" :: Maybe [Value]
+    let names = [name | Just name <- map (`jsonField` "name") modules :: [Maybe String]]
+        paths = [member | Just member <- map (`jsonField` "path") modules :: [Maybe String]]
+        validModule item = do
+          name <- jsonField item "name" :: Maybe String
+          member <- jsonField item "path" :: Maybe String
+          digest <- jsonField item "sha256" :: Maybe String
+          foundBoundary <- jsonField item "boundary" :: Maybe String
+          body <- lookup member entries
+          artifact <- either (const Nothing) Just (eitherDecodeStrict' body)
+          owner <- jsonField artifact "unit" :: Maybe String
+          actual <- jsonField artifact "module" :: Maybe String
+          artifactBoundary <- jsonField artifact "boundary" :: Maybe String
+          pure (shaHex body == digest && foundBoundary == boundary &&
+                owner == unit && actual == name && artifactBoundary == boundary)
+    if (jsonField inner "format" == Just ("thc-core-bundle" :: String) &&
+        jsonField inner "schema" == Just (1 :: Int) &&
+        jsonField inner "unit" == Just unit &&
+        jsonField inner "buildKey" == Just buildKey &&
+        jsonField inner "exportKey" == Just exportKey &&
+        not (null modules) && length names == length modules &&
+        length paths == length modules && length names == length (nub names) &&
+        sort (map fst entries) == sort ("manifest.json" : paths) &&
+        all (== Just True) (map validModule modules))
+      then Just (Bundle path (shaHex bytes) modules buildKey)
+      else Nothing
 
 exportUnit :: ExportContext -> Map.Map String String -> Unit -> IO Bundle
 exportUnit context keys unit = do

@@ -1,0 +1,13 @@
+cabal-version: 3.0
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: app-store
+version: 0.1.0.0
+license: BSD-3-Clause
+build-type: Simple
+executable completed
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base >=4.22 && <4.23, dep-data ==0.1.0.0
+  default-language: Haskell2010

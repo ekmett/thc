@@ -8,6 +8,7 @@ import Test.HUnit (Test(..), Counts(..), runTestTT)
 import qualified PlanTests
 import qualified RunTests
 import qualified ProjectTests
+import qualified StoreProjectTests
 import TestSupport (setup)
 
 main :: IO ()
@@ -17,5 +18,6 @@ main = do
     [ PlanTests.tests env
     , RunTests.tests env
     , ProjectTests.tests env
+    , StoreProjectTests.tests env
     ]
   if errors counts + failures counts == 0 then pure () else exitFailure

@@ -12,6 +12,7 @@ import System.Exit (die)
 import System.FilePath ((</>))
 import System.IO (hSetEncoding, stderr, stdout, utf8)
 import THC.Driver.Cabal
+import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
 import THC.Driver.Project (runProject)
 import THC.Driver.Run
@@ -22,6 +23,7 @@ main = topHandler $ do
   hSetEncoding stderr utf8
   args <- getArgs
   case args of
+    "ghc-proxy" : rest -> runGhcProxy rest
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
     ["run", "--help"] -> putStr runUsage

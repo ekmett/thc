@@ -25,6 +25,11 @@ extra-source-files:
   test/fixtures/run-project/app-run/app-run.cabal
   test/fixtures/run-project/app-run/src/Bridge.hs
   test/fixtures/run-project/app-run/app/Main.hs
+  test/fixtures/run-store-project/cabal.project
+  test/fixtures/run-store-project/app/app.cabal
+  test/fixtures/run-store-project/app/app/Main.hs
+  test/fixtures/run-store-project/dep-data/dep-data.cabal
+  test/fixtures/run-store-project/dep-data/src/Answer.hs
   test/fixtures/tiny/tiny-fixture.cabal
   test/fixtures/tiny/words/Words.hs
   test/fixtures/tiny/src/Greeting.hs
@@ -67,6 +72,7 @@ executable thc
   other-modules:
     THC.Driver.Cabal
     THC.Driver.Cache
+    THC.Driver.GhcProxy
     THC.Driver.Json
     THC.Driver.Project
     THC.Driver.Run
@@ -98,6 +104,7 @@ test-suite driver-tests
     PlanTests
     RunTests
     ProjectTests
+    StoreProjectTests
   build-tool-depends: thc:thc
   build-depends:
     base >= 4.22 && < 4.23,
