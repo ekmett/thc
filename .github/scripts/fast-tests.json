@@ -12,6 +12,10 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -214,6 +218,14 @@
     },
     "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SmallArrayAudit.hs": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/SmallArrayAuditNative.hs": {
+      "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
     "scripts/prepare-address-identity.sh": {
@@ -591,6 +603,7 @@
     "test/haskell-fixtures/Main.hs": {
       "junit": [
         "thc.runtime.CoreContinuationNativeTest",
+        "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.OriginalStackConsumerProofTest",
@@ -609,6 +622,10 @@
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/SmallArrayFixtures.hs": {
+      "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
     "src/test/kotlin/thc/NumericPrimopCoreEvidence.kt": {

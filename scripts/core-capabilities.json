@@ -599,6 +599,14 @@
     "writeArray#": 4,
     "unsafeFreezeArray#": 2,
     "indexArray#": 2,
+    "newSmallArray#": 3,
+    "readSmallArray#": 3,
+    "writeSmallArray#": 4,
+    "indexSmallArray#": 2,
+    "unsafeFreezeSmallArray#": 2,
+    "sizeofSmallArray#": 1,
+    "sizeofSmallMutableArray#": 1,
+    "getSizeofSmallMutableArray#": 2,
     "cloneArray#": 3,
     "freezeArray#": 4,
     "thawArray#": 4,
@@ -2167,6 +2175,38 @@
     }
   },
   "managedArrayPrimitives": {
+    "newSmallArray#": {
+      "arguments": ["int", "element", "state"],
+      "result": ["state", "array"]
+    },
+    "readSmallArray#": {
+      "arguments": ["array", "int", "state"],
+      "result": ["state", "element"]
+    },
+    "writeSmallArray#": {
+      "arguments": ["array", "int", "element", "state"],
+      "result": "state"
+    },
+    "indexSmallArray#": {
+      "arguments": ["array", "int"],
+      "result": ["element"]
+    },
+    "unsafeFreezeSmallArray#": {
+      "arguments": ["array", "state"],
+      "result": ["state", "array"]
+    },
+    "sizeofSmallArray#": {
+      "arguments": ["array"],
+      "result": "int"
+    },
+    "sizeofSmallMutableArray#": {
+      "arguments": ["array"],
+      "result": "int"
+    },
+    "getSizeofSmallMutableArray#": {
+      "arguments": ["array", "state"],
+      "result": ["state", "int"]
+    },
     "newArray#": {
       "arguments": [
         "int",

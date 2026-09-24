@@ -74,6 +74,17 @@
         "compiler/test-fixtures/PinnedPointerCellsNative.hs"
       ]
     },
+    "small-arrays": {
+      "junit": ["thc.runtime.SmallArrayTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "small-arrays"]}],
+      "outputs": ["build/small-arrays"],
+      "sources": [
+        "test/haskell-fixtures/SmallArrayFixtures.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/SmallArrayAudit.hs",
+        "compiler/test-fixtures/SmallArrayAuditNative.hs"
+      ]
+    },
     "synchronous-exceptions": {
       "junit": ["thc.runtime.SynchronousExceptionsNativeTest"],
       "commands": [

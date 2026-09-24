@@ -1210,6 +1210,35 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     if (operation == ArrayOp.CLONE) e.builder.endCloneArray() else e.builder.endWriteArray()
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && SmallArrayOp.named(fn[1] as String) != null) {
+                val operation = SmallArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    when (operation) {
+                        SmallArrayOp.NEW -> e.builder.beginNewSmallArray(destination[0])
+                        SmallArrayOp.READ -> e.builder.beginReadSmallArray(destination[0])
+                        SmallArrayOp.INDEX -> e.builder.beginIndexSmallArray(destination[0])
+                        SmallArrayOp.FREEZE -> e.builder.beginFreezeSmallArray(destination[0])
+                        SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeSmallMutableArray(destination[0])
+                        else -> error("Not a tuple SmallArray operation")
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (operation) {
+                        SmallArrayOp.NEW -> e.builder.endNewSmallArray()
+                        SmallArrayOp.READ -> e.builder.endReadSmallArray()
+                        SmallArrayOp.INDEX -> e.builder.endIndexSmallArray()
+                        SmallArrayOp.FREEZE -> e.builder.endFreezeSmallArray()
+                        SmallArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeSmallMutableArray()
+                        else -> error("Not a tuple SmallArray operation")
+                    }
+                } else ProvenExpression(Expression { e ->
+                    if (operation == SmallArrayOp.WRITE) e.builder.beginWriteSmallArray()
+                    else e.builder.beginSizeSmallArray()
+                    operands.forEach { it.emit(e) }
+                    if (operation == SmallArrayOp.WRITE) e.builder.endWriteSmallArray()
+                    else e.builder.endSizeSmallArray()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

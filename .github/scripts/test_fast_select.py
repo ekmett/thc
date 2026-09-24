@@ -575,7 +575,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives",
+        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "ManagedSmallArrays",
                           "IntegerVectorPrimitives", "FloatingVectorPrimitives"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():

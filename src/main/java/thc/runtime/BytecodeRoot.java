@@ -1443,6 +1443,72 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class NewSmallArray {
+        @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,
+                long size, Object initial, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedSmallArray.allocate(size, initial));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadSmallArray {
+        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long index, Object state, @Bind("$node") Node node) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedSmallArray.read(array, index));
+        }
+    }
+    @Operation public static final class WriteSmallArray {
+        @Specialization public static Object write(Object reference, long index, Object value, Object state) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedSmallArray.write(array, index, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class IndexSmallArray {
+        @Specialization public static void index(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long index, @Bind("$node") Node node) {
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedSmallArray.read(ManagedSmallArray.require(reference), index));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class FreezeSmallArray {
+        @Specialization public static void freeze(VirtualFrame frame, LocalAccessor destination,
+                Object reference, Object state, @Bind("$node") Node node) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedSmallArray.freeze(array));
+        }
+    }
+    @Operation public static final class SizeSmallArray {
+        @Specialization public static long size(Object reference) {
+            return ManagedSmallArray.size(ManagedSmallArray.require(reference));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class GetSizeSmallMutableArray {
+        @Specialization public static void size(VirtualFrame frame, LocalAccessor destination,
+                Object reference, Object state, @Bind("$node") Node node) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedSmallArray.size(array));
+        }
+    }
+
     /** State operands are evaluated before each effect; only the array has a tuple slot. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

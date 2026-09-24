@@ -192,6 +192,7 @@ executable thc-fixtures
     ContinuationFixtures
     FixtureSupport
     OriginalStdioFixtures
+    SmallArrayFixtures
     StackFixtures
   hs-source-dirs: test/haskell-fixtures
   build-depends:
