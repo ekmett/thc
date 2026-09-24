@@ -34,6 +34,9 @@ class FastSelectionTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.repo = Path(self.temporary.name)
         self.git("init", "-q")
+        # No background Git process should outlive this temporary repository.
+        self.git("config", "maintenance.auto", "false")
+        self.git("config", "gc.auto", "0")
         smoke = dict(junit=["example.SmokeTest"], python=["scripts/test-smoke.py"])
         affected = dict(junit=["example.OtherTest"], python=["scripts/test-other.py"])
         self.policy = dict(schema=2, smoke=smoke,
