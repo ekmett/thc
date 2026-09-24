@@ -180,6 +180,18 @@
     }
   },
   "owners": {
+    "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
+      "junit": [
+        "thc.runtime.ArrayCoreEvidenceTest",
+        "thc.runtime.IntArrayNativeTest",
+        "thc.runtime.Int8ArrayNativeTest",
+        "thc.runtime.Int16ArrayNativeTest",
+        "thc.runtime.Int32ArrayNativeTest",
+        "thc.runtime.DoubleArrayNativeTest",
+        "thc.runtime.FloatWordArrayNativeTest"
+      ],
+      "python": []
+    },
     "compiler/test-fixtures/IoMainPapAudit.hs": {
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "python": ["scripts/test-audit-core.py"]

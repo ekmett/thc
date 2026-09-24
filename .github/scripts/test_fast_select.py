@@ -605,6 +605,17 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                           "thc.SignedNarrowPrimopsTest"},
                          set(owners["src/test/kotlin/thc/PrimopTestContext.kt"]["junit"]))
 
+    def test_array_core_helper_selects_all_consuming_suites(self):
+        group = self.policy["owners"]["src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt"]
+        consumers = set()
+        for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
+            source = path.read_text()
+            if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
+                consumers.update(select.junit_info(source)[0])
+        self.assertEqual(7, len(consumers))
+        self.assertEqual(consumers, set(group["junit"]))
+        self.assertEqual([], group["python"])
+
     def test_control_and_owner_targets_exist_and_are_runnable(self):
         checked_python = set()
         for group in [*self.policy["owners"].values(), *self.policy["primopFamilies"].values(),

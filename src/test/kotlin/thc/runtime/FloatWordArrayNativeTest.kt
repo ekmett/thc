@@ -109,8 +109,12 @@ class FloatWordArrayNativeTest {
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
-    private fun model(name: String, seed: Long): Long {
-        if (name == "moveFloatBits" || name == "indexFloatBits") return seed and 0xffff_ffffL
+    private fun model(name: String, seed: Long, byteOrder: ByteOrder = ByteOrder.nativeOrder()): Long {
+        require(name in names)
+        if (name == "moveFloatBits" || name == "indexFloatBits") {
+            require(!signalingNaN(seed)) { "Signaling NaN movement is outside the evidence domain" }
+            return seed and 0xffff_ffffL
+        }
         if (name.startsWith("unboxedFloat")) {
             // Integer fixed-point quarters: no host floating arithmetic in the model.
             val x = (seed and 65535L) - 32768L
@@ -144,7 +148,7 @@ class FloatWordArrayNativeTest {
         val bytes = LongArray(16) { offset ->
             val value = if (offset < 8) seed else seed xor 0x55aa55aa55aa55aaL
             val position = offset % 8
-            val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) position else 7-position)*8
+            val shift = (if (byteOrder == ByteOrder.LITTLE_ENDIAN) position else 7-position)*8
             (value ushr shift) and 255
         }
         bytes[7] = (seed+101) and 255
@@ -152,7 +156,7 @@ class FloatWordArrayNativeTest {
         fun element(offset: Int): java.math.BigInteger {
             var value = java.math.BigInteger.ZERO
             for (byte in 0..7) {
-                val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 7-byte)*8
+                val shift = (if (byteOrder == ByteOrder.LITTLE_ENDIAN) byte else 7-byte)*8
                 value = value.or(java.math.BigInteger.valueOf(bytes[offset+byte]).shiftLeft(shift))
             }
             return value
@@ -161,36 +165,257 @@ class FloatWordArrayNativeTest {
             17.toBigInteger()*word(bytes[0]) + 19.toBigInteger()*word(bytes[7]) +
             23.toBigInteger()*word(bytes[8]) + 29.toBigInteger()*word(bytes[15])).mod(modulus).toLong()
     }
+    private fun signalingNaN(bits: Long) = bits and 0x7f800000L == 0x7f800000L &&
+        bits and 0x007fffffL != 0L && bits and 0x00400000L == 0L
+    private fun wordInputs(): List<Long> {
+        val values = (-16L..16L).toMutableSet()
+        values.addAll(listOf(Long.MIN_VALUE, Long.MIN_VALUE+1, Long.MAX_VALUE-1, Long.MAX_VALUE))
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            values.add(sign*((1L shl bit)+delta))
+        values.addAll(listOf(0x5555555555555555UL, 0xaaaaaaaaaaaaaaaaUL, 0x55aa55aa55aa55aaUL,
+            0xaa55aa55aa55aa55UL, 0x0123456789abcdefUL, 0xfedcba9876543210UL, 0x8000000080000000UL,
+            0xffffffff00000000UL, 0x800000007fffffffUL, 0x7fffffff80000000UL, 0xffffffff7fffffffUL,
+            0x0000000100000001UL, 0x12345678abcdef01UL).map { it.toLong() })
+        return values.sorted()
+    }
+    private val magnitudes = listOf(0L, 1L, 2L, 3L, 0x007fffffL, 0x00800000L, 0x3f7fffffL,
+        0x3f800000L, 0x3f800001L, 0x7f7fffffL, 0x7f800000L, 0x7fc00000L, 0x7fc01234L, 0x7fffffffL)
+    private fun movementInputs(): List<Long> {
+        val values = wordInputs().toMutableSet()
+        val bits = magnitudes.flatMap { bits -> listOf(bits, bits or 0x80000000L) }.toMutableSet()
+        for (bit in 0..21) for (sign in listOf(0L, 0x80000000L)) bits.add(0x7fc00000L or (1L shl bit) or sign)
+        for (value in bits) for (upper in listOf(0L, 0x1234567800000000L, -0x100000000L)) values.add(value or upper)
+        return values.filterNot(::signalingNaN).sorted()
+    }
+    private fun inputsByEntry() = names.associateWith {
+        if (it in listOf("moveFloatBits", "indexFloatBits")) movementInputs() else wordInputs()
+    }
+    private fun expectedRows() = inputsByEntry().flatMap { (name, values) -> values.map { Triple(name, it, model(name, it)) } }
+    private fun verifyRows(text: String): List<Triple<String, Long, Long>> {
+        val lines = text.lineSequence().toList().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+        val rows = lines.map { line ->
+            val fields = line.split('\t')
+            require(fields.size == 3) { "Float/Word oracle requires name/input/result" }
+            Triple(fields[0], fields[1].toLong(), fields[2].toLong())
+        }
+        require(rows == expectedRows()) { "Float/Word oracle/model mismatch or incomplete, duplicate, reordered inputs" }
+        return rows
+    }
+    @Test fun independentDomainsPreserveFloatBitsAndAllMachineWords() {
+        val words = wordInputs(); val movement = movementInputs()
+        assertEquals(397, words.size); assertEquals(590, movement.size)
+        assertEquals(words.distinct().sorted(), words); assertEquals(movement.distinct().sorted(), movement)
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            assertTrue(sign*((1L shl bit)+delta) in words)
+        assertTrue(words.any(::signalingNaN))
+        for (bits in magnitudes) for (sign in listOf(0L, 0x80000000L))
+            for (upper in listOf(0L, 0x1234567800000000L, -0x100000000L)) assertTrue((bits or sign or upper) in movement)
+        for (bit in 0..21) for (sign in listOf(0L, 0x80000000L))
+            assertTrue((0x7fc00000L or (1L shl bit) or sign) in movement)
+        for (raw in movement) {
+            assertFalse(signalingNaN(raw))
+            for (name in listOf("moveFloatBits", "indexFloatBits")) assertEquals(raw and 0xffffffffL, model(name, raw))
+        }
+        for (raw in listOf(0x7f800001L, 0x7fbfffffL, 0xff800123L)) {
+            assertTrue(signalingNaN(raw))
+            for (name in listOf("moveFloatBits", "indexFloatBits")) assertThrows(IllegalArgumentException::class.java) { model(name, raw) }
+            // Integer storage and bounded public arithmetic do not exclude these words.
+            for (name in names.filterNot { it in listOf("moveFloatBits", "indexFloatBits") }) model(name, raw)
+        }
+        assertThrows(IllegalArgumentException::class.java) { model("unknown", 0) }
+    }
+    @Test fun independentPublicArithmeticHasExactBinary32Intermediates() {
+        // All quantities are quarter-integers. Reduce only the denominator's two
+        // powers of two, then bound the numerator to binary32's 24-bit precision.
+        fun exact(quarters: Long): Long {
+            var numerator = kotlin.math.abs(quarters)
+            repeat(2) { if (numerator % 2 == 0L) numerator /= 2 }
+            assertTrue(numerator < (1L shl 24), "Non-exact binary32 quarter-integer $quarters")
+            return quarters
+        }
+        for (raw in wordInputs() + listOf(0L, 65535L, Long.MIN_VALUE, Long.MAX_VALUE)) {
+            val x = (raw and 65535)-32768
+            val q = exact(x*4)
+            val accum = listOf(exact(exact(q+13)-8), exact(q+22), exact(q+exact(q/2)))
+            val after = exact(q+1)
+            val st = listOf(q, after, exact(exact(exact(3*after)-q)+2))
+            for ((name, cells) in listOf("unboxedFloatAccum" to accum, "unboxedFloatST" to st)) {
+                val weighted = cells.zip(listOf(7, 11, 13)).map { (cell, weight) -> exact(cell*weight) }
+                val answer = exact(4*exact(exact(weighted[0]+weighted[1])+weighted[2]))
+                assertEquals(0L, answer%4); assertEquals(answer/4, model(name, raw))
+            }
+            assertEquals(150*x+277, model("unboxedFloatAccum", raw))
+            assertEquals(176*x+76, model("unboxedFloatST", raw))
+            assertEquals(44*raw+62, model("unboxedWordAccum", raw))
+            assertEquals(44*raw+350, model("unboxedWordST", raw))
+        }
+    }
+    @Test fun independentWordAliasingChecksBothByteOrders() {
+        for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN)) for (raw in wordInputs()) {
+            fun shift(index: Int) = 8*(if (order == ByteOrder.LITTLE_ENDIAN) index else 7-index)
+            fun byte(value: Long, index: Int) = (value ushr shift(index)) and 255
+            val first = (raw and (255L shl shift(7)).inv()) or (((raw+101) and 255) shl shift(7))
+            val second = ((raw xor 0x55aa55aa55aa55aaL) and (255L shl shift(0)).inv()) or (((raw+37) and 255) shl shift(0))
+            val expected = 3*raw+16*first+20*second+17*byte(first, 0)+19*byte(first, 7)+23*byte(second, 0)+29*byte(second, 7)
+            assertEquals(expected, model("aliasWordBytes", raw, order))
+        }
+        assertNotEquals(model("aliasWordBytes", 0, ByteOrder.LITTLE_ENDIAN), model("aliasWordBytes", 0, ByteOrder.BIG_ENDIAN))
+    }
+    @Test fun independentOracleRejectsCorruptOrIncompleteRows() {
+        val rows = expectedRows()
+        fun text(values: List<Triple<String, Long, Long>>) = values.joinToString("\n", postfix="\n") { "${it.first}\t${it.second}\t${it.third}" }
+        val valid = text(rows)
+        assertEquals(3165, rows.size); assertEquals(rows, verifyRows(valid))
+        val corrupt = listOf("", text(rows.drop(1)), text(rows+rows.first()), text(rows.asReversed()),
+            text(rows.toMutableList().apply { this[0] = this[1] }),
+            text(rows.toMutableList().apply { this[0] = this[0].copy(third=this[0].third+1) }),
+            text(rows.toMutableList().apply { this[0] = this[0].copy(first="unknown") }),
+            valid.replaceFirst("\t", " "), valid.replaceFirst("\t", "\textra\t"), valid+"\n",
+            "moveFloatBits\t9223372036854775808\t0\n", "moveFloatBits\t0\tnan\n")
+        for ((index, bad) in corrupt.withIndex()) assertThrows(IllegalArgumentException::class.java, { verifyRows(bad) }, "mutation $index")
+    }
     @Test fun nativePublicArraysAndFloatMovementWithInlining() = native(true)
     @Test fun nativePublicArraysAndFloatMovementAcrossResidualCalls() = native(false)
+    private val exactPrimitives = mapOf(
+        "moveFloatBits" to mapOf("newByteArray#" to 2, "writeWord32Array#" to 1, "readFloatArray#" to 1,
+            "writeFloatArray#" to 1, "unsafeFreezeByteArray#" to 1, "indexWord32Array#" to 1,
+            "int2Word#" to 1, "wordToWord32#" to 1, "word32ToWord#" to 1, "word2Int#" to 1),
+        "indexFloatBits" to mapOf("newByteArray#" to 2, "writeWord32Array#" to 1, "indexFloatArray#" to 1,
+            "writeFloatArray#" to 1, "unsafeFreezeByteArray#" to 2, "indexWord32Array#" to 1,
+            "int2Word#" to 1, "wordToWord32#" to 1, "word32ToWord#" to 1, "word2Int#" to 1),
+        "aliasWordBytes" to mapOf("newByteArray#" to 1, "writeWordArray#" to 2, "readWordArray#" to 3,
+            "indexWordArray#" to 2, "unsafeFreezeByteArray#" to 1, "writeWord8Array#" to 2,
+            "indexWord8Array#" to 4, "int2Word#" to 4, "word2Int#" to 1, "wordToWord8#" to 2,
+            "word8ToWord#" to 4, "plusWord#" to 8, "timesWord#" to 9, "+#" to 2, "xorI#" to 1))
+    private fun requiredPrimitives(name: String): Set<String> {
+        val lane = if (name.startsWith("unboxedFloat")) "Float" else "Word"
+        return setOf("read${lane}Array#", "write${lane}Array#", "index${lane}Array#",
+            "newByteArray#", "unsafeFreezeByteArray#", "plus$lane#", "times$lane#")
+    }
+    private fun checkCore(evidence: ArrayCoreEvidence, name: String): Long {
+        val exact = exactPrimitives[name]
+        if (exact == null) {
+            require(evidence.primitiveCounts.keys.containsAll(requiredPrimitives(name))) { "$name lost a required primitive" }
+            return evidence.immediateStateCalls().toLong()
+        }
+        require(exact == evidence.primitiveCounts) { "$name primitive movement changed" }
+        if (name == "aliasWordBytes") return evidence.immediateStateCalls().toLong()
+        val root = evidence.root["expr"] as List<Any?>
+        evidence.stateLambda(root)
+        val read = name == "moveFloatBits"
+        val helpers = evidence.bindings.filter { it["name"] == if (read) "readFloatSlot" else "indexFloatSlot" }
+        require(helpers.size == 1) { "$name lost its residual helper" }
+        val helper = helpers.single(); val id = helper["id"] as String
+        require(evidence.bindings.map { it["id"] }.toSet() == setOf(evidence.root["id"], id))
+        require(evidence.globalReferences(root) == listOf(id)) { "$name residual call is not unique" }
+        val expr = helper["expr"] as List<Any?>
+        require(evidence.globalReferences(expr).isEmpty())
+        val calls = evidence.nodes(root).filter { node -> node.firstOrNull() == "app" &&
+            (node[1] as? List<*>)?.take(2) == listOf("var", id) }
+        require(calls.size == 1 && (calls.single()[2] as List<*>).size.toLong() == helper["arity"])
+        require(helper["arity"] == if (read) 2L else 1L)
+        require(expr[0] == "lam" && (expr[1] as List<*>).size.toLong() == helper["arity"] && evidence.guestLambdas(expr).size == 1)
+        require((expr[2] as List<*>).take(2).let { it[0] == "app" &&
+            (it[1] as List<*>).take(2) == listOf("prim", if (read) "readFloatArray#" else "indexFloatArray#") })
+        for (node in evidence.nodes(root) + evidence.nodes(expr))
+            if (node.firstOrNull() == "case") require((node[3] as List<*>).size == 1) { "$name gained a conditional path" }
+        val rep = (expr.last() as Map<*, *>)["resultRep"] as Map<*, *>
+        val lane = mapOf("primReps" to listOf("FloatRep"), "kind" to "float", "evaluated" to read)
+        if (read) {
+            require(rep["aggregate"] == "unboxed-tuple" && rep["primReps"] == listOf("FloatRep"))
+            require(rep["components"] == listOf(mapOf("primReps" to emptyList<String>(), "kind" to "void", "evaluated" to true), lane))
+        } else require(rep == lane)
+        return (evidence.guestLambdas(root).size + calls.size * evidence.guestLambdas(expr).size).toLong()
+    }
+    @Test fun corePrimitiveEvidenceRejectsMissingExtraAndWrongCounts() {
+        for ((stage, paths) in manifest()["stages"] as Map<String, List<String>>) {
+            for (name in names) assertEquals(if (name in listOf("moveFloatBits", "indexFloatBits")) 3L else 2L,
+                checkCore(ArrayCoreEvidence(merged(paths), name), name), "$stage/$name")
+            for (name in names.take(4)) for (primitive in requiredPrimitives(name)) {
+                val module = merged(paths); val evidence = ArrayCoreEvidence(module, name)
+                for (node in evidence.bindings.flatMap { evidence.nodes(it["expr"]) })
+                    if (node.take(2) == listOf("prim", primitive)) (node as MutableList<Any?>)[1] = "missing#"
+                assertThrows(IllegalArgumentException::class.java) { checkCore(ArrayCoreEvidence(module, name), name) }
+            }
+            for (name in exactPrimitives.keys) for (mutation in listOf("missing", "extra", "count")) {
+                val module = merged(paths); val evidence = ArrayCoreEvidence(module, name)
+                val node = evidence.bindings.flatMap { evidence.nodes(it["expr"]) }
+                    .first { it.firstOrNull() == "prim" } as MutableList<Any?>
+                val original = node.toList()
+                node.clear()
+                node.addAll(when (mutation) {
+                    "missing" -> listOf("lit", "int", "0")
+                    "extra" -> listOf("app", listOf("prim", "unexpected#"), listOf(original))
+                    else -> listOf("app", original, listOf(original))
+                })
+                val failure = assertThrows(IllegalArgumentException::class.java) { checkCore(ArrayCoreEvidence(module, name), name) }
+                assertTrue(failure.message.orEmpty().contains("primitive movement"), "$stage/$name/$mutation: $failure")
+            }
+        }
+    }
+    @Test fun residualCoreEvidenceRequiresUniqueSaturatedUnconditionalLaneHelpers() {
+        for ((stage, paths) in manifest()["stages"] as Map<String, List<String>>)
+            for (name in listOf("moveFloatBits", "indexFloatBits")) for (mutation in 0..10) {
+                val module = merged(paths); val evidence = ArrayCoreEvidence(module, name)
+                val root = evidence.root["expr"] as MutableList<Any?>
+                val state = evidence.stateLambda(root) as MutableList<Any?>
+                val helper = evidence.bindings.single { it["id"] != evidence.root["id"] } as MutableMap<String, Any?>
+                val expr = helper["expr"] as MutableList<Any?>
+                val rep = (expr.last() as Map<*, *>)["resultRep"] as MutableMap<String, Any?>
+                val call = evidence.nodes(root).single { it.firstOrNull() == "app" &&
+                    (it[1] as? List<*>)?.take(2) == listOf("var", helper["id"]) } as MutableList<Any?>
+                val read = name == "moveFloatBits"
+                when (mutation) {
+                    0 -> helper["name"] = "wrongHelper"
+                    1 -> helper["arity"] = (helper["arity"] as Long) + 1
+                    2 -> (call[2] as MutableList<Any?>).removeLast()
+                    3 -> state[2] = listOf("case", state[2], "duplicate", listOf(listOf("default", null,
+                        emptyList<Any?>(), listOf("var", helper["id"]))))
+                    4 -> (evidence.nodes(root).first { it.firstOrNull() == "case" }[3] as MutableList<Any?>)
+                        .add(listOf("default", null, emptyList<Any?>(), listOf("lit", "int", "0")))
+                    5 -> if (read) rep.remove("aggregate") else rep["kind"] = "unknown"
+                    6 -> if (read) ((rep["components"] as List<*>)[1] as MutableMap<String, Any?>)["primReps"] = listOf("DoubleRep")
+                        else rep["primReps"] = listOf("DoubleRep")
+                    7 -> if (read) ((rep["components"] as List<*>)[0] as MutableMap<String, Any?>)["primReps"] = listOf("IntRep")
+                        else rep["evaluated"] = true
+                    8 -> (expr[1] as MutableList<Any?>).add(mapOf("id" to "unused"))
+                    9 -> expr[2] = listOf("case", expr[2], "notDirect", listOf(listOf("default", null,
+                        emptyList<Any?>(), listOf("lit", "int", "0"))))
+                    10 -> expr[2] = listOf("lam", listOf(mapOf("id" to "hidden")), expr[2])
+                }
+                assertThrows(IllegalArgumentException::class.java,
+                    { checkCore(ArrayCoreEvidence(module, name), name) }, "$stage/$name/mutation$mutation")
+            }
+    }
     private fun native(inlining: Boolean) {
         val manifest = manifest()
-        assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())
+        assertEquals(names, manifest["entries"])
         assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
         assertEquals(64, (manifest["wordBits"] as Number).toInt())
         assertEquals(true, manifest["signalingNaNsExcluded"])
         assertEquals(setOf("moveFloatBits", "indexFloatBits"), (manifest["signalingNaNExclusionScope"] as List<String>).toSet())
         assertEquals(names.toSet(), (manifest["inputsByEntry"] as Map<String, *>).keys)
+        assertEquals(inputsByEntry(), manifest["inputsByEntry"])
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, actual, "Stale Float/Word-array fixture: $path; rerun prepare-float-word-arrays.py")
+            assertEquals(expected, actual, "Stale Float/Word-array fixture: $path; regenerate the Float/Word-array fixtures")
         }
-        val rows = File(root, "build/float-word-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        val rows = verifyRows(File(root, "build/float-word-arrays/oracle.tsv").readText()).groupBy { it.first }
         assertEquals(names.toSet(), rows.keys)
+        assertEquals(3165L, manifest["nativeRows"])
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
-        val expectedCalls = names.associateWith { if (it in listOf("moveFloatBits", "indexFloatBits")) 3L else 2L }
-        assertEquals(expectedCalls, (manifest["expectedGuestCallsByEntry"] as Map<String, Number>).mapValues { it.value.toLong() })
         val stages = manifest["stages"] as Map<String, List<String>>
         assertEquals(setOf("pre", "post"), stages.keys)
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
-                val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+                val expectedCalls = checkCore(ArrayCoreEvidence(module, name), name)
+                val cases = rows.getValue(name).map { it.second to it.third }
                 val movement = name in listOf("moveFloatBits", "indexFloatBits")
                 assertEquals(if (movement) 590 else 397, cases.size, "$name pinned input domain")
                 assertEquals(cases.size, cases.map { it.first }.toSet().size)
-                assertEquals(((manifest["inputsByEntry"] as Map<String, List<Number>>).getValue(name)).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
+                assertEquals(inputsByEntry().getValue(name), cases.map { it.first })
                 for ((input, native) in cases) {
                     assertEquals(model(name, input), native, "Native $name($input)")
                     if (movement) {
@@ -232,7 +457,7 @@ class FloatWordArrayNativeTest {
                                 if (compiled) {
                                     val after = count()
                                     val afterTargets = callState(entry, probes)
-                                    assertEquals(expectedCalls.getValue(name), after-before) {
+                                    assertEquals(expectedCalls, after-before) {
                                         "$label exact compiled entries context@${System.identityHashCode(context).toString(16)}" +
                                             " handoff=${System.getProperty("thc.handoffSlabs", "false")}" +
                                             " countBefore=$before countAfter=$after" +
@@ -248,7 +473,7 @@ class FloatWordArrayNativeTest {
                         }
                         check(false)
                         targets = activeTargets(entry)
-                        assertEquals(expectedCalls.getValue(name).toInt(), targets.size, "$stage/$backend/$name active guest roots")
+                        assertEquals(expectedCalls.toInt(), targets.size, "$stage/$backend/$name active guest roots")
                         assertEquals(expectedLabels, targets.map { it.rootNode.name }.toSet(), "$stage/$backend/$name guest root labels")
                         targets.forEach(::compile)
                         val allocations = language.handoffState.get().results.allocations
