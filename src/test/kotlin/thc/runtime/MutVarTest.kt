@@ -187,6 +187,7 @@ class MutVarTest {
                     var previous = 0
                     var sawWrite = false
                     while (true) {
+                        if (Thread.currentThread().isInterrupted) throw InterruptedException("Reader cancelled")
                         val current = reference.value
                         if (current === done) break
                         val published = current as PublishedValue
@@ -216,6 +217,7 @@ class MutVarTest {
             readers.forEach { it.get(10, TimeUnit.SECONDS) }
         } finally {
             workers.shutdownNow()
+            assertTrue(workers.awaitTermination(10, TimeUnit.SECONDS), "MutVar workers did not terminate")
         }
     }
 
