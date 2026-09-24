@@ -69,7 +69,9 @@ Haskell implementation. Full public Fingerprint/error execution must compose the
 genuine source exports separately; this checkpoint does not claim that result.
 
 `scripts/prepare-managed-md5.py` compiles the pinned original C with an ABI/layout
-driver. It checks 558 cases, 2,247 full memory snapshots, seeded counter carries,
+driver. It archives prior owned attempts intact in unique sibling directories;
+ambiguous contents and symlinked output paths are rejected. It checks 558 cases,
+2,247 full memory snapshots, seeded counter carries,
 padding boundaries, defined aliases and 540 independently checked digests. JVM
 tests consume those snapshots, copy/resume visible contexts, exercise both
 compiled adapters and check malformed State/ranges/metadata. Synthetic adapter

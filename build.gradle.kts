@@ -114,7 +114,7 @@ tasks.test {
             "prepare-int8-arrays.py", "test-int8-array-model.py",
             "prepare-int16x8-audit.py", "int16x8_model.py", "test-int16x8-model.py",
             "prepare-address-fields.py", "test-address-fields.py",
-            "prepare-pinned-addresses.py", "pinned_address_model.py", "test-pinned-addresses.py", "prepare-managed-md5.py", "test-core-md5-foreign.py", "test-core-managed-memory.py",
+            "prepare-pinned-addresses.py", "pinned_address_model.py", "test-pinned-addresses.py", "prepare-managed-md5.py", "test-prepare-managed-md5.py", "test-core-md5-foreign.py", "test-core-managed-memory.py",
             "prepare-data-to-tag.py", "test-core-data-tags.py",
             "prepare-int8x16-audit.py", "int8x16_model.py", "test-int8x16-model.py",
             "prepare-word8x16-audit.py", "word8x16_model.py", "test-word8x16-model.py",

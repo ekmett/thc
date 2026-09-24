@@ -170,6 +170,7 @@ jobs:
           python3 scripts/test-pinned-addresses.py
           python3 scripts/test-core-md5-foreign.py
           python3 scripts/test-core-managed-memory.py
+          python3 scripts/test-prepare-managed-md5.py
           python3 scripts/test-core-data-tags.py
           python3 scripts/test-core-mutvars.py
           python3 scripts/test-int-array-model.py
