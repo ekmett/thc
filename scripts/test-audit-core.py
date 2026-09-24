@@ -396,7 +396,7 @@ class AuditTest(unittest.TestCase):
     def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
         for name, contract in CAP['tuplePrimitives'].items():
             scalar = dict(LONG, primReps=[contract['arguments'][0]])
-            proof = tuple_rep(scalar, scalar)
+            proof = tuple_rep(*(dict(LONG, primReps=[rep]) for rep in contract["result"]))
             module = tuple_fixture(proof)
             call = module['bindings'][0]['expr'][2][1]
             call[:] = ['app', ['prim', name],
@@ -429,6 +429,28 @@ class AuditTest(unittest.TestCase):
     def test_tuple_arithmetic_first_class_values_remain_unsupported(self):
         for name in CAP['tuplePrimitives']:
             self.assertIn('primitive-arity', {i['code'] for i in run(['prim', name])['issues']})
+
+    def test_word_carry_result_fields_cannot_be_swapped_or_relabelled(self):
+        word = dict(LONG, primReps=['WordRep'])
+        for name in ('addWordC#', 'subWordC#'):
+            proof = tuple_rep(word, LONG)
+            module = tuple_fixture(proof)
+            call = module['bindings'][0]['expr'][2][1]
+            call[:] = ['app', ['prim', name], [['lit', 'word', '1', dict(rep=word)]] * 2,
+                       [False, False], False, False, dict(rep=proof)]
+            self.assertTrue(run_tuple(module)['accepted'])
+            for fields in [('IntRep', 'WordRep'), ('WordRep', 'WordRep'), ('IntRep', 'IntRep'),
+                           ('WordRep', 'Int64Rep'), ('Word64Rep', 'IntRep')]:
+                changed = copy.deepcopy(module)
+                bad = changed['bindings'][0]['expr'][2][1]
+                bad[6]['rep'] = tuple_rep(*(dict(LONG, primReps=[rep]) for rep in fields))
+                report = run_tuple(changed)
+                self.assertFalse(report['accepted'], (name, fields))
+                self.assertIn('primitive-representation', {i['code'] for i in report['issues']})
+            for flag in (tuple_rep(LONG), dict(kind='void', evaluated=True, primReps=[]), dict(LONG, kind='unknown')):
+                changed = copy.deepcopy(module)
+                changed['bindings'][0]['expr'][2][1][6]['rep'] = tuple_rep(word, flag)
+                self.assertFalse(run_tuple(changed)['accepted'], (name, flag))
 
     def test_exact_tuple_join_results_include_zero_arity_binders(self):
         for zero in (False, True):
