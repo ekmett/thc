@@ -562,6 +562,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.OriginalStdioNativeTest",
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
         "thc.SignedNarrowPrimopsTest",
