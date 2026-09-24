@@ -193,7 +193,7 @@ jobs:
           check-for-updates: false
       - name: Resolve Cabal project dependencies
         run: |
-          test "$(cabal --numeric-version)" = 3.16.0.0
+          case "$(cabal --numeric-version)" in 3.16.*) ;; *) exit 1 ;; esac
           cabal build exe:thc
       - name: Identify toolchain and fixture dependencies
         run: python3 .github/scripts/fast_ci.py identify
