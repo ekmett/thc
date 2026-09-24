@@ -46,6 +46,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         else proof.copy(evaluated = binding["lifted"] == false || rhs[0] in listOf("lam", "lit", "con", "void"))
     }
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
+    private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val roots = arrayListOf<BytecodeRoot>()
     private var nextLocal = 0
@@ -53,7 +54,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     private data class Local(val id: Int, val name: String, val primitive: Boolean,
                              val proof: CoreRepresentation = CoreRepresentation.UNKNOWN,
-                             val cell: Boolean = false, val entry: BooleanArray? = null) {
+                             val cell: Boolean = false, val entry: BooleanArray? = null,
+                             val arityCertificate: CoreApplicationCertificates.Arity? = null) {
         // The denoted value can be primitive while a pre-publication capture
         // still holds its recursive cell. Raw captures must retain that cell.
         val directLong: Boolean get() = !cell && proof.isLong && proof.evaluated
@@ -198,7 +200,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val initializer = build("Core module initialization", scope.function, body, forceResult = false)
         Calls.target(initializer, arrayOf(0L))
         bindings.forEach { binding ->
-            CoreFunctionIdentity.install(moduleData, binding, globals.getValue(binding["id"] as String).read())
+            CoreFunctionIdentity.install(moduleData, binding, globals.getValue(binding["id"] as String).read(),
+                globalArityCertificates)
         }
     }
 
@@ -234,8 +237,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     private fun bind(scope: Scope, name: String, primitive: Boolean,
                      proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
-                     entry: BooleanArray? = null): Local =
-        Local(nextLocal++, name, !cell && (if (proof.present) proof.isLong else primitive), proof, cell, entry).also { scope.bindLocal(name, it) }
+                     entry: BooleanArray? = null,
+                     arityCertificate: CoreApplicationCertificates.Arity? = null): Local =
+        Local(nextLocal++, name, !cell && (if (proof.present) proof.isLong else primitive), proof, cell, entry,
+            arityCertificate).also { scope.bindLocal(name, it) }
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
@@ -270,7 +275,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
         val captureSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
         captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
-        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry) }
+        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
         context.captureLayout = if (captureSources.isEmpty()) null else CaptureLayout(language, captureSources.map { it.primitive }.toBooleanArray(),
             captureSources.map { it.directLong }.toBooleanArray(),
             captureSources.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
@@ -676,7 +681,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         // Lowering can expose a tuple behind omitted outer case metadata. It
         // must remain a destination writer and may never be forced or delayed.
         if (!lifted) return force(lowered())
-        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true))) return lowered()
+        val head = (expr.getOrNull(1) as? List<*>)?.takeIf { expr[0] == "app" && it.firstOrNull() == "var" }
+        val headId = head?.getOrNull(1) as? String
+        val arityCertificate = headId?.let { id ->
+            if (id in scope.locals) scope.locals.getValue(id).arityCertificate else globalArityCertificates[id]
+        }
+        if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate)) return lowered()
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> lowered(); else -> delay(expr, scope, label) }
     }
     private fun literal(kind: String, value: String): Any = when (kind) {
@@ -2253,7 +2263,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 group.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "let binding") }
                 val local = scope.child()
                 val slots = group.map { bind(local, it["id"] as String, !representation(it),
-                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it)) }
+                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it),
+                    arityCertificate = CoreApplicationCertificates.binding(it)) }
                 val rhs = group.map {
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
                     CoreRepresentations.requireNoSum(CoreRepresentations.expression(rhsExpr), "let binding")

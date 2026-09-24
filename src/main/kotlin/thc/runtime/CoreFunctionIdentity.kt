@@ -25,12 +25,15 @@ internal data class CoreFunctionIdentity(
         }
 
         /** Assign only the target created for this binding, never an aliased target. */
-        fun install(module: Map<String, Any?>, binding: Map<String, Any?>, value: Any?) {
+        fun install(module: Map<String, Any?>, binding: Map<String, Any?>, value: Any?,
+                    arities: Map<String, CoreApplicationCertificates.Arity?>) {
             val identity = from(module, binding) ?: return
             val rhs = binding["expr"] as? List<*> ?: return
             val head = rhs.firstOrNull()
-            val certifiedApplication = head == "app" &&
-                ((rhs.getOrNull(5) as? Boolean) ?: (rhs.getOrNull(4) == true))
+            val applicationHead = (rhs.getOrNull(1) as? List<*>)?.takeIf { head == "app" && it.firstOrNull() == "var" }
+                ?.getOrNull(1) as? String
+            val certifiedApplication = CoreApplicationCertificates.eagerApplication(rhs,
+                applicationHead?.let(arities::get))
             val target: RootCallTarget = when {
                 head == "lam" && value is Closure -> value.target
                 binding["lifted"] == true && !certifiedApplication &&

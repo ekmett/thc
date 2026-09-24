@@ -1596,14 +1596,16 @@ internal class EntryRoot(language: TruffleLanguage<*>?, private val arity: Int, 
     override fun getName() = "THC host entry/$arity"
 }
 private data class Local(val slot: Int, val primitive: Boolean, val proof: CoreRepresentation, val cell: Boolean,
-                         val entry: BooleanArray? = null, val tupleSlots: IntArray? = null)
+                         val entry: BooleanArray? = null, val tupleSlots: IntArray? = null,
+                         val arityCertificate: CoreApplicationCertificates.Arity? = null)
 private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Local> = linkedMapOf(),
                     val joins: MutableMap<String, LocalJoinTarget> = linkedMapOf(),
                     var self: AstSelfLayout? = null) {
     fun child() = Scope(layout.scope(), LinkedHashMap(locals), LinkedHashMap(joins), self)
     fun bind(id: String, primitive: Boolean, proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
-             entry: BooleanArray? = null): Local =
-        Local(layout.bind(id), if (proof.present) proof.isLong else primitive, proof, cell, entry).also { locals[id] = it; joins.remove(id) }
+             entry: BooleanArray? = null, arityCertificate: CoreApplicationCertificates.Arity? = null): Local =
+        Local(layout.bind(id), if (proof.present) proof.isLong else primitive, proof, cell, entry,
+            arityCertificate = arityCertificate).also { locals[id] = it; joins.remove(id) }
     fun bindTuple(id: String, proof: CoreRepresentation, slots: IntArray): Local =
         Local(-1, false, proof, false, tupleSlots = slots).also { locals[id] = it; joins.remove(id) }
     fun bindVoid(id: String, proof: CoreRepresentation): Local =
@@ -1650,6 +1652,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val names = bindings.withIndex().groupBy({ it.value["name"] as String }, { it.index })
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
+    private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     init {
         ArrayOp.validateApplications(bindings)
         CoreStackForeign.validateHeads(bindings)
@@ -1674,7 +1677,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scope.layout.build())
         bindings.forEachIndexed { index, binding ->
             val value = initializers[index].execute(frame)
-            CoreFunctionIdentity.install(moduleData, binding, value)
+            CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates)
             globals.getValue(binding["id"] as String).initialize(value)
         }
     }
@@ -1737,7 +1740,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val captureKinds = captured.map { outer.locals.getValue(it).primitive }.toBooleanArray()
         val environmentSlots = captured.map { id ->
             val local = outer.locals.getValue(id)
-            scope.bind(id, local.primitive, local.proof, local.cell, local.entry).slot
+            scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
         }.toIntArray()
         val argumentSlots = arrayListOf<Int>(); val argumentIndices = arrayListOf<Int>()
         val argumentProofs = arrayListOf<CoreRepresentation>()
@@ -1817,7 +1820,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         // dictionary knots. Allocate these values directly instead of creating
         // an update thunk and captures. A false certificate overrides HNF.
         // Older exports fall back to exprIsHNF; missing proofs stay lazy.
-        if (expr[0] == "app" && ((expr.getOrNull(5) as? Boolean) ?: (expr.getOrNull(4) == true)))
+        val head = (expr.getOrNull(1) as? List<*>)?.takeIf { expr[0] == "app" && it.firstOrNull() == "var" }
+        val headId = head?.getOrNull(1) as? String
+        val arityCertificate = headId?.let { id ->
+            if (id in scope.locals) scope.locals.getValue(id).arityCertificate else globalArityCertificates[id]
+        }
+        if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate))
             return compile(expr, scope, false).also { check(it.representation) }
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
@@ -2148,7 +2156,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 group.forEach { CoreRepresentations.requireScalar(CoreRepresentations.binder(it), "let binding") }
                 val local = scope.child()
                 val slots = group.map { local.bind(it["id"] as String, !representation(it),
-                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it)).slot }.toIntArray()
+                    CoreRepresentations.binder(it).copy(evaluated = false), cell = recursive, entry = CoreEntries.binding(it),
+                    arityCertificate = CoreApplicationCertificates.binding(it)).slot }.toIntArray()
                 val rhs = group.map { binding -> withSource(sources.binding(binding, currentSource)) {
                     val it = binding
                     val rhsExpr = it["expr"] as List<Any?>; val lifted = representation(it)
