@@ -189,8 +189,10 @@ executable thc-fixtures
   main-is: Main.hs
   other-modules:
     AggregateFixtures
+    ContinuationFixtures
     FixtureSupport
     OriginalStdioFixtures
+    SmallArrayFixtures
     StackFixtures
   hs-source-dirs: test/haskell-fixtures
   build-depends:

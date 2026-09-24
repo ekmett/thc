@@ -1284,6 +1284,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
 
 /** Exported GHC Core lowers lexical bindings to indexed frame slots, as Cadenza does. */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>) : ExecutableProgram {
+    private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = Metrics(moduleData["instrument"] != false)
     private val sources = CoreSources(moduleData)
@@ -1315,6 +1316,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     init {
         CoreStackForeign.validateHeads(bindings)
+        CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
         CoreManagedFiles.validateHeads(bindings)
         CoreMd5Foreign.validateHeads(bindings)
@@ -1553,14 +1555,16 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val stackClone = CoreStackForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags)
+            val stackInfo = CoreStackInfoForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val javascript = if (!stackClone && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
+            val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
             val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val polyglot = if (!stackClone && originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null && javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val state = args.single()
@@ -1569,6 +1573,16 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operand = compile(state, scope, false)
                 CoreStackForeign.validateState(operand.representation)
                 CloneStackExpression(operand, tupleProof)
+            } else if (stackInfo != null) {
+                val layout = CoreStackInfoForeign.requireLayout(stackTargetLayout)
+                CoreStackInfoForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreStackInfoForeign.validateOperand(stackInfo, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                OriginalStackInfoExpression(stackInfo, layout, operands.toTypedArray(), tupleProof)
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 OriginalStdioExpression(originalStdio, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
@@ -1670,6 +1684,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = ArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 arrayExpression(operation, tupleProof,
+                    args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
+            } else if (fn[0] == "prim" && SmallArrayOp.named(fn[1] as String) != null) {
+                val operation = SmallArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                smallArrayExpression(operation, tupleProof,
                     args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }.toTypedArray())
             } else if (fn[0] == "prim" && VectorByteArrayOp.named(fn[1] as String) != null) {
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!

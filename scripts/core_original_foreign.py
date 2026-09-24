@@ -3,19 +3,23 @@
 
 """Closed original GHC 9.14.1 foreign declarations, never wrapper-pattern aliases.
 
-Only implemented runtime seams belong here. Stack getters, IPE decoding and
-remote capture stay unsupported until their own typed runtime paths exist.
+Recognition is separate from capability admission. Stack payload getters,
+complete IPE decoding and remote capture remain unsupported.
 """
 
 STACK_CLONE = 'stg_cloneMyStackzh'
+STACK_INFO = frozenset(('getStackInfoTableAddrzh', 'getInfoTableAddrszh', 'lookupIPE'))
 
 OPERATIONS = {
     'ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
-        ('capi', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), 'Int64Rep'),
+        ('capi', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
     'ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
-        ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), 'Int64Rep'),
-    '__hscore_get_errno': ('ccall', 'unsafe', (None,), 'Int32Rep'),
-    STACK_CLONE: ('prim', 'safe', (None,), 'BoxedRep (Just Unlifted)'),
+        ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
+    '__hscore_get_errno': ('ccall', 'unsafe', (None,), (None, 'Int32Rep')),
+    STACK_CLONE: ('prim', 'safe', (None,), (None, 'BoxedRep (Just Unlifted)')),
+    'getStackInfoTableAddrzh': ('prim', 'safe', ('BoxedRep (Just Unlifted)',), 'AddrRep'),
+    'getInfoTableAddrszh': ('prim', 'safe', ('BoxedRep (Just Unlifted)', 'WordRep'), ('AddrRep', 'AddrRep')),
+    'lookupIPE': ('ccall', 'safe', ('AddrRep', 'AddrRep', None), (None, 'Word8Rep')),
 }
 SCALAR_KEYS = {'kind', 'primReps', 'evaluated'}
 TUPLE_KEYS = SCALAR_KEYS | {'aggregate', 'components'}
@@ -27,23 +31,28 @@ def require(condition, detail):
         raise ValueError('Invalid original foreign call: ' + detail)
 
 
-def scalar(raw, primitive, declared=False):
-    kind = ('void' if primitive is None else 'address' if primitive == 'AddrRep'
+def scalar_kind(primitive):
+    return ('void' if primitive is None else 'address' if primitive == 'AddrRep'
             else 'object' if primitive == 'BoxedRep (Just Unlifted)' else 'long')
+
+
+def scalar(raw, primitive, declared=False):
+    kind = scalar_kind(primitive)
     return (isinstance(raw, dict) and raw.keys() == SCALAR_KEYS and raw.get('kind') == kind
             and raw.get('primReps') == ([] if primitive is None else [primitive])
             and type(raw.get('evaluated')) is bool and (not declared or raw['evaluated'] is False))
 
 
-def result(raw, primitive, declared=False):
+def result(raw, output, declared=False):
+    if not isinstance(output, tuple):
+        return scalar(raw, output, declared)
     if not isinstance(raw, dict):
         return False
     fields = raw.get('components')
     return (raw.keys() == TUPLE_KEYS and raw.get('kind') == 'unknown' and raw.get('aggregate') == 'unboxed-tuple'
-            and raw.get('primReps') == [primitive] and type(raw.get('evaluated')) is bool
-            and (not declared or raw['evaluated'] is False) and isinstance(fields, list) and len(fields) == 2
-            and scalar(fields[0], None) and fields[0]['evaluated'] is True
-            and scalar(fields[1], primitive) and fields[1]['evaluated'] is True)
+            and raw.get('primReps') == [p for p in output if p is not None] and type(raw.get('evaluated')) is bool
+            and (not declared or raw['evaluated'] is False) and isinstance(fields, list) and len(fields) == len(output)
+            and all(scalar(field, primitive) and field['evaluated'] is True for field, primitive in zip(fields, output)))
 
 
 def validate_head(function, defined):
@@ -72,6 +81,14 @@ def validate_state_binding(raw):
         require(isinstance(raw, dict) and raw.get('kind') in ('void', 'unknown')
                 and raw.get('primReps') in (None, []) and 'aggregate' not in raw and 'vector' not in raw,
                 'stored State argument')
+
+
+def validate_operand_binding(raw, primitive, detail):
+    """Keep unknown stored proofs refinable, but never erase known carrier/reps."""
+    if raw is not None:
+        require(isinstance(raw, dict) and raw.get('kind') in (scalar_kind(primitive), 'unknown')
+                and raw.get('primReps') in (None, [] if primitive is None else [primitive])
+                and 'aggregate' not in raw and 'vector' not in raw, detail)
 
 
 def validate(metadata, argument_reps, flags, result_rep):
@@ -103,5 +120,5 @@ def validate(metadata, argument_reps, flags, result_rep):
             and all(scalar(p, e) for p, e in zip(argument_reps, expected)), 'actual argument representations')
     require(isinstance(flags, list) and len(flags) == len(expected) and all(f is False for f in flags), 'unlifted argument flags')
     require(result(descriptor.get('resultRep'), output, True) and result(metadata.get('rep'), output) and result(result_rep, output),
-            'exact State/result tuple')
+            'exact scalar/tuple result representations')
     return symbol

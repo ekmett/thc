@@ -40,6 +40,7 @@ python3 scripts/prepare-resize-bytearrays.py
 python3 scripts/prepare-mutable-bytearray-size.py
 python3 scripts/prepare-compare-byte-arrays.py
 python3 scripts/prepare-boxed-arrays.py
+"$fixture_bin" small-arrays
 python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
@@ -47,6 +48,7 @@ python3 scripts/prepare-mutvar.py
 python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py
+"$fixture_bin" core-continuation
 python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 python3 scripts/prepare-pinned-addresses.py

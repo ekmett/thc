@@ -120,6 +120,11 @@ class ManagedStackSnapshotTest {
         fun visit(value: Any?) {
             if (value == null || value is String || value is Number || value is Boolean || value is Enum<*>) return
             if (!seen.add(value)) return
+            if (value === snapshot.ownerToken) {
+                assertEquals(Any::class.java, value.javaClass, "Opaque ownership token must not retain context state")
+                assertTrue(value.javaClass.declaredFields.isEmpty())
+                return
+            }
             if (value is List<*>) { value.forEach(::visit); return }
             assertTrue(value is ManagedStackSnapshot || value is ManagedStackFrame || value is ManagedStackSource ||
                 value is ManagedStackNote || value is ManagedStackFunctionIdentity,

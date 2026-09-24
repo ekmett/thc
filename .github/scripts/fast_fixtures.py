@@ -23,14 +23,16 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "64cfdba24cade6a21a5b028ee5d7f9cbbaaa67a9a78b184deadf7cabca982bfe"
+FULL_PREPARATION_PLAN = "19fd17ef27ec3d3569bcb019b5feb215a58b105db046a0ac0391cfbb479bdb9e"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio",
+    "build/original-stdio", "build/core-continuation", "build/small-arrays",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/addr-identity/oracle.txt", "build/addr-identity/pre.audit.json", "build/addr-identity/post.audit.json",
+    "build/core-continuation/core/CoreContinuationAudit.json", "build/core-continuation/audit.json",
+    "build/core-continuation/native-output.txt",
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",
@@ -41,6 +43,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/pinned-pointer-cells/post/core/PinnedPointerCellsAudit.json",
     "build/managed-address-reads/manifest.json",
     "build/original-stdio/manifest.json",
+    "build/small-arrays/manifest.json",
     "build/simd-capability-smoke/manifest.json",
     # The SIMD smoke exporter consumes this generated Haskell fixture. Check
     # both Haskell outputs without hashing unrelated JVM code generation.
