@@ -58,3 +58,34 @@ forkAndThrow token =
       1# -> token +# 43#
       _  -> -999#
   } } } } } } } } } } } } }
+
+-- The child deliberately has no catch#. killThread# must acknowledge an
+-- uncaught asynchronous exception and let the sender continue; its blocked
+-- MVar is never filled, so a surviving child cannot finish normally.
+{-# OPAQUE uncaughtChild #-}
+uncaughtChild :: MVar# RealWorld ThreadBox -> MVar# RealWorld Box
+  -> State# RealWorld -> (# State# RealWorld, () #)
+uncaughtChild identity gate s0 =
+  case myThreadId# s0 of { (# s1, tid #) ->
+  case putMVar# identity (ThreadBox tid) s1 of { s2 ->
+  case takeMVar# gate s2 of { (# s3, _ #) -> (# s3, () #) } } }
+
+{-# OPAQUE killUncaught #-}
+killUncaught :: Int# -> Int#
+killUncaught token =
+  case newMVar# realWorld# of { (# s1, identity #) ->
+  case newMVar# s1 of { (# s2, gate #) ->
+  case fork# (uncaughtChild identity gate) s2 of { (# s3, _ #) ->
+  case takeMVar# identity s3 of { (# s4, ThreadBox tid #) ->
+  case killThread# tid (Box 7#) s4 of { _ -> token +# 5# } } } } }
+
+-- Self-directed delivery is caught by the original catch# path. There is
+-- no host sender or private runtime-thread API in either public root.
+{-# OPAQUE selfThrow #-}
+selfThrow :: Int# -> Int#
+selfThrow token =
+  case catch# (\s0 ->
+    case myThreadId# s0 of { (# s1, tid #) ->
+    case killThread# tid (Box 7#) s1 of { s2 -> (# s2, Box 99# #) } })
+    (\_ s -> (# s, Box (-1#) #)) realWorld# of
+      (# _, Box result #) -> token +# result

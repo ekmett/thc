@@ -24,6 +24,7 @@ prepareThreadAsync root = do
       manifest = output </> "manifest.json"
       source = "compiler/test-fixtures/ThreadAsyncAudit.hs"
       driver = "compiler/test-fixtures/ThreadAsyncNative.hs"
+      entries = ["forkAndThrow", "killUncaught", "selfThrow"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -33,20 +34,21 @@ prepareThreadAsync root = do
   unless (lines version == ["9.14.1"]) (die "Public thread fixture requires GHC 9.14.1")
   forM_ stages $ \stage -> do
     let core = directory </> stage </> "core"
-        report = directory </> stage </> "forkAndThrow-audit.json"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core),
       ("THC_GHC_OUT", output </> stage </> "ghc")]
       "compiler/export.sh" (options ++ [source]) ""
-    (status, _, errors) <- readCreateProcessWithExitCode
-      ((proc "python3" ["scripts/audit-core.py", "--entry", "forkAndThrow",
-        "--output", report, core </> "ThreadAsyncAudit.json"]) { cwd = Just root }) ""
-    unless (status == ExitSuccess)
-      (die ("Public thread Core audit failed: " ++ errors))
-    bytes <- BS.readFile (root </> report)
-    case decodeStrict' bytes of
-      Just value | supportedThreadContract value -> pure ()
-      _ -> die "Public thread Core audit did not accept the exact threading contract"
+    forM_ entries $ \entry -> do
+      let report = directory </> stage </> (entry ++ "-audit.json")
+      (status, _, errors) <- readCreateProcessWithExitCode
+        ((proc "python3" ["scripts/audit-core.py", "--entry", entry,
+          "--output", report, core </> "ThreadAsyncAudit.json"]) { cwd = Just root }) ""
+      unless (status == ExitSuccess)
+        (die ("Public thread Core audit failed: " ++ errors))
+      bytes <- BS.readFile (root </> report)
+      case decodeStrict' bytes of
+        Just value | supportedThreadContract entry value -> pure ()
+        _ -> die ("Public thread Core audit did not accept " ++ entry)
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
@@ -56,6 +58,10 @@ prepareThreadAsync root = do
     ["+RTS", "-N2", "-RTS"] ""
   unless (actual == "43\n44\n") (die "Public thread native fork/kill/resume oracle disagreed")
   writeFile (output </> "oracle.txt") actual
+  extras <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
+    ["extras", "+RTS", "-N2", "-RTS"] ""
+  unless (extras == "5\n-1\n") (die "Public thread uncaught/self delivery oracle disagreed")
+  writeFile (output </> "extra-oracle.txt") extras
   pluginFiles <- listDirectory (root </> "compiler/THC")
   coreScripts <- listDirectory (root </> "scripts")
   let sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
@@ -64,18 +70,20 @@ prepareThreadAsync root = do
         "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
         ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
-      artifacts = (directory </> "oracle.txt") : [directory </> stage </> suffix |
-        stage <- stages, suffix <- ["core/ThreadAsyncAudit.json", "forkAndThrow-audit.json"]]
+      artifacts = [directory </> "oracle.txt", directory </> "extra-oracle.txt"] ++
+        [directory </> stage </> suffix | stage <- stages,
+          suffix <- "core/ThreadAsyncAudit.json" : [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-    "entry" .= ("forkAndThrow" :: String), "stages" .= stages,
-    "native" .= ([43, 44] :: [Int]), "inputHashes" .= sourceHashes,
+    "entry" .= ("forkAndThrow" :: String), "entries" .= entries, "stages" .= stages,
+    "native" .= ([43, 44] :: [Int]), "extraNative" .= ([5, -1] :: [Int]),
+    "inputHashes" .= sourceHashes,
     "artifactHashes" .= artifactHashes, "installedArtifactsHashed" .= False]
   putStrLn "thread-async: native fork#/myThreadId#/killThread#, strict pre/post Core"
 
-supportedThreadContract :: Value -> Bool
-supportedThreadContract (Object report) = hasPublicThreadPrimitives && case KeyMap.lookup "accepted" report of
+supportedThreadContract :: String -> Value -> Bool
+supportedThreadContract entry (Object report) = hasPublicThreadPrimitives && case KeyMap.lookup "accepted" report of
   Just (Bool True) ->
     KeyMap.lookup "missingGlobals" report == Just (Array mempty) &&
     KeyMap.lookup "issues" report == Just (Array mempty)
@@ -84,9 +92,14 @@ supportedThreadContract (Object report) = hasPublicThreadPrimitives && case KeyM
     hasPublicThreadPrimitives = case KeyMap.lookup "primitives" report of
       Just (Array primitives) ->
         let names = map primitiveName (toList primitives)
-        in all (`elem` names) [Just "fork#", Just "myThreadId#", Just "killThread#", Just "catch#"] &&
+            required = case entry of
+              "forkAndThrow" -> ["fork#", "myThreadId#", "killThread#", "catch#"]
+              "killUncaught" -> ["fork#", "myThreadId#", "killThread#"]
+              "selfThrow" -> ["myThreadId#", "killThread#", "catch#"]
+              _ -> []
+        in not (null required) && all ((`elem` names) . Just . String) required &&
            Just "noDuplicate#" `notElem` names
       _ -> False
     primitiveName (Object primitive) = KeyMap.lookup "name" primitive
     primitiveName _ = Nothing
-supportedThreadContract _ = False
+supportedThreadContract _ _ = False
