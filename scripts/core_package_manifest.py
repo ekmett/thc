@@ -7,10 +7,15 @@
 import hashlib
 import json
 from pathlib import Path
+import re
+import stat
+import zlib
+from zipfile import BadZipFile, ZipFile
 
 
 FORMAT = 'thc-core-packages'
 BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
+SHA256 = re.compile(r'[0-9a-f]{64}\Z')
 
 
 def strict_json(data):
@@ -24,6 +29,52 @@ def strict_json(data):
     def invalid_constant(value):
         raise ValueError(f'Invalid JSON constant: {value}')
     return json.loads(data, object_pairs_hook=object_pairs, parse_constant=invalid_constant)
+
+
+def zip_member(name):
+    return (isinstance(name, str) and bool(name) and not name.startswith('/') and
+            not re.match(r'^[A-Za-z]:', name) and '\\' not in name and
+            all(part not in ('', '.', '..') for part in name.split('/')) and
+            all(ord(char) >= 32 for char in name))
+
+
+def bundle_modules(path, unit, records):
+    bundle = unit['bundle']
+    if (not isinstance(bundle, dict) or set(bundle) != {'path', 'sha256'} or
+            not isinstance(bundle['path'], str) or not Path(bundle['path']).is_absolute() or
+            not isinstance(bundle['sha256'], str) or not SHA256.fullmatch(bundle['sha256'])):
+        raise ValueError(f'{path}: invalid bundle reference for {unit["id"]}')
+    archive_path = Path(bundle['path'])
+    try:
+        with archive_path.open('rb') as stream:
+            digest = hashlib.sha256()
+            for block in iter(lambda: stream.read(1024 * 1024), b''):
+                digest.update(block)
+            if digest.hexdigest() != bundle['sha256']:
+                raise ValueError(f'{path}: bundle hash mismatch: {archive_path}')
+            stream.seek(0)
+            with ZipFile(stream) as archive:
+                infos = archive.infolist()
+                names = [info.filename for info in infos]
+                expected = {'manifest.json', *(item['path'] for item in records)}
+                if (len(names) != len(set(names)) or set(names) != expected or
+                        any(not zip_member(name) or info.is_dir() or
+                            (info.create_system == 3 and
+                             stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK)
+                            for name, info in zip(names, infos))):
+                    raise ValueError(f'{path}: duplicate, unsafe, missing, or extra ZIP entry in {archive_path}')
+                inner = strict_json(archive.read('manifest.json').decode('utf-8'))
+                if (not isinstance(inner, dict) or inner.get('format') != 'thc-core-bundle' or
+                        type(inner.get('schema')) is not int or inner['schema'] != 1 or
+                        inner.get('unit') != unit['id'] or
+                        not isinstance(inner.get('buildKey'), str) or not SHA256.fullmatch(inner['buildKey']) or
+                        not isinstance(inner.get('exportKey'), str) or not SHA256.fullmatch(inner['exportKey']) or
+                        inner.get('modules') != records):
+                    raise ValueError(f'{path}: bundle manifest disagrees with unit {unit["id"]}')
+                return [(str(archive_path) + '!/' + item['path'], archive.read(item['path']))
+                        for item in records]
+    except (BadZipFile, RuntimeError, EOFError, zlib.error) as error:
+        raise ValueError(f'{path}: invalid ZIP bundle {archive_path}: {error}') from error
 
 
 def load(path):
@@ -51,6 +102,7 @@ def load(path):
                 not isinstance(modules, list)):
             raise ValueError(f'{path}: invalid/duplicate unit or dependencies: {unit_id!r}')
         units.add(unit_id)
+        records = []
         for item in modules:
             if not isinstance(item, dict):
                 raise ValueError(f'{path}: invalid module record in {unit_id}')
@@ -59,17 +111,26 @@ def load(path):
             key = (unit_id, name)
             if (not isinstance(name, str) or not name or key in module_keys or
                     boundary != BOUNDARY or not isinstance(relative, str) or not relative or
-                    not isinstance(expected, str) or len(expected) != 64 or
-                    any(c not in '0123456789abcdef' for c in expected)):
+                    not isinstance(expected, str) or not SHA256.fullmatch(expected)):
                 raise ValueError(f'{path}: invalid/duplicate post-Tidy module: {key!r}')
             module_keys.add(key)
-            artifact = Path(relative)
-            if artifact.is_absolute() or '..' in artifact.parts:
-                raise ValueError(f'{path}: module path must stay inside manifest root: {relative!r}')
-            artifact = (root / artifact).resolve()
-            if not artifact.is_relative_to(root):
-                raise ValueError(f'{path}: module path escapes manifest root: {relative!r}')
-            data = artifact.read_bytes()
+            if 'bundle' in unit:
+                if not zip_member(relative) or relative == 'manifest.json':
+                    raise ValueError(f'{path}: unsafe ZIP member path: {relative!r}')
+            else:
+                artifact = Path(relative)
+                if artifact.is_absolute() or '..' in artifact.parts:
+                    raise ValueError(f'{path}: module path must stay inside manifest root: {relative!r}')
+                artifact = (root / artifact).resolve()
+                if not artifact.is_relative_to(root):
+                    raise ValueError(f'{path}: module path escapes manifest root: {relative!r}')
+            records.append(item)
+        artifacts = (bundle_modules(path, unit, records) if 'bundle' in unit else
+                     [(str((root / item['path']).resolve()),
+                       (root / item['path']).resolve().read_bytes()) for item in records])
+        for item, (artifact, data) in zip(records, artifacts):
+            name, boundary = item['name'], item['boundary']
+            relative, expected = item['path'], item['sha256']
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ValueError(f'{path}: content hash mismatch: {relative!r}')
             module = strict_json(data.decode('utf-8'))
