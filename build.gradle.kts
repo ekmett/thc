@@ -12,6 +12,7 @@ dependencies {
     implementation("org.graalvm.polyglot:polyglot:$graalVersion")
     implementation("org.graalvm.truffle:truffle-api:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
     kapt("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -180,3 +181,16 @@ tasks.register<JavaExec>("polyglotDemo") {
 
 // Vector intrinsics are isolated in Java; floating vectors retain fixed species.
 tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }
+
+// Compile the unchanged pinned GHC cbits for this host. The resulting bitcode
+// remains an optional execution path; no native pointer is exposed to Core.
+val compileCbits by tasks.registering(Exec::class) {
+    inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c",
+        "bench/experiments/pinned-addresses/reference/md5.c",
+        "bench/experiments/pinned-addresses/reference/md5.h")
+    outputs.dir(layout.buildDirectory.dir("generated/cbits"))
+    outputs.upToDateWhen { false }
+    commandLine("python3", "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
+tasks.processResources { dependsOn(compileCbits) }

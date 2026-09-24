@@ -267,7 +267,7 @@ def main():
         limits=['Public Storable roots are native evidence / explicit exported frontiers, not claimed THC support.',
                 'Primitive fingerprintByte is a labeled byte-layout conformance control, not a replacement Storable implementation.',
                 'Defined native domains only; malformed/bounds failures belong to non-native runtime tests.',
-                'Managed pinning is not physical JVM pinning; no MD5/general FFI or raw process pointers.']), indent=2)+'\n')
+                'Managed pinning is not physical JVM pinning; only the closed GHC MD5 FFI uses Sulong, with no general foreign calls or raw process pointers.']), indent=2)+'\n')
     print(f'Pinned address preparation: mode={args} nativeRows={0 if args.export_only else len(domain)} modelRows={len(domain)} strictAccepted={strict} counts={dict(counts)}')
 
 if __name__ == '__main__':

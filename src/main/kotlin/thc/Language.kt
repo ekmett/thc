@@ -26,6 +26,9 @@ import thc.runtime.CoreRepresentations
 import thc.runtime.CoreRepresentation
 import thc.runtime.IoMainRoot
 import java.io.File
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.atomic.AtomicReference
 
 object CoreModules {
     @Suppress("UNCHECKED_CAST")
@@ -135,17 +138,35 @@ object CoreModules {
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = ["application/x-thc-core"], defaultMimeType = "application/x-thc-core",
-    contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
+    dependentLanguages = ["llvm"], contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
 class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
     class State(val env: Env) {
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
+        private val nativeCbits = AtomicReference<FutureTask<thc.runtime.SulongCbits>?>()
+        @CompilerDirectives.TruffleBoundary
+        internal fun cbits(): thc.runtime.SulongCbits {
+            if (!env.isNativeAccessAllowed)
+                throw thc.runtime.RuntimeFault("C bitcode requires native access for the Sulong runtime")
+            var task = nativeCbits.get()
+            if (task == null) {
+                val candidate = FutureTask { thc.runtime.SulongCbits(env) }
+                if (nativeCbits.compareAndSet(null, candidate)) {
+                    task = candidate
+                    candidate.run() // Parsing LLVM can execute guest code; never hold a cache lock here.
+                } else task = nativeCbits.get()
+            }
+            return try { task!!.get() } catch (failure: ExecutionException) {
+                nativeCbits.compareAndSet(task, null)
+                throw (failure.cause ?: failure)
+            }
+        }
     }
     override fun createContext(env: Env): State = State(env)
     companion object {
         private val contexts = ContextReference.create(Language::class.java)
-        @JvmStatic fun currentState(node: Node?): State = contexts.get(node)
+        @JvmStatic fun currentState(node: Node? = null): State = contexts.get(node)
     }
     @Suppress("UNCHECKED_CAST")
     override fun parse(request: ParsingRequest): CallTarget {

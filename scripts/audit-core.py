@@ -10,6 +10,7 @@ import argparse
 from collections import deque
 import json
 import core_data_tags
+import core_md5_foreign
 from pathlib import Path
 import sys
 
@@ -510,12 +511,32 @@ class Audit:
         check(signature['result'], result, 'rep')
 
     def polyglot_call(self, expr, bound, owner, path):
-        """Accept only an exact, saturated GHC FCallId application in the v1 ABI."""
+        """Accept only closed MD5 or exact saturated polyglot FCallId applications."""
         function, arguments = expr[1:3]
         metadata = expr[6] if len(expr) > 6 and isinstance(expr[6], dict) else {}
         call = metadata.get('foreignCall')
         if call is None:
             return False
+
+        target = call.get('target') if isinstance(call, dict) else None
+        symbol = target.get('symbol') if isinstance(target, dict) else None
+        if isinstance(symbol, str) and symbol in core_md5_foreign.OPERATIONS:
+            try:
+                core_md5_foreign.validate(metadata, [self.expression_rep(arg) for arg in arguments],
+                                          expr[3], self.expression_rep(expr))
+                head = self.expression_rep(function)
+                if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or
+                        not function[1] or function[1] in bound or function[1] in self.bindings or
+                        not isinstance(head, dict) or set(head) != {'kind', 'primReps', 'evaluated'} or
+                        head['kind'] != 'closure' or head['primReps'] != ['BoxedRep (Just Lifted)'] or
+                        head['evaluated'] is not True):
+                    raise ValueError('Unresolved declared foreign variable required')
+                if symbol not in self.cap.get('managedForeignCalls', []):
+                    raise ValueError('Managed MD5 foreign-call capability disabled')
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+            except ValueError as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
 
         def reject(detail):
             self.issue('foreign-call', owner, path, detail)

@@ -151,6 +151,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: List<Local>)
 
     init {
+        CoreMd5Foreign.validateHeads(bindings)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(bindings, constructors)
             CoreInputCalls.validate(bindings, constructors)
@@ -838,8 +839,26 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val javascript = CoreJavaScript.validate(expr, defined)
-            val polyglot = if (javascript == null) CorePolyglot.validate(expr, defined) else null
-            if (javascript != null) {
+            val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
+            val polyglot = if (javascript == null && md5 == null) CorePolyglot.validate(expr, defined) else null
+            if (md5 != null) {
+                CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                val operands = args.map { compile(it, scope, false) }
+                tupleExpression(tupleProof) { e, _ ->
+                    when (md5) {
+                        Md5ForeignOp.INIT -> e.builder.beginMd5Init()
+                        Md5ForeignOp.UPDATE -> e.builder.beginMd5Update()
+                        Md5ForeignOp.FINAL -> e.builder.beginMd5Final()
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (md5) {
+                        Md5ForeignOp.INIT -> e.builder.endMd5Init()
+                        Md5ForeignOp.UPDATE -> e.builder.endMd5Update()
+                        Md5ForeignOp.FINAL -> e.builder.endMd5Final()
+                    }
+                }
+            } else if (javascript != null) {
                 val operands = args.map { argument(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder

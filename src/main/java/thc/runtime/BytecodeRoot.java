@@ -392,6 +392,30 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class Md5Init {
+        @Specialization public static void apply(ManagedAddress context, Object state) {
+            ManagedByteArray.requireState(state);
+            ManagedMd5.INSTANCE.init(context);
+        }
+    }
+
+    @Operation
+    public static final class Md5Update {
+        @Specialization public static void apply(ManagedAddress context, ManagedAddress input, long length, Object state) {
+            ManagedByteArray.requireState(state);
+            ManagedMd5.INSTANCE.update(context, input, length);
+        }
+    }
+
+    @Operation
+    public static final class Md5Final {
+        @Specialization public static void apply(ManagedAddress output, ManagedAddress context, Object state) {
+            ManagedByteArray.requireState(state);
+            ManagedMd5.INSTANCE.finish(output, context);
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
     public static final class RestoreTypedInput {
         @Specialization public static void restore(VirtualFrame frame, BytecodeTypedInputSlots slots,
