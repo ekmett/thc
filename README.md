@@ -119,6 +119,9 @@ immediate local destructuring of mutable reads.
 The [Word32X4 ByteArray slice](docs/word32x4-bytearray.md) adds the six unsigned
 counterparts, with high-bit native checks and packed loads that zero-extend all
 four observed lanes.
+The [FloatX4 ByteArray slice](docs/floatx4-bytearray.md) adds six floating
+counterparts with exact raw-bit movement, immediate State/vector reads and
+verified packed caller-array loads/stores on both backends.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;

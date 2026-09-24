@@ -1,0 +1,11 @@
+Command: python3 scripts/test-core-float-vector-memory.py
+Exit status: 1
+Ran 15 tests; 1 failure.
+FAIL: test_unsigned_proofs_cannot_be_used_by_signed_memory_operations
+scripts/test-core-float-vector-memory.py:89: self.assertFalse(check(module)['accepted'], name)
+AssertionError: True is not false : indexFloatX4Array#
+
+The new test's copied mutation still replaced Word32 with Int32, so it did not
+change a Float operation name at all. This was a test-construction error, not
+a runtime or auditor escape. The first source is preserved alongside this note.
+The chained subsequent Python checks did not run after this first failure.

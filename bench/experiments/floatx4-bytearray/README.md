@@ -1,5 +1,9 @@
 # FloatX4 managed ByteArray evidence harness
 
+The [retained x86-64 checkpoint](evidence-x86_64/README.md) passes all sixteen
+Float captures plus fresh signed/unsigned memory regressions. It preserves
+the original AST dispatch failure and the separate exact-frame reader fix.
+
 This is a fail-closed, native-backed check for the six local FloatX4 memory
 intrinsics. It is not evidence of successful compilation until an actual capture
 has passed. The reader's synthetic tests are parser tests, not guest execution.
