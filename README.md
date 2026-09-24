@@ -12,12 +12,52 @@ specialize.
 GHC already knows quite a lot about compiling Haskell. The intention is to keep
 that information around long enough to use it.
 
+## Build and run
+
+You need **GHC 9.14.1** (including `ghc-pkg` and `runghc`),
+**GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. Put GHC on your `PATH` and
+point `JAVA_HOME` at GraalVM. On macOS, use the bundle's `Contents/Home`
+directory. The Gradle wrapper downloads its dependencies on the first build.
+
+From the repository root, build the Core exporter, JVM runtime, and Cabal driver:
+
+```sh
+export JAVA_HOME=/path/to/graalvm
+export PATH="$JAVA_HOME/bin:$PATH"
+
+compiler/build.sh
+scripts/gradle.sh installDist
+(
+  cd driver
+  runghc Setup.hs configure --builddir=../build/driver-package \
+    --package-db=clear --package-db=global
+  runghc Setup.hs build --builddir=../build/driver-package
+)
+```
+
+Then run the included Cabal executable through THC:
+
+```sh
+build/driver-package/build/thc/thc run driver/test/fixtures/run-pure \
+  --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
+```
+
+This example checks a mutable reference and returns `()` without printing.
+For your own package, pass its directory or `.cabal` file and its executable
+name to `thc run`. The command builds with Cabal, exports GHC Core, and executes
+an accepted `Main.main :: IO ()` in THC. The [driver guide](driver/README.md)
+has the options and integration check.
+
+This is a first slice of IO support: `main = putStrLn "hello"` still fails the
+strict Core audit. Executables with internal library or build-tool dependencies
+are not supported yet. `thc build` and `thc repl` are future commands.
+
+## What works
+
 The runtime follows [Cadenza](https://github.com/ekmett/cadenza): indexed frames,
 selective captures, partial applications and tail calls. Haskell adds laziness,
 sharing, thunk updates and blackholes. Constructors have their own layouts, with
 primitive fields where GHC's representation permits them.
-
-## What works
 
 Both the bytecode and AST backends run lazy Core with closures, recursive
 bindings, typed constructor fields, local joins, and unboxed tuple inputs and
@@ -32,31 +72,25 @@ the individual contracts, native checks and remaining gaps; the generated
 
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
 complete boot-library closure, FFI, and stack-safe non-tail evaluation remain
-unfinished. The host entry interface is currently integer-only. Vector calling
+unfinished. The script-level scalar entry interface is currently integer-only;
+`thc run` has the narrower `IO ()` path described above. Vector calling
 conventions and several aggregate storage forms are deliberately unsupported.
 
 In particular, Map and Set still have cold runtime paths that strict loading
 rejects. Diagnostic mode leaves explicit traps at those gaps. A successful
 workload in that mode does not establish support for its whole call graph.
 
-## Running
+## Development examples
 
-You need **GHC 9.14.1**, **GraalVM 25.3.4.1 / JDK 25**, and Python 3.12+. The build
-pins Gradle 9.7.1 and Kotlin 2.4.20. Initial builds download their dependencies
-and the upstream Haskell source used by the tests.
-
-Put GHC on your `PATH` and point `JAVA_HOME` at the GraalVM JDK:
+The test script prepares native GHC fixtures and builds the runtime. The scalar
+runner then calls one exported entry; `--compile` requests guest compilation and
+checks that code was installed:
 
 ```sh
-export JAVA_HOME=/path/to/graalvm
-export PATH="$JAVA_HOME/bin:$PATH"
-
 scripts/try.sh
 scripts/run.sh sumLoop 100000 --compile
 ```
 
-On macOS, use the bundle's `Contents/Home` directory. `--compile` requests guest
-compilation and checks that code was installed; compilation failures are errors.
 The [bytecode backend](docs/bytecode.md) is the default. To use the AST backend:
 
 ```sh
