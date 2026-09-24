@@ -112,6 +112,13 @@ internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
     var owner: Thread? = null
     val monitor = java.lang.Object()
 }
+/** A cold, one-shot call continuation. Unlike a thunk update, its answer may itself be lazy. */
+internal class CallSegment(continuation: ContinuationResult) {
+    @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
+    var value: Any? = continuation
+    var owner: Thread? = null
+    val monitor = java.lang.Object()
+}
 /** Keep immutable guest failure data, never a shared mutable Truffle stack trace. */
 private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
 /** Async delivery must carry its origin separately from its guest payload. */
@@ -121,9 +128,12 @@ internal class ThunkSuspended(val thunk: Thunk) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode thunk suspension", null, 0, null)
 /** A call returned its own bytecode continuation; only that exact call edge may capture it. */
-internal class CapturedCallSuspension(val thunk: Thunk) :
+internal class CapturedCallSuspension(val segment: CallSegment) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call suspension", null, 0, null)
+internal class CallSegmentSuspended(val segment: CallSegment) :
+    com.oracle.truffle.api.exception.AbstractTruffleException(
+        "Internal bytecode call segment suspension", null, 0, null)
 /** Cold caller-segment input distinguishes a child result from its guest failure. */
 internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
@@ -288,7 +298,7 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
 }
 internal class Force(private val metrics: Metrics) : Node() {
     private object Retry
-    private class Parked(val thunk: Thunk, val continuation: ContinuationResult)
+    private class Parked(val boundary: Any, val continuation: ContinuationResult)
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
@@ -311,7 +321,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
             val observed = if (original.state == 5) original.value as? ContinuationResult else null
-            val child = (observed?.result as? ThunkSuspended)?.thunk
+            val child = suspendedChild(observed)
             // The continuation owns its captured callee frame. None of the
             // update/resume helpers needs this caller's frame; materializing
             // it here poisons frame-access speculation on ordinary loop exits.
@@ -339,7 +349,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
                         5 -> if ((observed != null && original.value !== observed) ||
                             (observed == null &&
-                                ((original.value as? ContinuationResult)?.result is ThunkSuspended))) 3 else {
+                                (suspendedChild(original.value as? ContinuationResult) != null))) 3 else {
                             continuation = original.value as? ContinuationResult
                                 ?: fault("Suspended thunk has no bytecode continuation")
                             original.value = null // One owner consumes the one-shot continuation.
@@ -370,27 +380,35 @@ internal class Force(private val metrics: Metrics) : Node() {
     @CompilerDirectives.TruffleBoundary
     private fun resumeChain(original: Thunk): Any? {
         val parked = java.util.ArrayDeque<Parked>()
-        val seen = java.util.IdentityHashMap<Thunk, Boolean>()
+        val seen = java.util.IdentityHashMap<Any, Boolean>()
         while (true) {
             parked.clear()
             seen.clear()
-            var leaf = original
+            var leaf: Any = original
             var leafContinuation: ContinuationResult? = null
             while (true) {
                 if (seen.put(leaf, true) != null) fault("Suspended thunk dependency cycle")
-                leafContinuation = if (leaf.state == 5) leaf.value as? ContinuationResult else null
-                val child = (leafContinuation?.result as? ThunkSuspended)?.thunk ?: break
-                parked.addLast(Parked(leaf, leafContinuation))
+                leafContinuation = continuationOf(leaf)
+                val child = suspendedChild(leafContinuation) ?: break
+                parked.addLast(Parked(leaf, leafContinuation!!))
                 leaf = child
             }
-            var current = leaf
+            var current: Any = leaf
             var expected = leafContinuation
             var input: Any? = Unit
             while (true) {
                 val outcome = try {
-                    val answer = executeOne(current, expected, input)
+                    val answer = when (current) {
+                        is Thunk -> executeOne(current, expected, input)
+                        is CallSegment -> executeCallSegment(current, expected, input)
+                        else -> fault("Invalid suspended continuation boundary")
+                    }
                     if (answer === Retry) null else ChildResume(answer, null)
                 } catch (suspension: ThunkSuspended) {
+                    // Resignal the requested update boundary, not a deeper child.
+                    if (original.state == 5) throw ThunkSuspended(original)
+                    throw suspension
+                } catch (suspension: CallSegmentSuspended) {
                     // The requested thunk is still parked even if a deeper
                     // dependency yielded again. A new caller must capture the
                     // requested update boundary, not skip its continuation.
@@ -403,11 +421,155 @@ internal class Force(private val metrics: Metrics) : Node() {
                     return outcome.value
                 }
                 val parent = parked.removeLast()
-                current = parent.thunk
+                current = parent.boundary
                 expected = parent.continuation
                 input = outcome
             }
         }
+    }
+
+    private fun continuationOf(boundary: Any): ContinuationResult? = when (boundary) {
+        is Thunk -> if (boundary.state == 5) boundary.value as? ContinuationResult else null
+        is CallSegment -> if (boundary.state == 5) boundary.value as? ContinuationResult else null
+        else -> fault("Invalid suspended continuation boundary")
+    }
+
+    private fun suspendedChild(continuation: ContinuationResult?): Any? = when (val signal = continuation?.result) {
+        is ThunkSuspended -> signal.thunk
+        is CallSegmentSuspended -> signal.segment
+        else -> null
+    }
+
+    private fun executeCallSegment(segment: CallSegment, observed: ContinuationResult?, resumeValue: Any?): Any? {
+        while (true) {
+            when (segment.state) {
+                2 -> return segment.value
+                3 -> rethrowCallFailure(segment)
+                4 -> fault("Interrupted call segment has no resumable continuation")
+            }
+            var continuation: ContinuationResult? = null
+            var claimedHere = false
+            try {
+                val claim = synchronized(segment.monitor) {
+                    when (segment.state) {
+                        5 -> if ((observed != null && segment.value !== observed) ||
+                            (observed == null && suspendedChild(segment.value as? ContinuationResult) != null)) 3 else {
+                            continuation = segment.value as? ContinuationResult
+                                ?: fault("Suspended call segment has no bytecode continuation")
+                            segment.value = null // Consume the one-shot continuation under ownership.
+                            segment.owner = Thread.currentThread()
+                            segment.state = 1
+                            claimedHere = true
+                            0
+                        }
+                        1 -> if (segment.owner === Thread.currentThread()) 2 else 1
+                        else -> 3
+                    }
+                }
+                when (claim) {
+                    0 -> return evaluateCallSegment(segment, continuation!!, resumeValue)
+                    1 -> awaitCallOwner(segment)
+                    2 -> fault("Blackhole: cyclic call segment entered while evaluating")
+                    3 -> return Retry
+                }
+            } catch (failure: Throwable) {
+                if (claimedHere) suspendCallOwned(segment)
+                throw failure
+            }
+        }
+    }
+
+    private fun evaluateCallSegment(segment: CallSegment, continuation: ContinuationResult, resumeValue: Any?): Any? {
+        try {
+            val ambient = SynchronousMasking.current(this)
+            if (ambient != MaskingState.UNMASKED)
+                throw IllegalStateException("Masked call segment resume has no logical mask segment")
+            var maskAtReturn = ambient
+            val result = try {
+                val answer = try { continuation.continueWith(resumeValue) }
+                catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+                maskAtReturn = SynchronousMasking.current(this)
+                answer
+            } finally { SynchronousMasking.set(this, ambient) }
+            if (result is ContinuationResult) {
+                if (maskAtReturn != MaskingState.UNMASKED)
+                    throw IllegalStateException("Masked call segment yield has no logical mask segment")
+                if (result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
+                    throw IllegalStateException("Nested bytecode yield has no captured caller segment")
+                publishCallContinuation(segment, result)
+                throw CallSegmentSuspended(segment)
+            }
+            synchronized(segment.monitor) {
+                segment.value = result // A call may return an unforced thunk; never enter it here.
+                segment.owner = null
+                segment.state = 2
+                segment.monitor.notifyAll()
+            }
+            return result
+        } catch (e: CallSegmentSuspended) {
+            if (e.segment !== segment) suspendCallOwned(segment)
+            throw e
+        } catch (e: ThunkSuspended) {
+            suspendCallOwned(segment)
+            throw e
+        } catch (e: AsyncThunkUnwind) {
+            suspendCallOwned(segment)
+            throw e
+        } catch (e: GuestException) {
+            publishCallFailure(segment, MemoizedGuestFailure(e.payload, e.location ?: this))
+            throw e
+        } catch (e: RuntimeFault) {
+            publishCallFailure(segment, e)
+            throw e
+        } catch (e: Throwable) {
+            suspendCallOwned(segment)
+            throw e
+        }
+    }
+
+    private fun publishCallContinuation(segment: CallSegment, continuation: ContinuationResult) {
+        val safepoint = TruffleSafepoint.getCurrent()
+        val previous = safepoint.setAllowSideEffects(false)
+        try {
+            synchronized(segment.monitor) {
+                segment.value = continuation
+                segment.owner = null
+                segment.state = 5
+                segment.monitor.notifyAll()
+            }
+        } finally { safepoint.setAllowSideEffects(previous) }
+    }
+
+    private fun publishCallFailure(segment: CallSegment, failure: Any) = synchronized(segment.monitor) {
+        segment.value = failure
+        segment.owner = null
+        segment.state = 3
+        segment.monitor.notifyAll()
+    }
+
+    private fun suspendCallOwned(segment: CallSegment) = synchronized(segment.monitor) {
+        if (segment.state != 1 || segment.owner !== Thread.currentThread()) return@synchronized
+        segment.owner = null
+        segment.state = 4
+        segment.monitor.notifyAll()
+    }
+
+    private fun rethrowCallFailure(segment: CallSegment): Nothing {
+        CompilerDirectives.transferToInterpreterAndInvalidate()
+        when (val failure = segment.value) {
+            is MemoizedGuestFailure -> throw GuestException(failure.payload, failure.location)
+            is Throwable -> throw failure
+            else -> fault("Invalid failed call segment")
+        }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private fun awaitCallOwner(segment: CallSegment) {
+        TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<CallSegment> { waiting ->
+            synchronized(waiting.monitor) {
+                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) waiting.monitor.wait()
+            }
+        }, segment)
     }
 
     private fun evaluateOwned(thunk: Thunk, continuation: ContinuationResult?, resumeValue: Any?): Any? {

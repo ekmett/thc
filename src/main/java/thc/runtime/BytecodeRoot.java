@@ -366,7 +366,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             Object source = continuation.getContinuationRootNode().getSourceRootNode();
             if (function.arity != arity || !(source instanceof BytecodeRoot callee) ||
                     !callee.isSelf(function.target) ||
-                    !(continuation.getResult() == kotlin.Unit.INSTANCE || continuation.getResult() instanceof ThunkSuspended))
+                    !(continuation.getResult() == kotlin.Unit.INSTANCE || continuation.getResult() instanceof ThunkSuspended ||
+                            continuation.getResult() instanceof CallSegmentSuspended))
                 throw new IllegalStateException("Application returned an unrelated bytecode continuation: " +
                         "arity=" + function.arity + "/" + arity + ", source=" + source +
                         ", target=" + function.target.getRootNode() + ", yielded=" + continuation.getResult());
@@ -374,27 +375,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 throw new IllegalStateException("Masked application continuation has no logical mask segment");
             // This private, cold call segment begins already suspended. It has no
             // original body to replay: only the captured Truffle frame can resume.
-            Thunk call = new Thunk(function.target, null);
-            call.setTarget(null);
-            call.setValue(continuation);
-            call.setState(5);
-            throw new CapturedCallSuspension(call);
+            throw new CapturedCallSuspension(new CallSegment(continuation));
         }
     }
 
     @Operation
     public static final class CallSuspensionOnly {
-        @Specialization public static ThunkSuspended capture(AbstractTruffleException failure) {
-            if (failure instanceof CapturedCallSuspension captured) return new ThunkSuspended(captured.getThunk());
+        @Specialization public static CallSegmentSuspended capture(AbstractTruffleException failure) {
+            if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
             throw failure;
         }
     }
 
     @Operation
     public static final class ResumeApplication {
-        @Specialization public static Object resume(ThunkSuspended suspended, ChildResume resumed) {
+        @Specialization public static Object resume(CallSegmentSuspended suspended, ChildResume resumed) {
             if (resumed.getFailure() != null) throw resumed.getFailure();
-            Thunk call = suspended.getThunk();
+            CallSegment call = suspended.getSegment();
             if (call.getState() != 2 || call.getValue() != resumed.getValue() || resumed.getValue() instanceof ContinuationResult)
                 throw new IllegalStateException("Application continuation lost its call update");
             return resumed.getValue();
