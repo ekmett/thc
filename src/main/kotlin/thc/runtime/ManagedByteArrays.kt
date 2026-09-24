@@ -193,6 +193,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     NEW("newByteArray#", listOf(listOf("IntRep"), emptyList()), true),
     RESIZE("resizeMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE("writeWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Word8Rep"), emptyList())),
+    WRITE_CHAR("writeCharArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("WordRep"), emptyList())),
     COPY("copyByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
         listOf("IntRep"), listOf("IntRep"), emptyList())),
     SET("setByteArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("IntRep"), listOf("IntRep"), emptyList())),
@@ -207,6 +208,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     SIZE_MUTABLE("sizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
     GET_SIZE_MUTABLE("getSizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
     INDEX("indexWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
+    INDEX_CHAR("indexCharArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_INT("readIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_INT("writeIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("IntRep"), emptyList())),
     INDEX_INT("indexIntArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
@@ -217,6 +219,7 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     WRITE_INT8("writeInt8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int8Rep"), emptyList())),
     INDEX_INT8("indexInt8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
     READ_WORD8("readWord8Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
+    READ_CHAR("readCharArray#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     READ_INT16("readInt16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), emptyList()), true),
     WRITE_INT16("writeInt16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf("Int16Rep"), emptyList())),
     INDEX_INT16("indexInt16Array#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"))),
@@ -250,18 +253,18 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             READ_INT8 -> "Int8Rep"; READ_WORD8 -> "Word8Rep"
             READ_INT16 -> "Int16Rep"; READ_WORD16 -> "Word16Rep"
             READ_INT32 -> "Int32Rep"; READ_WORD32 -> "Word32Rep"
-            READ_FLOAT -> "FloatRep"; READ_WORD -> "WordRep"; else -> BYTE_ARRAY_REP
+            READ_FLOAT -> "FloatRep"; READ_WORD, READ_CHAR -> "WordRep"; else -> BYTE_ARRAY_REP
         })
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
             scalar(result.components[0], emptyList()) && scalar(result.components[1], payload) &&
             result.primReps == payload
         else scalar(result, when (this) {
-            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
+            WRITE_INT8, WRITE_INT16, WRITE_WORD16, WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_FLOAT, WRITE_WORD, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING -> emptyList()
             SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
             INDEX_INT16 -> listOf("Int16Rep"); INDEX_WORD16 -> listOf("Word16Rep")
             INDEX_INT32 -> listOf("Int32Rep"); INDEX_WORD32 -> listOf("Word32Rep")
-            INDEX_FLOAT -> listOf("FloatRep"); INDEX_WORD -> listOf("WordRep")
+            INDEX_FLOAT -> listOf("FloatRep"); INDEX_WORD, INDEX_CHAR -> listOf("WordRep")
             INDEX_DOUBLE -> listOf("DoubleRep"); else -> listOf("Word8Rep")
         })
         if (!valid) throw RuntimeFault("ByteArray primitive result representation mismatch: $primitive")
@@ -276,7 +279,7 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.NEW -> NewByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.RESIZE -> ResizeByteArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
-        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.SET -> SetByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> CopyMutableByteArrayExpression(
@@ -284,7 +287,7 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.COMPARE -> CompareByteArraysExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.GET_SIZE_MUTABLE -> GetSizeMutableByteArrayExpression(operands[0], operands[1])
-        ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> IndexByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> ReadIntArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> WriteIntArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> IndexIntArrayExpression(operands[0], operands[1])
@@ -294,8 +297,8 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.READ_FLOAT -> ReadFloatArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_FLOAT -> WriteFloatArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_FLOAT -> IndexFloatArrayExpression(operands[0], operands[1])
-        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> ReadByteArrayExpression(
-            operation == ByteArrayOp.READ_WORD8, operands[0], operands[1], operands[2])
+        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> ReadByteArrayExpression(
+            operation != ByteArrayOp.READ_INT8, operands[0], operands[1], operands[2])
         ByteArrayOp.INDEX_INT8 -> IndexSignedByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> ReadInt16ArrayExpression(
             operation == ByteArrayOp.READ_WORD16, operands[0], operands[1], operands[2])
