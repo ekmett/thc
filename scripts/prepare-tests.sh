@@ -47,7 +47,7 @@ python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py
 python3 scripts/prepare-managed-md5.py
-python3 scripts/prepare-original-stdio.py --require-supported
+"$fixture_bin" original-stdio --require-supported
 python3 scripts/prepare-pinned-addresses.py
 scripts/prepare-address-identity.sh
 python3 scripts/prepare-managed-address-reads.py

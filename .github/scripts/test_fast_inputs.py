@@ -333,14 +333,15 @@ class FastInputTests(unittest.TestCase):
         self.assertIn("build/original-stdio/manifest.json", DECLARED_REQUIRED)
         self.assertIn("original-stdio", cache.MANIFEST_DIRS)
         self.assertIn("original-stdio", cache.BUILD_DIRS)
-        self.assertEqual(609, len(cache.ORIGINAL_STDIO_OUTPUTS))
+        self.assertEqual(630, len(cache.ORIGINAL_STDIO_OUTPUTS))
         for name in cache.ORIGINAL_STDIO_OUTPUTS:
             self.assertTrue(cache.allowed_payload(name, {}), name)
         self.assertIn("build/original-stdio/native/original-stdio-oracle", cache.NATIVE_EXECUTABLES)
         for name in ("other.json", "unknown.stdout", "logs/extra.stdout", "logs/native-144.stdout",
                      "logs/native-000.sh", "logs/pre-export.stdout.extra", "results/144.txt", "results/00.txt",
                      "native/other-oracle", "pre/ghc/OriginalStdioAudit.o", "post/core/Unreviewed.json",
-                     "test-results/pass.json", "reports/pass.json", "previous-manifests/stale.json"):
+                     "test-results/pass.json", "reports/pass.json", "previous-manifests/stale.json",
+                     "expected.json", "pre/proofs.json", "logs/pre-audit-unknown.stdout"):
             self.assertFalse(cache.allowed_payload("build/original-stdio/" + name, {}), name)
         self.assertFalse(cache.allowed_payload("build/bytearray/logs/pre-export.stdout", {}))
 
