@@ -65,7 +65,67 @@ class Int32ArrayNativeTest {
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
-    private fun model(name: String, seed: Long): Long {
+    private val inputs = buildSet {
+        addAll(-16L..16L)
+        addAll(listOf(Long.MIN_VALUE, Long.MIN_VALUE+1, Long.MAX_VALUE-1, Long.MAX_VALUE))
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            add(sign*((1L shl bit)+delta))
+        for (bits in listOf("5555555555555555", "aaaaaaaaaaaaaaaa", "55aa55aa55aa55aa",
+                "aa55aa55aa55aa55", "0123456789abcdef", "fedcba9876543210", "8000000080000000",
+                "ffffffff00000000", "800000007fffffff", "7fffffff80000000", "ffffffff7fffffff",
+                "0000000100000001", "12345678abcdef01")) add(bits.toULong(16).toLong())
+    }.sorted()
+    private data class Row(val name: String, val input: Long, val answer: Long)
+    private fun expectedRows(order: ByteOrder) = names.flatMap { name -> inputs.map { Row(name, it, model(name, it, order)) } }
+    private fun parseRows(text: String): List<Row> {
+        val lines = text.lineSequence().toList().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+        return lines.map { line ->
+            val fields = line.split('\t')
+            require(fields.size == 3) { "Int32-array oracle requires name/input/result" }
+            Row(fields[0], fields[1].toLong(), fields[2].toLong())
+        }
+    }
+    private fun checkedRows(text: String, order: ByteOrder = ByteOrder.nativeOrder()): List<Row> {
+        val rows = parseRows(text)
+        require(rows == expectedRows(order)) { "Int32-array native/model mismatch or incomplete/reordered corpus" }
+        return rows
+    }
+    private val literalNames = listOf("noinlineInt32Literal", "noinlineWord32Literal")
+    private val literalInputs = listOf(Long.MIN_VALUE, -2147483648L, -1L, 0L, 1L, 2147483647L, Long.MAX_VALUE)
+    private val literalRows = literalNames.flatMap { name -> literalInputs.map { Row(name, it,
+        it+if (name == literalNames[0]) -2147483648L else 4294967295L) } }
+    private fun checkedLiteralRows(text: String): List<Row> {
+        val rows = parseRows(text)
+        require(rows == literalRows) { "Noinline narrow-literal corpus mismatch" }
+        return rows
+    }
+    private fun exactAlias(name: String): Map<String, Int> {
+        if (!name.startsWith("alias")) return emptyMap()
+        val kind = if (name.contains("Word32")) "Word32" else "Int32"
+        return mapOf("newByteArray#" to 1, "unsafeFreezeByteArray#" to 1, "write${kind}Array#" to 2,
+            "read${kind}Array#" to 3, "index${kind}Array#" to 2, "writeWord8Array#" to 2,
+            "indexWord8Array#" to 4, "*#" to 9, "+#" to 10, "xorI#" to 1, "word8ToWord#" to 4, "wordToWord8#" to 2) +
+            if (kind == "Int32") mapOf("int2Word#" to 2, "word2Int#" to 4, "intToInt32#" to 2, "int32ToInt#" to 5)
+            else mapOf("int2Word#" to 4, "word2Int#" to 9, "wordToWord32#" to 2, "word32ToWord#" to 5)
+    }
+    private fun required(name: String): Set<String> {
+        if (name.startsWith("alias")) return exactAlias(name).keys
+        val kind = if (name.contains("Word32")) "Word32" else "Int32"
+        val conversions = if (kind == "Int32") setOf("intToInt32#", "int32ToInt#")
+            else setOf("wordToWord32#", "word32ToWord#", "int2Word#", "word2Int#")
+        return setOf("newByteArray#", "unsafeFreezeByteArray#", "read${kind}Array#", "write${kind}Array#",
+            "index${kind}Array#", "plus$kind#") + conversions +
+            if (name.endsWith("ST")) setOf("sub$kind#", "times$kind#") else emptySet()
+    }
+    private fun checkedReport(name: String, report: Map<String, Any?>): Map<String, Int> {
+        require(name in names && report["accepted"] == true) { "Int32-array strict audit failed: $name" }
+        val counts = (report["primitives"] as List<Map<String, Any?>>).associate { it["name"] as String to (it["uses"] as List<*>).size }
+        require(counts.keys.containsAll(required(name))) { "Missing Int32-array primitive: $name" }
+        require(!name.startsWith("alias") || counts == exactAlias(name)) { "Int32 alias use counts changed: $name" }
+        return counts
+    }
+    private fun model(name: String, seed: Long, order: ByteOrder = ByteOrder.nativeOrder()): Long {
+        require(name in names) { "Unknown Int32-array entry: $name" }
         val unsigned = name.contains("Word32")
         fun decode(value: Long): Long {
             val bits = value and 0xffff_ffffL
@@ -78,7 +138,7 @@ class Int32ArrayNativeTest {
         val bytes = LongArray(8) { offset ->
             val value = if (offset < 4) bits else bits xor 0x55aa55aaL
             val position = offset % 4
-            val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) position else 3-position)*8
+            val shift = (if (order == ByteOrder.LITTLE_ENDIAN) position else 3-position)*8
             (value ushr shift) and 255
         }
         bytes[3] = (seed+101) and 255
@@ -86,7 +146,7 @@ class Int32ArrayNativeTest {
         fun element(offset: Int): Long {
             var value = 0L
             for (byte in 0..3) {
-                val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 3-byte)*8
+                val shift = (if (order == ByteOrder.LITTLE_ENDIAN) byte else 3-byte)*8
                 value = value or (bytes[offset+byte] shl shift)
             }
             return decode(value)
@@ -94,23 +154,105 @@ class Int32ArrayNativeTest {
         return 3*decode(bits) + 16*element(0) + 20*element(4) +
             17*bytes[0] + 19*bytes[3] + 23*bytes[4] + 29*bytes[7]
     }
+    @Test fun independentModelsCoverNarrowCellUpdatesAndBothByteOrders() {
+        assertEquals(397, inputs.size); assertEquals(inputs.sorted().distinct(), inputs)
+        for (bit in 0..63) for (delta in -1L..1L) for (sign in listOf(-1L, 1L))
+            assertTrue(sign*((1L shl bit)+delta) in inputs)
+        for (unsigned in listOf(false, true)) {
+            val kind = if (unsigned) "Word32" else "Int32"
+            fun widen(bits: Long) = if (unsigned) bits and 0xffff_ffffL else bits.toInt().toLong()
+            for (raw in inputs) {
+                val bits = raw and 0xffff_ffffL
+                val accum = LongArray(8) { bits }; val st = LongArray(8) { bits }
+                for ((index, value) in listOf(-3 to 3L, 0 to 5L, -3 to -2L, 4 to bits))
+                    accum[index+3] = (accum[index+3]+value) and 0xffff_ffffL
+                st[3] = (st[0]+7) and 0xffff_ffffL
+                st[7] = (3*st[3]-bits) and 0xffff_ffffL
+                for ((suffix, cells) in listOf("Accum" to accum, "ST" to st))
+                    assertEquals(7*widen(cells[0])+11*widen(cells[3])+13*widen(cells[7]), model("unboxed$kind$suffix", raw))
+                for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN)) {
+                    val little = order == ByteOrder.LITTLE_ENDIAN
+                    val shiftA = if (little) 24 else 0; val shiftB = if (little) 0 else 24
+                    val a = (bits and (255L shl shiftA).inv()) or (((raw+101) and 255) shl shiftA)
+                    val b = ((bits xor 0x55aa55aaL) and (255L shl shiftB).inv()) or (((raw+37) and 255) shl shiftB)
+                    val first = if (little) a and 255 else a ushr 24
+                    val last = if (little) b ushr 24 else b and 255
+                    assertEquals(3*widen(bits)+16*widen(a)+20*widen(b)+17*first+19*((raw+101) and 255)+23*((raw+37) and 255)+29*last,
+                        model("alias${kind}Bytes", raw, order), "$kind/$raw/$order")
+                }
+            }
+        }
+        for (name in names) for (x in listOf(0L, 1L, 0x7fffffffL, 0x80000000L, 0xffffffffL))
+            for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN)) {
+                assertEquals(model(name, x, order), model(name, x+0x1_0000_0000L, order))
+                assertEquals(model(name, x, order), model(name, x-0x1_0000_0000L, order))
+            }
+        for ((signed, unsigned) in listOf("unboxedInt32Accum" to "unboxedWord32Accum",
+                "unboxedInt32ST" to "unboxedWord32ST", "aliasInt32Bytes" to "aliasWord32Bytes"))
+            for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN))
+                assertNotEquals(model(signed, 0x80000000L, order), model(unsigned, 0x80000000L, order))
+        assertNotEquals(model("aliasInt32Bytes", 0, ByteOrder.LITTLE_ENDIAN), model("aliasInt32Bytes", 0, ByteOrder.BIG_ENDIAN))
+        assertThrows(IllegalArgumentException::class.java) { model("unknownAccum", 0) }
+    }
+
+    @Test fun exactCorpusRejectsMissingDuplicateReorderedMalformedAndWrongRows() {
+        for (order in listOf(ByteOrder.LITTLE_ENDIAN, ByteOrder.BIG_ENDIAN)) {
+            val rows = expectedRows(order)
+            fun text(rows: List<Row>) = rows.joinToString("\n", postfix="\n") { "${it.name}\t${it.input}\t${it.answer}" }
+            val valid = text(rows); val first = rows.first()
+            assertEquals(2382, rows.size); assertEquals(rows, checkedRows(valid, order))
+            val bad = listOf("", text(rows.drop(1)), text(rows+first), text(rows.reversed()),
+                text(rows.toMutableList().apply { this[1] = first }),
+                text(listOf(first.copy(name="unknown"))+rows.drop(1)),
+                text(listOf(first.copy(input=first.input+1))+rows.drop(1)),
+                text(listOf(first.copy(answer=first.answer+1))+rows.drop(1)),
+                valid.replaceFirst("\t", " "), valid.replaceFirst("\t", "\textra\t"),
+                "unboxedInt32Accum\t9223372036854775808\t0\n", "unboxedInt32Accum\t0\tnot-an-int\n", valid+"\n")
+            for ((index, corrupt) in bad.withIndex())
+                assertThrows(IllegalArgumentException::class.java, { checkedRows(corrupt, order) }, "$order/mutation$index")
+        }
+        fun text(rows: List<Row>) = rows.joinToString("\n", postfix="\n") { "${it.name}\t${it.input}\t${it.answer}" }
+        assertEquals(literalRows, checkedLiteralRows(text(literalRows)))
+        for (corrupt in listOf(emptyList(), literalRows.drop(1), literalRows+literalRows.first(), literalRows.reversed(),
+                literalRows.toMutableList().apply { this[0] = first().copy(answer=first().answer+1) },
+                literalRows.toMutableList().apply { this[0] = first().copy(input=0) }))
+            assertThrows(IllegalArgumentException::class.java) { checkedLiteralRows(text(corrupt)) }
+    }
+
+    @Test fun primitiveReportsRequireAcceptanceRequiredNamesAndExactAliasCounts() {
+        for (name in names) {
+            val counts = required(name).associateWith { 1 } + exactAlias(name)
+            fun report(values: Map<String, Int>, accepted: Boolean = true) = mapOf("accepted" to accepted,
+                "primitives" to values.map { (primitive, count) -> mapOf("name" to primitive, "uses" to List(count) { emptyMap<String, Any?>() }) })
+            assertEquals(counts, checkedReport(name, report(counts)))
+            assertThrows(IllegalArgumentException::class.java) { checkedReport(name, report(counts, false)) }
+            for (primitive in required(name))
+                assertThrows(IllegalArgumentException::class.java) { checkedReport(name, report(counts-primitive)) }
+            for ((primitive, count) in exactAlias(name))
+                assertThrows(IllegalArgumentException::class.java) { checkedReport(name, report(counts+(primitive to count-1))) }
+            if (name.startsWith("alias"))
+                assertThrows(IllegalArgumentException::class.java) { checkedReport(name, report(counts+("readIntArray#" to 1))) }
+        }
+    }
+
     @Test fun nativePublicArraysAndByteAliasesWithInlining() = native(true)
     @Test fun nativePublicArraysAndByteAliasesAcrossResidualCalls() = native(false)
     @Test fun genuineNoinlineNarrowLiteralsRefineUnknownProofsInCompiledCode() {
         val manifest = manifest()
-        val entries = listOf("noinlineInt32Literal", "noinlineWord32Literal")
+        val entries = literalNames
         assertEquals(entries, manifest["literalEntries"])
+        assertEquals(literalInputs, (manifest["literalInputs"] as List<Number>).map { it.toLong() })
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
             val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale literal fixture: $path")
         }
-        val rows = File(root, "build/int32-arrays/literal-oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        val rows = checkedLiteralRows(File(root, "build/int32-arrays/literal-oracle.tsv").readText()).groupBy { it.name }
         assertEquals(entries.toSet(), rows.keys)
         assertEquals(14, rows.values.sumOf { it.size })
         assertEquals(14, (manifest["literalNativeRows"] as Number).toInt())
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) for (name in entries) {
-            val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+            val cases = rows.getValue(name).map { it.input to it.answer }
             assertEquals((manifest["literalInputs"] as List<Number>).map { it.toLong() }, cases.map { it.first })
             for ((input, answer) in cases) assertEquals(input + if (name == entries[0]) -2147483648L else 4294967295L, answer)
             for (backend in listOf("ast", "bytecode")) for (inlining in listOf(false, true)) context(inlining).use { context ->
@@ -145,7 +287,9 @@ class Int32ArrayNativeTest {
     }
     private fun native(inlining: Boolean) {
         val manifest = manifest()
-        assertEquals(names.toSet(), (manifest["entries"] as List<String>).toSet())
+        assertEquals(names, manifest["entries"])
+        assertEquals(inputs, (manifest["inputs"] as List<Number>).map { it.toLong() })
+        assertEquals(names.size*inputs.size, (manifest["nativeRows"] as Number).toInt())
         assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
         assertEquals(64, (manifest["wordBits"] as Number).toInt())
         assertEquals(32, (manifest["elementBits"] as Number).toInt())
@@ -154,7 +298,7 @@ class Int32ArrayNativeTest {
                 .joinToString("") { "%02x".format(it.toInt() and 255) }
             assertEquals(expected, actual, "Stale 32-bit-array fixture: $path; rerun prepare-int32-arrays.py")
         }
-        val rows = File(root, "build/int32-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        val rows = checkedRows(File(root, "build/int32-arrays/oracle.tsv").readText()).groupBy { it.name }
         assertEquals(names.toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         val expectedCalls = names.associateWith { 2L }
@@ -164,7 +308,10 @@ class Int32ArrayNativeTest {
         for ((stage, paths) in stages) {
             val module = merged(paths)
             for (name in names) {
-                val cases = rows.getValue(name).map { it[1].toLong() to it[2].toLong() }
+                val report = Json.parse(File(root, "build/int32-arrays/$stage/$name.audit.json").readText()) as Map<String, Any?>
+                val counts = checkedReport(name, report)
+                assertEquals(counts, (manifest["primitiveCounts"] as Map<String, Map<String, Number>>).getValue("$stage/$name").mapValues { it.value.toInt() })
+                val cases = rows.getValue(name).map { it.input to it.answer }
                 assertEquals(cases.size, cases.map { it.first }.toSet().size)
                 assertEquals((manifest["inputs"] as List<Number>).map { it.toLong() }.toSet(), cases.map { it.first }.toSet())
                 for ((input, native) in cases) {
