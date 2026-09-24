@@ -174,6 +174,12 @@ class Int32VectorMemoryProofTest {
                     val f = fixture(operation); map(list(list(f.app[2])[2])[6])["rep"] = copy(unsignedVector)
                     reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/unsigned vector")
                 }
+                if (operation.isIndex || operation.isWrite) for (count in listOf<Any?>(4.0, 4.5, true, "4", null)) {
+                    val f = fixture(operation)
+                    val expression = if (operation.isIndex) f.app else list(list(f.app[2])[2])
+                    map(map(map(expression[6])["rep"])["vector"])["lanes"] = count
+                    reject(language, backend, diagnostic, f, "$backend/$diagnostic/$operation/direct vector lanes=$count")
+                }
             }
         }
     }
