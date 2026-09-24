@@ -2266,6 +2266,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     })
     private fun floatingPrimitive(name: String, args: List<Expression>): Expression? {
         val operation = when (name) {
+            "fmaddFloat#" -> "FloatFMAdd"
+            "fmsubFloat#" -> "FloatFMSub"
+            "fnmaddFloat#" -> "FloatFNMAdd"
+            "fnmsubFloat#" -> "FloatFNMSub"
+            "fmaddDouble#" -> "DoubleFMAdd"
+            "fmsubDouble#" -> "DoubleFMSub"
+            "fnmaddDouble#" -> "DoubleFNMAdd"
+            "fnmsubDouble#" -> "DoubleFNMSub"
             "plusFloat#" -> "FloatAdd"
             "minusFloat#" -> "FloatSubtract"
             "timesFloat#" -> "FloatMultiply"
@@ -2335,8 +2343,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             else -> return null
         }
         val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "WordToFloat", "IntToDouble", "WordToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
-        if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
+        val fused = operation in setOf("FloatFMAdd", "FloatFMSub", "FloatFNMAdd", "FloatFNMSub",
+            "DoubleFMAdd", "DoubleFMSub", "DoubleFNMAdd", "DoubleFNMSub")
+        if (args.size != if (fused) 3 else if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
+            "FloatFMAdd", "FloatFMSub", "FloatFNMAdd", "FloatFNMSub" -> CoreKind.FLOAT
+            "DoubleFMAdd", "DoubleFMSub", "DoubleFNMAdd", "DoubleFNMSub" -> CoreKind.DOUBLE
             "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "WordToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
             "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "WordToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
@@ -2344,6 +2356,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         return ProvenExpression(Expression { e ->
             val b = e.builder
             when (operation) {
+                "FloatFMAdd" -> b.beginFloatFMAdd()
+                "FloatFMSub" -> b.beginFloatFMSub()
+                "FloatFNMAdd" -> b.beginFloatFNMAdd()
+                "FloatFNMSub" -> b.beginFloatFNMSub()
+                "DoubleFMAdd" -> b.beginDoubleFMAdd()
+                "DoubleFMSub" -> b.beginDoubleFMSub()
+                "DoubleFNMAdd" -> b.beginDoubleFNMAdd()
+                "DoubleFNMSub" -> b.beginDoubleFNMSub()
                 "FloatAdd" -> b.beginFloatAdd()
                 "FloatSubtract" -> b.beginFloatSubtract()
                 "FloatMultiply" -> b.beginFloatMultiply()
@@ -2413,6 +2433,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             args.forEach { it.emit(e) }
             when (operation) {
+                "FloatFMAdd" -> b.endFloatFMAdd()
+                "FloatFMSub" -> b.endFloatFMSub()
+                "FloatFNMAdd" -> b.endFloatFNMAdd()
+                "FloatFNMSub" -> b.endFloatFNMSub()
+                "DoubleFMAdd" -> b.endDoubleFMAdd()
+                "DoubleFMSub" -> b.endDoubleFMSub()
+                "DoubleFNMAdd" -> b.endDoubleFNMAdd()
+                "DoubleFNMSub" -> b.endDoubleFNMSub()
                 "FloatAdd" -> b.endFloatAdd()
                 "FloatSubtract" -> b.endFloatSubtract()
                 "FloatMultiply" -> b.endFloatMultiply()

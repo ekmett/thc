@@ -36,7 +36,7 @@ RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/java/thc/runtime/DoubleX2.java")
 MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
 boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
-explicit64-primops float-word-arrays int-arrays int16-arrays int32-arrays
+explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar
 narrow-literal-proofs original-stack original-stack-formatter original-stdio resize-bytearrays scalar-bitcasts short-bytes-slices
 show-int show-word-list signed-narrow-primops synchronous-exceptions tuple-arithmetic word-floating""".split()
