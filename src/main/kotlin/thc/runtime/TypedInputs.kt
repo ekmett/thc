@@ -424,9 +424,11 @@ internal class GenericInputCall(private val source: InputSource, private val cou
 }
 
 @CompilerDirectives.TruffleBoundary
-internal fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray =
-    root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) &&
+internal fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray {
+    if (root is BytecodeRoot && root.isAsyncEnabled) return intArrayOf()
+    return root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) &&
         input.packet.isObject(input.header + input.logical.offset(it)) }.toIntArray()
+}
 
 internal fun checkInputResult(root: GuestRoot, destination: TupleDestination?, exact: Boolean) {
     if (exact && destination == null && root.tupleResult != null)

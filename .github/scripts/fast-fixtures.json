@@ -500,6 +500,19 @@
       "outputs": ["build/float-word-arrays"],
       "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/FloatArrayAudit.hs", "compiler/test-fixtures/WordArrayAudit.hs", "examples/THC/UnboxedFloatArrays.hs", "examples/THC/UnboxedWordArrays.hs"]
     },
+    "live-async": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "live-async"]}],
+      "outputs": ["build/live-async"],
+      "sources": [
+        "test/haskell-fixtures/LiveAsyncFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/LiveAsyncAudit.hs",
+        "compiler/test-fixtures/LiveAsyncNative.hs",
+        "thc.cabal"
+      ]
+    },
     "simd-capability-smoke": {
       "junit": ["thc.runtime.SimdCapabilitySmokeTest"],
       "commands": [

@@ -195,6 +195,18 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/LiveAsyncAudit.hs": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/LiveAsyncNative.hs": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/LiveAsyncFixtures.hs": {
+      "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
+      "python": []
+    },
     "compiler/test-fixtures/OriginalStackFormatter.hs": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "python": []
@@ -728,6 +740,8 @@
         "thc.runtime.WordFloatingTest",
         "thc.runtime.OriginalStackFormatterTest",
         "thc.runtime.CoreContinuationNativeTest",
+        "thc.runtime.LiveAsyncNativeTest",
+        "thc.runtime.AsyncStrictEntryNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
