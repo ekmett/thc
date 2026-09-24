@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import random
+import struct
 import subprocess
 import sys
 
@@ -19,6 +20,16 @@ OUT = ROOT / 'build/sqrt'
 FIXTURE = ROOT / 'compiler/test-fixtures/SqrtAudit.hs'
 NATIVE = ROOT / 'compiler/test-fixtures/SqrtAuditNative.hs'
 ENTRIES = ['sqrtFloat', 'sqrtDouble', 'floatCase', 'doubleCase']
+MATH_OPERATIONS = {
+    **{name + suffix: primitive + ('Float#' if suffix == 'Float' else 'Double#')
+       for primitive, name in [('fabs', 'fabs'), ('exp', 'exp'), ('expm1', 'expm1'),
+                               ('log', 'log'), ('log1p', 'log1p'), ('sin', 'sin'), ('cos', 'cos'),
+                               ('tan', 'tan'), ('asin', 'asin'), ('acos', 'acos'), ('atan', 'atan'),
+                               ('sinh', 'sinh'), ('cosh', 'cosh'), ('tanh', 'tanh')]
+       for suffix in ('Float', 'Double')},
+    'powerFloat': 'powerFloat#', 'powerDouble': '**##',
+}
+ENTRIES += list(MATH_OPERATIONS)
 INTEGER_INPUTS = [0, 1, 2, 3, 4, 15, 16, 17, 81, 65535, 65536, 1 << 20, 1 << 24]
 
 
@@ -97,16 +108,45 @@ def bit_inputs(width):
 
 
 def input_rows():
-    return [(name, bits) for name, width in [('sqrtFloat', 32), ('sqrtDouble', 64)] for bits in bit_inputs(width)] + \
-           [(name, value) for name in ['floatCase', 'doubleCase'] for value in INTEGER_INPUTS]
+    sqrt = [(name, bits) for name, width in [('sqrtFloat', 32), ('sqrtDouble', 64)] for bits in bit_inputs(width)]
+    integer = [(name, value) for name in ['floatCase', 'doubleCase'] for value in INTEGER_INPUTS]
+    math_rows = []
+    for name in MATH_OPERATIONS:
+        width = 32 if name.endswith('Float') else 64
+        if name.startswith('fabs'):
+            values = [-math.inf, -3.0, -0.0, 0.0, 3.0, math.inf, math.nan]
+        elif name.startswith('log1p'):
+            values = [-2.0, -1.0, -0.5, -0.25, -0.0, 0.0, 0.25, 0.5, 1.0, 3.0, math.inf, math.nan]
+        elif name.startswith('log'):
+            values = [-1.0, -0.5, -0.0, 0.0, 0.125, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, math.inf, math.nan]
+        elif name.startswith('power'):
+            values = [-1.0, -0.5, -0.0, 0.0, 0.125, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, math.nan]
+        elif name.startswith('asin') or name.startswith('acos'):
+            values = [-2.0, -1.0, -0.75, -0.5, -0.0, 0.0, 0.5, 0.75, 1.0, 2.0, math.nan]
+        elif name.startswith('sinh') or name.startswith('cosh'):
+            limit = [88.0, 89.0, 90.0] if width == 32 else [709.0, 710.0, 711.0]
+            values = [-math.inf, *[-x for x in reversed(limit)], -3.0, -1.0, -0.0, 0.0,
+                      1.0, 3.0, *limit, math.inf, math.nan]
+        else:
+            values = [-math.inf, -3.0, -2.0, -1.0, -0.5, -0.25, -0.0, 0.0,
+                      0.25, 0.5, 1.0, 2.0, 3.0, math.inf, math.nan]
+        packing = '>I' if width == 32 else '>Q'
+        floating = '>f' if width == 32 else '>d'
+        math_rows += [(name, struct.unpack(packing, struct.pack(floating, value))[0]) for value in values]
+    return sqrt + integer + math_rows
 
 
 def check_native():
     rows = [line.split('\t') for line in (OUT / 'oracle.tsv').read_text().splitlines()]
     check([(name, int(bits)) for name, bits, _ in rows] == input_rows(), 'Native input coverage differs')
     nan_rows = 0
+    math_rows = 0
     for name, bits, actual in rows:
         bits, actual = int(bits), int(actual)
+        if name in MATH_OPERATIONS:
+            check(0 <= actual < 1 << (32 if name.endswith('Float') else 64), f'Invalid native bits: {name}/{bits}')
+            math_rows += 1
+            continue
         if name in ('floatCase', 'doubleCase'):
             check(actual == math.isqrt(bits), f'Native integer consumer differs: {name}/{bits}')
             continue
@@ -119,8 +159,8 @@ def check_native():
             nan_rows += 1
         else:
             check(actual == expected, f'Native exact sqrt rounding differs: {name}/{bits}: {actual} != {expected}')
-    return dict(nativeRows=len(rows), nanClassificationRows=nan_rows,
-                exactBitRows=len(rows) - nan_rows - 2 * len(INTEGER_INPUTS), integerRows=2 * len(INTEGER_INPUTS))
+    return dict(nativeRows=len(rows), mathRows=math_rows, nanClassificationRows=nan_rows,
+                exactBitRows=len(rows) - math_rows - nan_rows - 2 * len(INTEGER_INPUTS), integerRows=2 * len(INTEGER_INPUTS))
 
 
 def walk(value):
@@ -149,9 +189,17 @@ def inventory(stage):
               name + ': scalar signature changed')
         primitives = [n[1] for n in walk(lam[2]) if isinstance(n, list) and n and n[0] == 'prim']
         check(primitives == [name + '#'], name + ': public sqrt did not lower to its exact primop')
+    for name, primitive in MATH_OPERATIONS.items():
+        kind, register = ('float', 'FloatRep') if name.endswith('Float') else ('double', 'DoubleRep')
+        lam = bindings[name]['expr']
+        check(lam[0] == 'lam' and len(lam[1]) == 1 and lam[1][0]['rep']['primReps'] == [register]
+              and lam[3]['resultRep']['primReps'] == [register]
+              and lam[3]['resultRep']['kind'] == kind, name + ': typed scalar math signature changed')
+        primitives = [n[1] for n in walk(lam[2]) if isinstance(n, list) and n and n[0] == 'prim']
+        check(primitives == [primitive], name + ': expected one direct ' + primitive)
     audit = json.loads((OUT / f'{stage}-audit.json').read_text())
     check(audit['accepted'], stage + ': strict audit rejected a sqrt entry')
-    return dict(stage=stage, audit=audit['summary'], primitives=['sqrtFloat#', 'sqrtDouble#'])
+    return dict(stage=stage, audit=audit['summary'], primitives=['sqrtFloat#', 'sqrtDouble#', *MATH_OPERATIONS.values()])
 
 
 def main():
@@ -188,7 +236,7 @@ def main():
         artifacts += [OUT / name for name in ['inputs.tsv', 'oracle.tsv', 'integer-oracle.tsv', 'pre-audit.json', 'post-audit.json']]
         provenance.write_text(json.dumps(dict(schema=1, ghcInfo=subprocess.check_output([ghc, '--info'], text=True),
             sources=[record(p) for p in sources], artifacts=[record(p) for p in artifacts], commands=commands,
-            model='Exact rational squared midpoint comparisons; nearest, ties to even. Arithmetic NaNs compare by classification.'), indent=2) + '\n')
+            model='Sqrt: exact rational midpoint, nearest ties to even. Scalar math: native GHC oracle; JVM checked with finite tolerance, NaN classification, signed zero/infinity.'), indent=2) + '\n')
     evidence = json.loads(provenance.read_text())
     check({str(p.relative_to(ROOT)) for p in audit_inputs()} <= {r['path'] for r in evidence['sources']}, 'Missing auditor inputs')
     for item in evidence['sources'] + evidence['artifacts']:

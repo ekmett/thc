@@ -177,14 +177,17 @@ class ManagedAddressStorageTest {
         val type = ManagedAddress::class.java
         assertTrue(Modifier.isFinal(type.modifiers))
         val fields = type.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }
-        assertEquals(setOf("literalBytes", "mutableBytes", "offset"), fields.map { it.name }.toSet())
+        assertEquals(setOf("literalBytes", "mutableBytes", "offset", "owner"), fields.map { it.name }.toSet())
         assertTrue(fields.all { Modifier.isPrivate(it.modifiers) && Modifier.isFinal(it.modifiers) })
         val literalField = fields.single { it.name == "literalBytes" }.also { it.isAccessible = true }
         val mutableField = fields.single { it.name == "mutableBytes" }.also { it.isAccessible = true }
+        val ownerField = fields.single { it.name == "owner" }.also { it.isAccessible = true }
         assertEquals(ByteArray::class.java, literalField.type)
         assertEquals(ByteArray::class.java, mutableField.type)
+        assertEquals(ManagedAllocation::class.java, ownerField.type)
         assertEquals(1, literalField.getAnnotation(CompilationFinal::class.java).dimensions)
         assertNull(mutableField.getAnnotation(CompilationFinal::class.java))
+        assertNull(ownerField.getAnnotation(CompilationFinal::class.java))
         val bytes = ByteArray(8)
         // No root-address reference is retained here: the derived address owns the lifetime.
         val derived = ManagedAddress.fromByteArray(bytes).plus(8).plus(-3)
@@ -196,5 +199,9 @@ class ManagedAddressStorageTest {
         assertNull(mutableField.get(shiftedLiteral))
         assertSame(literalField.get(literal), literalField.get(shiftedLiteral))
         assertNotSame(bytes, literalField.get(literal))
+        val allocation = ManagedAllocation.mutable(16, 8)
+        val pinned = ManagedAddress.fromAllocation(allocation).plus(8)
+        assertSame(allocation, ownerField.get(pinned))
+        assertNull(literalField.get(pinned)); assertNull(mutableField.get(pinned))
     }
 }

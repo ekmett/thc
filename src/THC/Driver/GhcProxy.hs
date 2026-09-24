@@ -36,7 +36,8 @@ runGhcProxy arguments = do
         ["-no-link", "-fforce-recomp", "-outputdir", objects, "-odir", objects,
          "-hidir", objects, "-hiedir", objects </> "hie", "-stubdir", objects,
          "-package-db", pluginDb, "-plugin-package-id", pluginUnit,
-         "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:" ++ core,
+         "-fplugin=THC.Plugin", "-fplugin-trustworthy",
+         "-fplugin-opt=THC.Plugin:" ++ core,
          "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
          "-fplugin-opt=THC.Plugin:source-notes", "-g", "-dcore-lint"])
       unless (exported == ExitSuccess) (exitWith exported)

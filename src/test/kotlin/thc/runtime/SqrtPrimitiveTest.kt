@@ -15,6 +15,8 @@ import thc.Json
 import thc.Language
 import java.io.File
 import java.security.MessageDigest
+import kotlin.math.abs
+import kotlin.math.max
 
 class SqrtPrimitiveTest {
     private val root = File(System.getProperty("thc.projectRoot"))
@@ -75,7 +77,7 @@ class SqrtPrimitiveTest {
     @Test fun publicSqrtMatchesNativeWithInlining() = native(true)
     @Test fun publicSqrtMatchesNativeAcrossResidualCalls() = native(false)
     private fun native(inlining: Boolean) {
-        val rows = rows()
+        val rows = rows().filterKeys { it in setOf("sqrtFloat", "sqrtDouble", "floatCase", "doubleCase") }
         assertEquals(setOf("sqrtFloat", "sqrtDouble", "floatCase", "doubleCase"), rows.keys)
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
             context.initialize("thc"); context.enter()
@@ -95,6 +97,62 @@ class SqrtPrimitiveTest {
                         assertEquals(before + if (entry.endsWith("Case")) 2 else 1, count(program), label)
                         valid(target, label)
                     }
+                    assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
+                    assertEquals(0, language.handoffState.get().arguments.depth)
+                    assertEquals(0, language.handoffState.get().results.depth)
+                }
+            } finally { context.leave() }
+        }
+    }
+    private val mathEntries = listOf("fabs", "exp", "expm1", "log", "log1p", "sin", "cos", "tan",
+        "asin", "acos", "atan", "sinh", "cosh", "tanh", "power")
+        .flatMap { listOf(it + "Float", it + "Double") }
+
+    private fun mathCall(program: ExecutableProgram, entry: String, row: List<String>, label: String) {
+        val float = entry.endsWith("Float")
+        val input: Any = if (float) Float.fromBits(row[1].toLong().toInt())
+            else Double.fromBits(java.lang.Long.parseUnsignedLong(row[1]))
+        val result = Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue(entry), arrayOf(input)))
+        if (float) {
+            assertTrue(result is Float, label)
+            val actual = result as Float
+            val expected = Float.fromBits(row[2].toLong().toInt())
+            if (expected.isNaN()) assertTrue(actual.isNaN(), label)
+            else if (expected.isInfinite() || expected == 0f)
+                assertEquals(expected.toRawBits(), actual.toRawBits(), label)
+            else assertTrue(abs(actual - expected) <= max(8 * Math.ulp(expected), abs(expected) * 2e-6f),
+                "$label: native=$expected JVM=$actual")
+        } else {
+            assertTrue(result is Double, label)
+            val actual = result as Double
+            val expected = Double.fromBits(java.lang.Long.parseUnsignedLong(row[2]))
+            if (expected.isNaN()) assertTrue(actual.isNaN(), label)
+            else if (expected.isInfinite() || expected == 0.0)
+                assertEquals(expected.toRawBits(), actual.toRawBits(), label)
+            else assertTrue(abs(actual - expected) <= max(16 * Math.ulp(expected), abs(expected) * 2e-14),
+                "$label: native=$expected JVM=$actual")
+        }
+    }
+
+    @Test fun scalarMathMatchesNativeThroughTypedCompiledAstAndBytecode() {
+        val rows = rows()
+        assertTrue(rows.keys.containsAll(mathEntries))
+        for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(true).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (entry in mathEntries) {
+                    val program = program(language, CoreModules.reachable(module(stage), entry), backend)
+                    val target = program.entryTarget(entry)
+                    val selected = rows.getValue(entry)
+                    for (row in selected) mathCall(program, entry, row, "$stage/$backend/$entry/interpreter/${row[1]}")
+                    compile(target)
+                    val before = count(program)
+                    for (row in selected) {
+                        mathCall(program, entry, row, "$stage/$backend/$entry/compiled/${row[1]}")
+                        valid(target, "$stage/$backend/$entry")
+                    }
+                    assertEquals(before + selected.size, count(program), "$stage/$backend/$entry")
                     assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                     assertEquals(0, language.handoffState.get().arguments.depth)
                     assertEquals(0, language.handoffState.get().results.depth)

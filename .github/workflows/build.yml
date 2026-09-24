@@ -222,12 +222,9 @@ jobs:
             scripts/test-core-managed-memory.py \
             scripts/test-core-managed-files.py \
             scripts/test-core-md5-foreign.py \
-            scripts/test-core-original-stdio.py \
             scripts/test-core-package-manifest.py \
-            scripts/test-generate-stdio-abi.py \
             scripts/test-managed-mvar-fixtures.py \
             scripts/test-managed-mvars.py \
-            scripts/test-original-stdio-fixtures.py \
             scripts/test-pinned-addresses.py \
             scripts/test-prepare-managed-md5.py \
             scripts/test-putstrln-export.py \

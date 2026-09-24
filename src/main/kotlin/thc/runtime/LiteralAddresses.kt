@@ -14,22 +14,27 @@ import com.oracle.truffle.api.frame.VirtualFrame
 internal class ManagedAddress private constructor(
     @field:CompilationFinal(dimensions = 1) private val literalBytes: ByteArray?,
     private val mutableBytes: ByteArray?,
-    private val offset: Long
+    private val offset: Long,
+    private val owner: ManagedAllocation? = null
 ) {
     // Package-internal views for original C bitcode; callers never obtain a
     // process pointer and the byte storage is not copied or replaced.
-    internal fun cbitsBacking(): ByteArray = literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
-    internal fun cbitsWritable(): Boolean = mutableBytes != null
-    internal fun cbitsOffset(): Long { cbitsBacking(); return offset }
+    internal fun rawBacking(): ByteArray = owner?.rawBytesIfPointerFree()
+        ?: literalBytes ?: mutableBytes ?: fault("Null Addr# has no backing storage")
+    internal fun cbitsBacking(): ByteArray = owner?.exposeToNative() ?: rawBacking()
+    internal fun cbitsWritable(): Boolean = owner?.isWritable ?: (mutableBytes != null)
+    internal fun cbitsOffset(): Long { size(); return offset }
 
-    private fun size(): Long = cbitsBacking().size.toLong()
+    private fun size(): Long = owner?.size ?: (literalBytes ?: mutableBytes)?.size?.toLong()
+        ?: fault("Null Addr# has no backing storage")
 
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean =
         offset == other.offset && when {
             this === NULL || other === NULL -> this === other
+            owner != null -> owner === other.owner
             literalBytes != null -> literalBytes === other.literalBytes
-            else -> mutableBytes === other.mutableBytes
+            else -> mutableBytes != null && mutableBytes === other.mutableBytes
         }
 
     /** Like pointer arithmetic within this allocation, including its one-past address. */
@@ -41,7 +46,7 @@ internal class ManagedAddress private constructor(
         // Check before adding so even Long.MIN/MAX_VALUE cannot wrap into range.
         if (displacement < -offset || displacement > size() - offset)
             fault("Managed Addr# offset outside its backing storage")
-        return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes, offset + displacement)
+        return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes, offset + displacement, owner)
     }
 
     private fun index(displacement: Long): Int {
@@ -56,7 +61,7 @@ internal class ManagedAddress private constructor(
     /** The polyglot text ABI reads a checked NUL-terminated UTF-8 region. */
     @TruffleBoundary
     fun utf8(): String {
-        val bytes = cbitsBacking()
+        val bytes = rawBacking()
         val start = offset.toInt()
         var end = start
         while (end < bytes.size && bytes[end] != 0.toByte()) end++
@@ -74,6 +79,7 @@ internal class ManagedAddress private constructor(
     /** Both backing variants use byte offsets and return zero-extended Word8#. */
     fun readWord8(displacement: Long): Long {
         val index = index(displacement)
+        owner?.let { return it.readByte(index.toLong()) }
         // Keep the immutable and mutable loads distinct: only the former may fold.
         val literal = literalBytes
         return (if (literal != null) literal[index] else mutableBytes!![index]).toLong() and 0xffL
@@ -82,6 +88,7 @@ internal class ManagedAddress private constructor(
     /** The caller evaluates State# before reaching storage. Invalid writes have
      * no effect; the value contributes only its low eight bits, like writeWord8Array#. */
     fun writeWord8(displacement: Long, value: Long) {
+        owner?.let { it.writeByte(index(displacement).toLong(), value); return }
         val bytes = mutableBytes ?: fault("Cannot write through an immutable literal Addr#")
         val index = index(displacement)
         bytes[index] = value.toByte()
@@ -90,7 +97,10 @@ internal class ManagedAddress private constructor(
     /** Validate a complete byte region before any effect. An empty region may
      * start one past the allocation; an immutable destination is never writable. */
     fun requireRange(displacement: Long, count: Long, writable: Boolean = false) {
-        if (writable && mutableBytes == null) fault("Cannot write through an immutable literal Addr#")
+        if (writable && owner == null && mutableBytes == null)
+            fault("Cannot write through an immutable literal Addr#")
+        if (writable && owner != null && !owner.isWritable)
+            fault("Cannot write through an immutable managed allocation")
         if (count < 0 || displacement < -offset || displacement > size() - offset)
             fault("Managed Addr# range outside its backing storage")
         val start = offset + displacement
@@ -104,7 +114,8 @@ internal class ManagedAddress private constructor(
         requireRange(displacement, count)
         other.requireRange(otherDisplacement, otherCount)
         if (count == 0L || otherCount == 0L) return false
-        val shared = if (literalBytes != null) literalBytes === other.literalBytes
+        val shared = if (owner != null) owner === other.owner
+            else if (literalBytes != null) literalBytes === other.literalBytes
             else mutableBytes === other.mutableBytes
         if (!shared) return false
         val start = offset + displacement
@@ -116,6 +127,27 @@ internal class ManagedAddress private constructor(
     override fun toString(): String = if (this === NULL) "Addr#(null)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
+    /** Pointer cells contain references, not process address bits. */
+    fun readAddressElementIndex(elementOffset: Long): ManagedAddress {
+        val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
+        val width = allocation.addressWidth.toLong()
+        if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
+            fault("Managed Addr# element offset overflow")
+        val displacement = elementOffset * width
+        requireRange(displacement, width)
+        return allocation.readAddressByteOffset(offset + displacement)
+    }
+
+    fun writeAddressElementIndex(elementOffset: Long, value: ManagedAddress) {
+        val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
+        val width = allocation.addressWidth.toLong()
+        if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
+            fault("Managed Addr# element offset overflow")
+        val displacement = elementOffset * width
+        requireRange(displacement, width, writable = true)
+        allocation.writeAddressByteOffset(offset + displacement, value)
+    }
+
     companion object {
         private val NULL = ManagedAddress(null, null, 0L)
         fun nullAddress(): ManagedAddress = NULL
@@ -123,6 +155,12 @@ internal class ManagedAddress private constructor(
         /** Logical pinning means stable managed backing and a strong lifetime,
          * not physical pinning or a process address. Do not copy: views must alias. */
         fun fromByteArray(bytes: ByteArray): ManagedAddress = ManagedAddress(null, bytes, 0L)
+        fun fromAllocation(allocation: ManagedAllocation): ManagedAddress = ManagedAddress(null, null, 0L, allocation)
+        fun fromGuestByteArray(value: Any?): ManagedAddress = when (value) {
+            is ManagedAllocation -> fromAllocation(value)
+            is ByteArray -> fromByteArray(value)
+            else -> fault("Expected a managed ByteArray#")
+        }
 
         /** GHC's LitString stores raw bytes; the static allocation adds a final NUL. */
         @TruffleBoundary

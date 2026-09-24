@@ -1206,6 +1206,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
                         PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(destination[0])
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT ->
                             e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
@@ -1216,16 +1217,23 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
                         PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT -> e.builder.endReadManagedAddress()
                         else -> error("Scalar pinned memory operation")
                     }
                 } else ProvenExpression(Expression { e ->
-                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.beginByteArrayContents()
-                    else e.builder.beginWriteWord8OffAddr()
+                    when (operation) {
+                        PinnedMemoryOp.CONTENTS -> e.builder.beginByteArrayContents()
+                        PinnedMemoryOp.WRITE_ADDR -> e.builder.beginWriteAddrOffAddr()
+                        else -> e.builder.beginWriteWord8OffAddr()
+                    }
                     operands.forEach { it.emit(e) }
-                    if (operation == PinnedMemoryOp.CONTENTS) e.builder.endByteArrayContents()
-                    else e.builder.endWriteWord8OffAddr()
+                    when (operation) {
+                        PinnedMemoryOp.CONTENTS -> e.builder.endByteArrayContents()
+                        PinnedMemoryOp.WRITE_ADDR -> e.builder.endWriteAddrOffAddr()
+                        else -> e.builder.endWriteWord8OffAddr()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
@@ -2050,6 +2058,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "divideFloat#" -> "FloatDivide"
             "negateFloat#" -> "FloatNegate"
             "sqrtFloat#" -> "FloatSqrt"
+            "fabsFloat#" -> "FloatAbs"
+            "expFloat#" -> "FloatExp"
+            "expm1Float#" -> "FloatExpm1"
+            "logFloat#" -> "FloatLog"
+            "log1pFloat#" -> "FloatLog1p"
+            "sinFloat#" -> "FloatSin"
+            "cosFloat#" -> "FloatCos"
+            "powerFloat#" -> "FloatPower"
+            "tanFloat#" -> "FloatTan"
+            "asinFloat#" -> "FloatAsin"
+            "acosFloat#" -> "FloatAcos"
+            "atanFloat#" -> "FloatAtan"
+            "sinhFloat#" -> "FloatSinh"
+            "coshFloat#" -> "FloatCosh"
+            "tanhFloat#" -> "FloatTanh"
             "eqFloat#" -> "FloatEqual"
             "neFloat#" -> "FloatNotEqual"
             "ltFloat#" -> "FloatLess"
@@ -2062,6 +2085,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "/##" -> "DoubleDivide"
             "negateDouble#" -> "DoubleNegate"
             "sqrtDouble#" -> "DoubleSqrt"
+            "fabsDouble#" -> "DoubleAbs"
+            "expDouble#" -> "DoubleExp"
+            "expm1Double#" -> "DoubleExpm1"
+            "logDouble#" -> "DoubleLog"
+            "log1pDouble#" -> "DoubleLog1p"
+            "sinDouble#" -> "DoubleSin"
+            "cosDouble#" -> "DoubleCos"
+            "**##" -> "DoublePower"
+            "tanDouble#" -> "DoubleTan"
+            "asinDouble#" -> "DoubleAsin"
+            "acosDouble#" -> "DoubleAcos"
+            "atanDouble#" -> "DoubleAtan"
+            "sinhDouble#" -> "DoubleSinh"
+            "coshDouble#" -> "DoubleCosh"
+            "tanhDouble#" -> "DoubleTanh"
             "==##" -> "DoubleEqual"
             "/=##" -> "DoubleNotEqual"
             "<##" -> "DoubleLess"
@@ -2080,11 +2118,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
+        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -2096,6 +2134,36 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "FloatDivide" -> b.beginFloatDivide()
                 "FloatNegate" -> b.beginFloatNegate()
                 "FloatSqrt" -> b.beginFloatSqrt()
+                "FloatAbs" -> b.beginFloatAbs()
+                "FloatExp" -> b.beginFloatExp()
+                "FloatExpm1" -> b.beginFloatExpm1()
+                "FloatLog" -> b.beginFloatLog()
+                "FloatLog1p" -> b.beginFloatLog1p()
+                "FloatSin" -> b.beginFloatSin()
+                "FloatCos" -> b.beginFloatCos()
+                "FloatPower" -> b.beginFloatPower()
+                "DoubleAbs" -> b.beginDoubleAbs()
+                "DoubleExp" -> b.beginDoubleExp()
+                "DoubleExpm1" -> b.beginDoubleExpm1()
+                "DoubleLog" -> b.beginDoubleLog()
+                "DoubleLog1p" -> b.beginDoubleLog1p()
+                "DoubleSin" -> b.beginDoubleSin()
+                "DoubleCos" -> b.beginDoubleCos()
+                "DoublePower" -> b.beginDoublePower()
+                "FloatTan" -> b.beginFloatTan()
+                "FloatAsin" -> b.beginFloatAsin()
+                "FloatAcos" -> b.beginFloatAcos()
+                "FloatAtan" -> b.beginFloatAtan()
+                "FloatSinh" -> b.beginFloatSinh()
+                "FloatCosh" -> b.beginFloatCosh()
+                "FloatTanh" -> b.beginFloatTanh()
+                "DoubleTan" -> b.beginDoubleTan()
+                "DoubleAsin" -> b.beginDoubleAsin()
+                "DoubleAcos" -> b.beginDoubleAcos()
+                "DoubleAtan" -> b.beginDoubleAtan()
+                "DoubleSinh" -> b.beginDoubleSinh()
+                "DoubleCosh" -> b.beginDoubleCosh()
+                "DoubleTanh" -> b.beginDoubleTanh()
                 "FloatEqual" -> b.beginFloatEqual()
                 "FloatNotEqual" -> b.beginFloatNotEqual()
                 "FloatLess" -> b.beginFloatLess()
@@ -2133,6 +2201,36 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "FloatDivide" -> b.endFloatDivide()
                 "FloatNegate" -> b.endFloatNegate()
                 "FloatSqrt" -> b.endFloatSqrt()
+                "FloatAbs" -> b.endFloatAbs()
+                "FloatExp" -> b.endFloatExp()
+                "FloatExpm1" -> b.endFloatExpm1()
+                "FloatLog" -> b.endFloatLog()
+                "FloatLog1p" -> b.endFloatLog1p()
+                "FloatSin" -> b.endFloatSin()
+                "FloatCos" -> b.endFloatCos()
+                "FloatPower" -> b.endFloatPower()
+                "DoubleAbs" -> b.endDoubleAbs()
+                "DoubleExp" -> b.endDoubleExp()
+                "DoubleExpm1" -> b.endDoubleExpm1()
+                "DoubleLog" -> b.endDoubleLog()
+                "DoubleLog1p" -> b.endDoubleLog1p()
+                "DoubleSin" -> b.endDoubleSin()
+                "DoubleCos" -> b.endDoubleCos()
+                "DoublePower" -> b.endDoublePower()
+                "FloatTan" -> b.endFloatTan()
+                "FloatAsin" -> b.endFloatAsin()
+                "FloatAcos" -> b.endFloatAcos()
+                "FloatAtan" -> b.endFloatAtan()
+                "FloatSinh" -> b.endFloatSinh()
+                "FloatCosh" -> b.endFloatCosh()
+                "FloatTanh" -> b.endFloatTanh()
+                "DoubleTan" -> b.endDoubleTan()
+                "DoubleAsin" -> b.endDoubleAsin()
+                "DoubleAcos" -> b.endDoubleAcos()
+                "DoubleAtan" -> b.endDoubleAtan()
+                "DoubleSinh" -> b.endDoubleSinh()
+                "DoubleCosh" -> b.endDoubleCosh()
+                "DoubleTanh" -> b.endDoubleTanh()
                 "FloatEqual" -> b.endFloatEqual()
                 "FloatNotEqual" -> b.endFloatNotEqual()
                 "FloatLess" -> b.endFloatLess()

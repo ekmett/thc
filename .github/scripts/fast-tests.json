@@ -180,12 +180,36 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/OriginalStackAudit.hs": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalStackAuditNative.hs": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/OriginalStackProof.json": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/StackFixtures.hs": {
+      "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
+      "python": []
+    },
     "compiler/test-fixtures/AddressIdentityAudit.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
     "compiler/test-fixtures/AddressIdentityAuditNative.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/PinnedPointerCellsAudit.hs": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
+      "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
     "scripts/prepare-address-identity.sh": {
@@ -562,6 +586,9 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.PinnedPointerCellsTest",
+        "thc.runtime.OriginalStdioNativeTest",
+        "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
         "thc.SignedNarrowPrimopsTest",

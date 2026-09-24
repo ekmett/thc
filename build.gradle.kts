@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
 plugins {
     application
     kotlin("jvm") version "2.4.20"
@@ -88,8 +92,12 @@ tasks.withType<Test>().configureEach {
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
+            "original-stdio/**/*.json", "original-stdio/results/*.txt", "original-stdio/native/**",
+            "original-stdio/logs/*.stdout", "original-stdio/logs/*.stderr",
             "managed-md5-native/**",
+            "original-stack/manifest.json", "original-stack/run-*/**",
             "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**",
+            "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/NativeScalarBitCast.hs", "scalar-bitcasts/native/**",
             "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",
@@ -136,6 +144,10 @@ tasks.withType<Test>().configureEach {
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
+    inputs.file("compiler/test-fixtures/OriginalStackProof.json")
+    inputs.files("thc.cabal", "compiler/pinned-ghc-internal/LICENSE",
+        "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
+        "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc")
     inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
@@ -236,11 +248,50 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits"))
 tasks.processResources { dependsOn(compileCbits) }
 
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
-val generateStdioAbi by tasks.registering(Exec::class) {
-    inputs.files("scripts/generate-stdio-abi.py", "scripts/build-cbits.py", "src/main/c/stdio-abi-probe.c")
-    outputs.dir(layout.buildDirectory.dir("generated/stdio-abi"))
+val generateStdioAbi by tasks.registering {
+    val source = layout.projectDirectory.file("src/main/c/stdio-abi-probe.c").asFile
+    val output = layout.buildDirectory.dir("generated/stdio-abi")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source)
+    inputs.property("clang", clang)
+    outputs.dir(output)
     outputs.upToDateWhen { false }
-    commandLine("python3", "scripts/generate-stdio-abi.py", "--output", layout.buildDirectory.dir("generated/stdio-abi").get().asFile)
+    doLast {
+        fun run(command: List<String>): String = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        fun architecture(value: String) = when (value.lowercase()) {
+            "amd64" -> "x86_64"
+            "arm64" -> "aarch64"
+            else -> value.lowercase()
+        }
+        val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "Darwin" else it }
+        val arch = architecture(System.getProperty("os.arch"))
+        val compiler = clang.get()
+        val defaultTarget = run(listOf(compiler, "-dumpmachine")).trim()
+        val parts = defaultTarget.split('-')
+        require(system in setOf("Linux", "Darwin") && arch in setOf("x86_64", "aarch64") &&
+            parts.size >= 3 && architecture(parts[0]) == arch &&
+            (if (system == "Linux") parts.drop(2) == listOf("linux", "gnu") else parts[2].startsWith("darwin"))) {
+            "Original stdio requires a native Linux GNU/macOS LP64 compiler: $system/$arch, clang=$defaultTarget"
+        }
+        val target = if (system == "Linux") "$arch-unknown-linux-gnu" else defaultTarget
+        val command = listOf(compiler) + if (system == "Linux") listOf("--target=$target") else emptyList()
+        require(run(command + "-dumpmachine").trim() == target) { "Clang did not select the native stdio target $target" }
+        val executable = temporaryDir.resolve("stdio-abi-probe")
+        run(command + listOf("-std=c11", source.path, "-o", executable.path))
+        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
+        require(probe.keys == setOf("widths", "errno")) { "Malformed native stdio ABI probe" }
+        // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
+        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to system,
+            "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
+            "compilerVersion" to run(listOf(compiler, "--version")),
+            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
+                .joinToString("") { "%02x".format(it) },
+            "widths" to probe["widths"], "errno" to probe["errno"])
+        val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
+        destination.parentFile.mkdirs()
+        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+        logger.lifecycle("Probed original stdio ABI and errno values for $target")
+    }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/stdio-abi")) }
 tasks.processResources { dependsOn(generateStdioAbi) }

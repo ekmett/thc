@@ -8,6 +8,7 @@ import copy
 import json
 from pathlib import Path
 import unittest
+import core_original_foreign
 
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
@@ -1068,6 +1069,146 @@ class EmptyTupleInputTests(unittest.TestCase):
             # malformed empty-as-State operand violates the primitive contract.
             primitive_errors = [i for i in report['issues'] if i['code'] == 'primitive-representation']
             self.assertEqual(bool(primitive_errors), state is empty)
+
+
+class OriginalStackCloneAuditTest(unittest.TestCase):
+    """Unchanged genuine worker; only its scalar-result audit consumer is synthetic."""
+    symbol = 'stg_cloneMyStackzh'
+    resource = ROOT.parent / 'src/test/resources/core/original-stack-clone.json'
+
+    def fixture(self, moved=False):
+        module = json.loads(self.resource.read_text())
+        worker = module['bindings'][0]
+        lam = worker['expr']
+        state = copy.deepcopy(lam[1][0]['rep'])
+        boxed = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
+        result = lam[3]['resultRep']
+        call = lam[2] if moved else ['app', ['var', worker['id'], dict(rep=CLOSURE)],
+            [['var', lam[1][0]['id'], dict(rep=state)]], [False], False, False, dict(rep=result)]
+        body = ['case', call, 'pair', [['data', 'ghc-internal:GHC.Internal.Types.(#,#)', ['s', 'snapshot'],
+            ['var', 'snapshot', dict(rep=boxed)], dict(binders=[dict(id='s', lifted=False, rep=state),
+                dict(id='snapshot', lifted=True, rep=boxed)])]],
+            dict(rep=boxed, binder=dict(id='pair', lifted=False, rep=dict(result, evaluated=True)))]
+        consumer = dict(bind('synthetic-consumer', ['lam', copy.deepcopy(lam[1]), body,
+                                                dict(rep=CLOSURE, resultRep=boxed)]), rep=CLOSURE, arity=1)
+        module['bindings'] = [consumer] if moved else [worker, consumer]
+        return module
+
+    @staticmethod
+    def call(module):
+        return module['bindings'][0]['expr'][2][1]
+
+    def audit(self, module, cap=None):
+        return audit_core.Audit([('genuine-clone-with-synthetic-consumer.json', module)],
+                               CAP if cap is None else cap).run(['synthetic-consumer'])
+
+    def reject(self, module):
+        report = self.audit(module)
+        self.assertFalse(report['accepted'], report)
+        self.assertEqual([], report['foreignCalls'], report)
+        return report
+
+    def test_authentic_worker_and_moved_body_admit_only_the_exact_foreign_seam(self):
+        self.assertEqual(1, CAP['managedForeignCalls'].count(self.symbol))
+        original = json.loads(self.resource.read_text())['bindings'][0]
+        for moved in (False, True):
+            module = self.fixture(moved)
+            if not moved: self.assertEqual(original, module['bindings'][0])
+            report = self.audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([self.symbol], [call['symbol'] for call in report['foreignCalls']])
+            self.assertEqual([], report['missingGlobals'])
+        module = self.fixture()
+        self.call(module)[1][1] = 'unrelated:InlinedCaller.foreign'
+        self.assertTrue(self.audit(module)['accepted'])
+        module = self.fixture(); call = self.call(module)
+        call[2][0][2]['rep']['evaluated'] = False
+        call[6]['rep']['evaluated'] = True
+        self.assertTrue(self.audit(module)['accepted'])
+        module = self.fixture(); call = self.call(module)
+        call[2][0] = ['void', dict(rep=copy.deepcopy(call[2][0][2]['rep']))]
+        self.assertTrue(self.audit(module)['accepted'])
+
+    def test_capability_is_explicit_and_cold_getters_and_aliases_stay_closed(self):
+        module = self.fixture()
+        report = self.audit(module, dict(CAP, managedForeignCalls=[]))
+        self.assertFalse(report['accepted']); self.assertEqual([], report['foreignCalls'])
+        self.assertTrue(any('capability disabled' in str(issue['detail']) for issue in report['issues']))
+        for symbol in ('cloneMyStack#', 'stg_cloneMyStackzh2', 'prefixstg_cloneMyStackzh',
+                       'stg_sendCloneStackMessagezh', 'stg_decodeStackzh', 'getStackFieldszh',
+                       'getInfoTableAddrszh', 'advanceStackFrameLocationzh', 'lookupIPE'):
+            self.assertNotIn(symbol, core_original_foreign.OPERATIONS)
+            self.assertNotIn(symbol, CAP['managedForeignCalls'])
+            module = self.fixture(); self.call(module)[6]['foreignCall']['target']['symbol'] = symbol
+            self.reject(module)
+
+    def test_descriptor_integer_target_convention_and_safety_mutations_reject(self):
+        mutations = [(key, value) for key in ('schema', 'arity', 'suppliedArity')
+                     for value in (None, True, False, 1.0, '1', 0, 2, 1 << 32)]
+        mutations += [('convention', x) for x in (None, 'ccall', 'capi', 'javascript')]
+        mutations += [('safety', x) for x in (None, 'unsafe', 'interruptible')]
+        mutations += [('extra', None)]
+        for key, value in mutations:
+            module = self.fixture(); self.call(module)[6]['foreignCall'][key] = value; self.reject(module)
+        for key, values in {'kind': (None, 'dynamic'), 'unit': (None, '', 'main', 1),
+                            'isFunction': (None, False, 1), 'extra': (None,)}.items():
+            for value in values:
+                module = self.fixture(); self.call(module)[6]['foreignCall']['target'][key] = value; self.reject(module)
+
+    def test_raw_state_flags_and_all_result_proofs_reject_forgery(self):
+        for declared in (False, True):
+            for key, value in (('kind', 'unknown'), ('primReps', ['IntRep']), ('evaluated', 1),
+                               ('aggregate', 'unboxed-tuple'), ('components', []), ('vector', None)):
+                module = self.fixture(); call = self.call(module)
+                proof = call[6]['foreignCall']['argumentReps'][0] if declared else call[2][0][2]['rep']
+                proof[key] = value; self.reject(module)
+        for flags in ([], [True], [0], [None], [False, False]):
+            module = self.fixture(); self.call(module)[3] = flags; self.reject(module)
+        for declared in (False, True):
+            for extra in (False, True):
+                module = self.fixture(); call = self.call(module)
+                arguments = call[6]['foreignCall']['argumentReps'] if declared else call[2]
+                if extra: arguments.append(copy.deepcopy(arguments[0]))
+                else: arguments.clear()
+                self.reject(module)
+        for site in ('declared', 'actual'):
+            for key, value in (('kind', 'object'), ('primReps', ['BoxedRep (Just Lifted)']), ('evaluated', 1),
+                               ('aggregate', 'unboxed-sum'), ('components', []), ('extra', None)):
+                module = self.fixture(); meta = self.call(module)[6]
+                proof = meta['foreignCall']['resultRep'] if site == 'declared' else meta['rep']
+                proof[key] = value; self.reject(module)
+            for index in (0, 1):
+                for key, value in (('kind', 'unknown'), ('evaluated', False), ('primReps', ['IntRep']), ('vector', None)):
+                    module = self.fixture(); meta = self.call(module)[6]
+                    proof = meta['foreignCall']['resultRep'] if site == 'declared' else meta['rep']
+                    proof['components'][index][key] = value; self.reject(module)
+        module = self.fixture(); self.call(module)[6]['foreignCall']['argumentReps'][0]['evaluated'] = True; self.reject(module)
+        module = self.fixture(); self.call(module)[6]['foreignCall']['resultRep']['evaluated'] = True; self.reject(module)
+
+    def test_unbound_head_and_stored_state_cannot_be_relabelled(self):
+        for head in ([], ['var', None], ['var', ''], ['var', 3], ['prim', self.symbol], ['var', 'unproved']):
+            module = self.fixture(); self.call(module)[1] = head; self.reject(module)
+        for key, value in (('kind', 'long'), ('primReps', ['BoxedRep (Just Unlifted)']),
+                           ('evaluated', False), ('evaluated', 1), ('extra', None)):
+            module = self.fixture(); self.call(module)[1][2]['rep'][key] = value; self.reject(module)
+        for scope in ('formal', 'global'):
+            module = self.fixture(); worker = module['bindings'][0]
+            self.call(module)[1][1] = worker['expr'][1][0]['id'] if scope == 'formal' else worker['id']
+            self.reject(module)
+        bad_states = [LONG, REFERENCE, dict(kind='unknown', primReps=['IntRep'], evaluated=True),
+            dict(kind='unknown', primReps=['BoxedRep Nothing'], evaluated=True), tuple_rep(),
+            dict(kind='void', primReps=[], evaluated=True, vector={})]
+        for bad in bad_states:
+            for scope in ('formal', 'global'):
+                module = self.fixture()
+                if scope == 'formal': module['bindings'][0]['expr'][1][0]['rep'] = copy.deepcopy(bad)
+                else:
+                    module['bindings'].append(dict(bind('stored', lit(7), False), rep=copy.deepcopy(bad)))
+                    self.call(module)[2][0][1] = 'stored'
+                report = self.reject(module)
+                self.assertTrue(any('stored State' in str(issue['detail']) for issue in report['issues']))
+        module = self.fixture(); state = self.call(module)[2][0][2]
+        self.call(module)[2][0] = ['lit', 'int', '7', state]; self.reject(module)
 
 
 if __name__ == '__main__':

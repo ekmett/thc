@@ -6,20 +6,15 @@
 module AggregateFixtures (prepareAggregate) where
 
 import Control.Monad (forM, forM_, unless, when)
-import qualified Crypto.Hash.SHA256 as SHA256
-import Data.Aeson (object, (.=), encode)
+import Data.Aeson (object, (.=))
 import Data.Bits ((.&.), xor, shiftL, shiftR)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BL
 import Data.List (sort)
-import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Numeric (showHex)
+import FixtureSupport (run, hashes, writeJson, splitTab, readInteger)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeFile)
-import System.Environment (getEnvironment, lookupEnv)
-import System.Exit (ExitCode (..), die)
+import System.Environment (lookupEnv)
+import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
-import System.Process (CreateProcess (..), proc, readCreateProcessWithExitCode)
 import Text.Read (readMaybe)
 
 directNames, callNames :: [String]
@@ -82,27 +77,6 @@ oracleDriver = unlines $
   ["  _ -> error \"unknown primitive\"", "dispatch _ = error \"invalid input\"",
    "main :: IO ()", "main = getContents >>= mapM_ (dispatch . words) . lines"]
 
-run :: FilePath -> [(String,String)] -> FilePath -> [String] -> String -> IO String
-run root overrides program args input = do
-  environment <- getEnvironment
-  let updated = foldr (uncurry replace) environment overrides
-      replace key value rest = (key,value) : filter ((/= key) . fst) rest
-      command = (proc program args) {cwd = Just root, env = Just updated}
-  (code,stdout,stderr) <- readCreateProcessWithExitCode command input
-  case code of
-    ExitSuccess -> pure stdout
-    ExitFailure n -> die (unlines [program ++ " failed (" ++ show n ++ ")", unwords args, stdout, stderr])
-
-splitTab :: String -> [String]
-splitTab text = case break (== '\t') text of
-  (piece,[]) -> [piece]
-  (piece,_:rest) -> piece : splitTab rest
-
-readInteger :: String -> Maybe Integer
-readInteger text = case reads text of
-  [(number,"")] -> Just number
-  _ -> Nothing
-
 verifyRows :: [(String,Integer,Integer)] -> String -> IO Int
 verifyRows expected output = do
   let parse line = case splitTab (takeWhile (/= '\r') line) of
@@ -115,17 +89,6 @@ verifyRows expected output = do
   unless (length actual == length expected && Set.fromList actual == Set.fromList expected)
     (die "Native tuple arithmetic oracle omitted, duplicated, or added an input")
   pure (length actual)
-
-hashFile :: FilePath -> IO String
-hashFile path = do
-  digest <- SHA256.hash <$> BS.readFile path
-  pure $ concatMap hexByte (BS.unpack digest)
-  where hexByte byte = let digits = showHex byte "" in replicate (2 - length digits) '0' ++ digits
-
-hashes :: FilePath -> [FilePath] -> IO (Map.Map String String)
-hashes root paths = Map.fromList <$> forM paths (\path -> do
-  digest <- hashFile (root </> path)
-  pure (path,digest))
 
 prepareTupleArithmetic :: FilePath -> IO ()
 prepareTupleArithmetic root = do
@@ -174,7 +137,7 @@ prepareTupleArithmetic root = do
     pure (filename,count)
   pluginFiles <- listDirectory (root </> "compiler/THC")
   coreScripts <- listDirectory (root </> "scripts")
-  let inputs = sort $ [source, "thc.cabal", "test/haskell-fixtures/AggregateFixtures.hs",
+  let inputs = sort $ [source, "thc.cabal", "test/haskell-fixtures/AggregateFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "scripts/audit-core.py", "scripts/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh",
         "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
@@ -186,10 +149,10 @@ prepareTupleArithmetic root = do
           "native/tuple-arithmetic-oracle"]]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
-  BL.writeFile manifest (encode (object
+  writeJson manifest (object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "wordBits" .= (64 :: Int),
      "ghcInfo" .= ghcInfo, "entries" .= directNames, "mixedReturnEntries" .= callNames,
      "stages" .= (["pre","post"] :: [String]), "nativeRows" .= counts,
      "excludedDivisionInputs" .= ("zero divisors and quotRemInt# minBound / -1; no numeric oracle claimed" :: String),
-     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]) <> "\n")
+     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes])
   putStrLn ("tuple-arithmetic: 8 primitives and 2 mixed-result calls, " ++ show counts ++ " native rows")
