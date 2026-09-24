@@ -1098,7 +1098,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             if (reentryResult != null) {
                 b.endStoreLocal()
                 b.beginConditional()
-                b.beginIsTailReentry(); b.emitLoadLocal(reentryResult); b.endIsTailReentry()
+                b.beginIsTailReentry(); b.emitLoadLocal(reentryResult); b.emitLoadConstant(false); b.endIsTailReentry()
                 b.beginBlock()
                 restoreTailArguments(e, context, reentryResult)
                 b.emitBranch(e.continueLabel!!)
@@ -2438,7 +2438,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.beginBlock()
                 val result = b.createLocal("tuple tail result", null)
                 b.beginStoreLocal(result)
-                if (inputLayout?.requiresTyped == true) {
+                if (resumable) {
+                    checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true)
+                } else if (inputLayout?.requiresTyped == true) {
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination))
                 } else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size, metrics)
@@ -2448,8 +2450,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal); b.endTailApplyCompactTuple()
                 }
                 b.endStoreLocal()
+                if (resumable) {
+                    b.beginIfThen()
+                    b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(true); b.endIsTailReentry()
+                    b.beginBlock()
+                    b.beginReturn(); b.emitLoadLocal(result); b.endReturn()
+                    b.endBlock()
+                    b.endIfThen()
+                }
                 b.beginIfThenElse()
-                b.beginIsTailReentry(); b.emitLoadLocal(result); b.endIsTailReentry()
+                b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(false); b.endIsTailReentry()
                 b.beginBlock()
                 restoreTailArguments(e, context, result)
                 b.emitBranch(e.continueLabel!!)
@@ -2506,10 +2516,31 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.endTryCatch()
     }
 
+    /** The exact tuple tail writes its destination or forwards a trusted callee Yield. */
+    private fun savedTailTuple(e: Emission, slots: BytecodeTupleSlots,
+                               fn: BytecodeLocal, values: List<BytecodeLocal>,
+                               inputLayout: ArgumentLayout?, arity: Int) {
+        val b = e.builder
+        if (inputLayout?.requiresTyped == true) {
+            val source = BytecodeInputSource(inputLayout, values.map(LocalAccessor::constantOf).toTypedArray())
+            b.beginApplyTypedInputTuple(source, slots, true, metrics)
+            b.emitLoadLocal(fn)
+            b.endApplyTypedInputTuple()
+        } else if (inputLayout == null) {
+            b.beginTailApplyTuple(slots, arity, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endTailApplyTuple()
+        } else {
+            b.beginTailApplyCompactTuple(slots, inputLayout, metrics)
+            b.emitLoadLocal(fn); values.forEach(b::emitLoadLocal)
+            b.endTailApplyCompactTuple()
+        }
+    }
+
     /** Saved logical and physical arguments survive every saturated prefix call. */
     private fun checkpointedTupleApplication(e: Emission, shape: TupleShape, function: Expression,
                                              arguments: List<Expression>, inputLayout: ArgumentLayout?,
-                                             destination: List<BytecodeLocal>) {
+                                             destination: List<BytecodeLocal>, tail: Boolean = false) {
         val b = e.builder
         val slots = tupleSlots(shape, destination, capturesYield = true)
         b.beginBlock()
@@ -2533,7 +2564,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         }
         val callerMask = b.createLocal("captured tuple caller mask", "object")
         b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal()
-        if (arguments.isEmpty()) checkpointedTupleCall(e, slots, fn, values, inputLayout, 0, callerMask)
+        val tailResult = if (tail) b.createLocal("captured tuple tail result", "object") else null
+        fun finish(suffix: List<BytecodeLocal>, layout: ArgumentLayout?, arity: Int) {
+            if (tail) {
+                b.beginStoreLocal(checkNotNull(tailResult))
+                savedTailTuple(e, slots, fn, suffix, layout, arity)
+                b.endStoreLocal()
+            } else checkpointedTupleCall(e, slots, fn, suffix, layout, arity, callerMask)
+        }
+        if (arguments.isEmpty()) finish(values, inputLayout, 0)
         else {
             b.beginIfThenElse()
             b.beginMatchLiteral(1L)
@@ -2546,14 +2585,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val result = b.createLocal("tuple prefix result", "object")
             stagedOverapplication(e, fn, values, inputLayout,
                 arguments.map { it.proof.evaluated }.toBooleanArray(), callerMask, result, arguments.size, false) {
-                    suffix, layout, arity -> checkpointedTupleCall(e, slots, fn, suffix, layout, arity, callerMask)
+                    suffix, layout, arity -> finish(suffix, layout, arity)
                 }
             b.endBlock()
             b.beginBlock()
-            checkpointedTupleCall(e, slots, fn, values, inputLayout, arguments.size, callerMask)
+            finish(values, inputLayout, arguments.size)
             b.endBlock()
             b.endIfThenElse()
         }
+        if (tail) b.emitLoadLocal(checkNotNull(tailResult))
         b.endBlock()
     }
 

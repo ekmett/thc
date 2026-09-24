@@ -1118,6 +1118,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return transfer;
             } catch (TupleCallYield yielded) {
                 if (!checkpoint) throw yielded;
+                if (tail) return tailTupleYield(function, source.getLayout().getLogicalArity(),
+                        destination, yielded, node, callerMask);
                 throw captureTupleCall(function, source.getLayout().getLogicalArity(),
                         destination, yielded, node, callerMask);
             } finally {
@@ -1233,6 +1235,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         } finally { SynchronousMasking.set(node, callerMask); }
     }
 
+    /** An exact tuple tail has no caller suffix and can return its trusted callee continuation. */
+    private static TailYield tailTupleYield(Closure function, int arity, BytecodeTupleSlots destination,
+            TupleCallYield yielded, Node node, MaskingState callerMask) {
+        CompilerDirectives.transferToInterpreterAndInvalidate();
+        try {
+            ContinuationResult continuation = yielded.getContinuation();
+            Object source = continuation.getContinuationRootNode().getSourceRootNode();
+            RootCallTarget target = yielded.getTail() ? yielded.getTailTarget() : function.target;
+            if (function.arity != arity || target == null || !(source instanceof BytecodeRoot callee) ||
+                    !callee.isSelf(target) || !callee.hasTupleResult(destination.getShape()) ||
+                    !AsyncContinuations.isYieldMarker(continuation.getResult()))
+                throw new IllegalStateException("Tuple tail returned an unrelated continuation");
+            if (SynchronousMasking.current(node) != callerMask)
+                throw new IllegalStateException("Parked tuple tail did not restore its caller mask");
+            return new TailYield(continuation, target);
+        } finally { SynchronousMasking.set(node, callerMask); }
+    }
+
     @Operation(forceCached = true)
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
     @ConstantOperand(type = int.class, name = "arity")
@@ -1241,9 +1261,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object apply(VirtualFrame frame, BytecodeTupleSlots destination, int arity, Metrics metrics,
                 Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
                 @Cached(value = "create(destination, arity, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            MaskingState callerMask = destination.getCapturesYield() ? SynchronousMasking.current(node) : null;
             try {
                 dispatch.execute(frame, function, arguments);
                 return null;
+            } catch (TupleCallYield yielded) {
+                return tailTupleYield(function, arity, destination, yielded, node, callerMask);
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -1251,7 +1274,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             }
         }
         public static TupleDispatch create(BytecodeTupleSlots destination, int arity, Metrics metrics) {
-            return new TupleDispatch(destination, metrics, arity, true);
+            return new TupleDispatch(destination.getCapturesYield()
+                    ? new ContinuationTupleDestination(destination) : destination, metrics, arity, true);
         }
     }
 
@@ -1304,9 +1328,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object apply(VirtualFrame frame, BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics,
                 Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
                 @Cached(value = "create(destination, layout, metrics)", neverDefault = true) TupleDispatch dispatch) {
+            MaskingState callerMask = destination.getCapturesYield() ? SynchronousMasking.current(node) : null;
             try {
                 dispatch.execute(frame, function, arguments);
                 return null;
+            } catch (TupleCallYield yielded) {
+                return tailTupleYield(function, layout.getLogicalArity(), destination,
+                        yielded, node, callerMask);
             } catch (TailCall transfer) {
                 if (!((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
                 if (metrics.getEnabled()) metrics.incrementSelfTailReentries();
@@ -1314,7 +1342,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             }
         }
         public static TupleDispatch create(BytecodeTupleSlots destination, ArgumentLayout layout, Metrics metrics) {
-            return new TupleDispatch(destination, metrics, layout.getLogicalArity(), true, layout);
+            return new TupleDispatch(destination.getCapturesYield()
+                    ? new ContinuationTupleDestination(destination) : destination,
+                    metrics, layout.getLogicalArity(), true, layout);
         }
     }
 
@@ -1420,7 +1450,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     /** Internal control result of a matching-root tail bounce, never a guest value. */
     @Operation
     public static final class IsTailReentry {
-        @Specialization public static boolean test(Object value) { return value instanceof TailCall; }
+        @Specialization public static boolean test(Object value, boolean yielded) {
+            return yielded ? value instanceof TailYield : value instanceof TailCall;
+        }
     }
 
     @Operation

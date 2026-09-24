@@ -160,6 +160,16 @@ tupleOverapplicationAnswer input =
 tupleOverapplicationThunk :: Int
 tupleOverapplicationThunk = tupleOverapplicationAnswer 6#
 
+{-# OPAQUE tupleTailOverapplication #-}
+tupleTailOverapplication :: Int# -> (# State# RealWorld, Int#, (# State# RealWorld, Box #) #)
+tupleTailOverapplication input = tupleStage input 1#
+
+{-# OPAQUE tupleTailOverapplicationThunk #-}
+tupleTailOverapplicationThunk :: Int
+tupleTailOverapplicationThunk =
+  case tupleTailOverapplication 6# of
+    (# _, left, (# _, Box right #) #) -> I# (100# +# left +# right)
+
 {-# OPAQUE tupleApplicationFailure #-}
 tupleApplicationFailure :: Int
 tupleApplicationFailure =
