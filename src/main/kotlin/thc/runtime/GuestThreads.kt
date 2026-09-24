@@ -75,8 +75,9 @@ internal class GuestThreads internal constructor(
         try {
             wake(thread)
         } catch (failure: Throwable) {
-            request.fail(failure)
-            throw failure
+            // Completion may race the wake. A dead target is a successful
+            // no-op for throwTo, even if its last wake was rejected.
+            if (request.fail(failure)) throw failure
         }
         return request
     }
@@ -192,7 +193,7 @@ internal class GuestThreads internal constructor(
             target.thread
         }
         try { wake(thread) }
-        catch (failure: Throwable) { request.fail(failure); throw failure }
+        catch (failure: Throwable) { if (request.fail(failure)) throw failure }
     }
 
     companion object {
@@ -231,9 +232,8 @@ internal class AsyncRequest internal constructor(
 
     @TruffleBoundary fun cancel(): Boolean = owner.finish(this, AsyncRequestState.CANCELLED)
 
-    @TruffleBoundary fun fail(cause: Throwable? = null) {
+    @TruffleBoundary fun fail(cause: Throwable? = null): Boolean =
         owner.finish(this, AsyncRequestState.FAILED, cause)
-    }
 
     internal fun finish(next: AsyncRequestState) = transition(next)
 

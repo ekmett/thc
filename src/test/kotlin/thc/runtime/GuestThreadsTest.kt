@@ -177,4 +177,27 @@ class GuestThreadsTest {
             assertEquals(2, wakes.get())
         } finally { threads.leaveCurrent() }
     }
+
+    @Test fun targetCompletionBetweenEnqueueAndWakeIsSuccessfulNoop() {
+        val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+        val exit = CountDownLatch(1)
+        val ready = CountDownLatch(1)
+        val threads = GuestThreads(masks) { target ->
+            exit.countDown()
+            target.join(5000)
+            assertFalse(target.isAlive)
+            throw IllegalStateException("Wake rejected a completed Java thread")
+        }
+        val id = AtomicLong()
+        val target = Thread {
+            id.set(threads.enterCurrent())
+            ready.countDown()
+            try { assertTrue(exit.await(5, TimeUnit.SECONDS)) }
+            finally { threads.leaveCurrent() }
+        }
+        target.start()
+        assertTrue(ready.await(5, TimeUnit.SECONDS))
+        val request = threads.send(id.get(), "no-op")
+        assertEquals(AsyncRequestState.TARGET_FINISHED, request.state)
+    }
 }
