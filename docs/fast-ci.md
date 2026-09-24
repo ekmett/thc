@@ -21,8 +21,8 @@ grouped integer/floating vectors, and six native fixture families, including the
 preparers and independent oracle tests. The primop test context selects its three
 consumers. New primitive entries in `core-capabilities.json` and whole new narrow
 mask arms in `Program.kt` select their native family only when the existing content
-is unchanged; whole new arity/execution dispatch arms for those families are
-handled the same way. Other shared dispatch, vector-memory proof and representation edits
+is unchanged; whole new arity/execution dispatch arms and bytecode name-to-existing-operation
+arms for those families are handled the same way. Other shared dispatch, vector-memory proof and representation edits
 still widen. Fast-check automation edits select smoke plus control tests; merge and
 library scripts also select their own Python tests. New dependencies must be
 reviewed in `.github/scripts/fast-tests.json`; there is no force-narrow option.

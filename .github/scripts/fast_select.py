@@ -20,6 +20,7 @@ SCRIPT = ".github/scripts/fast_select.py"
 POLICY = ".github/scripts/fast-tests.json"
 CAPABILITIES = "scripts/core-capabilities.json"
 PROGRAM = "src/main/kotlin/thc/runtime/Program.kt"
+BYTECODE_PROGRAM = "src/main/kotlin/thc/runtime/BytecodeProgram.kt"
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"
 DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+([A-Za-z_]\w*)")
@@ -313,6 +314,42 @@ def additive_program_families(before, after):
     return families
 
 
+def additive_bytecode_families(before, after):
+    """Only new name-to-existing-operation arms in the scalar bytecode dispatch."""
+    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
+    added = []
+    for tag, first, last, start, end in difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False).get_opcodes():
+        if tag == "equal":
+            continue
+        if tag != "insert":
+            return None
+        added.extend(range(start, end))
+    if not added:
+        return None
+    marker = "val operation = when (scalar64PrimitiveOperation(name))"
+    old_start = before.find(marker)
+    old_end = before.find("else -> throw UnsupportedCore", old_start)
+    if old_start < 0 or old_end < 0:
+        return None
+    operations = set(re.findall(r'->\s*"([A-Za-z][A-Za-z0-9]*)"', before[old_start:old_end]))
+    families = set()
+    for index in added:
+        prefix = "".join(new_lines[:index])
+        start = prefix.rfind(marker)
+        if start < 0 or "else ->" in prefix[start:]:
+            return None
+        line = new_lines[index].strip()
+        match = re.fullmatch(r'("[A-Za-z0-9]+#"(?:,\s*"[A-Za-z0-9]+#")*)\s*->\s*"([A-Za-z][A-Za-z0-9]*)"', line)
+        if not match or match[2] not in operations:
+            return None
+        for name in re.findall(r'"([A-Za-z0-9]+#)"', match[1]):
+            family = primop_family(name)
+            if family is None:
+                return None
+            families.add(family)
+    return families
+
+
 def select(repo, base_ref, head_ref):
     repo = Path(repo).resolve()
     reasons = []
@@ -468,11 +505,12 @@ def select(repo, base_ref, head_ref):
                 group = policy["leafSources"][path]
                 affected_junit.update(group["junit"])
                 affected_python.update(group["python"])
-            elif policy and base and record["status"] == "M" and path in (CAPABILITIES, PROGRAM):
+            elif policy and base and record["status"] == "M" and path in (CAPABILITIES, PROGRAM, BYTECODE_PROGRAM):
                 try:
                     before = git(repo, "show", base + ":" + path).decode("utf-8")
                     families = (additive_capability_families(before, text(path)) if path == CAPABILITIES
-                                else additive_program_families(before, text(path)))
+                                else additive_program_families(before, text(path)) if path == PROGRAM
+                                else additive_bytecode_families(before, text(path)))
                     if not families:
                         widen("shared-primop-registry-change", path)
                     else:

@@ -216,6 +216,21 @@ private val text = "class FakeString { @Test }"
         self.commit()
         self.full("shared-primop-registry-change")
 
+    def test_bytecode_new_name_to_existing_operation_is_scoped(self):
+        path = select.BYTECODE_PROGRAM
+        before = ('val operation = when (scalar64PrimitiveOperation(name)) {\n'
+                  '    "popCnt8#" -> "PopulationCountWidth"\n'
+                  '    else -> throw UnsupportedCore("unknown")\n}\n')
+        self.write(path, before)
+        self.base = self.commit()
+        after = before.replace('    else ->', '    "popCnt16#" -> "PopulationCountWidth"\n    else ->')
+        self.write(path, after)
+        self.commit()
+        self.assertEqual("narrow", self.plan()["mode"])
+        self.write(path, after.replace('"PopulationCountWidth"\n    else', '"NewUnreviewedOperation"\n    else'))
+        self.commit()
+        self.full("shared-primop-registry-change")
+
     def test_unknown_production_configuration_resources_and_compiler_widen(self):
         for path in ("src/main/kotlin/Critical.kt", "src/main/kotlin/ArgumentLayout.kt", "compiler/THC/Plugin.hs",
                      "build.gradle.kts", "src/main/resources/proof.json", "scripts/helper.py"):
