@@ -8,9 +8,11 @@ import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.IndirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import thc.runtime.TargetCache
 import thc.runtime.Metrics
+import thc.runtime.Calls
 import com.oracle.truffle.api.CallTarget
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.TruffleLanguage
@@ -339,7 +341,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 }
             }
         }
-        return dispatch.execute(guestTarget, arrayOf(guestEntry, normalized))
+        return dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized))
     }
     @ExportMessage fun hasMembers() = true
     @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(
@@ -392,10 +394,15 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
     }
 }
 
-/** Bounded host entry cache, matching the guest call-target cache policy. */
+/** Direct IO dispatch and a bounded polyglot-to-guest entry boundary. */
 class HostDispatch : Node() {
     @Child private var calls = TargetCache(Metrics(false))
+    // The polyglot Value.execute root is shared across unrelated guest entries.
+    // Keep its compiled graph bounded while leaving direct guest-to-guest calls
+    // and explicit compilation of the stable guest entry target unchanged.
+    @Child private var publicCall = IndirectCallNode.create()
     fun execute(target: RootCallTarget, arguments: Array<Any?>): Any? = calls.call(target, arguments)
+    fun executePublic(target: RootCallTarget, arguments: Array<Any?>): Any? = Calls.indirect(publicCall, target, arguments)
     companion object { @JvmStatic fun create() = HostDispatch() }
 }
 

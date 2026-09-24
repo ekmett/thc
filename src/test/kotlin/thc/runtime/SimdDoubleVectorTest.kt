@@ -5,6 +5,8 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
@@ -16,6 +18,8 @@ import thc.Language
 import java.io.File
 import java.lang.reflect.Modifier
 import java.security.MessageDigest
+import java.util.Collections
+import java.util.IdentityHashMap
 
 class SimdDoubleVectorTest {
     private val root = File(System.getProperty("thc.projectRoot"))
@@ -36,6 +40,25 @@ class SimdDoubleVectorTest {
     private fun sameDouble(expected: Double, actual: Double, label: String = "") {
         if (expected.isNaN()) assertTrue(actual.isNaN(), label)
         else assertEquals(expected.toRawBits(), actual.toRawBits(), label)
+    }
+
+    private fun activeTargets(entry: RootCallTarget): List<RootCallTarget> {
+        val seen = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
+        val result = mutableListOf<RootCallTarget>()
+        fun visit(target: RootCallTarget) {
+            if (!seen.add(target)) return
+            val root = target.rootNode
+            val nodes = if (root is BytecodeRoot) listOf(root) + root.bytecodeNode.instructions.flatMap { it.arguments }
+                .filter { it.kind == Instruction.Argument.Kind.NODE_PROFILE }.mapNotNull { it.asCachedNode() }
+                else listOf(root)
+            for (call in nodes.flatMap { NodeUtil.findAllNodeInstances(it, DirectCallNode::class.java) }) {
+                val active = call.currentCallTarget as? RootCallTarget ?: continue
+                if (active.rootNode is GuestRoot) visit(active)
+            }
+            result.add(target)
+        }
+        visit(entry)
+        return result
     }
 
     @Test fun exactShapeAndVectorBackedStorageRemainDistinctFromDoubleTuple() {
@@ -177,6 +200,7 @@ class SimdDoubleVectorTest {
                 val stageStructure = (provenance["structure"] as Map<String, Map<String, Any?>>).getValue(stage)
                 val compiledEntries = (stageStructure["compiledEntriesByEntry"] as Map<String, Number>).getValue(name).toLong()
                 assertTrue(compiledEntries >= 1)
+                var compiledTargets = emptyList<RootCallTarget>()
                 fun checkRows(compiled: Boolean = false) {
                     for (input in cases) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
@@ -196,14 +220,27 @@ class SimdDoubleVectorTest {
                             assertTrue(calls.isNotEmpty(), "$label selected guest call")
                             for (call in calls) assertSame(target, call.currentCallTarget, "$label active guest identity")
                             assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$label remains installed")
+                            assertEquals(compiledTargets, activeTargets(host), "$label active target identities")
+                            compiledTargets.forEach { active ->
+                                assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active), "$label active compiled target")
+                            }
                         }
                     }
                 }
                 checkRows(); checkRows()
-                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$name installed")
+                // The fixture counts every strict nested guest call. Install the
+                // active callees before checking that whole compiled call chain.
+                compiledTargets = activeTargets(host)
+                assertTrue(compiledTargets.size > 1, "$stage/$backend/$name active guest targets")
+                for (active in compiledTargets) {
+                    active.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(active, true)
+                    assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active), "$stage/$backend/$name installed")
+                }
                 checkRows(compiled = true)
                 assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$name after execution")
+                compiledTargets.forEach { active ->
+                    assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active), "$stage/$backend/$name active compiled target")
+                }
                 val diagnostics = program.diagnostics()
                 assertEquals(0L, (diagnostics.getValue("unsupportedTraps") as Number).toLong())
                 assertEquals(0L, (diagnostics.getValue("blackholes") as Number).toLong())
