@@ -1810,7 +1810,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         }
         scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs, entryStrict.copyOf(), inputLayout)
         val body = compile(expression, scope, true)
-        val handoff = HandoffEntry.create(language, scope.layout, args.map(CoreRepresentations::binder), resultProof, captures != null)
+        // Async AST has no caller capture around a typed handoff loan yet.
+        // Keep admitted roots on the ordinary scalar call ABI.
+        val handoff = if (enableAsync) null else HandoffEntry.create(language, scope.layout,
+            args.map(CoreRepresentations::binder), resultProof, captures != null)
         if ((body.representation.isSum || resultProof.isSum) && (!body.representation.isSum || !resultProof.isSum))
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
         val effectiveResult = body.representation.refine(resultProof)

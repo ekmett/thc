@@ -27,7 +27,8 @@ class AstContinuationTest {
 
     private fun directMVarModule(wrap: Boolean = false, strict: Boolean = false,
                                  caseLiteral: Boolean = false, casePayload: Boolean = false,
-                                 wrongCaseResult: Boolean = false): Map<String, Any?> {
+                                 wrongCaseResult: Boolean = false,
+                                 unevaluatedCell: Boolean = false): Map<String, Any?> {
         val cell = listOf("var", "cell", mapOf("rep" to mvarRep))
         val state = listOf("void", mapOf("rep" to stateRep))
         val read = listOf("app", listOf("prim", "takeMVar#"), listOf(cell, state),
@@ -45,7 +46,8 @@ class AstContinuationTest {
             else -> read
         }
         val parameters = listOf(
-            mapOf("id" to "cell", "name" to "cell", "lifted" to false, "coercion" to false, "rep" to mvarRep),
+            mapOf("id" to "cell", "name" to "cell", "lifted" to false, "coercion" to false,
+                "rep" to if (unevaluatedCell) mvarRep + ("evaluated" to false) else mvarRep),
             mapOf("id" to "state", "name" to "state", "lifted" to false, "coercion" to false, "rep" to stateRep))
         val lambda = listOf("lam", parameters, body, mapOf("resultRep" to when {
             wrongCaseResult || casePayload -> dataRep; caseLiteral -> longRep; else -> tupleRep },
@@ -78,6 +80,11 @@ class AstContinuationTest {
                     Program(language, directMVarModule(caseLiteral = true, wrongCaseResult = true), true)
                 }
                 assertTrue(wrongRoute.message!!.contains("direct"))
+                Program(language, directMVarModule(unevaluatedCell = true))
+                val hiddenForce = assertThrows(RuntimeFault::class.java) {
+                    Program(language, directMVarModule(unevaluatedCell = true), true)
+                }
+                assertTrue(hiddenForce.message!!.contains("direct"))
             } finally { context.leave() }
         }
     }
@@ -97,6 +104,8 @@ class AstContinuationTest {
                 state = Language.currentState()
                 program = Program(language, directMVarModule(), true)
                 target = program.entryTarget("direct")
+                assertNull((target.rootNode as FunctionRoot).handoff,
+                    "An async AST root must not receive a typed caller loan without caller capture")
                 shape = TupleShape(CoreRepresentations.parse(tupleRep), language)
                 repeat(5) {
                     val ready = ManagedMVar()
@@ -169,6 +178,7 @@ class AstContinuationTest {
                 state = Language.currentState()
                 program = Program(language, directMVarModule(caseLiteral = true), true)
                 target = program.entryTarget("direct")
+                assertNull((target.rootNode as FunctionRoot).handoff)
                 repeat(5) {
                     val ready = ManagedMVar()
                     assertTrue(ready.tryPut("discarded"))
