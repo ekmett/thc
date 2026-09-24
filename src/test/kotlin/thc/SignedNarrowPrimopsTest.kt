@@ -9,7 +9,6 @@ import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.io.File
-import java.math.BigInteger
 import java.security.MessageDigest
 
 /** GHC's narrow signed values have canonical sign-extended Long carriers. */
@@ -20,31 +19,8 @@ class SignedNarrowPrimopsTest {
         ((Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>)[key] as Number).toLong()
     private fun entries() = manifest()["entries"] as List<Map<String, Any?>>
 
-    private fun signed(value: BigInteger, width: Int): BigInteger {
-        val modulus = BigInteger.ONE.shiftLeft(width)
-        val residue = value.mod(modulus)
-        return if (residue.testBit(width - 1)) residue - modulus else residue
-    }
     private fun mathematical(name: String, width: Int, left: Long, right: Long): Long {
-        val x = signed(BigInteger.valueOf(left), width)
-        val y = signed(BigInteger.valueOf(right), width)
-        fun bit(condition: Boolean) = if (condition) BigInteger.ONE else BigInteger.ZERO
-        val result = when (name.substringBefore("Int")) {
-            "negate" -> -x
-            "plus" -> x + y
-            "sub" -> x - y
-            "times" -> x * y
-            "quot" -> x.divide(y)
-            "rem" -> x.remainder(y)
-            "eq" -> bit(x == y)
-            "ne" -> bit(x != y)
-            "lt" -> bit(x < y)
-            "le" -> bit(x <= y)
-            "gt" -> bit(x > y)
-            "ge" -> bit(x >= y)
-            else -> error("Unknown signed narrow primitive: $name")
-        }
-        return signed(result, width).toLong()
+        return ScalarPrimopModel.scalar(name.substringBefore("Int"), width, false, left, right)
     }
     private fun verifyHashes(manifest: Map<String, Any?>) {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {

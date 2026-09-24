@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
-import java.math.BigInteger
 import java.security.MessageDigest
 
 /** Native defined bits, an independent unbounded bit model, and exact installed entries. */
@@ -27,25 +26,8 @@ class BitPrimopsTest {
             assertEquals(expected, actual, "Stale bit primitive fixture: $path; rerun prepare-tests.sh")
         }
     }
-    private fun mathematical(operation: String, width: Int, carrier: Long): Long {
-        val input = BigInteger.valueOf(carrier).mod(BigInteger.ONE.shiftLeft(width))
-        val bits = List(width) { input.testBit(it) }
-        return when (operation) {
-            "popCnt" -> bits.count { it }.toLong()
-            "clz" -> bits.asReversed().takeWhile { !it }.size.toLong()
-            "ctz" -> bits.takeWhile { !it }.size.toLong()
-            "bitReverse", "byteSwap" -> {
-                var result = BigInteger.ZERO
-                for (bit in bits.indices) if (bits[bit]) {
-                    val destination = if (operation == "bitReverse") width - 1 - bit
-                        else width - 8 - 8 * (bit / 8) + bit % 8
-                    result = result + BigInteger.ONE.shiftLeft(destination)
-                }
-                result.toLong()
-            }
-            else -> error(operation)
-        }
-    }
+    private fun mathematical(operation: String, width: Int, carrier: Long): Long =
+        ScalarPrimopModel.bit(operation, width, carrier)
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
         Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target), label)
 
