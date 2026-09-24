@@ -124,6 +124,52 @@ class CoreContinuationNativeTest {
         }
     }
 
+    @Test fun compactAndTypedScalarCallsResumeTheirExactCalleeWithoutReplayingInputs() {
+        val oracle = File(root, "build/core-continuation/native-output.txt").readLines()
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        data class Case(val line: Int, val entry: String, val callee: String, val expected: Long)
+        for ((line, entry, callee, expected) in listOf(
+            Case(12, "compactScalarAnswer", "compactScalarDelayed", 208L),
+            Case(13, "typedScalarAnswer", "typedScalarDelayed", 209L))) {
+            assertEquals(expected.toString(), oracle[line])
+            executionContext().use { context ->
+                context.initialize("thc")
+                entered(context) {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val linked = CoreModules.reachable(module, entry, strictLink = true)
+                    val driver = Driver()
+                    for (ordinary in listOf(Program(language, linked), BytecodeProgram(language, linked))) {
+                        val answer = driver.force(ordinary.entryValue(entry) as Thunk) as DataValue
+                        assertEquals(expected, answer.layout.readLong(answer, 0), "$entry ordinary")
+                    }
+                    val checkpoint = BytecodeCheckpoint()
+                    val program = BytecodeProgram(language, linked, checkpoint)
+                    val parent = program.entryValue(entry) as Thunk
+                    val target = parent.target!!
+                    val warm = Calls.target(target, arrayOf(0L)) as DataValue
+                    assertEquals(expected, warm.layout.readLong(warm, 0))
+                    compile(target)
+                    val compiled = Calls.target(target, arrayOf(0L)) as DataValue
+                    assertEquals(expected, compiled.layout.readLong(compiled, 0))
+                    checkpoint.armed = true
+                    assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                    val suspended = (parent.value as ContinuationResult).result as CallSegmentSuspended
+                    val segment = suspended.segment
+                    val calleeTarget = program.entryTarget(callee)
+                    assertTrue(((segment.value as ContinuationResult).continuationRootNode.sourceRootNode as BytecodeRoot)
+                        .isSelf(calleeTarget), "$entry must capture its actual typed/compact callee")
+                    assertEquals(1, checkpoint.visits.get(), "$entry input/callee prefix runs once")
+                    val result = driver.force(parent) as DataValue
+                    assertEquals(expected, result.layout.readLong(result, 0))
+                    assertEquals(1, checkpoint.visits.get(), "$entry must not replay its callee")
+                    assertEquals(2, segment.state)
+                    assertEquals(2, parent.state)
+                }
+            }
+        }
+    }
+
     @Test fun applicationRejectsUnownedNestedRootAndPreservesMaskedCarrier() {
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
@@ -457,7 +503,7 @@ class CoreContinuationNativeTest {
     }
 
     @Test fun nativeCoreThunkResumesThroughForcedLocal() {
-        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208"),
+        assertEquals(listOf("108", "208", "42", "77", "43", "114", "114", "79", "2", "0", "1", "208", "208", "209"),
             File(root, "build/core-continuation/native-output.txt").readLines())
         @Suppress("UNCHECKED_CAST")
         val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>

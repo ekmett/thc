@@ -15,6 +15,27 @@ asyncPayload = Box 7#
 delayed :: Int# -> Box
 delayed input = case noDuplicate# realWorld# of _ -> Box (input +# 1#)
 
+-- A zero-width argument uses compact input transport; the exact callee still
+-- yields after its caller has performed work and retained an operand.
+{-# OPAQUE compactScalarDelayed #-}
+compactScalarDelayed :: (# #) -> Int# -> Box
+compactScalarDelayed _ input = case noDuplicate# realWorld# of _ -> Box (input +# 1#)
+
+{-# OPAQUE compactScalarAnswer #-}
+compactScalarAnswer :: Int
+compactScalarAnswer = case compactScalarDelayed (# #) 7# of Box result -> I# (200# +# result)
+
+-- A two-field unboxed-tuple argument stays in typed input slots across a
+-- separately compiled callee yield; neither field is reconstructed on resume.
+{-# OPAQUE typedScalarDelayed #-}
+typedScalarDelayed :: (# Int#, Box #) -> Box
+typedScalarDelayed pair = case pair of
+  (# left, Box right #) -> case noDuplicate# realWorld# of _ -> Box (left +# right)
+
+{-# OPAQUE typedScalarAnswer #-}
+typedScalarAnswer :: Int
+typedScalarAnswer = case typedScalarDelayed (# 7#, Box 2# #) of Box result -> I# (200# +# result)
+
 {-# OPAQUE checkpointValue #-}
 checkpointValue :: Box
 checkpointValue = case noDuplicate# realWorld# of _ -> Box 8#

@@ -20,3 +20,5 @@ main = do
   print unmaskedCheckpointAnswer
   print uninterruptibleCheckpointAnswer
   print forceNonlocalAnswer
+  print compactScalarAnswer
+  print typedScalarAnswer
