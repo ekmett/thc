@@ -78,9 +78,9 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     @ConstantOperand(type = AtomicReference.class, name = "child")
     @ConstantOperand(type = RootCallTarget.class, name = "childForceTarget")
     public static final class CallChild {
-        @Specialization public static Answer run(AtomicReference<?> child, RootCallTarget childForceTarget,
+        @Specialization public static Object run(AtomicReference<?> child, RootCallTarget childForceTarget,
                 @Cached IndirectCallNode call) {
-            return (Answer) call.call(childForceTarget, child.get());
+            return call.call(childForceTarget, child.get());
         }
     }
 
@@ -103,9 +103,9 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
 
     @Operation
     public static final class ResumeChild {
-        @Specialization public static Answer run(ChildResume resume) {
+        @Specialization public static Object run(ChildResume resume) {
             if (resume.getFailure() != null) throw resume.getFailure();
-            return (Answer) resume.getValue();
+            return resume.getValue();
         }
     }
 
@@ -113,6 +113,9 @@ public abstract class ThunkYieldProofRoot extends RootNode implements BytecodeRo
     public static final class AddNumber {
         @Specialization public static long run(long left, Answer right) {
             return left + right.number();
+        }
+        @Specialization public static long run(long left, long right) {
+            return left + right;
         }
     }
 
