@@ -2,7 +2,7 @@
 
 The bounded runtime supports the GHC 9.14.1 operations `newByteArray#`,
 `writeWord8Array#`, `unsafeFreezeByteArray#`, `sizeofByteArray#`,
-`indexWord8Array#`, and `copyByteArray#` on AST and bytecode. The ordinary public
+`indexWord8Array#`, `copyByteArray#`, and `compareByteArrays#` on AST and bytecode. The ordinary public
 `Data.ByteString.Short.pack`, `length`, `unpack`, and repeated `uncons` workloads execute the
 installed bytestring `$wpack`/`$wgo`/`uncons`/`$wuncons` bodies and the original, source-exported
 `GHC.Internal.List.$wlenAcc`. Preparation requires those exact dependencies and
@@ -58,7 +58,7 @@ alias misuse.
 The primitive contracts come from the pinned
 [GHC primop declarations](https://gitlab.haskell.org/ghc/ghc/-/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/compiler/GHC/Builtin/primops.txt.pp),
 whose ByteArray documentation states that freeze does not copy and both variants
-share the same heap structure. `scripts/primop-coverage.py` also checks all six
+share the same heap structure. `scripts/primop-coverage.py` also checks the advertised
 names and arities against the installed GHC API, and records its signatures.
 
 Run `compiler/build.sh`, then `python3 scripts/prepare-bytearray.py` and
@@ -86,3 +86,27 @@ no writes/result publication on state failure, exhaustive small contained copy
 ranges, full-width invalid ranges, forbidden alias identity, exact proofs for
 all six copy operands and its State# result, and malformed or partial primitive
 applications. This is correctness evidence, not a throughput measurement.
+
+`compareByteArrays# :: ByteArray# -> Int# -> ByteArray# -> Int# -> Int# -> Int#`
+compares equal-length byte ranges using unsigned byte ordering. Only the sign of
+the result is contractual; THC does not promise GHC's particular nonzero magnitude.
+The fixed-child AST node and typed bytecode operation return primitive Long values.
+All five operands are evaluated in order, including for zero-length comparisons.
+Both ranges are checked at full Long width before narrowing: nonnegative offsets
+and length, offsets no greater than size, and length no greater than
+`size - offset`. Empty ranges at either endpoint are valid. Comparing overlapping
+ranges of the same immutable array is valid and does not mutate storage.
+
+`prepare-compare-byte-arrays.py` exports genuine pre/post-Tidy public
+ShortByteString `Ord`, `isPrefixOf`, and `isSuffixOf` workloads plus direct range
+and alias controls. The 3,027 native rows are checked against independent
+unsigned-list models; all ten entry audits must retain `compareByteArrays#` and
+the installed `$wpack` body with no missing globals or unsupported operations.
+`CompareByteArraysTest` runs every row on both backends with inlining enabled and
+disabled, requiring per-row compiled guest entry, valid original and observed
+active targets, and empty input/result loans. Synthetic controls cover every
+unsigned byte pair, contained small ranges, endpoint empties, operand failure,
+full-width invalid ranges, wrong storage carriers, and exact proof/saturation
+rejection. Invalid domains are tested only against THC, never by invoking native
+undefined behavior. This adds comparison coverage; it does not change the
+existing exception-library frontiers or permit mutable alias misuse.

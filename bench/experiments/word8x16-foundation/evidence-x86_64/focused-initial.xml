@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="thc.runtime.SimdWord8VectorTest" tests="7" skipped="0" failures="1" errors="0" timestamp="2026-09-23T22:14:43.793Z" hostname="eak-quartus" time="14.463">
+  <properties/>
+  <testcase name="literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution()" classname="thc.runtime.SimdWord8VectorTest" time="0.225">
+    <failure message="org.opentest4j.AssertionFailedError: Expected thc.runtime.RuntimeFault to be thrown, but nothing was thrown." type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Expected thc.runtime.RuntimeFault to be thrown, but nothing was thrown.
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:152)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:73)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:35)
+	at org.junit.jupiter.api.Assertions.assertThrows(Assertions.java:3128)
+	at thc.runtime.SimdWord8VectorTest.literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution$lambda$0(SimdWord8VectorTest.kt:135)
+	at thc.runtime.SimdWord8VectorTest.withLanguage(SimdWord8VectorTest.kt:32)
+	at thc.runtime.SimdWord8VectorTest.withLanguage$default(SimdWord8VectorTest.kt:27)
+	at thc.runtime.SimdWord8VectorTest.literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution(SimdWord8VectorTest.kt:111)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1604)
+</failure>
+  </testcase>
+  <testcase name="allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct()" classname="thc.runtime.SimdWord8VectorTest" time="0.228"/>
+  <testcase name="canonicalWord8LiteralsAndAlternativesRejectOutOfRangeAndNoncanonicalText()" classname="thc.runtime.SimdWord8VectorTest" time="0.061"/>
+  <testcase name="exactShapeRequiresSixteenByteFieldsAndSixteenWord8TupleLanes()" classname="thc.runtime.SimdWord8VectorTest" time="0.003"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithoutInlining()" classname="thc.runtime.SimdWord8VectorTest" time="7.342"/>
+  <testcase name="nativeCoreHasExactCompiledEntriesWithInlining()" classname="thc.runtime.SimdWord8VectorTest" time="6.401"/>
+  <testcase name="bothLoadersRetainVectorBoundaryAndRejectForgedShapes()" classname="thc.runtime.SimdWord8VectorTest" time="0.196"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

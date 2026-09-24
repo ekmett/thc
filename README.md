@@ -104,6 +104,8 @@ operations with exact typed lanes and bit-sensitive correctness gates.
 The [Int16X8](docs/int16x8.md) and [Int8X16](docs/int8x16.md) foundations
 each add seven local narrow-integer vector operations, including wrapping
 multiplication, with primitive lane carriers and native/model edge checks.
+The [Word8X16 foundation](docs/word8x16.md) adds six unsigned counterparts with
+distinct proofs, zero-extended lanes and native/model high-bit checks.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
@@ -116,7 +118,8 @@ storage, joins, nested sums and unresolved layouts remain rejected.
 lazy reference storage and exact State sequencing on both backends.
 
 [Managed ByteArray operations](docs/bytearrays.md) execute genuine ShortByteString
-pack/length/unpack/uncons with ordered writes and contained copies and native/model checks on both backends.
+pack/length/unpack/uncons and public comparison/prefix/suffix operations, with ordered writes,
+contained ranges and native/model checks on both backends.
 [Int-array operations](docs/int-arrays.md) extend the same byte storage to
 public `UArray`/`STUArray` examples with native-endian, full-width values.
 [Double-array operations](docs/double-arrays.md) add typed floating storage,

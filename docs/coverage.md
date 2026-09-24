@@ -71,6 +71,9 @@ pack, unpack, broadcast, add, subtract, negate and multiply with exact narrow
 lane proofs. Their native/model corpora contain 6,032 and 9,168 rows respectively,
 including independently observable lanes and residual scalar/tuple calls.
 Both use dense primitive carriers and retain the same local-only vector boundary.
+The [Word8X16 foundation](word8x16.md) adds six unsigned byte-vector operations
+and 7,712 native/model rows, with exact Word8 proofs, zero-extension and explicit
+signed/unsigned mismatch controls. There is no GHC unsigned vector negate primop.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle

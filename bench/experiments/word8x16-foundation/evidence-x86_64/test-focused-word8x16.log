@@ -1,0 +1,51 @@
+Resource run log: /home/ekmett/.codex/worktrees/98d0/cult/build-agent-logs/20260923-181609-0ioi90uh/output.log
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :kaptGenerateStubsKotlin UP-TO-DATE
+> Task :kaptKotlin UP-TO-DATE
+> Task :compileKotlin UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :processTestResources NO-SOURCE
+> Task :startScripts UP-TO-DATE
+> Task :installDist UP-TO-DATE
+> Task :kaptGenerateStubsTestKotlin
+> Task :kaptTestKotlin UP-TO-DATE
+
+> Task :compileTestKotlin
+w: file:///home/ekmett/ai/thc-word8x16-foundation-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:63:124 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-word8x16-foundation-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:68:103 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/thc-word8x16-foundation-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:76:99 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :test
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SimdWord8VectorTest > literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() PASSED
+
+SimdWord8VectorTest > allBitPatternsAndDistinctLanesWrapWithoutSaturationOrHighProduct() PASSED
+
+SimdWord8VectorTest > canonicalWord8LiteralsAndAlternativesRejectOutOfRangeAndNoncanonicalText() PASSED
+
+SimdWord8VectorTest > exactShapeRequiresSixteenByteFieldsAndSixteenWord8TupleLanes() PASSED
+
+SimdWord8VectorTest > nativeCoreHasExactCompiledEntriesWithoutInlining() PASSED
+
+SimdWord8VectorTest > nativeCoreHasExactCompiledEntriesWithInlining() PASSED
+
+SimdWord8VectorTest > bothLoadersRetainVectorBoundaryAndRejectForgedShapes() PASSED
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/thc-word8x16-foundation-01a0cdeb/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 23s
+12 actionable tasks: 3 executed, 9 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

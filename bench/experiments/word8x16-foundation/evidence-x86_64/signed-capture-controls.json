@@ -1,0 +1,147 @@
+{
+  "kind": "read-only real signed-capture negative controls",
+  "reader": {
+    "path": "bench/experiments/word8x16-foundation/runtime-audit.py",
+    "sha256": "8418096c7254d8bc34d78ff4afbc19be501efa2f2732450b1e18d41edba212e6",
+    "function": "inspect_graph"
+  },
+  "signedEvidence": {
+    "path": "bench/experiments/int8x16-foundation/evidence-x86_64/evidence.json",
+    "sha256": "f5326fcbec1741930982769555caa4e6c9f266dfb574d33acc64b3f0bfd79222"
+  },
+  "results": [
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "plusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/pre-ast-plusCase/graph.json.gz",
+        "sha256": "f0b64001a54c2e5f92a9f607c155497dc23178910702c329ed38d5da2fab293a"
+      },
+      "parsedGraphSha256": "3b5e03b809512b7eaf21f00915d4f9dc6c4d78483096cd23304a086d55810123",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "minusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/pre-ast-minusCase/graph.json.gz",
+        "sha256": "138e8bc025b7b301de3f35793d54eda9f3b0d9304f142f3034f72342dd83a648"
+      },
+      "parsedGraphSha256": "2c27dfab808e5fa87ff08bb8cb629efae9fdf0ae75b26245a96c747c97ecf142",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "pre",
+      "backend": "ast",
+      "entry": "timesCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/pre-ast-timesCase/graph.json.gz",
+        "sha256": "16d1f48bbaae245da02a430079670f15b760bbc026a415e5545b8763c63948d2"
+      },
+      "parsedGraphSha256": "fe244ebfade6187fcdda3121f61e3b032c7a77683cb0694a28a45b471214c785",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "plusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/pre-bytecode-plusCase/graph.json.gz",
+        "sha256": "39da11f4498adb570596b2768136d1206bfaa6968e124fb609b69fe732f6419d"
+      },
+      "parsedGraphSha256": "e1cb7607ca901475e7f5c25193216904a65c2a2da65c455fe50f9dc9a988b4d0",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "minusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/pre-bytecode-minusCase/graph.json.gz",
+        "sha256": "b615bcfadc2a18142dde2925fde1c81017f940e72941f864e9deaaf6131b5ea9"
+      },
+      "parsedGraphSha256": "c05dd73f2261caddd44bc6895f78fa5c44aff9633e681c672ad6523439026799",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "pre",
+      "backend": "bytecode",
+      "entry": "timesCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/pre-bytecode-timesCase/graph.json.gz",
+        "sha256": "c3a63c7ab5697969e77739ab15ab361698d4ded0096a01a48a2689f9a2948608"
+      },
+      "parsedGraphSha256": "1e1338de0553c19f039b99176fb7e690ee4a01cf5e13fac8da9a7e5dc62cf7b7",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "plusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/post-ast-plusCase/graph.json.gz",
+        "sha256": "8f93cde3457453d3ae1e22742830e7eafce8792a48edb236ef32746a0239ed86"
+      },
+      "parsedGraphSha256": "30962ececd04034d0cc13f569f98290521813600671ba2fc51c894c387bfa888",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "minusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/post-ast-minusCase/graph.json.gz",
+        "sha256": "cabaf302125ae8220c7f9e8486847db4c1633ad55fbc5d809e702f6a1e3a4dde"
+      },
+      "parsedGraphSha256": "b84791a81e49c47cac8e9f96eeaf54a62ee58e6e102c0b8b8b078f0524dc2a7f",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "post",
+      "backend": "ast",
+      "entry": "timesCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/post-ast-timesCase/graph.json.gz",
+        "sha256": "07d5950ee538789ed221d634e5dbc2110469820314748fec39531a220b2c0993"
+      },
+      "parsedGraphSha256": "efb385930713e8b5ffffbc8a6c5f3dc52c0cb58680f9395d655cc936fd29a7fb",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "plusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/post-bytecode-plusCase/graph.json.gz",
+        "sha256": "fdb8321172ad2909fe5e7b5961148129a7ebdc7d23e63c2bc5ef5107a38e3d9e"
+      },
+      "parsedGraphSha256": "e22e8ef8f9ffa37660e3253183fe4abf4f9bb17bce7115dbd7d4af7dacf87adf",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "minusCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/post-bytecode-minusCase/graph.json.gz",
+        "sha256": "f591590cdded9ea3fa241984a9fc330cc336df559cdab21588161f0cf627969e"
+      },
+      "parsedGraphSha256": "cf25b558bb45d10db7ee2104e8fcd69806d82c1c8fef77aa5290772ff0843397",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    },
+    {
+      "stage": "post",
+      "backend": "bytecode",
+      "entry": "timesCase",
+      "compressedGraph": {
+        "path": "bench/experiments/int8x16-foundation/evidence-x86_64/post-bytecode-timesCase/graph.json.gz",
+        "sha256": "3197e40e505674d52c53e7c5b1a3c931f80c71025b13467eef9b2ff63c26c997"
+      },
+      "parsedGraphSha256": "90fcdd0e62baf5de3ae2e691a64d96ccd1d4fa321b4591fee62ff3aadeea3b39",
+      "expectedRejection": "Word8 output must zero-extend exactly 8 to 64 bits"
+    }
+  ],
+  "claim": "Every corresponding frozen real Int8 capture is rejected by the Word8 graph gate specifically for missing unsigned 8-to-64-bit extension; no guest execution or graph mutation."
+}
