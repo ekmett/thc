@@ -183,7 +183,7 @@ class BigNatLiteralTest {
         val exact = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true)
         val bad = listOf(
             exact + ("primReps" to listOf("BoxedRep (Just Lifted)")), exact + ("primReps" to listOf("BoxedRep Nothing")),
-            exact + ("kind" to "unknown"),
+            exact + ("kind" to "unknown"), exact + ("kind" to "data"), exact + ("kind" to "closure"),
             mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true),
             mapOf("kind" to "long", "primReps" to listOf("WordRep"), "evaluated" to true),
             mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true),
@@ -193,20 +193,24 @@ class BigNatLiteralTest {
                 "aggregate" to "unboxed-sum", "tagSlot" to 0, "alternativeSlots" to listOf(emptyList<Int>(), emptyList<Int>()),
                 "alternatives" to List(2) { mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true) }))
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
-            fun size(proof: Map<String, Any?>?): List<Any?> {
+            fun size(proof: Map<String, Any?>?, bind: Boolean): List<Any?> {
                 val scalar = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
                 val literal = listOf("lit", "bignat", "18446744073709551616") +
                     if (proof == null) emptyList() else listOf(mapOf("rep" to proof))
-                // Keep sizeof's existing exact raw operand certificate. The case
-                // separately checks the intrinsic proof of an erased literal.
+                // Direct calls must recover the same intrinsic proof as the
+                // auditor; the exact case binder is an independent control.
+                val operand = if (bind) listOf("var", "bytes", mapOf("rep" to exact)) else literal
                 val read = listOf("app", listOf("prim", "sizeofByteArray#"),
-                    listOf(listOf("var", "bytes", mapOf("rep" to exact))), listOf(false), false, false, mapOf("rep" to scalar))
+                    listOf(operand), listOf(false), false, false, mapOf("rep" to scalar))
+                if (!bind) return read
                 return listOf("case", literal, "bytes", listOf(listOf("default", null, emptyList<String>(), read)),
                     mapOf("rep" to scalar, "binder" to mapOf("id" to "bytes", "lifted" to false, "rep" to exact)))
             }
-            for (proof in listOf(exact, null, mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)))
-                assertEquals(16L, context.eval("thc", request(backend, size(proof))).execute(0L).asLong())
-            for (proof in bad) assertThrows(PolyglotException::class.java) { context.eval("thc", request(backend, size(proof))) }
+            for (bind in listOf(false, true)) {
+                for (proof in listOf(exact, null, mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)))
+                    assertEquals(16L, context.eval("thc", request(backend, size(proof, bind))).execute(0L).asLong())
+                for (proof in bad) assertThrows(PolyglotException::class.java) { context.eval("thc", request(backend, size(proof, bind))) }
+            }
         }
     }
     @Test fun bignatLiteralAlternativesRemainForbidden() {

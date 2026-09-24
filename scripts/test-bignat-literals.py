@@ -27,11 +27,21 @@ class BigNatContracts(unittest.TestCase):
         for value in ('','-1','+1','00','01',' 1','1 ','1.0','0x10','١'):
             result=report(fixture(value));self.assertIn('invalid-literal-value',{i['code'] for i in result['issues']},value)
     def test_forged_scalar_aggregate_and_vector_proofs(self):
-        bad=[dict(kind=k,primReps=[r],evaluated=True) for k,r in [('long','IntRep'),('long','WordRep'),('object','BoxedRep (Just Lifted)'),('object','BoxedRep Nothing'),('unknown','BoxedRep (Just Unlifted)')]]
+        bad=[dict(kind=k,primReps=[r],evaluated=True) for k,r in [('long','IntRep'),('long','WordRep'),('object','BoxedRep (Just Lifted)'),('object','BoxedRep Nothing'),('unknown','BoxedRep (Just Unlifted)'),('data','BoxedRep (Just Unlifted)'),('closure','BoxedRep (Just Unlifted)')]]
         bad += [dict(kind='void',primReps=[],evaluated=True),dict(kind='unknown',primReps=[],evaluated=True,aggregate='unboxed-tuple',components=[]),
                 dict(kind='unknown',primReps=['WordRep'],evaluated=True,aggregate='unboxed-sum',tagSlot=0,alternativeSlots=[[],[]],alternatives=[dict(kind='void',primReps=[],evaluated=True)]*2),
                 dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],evaluated=True,vector=dict(lanes=2,element='Int64ElemRep'))]
         for proof in bad:self.assertFalse(report(fixture(proof=proof))['accepted'],proof)
+    def test_direct_primitive_uses_the_intrinsic_literal_proof(self):
+        positives=(EXACT,None,dict(kind='unknown',primReps=None,evaluated=False))
+        negatives=[dict(EXACT,kind=k) for k in ('data','closure','unknown')]
+        negatives += [dict(EXACT,primReps=[r]) for r in ('BoxedRep (Just Lifted)','BoxedRep Nothing','IntRep','WordRep')]
+        for proof in (*positives,*negatives):
+            module=fixture('18446744073709551616',proof)
+            lam=module['bindings'][0]['expr'];literal=lam[2]
+            lam[2]=['app',['prim','sizeofByteArray#'],[literal],[False],False,False,
+                    dict(rep=dict(kind='long',primReps=['IntRep'],evaluated=True))]
+            self.assertEqual(proof in positives,report(module)['accepted'],proof)
     def test_bignat_alternatives_remain_invalid_ghc_core(self):
         result=report(fixture(alternative=True));self.assertIn('alternative-kind',{i['code'] for i in result['issues']})
     def test_every_model_byte_reconstructs_the_magnitude(self):

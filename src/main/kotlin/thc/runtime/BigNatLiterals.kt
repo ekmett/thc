@@ -12,7 +12,7 @@ internal object BigNatLiterals {
         primReps = listOf("BoxedRep (Just Unlifted)"))
 
     fun proof(expression: List<Any?>): CoreRepresentation {
-        val actual = CoreRepresentations.expression(expression)
+        val actual = CoreRepresentations.parse(CoreRepresentations.metadata(expression)?.get("rep"))
         val unconstrained = actual.kind == CoreKind.UNKNOWN && actual.primReps == null &&
             !actual.isAggregate && !actual.isVector
         if (actual.present && !unconstrained && (actual.kind != CoreKind.OBJECT ||
