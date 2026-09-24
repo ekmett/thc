@@ -238,9 +238,29 @@ def junit_info(source):
             if not private_at(item.start()):
                 unsafe.append("shared-test-helper")
     for _, start, end in ranges:
+        private_constructors = []
+        for item in declarations:
+            if not start < item.start() < end or depths[item.start()] != 1 or item[1] != "class" or not private_at(item.start()):
+                continue
+            opener = re.match(r"\s*\(", code[item.end():])
+            if opener is None:
+                continue
+            first = item.end() + opener.end() - 1
+            parens = 0
+            for position in range(first, end):
+                char = code[position]
+                if char in "{}":
+                    break  # Complex constructor: retain conservative widening.
+                parens += (char == "(") - (char == ")")
+                if parens == 0:
+                    private_constructors.append((first, position))
+                    break
         previous = start + 1
         for item in declarations:
             if not start < item.start() < end or depths[item.start()] != 1:
+                continue
+            if item[1] in ("val", "var") and any(first < item.start() < last for first, last in private_constructors):
+                previous = item.end()
                 continue
             prefix = "".join(code[i] if depths[i] == 1 else " " for i in range(previous, item.start()))
             if not private_at(item.start()) and not (
