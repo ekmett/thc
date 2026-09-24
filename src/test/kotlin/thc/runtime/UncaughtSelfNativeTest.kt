@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit
 class UncaughtSelfNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
 
+    @Suppress("UNCHECKED_CAST")
     @Test fun publicSelfThrowWithoutCatchIsGuestFailure() {
-        @Suppress("UNCHECKED_CAST")
         val receipt = Json.parse(File(root, "build/uncaught-self/manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", receipt["ghc"])
         for (kind in listOf("inputHashes", "artifactHashes"))
@@ -39,11 +39,13 @@ class UncaughtSelfNativeTest {
             assertTrue(native.errorStream.bufferedReader().readText().contains("thread killed"))
         } finally { native.destroyForcibly() }
         for (stage in listOf("pre", "post")) {
-            @Suppress("UNCHECKED_CAST")
-            val audit = Json.parse(File(root, "build/uncaught-self/$stage/audit.json").readText()) as Map<String, Any?>
-            assertEquals(true, audit["accepted"], "$stage strict Core audit")
-            assertEquals(emptyList<Any>(), audit["missingGlobals"])
-            assertEquals(emptyList<Any>(), audit["issues"])
+            for (report in listOf("audit.json", "io-audit.json")) {
+                @Suppress("UNCHECKED_CAST")
+                val audit = Json.parse(File(root, "build/uncaught-self/$stage/$report").readText()) as Map<String, Any?>
+                assertEquals(true, audit["accepted"], "$stage $report strict Core audit")
+                assertEquals(emptyList<Any>(), audit["missingGlobals"])
+                assertEquals(emptyList<Any>(), audit["issues"])
+            }
             Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false")
                 .option("engine.MultiTier", "false")
@@ -60,6 +62,13 @@ class UncaughtSelfNativeTest {
                 val after = Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>
                 assertTrue((after["compiledEntries"] as Number).toLong() >
                     (before["compiledEntries"] as Number).toLong(), "$stage installed guest code")
+                val io = context.eval("thc", CoreModules.request(listOf(source.path), "selfUncaughtIO",
+                    backend = "bytecode", ioMain = true))
+                assertFalse(io.canExecute(), "$stage IO action must use runIO")
+                assertTrue(io.canInvokeMember("runIO"))
+                val ioFailure = assertThrows(PolyglotException::class.java) { io.invokeMember("runIO") }
+                assertTrue(ioFailure.isGuestException, "$stage uncaught runIO must be a guest failure")
+                assertFalse(ioFailure.message.orEmpty().contains("Internal bytecode"))
             }
         }
     }
