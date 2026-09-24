@@ -22,6 +22,9 @@ import com.oracle.truffle.api.nodes.RootNode
 import thc.runtime.Program
 import thc.runtime.BytecodeProgram
 import thc.runtime.ExecutableProgram
+import thc.runtime.CoreRepresentations
+import thc.runtime.CoreRepresentation
+import thc.runtime.IoMainRoot
 import java.io.File
 
 object CoreModules {
@@ -108,10 +111,14 @@ object CoreModules {
     }
 
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
-                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true): String {
+                backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false): String {
+        val settings = linkedMapOf<String, Any>(
+            "entry" to entry, "instrument" to instrument,
+            "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend,
+            "sourceNotesEnabled" to sourceNotesEnabled)
+        if (ioMain) settings["ioMain"] = true
         val options = StringBuilder().also { Json.appendObjectDocument(it,
-            Json.stringify(mapOf("entry" to entry, "instrument" to instrument,
-                "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend, "sourceNotesEnabled" to sourceNotesEnabled))) }
+            Json.stringify(settings)) }
         return buildString {
             append(options, 0, options.length - 1)
             append(",\"modules\":[")
@@ -139,13 +146,17 @@ class Language : TruffleLanguage<Language.State>() {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
         val entry = input["entry"] as? String ?: error("Expected entry name")
+        require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
+            "IO main requires strict unsupported-Core rejection"
+        }
         val linked = CoreModules.reachable(CoreModules.merge(modules), entry) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>
-        val hostResultFault = try {
+        val ioResult = if (input["ioMain"] == true) CoreRepresentations.ioUnitMainResult(selected, bindings) else null
+        val hostResultFault = if (ioResult != null) null else try {
             thc.runtime.CoreRepresentations.knownFunctionSignature(selectedExpression, bindings)?.let { (inputs, result) ->
                 inputs.forEach { thc.runtime.CoreRepresentations.requireScalar(it, "host argument") }
                 thc.runtime.CoreRepresentations.requireScalar(result, "host result")
@@ -166,7 +177,7 @@ class Language : TruffleLanguage<Language.State>() {
             "bytecode" -> BytecodeProgram(this, linked)
             else -> throw IllegalArgumentException("Unknown THC backend: $backend")
         }
-        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault)
+        val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this)
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any = value
             override fun getName(): String = "THC load $entry"
@@ -175,13 +186,16 @@ class Language : TruffleLanguage<Language.State>() {
 }
 
 @ExportLibrary(InteropLibrary::class)
-class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int,
-                 private val hostResultFault: String? = null) : TruffleObject {
+internal class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int,
+                 private val hostResultFault: String? = null, ioResult: CoreRepresentation? = null,
+                 language: Language? = null) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
-    @ExportMessage fun isExecutable() = true
+    private val ioTarget = ioResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
+    @ExportMessage fun isExecutable() = ioTarget == null
     @ExportMessage fun execute(arguments: Array<Any?>,
                                @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any? {
+        if (ioTarget != null) throw thc.runtime.RuntimeFault("IO main must be invoked through runIO")
         if (hostResultFault != null) throw thc.runtime.RuntimeFault("Diagnostic unsupported path reached: $hostResultFault")
         if (arguments.size != argumentCount) {
             CompilerDirectives.transferToInterpreterAndInvalidate()
@@ -203,7 +217,9 @@ class EntryValue(private val program: ExecutableProgram, private val entry: Stri
     }
     @ExportMessage fun hasMembers() = true
     @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(
-        if (program is BytecodeProgram) arrayOf("diagnostics", "compile", "bytecode") else arrayOf("diagnostics", "compile"))
+        if (ioTarget != null) {
+            if (program is BytecodeProgram) arrayOf("diagnostics", "runIO", "bytecode") else arrayOf("diagnostics", "runIO")
+        } else if (program is BytecodeProgram) arrayOf("diagnostics", "compile", "bytecode") else arrayOf("diagnostics", "compile"))
     @ExportMessage fun isMemberReadable(member: String) = member == "diagnostics" || (member == "bytecode" && program is BytecodeProgram)
     @ExportMessage @CompilerDirectives.TruffleBoundary
     fun readMember(member: String): Any {
@@ -213,10 +229,17 @@ class EntryValue(private val program: ExecutableProgram, private val entry: Stri
             else -> throw UnknownIdentifierException.create(member)
         }
     }
-    @ExportMessage fun isMemberInvocable(member: String) = member == "compile"
+    @ExportMessage fun isMemberInvocable(member: String) = if (ioTarget != null) member == "runIO" else member == "compile"
     @ExportMessage @CompilerDirectives.TruffleBoundary
-    fun invokeMember(member: String, arguments: Array<Any?>): Any {
+    fun invokeMember(member: String, arguments: Array<Any?>,
+                     @Cached(value = "create()", uncached = "create()", neverDefault = true) dispatch: HostDispatch): Any {
+        if (member == "runIO" && ioTarget != null) {
+            require(arguments.isEmpty()) { "runIO takes no arguments" }
+            dispatch.execute(ioTarget, arrayOf(guestEntry))
+            return true
+        }
         if (member != "compile") throw UnknownIdentifierException.create(member)
+        if (ioTarget != null) throw UnknownIdentifierException.create(member)
         require(arguments.isEmpty()) { "compile takes no arguments" }
         val original = program.entryTarget(entry)
         // The host root is not cloned, but its guest direct call may be split.

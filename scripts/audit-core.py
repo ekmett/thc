@@ -1000,7 +1000,34 @@ class Audit:
         except (IndexError, KeyError, TypeError, ValueError) as error:
             self.issue('malformed-expression', owner, path, str(error))
 
-    def run(self, entries):
+    def io_main_contract(self, key, expression, formals, result):
+        """Only GHC's erased IO () state transformer may cross this host boundary."""
+        def state_binder(expr, seen=frozenset()):
+            if not isinstance(expr, list) or not expr:
+                return None
+            if expr[0] == 'lam' and len(expr) > 1 and isinstance(expr[1], list) and len(expr[1]) == 1:
+                return expr[1][0]
+            if expr[0] == 'var' and len(expr) > 1 and expr[1] not in seen:
+                return state_binder(self.bindings.get(expr[1], {}).get('expr'), seen | {expr[1]})
+            return None
+        binder = state_binder(expression)
+        state = formals[0] if isinstance(formals, list) and len(formals) == 1 else None
+        components = result.get('components') if isinstance(result, dict) and result.get('aggregate') == 'unboxed-tuple' else None
+        state_result = components[0] if isinstance(components, list) and len(components) == 2 else None
+        unit_result = components[1] if isinstance(components, list) and len(components) == 2 else None
+        if (self.bindings[key].get('type') != 'IO ()' or
+                not isinstance(result, dict) or result.get('kind') != 'unknown' or
+                result.get('primReps') != ['BoxedRep (Just Lifted)'] or
+                not isinstance(binder, dict) or binder.get('type') != 'State# RealWorld' or
+                not isinstance(state, dict) or state.get('kind') != 'void' or state.get('primReps') != [] or
+                not isinstance(state_result, dict) or state_result.get('kind') != 'void' or state_result.get('primReps') != [] or
+                not isinstance(unit_result, dict) or unit_result.get('primReps') != ['BoxedRep (Just Lifted)'] or
+                unit_result.get('kind') not in ('data', 'object')):
+            self.issue('io-main-boundary', key, '/entry', 'requires IO () with State# RealWorld -> (# State#, () #)')
+
+    def run(self, entries, io_main=False):
+        if io_main and len(entries) != 1:
+            raise ValueError('IO main audit requires exactly one entry')
         roots = []
         for entry in entries:
             candidates = [entry] if entry in self.bindings else [k for k, b in self.bindings.items() if b.get('name') == entry]
@@ -1014,10 +1041,14 @@ class Audit:
                     formals = self.call_formals(expression, {})
                 except (IndexError, KeyError, TypeError):
                     formals = None  # walk() reports malformed metadata in context.
-                if formals is not None and any(self.is_tuple(proof) for proof in formals):
-                    self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
-                if self.is_tuple(self.known_result(expression)):
-                    self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
+                result = self.known_result(expression)
+                if io_main:
+                    self.io_main_contract(key, expression, formals, result)
+                else:
+                    if formals is not None and any(self.is_tuple(proof) for proof in formals):
+                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
+                    if self.is_tuple(result):
+                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
                 if is_sum(self.known_result(expression)) or is_sum(self.bindings[key].get('rep')):
                     self.issue('aggregate-boundary', key, '/entry', 'unboxed-sum host result')
                 if key not in self.chains:
@@ -1058,6 +1089,7 @@ def main():
     parser.add_argument('modules', nargs='*', help='Exported JSON modules, or directories containing exported *.json modules')
     parser.add_argument('--module-list', action='append', type=Path, default=[], help='Read an exact newline-delimited module manifest; relative paths are relative to the manifest')
     parser.add_argument('--entry', action='append', required=True, help='Exact global id or unambiguous occurrence name; repeatable')
+    parser.add_argument('--io-main', action='store_true', help='Validate the exact IO () host entry contract instead of the scalar host result')
     parser.add_argument('--capabilities', type=Path, default=Path(__file__).with_name('core-capabilities.json'))
     parser.add_argument('--output', type=Path, help='Write full JSON report here (otherwise stdout)')
     args = parser.parse_args()
@@ -1074,7 +1106,7 @@ def main():
         if not files:
             parser.error('Supply modules or --module-list')
         modules = [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)]
-        report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry)
+        report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
     except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))
     text = json.dumps(report, indent=2) + '\n'

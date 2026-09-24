@@ -19,11 +19,22 @@ fun executionContext(): Context = Context.newBuilder("thc")
 
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
-              backend: String = defaultBackend()): Value =
-    context.eval("thc", CoreModules.request(modules, entry, instrument, java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
-        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict()))
+              backend: String = defaultBackend(), ioMain: Boolean = false): Value =
+    context.eval("thc", CoreModules.request(modules, entry, instrument,
+        !ioMain && java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
+        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain))
 
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--run-io") {
+        require(args.size == 3) { "Usage: thc --run-io MODULE.json[,MODULE.json...] ENTRY" }
+        val modules = args[1].split(',')
+        executionContext().use { context ->
+            val action = loadEntry(context, modules, args[2], ioMain = true)
+            check(action.invokeMember("runIO").asBoolean()) { "IO main did not complete" }
+            System.err.println(action.getMember("diagnostics").asString())
+        }
+        return
+    }
     require(args.size >= 3) { "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]" }
     val modules = args[0].split(',')
     val entry = args[1]
