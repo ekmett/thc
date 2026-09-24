@@ -20,7 +20,11 @@ class SignedNarrowPrimopsTest {
     private fun entries() = manifest()["entries"] as List<Map<String, Any?>>
 
     private fun mathematical(name: String, width: Int, left: Long, right: Long): Long {
-        return ScalarPrimopModel.scalar(name.substringBefore("Int"), width, false, left, right)
+        return when {
+            name.startsWith("int") && "ToWord" in name -> ScalarPrimopModel.scalar("identity", width, true, left, right)
+            name.startsWith("word") && "ToInt" in name -> ScalarPrimopModel.scalar("identity", width, false, left, right)
+            else -> ScalarPrimopModel.scalar(name.substringBefore("Int"), width, false, left, right)
+        }
     }
     private fun verifyHashes(manifest: Map<String, Any?>) {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
@@ -34,7 +38,7 @@ class SignedNarrowPrimopsTest {
         val manifest = manifest()
         verifyHashes(manifest)
         val entries = manifest["entries"] as List<Map<String, Any?>>
-        assertEquals(36, entries.size)
+        assertEquals(42, entries.size)
         assertEquals("signedNarrowDispatch", manifest["compositeEntry"])
         assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
         val modules = (manifest["modules"] as List<String>).map {
@@ -46,8 +50,15 @@ class SignedNarrowPrimopsTest {
             val name = entry["name"] as String
             val operation = name.substringBefore("Int")
             val rep = "Int${(entry["width"] as Number).toInt()}Rep"
-            val arguments = List((entry["arity"] as Number).toInt()) { rep }
-            val result = if (operation in setOf("eq", "ne", "lt", "le", "gt", "ge")) "IntRep" else rep
+            val wordRep = "Word${(entry["width"] as Number).toInt()}Rep"
+            val arguments = List((entry["arity"] as Number).toInt()) {
+                if (name.startsWith("word") && "ToInt" in name) wordRep else rep
+            }
+            val result = when {
+                name.startsWith("int") && "ToWord" in name -> wordRep
+                operation in setOf("eq", "ne", "lt", "le", "gt", "ge") -> "IntRep"
+                else -> rep
+            }
             val primitive = entry["primitive"] as String
             NumericPrimopCoreEvidence.assertCall(
                 NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, name)
@@ -94,11 +105,50 @@ class SignedNarrowPrimopsTest {
 
     private fun rawModule(primitive: String, width: Int, supplied: Int): Map<String, Any?> {
         val parameters = List(supplied) { mapOf("id" to "x$it", "name" to "x$it", "lifted" to false,
-            "type" to "Int$width#", "coercion" to false) }
+            "type" to if (primitive.startsWith("word") && "ToInt" in primitive) "Word$width#" else "Int$width#",
+            "coercion" to false) }
         val body = listOf("app", listOf("prim", primitive), List(supplied) { listOf("var", "x$it") }, List(supplied) { false })
         return mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SignedNarrowCarrierControl",
             "constructors" to emptyList<Any?>(), "bindings" to listOf(mapOf("id" to "entry", "name" to "entry",
                 "lifted" to true, "arity" to supplied, "expr" to listOf("lam", parameters, body))))
+    }
+
+    private fun castModule(primitive: String, argumentRep: String, resultRep: String): Map<String, Any?> {
+        fun proof(rep: String) = mapOf("kind" to "long", "primReps" to listOf(rep), "evaluated" to true)
+        val parameter = mapOf("id" to "x", "name" to "x", "type" to "${argumentRep.removeSuffix("Rep")}#",
+            "lifted" to false, "coercion" to false, "rep" to proof(argumentRep))
+        val operand = listOf("var", "x", mapOf("rep" to proof(argumentRep)))
+        val body = listOf("app", listOf("prim", primitive), listOf(operand), listOf(false), false, false,
+            mapOf("rep" to proof(resultRep)))
+        return mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SignedNarrowCastProofControl",
+            "constructors" to emptyList<Any?>(), "bindings" to listOf(mapOf("id" to "entry", "name" to "entry",
+                "lifted" to true, "arity" to 1, "expr" to listOf("lam", listOf(parameter), body))))
+    }
+
+    @Test fun crossSignednessCastsRejectContradictoryExactRegisterProofs() {
+        val casts = entries().filter { "ToWord" in (it["name"] as String) || "ToInt" in (it["name"] as String) }
+        assertEquals(6, casts.size)
+        for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true))
+            executionContext().use { context ->
+                for (entry in casts) {
+                    val name = entry["primitive"] as String
+                    val width = (entry["width"] as Number).toInt()
+                    val signed = "Int${width}Rep"
+                    val unsigned = "Word${width}Rep"
+                    val argument = if (name.startsWith("int")) signed else unsigned
+                    val result = if (name.startsWith("int")) unsigned else signed
+                    for ((position, wrongArgument, wrongResult) in listOf(
+                        Triple("argument 0", result, result), Triple("result", argument, argument))) {
+                        val error = assertThrows(PolyglotException::class.java) {
+                            context.eval("thc", Json.stringify(mapOf("entry" to "entry", "backend" to backend,
+                                "diagnosticUnsupported" to diagnostic,
+                                "modules" to listOf(castModule(name, wrongArgument, wrongResult)))))
+                        }
+                        assertTrue(error.message.orEmpty().contains("Primitive representation mismatch: $name $position expects"),
+                            error.message)
+                    }
+                }
+            }
     }
 
     @Test fun directResultsAreCanonicalWithoutAnIntNToIntConversionMaskingTheResult() {

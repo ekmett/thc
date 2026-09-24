@@ -104,12 +104,20 @@ entries IntegerWord = zipWith makeWord [0 ..] choices
           arity = if op == "not" then 1 else 2
       in makeEntry index name (Just primitive) width arity op (replicate arity "WordRep") "WordRep" True
 entries SignedNarrow = zipWith makeSigned [0 ..]
-  [(op, width) | op <- ["negate", "plus", "sub", "times", "quot", "rem", "eq", "ne", "lt", "le", "gt", "ge"], width <- [8,16,32]]
+  [(op, width) | op <- ["negate", "plus", "sub", "times", "quot", "rem", "eq", "ne", "lt", "le", "gt", "ge"], width <- [8,16,32]] ++
+  zipWith makeCast [36 ..] [(direction, width) | width <- [8,16,32], direction <- ["intToWord", "wordToInt"]]
   where
     makeSigned index (op, width) =
       let arity = if op == "negate" then 1 else 2
       in makeEntry index (op ++ "Int" ++ show width) (Just (op ++ "Int" ++ show width ++ "#"))
            width arity op (replicate arity "IntRep") "IntRep" False
+    makeCast index (direction, width) =
+      let signed = direction == "intToWord"
+          name = (if signed then "int" else "word") ++ show width ++
+                 "To" ++ (if signed then "Word" else "Int") ++ show width
+          argument = (if signed then "Int" else "Word") ++ show width ++ "Rep"
+          result = (if signed then "Word" else "Int") ++ show width ++ "Rep"
+      in makeEntry index name (Just (name ++ "#")) width 1 direction [argument] result signed
 entries Explicit64 = zipWith make64 [0 ..] definitions
   where
     unary name arg result op unsigned = (name, [arg], result, op, unsigned, True)
@@ -222,7 +230,8 @@ operands IntegerWord e
                           [(x,y) | x <- values, y <- [x-1,x,x+1], y >= 0, y < pow2 width])
 operands SignedNarrow e
   | entryArity e == 1 = [(x,0) | x <- Set.toAscList $ Set.union
-      (Set.fromList values) (if width == 8 then Set.fromList [-128 .. 127] else Set.empty)]
+      (Set.fromList values) (if width == 8 then Set.fromList
+        (if entryOperation e == "wordToInt" then [0 .. 255] else [-128 .. 127]) else Set.empty)]
   | otherwise = filter defined $ Set.toAscList pairs
   where
     width = entryWidth e
