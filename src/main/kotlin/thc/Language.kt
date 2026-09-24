@@ -306,7 +306,7 @@ class Language : TruffleLanguage<Language.State>() {
         }
         val program = when (val backend = input["backend"] ?: defaultBackend()) {
             "ast" -> Program(this, linked)
-            "bytecode" -> BytecodeProgram(this, linked)
+            "bytecode" -> BytecodeProgram(this, linked, true)
             else -> throw IllegalArgumentException("Unknown THC backend: $backend")
         }
         val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault, ioResult, this)

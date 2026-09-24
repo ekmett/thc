@@ -105,6 +105,8 @@ class LiveAsyncNativeTest {
                 target.join(5000)
                 assertFalse(target.isAlive)
                 assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                if (running) assertTrue(request.compiledCapture,
+                    "The executing compiled loop must claim the exception")
                 assertEquals(5, shared.state, "The abandoned shared thunk retains its continuation")
                 assertEquals(1L, call("prefixCount"))
                 if (!running) assertEquals(1L, call("releaseGate"))
