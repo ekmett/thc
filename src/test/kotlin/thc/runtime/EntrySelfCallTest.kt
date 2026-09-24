@@ -163,4 +163,25 @@ class EntrySelfCallTest {
             } finally { context.leave() }
         }
     }
+
+    @Test fun asyncDirectSelfCallKeepsTheLocalLoopWithoutTailPackets() {
+        val remaining = variable("remaining")
+        val loop = binding("loop", lambda(listOf(parameter("remaining")),
+            choose(remaining, integer(73), apply(variable("loop"),
+                listOf(primitive("-#", remaining, integer(1)))))))
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val program = BytecodeProgram(language,
+                    mapOf("bindings" to listOf(loop), "instrument" to true), true)
+                assertEquals(73L, call(program, "loop", 10L))
+                compile(program.entryTarget("loop"))
+                assertEquals(73L, call(program, "loop", 10_000L))
+                assertEquals(0L, count(program, "selfTailReentries"),
+                    "Direct self calls must use local parallel moves rather than tail packets")
+                assertEquals(0L, count(program, "trampolineIterations"))
+            } finally { context.leave() }
+        }
+    }
 }
