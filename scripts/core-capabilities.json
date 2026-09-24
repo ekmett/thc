@@ -361,6 +361,9 @@
     "maskAsyncExceptions#": 2,
     "maskUninterruptible#": 2,
     "getMaskingState#": 1,
+    "fork#": 2,
+    "myThreadId#": 1,
+    "killThread#": 3,
     "noDuplicate#": 1,
     "packInt64X2#": 1,
     "unpackInt64X2#": 1,
@@ -3180,6 +3183,20 @@
         "boxed",
         "state"
       ],
+      "result": "state"
+    }
+  },
+  "managedThreadPrimitives": {
+    "fork#": {
+      "arguments": ["action", "state"],
+      "result": ["state", "threadId"]
+    },
+    "myThreadId#": {
+      "arguments": ["state"],
+      "result": ["state", "threadId"]
+    },
+    "killThread#": {
+      "arguments": ["threadId", "payload", "state"],
       "result": "state"
     }
   },
