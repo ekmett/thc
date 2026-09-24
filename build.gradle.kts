@@ -8,6 +8,8 @@ plugins {
 }
 repositories { mavenCentral() }
 val graalVersion = "25.3.4.1"
+// Additional languages are opt-in; the ordinary runtime stays language-neutral.
+val polyglotDemoRuntime by configurations.creating
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.graalvm.polyglot:polyglot:$graalVersion")
@@ -16,6 +18,7 @@ dependencies {
     kapt("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
 }
 kotlin {
     jvmToolchain(25)
@@ -141,6 +144,17 @@ tasks.withType<Test>().configureEach {
 tasks.test {
     useJUnitPlatform { excludeTags("jit-stability") }
 }
+// Keep optional language tests outside the ordinary test inventory and classpath.
+val polyglotTests = sourceSets.create("polyglotTest")
+configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
+configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+kotlin.target.compilations.getByName("polyglotTest").associateWith(kotlin.target.compilations.getByName("main"))
+tasks.register<Test>("polyglotTest") {
+    group = "verification"
+    description = "Tests THC's optional interop boundary against GraalJS."
+    testClassesDirs = polyglotTests.output.classesDirs
+    classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+}
 tasks.register<Test>("jitStabilityTest") {
     group = "verification"
     description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."
@@ -154,6 +168,15 @@ tasks.register<JavaExec>("probe") {
     group = "verification"
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("thc.ProbeKt")
+    jvmArgs(application.applicationDefaultJvmArgs)
+    workingDir(projectDir)
+}
+
+tasks.register<JavaExec>("polyglotDemo") {
+    group = "application"
+    description = "Runs exported Haskell against GraalJS through THC.Polyglot."
+    classpath = sourceSets.main.get().runtimeClasspath + polyglotDemoRuntime
+    mainClass.set("thc.PolyglotDemoKt")
     jvmArgs(application.applicationDefaultJvmArgs)
     workingDir(projectDir)
 }

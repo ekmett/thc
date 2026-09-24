@@ -27,6 +27,23 @@ internal class LiteralAddress private constructor(
         return bytes[(offset + displacement).toInt()].toLong() and 0xffL
     }
 
+    /** Text at the polyglot ABI is a NUL-terminated UTF-8 literal, not a pointer. */
+    @TruffleBoundary
+    fun utf8(): String {
+        val start = offset.toInt()
+        var end = start
+        while (end < bytes.size && bytes[end] != 0.toByte()) end++
+        if (end == bytes.size) fault("Unterminated polyglot UTF-8 literal")
+        return try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(bytes, start, end - start)).toString()
+        } catch (_: java.nio.charset.CharacterCodingException) {
+            fault("Invalid UTF-8 at the polyglot boundary")
+        }
+    }
+
     @TruffleBoundary
     override fun toString(): String = "Addr#(literal+$offset)"
 

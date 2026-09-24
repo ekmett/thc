@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "convention": "prim",
+  "safety": "safe",
+  "operations": {
+    "thc_polyglot_v1_eval": {
+      "arguments": ["AddrRep", "AddrRep", "AddrRep", "State# RealWorld"],
+      "result": ["State# RealWorld", "BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_read_member": {
+      "arguments": ["BoxedRep (Just Lifted)", "AddrRep", "State# RealWorld"],
+      "result": ["State# RealWorld", "BoxedRep (Just Lifted)"]
+    },
+    "thc_polyglot_v1_execute_int": {
+      "arguments": ["BoxedRep (Just Lifted)", "IntRep", "State# RealWorld"],
+      "result": ["State# RealWorld", "IntRep"]
+    }
+  }
+}

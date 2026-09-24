@@ -31,7 +31,7 @@ class FastRunnerTest(unittest.TestCase):
             f'<testsuite name="{name}" {attributes}>{body}</testsuite>')
 
     def selection(self, mode="narrow"):
-        return {"mode": mode, "runnable": True, "junit": {
+        return {"mode": mode, "runnable": True, "polyglot": {"required": False, "classes": []}, "junit": {
             "classes": ["example.Test"], "patterns": ["*"] if mode == "full" else ["example.Test"]}}
 
     def test_exact_fresh_suite_and_cases(self):
@@ -85,6 +85,44 @@ class FastRunnerTest(unittest.TestCase):
         init = Path(__file__).with_name("fast_ci.init.gradle").read_text()
         self.assertIn("tasks.withType(org.gradle.api.tasks.testing.Test)", init)
         self.assertIn("outputs.doNotCacheIf", init)
+
+    def test_polyglot_task_is_optional_and_reruns_its_exact_inventory(self):
+        self.assertIsNone(ci.polyglot_command(self.selection()))
+        selected = self.selection() | {"polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}
+        command = ci.polyglot_command(selected)
+        self.assertIn("polyglotTest", command)
+        self.assertIn("--rerun", command)
+        self.assertNotIn("--tests", command)
+        for malformed in ({"required": True, "classes": []},
+                          {"required": False, "classes": ["example.PolyglotTest"]},
+                          {"required": True, "classes": ["example.PolyglotTest", "example.PolyglotTest"]}):
+            with self.subTest(malformed=malformed), self.assertRaises(RuntimeError):
+                ci.polyglot_command(self.selection() | {"polyglot": malformed})
+
+    def test_polyglot_task_cannot_reuse_previous_xml(self):
+        selected = self.selection() | {"polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}
+        old = self.root / "build/test-results/polyglotTest/TEST-stale.xml"
+        old.parent.mkdir(parents=True)
+        old.write_text("old")
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(recorder, "command", return_value=(0, "")):
+            with self.assertRaisesRegex(RuntimeError, "No fresh JUnit XML"):
+                ci.run_polyglot(recorder, selected)
+        self.assertEqual((recorder.directory / "prior-polyglot/xml/TEST-stale.xml").read_text(), "old")
+
+        def fresh(_, __, **___):
+            output = self.root / "build/test-results/polyglotTest/TEST-example.PolyglotTest.xml"
+            output.parent.mkdir(parents=True)
+            output.write_text('<testsuite name="example.PolyglotTest" tests="1" failures="0" '
+                              'errors="0" skipped="0"><testcase name="works" '
+                              'classname="example.PolyglotTest"/></testsuite>')
+            return (0, "")
+
+        with patch.object(recorder, "command", side_effect=fresh):
+            summary = ci.run_polyglot(recorder, selected)
+        self.assertEqual(summary["classes"], ["example.PolyglotTest"])
+        self.assertEqual(json.loads((recorder.directory / "polyglot/summary.json").read_text())["tests"], 1)
 
     def test_nonrunnable_or_method_only_selection_rejected(self):
         selection = self.selection()
@@ -235,6 +273,22 @@ class FastRunnerTest(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
         self.assertEqual(recorder.data["nativeInputs"]["reused"], ["smoke"])
         self.assertEqual((recorder.data["requestedBase"], recorder.data["selectionBase"]), ("HEAD", "b" * 40))
+        self.assertTrue(recorder.data["passed"])
+
+    def test_required_polyglot_lane_runs_real_demo_after_normal_tests(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": []},
+                                        "polyglot": {"required": True, "classes": ["example.PolyglotTest"]}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, ""), (0, "")]) as run, \
+                patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                patch.object(ci, "run_mode", return_value={"cases": []}), \
+                patch.object(ci, "run_polyglot", return_value={"classes": ["example.PolyglotTest"]}) as optional:
+            ci.execute(recorder, "HEAD", "HEAD", identity_path)
+        optional.assert_called_once_with(recorder, selection)
+        self.assertEqual(run.call_args_list[2].args, ("javascript-demo", ["scripts/javascript-demo.sh"]))
         self.assertTrue(recorder.data["passed"])
 
     def test_native_oracle_stdout_excludes_diagnostics(self):

@@ -25,6 +25,8 @@ from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case
 # The identical checked-in resource is packaged in the JVM runtime jar.
 SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
     'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
+POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
+    'src/main/resources/thc/polyglot-abi.json').read_text())
 
 
 class Audit:
@@ -37,6 +39,7 @@ class Audit:
         self.edges = []
         self.missing = {}
         self.primitives = {}
+        self.foreign_calls = []
         self.literals = {}
         self.used_constructors = {}
         self.reachable = []
@@ -489,6 +492,122 @@ class Audit:
                 check(expected, stored, f'arguments/{index}/binder')
         check(signature['result'], result, 'rep')
 
+    def polyglot_call(self, expr, bound, owner, path):
+        """Accept only an exact, saturated GHC FCallId application in the v1 ABI."""
+        function, arguments = expr[1:3]
+        metadata = expr[6] if len(expr) > 6 and isinstance(expr[6], dict) else {}
+        call = metadata.get('foreignCall')
+        if call is None:
+            return False
+
+        def reject(detail):
+            self.issue('foreign-call', owner, path, detail)
+            return False
+
+        if function[0] != 'var' or function[1] in bound or function[1] in self.bindings:
+            return reject('Foreign descriptor requires a direct external FCallId head')
+        if not isinstance(call, dict) or call.get('schema') != 1:
+            return reject('Missing GHC foreign-call schema 1 evidence')
+        target = call.get('target')
+        if not isinstance(target, dict) or target.get('kind') != 'static' or target.get('isFunction') is not True:
+            return reject('Requires a static function target')
+        symbol = target.get('symbol')
+        javascript_prefix = 'thc_javascript_v1_'
+        if ('intrinsic' in call or 'javascriptSource' in call or
+                isinstance(symbol, str) and symbol.startswith(javascript_prefix)):
+            if call.get('intrinsic') != 'javascript-v1' or not isinstance(call.get('javascriptSource'), str):
+                return reject('Missing exact javascript-v1 source evidence')
+            source = call['javascriptSource']
+            try:
+                encoded = source.encode('utf-8').hex()
+            except UnicodeEncodeError:
+                return reject('JavaScript source is not valid UTF-8')
+            if symbol != javascript_prefix + encoded:
+                return reject('JavaScript target does not encode the declared source')
+            if call.get('convention') != 'ccall' or call.get('safety') not in ('safe', 'unsafe'):
+                return reject('JavaScript import requires a synchronous ccall declaration')
+            declared = call.get('argumentReps')
+            if not isinstance(declared, list) or not declared or len(declared) != len(arguments):
+                return reject('JavaScript import lacks exact argument declarations')
+            def exact_js(rep, register):
+                if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                    return False
+                return (rep.get('kind') == {'IntRep': 'long', 'DoubleRep': 'double',
+                                            'State# RealWorld': 'void'}[register] and
+                        rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
+            register_names = [value.get('primReps') if isinstance(value, dict) else None for value in declared]
+            if (register_names[-1] != [] or any(value not in (["IntRep"], ["DoubleRep"])
+                                                 for value in register_names[:-1])):
+                return reject('JavaScript import requires Int/Double arguments followed by State#')
+            if (type(call.get('arity')) is not int or call['arity'] != len(declared) or
+                    type(call.get('suppliedArity')) is not int or call['suppliedArity'] != len(declared)):
+                return reject('JavaScript import must be exactly saturated')
+            for index, (argument, declared_rep) in enumerate(zip(arguments, declared)):
+                register = 'State# RealWorld' if index == len(declared) - 1 else declared_rep['primReps'][0]
+                if not exact_js(declared_rep, register) or not exact_js(self.effective_rep(argument, bound), register):
+                    return reject(f'JavaScript argument {index} lacks exact {register} proof')
+            if expr[3] != [False] * len(declared):
+                return reject('JavaScript FFI arguments must be unlifted')
+            result = call.get('resultRep')
+            actual_result = self.expression_rep(expr)
+            def exact_result(proof):
+                if not isinstance(proof, dict) or proof.get('aggregate') != 'unboxed-tuple' or proof.get('kind') != 'unknown':
+                    return None
+                components = proof.get('components')
+                if not isinstance(components, list) or len(components) not in (1, 2) or not exact_js(components[0], 'State# RealWorld'):
+                    return None
+                if len(components) == 1:
+                    return 'void' if proof.get('primReps') == [] else None
+                for register in ('IntRep', 'DoubleRep'):
+                    if exact_js(components[1], register) and proof.get('primReps') == [register]:
+                        return register
+                return None
+            output = exact_result(result)
+            if output is None or exact_result(actual_result) != output:
+                return reject('JavaScript result requires exact State# singleton or State#/Int#/Double# tuple')
+            self.foreign_calls.append(dict(symbol=symbol, javascriptSource=source,
+                                           result=output, owner=owner, path=path))
+            return True
+        spec = POLYGLOT_ABI['operations'].get(symbol)
+        if spec is None:
+            return reject('Unsupported foreign target ' + repr(symbol))
+        if call.get('convention') != POLYGLOT_ABI['convention'] or call.get('safety') != POLYGLOT_ABI['safety']:
+            return reject('GHC calling convention or safety differs from polyglot ABI')
+        declared = spec['arguments']
+        if (type(call.get('arity')) is not int or call['arity'] != len(declared) or
+                type(call.get('suppliedArity')) is not int or call['suppliedArity'] != len(declared) or
+                len(arguments) != len(declared)):
+            return reject('Foreign call must be exactly saturated at declared arity')
+        def exact(rep, register):
+            if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                return False
+            kinds = {'AddrRep': 'address', 'IntRep': 'long',
+                     'BoxedRep (Just Lifted)': 'object', 'State# RealWorld': 'void'}
+            return (rep.get('kind') == kinds[register] and
+                    rep.get('primReps') == ([] if register == 'State# RealWorld' else [register]))
+        declared_reps = call.get('argumentReps')
+        if (not isinstance(declared_reps, list) or len(declared_reps) != len(declared) or
+                any(not exact(rep, register) for rep, register in zip(declared_reps, declared))):
+            return reject('GHC declared argument representations differ from polyglot ABI')
+        for index, (argument, register) in enumerate(zip(arguments, declared)):
+            actual = self.effective_rep(argument, bound)
+            if not exact(actual, register):
+                return reject(f'Argument {index} lacks exact {register} proof')
+        expected_lifted = [register == 'BoxedRep (Just Lifted)' for register in declared]
+        if expr[3] != expected_lifted:
+            return reject('Argument levity differs from GHC foreign signature')
+        result = call.get('resultRep')
+        components = result.get('components') if isinstance(result, dict) else None
+        wanted = spec['result']
+        if (not isinstance(components, list) or len(components) != len(wanted) or
+                result.get('aggregate') != 'unboxed-tuple' or result.get('kind') != 'unknown' or
+                any(not exact(rep, register) for rep, register in zip(components, wanted)) or
+                result.get('primReps') != [r for rep in components for r in rep['primReps']] or
+                self.shape(self.expression_rep(expr)) != self.shape(result)):
+            return reject('GHC declared State# tuple result differs from polyglot ABI')
+        self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+        return True
+
     def free_variables(self, expr):
         if not isinstance(expr, list) or not expr:
             return set()
@@ -833,6 +952,10 @@ class Audit:
                 if enum_application or data_tag:
                     self.expression_metadata(function, owner, path + '/function')
                     self.primitives.setdefault(function[1], []).append(dict(self.location(owner, path), arity=len(arguments)))
+                elif self.polyglot_call(expr, bound, owner, path):
+                    # The descriptor was emitted for this direct GHC FCallId,
+                    # and the runtime links this exact versioned symbol.
+                    self.expression_metadata(function, owner, path + '/function')
                 else:
                     self.walk(function, bound, owner, path + '/function', len(arguments), proof if tuple_constructor or sum_constructor else None)
                 for index, argument in enumerate(arguments):
@@ -1081,6 +1204,7 @@ class Audit:
                     runtimeExternals=[dict(id=key, uses=[edge for edge in self.edges if edge['dependency'] == key])
                                       for key in sorted((set(self.cap.get('externalBindings', [])) - self.bindings.keys()) & {edge['dependency'] for edge in self.edges})],
                     primitives=[dict(name=k, expectedArity=self.cap['primitives'].get(k), uses=v) for k, v in sorted(self.primitives.items())],
+                    foreignCalls=self.foreign_calls,
                     constructors=[dict(id=k, metadata=self.constructors.get(k), uses=v) for k, v in sorted(self.used_constructors.items())],
                     literals=[v for _, v in sorted(self.literals.items())], issues=self.issues,
                     limits=['All syntactically reachable branches and local RHSs are audited, including lazy error paths.',

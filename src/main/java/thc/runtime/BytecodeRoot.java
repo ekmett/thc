@@ -84,6 +84,89 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object read(GlobalBinding binding) { return binding.read(); }
     }
 
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class PolyglotEval {
+        @Specialization
+        public static void apply(VirtualFrame frame, LocalAccessor destination,
+                LiteralAddress language, LiteralAddress source, LiteralAddress name, Object state,
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    access.eval(language, source, name, state));
+        }
+        public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class PolyglotReadMember {
+        @Specialization
+        public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object value, LiteralAddress name, Object state,
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    access.readMember(frame, value, name, state));
+        }
+        public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class PolyglotExecuteInt {
+        @Specialization
+        public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object value, long argument, Object state,
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    access.executeInt(frame, value, argument, state));
+        }
+        public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class JavaScriptInt {
+        @Specialization public static void call(VirtualFrame frame, BytecodeJavaScriptArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) JavaScriptAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setLong(bytecode, frame, access.executeLong(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static JavaScriptAccess createAccess(BytecodeJavaScriptArguments arguments) {
+            return new JavaScriptAccess(arguments.getDeclaration());
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class JavaScriptDouble {
+        @Specialization public static void call(VirtualFrame frame, BytecodeJavaScriptArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) JavaScriptAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setDouble(bytecode, frame, access.executeDouble(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static JavaScriptAccess createAccess(BytecodeJavaScriptArguments arguments) {
+            return new JavaScriptAccess(arguments.getDeclaration());
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeJavaScriptArguments.class, name = "arguments")
+    public static final class JavaScriptVoid {
+        @Specialization public static void call(VirtualFrame frame, BytecodeJavaScriptArguments arguments,
+                @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) JavaScriptAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            access.executeVoid(arguments.read(bytecode, frame), arguments.state(bytecode, frame));
+        }
+        public static JavaScriptAccess createAccess(BytecodeJavaScriptArguments arguments) {
+            return new JavaScriptAccess(arguments.getDeclaration());
+        }
+    }
+
     /** Core's single-register integer representation guarantees a primitive value. */
     @Operation
     @ConstantOperand(type = GlobalBinding.class, name = "binding")
