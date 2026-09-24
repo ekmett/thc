@@ -19,8 +19,11 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
     @field:CompilationFinal(dimensions = 1) internal var strictArgumentPositions: IntArray = intArrayOf()
         private set
     internal fun configureInput(layout: ArgumentLayout?) { inputLayout = layout; configureStrictPositions() }
+    @field:CompilationFinal internal var typedInput: TypedInputLayout? = null
+        private set
+    internal fun configureTypedInput(layout: TypedInputLayout?) { typedInput = layout }
     private fun configureStrictPositions() {
-        strictArgumentPositions = entryStrict.indices.filter { entryStrict[it] && inputLayout?.isEmpty(it) != true }
+        strictArgumentPositions = entryStrict.indices.filter { entryStrict[it] && inputLayout?.isTuple(it) != true }
             .map { ArgumentLayout.offset(inputLayout, it) + entryArgumentOffset }.toIntArray()
     }
 

@@ -146,8 +146,9 @@ class Language : TruffleLanguage<Language.State>() {
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>
         val hostResultFault = try {
-            thc.runtime.CoreRepresentations.knownFunctionResult(selectedExpression, bindings)?.let {
-                thc.runtime.CoreRepresentations.requireNoSum(it, "host result")
+            thc.runtime.CoreRepresentations.knownFunctionSignature(selectedExpression, bindings)?.let { (inputs, result) ->
+                inputs.forEach { thc.runtime.CoreRepresentations.requireScalar(it, "host argument") }
+                thc.runtime.CoreRepresentations.requireScalar(result, "host result")
             }
             if (selectedExpression.firstOrNull() == "lam") {
                 for (parameter in selectedExpression[1] as List<Map<String, Any?>>)

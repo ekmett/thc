@@ -11,18 +11,21 @@ python3 scripts/prepare-sqrt-audit.py
 python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-unsafe-equality-audit.py
+python3 scripts/prepare-show-int.py
 sh scripts/prepare-aggregate-frontier.sh
 python3 scripts/check-sum-layout.py --prepare
 python3 scripts/prepare-sum-result-audit.py
 python3 scripts/prepare-tuple-return-audit.py
 python3 scripts/prepare-state-tuple-audit.py
 python3 scripts/prepare-empty-tuple-input-audit.py
+python3 scripts/prepare-tuple-input-audit.py
 python3 scripts/prepare-tuple-join-audit.py
 python3 scripts/prepare-integer-primops.py
 python3 scripts/prepare-bit-primops.py
 python3 scripts/prepare-bytearray.py
 python3 scripts/prepare-compare-byte-arrays.py
 python3 scripts/prepare-boxed-arrays.py
+python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py
 python3 scripts/prepare-mutvar.py
@@ -65,6 +68,14 @@ esac
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-word16x8-audit.py --export-only ;;
   *) python3 scripts/prepare-word16x8-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-word32x4-audit.py --export-only ;;
+  *) python3 scripts/prepare-word32x4-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-int32x4-multiply-audit.py --export-only ;;
+  *) python3 scripts/prepare-int32x4-multiply-audit.py ;;
 esac
 python3 scripts/prepare-explicit64-primops.py
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs

@@ -26,6 +26,8 @@ import thc.Language;
         defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
+    @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
+    public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
 
     protected BytecodeRoot(Language language, FrameDescriptor descriptor) {
         super(language, descriptor);
@@ -36,7 +38,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Override public final String toString() { return label; }
     @Override public final long bloom(VirtualFrame frame) {
         // Self backedges restore DSL locals, leaving the incoming ancestry intact.
-        return (long) frame.getArguments()[0] | mask;
+        if (typedBloom == null) return (long) frame.getArguments()[0] | mask;
+        try { return typedBloom.getLong(getBytecodeNode(), frame); }
+        catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) { throw fail("Invalid typed input bloom"); }
     }
 
     /** Constant metadata must stay out of the guest operand stack during PE. */
@@ -252,6 +256,73 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             first.setLong(bytecode, frame, a);
             second.setLong(bytecode, frame, b);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
+    public static final class RestoreTypedInput {
+        @Specialization public static void restore(VirtualFrame frame, BytecodeTypedInputSlots slots,
+                @Bind("$node") Node node) {
+            slots.enter(frame, (BytecodeRoot) node.getRootNode());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeTypedInputSlots.class, name = "slots")
+    public static final class RestoreTypedTail {
+        @Specialization public static void restore(VirtualFrame frame, BytecodeTypedInputSlots slots,
+                TailCall transfer, @Bind("$node") Node node) {
+            slots.tail(frame, (BytecodeRoot) node.getRootNode(), transfer);
+        }
+    }
+
+    /** Only the function is a stack operand; aggregate fields stay in typed locals. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeInputSource.class, name = "source")
+    @ConstantOperand(type = boolean.class, name = "tail")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyTypedInput {
+        @Specialization public static Object apply(VirtualFrame frame, BytecodeInputSource source, boolean tail,
+                Metrics metrics, Closure function, @Bind("$node") Node node,
+                @Cached(value = "create(source, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
+            try {
+                return dispatch.execute(frame, function, null);
+            } catch (TailCall transfer) {
+                if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return transfer;
+            } finally {
+                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+            }
+        }
+        public static InputDispatch create(BytecodeInputSource source, boolean tail, Metrics metrics) {
+            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics, null, 0);
+        }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeInputSource.class, name = "source")
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "tail")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class ApplyTypedInputTuple {
+        @Specialization public static Object apply(VirtualFrame frame, BytecodeInputSource source,
+                BytecodeTupleSlots destination, boolean tail, Metrics metrics, Closure function, @Bind("$node") Node node,
+                @Cached(value = "create(source, destination, tail, metrics)", neverDefault = true) InputDispatch dispatch) {
+            try {
+                return dispatch.execute(frame, function, null);
+            } catch (TailCall transfer) {
+                if (!tail || !((GuestRoot) node.getRootNode()).isSelf(transfer.getTarget())) throw transfer;
+                if (metrics.getEnabled()) metrics.setSelfTailReentries(metrics.getSelfTailReentries() + 1);
+                return transfer;
+            } finally {
+                BytecodeTypedInputSlotsKt.clearBytecodeInputSource(source, frame, (BytecodeRoot) node.getRootNode());
+            }
+        }
+        public static InputDispatch create(BytecodeInputSource source, BytecodeTupleSlots destination,
+                boolean tail, Metrics metrics) {
+            return new InputDispatch(source, source.getLayout().getLogicalArity(), tail, metrics, destination, 0);
         }
     }
 
@@ -637,6 +708,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class CloneArray {
+        @Specialization public static Object clone(Object reference, long offset, long count) {
+            return ManagedArray.slice(ManagedArray.require(reference), offset, count);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class CopyArraySlice {
+        @Specialization public static void copy(VirtualFrame frame, LocalAccessor destination,
+                Object reference, long offset, long count, Object state, @Bind("$node") Node node) {
+            Object[] array = ManagedArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    ManagedArray.slice(array, offset, count));
+        }
+    }
+
     /** State operands are evaluated before each effect; only the array has a tuple slot. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
@@ -989,6 +1077,38 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             fifteenth.setLong(bytecode, frame, value.fifteenth); sixteenth.setLong(bytecode, frame, value.sixteenth);
         }
     }
+    @Operation public static final class VectorWord32Pack {
+        @Specialization public static Word32X4 pack(long first, long second, long third, long fourth) {
+            return new Word32X4((int) first, (int) second, (int) third, (int) fourth);
+        }
+    }
+    @Operation public static final class VectorWord32Broadcast {
+        @Specialization public static Word32X4 broadcast(long value) { return Word32X4.broadcast((int) value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorWord32Binary {
+        @Specialization public static Word32X4 binary(int operation, Word32X4 first, Word32X4 second) {
+            return switch (operation) {
+                case 0 -> Word32X4.add(first, second);
+                case 1 -> Word32X4.subtract(first, second);
+                case 2 -> Word32X4.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid Word32X4 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    public static final class VectorWord32Unpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, Word32X4 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first & 0xffff_ffffL); second.setLong(bytecode, frame, value.second & 0xffff_ffffL);
+            third.setLong(bytecode, frame, value.third & 0xffff_ffffL); fourth.setLong(bytecode, frame, value.fourth & 0xffff_ffffL);
+        }
+    }
     @Operation public static final class VectorWord16Pack {
         @Specialization public static Word16X8 pack(long first, long second, long third, long fourth,
                 long fifth, long sixth, long seventh, long eighth) {
@@ -1089,6 +1209,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class Vector32Negate {
         @Specialization public static Int32X4 negate(Int32X4 value) { return Int32X4.negate(value); }
+    }
+    @Operation public static final class Vector32Multiply {
+        @Specialization public static Int32X4 multiply(Int32X4 first, Int32X4 second) { return Int32X4.multiply(first, second); }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "subtract")
     public static final class Vector32Binary {

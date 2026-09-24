@@ -371,6 +371,7 @@
     "plusInt32X4#": 2,
     "minusInt32X4#": 2,
     "negateInt32X4#": 1,
+    "timesInt32X4#": 2,
     "packInt16X8#": 1,
     "unpackInt16X8#": 1,
     "broadcastInt16X8#": 1,
@@ -397,6 +398,12 @@
     "plusWord16X8#": 2,
     "minusWord16X8#": 2,
     "timesWord16X8#": 2,
+    "packWord32X4#": 1,
+    "unpackWord32X4#": 1,
+    "broadcastWord32X4#": 1,
+    "plusWord32X4#": 2,
+    "minusWord32X4#": 2,
+    "timesWord32X4#": 2,
     "packFloatX4#": 1,
     "unpackFloatX4#": 1,
     "broadcastFloatX4#": 1,
@@ -432,6 +439,9 @@
     "writeArray#": 4,
     "unsafeFreezeArray#": 2,
     "indexArray#": 2,
+    "cloneArray#": 3,
+    "freezeArray#": 4,
+    "thawArray#": 4,
     "readInt32Array#": 3,
     "writeInt32Array#": 4,
     "indexInt32Array#": 2,
@@ -457,11 +467,12 @@
   },
   "limitations": [
     "Address operations support immutable managed literal backing only; no raw pointers or foreign address access.",
-    "Unboxed tuple result leaves use concrete Long, Float, Double or reference fields with exact recursive layouts; nonempty or nested aggregate arguments, captures, ordinary let bindings, join arguments/captures, and first-class tuple constructors remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots.",
+    "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join arguments/captures remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors, addresses and unresolved leaves cannot appear in tuple inputs.",
     "Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported."
   ],
   "aggregateInputs": [
-    "empty-unboxed-tuple"
+    "empty-unboxed-tuple",
+    "unboxed-tuple"
   ],
   "aggregateResults": [
     "unboxed-tuple",
@@ -471,6 +482,11 @@
     "unboxed-tuple"
   ],
   "vectorRepresentations": [
+    {
+      "lanes": 4,
+      "element": "Word32ElemRep",
+      "scope": "local operations only; calls, returns, captures, fields and join arguments/results unsupported"
+    },
     {
       "lanes": 8,
       "element": "Word16ElemRep",
@@ -1578,6 +1594,18 @@
       "result": [
         "element"
       ]
+    },
+    "cloneArray#": {
+      "arguments": ["array", "int", "int"],
+      "result": "array"
+    },
+    "freezeArray#": {
+      "arguments": ["array", "int", "int", "state"],
+      "result": ["state", "array"]
+    },
+    "thawArray#": {
+      "arguments": ["array", "int", "int", "state"],
+      "result": ["state", "array"]
     }
   }
 }

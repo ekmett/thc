@@ -112,6 +112,10 @@ jobs:
           assert proof['nativeRows'] == 7712 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           proof = json.loads(Path('build/simd-word16x8/provenance.json').read_text())
           assert proof['nativeRows'] == 5116 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-word32x4/provenance.json').read_text())
+          assert proof['nativeRows'] == 4882 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-int32x4-multiply/provenance.json').read_text())
+          assert proof['nativeRows'] == 1722 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           PY
       - name: Test opt-in dense handoff
         env:
@@ -138,6 +142,7 @@ jobs:
           python3 scripts/test-core-enums.py
           python3 scripts/test-sum-layout.py
           python3 scripts/test-core-sums.py
+          python3 scripts/test-tuple-inputs.py
           python3 scripts/test-library-frontier.py
           python3 scripts/test-sequence-model.py
           python3 scripts/test-core-vectors.py
@@ -148,6 +153,8 @@ jobs:
           python3 scripts/test-word8x16-model.py
           python3 scripts/test-word16x8-model.py
           python3 scripts/test-scalar-bitcasts.py
+          python3 scripts/test-word32x4-model.py
+          python3 scripts/test-int32x4-multiply-model.py
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-arrays.py
           python3 scripts/test-address-fields.py
@@ -159,6 +166,8 @@ jobs:
           python3 scripts/test-float-word-array-model.py
           python3 scripts/test-int16-array-model.py
           python3 scripts/test-int8-array-model.py
+          python3 scripts/test-show-int-model.py
+          python3 scripts/test-array-slice-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -192,8 +201,22 @@ jobs:
             build/floating/oracle.tsv
             build/floating-tuple/
             build/empty-tuple-input/
+            build/tuple-input/
             build/sqrt/
             build/tag-to-enum/
+            build/array-slices/manifest.json
+            build/array-slices/*.tsv
+            build/array-slices/*.audit.json
+            build/array-slices/NativeArraySlices.hs
+            build/array-slices/*-core/
+            build/array-slices/native/array-slices-oracle
+            build/show-int/manifest.json
+            build/show-int/*.tsv
+            build/show-int/*.audit.json
+            build/show-int/*-core/
+            build/show-int/boot/core/
+            build/show-int/boot/boot-provenance.json
+            build/show-int/native/show-int-oracle
             build/unsafe-equality/
             build/test-results/
             build/aggregate-frontier.json
@@ -294,6 +317,8 @@ jobs:
             build/simd-int8x16/
             build/simd-word8x16/
             build/simd-word16x8/
+            build/simd-word32x4/
+            build/simd-int32x4-multiply/
             build/signed-narrow-primops/manifest.json
             build/signed-narrow-primops/oracle.tsv
             build/signed-narrow-primops/*.audit.json

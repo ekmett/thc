@@ -20,7 +20,7 @@ root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--build-dir', type=Path, default=root / 'build/map',
                     help='Private output directory (default: build/map)')
-parser.add_argument('--frontier', choices=['exceptions', 'lists'], default='exceptions',
+parser.add_argument('--frontier', choices=['exceptions', 'lists', 'show'], default='exceptions',
                     help='Original ghc-internal modules to export (default: exceptions)')
 args = parser.parse_args()
 build = args.build_dir.resolve()
@@ -45,10 +45,15 @@ list_sources = {
     'GHC/Internal/Real.hs-boot': '843ed3133589748fbc65e0d7ef7e5a5491dc131b55ff73b67f6e3c3516bb99f4',
     'LICENSE': exception_sources['LICENSE'],
 }
-sources = list_sources if args.frontier == 'lists' else exception_sources
-source_modules = ['Base', 'List'] if args.frontier == 'lists' else ['CString', 'Err']
-boot_modules = (['Exception/Type', 'IO', 'Num', 'Enum', 'Real'] if args.frontier == 'lists'
-                else ['Exception/Type', 'Exception'])
+show_sources = {
+    'GHC/Internal/Show.hs': 'b37f6d9d376e837785d207f2cf784daf0a53a04db26723a456c073616512be98',
+    'LICENSE': exception_sources['LICENSE'],
+}
+sources, source_modules, boot_modules = {
+    'exceptions': (exception_sources, ['CString', 'Err'], ['Exception/Type', 'Exception']),
+    'lists': (list_sources, ['Base', 'List'], ['Exception/Type', 'IO', 'Num', 'Enum', 'Real']),
+    'show': (show_sources, ['Show'], []),
+}[args.frontier]
 
 def source_url(name):
     return package_url + 'LICENSE' if name == 'LICENSE' else base_url + name
@@ -82,7 +87,7 @@ plugin = ['-O2', '-dcore-lint', '-package-db', str(root / 'build/compiler/packag
           '-fplugin-opt=Thc.Plugin:' + str(build / 'boot-core'), '-fplugin-opt=Thc.Plugin:post-tidy']
 if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
     plugin += ['-g', '-fplugin-opt=Thc.Plugin:source-notes']
-if args.frontier == 'lists':
+if args.frontier in ('lists', 'show'):
     # Loading the plugin's interface would import GHC.Driver.Plugins, including
     # its Semigroup instance, into the Base unit being rebuilt. Load the already
     # compiled plugin directly so the installed Base interface cannot introduce
@@ -117,7 +122,7 @@ if args.frontier == 'exceptions':
     'sourceModules': ['GHC.Internal.' + name for name in source_modules],
     'boundary': 'Original source after Tidy, before CorePrep; explicit dependency boundary',
     'unitPolicy': 'Original wired ghc-internal unit, private dynamic-interface overlay, installed packages unmodified',
-    'pluginLoading': 'direct-library' if args.frontier == 'lists' else 'package-interface',
+    'pluginLoading': 'direct-library' if args.frontier in ('lists', 'show') else 'package-interface',
     'interfaceRoot': 'compiler/package-roots/InterfaceRoots.hs' if args.frontier == 'exceptions' else None,
     'interfacePolicy': 'Actual installed non-boot Core/DFun unfoldings; unsupported and missing paths remain explicit',
 }, indent=2) + '\n')

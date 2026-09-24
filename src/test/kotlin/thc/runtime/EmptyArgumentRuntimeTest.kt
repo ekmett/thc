@@ -199,15 +199,26 @@ class EmptyArgumentRuntimeTest {
         }
     }
 
-    @Test fun exactEmptyInputsRemainDistinctFromStatePrimitiveContractsAndAllOtherZeroWidthShapes() = withLanguage { language ->
+    @Test fun exactEmptyInputsRemainDistinctFromStateContractsAndSupportedNestedZeroWidthTuples() = withLanguage { language ->
         val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
         val nested = empty + ("components" to listOf(empty))
         val singletonState = empty + ("components" to listOf(state))
         for (backend in listOf("ast", "bytecode")) {
-            for (bad in listOf(nested, singletonState, empty + ("components" to null))) {
+            for (supported in listOf(nested, singletonState)) {
+                val worker = bind("worker", lam(listOf(arg("u", supported)), n(0)))
+                val p = program(language, backend, module(worker))
+                val layout = (p.entryTarget("worker").rootNode as GuestRoot).inputLayout!!
+                assertEquals(1, layout.logicalArity); assertEquals(0, layout.physicalArity)
+                assertFalse(layout.isEmpty(0)); assertTrue(layout.requiresTyped)
+                // Equal zero payload width does not make these logical shapes (# #).
                 assertThrows(RuntimeFault::class.java) {
-                    program(language, backend, module(bind("worker", lam(listOf(arg("u", bad)), n(0)))))
+                    program(language, backend, module(worker,
+                        bind("entry", lam(emptyList(), call("worker", listOf(zero()))))))
                 }
+            }
+            assertThrows(RuntimeFault::class.java) {
+                program(language, backend, module(bind("worker",
+                    lam(listOf(arg("u", empty + ("components" to null))), n(0)))))
             }
             // These are statically known contradictory formals, including a known PAP prefix.
             val stateWorker = bind("worker", lam(listOf(arg("x"), arg("s", state)), n(0)))

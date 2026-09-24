@@ -24,6 +24,7 @@ OPERATIONS.update({
     'plusInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
     'minusInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
     'negateInt32X4#': ([VECTOR32_REP], VECTOR32_REP),
+    'timesInt32X4#': ([VECTOR32_REP, VECTOR32_REP], VECTOR32_REP),
 })
 VECTOR16_REP = {'kind': 'vector', 'primReps': ['VecRep 8 Int16ElemRep'], 'evaluated': True,
                 'vector': {'lanes': 8, 'element': 'Int16ElemRep'}}
@@ -79,6 +80,19 @@ OPERATIONS.update({
     'minusWord16X8#': ([VECTOR_WORD16_REP, VECTOR_WORD16_REP], VECTOR_WORD16_REP),
     'timesWord16X8#': ([VECTOR_WORD16_REP, VECTOR_WORD16_REP], VECTOR_WORD16_REP),
 })
+VECTOR_WORD32_REP = {'kind': 'vector', 'primReps': ['VecRep 4 Word32ElemRep'], 'evaluated': True,
+                    'vector': {'lanes': 4, 'element': 'Word32ElemRep'}}
+LANE_WORD32_REP = {'kind': 'long', 'primReps': ['Word32Rep'], 'evaluated': True}
+TUPLE_WORD32_REP = {'kind': 'unknown', 'primReps': ['Word32Rep'] * 4, 'evaluated': True,
+                  'aggregate': 'unboxed-tuple', 'components': [LANE_WORD32_REP] * 4}
+OPERATIONS.update({
+    'packWord32X4#': ([TUPLE_WORD32_REP], VECTOR_WORD32_REP),
+    'unpackWord32X4#': ([VECTOR_WORD32_REP], TUPLE_WORD32_REP),
+    'broadcastWord32X4#': ([LANE_WORD32_REP], VECTOR_WORD32_REP),
+    'plusWord32X4#': ([VECTOR_WORD32_REP, VECTOR_WORD32_REP], VECTOR_WORD32_REP),
+    'minusWord32X4#': ([VECTOR_WORD32_REP, VECTOR_WORD32_REP], VECTOR_WORD32_REP),
+    'timesWord32X4#': ([VECTOR_WORD32_REP, VECTOR_WORD32_REP], VECTOR_WORD32_REP),
+})
 VECTOR_FLOAT_REP = {'kind': 'vector', 'primReps': ['VecRep 4 FloatElemRep'], 'evaluated': True,
                     'vector': {'lanes': 4, 'element': 'FloatElemRep'}}
 LANE_FLOAT_REP = {'kind': 'float', 'primReps': ['FloatRep'], 'evaluated': True}
@@ -123,6 +137,6 @@ def proof_error(rep):
         return 'Invalid Core vector shape'
     if registers != [f"VecRep {shape['lanes']} {shape['element']}"]:
         return 'Vector shape disagrees with primitive representation'
-    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_WORD8_REP['vector'], VECTOR_WORD16_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
+    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_WORD8_REP['vector'], VECTOR_WORD16_REP['vector'], VECTOR_WORD32_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
         return 'Unsupported Core vector representation'
     return None

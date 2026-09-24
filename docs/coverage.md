@@ -80,6 +80,11 @@ signed/unsigned mismatch controls. There is no GHC unsigned vector negate primop
 The [Word16X8 foundation](word16x8.md) adds the corresponding six unsigned
 16-bit operations and 5,116 native/model rows. Word16 and Int16 proofs remain
 distinct; unpack widens all eight lanes to 0..65535 without changing vector ABIs.
+The [Word32X4 foundation](word32x4.md) adds six unsigned 32-bit operations and
+4,882 native/model rows. Four Word32 lanes retain distinct proofs from Int32,
+wrap modulo 2^32 and unpack to 0..4294967295; vector ABI limits remain unchanged.
+The [Int32X4 multiplication slice](int32x4-multiply.md) adds the missing signed
+`timesInt32X4#`, with 1,722 native/model observations and signed low-32-bit products.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
@@ -209,14 +214,13 @@ Installed interfaces and sources remain unchanged.
 establish execution of separate library call targets with those names.
 
 Exact unboxed tuple results now execute on both backends with scalar/reference
-inputs, including empty/singleton/nested results, lazy references, forwarding,
+or [typed tuple inputs](tuple-inputs.md), including empty/singleton/nested results, lazy references, forwarding,
 PAPs and overapplication. The [result protocol](tuple-results.md) is independent
-of the optional input handoff experiment. Aggregate formal arguments, captures,
-ordinary let bindings, join parameters/captures, sums
+of input storage. Aggregate captures, ordinary let bindings, join parameters/captures, sum arguments
 and unresolved layouts remain rejected, including unused and constructor-free
 boundaries. Physical register counts alone never establish an aggregate layout.
 
-The separate aggregate frontier reports three supported result-only entries and
+The earlier separate aggregate frontier reported three supported result-only entries and
 eight rejected entries at both native export stages. `TupleReturnAudit` supplies
 94 native rows for result-only boundary tests, including deep self/mutual tail
 calls. These semantic controls remain separate from the library corpus and

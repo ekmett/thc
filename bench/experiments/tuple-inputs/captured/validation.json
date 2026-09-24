@@ -1,0 +1,426 @@
+{
+  "capabilityCommit": "155274f",
+  "graphSource": "a94c63a12e5f6e202f28db75c1b2b93969f07904",
+  "validationScope": "Focused native and protocol execution; complete suite deferred to the later current-coverage union, not claimed here.",
+  "nativeRows": 139,
+  "nativeIndependentPairs": 7,
+  "nativeExportStages": [
+    "pre",
+    "post"
+  ],
+  "backends": [
+    "ast",
+    "bytecode"
+  ],
+  "modes": [
+    "inline",
+    "residual"
+  ],
+  "handoffModes": [
+    false,
+    true
+  ],
+  "tests": [
+    {
+      "path": "/private/tmp/thc-tuple-inputs/build/validation/native-default/TEST-thc.runtime.TupleInputNativeTest.xml",
+      "sha256": "37396379bf4de39b0b5aea5ee11dd85ca99dbd472c60573e812b87ee8e4aebb2",
+      "name": "thc.runtime.TupleInputNativeTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "/private/tmp/thc-tuple-inputs/build/validation/native-handoff/TEST-thc.runtime.TupleInputNativeTest.xml",
+      "sha256": "244543a7689a0050a9bdae9d183124e23769e189e0888b63ad1823c52e66dbf0",
+      "name": "thc.runtime.TupleInputNativeTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "/private/tmp/thc-tuple-inputs/build/validation/ownership-default/TEST-thc.runtime.TypedInputOwnershipTest.xml",
+      "sha256": "d2141c6b878ed66e5cbcb2d0ae4c8de9e536aa63b0d3ca14f1907c4a2f84e841",
+      "name": "thc.runtime.TypedInputOwnershipTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "/private/tmp/thc-tuple-inputs/build/validation/ownership-handoff/TEST-thc.runtime.TypedInputOwnershipTest.xml",
+      "sha256": "34095121f11c7f50b394ce3b0bc2c987352d796f02823f990027c21beae80213",
+      "name": "thc.runtime.TypedInputOwnershipTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "path": "/private/tmp/thc-tuple-inputs/build/validation/protocol-default/TEST-thc.runtime.TypedInputProtocolTest.xml",
+      "sha256": "609f4a774da626f1e37d664a4410f01794c848bf76f62019ea9fa2a1752a1efc",
+      "name": "thc.runtime.TypedInputProtocolTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "logs": [
+    {
+      "path": "/private/tmp/thc-tuple-input-native-default.log",
+      "sha256": "6f66de21712ad7b5ed7d81ac1a3e2d7f306d7c842a9b520b9138ce679aeb298f"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-native-handoff.log",
+      "sha256": "4c552478da7d80412703d8f358f695805e17600bae21e3d8c2cc13e48d69a61d"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-ownership-default.log",
+      "sha256": "887395bbdf19a1f65720068190fbec91c547e5574410df563c038655921d300e"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-ownership-handoff.log",
+      "sha256": "fbecf20230b093547446f90b3396740ba481a7aff5315a486f6551daa3f4adb4"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-trampoline-cleanup-tests.log",
+      "sha256": "14ca798a488e9b8d2ad9392465b46a1aee317d21af43f46629288779275d2ea5"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-protocol-handoff-tests.log",
+      "sha256": "f66493e1004f768ff3d70be73c1c779d9345d0989ec23c11bfbe9c3658026731"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-automation.log",
+      "sha256": "e2a22f0d2a853eb51cc2b3436301132e5ff17688fc9ce5e158fffaab08fe3d78"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-final-focused-default.log",
+      "sha256": "cf5157da9e2b32eb63d40154ca81d3f56ee49f4389d182a3a4511fdad633bd6d"
+    },
+    {
+      "path": "/private/tmp/thc-tuple-input-final-focused-handoff.log",
+      "sha256": "59abb73b8af4012d39a75ad5cfad6efcd52da6b74e185901ff986be08b3013df"
+    }
+  ],
+  "nativeProvenance": {
+    "path": "/private/tmp/thc-tuple-inputs/build/tuple-input/provenance.json",
+    "sha256": "be0550001e64ad5c13df02ff665e4e0acb76b7535997e557d1b0bc63603b366d"
+  },
+  "independentLoopReview": {
+    "path": "/private/tmp/thc-typed-tail-review-752de4b/summary.json",
+    "sha256": "da13166ad7a43bf471872b311b91632a0fd9fde958c36bb42b234a31c70d4c45"
+  },
+  "inspectorCorrection": {
+    "description": "Inspector-only mismatch: named handoff writes versus lowered allocation INIT_LOCATION; original residual semantic checks were already green.",
+    "initialSource": "4a0101d",
+    "inspectorFix": "a94c63a12e5f6e202f28db75c1b2b93969f07904",
+    "hashes": [
+      {
+        "path": "/private/tmp/thc-typed-input-production-graphs/launch.json",
+        "sha256": "53c5975da7efd1b2d74a6a0a076e62e219813696b7382407e3849cd2a58ba7f3"
+      },
+      {
+        "path": "/private/tmp/thc-typed-input-production-capture.log",
+        "sha256": "aadf3d0e52117049db4bdf3ded8f11018f8c2a5175c86c918c14002a31622041"
+      },
+      {
+        "path": "/private/tmp/thc-typed-input-production-graphs/ast-residual-pairInputs/run.log",
+        "sha256": "80007feb3badd89fee84ee02eadb2e384f83f1f845dd38d8fb114e794ba2eec1"
+      },
+      {
+        "path": "/private/tmp/thc-typed-input-production-graphs/ast-residual-pairInputs/raw-sha256.json",
+        "sha256": "9ef5376bd781a09ae88a4f577e3cc40b0d2fb3b6818f25a7cf73f11c76d3d469"
+      },
+      {
+        "path": "/private/tmp/thc-typed-input-production-graphs/ast-residual-pairInputs/graph-evidence.json",
+        "sha256": "5d570084180c5ed6cbbe8cbefa5c9d3715243b3e96692a20622797b8ea4d485c"
+      }
+    ]
+  },
+  "limitations": [
+    "Protocol3+BC8 dense run log retained; its XML was replaced by the later native run before separate archival.",
+    "Graph validity controls have instrumentation off; exact compiled-entry counts are established separately by native tests.",
+    "No full current-union test claim; no additional Sequence or unresolved library-path promotion.",
+    "Graph runtime source a94 predates the later checked unknown-scalar fallback; exact-layout graph evidence is not relabelled as final-source capture."
+  ],
+  "initialRuntimeCommit": "752de4b57bf62b7882f90d1fdcdd38556ed0b0cf",
+  "graphRuntimeSourceSha256": {
+    "build.gradle.kts": "dffdea84f3d67a80a6bb8d66dfd854a60f731337fc70cdcd70d332dd2e1fb372",
+    "gradle.properties": "f38a9939f2ef20b9a128d5389c2600ffda875e4a86ccd1e9838b4716e021c4ea",
+    "gradle/wrapper/gradle-wrapper.jar": "7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d",
+    "gradle/wrapper/gradle-wrapper.properties": "d0bebe8133babb74ab29a31ee6616c56ef8985fc801e1fd16c61b5ed2189e907",
+    "gradlew": "a5a5c199ba02189ae8c46a334223371a20599d9c298ef65e7540ede4a3f72d59",
+    "gradlew.bat": "d539676c48b596afda64c963ec8f7ee56c7b3fe7e3b81d1dbe2d1a1e3dd9e9f8",
+    "settings.gradle.kts": "e380485e3d8c6b1fa35b73cd468f583be0cb864a4f0b2c0e5afc54348d0811a9",
+    "src/main/java/thc/runtime/BytecodeRoot.java": "901d469d642093629ba693be153de5e985bc04f6ad728aca7ad0c06f9241168e",
+    "src/main/java/thc/runtime/Calls.java": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+    "src/main/java/thc/runtime/DoubleX2.java": "1aab60107bd33d299ab12a90a81fc91511b6f3c9b93456eff987643cc3e89af0",
+    "src/main/java/thc/runtime/FloatX4.java": "0f898040f85dee1f8f0702eb73fb7b4fb168f4f16e52803435dc12841481b355",
+    "src/main/java/thc/runtime/Int16X8.java": "70c06e1d00de20fcbba47709a551ea032626e7737cc0ccd958e5eb3e8212df87",
+    "src/main/java/thc/runtime/Int32X4.java": "5cac5b334384165f47965d3d1b55d571e5310db2572335d10242cc046764ee3a",
+    "src/main/java/thc/runtime/Int64X2.java": "ba9a429eb8a9eb03c66d1c8c19cbed2694b90385c7638aa33ee121c3c7d2c469",
+    "src/main/java/thc/runtime/ManagedDoubleArray.java": "0980ec94078f9a359039d9dd5ea75fa6b80f69b80507564bd64695534e78ff70",
+    "src/main/java/thc/runtime/ManagedFloatArray.java": "18e4100e40a6420182c87c997d2aa1031cc93a9c0eac2f219b1e87a2a2e01cd6",
+    "src/main/java/thc/runtime/ManagedInt16Array.java": "dbb46bf063af02a961084e2388a4e65979f9185632c4870ed2c1daf7f69dc94e",
+    "src/main/java/thc/runtime/ManagedInt32Array.java": "0ba53ca4ce936ac69798b884107b72f169cb7a5cd769b262751a05f422f2eba1",
+    "src/main/java/thc/runtime/ManagedIntArray.java": "2f9d54e8092a43992ec5ccbef38c3e89f91fe8cff725cd5b210ab3c651823116",
+    "src/main/java/thc/runtime/RuntimeTypes.java": "7a743b5ffe597094d490605a56b0370044f10740f8b9818f1857ee1c413d9974",
+    "src/main/kotlin/thc/Json.kt": "e6749bb709a8c93ba42bea2c185dd7956c55e3adc733da8e5e34191575c9ab93",
+    "src/main/kotlin/thc/Language.kt": "52fad0fa562416f73d9de7446945801e2c2593a794dadeb61f7a39409f89038f",
+    "src/main/kotlin/thc/LibraryCheck.kt": "c058b9a5de5cb772a5c4e6e042bd89ea2d0f9702b5f018eaca264354b343b275",
+    "src/main/kotlin/thc/Main.kt": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6",
+    "src/main/kotlin/thc/MapCheck.kt": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11",
+    "src/main/kotlin/thc/Probe.kt": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7",
+    "src/main/kotlin/thc/runtime/Application.kt": "fd58eebcdd3684be2c646b7f756f7f323d7061870f630c835e759e6e7fe5ab74",
+    "src/main/kotlin/thc/runtime/ArgumentLayout.kt": "4db757d06d874e5995c6073e700c2e71dfc56f76b3b1497373b7ac50706fa649",
+    "src/main/kotlin/thc/runtime/AstSelfCalls.kt": "a3c6e3af547c367ed6190c069458e1ad9a125343bbe4f24198b79d21c6926a57",
+    "src/main/kotlin/thc/runtime/BitPrimitives.kt": "59a2222779fea7a5ff55222f5ea09c8445c1c640e97cc1d6bad67b480c908f5e",
+    "src/main/kotlin/thc/runtime/BloomValue.kt": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879",
+    "src/main/kotlin/thc/runtime/BytecodeProgram.kt": "c7f585306ac28f856cc65f59a7f1404132ca6b4bfdd4e998de873bbfd0519aea",
+    "src/main/kotlin/thc/runtime/BytecodeTypedInputSlots.kt": "d2e3e1fc0b3399e77aee444fa9714e9ce9dc6b226696d23b5b89b9f924af7f45",
+    "src/main/kotlin/thc/runtime/CaseCategories.kt": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea",
+    "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094",
+    "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d",
+    "src/main/kotlin/thc/runtime/CoreCallDemands.kt": "e109bdefd49f9db539d418227794eb8763d40c0ad635c78a5a2328e64d0d9196",
+    "src/main/kotlin/thc/runtime/CoreEntries.kt": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268",
+    "src/main/kotlin/thc/runtime/CoreFields.kt": "8a201d2cbb7a4ca8fc82f8607c5a4e48bec3be553b93314f07524a9726af616c",
+    "src/main/kotlin/thc/runtime/CoreInputCalls.kt": "523472fef8f5b89bbc19ec5335dfa6b46bae4b4fbcbefdf280aae64e7514ca67",
+    "src/main/kotlin/thc/runtime/CoreRepresentations.kt": "29142176213a2bbf74ac066237ec161cc480333187c2f0b93396d39c49d8cdc3",
+    "src/main/kotlin/thc/runtime/CoreSources.kt": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948",
+    "src/main/kotlin/thc/runtime/CoreVectors.kt": "27c3f69d49e2ce789e5899e56163a36e3f4c6dc3b570b29ba33aea4b2bb7402d",
+    "src/main/kotlin/thc/runtime/DataValues.kt": "df09bc47169cc74adca509a20fe2eaf8b99bb6822d90e52e465306bed41a5b6f",
+    "src/main/kotlin/thc/runtime/EntryArguments.kt": "80ec485f6c7c3d667d74f7f8b5d33804b0aa21bfd6eb97a8fdde5043dd99c7cf",
+    "src/main/kotlin/thc/runtime/EnumFamilies.kt": "67cb9a984c611f40afcb70ba3b17d90824002fc2500606bff00fc16019d773fb",
+    "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": "797bfd6afe21ca28b454007d9cc0bb1203baa3c397b504fcd9129e594910c293",
+    "src/main/kotlin/thc/runtime/Frames.kt": "1730379255ff11560a7746a05a3de4c7b6a90b468aa3e8b46397fa749365bd4d",
+    "src/main/kotlin/thc/runtime/GenericTypedInputs.kt": "d241cddbf7cd80d77ac7a4dd73e284f5a6cd2d6eb57be68ed13b15f4d3fce088",
+    "src/main/kotlin/thc/runtime/GuestExceptions.kt": "0bcd1d1e4dd6e694e4fa71d68f51617fcde73172bfe2bd5a5617fa369f01361b",
+    "src/main/kotlin/thc/runtime/GuestRoot.kt": "70755dd9613afc4ed723242fd9f73c1854334fbe9909c0bc47db5d0f14d08c1b",
+    "src/main/kotlin/thc/runtime/Handoff.kt": "3a15c560f6444874dfc67406349bd122bc5a6d140b72bcbd4b67d6c18453bbcb",
+    "src/main/kotlin/thc/runtime/LeadingCaseReturn.kt": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d",
+    "src/main/kotlin/thc/runtime/LiteralAddresses.kt": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69",
+    "src/main/kotlin/thc/runtime/LocalJoins.kt": "19e8a73bf271a6b0ace61edf2b75524105bec87ff2c20b0e2a19a68c4bb8c224",
+    "src/main/kotlin/thc/runtime/ManagedArrays.kt": "282a527b642c072a3f972992589240bca20529e4b3f4123cb172376d0d764c12",
+    "src/main/kotlin/thc/runtime/ManagedByteArrays.kt": "bb979b8bb3cfe98a6a16ae3ecf71329933b1a7bd653158505d693ee574ca69a4",
+    "src/main/kotlin/thc/runtime/ManagedMutVars.kt": "bf4f766cbc5b7af11cecae6c76d0101e162a0396918b838b1bc238c0cf3e6f4c",
+    "src/main/kotlin/thc/runtime/Program.kt": "b2bc55c793a911c499e11979aaf467441ec85648110ba8f942ccc7d1051c3ace",
+    "src/main/kotlin/thc/runtime/Scalar64Primitives.kt": "e39a7ba6a2409447fe5a519988badb8ffa9270fc08f58368bc421250d56a59f1",
+    "src/main/kotlin/thc/runtime/ScalarPrimitiveSignatures.kt": "ad8997270aca328adbc1b20207111c25152ef1a656183b2cb6aba7a3248ea6c2",
+    "src/main/kotlin/thc/runtime/SumResults.kt": "fe0956b8a8e754322a6099f550968d960afcfb74363b73472b1c6efcbb4e7f54",
+    "src/main/kotlin/thc/runtime/TupleArithmetic.kt": "af4fcfad9658e8908ecedae60f8ed34448f4f6c37b7bd03001d91098658459e6",
+    "src/main/kotlin/thc/runtime/TupleResults.kt": "8a301d42831cb2ddd04314e31691b0404ac4e197f8cff23049a46da40c4e8eab",
+    "src/main/kotlin/thc/runtime/TypedInputs.kt": "0cc1b78ea6a1a579ffb14488fbccf4cf438bb7d573d3779fdf475a531912df94",
+    "src/main/kotlin/thc/runtime/Vector16Expressions.kt": "f7cf57f478f080bf3f84c0d171b50294e9662d25a160eb6a31753fe1b9cda54a",
+    "src/main/kotlin/thc/runtime/Vector32Expressions.kt": "859a021a585e60f9ca31e44519d0c911f1c83ce4acf30fbe9155305cc747316e",
+    "src/main/kotlin/thc/runtime/VectorDoubleExpressions.kt": "fe5dc7d571d409b41a23828ffec37711406687c39f2a88ed7f8f1c0999c1e23f",
+    "src/main/kotlin/thc/runtime/VectorExpressions.kt": "302658f2bd688ae05ff68f6de830884e9e58ae169c10f837930a31ae33fdb161",
+    "src/main/kotlin/thc/runtime/VectorFloatExpressions.kt": "c82683eb9996a1c2b4539472338346c4ae1c1663248a319f8fbcb5054ad68087",
+    "src/main/resources/thc/scalar-primop-signatures.json": "7c9c05e2e789d73ed3cd542a60a4fe87fde04e1eb0b1aa29744ea7b081c7756d"
+  },
+  "finalRuntimeCommit": "7bddb65ab2e0385e147c3b76971f77fe32caec20",
+  "finalRuntimeSourceSha256": {
+    "src/main/java/thc/runtime/BytecodeRoot.java": "901d469d642093629ba693be153de5e985bc04f6ad728aca7ad0c06f9241168e",
+    "src/main/java/thc/runtime/Calls.java": "ae5815296037291adb7d2e916e23b73827242c303581e6586a2fd76b454697bb",
+    "src/main/java/thc/runtime/DoubleX2.java": "1aab60107bd33d299ab12a90a81fc91511b6f3c9b93456eff987643cc3e89af0",
+    "src/main/java/thc/runtime/FloatX4.java": "0f898040f85dee1f8f0702eb73fb7b4fb168f4f16e52803435dc12841481b355",
+    "src/main/java/thc/runtime/Int16X8.java": "70c06e1d00de20fcbba47709a551ea032626e7737cc0ccd958e5eb3e8212df87",
+    "src/main/java/thc/runtime/Int32X4.java": "5cac5b334384165f47965d3d1b55d571e5310db2572335d10242cc046764ee3a",
+    "src/main/java/thc/runtime/Int64X2.java": "ba9a429eb8a9eb03c66d1c8c19cbed2694b90385c7638aa33ee121c3c7d2c469",
+    "src/main/java/thc/runtime/ManagedDoubleArray.java": "0980ec94078f9a359039d9dd5ea75fa6b80f69b80507564bd64695534e78ff70",
+    "src/main/java/thc/runtime/ManagedFloatArray.java": "18e4100e40a6420182c87c997d2aa1031cc93a9c0eac2f219b1e87a2a2e01cd6",
+    "src/main/java/thc/runtime/ManagedInt16Array.java": "dbb46bf063af02a961084e2388a4e65979f9185632c4870ed2c1daf7f69dc94e",
+    "src/main/java/thc/runtime/ManagedInt32Array.java": "0ba53ca4ce936ac69798b884107b72f169cb7a5cd769b262751a05f422f2eba1",
+    "src/main/java/thc/runtime/ManagedIntArray.java": "2f9d54e8092a43992ec5ccbef38c3e89f91fe8cff725cd5b210ab3c651823116",
+    "src/main/java/thc/runtime/RuntimeTypes.java": "7a743b5ffe597094d490605a56b0370044f10740f8b9818f1857ee1c413d9974",
+    "src/main/kotlin/thc/Json.kt": "e6749bb709a8c93ba42bea2c185dd7956c55e3adc733da8e5e34191575c9ab93",
+    "src/main/kotlin/thc/Language.kt": "52fad0fa562416f73d9de7446945801e2c2593a794dadeb61f7a39409f89038f",
+    "src/main/kotlin/thc/LibraryCheck.kt": "c058b9a5de5cb772a5c4e6e042bd89ea2d0f9702b5f018eaca264354b343b275",
+    "src/main/kotlin/thc/Main.kt": "9251f9f5efbe9f70d118b4c52cee94cc5f1bf955b654efad55f33910989b66e6",
+    "src/main/kotlin/thc/MapCheck.kt": "b174f08d0b6579853d06dfb9f03ea7997d56d85206810c72f81e57fe5f73fc11",
+    "src/main/kotlin/thc/Probe.kt": "f86ff9add77cc1ce35772d4c36ca28f562c0c5acc0486d5637af94e50807c6b7",
+    "src/main/kotlin/thc/runtime/Application.kt": "fd58eebcdd3684be2c646b7f756f7f323d7061870f630c835e759e6e7fe5ab74",
+    "src/main/kotlin/thc/runtime/ArgumentLayout.kt": "4db757d06d874e5995c6073e700c2e71dfc56f76b3b1497373b7ac50706fa649",
+    "src/main/kotlin/thc/runtime/AstSelfCalls.kt": "a3c6e3af547c367ed6190c069458e1ad9a125343bbe4f24198b79d21c6926a57",
+    "src/main/kotlin/thc/runtime/BitPrimitives.kt": "59a2222779fea7a5ff55222f5ea09c8445c1c640e97cc1d6bad67b480c908f5e",
+    "src/main/kotlin/thc/runtime/BloomValue.kt": "85b442a5794dc3d31737ae0766651467177a7267c74c7a75e0883c4725f9f879",
+    "src/main/kotlin/thc/runtime/BytecodeProgram.kt": "c7f585306ac28f856cc65f59a7f1404132ca6b4bfdd4e998de873bbfd0519aea",
+    "src/main/kotlin/thc/runtime/BytecodeTypedInputSlots.kt": "d2e3e1fc0b3399e77aee444fa9714e9ce9dc6b226696d23b5b89b9f924af7f45",
+    "src/main/kotlin/thc/runtime/CaseCategories.kt": "9674d7cc8023c34511af96ff928a0438d37785f2658c7a45274ce83017392dea",
+    "src/main/kotlin/thc/runtime/ClassOwnedLayouts.kt": "a28c2c31fbd490ef3c36f3db002ef19a8063e5849db4b145ec59416947e52094",
+    "src/main/kotlin/thc/runtime/ConstructorClassIdentity.kt": "b982cb7ae06071d13ed5771b3b18386a04e4f1bbe46d755f00b72aae048a991d",
+    "src/main/kotlin/thc/runtime/CoreCallDemands.kt": "e109bdefd49f9db539d418227794eb8763d40c0ad635c78a5a2328e64d0d9196",
+    "src/main/kotlin/thc/runtime/CoreEntries.kt": "9c5f976aa179f0f5191c3636ed91dfe6594cc862af945fa6e5623d8468d4f268",
+    "src/main/kotlin/thc/runtime/CoreFields.kt": "8a201d2cbb7a4ca8fc82f8607c5a4e48bec3be553b93314f07524a9726af616c",
+    "src/main/kotlin/thc/runtime/CoreInputCalls.kt": "523472fef8f5b89bbc19ec5335dfa6b46bae4b4fbcbefdf280aae64e7514ca67",
+    "src/main/kotlin/thc/runtime/CoreRepresentations.kt": "29142176213a2bbf74ac066237ec161cc480333187c2f0b93396d39c49d8cdc3",
+    "src/main/kotlin/thc/runtime/CoreSources.kt": "766e1dccdba767ebdb53eeafb6588752da118917c86daad9112b9589bb6b5948",
+    "src/main/kotlin/thc/runtime/CoreVectors.kt": "27c3f69d49e2ce789e5899e56163a36e3f4c6dc3b570b29ba33aea4b2bb7402d",
+    "src/main/kotlin/thc/runtime/DataValues.kt": "df09bc47169cc74adca509a20fe2eaf8b99bb6822d90e52e465306bed41a5b6f",
+    "src/main/kotlin/thc/runtime/EntryArguments.kt": "80ec485f6c7c3d667d74f7f8b5d33804b0aa21bfd6eb97a8fdde5043dd99c7cf",
+    "src/main/kotlin/thc/runtime/EnumFamilies.kt": "67cb9a984c611f40afcb70ba3b17d90824002fc2500606bff00fc16019d773fb",
+    "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": "797bfd6afe21ca28b454007d9cc0bb1203baa3c397b504fcd9129e594910c293",
+    "src/main/kotlin/thc/runtime/Frames.kt": "1730379255ff11560a7746a05a3de4c7b6a90b468aa3e8b46397fa749365bd4d",
+    "src/main/kotlin/thc/runtime/GenericTypedInputs.kt": "d241cddbf7cd80d77ac7a4dd73e284f5a6cd2d6eb57be68ed13b15f4d3fce088",
+    "src/main/kotlin/thc/runtime/GuestExceptions.kt": "0bcd1d1e4dd6e694e4fa71d68f51617fcde73172bfe2bd5a5617fa369f01361b",
+    "src/main/kotlin/thc/runtime/GuestRoot.kt": "70755dd9613afc4ed723242fd9f73c1854334fbe9909c0bc47db5d0f14d08c1b",
+    "src/main/kotlin/thc/runtime/Handoff.kt": "3a15c560f6444874dfc67406349bd122bc5a6d140b72bcbd4b67d6c18453bbcb",
+    "src/main/kotlin/thc/runtime/LeadingCaseReturn.kt": "d4caab64fb21c98e82af92799d3b509ff30ffa5915962d8c03f00719c98dcb3d",
+    "src/main/kotlin/thc/runtime/LiteralAddresses.kt": "05a581f7fb8126a865b82cf79c3b7f915f8de8129d4e349e473f51ba39ffba69",
+    "src/main/kotlin/thc/runtime/LocalJoins.kt": "19e8a73bf271a6b0ace61edf2b75524105bec87ff2c20b0e2a19a68c4bb8c224",
+    "src/main/kotlin/thc/runtime/ManagedArrays.kt": "282a527b642c072a3f972992589240bca20529e4b3f4123cb172376d0d764c12",
+    "src/main/kotlin/thc/runtime/ManagedByteArrays.kt": "bb979b8bb3cfe98a6a16ae3ecf71329933b1a7bd653158505d693ee574ca69a4",
+    "src/main/kotlin/thc/runtime/ManagedMutVars.kt": "bf4f766cbc5b7af11cecae6c76d0101e162a0396918b838b1bc238c0cf3e6f4c",
+    "src/main/kotlin/thc/runtime/Program.kt": "b2bc55c793a911c499e11979aaf467441ec85648110ba8f942ccc7d1051c3ace",
+    "src/main/kotlin/thc/runtime/Scalar64Primitives.kt": "e39a7ba6a2409447fe5a519988badb8ffa9270fc08f58368bc421250d56a59f1",
+    "src/main/kotlin/thc/runtime/ScalarPrimitiveSignatures.kt": "ad8997270aca328adbc1b20207111c25152ef1a656183b2cb6aba7a3248ea6c2",
+    "src/main/kotlin/thc/runtime/SumResults.kt": "fe0956b8a8e754322a6099f550968d960afcfb74363b73472b1c6efcbb4e7f54",
+    "src/main/kotlin/thc/runtime/TupleArithmetic.kt": "af4fcfad9658e8908ecedae60f8ed34448f4f6c37b7bd03001d91098658459e6",
+    "src/main/kotlin/thc/runtime/TupleResults.kt": "8a301d42831cb2ddd04314e31691b0404ac4e197f8cff23049a46da40c4e8eab",
+    "src/main/kotlin/thc/runtime/TypedInputs.kt": "9f150a61df89cb312d0f477d290b170f4f1bc84b6d0d8e8f61fcd68d3f010bb6",
+    "src/main/kotlin/thc/runtime/Vector16Expressions.kt": "f7cf57f478f080bf3f84c0d171b50294e9662d25a160eb6a31753fe1b9cda54a",
+    "src/main/kotlin/thc/runtime/Vector32Expressions.kt": "859a021a585e60f9ca31e44519d0c911f1c83ce4acf30fbe9155305cc747316e",
+    "src/main/kotlin/thc/runtime/VectorDoubleExpressions.kt": "fe5dc7d571d409b41a23828ffec37711406687c39f2a88ed7f8f1c0999c1e23f",
+    "src/main/kotlin/thc/runtime/VectorExpressions.kt": "302658f2bd688ae05ff68f6de830884e9e58ae169c10f837930a31ae33fdb161",
+    "src/main/kotlin/thc/runtime/VectorFloatExpressions.kt": "c82683eb9996a1c2b4539472338346c4ae1c1663248a319f8fbcb5054ad68087",
+    "src/main/resources/thc/scalar-primop-signatures.json": "7c9c05e2e789d73ed3cd542a60a4fe87fde04e1eb0b1aa29744ea7b081c7756d"
+  },
+  "finalFocusedTests": {
+    "default": [
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-default/TEST-thc.runtime.BytecodeTypedTupleInputTest.xml",
+        "sha256": "f35809bc875f28d7224d50bc62ea9fc2c518b0b87801a313c6e449051fcf749c",
+        "name": "thc.runtime.BytecodeTypedTupleInputTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-default/TEST-thc.runtime.TupleInputNativeTest.xml",
+        "sha256": "47c5c961f30153d45d83b9e2cc27f944800a1a0dca1b8e6cbc30237227172c1a",
+        "name": "thc.runtime.TupleInputNativeTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-default/TEST-thc.runtime.TypedInputOwnershipTest.xml",
+        "sha256": "9b90f347783cdbde7c118254b3b5c4300ea911d8c99c3d18e84b8c13407bcc19",
+        "name": "thc.runtime.TypedInputOwnershipTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-default/TEST-thc.runtime.TypedInputProtocolTest.xml",
+        "sha256": "9276ec2068c0cf30f06bd393ee3d2d03da02912a10b401f30ef7666153bbfca5",
+        "name": "thc.runtime.TypedInputProtocolTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-default/TEST-thc.runtime.TypedInputScalarSourceTest.xml",
+        "sha256": "420b11d220af9fcbd85e1576d0f0a52307358be0df6fca0fc5bb6acfa1d7accd",
+        "name": "thc.runtime.TypedInputScalarSourceTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "handoff": [
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-handoff/TEST-thc.runtime.BytecodeTypedTupleInputTest.xml",
+        "sha256": "aa688408359d9ea482b608da613cc580c32e895380dea7f3654aac79a6e79295",
+        "name": "thc.runtime.BytecodeTypedTupleInputTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-handoff/TEST-thc.runtime.TupleInputNativeTest.xml",
+        "sha256": "bf79f9ffe374fcd091322128b802b3549f64f47f23c80dfc4328d34bd8d6bafd",
+        "name": "thc.runtime.TupleInputNativeTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-handoff/TEST-thc.runtime.TypedInputOwnershipTest.xml",
+        "sha256": "41b75e856eb05e334e57efaeb5733659ca41c640473f4e6a5c415df00068b1c9",
+        "name": "thc.runtime.TypedInputOwnershipTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-handoff/TEST-thc.runtime.TypedInputProtocolTest.xml",
+        "sha256": "dcb976e20be4157df5e5e651d9a30a1f5b537be905c92f0655e8eb013e5c1a4a",
+        "name": "thc.runtime.TypedInputProtocolTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "path": "/private/tmp/thc-tuple-inputs/build/validation/final-focused-handoff/TEST-thc.runtime.TypedInputScalarSourceTest.xml",
+        "sha256": "fab24eee8a71537b5033964f2dddf791027c4072a6c4871eee7d1d33a4711b5b",
+        "name": "thc.runtime.TypedInputScalarSourceTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "legacyScalarCorrection": {
+    "commit": "7bddb65ab2e0385e147c3b76971f77fe32caec20",
+    "failure": "Bytecode first interpreted Float row after Long at a higher-order tuple + UNKNOWN scalar site threw UnexpectedResultException; AST passed both modes.",
+    "fix": "Select primitive accessors for exact source proofs; otherwise read the existing scalar local generically and require the target primitive carrier.",
+    "tests": "Long/Float/Double transitions and reverse compiled replay on AST/bytecode, inline/residual, default/handoff; compiled entries plus host/original/active validity unchanged.",
+    "initialFailure": {
+      "path": "/private/tmp/thc-tuple-inputs/build/validation/unknown-scalar-first-failed/TEST-thc.runtime.TypedInputScalarSourceTest.xml",
+      "sha256": "765f1829d22547f7a60d9b8b176b7e51feddde38f8b530f91fd532c576551376"
+    },
+    "labelledFailure": {
+      "path": "/private/tmp/thc-tuple-inputs/build/validation/unknown-scalar-labelled-failed/TEST-thc.runtime.TypedInputScalarSourceTest.xml",
+      "sha256": "3f13d794f0dd1817c725e17261b94ca0e313ca6ad9632b0ca377fdd23a5961b0"
+    }
+  },
+  "postfixGraphCapture": {
+    "runtimeCommit": "7bddb65ab2e0385e147c3b76971f77fe32caec20",
+    "evidence": {
+      "path": "/private/tmp/thc-tuple-inputs/bench/experiments/tuple-inputs/captured/postfix-evidence.json",
+      "sha256": "6ba1bd0aa795f7b688bce0a84eb3ee536636375f85f459e5d79b88e81b2ff97e"
+    },
+    "log": {
+      "path": "/private/tmp/thc-typed-input-postfix-capture.log",
+      "sha256": "80af4618e9426dad03341647624b3cdc0eb7147013df1df1f6267cfabf8bb695"
+    },
+    "nativeRowsPerPass": 18,
+    "passes": 2,
+    "controls": [
+      "bytecode-inline-pairInputs",
+      "bytecode-inline-mixedCase"
+    ],
+    "limitation": "No new residual/cycle capture; historical full capture remains separately pinned"
+  },
+  "finalSourceReview": {
+    "path": "/private/tmp/thc-typed-input-final-guard-review-7bddb65/review.json",
+    "sha256": "a964bea58ad847c45bd5189d021cdfdb97c93d09a3d7192c400ab93386812a32"
+  },
+  "finalRuntimeJar": {
+    "path": "/private/tmp/thc-tuple-inputs/build/libs/thc-0.1-experiment.jar",
+    "sha256": "6019b6b3969fd5e47a584e0f06829b1e38d7c00fae6ecf360d20a9da1de99bbf"
+  }
+}

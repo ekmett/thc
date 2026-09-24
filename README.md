@@ -108,11 +108,17 @@ The [Word8X16 foundation](docs/word8x16.md) adds six unsigned counterparts with
 distinct proofs, zero-extended lanes and native/model high-bit checks.
 The [Word16X8 foundation](docs/word16x8.md) provides the six unsigned 16-bit
 counterparts with eight primitive short fields and independently observed lanes.
+The [Word32X4 foundation](docs/word32x4.md) adds six unsigned 32-bit operations,
+four primitive int fields and explicit zero-extension to Long scalar lanes.
+The [signed Int32X4 multiplication slice](docs/int32x4-multiply.md) completes
+the seven-operation signed family with wrapping low-32-bit products and signed
+lane observations, without widening vector calling conventions.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
-scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
-[Exact empty tuple inputs](docs/empty-tuple-inputs.md) retain logical arity with no payload fields.
-Other aggregate arguments, join captures and ordinary captures remain explicit boundaries.
+concrete Float/Double leaves, local join results and zero-width State# components.
+[Typed tuple inputs](docs/tuple-inputs.md) preserve logical arity across direct calls, PAPs and tail transfers,
+including [exact empty inputs](docs/empty-tuple-inputs.md) with no payload fields.
+Sum inputs, aggregate join arguments and captures remain explicit boundaries.
 [Binary unboxed sum results](docs/sum-results.md) use exact typed destinations; sum inputs,
 storage, joins, nested sums and unresolved layouts remain rejected.
 
