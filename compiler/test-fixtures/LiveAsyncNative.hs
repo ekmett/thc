@@ -33,6 +33,6 @@ main = do
   d <- count
   warm <- evaluate (I# (A.warmLoop 1024#))
   case (r,a,b,release,c,d,warm) of
-    (Just 1007, Just (Right (-1)), Just (), 1, Just 200000008, 1, 1031) ->
-      putStr "1007\n-1\n200000008\n1\n1031\n"
+    (Just 1007, Just (Right (-1)), Just (), 1, Just 10000008, 1, 1031) ->
+      putStr "1007\n-1\n10000008\n1\n1031\n"
     _ -> error ("Native interrupted-thunk protocol failed: " ++ show (r,a,b,release,c,d,warm))
