@@ -181,7 +181,8 @@ jobs:
         if: needs.automation.outputs.persistent != 'true'
         with:
           ghc-version: '9.14.1'
-          cabal-update: false
+          cabal-version: '3.16.0.0'
+          cabal-update: true
       - uses: graalvm/setup-graalvm@0426e2e191540e8514dff98dc52a5f5146a2a276 # v1
         if: needs.automation.outputs.persistent != 'true'
         with:
@@ -190,6 +191,10 @@ jobs:
           distribution: graalvm
           github-token: ${{ secrets.GITHUB_TOKEN }}
           check-for-updates: false
+      - name: Resolve Cabal project dependencies
+        run: |
+          test "$(cabal --numeric-version)" = 3.16.0.0
+          cabal build exe:thc
       - name: Identify toolchain and fixture dependencies
         run: python3 .github/scripts/fast_ci.py identify
       - name: Run fresh smoke plus affected tests

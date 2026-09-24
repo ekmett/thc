@@ -120,12 +120,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
                                "units" .= map fst described])
-  -- The package-aware audit/runtime entrypoints consume this manifest once the
-  -- corresponding cross-unit loader lands. The legacy file-list path remains
-  -- strict for this independently testable driver slice.
-  runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--entry", entry,
-                              "--io-main", "--output", audit] ++ files) thcRoot
-  runCommand False runtime ["--run-io", comma files, entry] thcRoot
+  runCommand True "python3" [thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
+                             "--entry", entry, "--io-main", "--output", audit] thcRoot
+  runCommand False runtime ["--run-io", '@' : manifest, entry] thcRoot
 
 -- Cabal locks its own build tree; this also keeps the THC cache and the
 -- published package manifest coherent for concurrent runs of one project.
@@ -403,9 +400,6 @@ split _ [] = [""]
 split separator text = case break (== separator) text of
   (part, []) -> [part]
   (part, _:rest) -> part : split separator rest
-
-comma :: [String] -> String
-comma = foldr (\item rest -> item ++ if null rest then "" else ',' : rest) ""
 
 foldlM :: Monad m => (b -> a -> m b) -> b -> [a] -> m b
 foldlM _ value [] = pure value
