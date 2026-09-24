@@ -836,7 +836,23 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
-            if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
+            val polyglot = CorePolyglot.validate(expr, fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals))
+            if (polyglot != null) {
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                tupleExpression(tupleProof) { e, destination ->
+                    when (polyglot) {
+                        PolyglotOp.EVAL -> e.builder.beginPolyglotEval(destination[0])
+                        PolyglotOp.READ_MEMBER -> e.builder.beginPolyglotReadMember(destination[0])
+                        PolyglotOp.EXECUTE_INT -> e.builder.beginPolyglotExecuteInt(destination[0])
+                    }
+                    operands.forEach { it.emit(e) }
+                    when (polyglot) {
+                        PolyglotOp.EVAL -> e.builder.endPolyglotEval()
+                        PolyglotOp.READ_MEMBER -> e.builder.endPolyglotReadMember()
+                        PolyglotOp.EXECUTE_INT -> e.builder.endPolyglotExecuteInt()
+                    }
+                }
+            } else if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
                 if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
                 val operand = compile(args[0], scope, false)
                 val ids = CoreEnums.validate(expr, operand.proof, constructors)

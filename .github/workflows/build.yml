@@ -86,6 +86,12 @@ jobs:
         run: python3 scripts/primop-coverage.py --check
       - name: Build and test from source
         run: scripts/try.sh
+      - name: Check Haskell calls into JavaScript
+        run: |
+          python3 scripts/test-polyglot-audit.py
+          python3 -O scripts/test-polyglot-audit.py
+          scripts/polyglot-demo.sh
+          scripts/gradle.sh polyglotTest
       - name: Preserve default test results
         if: always()
         shell: bash

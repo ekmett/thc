@@ -81,6 +81,45 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object read(GlobalBinding binding) { return binding.read(); }
     }
 
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class PolyglotEval {
+        @Specialization
+        public static void apply(VirtualFrame frame, LocalAccessor destination,
+                LiteralAddress language, LiteralAddress source, LiteralAddress name, Object state,
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    access.eval(language, source, name, state));
+        }
+        public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class PolyglotReadMember {
+        @Specialization
+        public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object value, LiteralAddress name, Object state,
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    access.readMember(frame, value, name, state));
+        }
+        public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
+    }
+
+    @Operation(forceCached = true)
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class PolyglotExecuteInt {
+        @Specialization
+        public static void apply(VirtualFrame frame, LocalAccessor destination,
+                Object value, long argument, Object state,
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    access.executeInt(frame, value, argument, state));
+        }
+        public static PolyglotAccess createAccess() { return new PolyglotAccess(); }
+    }
+
     /** Core's single-register integer representation guarantees a primitive value. */
     @Operation
     @ConstantOperand(type = GlobalBinding.class, name = "binding")

@@ -136,8 +136,12 @@ object CoreModules {
 class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts = thc.runtime.HandoffLayouts(this)
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
-    class State
-    override fun createContext(env: Env): State = State()
+    class State(val env: Env)
+    override fun createContext(env: Env): State = State(env)
+    companion object {
+        private val contexts = ContextReference.create(Language::class.java)
+        @JvmStatic fun currentState(node: Node?): State = contexts.get(node)
+    }
     @Suppress("UNCHECKED_CAST")
     override fun parse(request: ParsingRequest): CallTarget {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>

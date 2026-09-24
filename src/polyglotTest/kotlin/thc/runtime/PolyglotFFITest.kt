@@ -6,12 +6,10 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.PolyglotAccess
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import thc.Language
 
 /** The optional JS dependency is loaded only by Gradle's polyglotTest task. */
-@Tag("polyglot")
 class PolyglotFFITest {
     private fun proof(rep: String): Map<String, Any?> = mapOf(
         "kind" to when (rep) {
