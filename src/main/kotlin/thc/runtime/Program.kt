@@ -303,6 +303,7 @@ internal class Force(private val metrics: Metrics) : Node() {
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
     @CompilationFinal @Volatile private var seenThunk = false
+    @Suppress("UNUSED_PARAMETER")
     fun execute(frame: VirtualFrame, original: Any?): Any? {
         if (!seenThunk) {
             if (original !is Thunk) return original
@@ -321,6 +322,9 @@ internal class Force(private val metrics: Metrics) : Node() {
             }
             val observed = if (original.state == 5) original.value as? ContinuationResult else null
             val child = suspendedChild(observed)
+            // The continuation owns its captured callee frame. None of the
+            // update/resume helpers needs this caller's frame; materializing
+            // it here poisons frame-access speculation on ordinary loop exits.
             if (child != null) return resumeChain(original)
             val result = executeOne(original, observed, Unit)
             if (result !== Retry) return result
