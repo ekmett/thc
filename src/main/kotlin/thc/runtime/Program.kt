@@ -1990,6 +1990,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operation = VectorByteArrayOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
+            } else if (fn[0] == "prim" && fn[1] == "touch#") {
+                CoreTouch.validateRaw(args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
+                    CoreRepresentations.metadata(expr)?.get("rep"))
+                val kept = argument(args[0], scope, flags[0] as Boolean)
+                val state = compile(args[1], scope, false)
+                CoreTouch.validate(listOf(kept.representation, state.representation), flags, tupleProof)
+                TouchExpression(kept, state, tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
                 CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
                     args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
@@ -2004,7 +2011,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
+                if (operation == PinnedMemoryOp.CONTENTS || operation == PinnedMemoryOp.MUTABLE_CONTENTS)
+                    PinnedByteArrayContents(tupleProof, compile(args[0], scope, false))
+                else if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
                     PinnedPointerIndexExpression(operation, tupleProof,
                         compile(args[0], scope, false), compile(args[1], scope, false))
                 else if (operation == PinnedMemoryOp.WRITE_ADDR_ARRAY)

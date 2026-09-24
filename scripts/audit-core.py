@@ -1005,6 +1005,33 @@ class Audit:
                         valid = array_role(proof, result)
                     if not valid:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact Array result required')
+                if function[0] == 'prim' and function[1] == 'touch#':
+                    def touch_scalar(rep):
+                        return (isinstance(rep, dict) and set(rep) == {'kind', 'primReps', 'evaluated'} and
+                                type(rep['evaluated']) is bool)
+                    def touch_state(rep):
+                        return touch_scalar(rep) and rep['kind'] == 'void' and rep['primReps'] == []
+                    actual = [self.expression_rep(a) for a in arguments]
+                    valid = (len(actual) == 2 and touch_scalar(actual[0]) and
+                             actual[0]['kind'] in ('object', 'data', 'closure') and
+                             actual[0]['primReps'] in (['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']) and
+                             touch_state(actual[1]) and touch_state(proof) and
+                             isinstance(flags, list) and all(type(flag) is bool for flag in flags) and
+                             flags == [actual[0]['primReps'] == ['BoxedRep (Just Lifted)'], False])
+                    if not valid:
+                        self.issue('primitive-representation', owner, path,
+                                   'touch#: exact reference, State input and bare State result required')
+                    for index, argument in enumerate(arguments):
+                        stored = ((bound.get(argument[1]) if argument[1] in bound else self.bindings.get(argument[1], {}).get('rep'))
+                                  if argument[0] == 'var' else self.literal_rep(argument))
+                        if isinstance(stored, dict):
+                            reps = stored.get('primReps')
+                            kinds = ('unknown', 'object', 'data', 'closure') if index == 0 else ('unknown', 'void')
+                            if (stored.get('kind', 'unknown') not in kinds or
+                                    isinstance(reps, list) and reps != ['BoxedRep Nothing'] and
+                                    self.shape(stored) != self.shape(actual[index])):
+                                self.issue('primitive-representation', owner, path,
+                                           'touch#: argument contradicts its stored/intrinsic proof')
                 if function[0] == 'prim' and function[1] == 'keepAlive#':
                     def kept_reference(rep):
                         return (isinstance(rep, dict) and 'aggregate' not in rep and not is_vector(rep) and
@@ -1099,6 +1126,23 @@ class Audit:
                     if (len(arguments) != len(expected) or flags != [False] * len(expected) or
                             any(not exact(self.expression_rep(a), e) for a, e in zip(arguments, expected))):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray arguments required')
+                    for index, (argument, required) in enumerate(zip(arguments, expected)):
+                        stored = None
+                        if argument[0] == 'var':
+                            stored = (bound.get(argument[1]) if argument[1] in bound else
+                                      self.bindings.get(argument[1], {}).get('rep'))
+                        elif argument[0] in ('lit', 'void'):
+                            stored = self.literal_rep(argument)
+                        # Unknown metadata may refine from the exact occurrence;
+                        # known lexical/intrinsic facts cannot be relabelled by it.
+                        if isinstance(stored, dict) and (
+                                'aggregate' in stored or is_vector(stored) or
+                                stored.get('kind') not in (None, 'unknown', required['kind']) or
+                                stored.get('primReps') is not None and stored['primReps'] != required['primReps'] and
+                                not (stored['primReps'] == ['BoxedRep Nothing'] and
+                                     required['primReps'] == ['BoxedRep (Just Unlifted)'])):
+                            self.issue('primitive-representation', owner, path + f'/args/{index}',
+                                       function[1] + ': stored ByteArray operand contradicts its required representation')
                     if not exact(proof, bytearray_primitive['result']):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact ByteArray result required')
                 mutvar = self.cap.get('managedMutVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
