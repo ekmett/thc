@@ -152,6 +152,19 @@
         "thc.cabal"
       ]
     },
+    "int32-byte-offset": {
+      "junit": ["thc.runtime.Int32ByteOffsetTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int32-byte-offset"]}],
+      "outputs": ["build/int32-byte-offset"],
+      "sources": [
+        "test/haskell-fixtures/Int32ByteOffsetFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "compiler/test-fixtures/Int32ByteOffsetAudit.hs",
+        "compiler/test-fixtures/Int32ByteOffsetNative.hs",
+        "thc.cabal"
+      ]
+    },
     "original-stack-formatter": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack-formatter"]}],
