@@ -2023,6 +2023,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "divideFloat#" -> "FloatDivide"
             "negateFloat#" -> "FloatNegate"
             "sqrtFloat#" -> "FloatSqrt"
+            "fabsFloat#" -> "FloatAbs"
+            "expFloat#" -> "FloatExp"
+            "expm1Float#" -> "FloatExpm1"
+            "logFloat#" -> "FloatLog"
+            "log1pFloat#" -> "FloatLog1p"
+            "sinFloat#" -> "FloatSin"
+            "cosFloat#" -> "FloatCos"
+            "powerFloat#" -> "FloatPower"
             "eqFloat#" -> "FloatEqual"
             "neFloat#" -> "FloatNotEqual"
             "ltFloat#" -> "FloatLess"
@@ -2035,6 +2043,14 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "/##" -> "DoubleDivide"
             "negateDouble#" -> "DoubleNegate"
             "sqrtDouble#" -> "DoubleSqrt"
+            "fabsDouble#" -> "DoubleAbs"
+            "expDouble#" -> "DoubleExp"
+            "expm1Double#" -> "DoubleExpm1"
+            "logDouble#" -> "DoubleLog"
+            "log1pDouble#" -> "DoubleLog1p"
+            "sinDouble#" -> "DoubleSin"
+            "cosDouble#" -> "DoubleCos"
+            "**##" -> "DoublePower"
             "==##" -> "DoubleEqual"
             "/=##" -> "DoubleNotEqual"
             "<##" -> "DoubleLess"
@@ -2053,11 +2069,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
+        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "DoublePower" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -2069,6 +2085,22 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "FloatDivide" -> b.beginFloatDivide()
                 "FloatNegate" -> b.beginFloatNegate()
                 "FloatSqrt" -> b.beginFloatSqrt()
+                "FloatAbs" -> b.beginFloatAbs()
+                "FloatExp" -> b.beginFloatExp()
+                "FloatExpm1" -> b.beginFloatExpm1()
+                "FloatLog" -> b.beginFloatLog()
+                "FloatLog1p" -> b.beginFloatLog1p()
+                "FloatSin" -> b.beginFloatSin()
+                "FloatCos" -> b.beginFloatCos()
+                "FloatPower" -> b.beginFloatPower()
+                "DoubleAbs" -> b.beginDoubleAbs()
+                "DoubleExp" -> b.beginDoubleExp()
+                "DoubleExpm1" -> b.beginDoubleExpm1()
+                "DoubleLog" -> b.beginDoubleLog()
+                "DoubleLog1p" -> b.beginDoubleLog1p()
+                "DoubleSin" -> b.beginDoubleSin()
+                "DoubleCos" -> b.beginDoubleCos()
+                "DoublePower" -> b.beginDoublePower()
                 "FloatEqual" -> b.beginFloatEqual()
                 "FloatNotEqual" -> b.beginFloatNotEqual()
                 "FloatLess" -> b.beginFloatLess()
@@ -2106,6 +2138,22 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "FloatDivide" -> b.endFloatDivide()
                 "FloatNegate" -> b.endFloatNegate()
                 "FloatSqrt" -> b.endFloatSqrt()
+                "FloatAbs" -> b.endFloatAbs()
+                "FloatExp" -> b.endFloatExp()
+                "FloatExpm1" -> b.endFloatExpm1()
+                "FloatLog" -> b.endFloatLog()
+                "FloatLog1p" -> b.endFloatLog1p()
+                "FloatSin" -> b.endFloatSin()
+                "FloatCos" -> b.endFloatCos()
+                "FloatPower" -> b.endFloatPower()
+                "DoubleAbs" -> b.endDoubleAbs()
+                "DoubleExp" -> b.endDoubleExp()
+                "DoubleExpm1" -> b.endDoubleExpm1()
+                "DoubleLog" -> b.endDoubleLog()
+                "DoubleLog1p" -> b.endDoubleLog1p()
+                "DoubleSin" -> b.endDoubleSin()
+                "DoubleCos" -> b.endDoubleCos()
+                "DoublePower" -> b.endDoublePower()
                 "FloatEqual" -> b.endFloatEqual()
                 "FloatNotEqual" -> b.endFloatNotEqual()
                 "FloatLess" -> b.endFloatLess()

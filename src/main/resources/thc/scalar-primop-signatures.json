@@ -18,6 +18,13 @@
       ],
       "result": "DoubleRep"
     },
+    "**##": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
     "+#": {
       "arguments": [
         "IntRep",
@@ -293,6 +300,18 @@
       ],
       "result": "WordRep"
     },
+    "cosDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "cosFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "ctz#": {
       "arguments": [
         "WordRep"
@@ -425,6 +444,42 @@
         "Word8Rep"
       ],
       "result": "IntRep"
+    },
+    "expDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "expFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "expm1Double#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "expm1Float#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "fabsDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "fabsFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "float2Double#": {
       "arguments": [
@@ -747,6 +802,30 @@
         "Word8Rep"
       ],
       "result": "IntRep"
+    },
+    "log1pDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "log1pFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "logDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "logFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "ltChar#": {
       "arguments": [
@@ -1174,6 +1253,13 @@
       ],
       "result": "WordRep"
     },
+    "powerFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "quotInt#": {
       "arguments": [
         "IntRep",
@@ -1313,6 +1399,18 @@
         "Word8Rep"
       ],
       "result": "Word8Rep"
+    },
+    "sinDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "sinFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
     },
     "sqrtDouble#": {
       "arguments": [
