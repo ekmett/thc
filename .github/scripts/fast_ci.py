@@ -140,11 +140,13 @@ def gradle_command(selection):
     return argv
 
 
-def python_commands(selection, executable):
+def python_commands(selection, executable, automation_checked=False):
     for command in selection["python"]["commands"]:
         require(isinstance(command, list) and len(command) >= 2 and command[0] == "python3"
                 and all(isinstance(part, str) and "\0" not in part for part in command),
                 "Invalid Python argv from selector")
+        if automation_checked and re.fullmatch(r"\.github/scripts/test_[A-Za-z0-9_]+\.py", command[1]):
+            continue  # The required automation job ran these in both modes.
         yield [executable, *command[1:]]
         yield [executable, "-O", *command[1:]]
 
@@ -221,7 +223,10 @@ def execute(recorder, base, head, identity_path):
     recorder.data["nativeInputs"] = inputs
     recorder.save()
     failures = []
-    for index, command in enumerate(python_commands(selection, sys.executable)):
+    automation_sha = os.environ.get("FAST_AUTOMATION_SHA", "")
+    automation_checked = bool(SHA.fullmatch(automation_sha)) and automation_sha == git(recorder.root, "rev-parse", "HEAD")
+    recorder.data["automationReused"] = automation_sha if automation_checked else None
+    for index, command in enumerate(python_commands(selection, sys.executable, automation_checked)):
         try:
             recorder.command(f"python-{index:03d}", command)
         except RuntimeError as error:

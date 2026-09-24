@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -98,6 +99,14 @@ class FastRunnerTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             list(ci.python_commands({"python": {"commands": [["bash", "-c", "exit 0"]]}}, "/python"))
 
+    def test_matching_automation_job_reuses_only_its_complete_test_files(self):
+        selected = {"python": {"commands": [["python3", path] for path in (
+            ".github/scripts/test_fast_select.py", "scripts/test-scalar-bitcasts.py",
+            ".github/scripts/extra/test_nested.py")]}}
+        all_commands = list(ci.python_commands(selected, "/python"))
+        reused = list(ci.python_commands(selected, "/python", automation_checked=True))
+        self.assertEqual(reused, all_commands[2:])
+
     def test_previous_outputs_are_preserved_and_cannot_count(self):
         source = self.root / "build/test-results/test"
         source.mkdir(parents=True)
@@ -193,6 +202,22 @@ class FastRunnerTest(unittest.TestCase):
                 ci.execute(recorder, "HEAD", "HEAD", identity_path)
             junit.assert_not_called()
         self.assertNotIn("passed", recorder.data)
+
+    def test_only_the_current_revision_can_reuse_automation_results(self):
+        selection = self.selection() | {"reasons": [], "python": {"commands": [
+            ["python3", ".github/scripts/test_fast_select.py"]]}}
+        identity_path = self.root / "identity.json"
+        identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
+        for checked, expected in (("a" * 40, 2), ("b" * 40, 4), ("", 4)):
+            with self.subTest(checked=checked), patch.object(ci, "git", return_value="a" * 40), \
+                    patch.dict(os.environ, {"FAST_AUTOMATION_SHA": checked}), \
+                    patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
+                    patch.object(ci, "run_mode", return_value={"cases": []}):
+                recorder = ci.Recorder(self.root, self.root / ("run-" + (checked or "none")))
+                with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection))] + [(0, "")] * 3) as run:
+                    ci.execute(recorder, "HEAD", "HEAD", identity_path)
+                self.assertEqual(run.call_count, expected)
+                self.assertEqual(recorder.data["automationReused"], checked if expected == 2 else None)
 
 
 if __name__ == "__main__":
