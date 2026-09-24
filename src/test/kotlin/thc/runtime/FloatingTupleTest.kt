@@ -218,7 +218,11 @@ class FloatingTupleTest {
             val target = program.entryTarget(bindings.single { it["name"] == "mixedCase" }["id"] as String)
             for (input in listOf(-7L, 0L, 7L)) assertEquals(20L * input - 23,
                 Calls.target(target, arrayOf(0L, input)))
-            compile(target)
+            // Compile producers too: copying the whole tuple must stay compiled
+            // even when Graal keeps a producer call out of line.
+            (linked["bindings"] as List<Map<String, Any?>>)
+                .filter { (it["expr"] as List<*>)[0] == "lam" }
+                .forEach { compile(program.entryTarget(it["id"] as String)) }
             for (input in listOf(-7L, 0L, 7L)) {
                 val before = count(program)
                 assertEquals(20L * input - 23, Calls.target(target, arrayOf(0L, input)))
