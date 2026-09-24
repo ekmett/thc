@@ -3,9 +3,20 @@
   "fixtureFreeJunit": [
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
+    "thc.runtime.IoMainBoundaryTest",
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "io-main-pap": {
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "commands": [{"argv": ["python3", "scripts/prepare-io-main-pap.py"]}],
+      "outputs": ["build/io-main-pap"],
+      "sources": [
+        "scripts/prepare-io-main-pap.py",
+        "compiler/test-fixtures/IoMainPapAudit.hs",
+        "compiler/test-fixtures/IoMainPapNative.hs"
+      ]
+    },
     "runtime-core-native": {
       "junit": [
         "thc.FastSmokeTest",

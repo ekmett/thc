@@ -180,6 +180,18 @@
     }
   },
   "owners": {
+    "compiler/test-fixtures/IoMainPapAudit.hs": {
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "compiler/test-fixtures/IoMainPapNative.hs": {
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "python": []
+    },
+    "scripts/prepare-io-main-pap.py": {
+      "junit": ["thc.runtime.IoMainPapNativeTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
     "compiler/test-fixtures/BitPrimopsAudit.hs": {
       "junit": [
         "thc.runtime.BitPrimopsTest"
