@@ -46,6 +46,7 @@ private val floatingOperations = mapOf(
 
 /** JVM float operations round each result to binary32; no implicit numeric widening. */
 internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
+    rawBitCastPrimitive(name, arguments)?.let { return it }
     if (name == "sqrtFloat#" || name == "sqrtDouble#") {
         if (arguments.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
         return if (name == "sqrtFloat#") FloatSqrt(arguments[0]) else DoubleSqrt(arguments[0])

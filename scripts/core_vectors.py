@@ -66,6 +66,19 @@ OPERATIONS.update({
     'minusWord8X16#': ([VECTOR_WORD8_REP, VECTOR_WORD8_REP], VECTOR_WORD8_REP),
     'timesWord8X16#': ([VECTOR_WORD8_REP, VECTOR_WORD8_REP], VECTOR_WORD8_REP),
 })
+VECTOR_WORD16_REP = {'kind': 'vector', 'primReps': ['VecRep 8 Word16ElemRep'], 'evaluated': True,
+                    'vector': {'lanes': 8, 'element': 'Word16ElemRep'}}
+LANE_WORD16_REP = {'kind': 'long', 'primReps': ['Word16Rep'], 'evaluated': True}
+TUPLE_WORD16_REP = {'kind': 'unknown', 'primReps': ['Word16Rep'] * 8, 'evaluated': True,
+                  'aggregate': 'unboxed-tuple', 'components': [LANE_WORD16_REP] * 8}
+OPERATIONS.update({
+    'packWord16X8#': ([TUPLE_WORD16_REP], VECTOR_WORD16_REP),
+    'unpackWord16X8#': ([VECTOR_WORD16_REP], TUPLE_WORD16_REP),
+    'broadcastWord16X8#': ([LANE_WORD16_REP], VECTOR_WORD16_REP),
+    'plusWord16X8#': ([VECTOR_WORD16_REP, VECTOR_WORD16_REP], VECTOR_WORD16_REP),
+    'minusWord16X8#': ([VECTOR_WORD16_REP, VECTOR_WORD16_REP], VECTOR_WORD16_REP),
+    'timesWord16X8#': ([VECTOR_WORD16_REP, VECTOR_WORD16_REP], VECTOR_WORD16_REP),
+})
 VECTOR_FLOAT_REP = {'kind': 'vector', 'primReps': ['VecRep 4 FloatElemRep'], 'evaluated': True,
                     'vector': {'lanes': 4, 'element': 'FloatElemRep'}}
 LANE_FLOAT_REP = {'kind': 'float', 'primReps': ['FloatRep'], 'evaluated': True}
@@ -110,6 +123,6 @@ def proof_error(rep):
         return 'Invalid Core vector shape'
     if registers != [f"VecRep {shape['lanes']} {shape['element']}"]:
         return 'Vector shape disagrees with primitive representation'
-    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_WORD8_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
+    if shape not in (VECTOR_REP['vector'], VECTOR32_REP['vector'], VECTOR16_REP['vector'], VECTOR8_REP['vector'], VECTOR_WORD8_REP['vector'], VECTOR_WORD16_REP['vector'], VECTOR_FLOAT_REP['vector'], VECTOR_DOUBLE_REP['vector']):
         return 'Unsupported Core vector representation'
     return None

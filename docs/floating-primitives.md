@@ -2,7 +2,7 @@
 
 THC supports a bounded scalar `Float#`/`Double#` foundation in both the AST and
 bytecode backends. It includes floating literals, primitive locals, constructor
-fields and closure captures, scalar arguments/results, and 30 primops:
+fields and closure captures, scalar arguments/results, and 34 primops:
 
 | Family | Float# | Double# |
 | --- | --- | --- |
@@ -11,6 +11,7 @@ fields and closure captures, scalar arguments/results, and 30 primops:
 | Comparisons | `eqFloat#`, `neFloat#`, `ltFloat#`, `leFloat#`, `gtFloat#`, `geFloat#` | `==##`, `/=##`, `<##`, `<=##`, `>##`, `>=##` |
 | Int conversion | `int2Float#`, `float2Int#` | `int2Double#`, `double2Int#` |
 | Precision conversion | `double2Float#` | `float2Double#` |
+| Raw bit casts | `castFloatToWord32#`, `castWord32ToFloat#` | `castDoubleToWord64#`, `castWord64ToDouble#` |
 
 The exporter retains `FloatRep` and `DoubleRep` as distinct scalar proofs.
 AST execution has `executeFloat`/`executeDouble` paths; frames and StaticShape
@@ -135,3 +136,27 @@ problem and neither experiment is retained.
 --output docs/floating-graphs` retains each checked entry snapshot, its original
 BGV, hashes, installed runtime identity, and loop evidence. This record is
 about the compiler snapshot, not final machine-code instruction selection.
+
+The four raw bit casts preserve IEEE encodings instead of performing numeric
+conversions. Their integer sides are exactly `Word32#` and `Word64#`; binary32
+bits use a zero-extended Long, while binary64 uses all 64 Long bits. Separate
+typed AST nodes and BytecodeDSL operations call the raw-bit JVM APIs. Saturation
+and the pinned scalar signature table reject contradictory exact argument or
+result proofs, including machine-Word substitutions. No vector or call ABI is
+added.
+
+`scripts/prepare-scalar-bitcasts.py` retains 13,555 native/model rows across ten
+pre/post-Tidy roots. Integer-only models cover signed zeros, infinities,
+subnormals and signed quiet/signalling NaNs. The fixtures retain opaque calls,
+floating constructor fields with an unused recursive bottom, and primitive
+closure captures. Separate encode and decode roots compare through native-order
+array storage, so a pair of compensating bit-cast errors cannot satisfy only a
+round-trip test. Export checks derive fixed guest-entry counts from the retained
+call structure; every measured row requires that exact count and unchanged,
+installed active targets, with inlining both enabled and disabled. The normal
+handoff matrix repeats these gates. A separate helper test enumerates every
+binary32 NaN encoding and 262,140 selected binary64 NaN encodings. Raw-bit
+preservation, including signalling NaNs, is an explicit platform/JDK test gate;
+this does not rely on floating equality or claim that Java specifies universal
+signalling-NaN preservation on other architectures. Generic residual floating
+calls can still box, as described above.

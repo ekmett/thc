@@ -106,6 +106,8 @@ each add seven local narrow-integer vector operations, including wrapping
 multiplication, with primitive lane carriers and native/model edge checks.
 The [Word8X16 foundation](docs/word8x16.md) adds six unsigned counterparts with
 distinct proofs, zero-extended lanes and native/model high-bit checks.
+The [Word16X8 foundation](docs/word16x8.md) provides the six unsigned 16-bit
+counterparts with eight primitive short fields and independently observed lanes.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 scalar/reference inputs, concrete Float/Double leaves, local join results and zero-width State# components;
@@ -130,6 +132,8 @@ unsigned elements, public accumulation/ST examples and cross-element byte aliase
 and eight-byte machine Word storage, public examples and native bit-movement checks.
 [Int16/Word16-array operations](docs/int16-arrays.md) add two-byte signed/unsigned
 storage and exact narrow literal proofs.
+[Int8/Word8-array operations](docs/int8-arrays.md) complete signed and unsigned
+single-byte storage with public arrays and raw narrow-result controls.
 
 Public fixed-bounds `STArray` programs use [boxed array storage](docs/core-evidence.md#lifted-boxed-array-storage)
 while preserving lazy lifted elements and closures.
@@ -140,8 +144,8 @@ Long tag and return the existing typed constructor value; missing family proofs
 and invalid full-width tags are rejected.
 
 [Scalar floating primitives](docs/floating-primitives.md) add concrete Float and
-Double storage and 30 arithmetic/comparison/conversion primops, including square
-roots, checked against native GHC. Floating tuple results also execute genuine
+Double storage and 34 arithmetic/comparison/conversion primops, including square
+roots and raw Word32/Word64 bit casts, checked against native GHC. Floating tuple results also execute genuine
 `Data.Complex` workers; residual scalar floating inputs still use the existing
 Object call ABI.
 

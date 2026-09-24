@@ -8,6 +8,7 @@ compiler/build.sh
 python3 scripts/prepare-floating-audit.py
 python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-sqrt-audit.py
+python3 scripts/prepare-scalar-bitcasts.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-unsafe-equality-audit.py
 sh scripts/prepare-aggregate-frontier.sh
@@ -30,6 +31,7 @@ python3 scripts/prepare-double-arrays.py
 python3 scripts/prepare-int32-arrays.py
 python3 scripts/prepare-float-word-arrays.py
 python3 scripts/prepare-int16-arrays.py
+python3 scripts/prepare-int8-arrays.py
 # GHC9.14 AArch64 NCG requires LLVM for SIMD. The macOS job deliberately
 # validates pre-Core/model execution; the x86 job also requires native + post-Tidy.
 for simd_vector in int64x2 int32x4; do
@@ -59,6 +61,10 @@ esac
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-word8x16-audit.py --export-only ;;
   *) python3 scripts/prepare-word8x16-audit.py ;;
+esac
+case "$(uname -m)" in
+  arm64|aarch64) python3 scripts/prepare-word16x8-audit.py --export-only ;;
+  *) python3 scripts/prepare-word16x8-audit.py ;;
 esac
 python3 scripts/prepare-explicit64-primops.py
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CbvAudit.hs compiler/test-fixtures/CbvJoinAudit.hs compiler/test-fixtures/CbvCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs

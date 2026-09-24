@@ -110,6 +110,8 @@ jobs:
           assert proof['nativeRows'] == 9168 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           proof = json.loads(Path('build/simd-word8x16/provenance.json').read_text())
           assert proof['nativeRows'] == 7712 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
+          proof = json.loads(Path('build/simd-word16x8/provenance.json').read_text())
+          assert proof['nativeRows'] == 5116 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           PY
       - name: Test opt-in dense handoff
         env:
@@ -144,6 +146,8 @@ jobs:
           python3 scripts/test-int16x8-model.py
           python3 scripts/test-int8x16-model.py
           python3 scripts/test-word8x16-model.py
+          python3 scripts/test-word16x8-model.py
+          python3 scripts/test-scalar-bitcasts.py
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-arrays.py
           python3 scripts/test-address-fields.py
@@ -154,6 +158,7 @@ jobs:
           python3 scripts/test-int32-array-model.py
           python3 scripts/test-float-word-array-model.py
           python3 scripts/test-int16-array-model.py
+          python3 scripts/test-int8-array-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check benchmark power provenance
         run: python3 tools/test-compare-map-runtimes.py
@@ -212,6 +217,7 @@ jobs:
             build/boxed-arrays/
             build/address-fields/
             build/data-to-tag/
+            build/scalar-bitcasts/
             build/compare-byte-arrays/manifest.json
             build/compare-byte-arrays/oracle.tsv
             build/compare-byte-arrays/NativeCompareByteArrays.hs
@@ -253,6 +259,12 @@ jobs:
             build/float-word-arrays/native/float-word-array-oracle
             build/float-word-arrays/*/*.audit.json
             build/float-word-arrays/*/*/core/*.json
+            build/int8-arrays/manifest.json
+            build/int8-arrays/*.tsv
+            build/int8-arrays/NativeInt8Array.hs
+            build/int8-arrays/native/int8-array-oracle
+            build/int8-arrays/*/*.audit.json
+            build/int8-arrays/*/*/core/*.json
             build/int16-arrays/manifest.json
             build/int16-arrays/oracle.tsv
             build/int16-arrays/expected.tsv
@@ -281,6 +293,7 @@ jobs:
             build/simd-int16x8/
             build/simd-int8x16/
             build/simd-word8x16/
+            build/simd-word16x8/
             build/signed-narrow-primops/manifest.json
             build/signed-narrow-primops/oracle.tsv
             build/signed-narrow-primops/*.audit.json

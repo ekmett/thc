@@ -9,6 +9,7 @@ from core_vectors import VECTOR_REP, LANE_REP, TUPLE_REP, VECTOR32_REP, LANE32_R
 from core_vectors import VECTOR16_REP, LANE16_REP, TUPLE16_REP, OPERATIONS, proof_error
 from core_vectors import VECTOR8_REP, LANE8_REP, TUPLE8_REP
 from core_vectors import VECTOR_WORD8_REP, LANE_WORD8_REP, TUPLE_WORD8_REP
+from core_vectors import VECTOR_WORD16_REP, LANE_WORD16_REP, TUPLE_WORD16_REP
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
 audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
@@ -24,6 +25,42 @@ def fixture():
     return dict(schema=1, ghc='9.14.1', bindings=[dict(id='root', name='root', lifted=True, arity=0,
         rep=CLOSURE, expr=['lam', [], body, dict(rep=CLOSURE,resultRep=LONG)])], constructors=[])
 class VectorAuditTest(unittest.TestCase):
+    def test_word16_shape_and_unsigned_identity_are_independent_of_storage(self):
+        m=fixture(); body=m['bindings'][0]['expr'][2]
+        body[1][1][1]='broadcastWord16X8#'
+        body[1][2][0]=['lit','word16','65535',dict(rep=copy.deepcopy(LANE_WORD16_REP))]
+        body[1][6]['rep']=copy.deepcopy(VECTOR_WORD16_REP)
+        body[4]['binder']['rep']=copy.deepcopy(VECTOR_WORD16_REP)
+        self.assertTrue(run(m)['accepted'])
+        self.assertIsNone(proof_error(VECTOR_WORD16_REP))
+        self.assertFalse(signature_matches(VECTOR_WORD16_REP,VECTOR16_REP))
+        for operand in (['lit','word16','32768'], ['lit','word16','65535',dict(rep=dict(kind='unknown',primReps=None,evaluated=False))]):
+            good=copy.deepcopy(m); good['bindings'][0]['expr'][2][1][2][0]=operand
+            self.assertTrue(run(good)['accepted'])
+        for operand in (['lit','int16','32767'], ['lit','int16','32767',dict(rep=LANE_WORD16_REP)],
+                        ['lit','word16','65535',dict(rep=LANE16_REP)]):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2][0]=operand
+            self.assertFalse(run(bad)['accepted'])
+        for flag in (True,None,0,'false'):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][3]=[flag]
+            self.assertFalse(run(bad)['accepted'])
+        for wrong in (LANE16_REP,LANE_WORD8_REP,LANE32_REP,LONG,dict(LANE_WORD16_REP,kind='unknown'),
+                      dict(LANE_WORD16_REP,primReps=['WordRep'])):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][2][0][3]['rep']=wrong
+            self.assertFalse(run(bad)['accepted'],wrong)
+            for index in range(8):
+                lanes=copy.deepcopy(TUPLE_WORD16_REP); lanes['components'][index]=wrong
+                self.assertFalse(signature_matches(TUPLE_WORD16_REP,lanes))
+        for wrong in (VECTOR16_REP,VECTOR_WORD8_REP,VECTOR8_REP,VECTOR32_REP,TUPLE_WORD16_REP):
+            bad=copy.deepcopy(m); bad['bindings'][0]['expr'][2][1][6]['rep']=copy.deepcopy(wrong)
+            self.assertFalse(run(bad)['accepted'])
+        self.assertEqual(OPERATIONS['packWord16X8#'],([TUPLE_WORD16_REP],VECTOR_WORD16_REP))
+        self.assertEqual(OPERATIONS['unpackWord16X8#'],([VECTOR_WORD16_REP],TUPLE_WORD16_REP))
+        names={name for name in OPERATIONS if 'Word16X8' in name}
+        self.assertEqual(len(names),6)
+        self.assertNotIn('negateWord16X8#',CAP['primitives'])
+        for name in names: self.assertEqual(CAP['primitives'][name],len(OPERATIONS[name][0]))
+
     def test_word8_shape_and_unsigned_identity_are_independent_of_storage(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastWord8X16#'
@@ -116,7 +153,7 @@ class VectorAuditTest(unittest.TestCase):
             if 'Int16X8' in name:
                 self.assertEqual(CAP['primitives'][name],len(args))
                 self.assertTrue(signature_matches(result,result))
-        for lanes,element in ((4,'Int16ElemRep'),(8,'Word16ElemRep')):
+        for lanes,element in ((4,'Int16ElemRep'),(4,'Word16ElemRep')):
             bad=copy.deepcopy(VECTOR16_REP); bad['vector']=dict(lanes=lanes,element=element)
             bad['primReps']=[f'VecRep {lanes} {element}']
             self.assertIsNotNone(proof_error(bad))
@@ -166,6 +203,13 @@ class VectorAuditTest(unittest.TestCase):
         from word8x16_model import entries
         path=ROOT.parent/'build/simd-word8x16/pre-core/SimdWord8X16.json'
         if not path.exists(): self.skipTest('Word8 SIMD Core export not generated')
+        m=json.loads(path.read_text())
+        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        self.assertFalse(run(m,'vectorArgument')['accepted'])
+    def test_real_word16_core_local_entries_and_formal_frontier(self):
+        from word16x8_model import entries
+        path=ROOT.parent/'build/simd-word16x8/pre-core/SimdWord16X8.json'
+        if not path.exists(): self.skipTest('Word16 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])

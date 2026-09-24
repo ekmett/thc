@@ -686,6 +686,23 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class SizeByteArray {
         @Specialization public static long size(Object value) { return ManagedByteArray.size(ManagedByteArray.require(value)); }
     }
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "unsigned")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadByteArray {
+        @Specialization public static void read(VirtualFrame frame, boolean unsigned, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            byte[] array = ManagedByteArray.require(value);
+            ManagedByteArray.requireState(state);
+            long result = unsigned ? ManagedByteArray.read(array, index) : ManagedByteArray.readSigned(array, index);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class IndexSignedByteArray {
+        @Specialization public static long index(Object value, long offset) {
+            return ManagedByteArray.readSigned(ManagedByteArray.require(value), offset);
+        }
+    }
     @Operation public static final class IndexByteArray {
         @Specialization public static long index(Object value, long offset) { return ManagedByteArray.read(ManagedByteArray.require(value), offset); }
     }
@@ -972,6 +989,48 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             fifteenth.setLong(bytecode, frame, value.fifteenth); sixteenth.setLong(bytecode, frame, value.sixteenth);
         }
     }
+    @Operation public static final class VectorWord16Pack {
+        @Specialization public static Word16X8 pack(long first, long second, long third, long fourth,
+                long fifth, long sixth, long seventh, long eighth) {
+            return new Word16X8((short) first, (short) second, (short) third, (short) fourth,
+                (short) fifth, (short) sixth, (short) seventh, (short) eighth);
+        }
+    }
+    @Operation public static final class VectorWord16Broadcast {
+        @Specialization public static Word16X8 broadcast(long value) { return Word16X8.broadcast((short) value); }
+    }
+    @Operation @ConstantOperand(type = int.class, name = "operation")
+    public static final class VectorWord16Binary {
+        @Specialization public static Word16X8 binary(int operation, Word16X8 first, Word16X8 second) {
+            return switch (operation) {
+                case 0 -> Word16X8.add(first, second);
+                case 1 -> Word16X8.subtract(first, second);
+                case 2 -> Word16X8.multiply(first, second);
+                default -> throw new RuntimeFault("Invalid Word16X8 operation");
+            };
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "first")
+    @ConstantOperand(type = LocalAccessor.class, name = "second")
+    @ConstantOperand(type = LocalAccessor.class, name = "third")
+    @ConstantOperand(type = LocalAccessor.class, name = "fourth")
+    @ConstantOperand(type = LocalAccessor.class, name = "fifth")
+    @ConstantOperand(type = LocalAccessor.class, name = "sixth")
+    @ConstantOperand(type = LocalAccessor.class, name = "seventh")
+    @ConstantOperand(type = LocalAccessor.class, name = "eighth")
+    public static final class VectorWord16Unpack {
+        @Specialization public static void unpack(VirtualFrame frame, LocalAccessor first, LocalAccessor second,
+                LocalAccessor third, LocalAccessor fourth, LocalAccessor fifth, LocalAccessor sixth,
+                LocalAccessor seventh, LocalAccessor eighth, Word16X8 value, @Bind("$node") Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            first.setLong(bytecode, frame, value.first & 0xffffL); second.setLong(bytecode, frame, value.second & 0xffffL);
+            third.setLong(bytecode, frame, value.third & 0xffffL); fourth.setLong(bytecode, frame, value.fourth & 0xffffL);
+            fifth.setLong(bytecode, frame, value.fifth & 0xffffL); sixth.setLong(bytecode, frame, value.sixth & 0xffffL);
+            seventh.setLong(bytecode, frame, value.seventh & 0xffffL); eighth.setLong(bytecode, frame, value.eighth & 0xffffL);
+        }
+    }
+
     @Operation public static final class Vector16Pack {
         @Specialization public static Int16X8 pack(long first, long second, long third, long fourth,
                 long fifth, long sixth, long seventh, long eighth) {
@@ -1251,6 +1310,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleLessEqual { @Specialization public static long apply(double x, double y) { return x <= y ? 1L : 0L; } }
     @Operation public static final class DoubleGreater { @Specialization public static long apply(double x, double y) { return x > y ? 1L : 0L; } }
     @Operation public static final class DoubleGreaterEqual { @Specialization public static long apply(double x, double y) { return x >= y ? 1L : 0L; } }
+    @Operation public static final class CastFloatToWord32 { @Specialization public static long apply(float value) { return RawBitCasts.floatToWord32(value); } }
+    @Operation public static final class CastWord32ToFloat { @Specialization public static float apply(long value) { return RawBitCasts.word32ToFloat(value); } }
+    @Operation public static final class CastDoubleToWord64 { @Specialization public static long apply(double value) { return RawBitCasts.doubleToWord64(value); } }
+    @Operation public static final class CastWord64ToDouble { @Specialization public static double apply(long value) { return RawBitCasts.word64ToDouble(value); } }
     @Operation public static final class IntToFloat { @Specialization public static float apply(long x) { return (float) x; } }
     @Operation public static final class IntToDouble { @Specialization public static double apply(long x) { return (double) x; } }
     @Operation public static final class FloatToInt { @Specialization public static long apply(float x) { return (long) x; } }

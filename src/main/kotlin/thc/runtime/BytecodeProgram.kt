@@ -815,6 +815,8 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.beginReadIntArray(destination[0])
                         ByteArrayOp.READ_DOUBLE -> e.builder.beginReadDoubleArray(destination[0])
                         ByteArrayOp.READ_FLOAT -> e.builder.beginReadFloatArray(destination[0])
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 ->
+                            e.builder.beginReadByteArray(operation == ByteArrayOp.READ_WORD8, destination[0])
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 ->
                             e.builder.beginReadInt16Array(operation == ByteArrayOp.READ_WORD16, destination[0])
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 ->
@@ -828,6 +830,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD -> e.builder.endReadIntArray()
                         ByteArrayOp.READ_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT -> e.builder.endReadFloatArray()
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> e.builder.endReadByteArray()
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16 -> e.builder.endReadInt16Array()
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32 -> e.builder.endReadInt32Array()
                         else -> error("Scalar ByteArray operation")
@@ -836,9 +839,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.beginCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.beginCopyByteArray()
-                        ByteArrayOp.WRITE -> e.builder.beginWriteByteArray()
+                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.beginWriteIntArray()
                         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.beginIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.beginWriteDoubleArray()
@@ -857,9 +861,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     when (operation) {
                         ByteArrayOp.COMPARE -> e.builder.endCompareByteArrays()
                         ByteArrayOp.COPY -> e.builder.endCopyByteArray()
-                        ByteArrayOp.WRITE -> e.builder.endWriteByteArray()
+                        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8 -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE -> e.builder.endSizeByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD -> e.builder.endWriteIntArray()
                         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD -> e.builder.endIndexIntArray()
                         ByteArrayOp.WRITE_DOUBLE -> e.builder.endWriteDoubleArray()
@@ -1171,6 +1176,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
     }
 
     private fun vectorPrimitive(name: String, operands: List<Expression>): Expression = when (name) {
+        in CoreVectors.operationsWord16 -> vectorWord16Primitive(name, operands)
         in CoreVectors.operationsWord8 -> vectorWord8Primitive(name, operands)
         in CoreVectors.operations8 -> vector8Primitive(name, operands)
         in CoreVectors.operations16 -> vector16Primitive(name, operands)
@@ -1259,6 +1265,33 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 }
             }
         }, CoreVectors.proof8)
+    }
+
+    private fun vectorWord16Primitive(name: String, operands: List<Expression>): Expression = when (name) {
+        "unpackWord16X8#" -> tupleExpression(CoreVectors.unpackedWord16) { e, destination ->
+            e.builder.beginVectorWord16Unpack(destination[0], destination[1], destination[2], destination[3],
+                destination[4], destination[5], destination[6], destination[7])
+            operands[0].emit(e)
+            e.builder.endVectorWord16Unpack()
+        }
+        else -> ProvenExpression(Expression { e ->
+            val b = e.builder
+            when (name) {
+                "packWord16X8#" -> {
+                    b.beginBlock()
+                    val lanes = List(8) { b.createLocal() }
+                    operands[0].emitTuple(e, lanes)
+                    b.beginVectorWord16Pack(); lanes.forEach(b::emitLoadLocal); b.endVectorWord16Pack()
+                    b.endBlock()
+                }
+                "broadcastWord16X8#" -> { b.beginVectorWord16Broadcast(); operands[0].emit(e); b.endVectorWord16Broadcast() }
+                else -> {
+                    val operation = when (name) { "plusWord16X8#" -> 0; "minusWord16X8#" -> 1; "timesWord16X8#" -> 2; else -> error("Invalid Word16X8 operation") }
+                    b.beginVectorWord16Binary(operation)
+                    operands.forEach { it.emit(e) }; b.endVectorWord16Binary()
+                }
+            }
+        }, CoreVectors.proofWord16)
     }
 
     private fun vector16Primitive(name: String, operands: List<Expression>): Expression = when (name) {
@@ -1495,6 +1528,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "<=##" -> "DoubleLessEqual"
             ">##" -> "DoubleGreater"
             ">=##" -> "DoubleGreaterEqual"
+            "castFloatToWord32#" -> "CastFloatToWord32"
+            "castWord32ToFloat#" -> "CastWord32ToFloat"
+            "castDoubleToWord64#" -> "CastDoubleToWord64"
+            "castWord64ToDouble#" -> "CastWord64ToDouble"
             "int2Float#" -> "IntToFloat"
             "int2Double#" -> "IntToDouble"
             "float2Int#" -> "FloatToInt"
@@ -1503,11 +1540,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
+        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "IntToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
-            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat" -> CoreKind.FLOAT
-            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble" -> CoreKind.DOUBLE
+            "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "DoubleToFloat", "CastWord32ToFloat" -> CoreKind.FLOAT
+            "DoubleAdd", "DoubleSubtract", "DoubleMultiply", "DoubleDivide", "DoubleNegate", "DoubleSqrt", "IntToDouble", "FloatToDouble", "CastWord64ToDouble" -> CoreKind.DOUBLE
             else -> CoreKind.LONG
         }
         return ProvenExpression(Expression { e ->
@@ -1537,6 +1574,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleLessEqual" -> b.beginDoubleLessEqual()
                 "DoubleGreater" -> b.beginDoubleGreater()
                 "DoubleGreaterEqual" -> b.beginDoubleGreaterEqual()
+                "CastFloatToWord32" -> b.beginCastFloatToWord32()
+                "CastWord32ToFloat" -> b.beginCastWord32ToFloat()
+                "CastDoubleToWord64" -> b.beginCastDoubleToWord64()
+                "CastWord64ToDouble" -> b.beginCastWord64ToDouble()
                 "IntToFloat" -> b.beginIntToFloat()
                 "IntToDouble" -> b.beginIntToDouble()
                 "FloatToInt" -> b.beginFloatToInt()
@@ -1570,6 +1611,10 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "DoubleLessEqual" -> b.endDoubleLessEqual()
                 "DoubleGreater" -> b.endDoubleGreater()
                 "DoubleGreaterEqual" -> b.endDoubleGreaterEqual()
+                "CastFloatToWord32" -> b.endCastFloatToWord32()
+                "CastWord32ToFloat" -> b.endCastWord32ToFloat()
+                "CastDoubleToWord64" -> b.endCastDoubleToWord64()
+                "CastWord64ToDouble" -> b.endCastWord64ToDouble()
                 "IntToFloat" -> b.endIntToFloat()
                 "IntToDouble" -> b.endIntToDouble()
                 "FloatToInt" -> b.endFloatToInt()

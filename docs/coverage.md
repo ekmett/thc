@@ -51,6 +51,9 @@ and exact compiled-entry checks for every row on both backends.
 The [floating suite](floating-primitives.md) adds 28 scalar `Float#`/`Double#`
 operations and 441 native/model rows, with primitive locals, fields and captures.
 Two additional square-root primitives have a separate 418-row native/model suite.
+Four raw Float/Word32 and Double/Word64 bit casts have 13,555 exact-bit native/model
+rows, including signed signalling NaNs, retained fields and captures, and separate
+encode/decode controls against array storage.
 Its compiled loop retains both precisions without boxing in the continuing loop;
 generic scalar call boundaries still use the Object ABI. The floating tuple result
 slice adds genuine `Data.Complex` CPR workers, 44 native/model rows and eight IEEE
@@ -74,6 +77,9 @@ Both use dense primitive carriers and retain the same local-only vector boundary
 The [Word8X16 foundation](word8x16.md) adds six unsigned byte-vector operations
 and 7,712 native/model rows, with exact Word8 proofs, zero-extension and explicit
 signed/unsigned mismatch controls. There is no GHC unsigned vector negate primop.
+The [Word16X8 foundation](word16x8.md) adds the corresponding six unsigned
+16-bit operations and 5,116 native/model rows. Word16 and Int16 proofs remain
+distinct; unpack widens all eight lanes to 0..65535 without changing vector ABIs.
 
 The separate [library suite](library-coverage.md), run by
 `scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
