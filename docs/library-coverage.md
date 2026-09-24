@@ -234,6 +234,14 @@ pre/post-Tidy consumers compare checksums and every character against fresh
 native GHC and an independent decimal model. This separate source-coverage
 slice does not close the Set/Sequence exception and Typeable frontiers above.
 
+## Public Show Word and lists
+
+[Original-source Word/list formatting](show-word-list.md) reuses the complete
+pinned Show module and original CString helper. Public unsigned decimal and
+`[Int]` consumers observe checksums, every character and end sentinels against
+fresh native GHC and independent models. Empty, singleton and multiple lists
+preserve the genuine list worker; no runtime or primitive capability is added.
+
 ## Boxed-array slices
 
 [Shallow Array# slices](array-slices.md) add genuine `cloneArray#`, `freezeArray#`
