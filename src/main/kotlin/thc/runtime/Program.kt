@@ -382,8 +382,20 @@ internal class Force(private val metrics: Metrics) : Node() {
 
     /** Private request cut; the token names a logical continuation rather than a host carrier. */
     internal fun deliverAtCapturedIOHandler(request: CapturedAsyncRequest,
-                                            afterClaim: (() -> Unit)? = null): Any? =
-        deliverAtCapturedIOHandler(request.parent, request.child, request.payload, afterClaim, request)
+                                            afterClaim: (() -> Unit)? = null): Any? {
+        try {
+            val answer = deliverAtCapturedIOHandler(request.parent, request.child, request.payload, afterClaim, request)
+            if (request.state != CapturedRequestState.ACKNOWLEDGED)
+                throw IllegalStateException("Captured handler returned without acknowledging delivery")
+            return answer
+        } catch (failure: Throwable) {
+            // An observer may have completed or reparked the parent after submit.
+            // The exact-cut check then fails before ownership is claimed; do not
+            // leave the sender pending or disturb the observer's result.
+            request.fail()
+            throw failure
+        }
+    }
 
     /** Private test cut at a captured original catch# frame; its action remains shared. */
     @CompilerDirectives.TruffleBoundary

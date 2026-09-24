@@ -997,6 +997,44 @@ class CoreContinuationNativeTest {
         } finally { context.close(true) }
     }
 
+    @Test fun staleRequestFailsAfterAnotherEvaluatorCompletesTheParent() {
+        @Suppress("UNCHECKED_CAST")
+        val module = Json.parse(File(root, "build/core-continuation/core/CoreContinuationAudit.json").readText()) as Map<String, Any?>
+        executionContext().use { context ->
+            context.initialize("thc")
+            val language = entered(context) { TruffleLanguage.LanguageReference.create(Language::class.java).get(null) }
+            val state = entered(context) { Language.currentState() }
+            val driver = entered(context) { Driver() }
+            val checkpoint = BytecodeCheckpoint().also { it.armed = true }
+            val program = entered(context) { BytecodeProgram(language, linkedWithPayload(module, "catchActionAnswer"), checkpoint) }
+            val payload = entered(context) { driver.force(program.entryValue("asyncPayload") as Thunk) as DataValue }
+            val parent = entered(context) { program.entryValue("catchActionAnswer") as Thunk }
+            val child = entered(context) {
+                assertSame(parent, assertThrows(ThunkSuspended::class.java) { driver.force(parent) }.thunk)
+                ((parent.value as ContinuationResult).result as CallSegmentSuspended).segment
+            }
+            val request = state.capturedAsyncRequests.submit(parent, child, payload)
+            Executors.newSingleThreadExecutor().use { pool ->
+                val waiting = CountDownLatch(1)
+                val sender = pool.submit<CapturedRequestState> { entered(context) {
+                    waiting.countDown()
+                    request.await(driver)
+                } }
+                assertTrue(waiting.await(5, TimeUnit.SECONDS))
+                checkpoint.armed = false
+                val completed = entered(context) { driver.force(parent) as DataValue }
+                assertEquals(42L, completed.layout.readLong(completed, 0))
+                assertSame(completed, parent.value)
+                assertEquals(2, parent.state)
+                assertEquals(2, child.state)
+                entered(context) { assertThrows(RuntimeFault::class.java) { driver.deliver(request) } }
+                assertEquals(CapturedRequestState.FAILED, sender.get(5, TimeUnit.SECONDS))
+                assertSame(completed, parent.value, "Stale delivery cannot overwrite the newer result")
+                assertEquals(1, checkpoint.visits.get(), "Ordinary completion must not replay the prefix")
+            }
+        }
+    }
+
     @Test fun privateDeliveryCutsOriginalCatchAndLeavesItsActionShared() {
         assertEquals("42", File(root, "build/core-continuation/native-output.txt").readLines()[2])
         @Suppress("UNCHECKED_CAST")
