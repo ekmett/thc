@@ -17,7 +17,9 @@ for pkg in ghc base bytestring directory filepath containers; do
   pkg_id=$("$GHC_PKG" field "$pkg" id --simple-output)
   depends="$depends $pkg_id"
 done
-cat > "$out/thc-core-plugin.conf" <<CONF
+pending_conf=$(mktemp "$out/.thc-core-plugin.conf.XXXXXX")
+trap 'rm -f "$pending_conf"' EXIT HUP INT TERM
+cat > "$pending_conf" <<CONF
 name: thc-core-plugin
 version: 0.1
 id: thc-core-plugin-0.1
@@ -30,5 +32,19 @@ dynamic-library-dirs: $out
 hs-libraries: HSthc-core-plugin-0.1
 depends: $depends
 CONF
-"$GHC_PKG" --package-db "$out/package.conf.d" update --force "$out/thc-core-plugin.conf"
+# GHC still checks every plugin source above. Rewriting an identical package DB
+# after each preparer can invalidate the next shared-library link check.
+registered="$out/package.conf.d/thc-core-plugin-0.1.conf"
+registered_copy="$out/thc-core-plugin.registered.conf"
+package_cache="$out/package.conf.d/package.cache"
+package_cache_copy="$out/thc-core-plugin.package.cache"
+if ! cmp -s "$pending_conf" "$out/thc-core-plugin.conf" || \
+   [ ! -s "$package_cache" ] || \
+   ! cmp -s "$registered" "$registered_copy" || \
+   ! cmp -s "$package_cache" "$package_cache_copy"; then
+  mv "$pending_conf" "$out/thc-core-plugin.conf"
+  "$GHC_PKG" --package-db "$out/package.conf.d" update --force "$out/thc-core-plugin.conf"
+  cp "$registered" "$registered_copy"
+  cp "$package_cache" "$package_cache_copy"
+fi
 printf '%s\n' "Built THC Core plugin in $out"
