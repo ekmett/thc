@@ -269,6 +269,27 @@ class ManagedStackRuntimeTest {
         assertEquals(2, evaluations)
     }
 
+    @Test fun boundNullUnliftedLocalsRemainDistinctFromUnknownOrUnpublishedBindings() {
+        val layout = FrameLayout()
+        val slot = layout.bind("nullable-snapshot")
+        val frame = com.oracle.truffle.api.Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
+        FrameAccess.writeObject(frame, slot, null)
+        val unlifted = CoreRepresentation(CoreKind.OBJECT, evaluated = true, primReps = listOf("BoxedRep (Just Unlifted)"))
+        assertNull(LocalRead(slot, cell = false).proven(unlifted).execute(frame))
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot, cell = false).execute(frame) }
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot, cell = false).proven(unlifted.copy(evaluated = false)).execute(frame) }
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot).proven(unlifted).execute(frame) }
+        assertThrows(RuntimeFault::class.java) {
+            LocalRead(slot, cell = false).proven(unlifted.copy(primReps = listOf("BoxedRep (Just Lifted)"))).execute(frame)
+        }
+        val recursive = RecCell()
+        FrameAccess.writeObject(frame, slot, recursive)
+        assertThrows(RuntimeFault::class.java) { LocalRead(slot).proven(unlifted).execute(frame) }
+        recursive.value = null
+        recursive.initialized = true
+        assertNull(LocalRead(slot).proven(unlifted).execute(frame))
+    }
+
     @Test fun newGettersEnforceSnapshotContextAndRegistryLifetime() {
         val layout = layout()
         val snapshot = context { capture(it) }
