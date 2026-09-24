@@ -186,6 +186,7 @@ executable thc-fixtures
   other-modules:
     AggregateFixtures
     FixtureSupport
+    OriginalStdioFixtures
   hs-source-dirs: test/haskell-fixtures
   build-depends:
     base >= 4.22 && < 4.23,
