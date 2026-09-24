@@ -477,6 +477,7 @@
     "newAlignedPinnedByteArray#": 3,
     "byteArrayContents#": 1,
     "readWord8OffAddr#": 3,
+    "readCharOffAddr#": 3,
     "readWord32OffAddr#": 3,
     "readWordOffAddr#": 3,
     "readInt32OffAddr#": 3,
@@ -486,6 +487,7 @@
     "indexAddrArray#": 2,
     "readAddrArray#": 3,
     "writeWord8OffAddr#": 4,
+    "writeCharOffAddr#": 4,
     "writeAddrOffAddr#": 4,
     "writeAddrArray#": 4,
     "keepAlive#": 3,
@@ -494,9 +496,11 @@
     "getSizeofMutableByteArray#": 2,
     "sizeofMutableByteArray#": 1,
     "writeWord8Array#": 4,
+    "writeCharArray#": 4,
     "unsafeFreezeByteArray#": 2,
     "sizeofByteArray#": 1,
     "indexWord8Array#": 2,
+    "indexCharArray#": 2,
     "copyByteArray#": 6,
     "setByteArray#": 5,
     "copyMutableByteArray#": 6,
@@ -653,11 +657,12 @@
     "writeInt8Array#": 4,
     "indexInt8Array#": 2,
     "readWord8Array#": 3,
+    "readCharArray#": 3,
     "addWordC#": 2,
     "subWordC#": 2
   },
   "limitations": [
-    "Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.",
+    "Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.",
     "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.",
     "Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported."
   ],
@@ -1093,6 +1098,24 @@
         "kind": "void",
         "primReps": []
       }
+    },
+    "readCharOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["WordRep"],
+        "components": [{"kind": "void", "primReps": []}, {"kind": "long", "primReps": ["WordRep"]}]}
+    },
+    "writeCharOffAddr#": {
+      "arguments": [
+        {"kind": "address", "primReps": ["AddrRep"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["WordRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
     }
   },
   "managedByteArrayPrimitives": {
@@ -2081,6 +2104,31 @@
           }
         ]
       }
+    },
+    "indexCharArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
+        {"kind": "long", "primReps": ["IntRep"]}
+      ],
+      "result": {"kind": "long", "primReps": ["WordRep"]}
+    },
+    "readCharArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["WordRep"],
+        "components": [{"kind": "void", "primReps": []}, {"kind": "long", "primReps": ["WordRep"]}]}
+    },
+    "writeCharArray#": {
+      "arguments": [
+        {"kind": "object", "primReps": ["BoxedRep (Just Unlifted)"]},
+        {"kind": "long", "primReps": ["IntRep"]},
+        {"kind": "long", "primReps": ["WordRep"]},
+        {"kind": "void", "primReps": []}
+      ],
+      "result": {"kind": "void", "primReps": []}
     }
   },
   "managedMutVarPrimitives": {
