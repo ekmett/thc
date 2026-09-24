@@ -1,5 +1,6 @@
 package thc.runtime;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import java.nio.ByteOrder;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.IntVector;
@@ -24,8 +25,10 @@ public final class Int32X4 {
     private static int byteOffset(byte[] bytes, long index, boolean scalarOffset) {
         long size = bytes.length;
         long stride = scalarOffset ? 4 : 16;
-        if (size < 16 || index < 0 || index > (size - 16) / stride)
+        if (size < 16 || index < 0 || index > (size - 16) / stride) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new RuntimeFault("Int32X4 ByteArray# range outside its backing storage");
+        }
         return (int) (index * stride);
     }
     /** Native-order lanes, indexed in Int32 elements or complete Int32X4 vectors. */
