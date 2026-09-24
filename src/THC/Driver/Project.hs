@@ -60,8 +60,8 @@ data Bundle = Bundle { bundlePath :: FilePath, bundleHash :: String
 data ExportContext = ExportContext
   { contextCompiler :: String, contextAbi :: String, contextPlatform :: String
   , contextPluginDb :: FilePath, contextPluginUnit :: String
-  , contextPluginLibrary :: FilePath, contextOutput :: FilePath
-  , contextNative :: FilePath, contextCache :: FilePath, contextDriverHash :: String
+  , contextPluginLibrary :: FilePath, contextNative :: FilePath
+  , contextCache :: FilePath, contextDriverHash :: String
   , contextGhc :: FilePath, contextDriver :: FilePath }
 
 boundary :: String
@@ -130,7 +130,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   driver <- getExecutablePath
   driverHash <- digestFile driver
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary output native cacheRoot driverHash ghc driver
+                              pluginLibrary native cacheRoot driverHash ghc driver
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -275,7 +275,7 @@ prepareGlobalBundles context project units = do
 captureGlobalUnits :: ExportContext -> FilePath -> [Unit] ->
                       [(Unit, String, String, FilePath)] -> IO ()
 captureGlobalUnits context project requested missing = do
-  let stagingRoot = contextOutput context </> "core/staging"
+  let stagingRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True stagingRoot
   (staging, handle) <- openTempFile stagingRoot "store-export-"
   hClose handle
@@ -423,8 +423,7 @@ exportUnit context keys unit = do
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey,
                                            "exporter" .= exporter])
-      directory = contextCache context </> "core-bundles/v1" </>
-                  (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context) </> exportKey
+      directory = contextNative context </> "cache/thc/core-bundles/v1" </> exportKey
       destination = directory </> (unitId unit ++ "-" ++ buildKey ++ ".zip")
   expected <- expectedModuleNames (componentValue component)
   createDirectoryIfMissing True directory
@@ -441,7 +440,7 @@ exportUnit context keys unit = do
 freshExport :: ExportContext -> Component -> Unit -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle
 freshExport context component unit buildKey exportKey buildInputs expected destination = do
-  let localRoot = contextOutput context </> "core/staging"
+  let localRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True localRoot
   (staging, handle) <- openTempFile localRoot "export-"
   hClose handle

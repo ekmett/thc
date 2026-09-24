@@ -8,10 +8,11 @@ import Control.Exception (bracket)
 import Control.Monad (forM_)
 import Data.Aeson (Value, eitherDecode')
 import qualified Data.ByteString.Lazy as BL
+import Data.List (isPrefixOf)
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
                          doesFileExist, getModificationTime)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>), splitDirectories, takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 
@@ -66,6 +67,11 @@ tests env = TestLabel "three-package project native versus THC run" $ TestCase $
     let entry = entryOf plan
     native <- runExe env project Nothing 60 (string $ field entry "bin-file") []
     assertFailure native
+    cleaned <- runExe env project Nothing 60 "cabal" ["clean", "--builddir", output </> "native"]
+    assertSuccess cleaned
+    forM_ (map (fst . snd) firstBundles ++ [fst $ bundleRef manifest depId]) $ \path -> do
+      remains <- doesFileExist path
+      assertBool "cabal clean removes in-place Core bundles" (not remains)
 
 withCache :: FilePath -> IO a -> IO a
 withCache path action = bracket acquire restore (const action)
@@ -134,6 +140,9 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
         (objects audit "reachableBindings")
       let bundles = [(identifier, bundleRef manifest identifier)
                   | identifier <- [depId, helperId, bridgeId, entryId]]
+      forM_ bundles $ \(_, (path, _)) ->
+        assertBool "in-place Core stays in Cabal's build directory"
+          (splitDirectories (output </> "native") `isPrefixOf` splitDirectories path)
       times <- mapM (getModificationTime . fst . snd) bundles
       case previous of
         Nothing -> pure ()
