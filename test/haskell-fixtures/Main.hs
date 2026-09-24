@@ -9,6 +9,7 @@ module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
 import OriginalStdioFixtures (prepareOriginalStdio)
+import StackFixtures (prepareOriginalStack)
 import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value (..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -769,10 +770,11 @@ main = do
     _ -> pure False
   unless handled $ case args of
     "original-stdio":options -> prepareOriginalStdio root options
+    ["original-stack"] -> prepareOriginalStack root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
     ["pinned-pointer-cells"] -> preparePinnedPointers root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (original-stack|original-stdio [OPTIONS]|bit|integer|signed-narrow|explicit64|tuple-arithmetic|pinned-pointer-cells|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
