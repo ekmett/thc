@@ -2,9 +2,6 @@ name: Build
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-  merge_group:
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -13,8 +10,10 @@ on:
         required: false
 
 concurrency:
-  group: build-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  # Keep full main checks running as new PRs land. Branch dispatches may cancel
+  # an older revision of that branch, but a new main commit cannot starve them.
+  group: build-${{ github.repository }}-${{ github.ref_name }}-${{ github.ref_name == 'main' && github.sha || 'branch' }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 permissions:
   contents: read
 jobs:
@@ -39,7 +38,7 @@ jobs:
             --output "$RUNNER_TEMP/actionlint.tar.gz"
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint" .github/workflows/build.yml .github/workflows/merge.yml
+          "$RUNNER_TEMP/actionlint"
   build:
     strategy:
       fail-fast: false
