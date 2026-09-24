@@ -11,8 +11,82 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
+import tempfile
+
+
+OUTPUT_NAME = 'managed-md5-native'
+LEGACY_FILES = frozenset({'managed-md5-native', 'provenance.json'} | {
+    f'{step}.{suffix}' for step in ('cc-version', 'ghc-libdir', 'compile', 'native')
+    for suffix in ('command.txt', 'stdout', 'stderr', 'exit-status.txt')})
+OWNER_NAME = 'attempt-owner.json'
+OWNER = {'schema': 1, 'tool': 'prepare-managed-md5.py', 'directory': 'build/managed-md5-native'}
+OWNER_TEXT = json.dumps(OWNER, sort_keys=True) + '\n'
+ATTEMPT_FILES = LEGACY_FILES | {OWNER_NAME}
+
+
+def require_owned_attempt(output):
+    if (output / OWNER_NAME).exists():
+        if (output / OWNER_NAME).read_bytes() != OWNER_TEXT.encode():
+            raise ValueError(f'Ambiguous MD5 attempt owner marker: {output}')
+        return
+    # The original preparer had no owner marker. Admit only a complete successful
+    # legacy attempt, bound to this exact output and all seventeen artifact hashes.
+    # Unmarked partial/empty directories cannot safely establish ownership.
+    if {p.name for p in output.iterdir()} != LEGACY_FILES:
+        raise ValueError(f'Ambiguous unmarked MD5 attempt: {output}')
+    provenance = json.loads((output / 'provenance.json').read_text())
+    expected_blobs = {'md5.c': '4fa83bda7aacc8a1656d7e2d78251bbe70a04b56',
+                      'md5.h': 'a87296687a2f3dc6748264ff2a8a0c919518db55'}
+    if (not isinstance(provenance, dict) or type(provenance.get('schema')) is not int or provenance['schema'] != 1 or
+            provenance.get('contextSize') != 88 or
+            provenance.get('contextOffsets') != [0, 16, 24] or provenance.get('contextAlignment') != 4 or
+            provenance.get('referenceGitBlobs') != expected_blobs or
+            provenance.get('independentModelMatched') is not True or
+            shlex.split((output / 'native.command.txt').read_text()) != [str(output / OUTPUT_NAME)]):
+        raise ValueError(f'Ambiguous legacy MD5 provenance: {output}')
+    artifacts = provenance.get('artifacts')
+    expected = {'build/' + OUTPUT_NAME + '/' + name: digest(output / name)
+                for name in LEGACY_FILES - {'provenance.json'}}
+    if (not isinstance(artifacts, list) or len(artifacts) != len(expected) or
+            any(not isinstance(r, dict) or set(r) != {'path', 'sha256'} for r in artifacts) or
+            {r['path']: r['sha256'] for r in artifacts} != expected):
+        raise ValueError(f'Legacy MD5 artifact ownership/hash mismatch: {output}')
+
+
+def prepare_output(root, requested):
+    """Retain a known previous attempt whole; never clean arbitrary directories.
+
+    The caller holds the checkout's build lease. Only this checkout's canonical
+    default output is accepted, with no symlink traversal. Partial attempts may
+    contain any subset of the exact filenames this tool writes.
+    """
+    root = root.resolve(strict=True)
+    output = root / 'build' / OUTPUT_NAME
+    if requested != output:
+        raise ValueError(f'MD5 preparation requires the canonical output directory: {output}')
+    build = output.parent
+    if build.is_symlink() or (build.exists() and not build.is_dir()):
+        raise ValueError(f'MD5 build directory must be a real directory: {build}')
+    if output.is_symlink() or (output.exists() and not output.is_dir()):
+        raise ValueError(f'MD5 output must be a real directory: {output}')
+    archive = None
+    if output.exists():
+        for entry in output.iterdir():
+            if entry.name not in ATTEMPT_FILES or not stat.S_ISREG(entry.lstat().st_mode):
+                raise ValueError(f'Refusing to archive ambiguous MD5 output entry: {entry}')
+        require_owned_attempt(output)
+        # Reserve a unique sibling container; rename the old attempt inside it.
+        # No existing archive or file is overwritten, even if creation later fails.
+        container = Path(tempfile.mkdtemp(prefix=OUTPUT_NAME + '.previous-', dir=build))
+        archive = container / OUTPUT_NAME
+        output.rename(archive)
+        print(f'Archived prior MD5 attempt unchanged: {archive}', flush=True)
+    output.mkdir(parents=True, exist_ok=False)
+    (output / OWNER_NAME).write_text(OWNER_TEXT)
+    return output, archive
 
 
 def digest(path):
@@ -110,13 +184,13 @@ def check_rows(path):
 def main():
     root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=root / "build/managed-md5-native")
+    parser.add_argument("--output", type=Path, default=root / "build/managed-md5-native",
+                        help="Only the canonical default path is accepted; prior attempts are archived intact")
     parser.add_argument("--reference-dir", type=Path, default=root / "bench/experiments/pinned-addresses/reference")
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
     parser.add_argument("--ghc", default=os.environ.get("GHC", "ghc"))
     args = parser.parse_args()
-    output = args.output.resolve()
-    output.mkdir(parents=True, exist_ok=False)
+    output, _archive = prepare_output(root, args.output)
     reference = args.reference_dir.resolve()
     expected_blobs = {"md5.c": "4fa83bda7aacc8a1656d7e2d78251bbe70a04b56",
                       "md5.h": "a87296687a2f3dc6748264ff2a8a0c919518db55"}
