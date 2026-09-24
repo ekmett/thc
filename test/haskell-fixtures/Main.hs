@@ -9,13 +9,19 @@ module Main (main) where
 
 import Control.Monad (forM, forM_, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA256
-import Data.Aeson (Value, object, (.=), encode)
+import Data.Aeson (Value (..), decodeStrict', object, (.=), encode)
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, sort)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+import Data.String (fromString)
+import Data.Word (Word8, Word16)
+import Foreign.Marshal.Alloc (alloca)
+import Foreign.Ptr (Ptr, castPtr)
+import Foreign.Storable (peek, poke)
 import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory, listDirectory, removeFile)
 import System.Environment (getArgs, getEnvironment, lookupEnv)
@@ -439,16 +445,155 @@ readInteger text = case reads text of
   [(number,"")] -> Just number
   _ -> Nothing
 
+data ArrayGroup = ArrayGroup
+  { arraySource :: FilePath
+  , arrayModule :: String
+  , arrayPrefix :: String
+  , arrayEntries :: [String]
+  }
+
+data ArraySpec = ArraySpec
+  { arrayName :: String
+  , arrayGroups :: [ArrayGroup]
+  , arrayDriver :: FilePath
+  , arrayOracle :: FilePath
+  , arrayValues :: [Integer]
+  }
+
+arraySpec :: String -> Maybe ArraySpec
+arraySpec "int-arrays" = Just $ ArraySpec "int-arrays"
+  [ArrayGroup "examples/THC/UnboxedArrays.hs" "THC.UnboxedArrays" "U"
+    ["unboxedAccum", "unboxedST", "unboxedEmpty"],
+   ArrayGroup "compiler/test-fixtures/IntArrayAudit.hs" "IntArrayAudit" "P"
+    ["orderedInts", "aliasIntBytes"]]
+  "NativeIntArray.hs" "int-array-oracle" (arrayBoundaryInputs
+    [0x5555555555555555, 0xaaaaaaaaaaaaaaaa, 0x55aa55aa55aa55aa,
+     0xaa55aa55aa55aa55, 0x0123456789abcdef, 0xfedcba9876543210])
+arraySpec _ = Nothing
+
+arrayBoundaryInputs :: [Integer] -> [Integer]
+arrayBoundaryInputs patterns = Set.toAscList $ Set.fromList $
+  [-16 .. 16] ++ [-pow2 63, -pow2 63 + 1, pow2 63 - 2, pow2 63 - 1] ++
+  [signed64 (sign * (pow2 bit + delta)) |
+    bit <- [0 .. 63], delta <- [-1,0,1], sign <- [-1,1]] ++ map signed64 patterns
+
+arrayDriverSource :: ArraySpec -> String
+arrayDriverSource spec = unlines $ header ++ map arm allEntries ++ ending
+  where
+    groups = arrayGroups spec
+    allEntries = [(name, arrayPrefix group) | group <- groups, name <- arrayEntries group]
+    header = ["{-# LANGUAGE MagicHash #-}", "module Main where",
+      "import GHC.Exts (Int(I#), Int#)", "import Data.Bits (finiteBitSize)"] ++
+      ["import qualified " ++ arrayModule group ++ " as " ++ arrayPrefix group | group <- groups] ++
+      ["emit :: String -> (Int# -> Int#) -> Int -> IO ()",
+       "emit name f x@(I# a) = putStrLn (name ++ \"\\t\" ++ show x ++ \"\\t\" ++ show (I# (f a)))",
+       "dispatch :: [String] -> IO ()", "dispatch [name,x] = case name of"]
+    arm (name,prefix) = "  " ++ show name ++ " -> emit name " ++ prefix ++ "." ++ name ++ " (read x)"
+    ending = ["  _ -> error \"unknown entry\"", "dispatch _ = error \"invalid input\"",
+      "main :: IO ()", "main = if finiteBitSize (0 :: Int) /= 64 then error \"Requires 64-bit Int\"",
+      "       else getContents >>= mapM_ (dispatch . words) . lines"]
+
+nativeByteOrder :: IO String
+nativeByteOrder = alloca $ \ptr -> do
+  poke ptr (1 :: Word16)
+  byte <- peek (castPtr ptr :: Ptr Word8)
+  pure (if byte == 1 then "little" else "big")
+
+prepareArray :: FilePath -> ArraySpec -> IO ()
+prepareArray root spec = do
+  let directory = "build" </> arrayName spec
+      output = root </> directory
+      manifest = output </> "manifest.json"
+      groups = arrayGroups spec
+      names = concatMap arrayEntries groups
+      values = arrayValues spec
+  createDirectoryIfMissing True output
+  present <- doesFileExist manifest
+  when present (removeFile manifest)
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+  ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
+  version <- run root [] ghc ["--numeric-version"] ""
+  unless (takeWhile (/= '\n') version == "9.14.1") (die "thc-fixtures requires GHC 9.14.1")
+  arrayVersion <- run root [] ghcPkg ["field", "array", "version", "--simple-output"] ""
+  unless (takeWhile (/= '\n') arrayVersion == "0.5.8.0") (die "thc-fixtures requires array 0.5.8.0")
+  stages <- forM [("pre", "optimized-Core-before-Tidy"),
+                   ("post", "optimized-Core-after-Tidy-before-CorePrep")] $ \(stage,boundary) -> do
+    paths <- fmap concat $ forM (zip [0 :: Int ..] groups) $ \(index,group) -> do
+      let folder = directory </> stage </> show index
+          core = folder </> "core"
+          modulePath = core </> arrayModule group ++ ".json"
+          closurePath = core </> "THC.InterfaceClosure.json"
+          options = if stage == "post" then ["-fplugin-opt=THC.Plugin:post-tidy"] else []
+          roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- arrayEntries group]
+      _ <- run root [("THC_CORE_OUT",root </> core), ("THC_GHC_OUT",root </> folder </> "ghc"),
+                     ("THC_SOURCE_NOTES","true")]
+        "compiler/export.sh" (options ++ roots ++ [arraySource group]) ""
+      content <- BS.readFile (root </> modulePath)
+      let exportedBoundary = case decodeStrict' content of
+            Just (Object value) -> KeyMap.lookup "boundary" value
+            _ -> Nothing
+      unless (exportedBoundary == Just (String (fromString boundary)))
+        (die ("Wrong GHC Core boundary: " ++ modulePath))
+      closurePresent <- doesFileExist (root </> closurePath)
+      unless closurePresent (die ("Missing GHC interface closure: " ++ closurePath))
+      pure [modulePath, closurePath]
+    pure (stage,paths)
+  let driver = directory </> arrayDriver spec
+      binary = directory </> "native" </> arrayOracle spec
+      oracle = directory </> "oracle.tsv"
+      requests = [(name,value) | name <- names, value <- values]
+      arrayRequestText = unlines [name ++ "\t" ++ show value | (name,value) <- requests]
+  writeFile (root </> driver) (arrayDriverSource spec)
+  createDirectoryIfMissing True (root </> directory </> "native")
+  _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
+    "-i" ++ root </> "examples", "-i" ++ root </> "compiler/test-fixtures",
+    "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native",
+    root </> driver, "-o", root </> binary] ""
+  actual <- run root [] (root </> binary) [] arrayRequestText
+  let parsed = traverse parseArrayRow (lines actual)
+      expectedKeys = Set.fromList requests
+  rows <- maybe (die "Malformed native array oracle TSV") pure parsed
+  unless (length rows == Set.size expectedKeys && Set.fromList rows == expectedKeys)
+    (die "Native array oracle returned missing, duplicate, or unexpected inputs")
+  writeFile (root </> oracle) actual
+  plugin <- listDirectory (root </> "compiler/THC")
+  let sources = sort $ ["thc.cabal", "test/haskell-fixtures/Main.hs", "compiler/build.sh",
+        "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
+        map arraySource groups ++ ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"]
+      artifacts = concatMap snd stages ++ [driver,binary,oracle]
+  sourceHashes <- hashes root sources
+  artifactHashes <- hashes root artifacts
+  byteOrder <- nativeByteOrder
+  installedArray <- run root [] ghcPkg ["describe", "array"] ""
+  ghcInfo <- run root [] ghc ["--info"] ""
+  writeJson manifest $ object
+    ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "array" .= ("0.5.8.0" :: String),
+     "wordBits" .= (64 :: Int), "byteOrder" .= byteOrder,
+     "entries" .= names, "inputs" .= values, "nativeRows" .= length rows,
+     "stages" .= Map.fromList stages, "installedArray" .= installedArray, "ghcInfo" .= ghcInfo,
+     "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
+     "claim" .= ("Native GHC oracle and pre/post Core exports; JVM tests own independent semantic and structural validation" :: String)]
+  putStrLn (arrayName spec ++ ": " ++ show (length names) ++ " entries, " ++
+            show (length rows) ++ " native rows, pre/post GHC Core")
+
+parseArrayRow :: String -> Maybe (String,Integer)
+parseArrayRow line = case splitTab (takeWhile (/= '\r') line) of
+  [name,input,result] -> do
+    value <- readInteger input
+    _ <- readInteger result
+    pure (name,value)
+  _ -> Nothing
+
 main :: IO ()
 main = do
   args <- getArgs
-  family <- case args of
-    ["bit"] -> pure Bit
-    ["integer"] -> pure IntegerWord
-    ["signed-narrow"] -> pure SignedNarrow
-    ["explicit64"] -> pure Explicit64
-    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64)"
   root <- getCurrentDirectory
   exists <- doesFileExist (root </> "thc.cabal")
   unless exists (die "Run thc-fixtures from the THC repository root")
-  prepare root family
+  case args of
+    ["bit"] -> prepare root Bit
+    ["integer"] -> prepare root IntegerWord
+    ["signed-narrow"] -> prepare root SignedNarrow
+    ["explicit64"] -> prepare root Explicit64
+    [name] | Just spec <- arraySpec name -> prepareArray root spec
+    _ -> die "Usage: thc-fixtures (bit|integer|signed-narrow|explicit64|int-arrays)"
