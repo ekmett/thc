@@ -19,6 +19,165 @@
     "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
       "junit": ["thc.runtime.BitPrimopsTest"],
       "python": []
+    },
+    "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
+      "junit": [
+        "thc.SumLayoutMetadataTest",
+        "thc.runtime.BytecodeTypedTupleInputTest",
+        "thc.runtime.DoubleArrayNativeTest",
+        "thc.runtime.DoubleArrayTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatArrayTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.FloatWordArrayNativeTest",
+        "thc.runtime.FloatingPrimitiveTest",
+        "thc.runtime.FloatingTupleTest",
+        "thc.runtime.ScalarBitCastTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SqrtPrimitiveTest",
+        "thc.runtime.SumProtocolTest",
+        "thc.runtime.SumResultTest",
+        "thc.runtime.TupleInputNativeTest",
+        "thc.runtime.TypedInputScalarSourceTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-sums.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-double-array-model.py",
+        "scripts/test-doublex2-bytearray-model.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-float-word-array-model.py",
+        "scripts/test-floatx4-bytearray-model.py",
+        "scripts/test-floatx4-model.py",
+        "scripts/test-scalar-bitcasts.py",
+        "scripts/test-sum-layout.py",
+        "scripts/test-tuple-inputs.py"
+      ]
+    },
+    "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": {
+      "junit": [
+        "thc.SumLayoutMetadataTest",
+        "thc.runtime.BytecodeTypedTupleInputTest",
+        "thc.runtime.DoubleArrayNativeTest",
+        "thc.runtime.DoubleArrayTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatArrayTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.FloatWordArrayNativeTest",
+        "thc.runtime.FloatingPrimitiveTest",
+        "thc.runtime.FloatingTupleTest",
+        "thc.runtime.ScalarBitCastTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SqrtPrimitiveTest",
+        "thc.runtime.SumProtocolTest",
+        "thc.runtime.SumResultTest",
+        "thc.runtime.TupleInputNativeTest",
+        "thc.runtime.TypedInputScalarSourceTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-sums.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-double-array-model.py",
+        "scripts/test-doublex2-bytearray-model.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-float-word-array-model.py",
+        "scripts/test-floatx4-bytearray-model.py",
+        "scripts/test-floatx4-model.py",
+        "scripts/test-scalar-bitcasts.py",
+        "scripts/test-sum-layout.py",
+        "scripts/test-tuple-inputs.py"
+      ]
+    },
+    "src/main/kotlin/thc/runtime/VectorExpressions.kt": {
+      "junit": ["thc.runtime.SimdVectorTest"],
+      "python": ["scripts/test-core-vectors.py"]
+    },
+    "src/main/kotlin/thc/runtime/Vector32Expressions.kt": {
+      "junit": [
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-int32x4-bytearray-model.py",
+        "scripts/test-int32x4-multiply-model.py"
+      ]
+    },
+    "src/main/kotlin/thc/runtime/Vector16Expressions.kt": {
+      "junit": ["thc.runtime.SimdInt16VectorTest"],
+      "python": ["scripts/test-core-vectors.py", "scripts/test-int16x8-model.py"]
+    },
+    "src/main/kotlin/thc/runtime/Vector8Expressions.kt": {
+      "junit": ["thc.runtime.SimdInt8VectorTest"],
+      "python": ["scripts/test-core-vectors.py", "scripts/test-int8x16-model.py"]
+    },
+    "src/main/kotlin/thc/runtime/VectorWord8Expressions.kt": {
+      "junit": ["thc.runtime.SimdWord8VectorTest"],
+      "python": ["scripts/test-core-vectors.py", "scripts/test-word8x16-model.py"]
+    },
+    "src/main/kotlin/thc/runtime/VectorWord16Expressions.kt": {
+      "junit": ["thc.runtime.SimdWord16VectorTest"],
+      "python": ["scripts/test-core-vectors.py", "scripts/test-word16x8-model.py"]
+    },
+    "src/main/kotlin/thc/runtime/VectorWord32Expressions.kt": {
+      "junit": [
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-word32x4-bytearray-model.py",
+        "scripts/test-word32x4-model.py"
+      ]
+    },
+    "src/main/kotlin/thc/runtime/VectorFloatExpressions.kt": {
+      "junit": [
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest"
+      ],
+      "python": [
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-floatx4-bytearray-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/kotlin/thc/runtime/VectorDoubleExpressions.kt": {
+      "junit": [
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-bytearray-model.py",
+        "scripts/test-doublex2-model.py"
+      ]
     }
   }
 }

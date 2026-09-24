@@ -300,6 +300,109 @@ private val text = "class FakeString { @Test }"
         self.assertEqual("full", plan["mode"])
         self.assertIn("missing-base", {r["code"] for r in plan["reasons"]})
 
+    def test_every_reviewed_family_selects_its_complete_union_without_budget_truncation(self):
+        policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        self.write(select.POLICY, json.dumps(policy))
+        groups = [policy["smoke"], *policy["leafSources"].values()]
+        for name in {name for group in groups for name in group["junit"]}:
+            package, short = name.rsplit(".", 1)
+            self.write("src/test/kotlin/" + name.replace(".", "/") + ".kt",
+                       kotlin(short).replace("package example", "package " + package))
+        for path in {path for group in groups for path in group["python"]}:
+            self.write(path, PYTHON_TEST)
+        for path in policy["leafSources"]:
+            self.write(path, "// synthetic family source: selection only\n")
+        previous = self.commit()
+        for path, group in policy["leafSources"].items():
+            with self.subTest(path=path):
+                self.write(path, "// changed synthetic family source: no JVM execution\n")
+                current = self.commit()
+                result = self.plan(base=previous)
+                self.assertEqual("narrow", result["mode"], result)
+                self.assertEqual([path], result["changedPaths"])
+                self.assertEqual(sorted(set(group["junit"]) | set(policy["smoke"]["junit"])),
+                                 result["junit"]["classes"])
+                self.assertEqual(sorted(set(group["python"]) | set(policy["smoke"]["python"])),
+                                 result["python"]["files"])
+                self.assertEqual(sorted(group["junit"]), result["affected"]["junit"])
+                self.assertEqual(sorted(group["python"]), result["affected"]["python"])
+                previous = current
+
+
+class PrimitiveFamilyPolicyTest(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(__file__).resolve().parents[2]
+        self.policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        self.families = self.policy["leafSources"]
+
+    def family(self, name):
+        return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
+
+    def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
+        self.assertEqual({"BitPrimitives", "RawBitCasts", "FloatingPrimitives", "VectorExpressions",
+                          "Vector32Expressions", "Vector16Expressions", "Vector8Expressions",
+                          "VectorWord8Expressions", "VectorWord16Expressions", "VectorWord32Expressions",
+                          "VectorFloatExpressions", "VectorDoubleExpressions"},
+                         {Path(path).stem for path in self.families})
+        classes = {name for path in (self.root / "src/test").rglob("*.kt")
+                   for name in select.junit_info(path.read_text())[0]}
+        for path, group in self.families.items():
+            with self.subTest(path=path):
+                self.assertTrue((self.root / path).is_file())
+                self.assertFalse(any(c in path for c in "*?[]"))
+                self.assertTrue(group["junit"])
+                self.assertEqual(len(group["junit"]), len(set(group["junit"])))
+                self.assertEqual(len(group["python"]), len(set(group["python"])))
+                self.assertLessEqual(set(group["junit"]), classes)
+                for test in group["python"]:
+                    self.assertTrue((self.root / test).is_file(), test)
+                    self.assertTrue(select.python_test(test), test)
+
+    def test_floating_dispatch_retains_hidden_native_sum_tuple_memory_and_bitcast_consumers(self):
+        floating = self.family("FloatingPrimitives")
+        self.assertEqual(floating, self.family("RawBitCasts"))
+        self.assertEqual({"thc.SumLayoutMetadataTest", *{"thc.runtime." + name for name in (
+            "BytecodeTypedTupleInputTest", "DoubleArrayNativeTest", "DoubleArrayTest",
+            "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
+            "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
+            "FloatingPrimitiveTest", "FloatingTupleTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
+            "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SqrtPrimitiveTest",
+            "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
+                         set(floating["junit"]))
+        self.assertLessEqual({"scripts/test-scalar-bitcasts.py", "scripts/test-core-sums.py",
+                             "scripts/test-sum-layout.py", "scripts/test-tuple-inputs.py",
+                             "scripts/test-doublex2-bytearray-model.py", "scripts/test-floatx4-bytearray-model.py"},
+                            set(floating["python"]))
+
+    def test_each_vector_family_keeps_native_storage_proof_and_multiply_consumers(self):
+        expected = {
+            "VectorExpressions": ["SimdVectorTest"],
+            "Vector8Expressions": ["SimdInt8VectorTest"],
+            "Vector16Expressions": ["SimdInt16VectorTest"],
+            "VectorWord8Expressions": ["SimdWord8VectorTest"],
+            "VectorWord16Expressions": ["SimdWord16VectorTest"],
+            "Vector32Expressions": ["SimdInt32VectorTest", "SimdInt32MultiplyTest", "SimdInt32ByteArrayTest",
+                                    "Int32VectorMemoryProofTest", "Int32VectorStorageTest"],
+            "VectorWord32Expressions": ["SimdWord32VectorTest", "SimdWord32ByteArrayTest",
+                                        "Word32VectorMemoryProofTest", "Word32VectorStorageTest"],
+            "VectorFloatExpressions": ["SimdFloatVectorTest", "SimdFloatByteArrayTest",
+                                       "FloatVectorMemoryProofTest", "FloatVectorStorageTest"],
+            "VectorDoubleExpressions": ["SimdDoubleVectorTest", "SimdDoubleByteArrayTest",
+                                        "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest"],
+        }
+        for name, tests in expected.items():
+            with self.subTest(name=name):
+                self.assertEqual({"thc.runtime." + test for test in tests}, set(self.family(name)["junit"]))
+                self.assertIn("scripts/test-core-vectors.py", self.family(name)["python"])
+
+    def test_shared_dispatch_loaders_memory_proofs_layouts_and_carriers_stay_full(self):
+        # Scalar64's identity fallback processes every ordinary scalar operation;
+        # the shared state/vector memory node and durable layouts are not leaves.
+        names = ("Scalar64Primitives", "VectorByteArrayExpressions", "CoreVectorMemory", "CoreVectors",
+                 "Program", "BytecodeProgram", "CoreRepresentations", "ArgumentLayout", "TupleResults", "Handoff")
+        self.assertFalse({"src/main/kotlin/thc/runtime/" + name + ".kt" for name in names} & self.families.keys())
+        self.assertFalse(any(path.startswith(("compiler/", "src/main/java/")) for path in self.families))
+
 
 if __name__ == "__main__":
     unittest.main()
