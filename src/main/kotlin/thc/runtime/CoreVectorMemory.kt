@@ -3,11 +3,12 @@ package thc.runtime
 
 /** Closed local memory families, independent of their scalar lane carriers. */
 internal enum class VectorMemoryFamily {
-    INT32, WORD32, FLOAT32;
+    INT32, WORD32, FLOAT32, DOUBLE64;
     val vectorProof: CoreRepresentation get() = when (this) {
         INT32 -> CoreVectors.proof32
         WORD32 -> CoreVectors.proofWord32
         FLOAT32 -> CoreVectors.proofFloat
+        DOUBLE64 -> CoreVectors.proofDouble
     }
 }
 
@@ -31,14 +32,20 @@ internal enum class VectorByteArrayOp(val primitive: String, val scalarOffset: B
     READ_FLOAT("readFloatX4Array#", false, VectorMemoryFamily.FLOAT32),
     READ_FLOAT_SCALAR("readFloatArrayAsFloatX4#", true, VectorMemoryFamily.FLOAT32),
     WRITE_FLOAT("writeFloatX4Array#", false, VectorMemoryFamily.FLOAT32),
-    WRITE_FLOAT_SCALAR("writeFloatArrayAsFloatX4#", true, VectorMemoryFamily.FLOAT32);
+    WRITE_FLOAT_SCALAR("writeFloatArrayAsFloatX4#", true, VectorMemoryFamily.FLOAT32),
+    INDEX_DOUBLE("indexDoubleX2Array#", false, VectorMemoryFamily.DOUBLE64),
+    INDEX_DOUBLE_SCALAR("indexDoubleArrayAsDoubleX2#", true, VectorMemoryFamily.DOUBLE64),
+    READ_DOUBLE("readDoubleX2Array#", false, VectorMemoryFamily.DOUBLE64),
+    READ_DOUBLE_SCALAR("readDoubleArrayAsDoubleX2#", true, VectorMemoryFamily.DOUBLE64),
+    WRITE_DOUBLE("writeDoubleX2Array#", false, VectorMemoryFamily.DOUBLE64),
+    WRITE_DOUBLE_SCALAR("writeDoubleArrayAsDoubleX2#", true, VectorMemoryFamily.DOUBLE64);
 
     val isRead: Boolean get() = this == READ || this == READ_SCALAR || this == READ_WORD || this == READ_WORD_SCALAR ||
-        this == READ_FLOAT || this == READ_FLOAT_SCALAR
+        this == READ_FLOAT || this == READ_FLOAT_SCALAR || this == READ_DOUBLE || this == READ_DOUBLE_SCALAR
     val isWrite: Boolean get() = this == WRITE || this == WRITE_SCALAR || this == WRITE_WORD || this == WRITE_WORD_SCALAR ||
-        this == WRITE_FLOAT || this == WRITE_FLOAT_SCALAR
+        this == WRITE_FLOAT || this == WRITE_FLOAT_SCALAR || this == WRITE_DOUBLE || this == WRITE_DOUBLE_SCALAR
     val isIndex: Boolean get() = this == INDEX || this == INDEX_SCALAR || this == INDEX_WORD || this == INDEX_WORD_SCALAR ||
-        this == INDEX_FLOAT || this == INDEX_FLOAT_SCALAR
+        this == INDEX_FLOAT || this == INDEX_FLOAT_SCALAR || this == INDEX_DOUBLE || this == INDEX_DOUBLE_SCALAR
     val vectorProof: CoreRepresentation get() = family.vectorProof
     internal fun validateArguments(actual: List<CoreRepresentation>, flags: List<*>) {
         val expected = listOf(CoreVectorMemory.arrayProof, CoreVectorMemory.indexProof) + when {

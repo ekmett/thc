@@ -122,6 +122,9 @@ four observed lanes.
 The [FloatX4 ByteArray slice](docs/floatx4-bytearray.md) adds six floating
 counterparts with exact raw-bit movement, immediate State/vector reads and
 verified packed caller-array loads/stores on both backends.
+The [DoubleX2 ByteArray slice](docs/doublex2-bytearray.md) adds the six binary64
+counterparts with two-lane raw-bit witnesses and 16-byte or 8-byte offset units,
+without expanding vector transport.
 
 Exact [unboxed tuple results](docs/tuple-results.md) execute on both backends with
 concrete Float/Double leaves, local join results and zero-width State# components.

@@ -1,0 +1,1 @@
+scripts/gradle.sh --offline --no-daemon --max-workers=4 test --tests thc.runtime.DoubleVectorMemoryProofTest --tests thc.runtime.DoubleVectorStorageTest --tests thc.runtime.SimdDoubleByteArrayTest 

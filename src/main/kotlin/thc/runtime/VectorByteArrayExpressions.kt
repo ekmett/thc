@@ -29,6 +29,11 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
                     ManagedByteArray.requireState(arguments[3].execute(frame))
                     FloatX4.writeArray(bytes, index, value, operation.scalarOffset)
                 }
+                operation.family === VectorMemoryFamily.DOUBLE64 -> {
+                    val value = arguments[2].execute(frame) as? DoubleX2 ?: fault("Expected DoubleX2#")
+                    ManagedByteArray.requireState(arguments[3].execute(frame))
+                    DoubleX2.writeArray(bytes, index, value, operation.scalarOffset)
+                }
                 else -> fault("Unsupported local vector memory family")
             }
             return Unit
@@ -38,6 +43,7 @@ internal class VectorByteArrayExpression(private val operation: VectorByteArrayO
             operation.family === VectorMemoryFamily.INT32 -> Int32X4.readArray(bytes, index, operation.scalarOffset)
             operation.family === VectorMemoryFamily.WORD32 -> Word32X4.readArray(bytes, index, operation.scalarOffset)
             operation.family === VectorMemoryFamily.FLOAT32 -> FloatX4.readArray(bytes, index, operation.scalarOffset)
+            operation.family === VectorMemoryFamily.DOUBLE64 -> DoubleX2.readArray(bytes, index, operation.scalarOffset)
             else -> fault("Unsupported local vector memory family")
         }
     }

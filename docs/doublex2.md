@@ -19,9 +19,10 @@ production graphs; type acceptance alone does not establish either claim.
 No vector ABI boundary is added. Vector function arguments/results, PAP prefixes,
 captures, ordinary lets, join arguments/results, constructor fields and tuple
 leaves remain unsupported. Division, negation, FMA, comparisons, other shapes,
-vector array access, addresses and FFI are outside this slice. In particular,
-`indexDoubleX2Array#` and `indexDoubleArrayAsDoubleX2#` have different index units
-and are both unsupported; scalar Double-array coverage is independent.
+addresses and FFI are outside this slice. The separate
+[DoubleX2 ByteArray slice](doublex2-bytearray.md) adds six local memory operations:
+`indexDoubleX2Array#` and `indexDoubleArrayAsDoubleX2#` have different index units.
+Scalar Double-array coverage remains independent.
 
 ## Correctness gates
 

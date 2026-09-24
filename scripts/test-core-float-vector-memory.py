@@ -92,10 +92,10 @@ class FloatVectorMemoryProofTest(unittest.TestCase):
 
     def test_family_registry_is_closed_and_each_proof_is_exact(self):
         from core_vector_memory import VECTOR_PROOFS, vector_proof
-        self.assertEqual(len(VECTOR_PROOFS), 18)
+        self.assertEqual(len(VECTOR_PROOFS), 24)
         for name in OPERATIONS:
             self.assertEqual(vector_proof(name), VECTOR_FLOAT_REP)
-        for name in ('indexDoubleX2Array#', 'readFloatX8Array#', 'writeFloatOffAddrAsFloatX4#'):
+        for name in ('indexDoubleX4Array#', 'readFloatX8Array#', 'writeFloatOffAddrAsFloatX4#'):
             self.assertNotIn(name, CAP['primitives'])
             with self.assertRaises(ValueError):
                 vector_proof(name)

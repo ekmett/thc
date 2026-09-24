@@ -1,9 +1,9 @@
-"""Exact local Int32X4/Word32X4/FloatX4 ByteArray intrinsics; no vector aggregate transport.
+"""Exact local Int32X4/Word32X4/FloatX4/DoubleX2 memory; no vector aggregate transport.
 
 The pinned exporter places its sole physical vector annotation on the logical
 State/vector tuple too. Only an immediate, exactly checked read case accepts it.
 """
-from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, VECTOR_FLOAT_REP, signature_matches
+from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, VECTOR_FLOAT_REP, VECTOR_DOUBLE_REP, signature_matches
 
 STATE = dict(kind='void', primReps=[], evaluated=True)
 ARRAY = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
@@ -20,13 +20,18 @@ FLOAT_READS = {'readFloatX4Array#', 'readFloatArrayAsFloatX4#'}
 FLOAT_INDICES = {'indexFloatX4Array#', 'indexFloatArrayAsFloatX4#'}
 FLOAT_WRITES = {'writeFloatX4Array#', 'writeFloatArrayAsFloatX4#'}
 FLOAT_OPERATIONS = FLOAT_READS | FLOAT_INDICES | FLOAT_WRITES
-READS = SIGNED_READS | UNSIGNED_READS | FLOAT_READS
-INDICES = SIGNED_INDICES | UNSIGNED_INDICES | FLOAT_INDICES
-WRITES = SIGNED_WRITES | UNSIGNED_WRITES | FLOAT_WRITES
+DOUBLE_READS = {'readDoubleX2Array#', 'readDoubleArrayAsDoubleX2#'}
+DOUBLE_INDICES = {'indexDoubleX2Array#', 'indexDoubleArrayAsDoubleX2#'}
+DOUBLE_WRITES = {'writeDoubleX2Array#', 'writeDoubleArrayAsDoubleX2#'}
+DOUBLE_OPERATIONS = DOUBLE_READS | DOUBLE_INDICES | DOUBLE_WRITES
+READS = SIGNED_READS | UNSIGNED_READS | FLOAT_READS | DOUBLE_READS
+INDICES = SIGNED_INDICES | UNSIGNED_INDICES | FLOAT_INDICES | DOUBLE_INDICES
+WRITES = SIGNED_WRITES | UNSIGNED_WRITES | FLOAT_WRITES | DOUBLE_WRITES
 OPERATIONS = READS | INDICES | WRITES
 VECTOR_PROOFS = {**dict.fromkeys(SIGNED_OPERATIONS, VECTOR32_REP),
                  **dict.fromkeys(UNSIGNED_OPERATIONS, VECTOR_WORD32_REP),
-                 **dict.fromkeys(FLOAT_OPERATIONS, VECTOR_FLOAT_REP)}
+                 **dict.fromkeys(FLOAT_OPERATIONS, VECTOR_FLOAT_REP),
+                 **dict.fromkeys(DOUBLE_OPERATIONS, VECTOR_DOUBLE_REP)}
 
 
 def require(condition, detail):

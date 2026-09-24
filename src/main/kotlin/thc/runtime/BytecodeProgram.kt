@@ -1624,6 +1624,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     operation.isRead -> b.beginReadVectorFloatArray(operation.scalarOffset)
                     else -> b.beginIndexVectorFloatArray(operation.scalarOffset)
                 }
+                VectorMemoryFamily.DOUBLE64 -> when {
+                    operation.isWrite -> b.beginWriteVectorDoubleArray(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorDoubleArray(operation.scalarOffset)
+                    else -> b.beginIndexVectorDoubleArray(operation.scalarOffset)
+                }
             }
             operands.forEach { it.emit(e) }
             when (operation.family) {
@@ -1641,6 +1646,11 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                     operation.isWrite -> b.endWriteVectorFloatArray()
                     operation.isRead -> b.endReadVectorFloatArray()
                     else -> b.endIndexVectorFloatArray()
+                }
+                VectorMemoryFamily.DOUBLE64 -> when {
+                    operation.isWrite -> b.endWriteVectorDoubleArray()
+                    operation.isRead -> b.endReadVectorDoubleArray()
+                    else -> b.endIndexVectorDoubleArray()
                 }
             }
         }, if (operation.isWrite) CoreVectorMemory.stateProof else operation.vectorProof)

@@ -98,6 +98,7 @@ tasks.test {
             "simd-int32x4-bytearray/**/*.json", "simd-int32x4-bytearray/*.tsv", "simd-int32x4-bytearray/native/int32x4-bytearray-oracle",
             "simd-word32x4-bytearray/**/*.json", "simd-word32x4-bytearray/*.tsv", "simd-word32x4-bytearray/native/word32x4-bytearray-oracle",
             "simd-floatx4-bytearray/**/*.json", "simd-floatx4-bytearray/*.tsv", "simd-floatx4-bytearray/native/floatx4-bytearray-oracle",
+            "simd-doublex2-bytearray/**/*.json", "simd-doublex2-bytearray/*.tsv", "simd-doublex2-bytearray/native/doublex2-bytearray-oracle",
             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
@@ -124,6 +125,7 @@ tasks.test {
             "prepare-int32x4-bytearray-audit.py", "int32x4_bytearray_model.py", "test-int32x4-bytearray-model.py", "test-core-vector-memory.py",
             "prepare-word32x4-bytearray-audit.py", "word32x4_bytearray_model.py", "test-word32x4-bytearray-model.py", "test-core-word32-vector-memory.py",
             "prepare-floatx4-bytearray-audit.py", "floatx4_bytearray_model.py", "test-floatx4-bytearray-model.py", "test-core-float-vector-memory.py",
+            "prepare-doublex2-bytearray-audit.py", "doublex2_bytearray_model.py", "test-doublex2-bytearray-model.py", "test-core-double-vector-memory.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
             "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
     })
