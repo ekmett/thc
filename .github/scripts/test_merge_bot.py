@@ -4,6 +4,7 @@ from urllib.error import HTTPError
 
 from merge_bot import (ACTIONS_APP, CHECKS, REQUIRED_STATUS, BUILD_GATE, FAST_GATE, PR_GATE,
                        BULK_LABEL, BULK_PREFIX, bulk_chain, candidate_manifest,
+                       mark_solo_retest, solo_retest_cutoff,
                        build_result, main_build_health, owner_authorized,
                        publish_run as publish_selected_run, reconcile, workflow_result, dispatch, ensure_main_checks)
 
@@ -1227,6 +1228,15 @@ class BulkMergeTest(unittest.TestCase):
         api.call("POST", "issues/1/labels", {"labels": ["auto-merge"]})
         api.call("DELETE", "issues/1/labels/bulk-merge")
         self.assertFalse(owner_authorized(api, 1))
+
+    def test_second_failed_batch_advances_same_head_retest_cutoff(self):
+        api = BulkAPI()
+        api.runs = [{**build(10), "workflow_id": 18, "head_sha": api.first_sha}]
+        mark_solo_retest(api, api.first_sha, "d" * 40)
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 10)
+        api.runs.append({**build(12), "workflow_id": 18, "head_sha": api.first_sha})
+        mark_solo_retest(api, api.first_sha, "e" * 40)
+        self.assertEqual(solo_retest_cutoff(api, api.first_sha), 12)
 
     def test_cancelled_check_reruns_without_relabeling(self):
         api = BulkAPI(); self.run_bot(api); api.finish_fast("cancelled")

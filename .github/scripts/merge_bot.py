@@ -281,7 +281,7 @@ def still_authorized(api, pr, label=LABEL):
     return eligible(pr, api.repo, label) and owner_authorized(api, pr["number"], label)
 
 
-def solo_retest_cutoff(api, sha):
+def solo_retest_marker(api, sha):
     prefix = f"https://github.com/{api.repo}/actions/workflows/fast.yml{RETEST_MARKER}"
     for status in api.pages(f"commits/{sha}/statuses"):
         target = status.get("target_url") or ""
@@ -289,21 +289,29 @@ def solo_retest_cutoff(api, sha):
                 and (status.get("creator") or {}).get("login") == BOT_LOGIN
                 and target.startswith(prefix)):
             value = target[len(prefix):]
-            if value.isdecimal():
-                return int(value)
+            match = re.fullmatch(r"(\d+)-([0-9a-f]{40})", value)
+            if match:
+                return int(match[1]), match[2]
     return None
 
 
-def mark_solo_retest(api, sha):
-    if solo_retest_cutoff(api, sha) is not None:
+def solo_retest_cutoff(api, sha):
+    marker = solo_retest_marker(api, sha)
+    return marker[0] if marker else None
+
+
+def mark_solo_retest(api, sha, candidate_sha):
+    previous = solo_retest_marker(api, sha)
+    if previous is not None and previous[1] == candidate_sha:
         return
     workflow = api.call("GET", "actions/workflows/fast.yml")
     runs = api.pages(f"actions/workflows/fast.yml/runs?head_sha={sha}", "workflow_runs")
     cutoff = max((run["id"] for run in runs if run["head_sha"] == sha
                   and run["workflow_id"] == workflow["id"]), default=0)
+    cutoff = max(cutoff, previous[0] if previous else 0)
     api.call("POST", f"statuses/{sha}", {
         "context": REQUIRED_STATUS, "state": "pending",
-        "target_url": f"https://github.com/{api.repo}/actions/workflows/fast.yml{RETEST_MARKER}{cutoff}",
+        "target_url": f"https://github.com/{api.repo}/actions/workflows/fast.yml{RETEST_MARKER}{cutoff}-{candidate_sha}",
         "description": "Solo Fast retest required after failed combined check"})
 
 
@@ -501,7 +509,7 @@ def fallback_to_solo(api, manifest):
     # marker is an immutable bot-authored commit status; old green runs on the
     # same head cannot satisfy the required fresh individual retest.
     for part in manifest["components"]:
-        mark_solo_retest(api, part["sha"])
+        mark_solo_retest(api, part["sha"], manifest["head"])
     for pr in states:
         labels = {item["name"] for item in pr["labels"]}
         if BULK_LABEL not in labels:
