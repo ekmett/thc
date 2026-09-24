@@ -56,6 +56,16 @@
         "compiler/test-fixtures/SynchronousExceptionsNative.hs"
       ]
     },
+    "core-continuation": {
+      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "commands": [{"argv": ["sh", "scripts/prepare-core-continuation.sh"]}],
+      "outputs": ["build/core-continuation"],
+      "sources": [
+        "scripts/prepare-core-continuation.sh",
+        "compiler/test-fixtures/CoreContinuationAudit.hs",
+        "compiler/test-fixtures/CoreContinuationNative.hs"
+      ]
+    },
     "io-main-pap": {
       "junit": ["thc.runtime.IoMainPapNativeTest"],
       "commands": [{"argv": ["python3", "scripts/prepare-io-main-pap.py"]}],

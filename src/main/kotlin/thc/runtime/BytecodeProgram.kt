@@ -18,7 +18,9 @@ import thc.Language
  * and labels are created afresh on every replay. Runtime values and application use the
  * same selective captures, lazy update protocol and PAP convention as the AST backend.
  */
-class BytecodeProgram(private val language: Language, moduleData: Map<String, Any?>) : ExecutableProgram {
+class BytecodeProgram internal constructor(private val language: Language, moduleData: Map<String, Any?>,
+                                           private val checkpoint: BytecodeCheckpoint?) : ExecutableProgram {
+    constructor(language: Language, moduleData: Map<String, Any?>) : this(language, moduleData, null)
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val sources = CoreSources(moduleData)
     private val metrics = Metrics(moduleData["instrument"] != false)
@@ -410,9 +412,30 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 val localValue = undecorated(value)
                 if (localValue is LocalExpression && localValue.resolve) {
                     val local = e.locals.getValue(localValue.local.id)
-                    b.beginForceLocal(metrics, local, localValue.local.cell)
-                    b.emitLoadLocal(local)
-                    b.endForceLocal()
+                    if (checkpoint == null) {
+                        b.beginForceLocal(metrics, local, localValue.local.cell)
+                        b.emitLoadLocal(local)
+                        b.endForceLocal()
+                    } else {
+                        val result = b.createLocal("forced local result", null)
+                        b.beginBlock()
+                        b.beginTryCatch()
+                        b.beginStoreLocal(result)
+                        b.beginForceLocal(metrics, local, localValue.local.cell)
+                        b.emitLoadLocal(local)
+                        b.endForceLocal()
+                        b.endStoreLocal()
+                        b.beginStoreLocal(result)
+                        b.beginResumeForcedLocal(local, localValue.local.cell)
+                        b.beginYield()
+                        b.beginSuspensionOnly(); b.emitLoadException(); b.endSuspensionOnly()
+                        b.endYield()
+                        b.endResumeForcedLocal()
+                        b.endStoreLocal()
+                        b.endTryCatch()
+                        b.emitLoadLocal(result)
+                        b.endBlock()
+                    }
                 } else {
                     b.beginForceValue(metrics); value.emit(e); b.endForceValue()
                 }
@@ -1062,7 +1085,19 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operand = argument(args[0], scope, false)
                 ProvenExpression(Expression { e ->
-                    e.builder.beginNoDuplicate(); operand.emit(e); e.builder.endNoDuplicate()
+                    val b = e.builder
+                    if (checkpoint == null) {
+                        b.beginNoDuplicate(); operand.emit(e); b.endNoDuplicate()
+                    } else {
+                        b.beginBlock()
+                        b.beginNoDuplicate(); operand.emit(e); b.endNoDuplicate()
+                        b.beginConditional()
+                        b.emitCheckpointArmed(checkpoint)
+                        b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                        b.emitLoadConstant(Unit)
+                        b.endConditional()
+                        b.endBlock()
+                    }
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

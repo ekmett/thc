@@ -26,7 +26,7 @@ import thc.Language;
 /** Concrete Core instructions sharing the AST backend's heap and application ABI. */
 // An explicit compile request must work after the first ordinary invocation, even
 // when Core proofs eliminate every operation that otherwise forces the cached tier.
-@GenerateBytecode(languageClass = Language.class, enableUncachedInterpreter = true,
+@GenerateBytecode(languageClass = Language.class, enableYield = true, enableUncachedInterpreter = true,
         defaultUncachedThreshold = "0", boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
     private String label = "bytecode";
@@ -291,23 +291,66 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             // cell. Ordinary formals, fields and published values need no cell test.
             Object original = cell ? ReadCellIfNeeded.read(binding) : binding;
             Object result = force.execute(frame, original);
-            if (original instanceof Thunk thunk) {
-                if (cell) {
-                    ProgramKt.updateForcedCell((RecCell) binding, thunk, result);
-                } else {
-                    BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
-                    if (local.getObject(bytecode, frame) == thunk) {
-                        if (result instanceof Long number) local.setLong(bytecode, frame, number);
-                        else if (result instanceof Float floating) local.setFloat(bytecode, frame, floating);
-                        else if (result instanceof Double doubleValue) local.setDouble(bytecode, frame, doubleValue);
-                        else if (result instanceof Boolean bool) local.setBoolean(bytecode, frame, bool);
-                        else local.setObject(bytecode, frame, result);
-                    }
-                }
-            }
+            publish(frame, local, cell, binding, original, result, node);
             return result;
         }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
+        static void publish(VirtualFrame frame, LocalAccessor local, boolean cell, Object binding,
+                Object original, Object result, Node node) {
+            if (!(original instanceof Thunk thunk)) return;
+            if (cell) {
+                ProgramKt.updateForcedCell((RecCell) binding, thunk, result);
+            } else {
+                BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+                if (local.getObject(bytecode, frame) == thunk) {
+                    if (result instanceof Long number) local.setLong(bytecode, frame, number);
+                    else if (result instanceof Float floating) local.setFloat(bytecode, frame, floating);
+                    else if (result instanceof Double doubleValue) local.setDouble(bytecode, frame, doubleValue);
+                    else if (result instanceof Boolean bool) local.setBoolean(bytecode, frame, bool);
+                    else local.setObject(bytecode, frame, result);
+                }
+            }
+        }
+    }
+
+    @Operation
+    public static final class SuspensionOnly {
+        @Specialization public static ThunkSuspended capture(AbstractTruffleException failure) {
+            if (failure instanceof ThunkSuspended suspended) return suspended;
+            throw failure;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    @ConstantOperand(type = boolean.class, name = "cell")
+    public static final class ResumeForcedLocal {
+        @Specialization public static Object resume(VirtualFrame frame, LocalAccessor local, boolean cell,
+                ChildResume resumed, @Bind("$node") Node node) {
+            if (resumed.getFailure() != null) throw resumed.getFailure();
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            Object binding = local.getObject(bytecode, frame);
+            Object original = cell ? ReadCellIfNeeded.read(binding) : binding;
+            if (!(original instanceof Thunk thunk) || thunk.getState() != 2 || thunk.getValue() != resumed.getValue())
+                throw new IllegalStateException("Forced-local continuation lost its child update");
+            ForceLocal.publish(frame, local, cell, binding, original, resumed.getValue(), node);
+            return resumed.getValue();
+        }
+        @Fallback public static Object malformed(LocalAccessor local, boolean cell, Object resumed) {
+            throw new IllegalStateException("Forced-local continuation requires ChildResume");
+        }
+    }
+
+    /** The ordinary noDuplicate# operation remains unchanged; this is a private test checkpoint. */
+    @Operation
+    @ConstantOperand(type = BytecodeCheckpoint.class, name = "checkpoint")
+    public static final class CheckpointArmed {
+        @Specialization public static boolean armed(BytecodeCheckpoint checkpoint) {
+            if (CompilerDirectives.inCompiledCode()) checkpoint.getCompiledVisits().incrementAndGet();
+            if (!checkpoint.getArmed()) return false;
+            checkpoint.getVisits().incrementAndGet();
+            return true;
+        }
     }
 
     @Operation
