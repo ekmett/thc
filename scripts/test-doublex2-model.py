@@ -68,6 +68,21 @@ class DoubleX2ModelTest(unittest.TestCase):
                 self.assertEqual({(xs[lane], xs[2]) for xs in entry['cases']},
                                  {(a, b) for a in range(21) for b in range(21)})
 
+    def test_native_parser_rejects_wrong_shapes_and_duplicate_keys(self):
+        valid = 'plusCase\t1\t2\t3'
+        self.assertEqual({('plusCase', 1, 2): '3'}, model.parse_rows(valid))
+        for malformed in ('unknownCase\t1\t2\t3', 'plusCase\t1\t3',
+                          'plusCase\t1\t2\t3\t4', ''):
+            with self.subTest(malformed=malformed):
+                with self.assertRaises(AssertionError) as caught:
+                    model.parse_rows(malformed + '\n')
+                self.assertEqual('Wrong native row shape: ' + malformed,
+                                 str(caught.exception))
+        duplicate = 'plusCase\t1\t2\t4'
+        with self.assertRaises(AssertionError) as caught:
+            model.parse_rows(valid + '\n' + duplicate + '\n')
+        self.assertEqual('Duplicate native row: ' + duplicate, str(caught.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

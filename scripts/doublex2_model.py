@@ -146,8 +146,10 @@ def parse_rows(text):
     rows = {}
     for line in text.splitlines():
         name, *fields = line.split('\t')
-        assert name in declared and len(fields) == declared[name] + 1, 'Wrong native row shape: ' + line
+        if name not in declared or len(fields) != declared[name] + 1:
+            raise AssertionError('Wrong native row shape: ' + line)
         key = (name, *map(int, fields[:-1]))
-        assert key not in rows, 'Duplicate native row: ' + line
+        if key in rows:
+            raise AssertionError('Duplicate native row: ' + line)
         rows[key] = fields[-1]
     return rows
