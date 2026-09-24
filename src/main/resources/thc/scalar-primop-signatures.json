@@ -541,6 +541,13 @@
       ],
       "result": "IntRep"
     },
+    "geAddr#": {
+      "arguments": [
+        "AddrRep",
+        "AddrRep"
+      ],
+      "result": "IntRep"
+    },
     "geChar#": {
       "arguments": [
         "WordRep",
@@ -615,6 +622,13 @@
       "arguments": [
         "Word8Rep",
         "Word8Rep"
+      ],
+      "result": "IntRep"
+    },
+    "gtAddr#": {
+      "arguments": [
+        "AddrRep",
+        "AddrRep"
       ],
       "result": "IntRep"
     },
@@ -695,6 +709,13 @@
       ],
       "result": "IntRep"
     },
+    "indexAddrOffAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "AddrRep"
+    },
     "indexCharOffAddr#": {
       "arguments": [
         "AddrRep",
@@ -773,6 +794,13 @@
         "IntRep"
       ],
       "result": "Int8Rep"
+    },
+    "leAddr#": {
+      "arguments": [
+        "AddrRep",
+        "AddrRep"
+      ],
+      "result": "IntRep"
     },
     "leChar#": {
       "arguments": [
@@ -874,6 +902,13 @@
         "FloatRep"
       ],
       "result": "FloatRep"
+    },
+    "ltAddr#": {
+      "arguments": [
+        "AddrRep",
+        "AddrRep"
+      ],
+      "result": "IntRep"
     },
     "ltChar#": {
       "arguments": [

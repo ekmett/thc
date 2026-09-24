@@ -33,6 +33,25 @@ internal class CompareManagedAddress(@field:Child private var left: Expr,
     }
 }
 
+internal enum class ManagedAddressOrder {
+    LT, LE, GT, GE;
+
+    fun accepts(comparison: Int): Boolean = when (this) {
+        LT -> comparison < 0
+        LE -> comparison <= 0
+        GT -> comparison > 0
+        GE -> comparison >= 0
+    }
+}
+
+internal class CompareOrderedManagedAddress(@field:Child private var left: Expr,
+    @field:Child private var right: Expr, private val order: ManagedAddressOrder) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long =
+        if (order.accepts(left.executeRequiredAddress(frame)
+                .compareWithinAllocation(right.executeRequiredAddress(frame)))) 1L else 0L
+}
+
 internal class GetCurrentCCS(@field:Child private var dummy: Expr,
     @field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
     init { representation = proof.copy(evaluated = true) }

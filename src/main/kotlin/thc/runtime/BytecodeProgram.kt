@@ -2318,6 +2318,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
             "plusAddr#" -> "AddressPlus"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
+            "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
             "indexCharOffAddr#" -> "AddressIndexChar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
@@ -2379,6 +2380,12 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus(); "AddressIndexChar" -> b.beginAddressIndexChar()
                 "AddressEqual" -> b.beginAddressEqual(); "AddressNotEqual" -> b.beginAddressNotEqual()
+                "AddressOrder" -> b.beginAddressOrder(when (name) {
+                    "ltAddr#" -> ManagedAddressOrder.LT
+                    "leAddr#" -> ManagedAddressOrder.LE
+                    "gtAddr#" -> ManagedAddressOrder.GT
+                    else -> ManagedAddressOrder.GE
+                })
             }
             args.forEach { it.emit(e) }
             when (operation) {
@@ -2433,6 +2440,7 @@ class BytecodeProgram(private val language: Language, moduleData: Map<String, An
                 "NarrowWord" -> b.endNarrowWord()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexChar" -> b.endAddressIndexChar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
+                "AddressOrder" -> b.endAddressOrder()
             }
         })
     }

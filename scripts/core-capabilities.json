@@ -309,6 +309,10 @@
     "plusAddr#": 2,
     "eqAddr#": 2,
     "neAddr#": 2,
+    "ltAddr#": 2,
+    "leAddr#": 2,
+    "gtAddr#": 2,
+    "geAddr#": 2,
     "indexCharOffAddr#": 2,
     "getCurrentCCS#": 2,
     "raise#": 1,
@@ -625,7 +629,7 @@
     "subWordC#": 2
   },
   "limitations": [
-    "Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.",
+    "Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.",
     "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.",
     "Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported."
   ],

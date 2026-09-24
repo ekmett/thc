@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 274 | Implemented fixed numeric/character scalar forms. |
-| Partial | 229 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 988 | No declared lowering. |
+| Partial | 233 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 984 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -39,7 +39,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 
 ## Current aggregate and address limits
 
-- Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.
+- Address operations support managed literal or byte-array backing with checked offsets; no raw pointers. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Only the exact GHC MD5 C foreign calls admit managed addresses through Sulong.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Aggregate captures, heap fields, ordinary let bindings and join captures remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums, vectors and unresolved leaves cannot appear in tuple inputs; exact evaluated AddrRep leaves use managed address references.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
@@ -354,11 +354,13 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `divideFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `eqAddr#` — arity 2 — Managed literal addresses only
 - [ ] `freezeArray#` — arity 4 — Managed lifted arrays
+- [ ] `geAddr#` — arity 2 — Managed literal addresses only
 - [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
+- [ ] `gtAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexAddrArray#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexAddrOffAddr#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `indexAddrOffAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexArray#` — arity 2 — Managed lifted arrays
 - [ ] `indexCharOffAddr#` — arity 2 — Managed literal addresses only
 - [ ] `indexDoubleArray#` — arity 2 — Managed byte storage
@@ -381,6 +383,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWordArray#` — arity 2 — Managed byte storage
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; no guest scheduler or async exceptions
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
+- [ ] `leAddr#` — arity 2 — Managed literal addresses only
+- [ ] `ltAddr#` — arity 2 — Managed literal addresses only
 - [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `maskUninterruptible#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -692,12 +696,10 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `fork#` — arity 2
 - [ ] `forkOn#` — arity 3
 - [ ] `freezeSmallArray#` — arity 4
-- [ ] `geAddr#` — arity 2
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
 - [ ] `getSizeofSmallMutableArray#` — arity 2
 - [ ] `getSpark#` — arity 1
-- [ ] `gtAddr#` — arity 2
 - [ ] `indexCharArray#` — arity 2
 - [ ] `indexDoubleArrayAsDoubleX4#` — arity 2
 - [ ] `indexDoubleArrayAsDoubleX8#` — arity 2
@@ -899,9 +901,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
 - [ ] `killThread#` — arity 3
 - [ ] `labelThread#` — arity 3
-- [ ] `leAddr#` — arity 2
 - [ ] `listThreads#` — arity 1
-- [ ] `ltAddr#` — arity 2
 - [ ] `makeStableName#` — arity 2
 - [ ] `makeStablePtr#` — arity 2
 - [ ] `maxDouble#` — arity 2

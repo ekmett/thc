@@ -2044,6 +2044,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             CompareManagedAddress(args[0], args[1], name == "neAddr#")
         }
+        "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> {
+            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            CompareOrderedManagedAddress(args[0], args[1], when (name) {
+                "ltAddr#" -> ManagedAddressOrder.LT
+                "leAddr#" -> ManagedAddressOrder.LE
+                "gtAddr#" -> ManagedAddressOrder.GT
+                else -> ManagedAddressOrder.GE
+            })
+        }
         "plusAddr#", "indexCharOffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             if (name == "plusAddr#") PlusManagedAddress(args[0], args[1]) else IndexLiteralChar(args[0], args[1])

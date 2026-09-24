@@ -1192,6 +1192,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = ManagedAddressOrder.class, name = "order")
+    public static final class AddressOrder {
+        @Specialization public static long compare(ManagedAddressOrder order,
+                ManagedAddress left, ManagedAddress right) {
+            return order.accepts(left.compareWithinAllocation(right)) ? 1L : 0L;
+        }
+        @Fallback public static long invalid(ManagedAddressOrder order, Object left, Object right) {
+            throw fail("Expected managed Addr# operands");
+        }
+    }
+
+    @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class NewMVar {
         @Specialization public static void create(VirtualFrame frame, LocalAccessor destination,

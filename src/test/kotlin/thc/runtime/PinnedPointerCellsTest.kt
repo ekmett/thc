@@ -15,6 +15,7 @@ import java.security.MessageDigest
 
 class PinnedPointerCellsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
+    private data class Row(val input: Long, val pointer: Long, val array: Long, val order: Long)
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
@@ -34,6 +35,27 @@ class PinnedPointerCellsTest {
         assertSame(nullAddress, PinnedMemory.readAddressArray(pinned, 1))
     }
 
+    @Test fun orderedAddressesRequireOneAllocationAndPreserveCheckedOffsets() {
+        val nullAddress = ManagedAddress.nullAddress()
+        assertEquals(0, nullAddress.compareWithinAllocation(nullAddress))
+        val bytes = ByteArray(16)
+        val base = ManagedAddress.fromByteArray(bytes)
+        val alias = ManagedAddress.fromByteArray(bytes)
+        assertEquals(0, base.compareWithinAllocation(alias))
+        assertTrue(base.compareWithinAllocation(alias.plus(1)) < 0)
+        assertTrue(base.plus(16).compareWithinAllocation(alias) > 0) // one past
+        assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE) }
+        assertThrows(RuntimeFault::class.java) { base.plus(-1) }
+        assertThrows(RuntimeFault::class.java) { base.compareWithinAllocation(nullAddress) }
+        assertThrows(RuntimeFault::class.java) { nullAddress.compareWithinAllocation(base) }
+        assertThrows(RuntimeFault::class.java) {
+            base.compareWithinAllocation(ManagedAddress.fromByteArray(bytes.copyOf()))
+        }
+        val pinned = ManagedAddress.fromAllocation(PinnedMemory.allocate(16, 1))
+        assertTrue(pinned.compareWithinAllocation(pinned.plus(16)) < 0)
+        assertThrows(RuntimeFault::class.java) { base.compareWithinAllocation(pinned) }
+    }
+
     @Test fun originalPinnedFreezeContentsAndKeepAliveMatchNativeInBothBackends() {
         val manifest = Json.parse(File(root, "build/pinned-pointer-cells/manifest.json").readText()) as Map<String, Any?>
         assertEquals(1L, manifest["schema"])
@@ -46,13 +68,14 @@ class PinnedPointerCellsTest {
             }
         val rows = File(root, "build/pinned-pointer-cells/oracle.tsv").readLines().map { line ->
             val fields = line.split('\t')
-            assertEquals(3, fields.size)
-            Triple(fields[0].toLong(), fields[1].toLong(), fields[2].toLong())
+            assertEquals(4, fields.size)
+            Row(fields[0].toLong(), fields[1].toLong(), fields[2].toLong(), fields[3].toLong())
         }
-        assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, -1L), rows.map { it.first })
-        for ((input, expected, arrayExpected) in rows) {
-            assertEquals(1009L + 17L * (input and 255L), expected)
-            assertEquals(1L, arrayExpected)
+        assertEquals(listOf(0L, 1L, 17L, 127L, 255L, 256L, -1L), rows.map { it.input })
+        for (row in rows) {
+            assertEquals(1009L + 17L * (row.input and 255L), row.pointer)
+            assertEquals(1L, row.array)
+            assertEquals(if (row.input and 7L == 0L) 122L else 127L, row.order)
         }
         for (stage in listOf("pre", "post")) {
             val directory = File(root, "build/pinned-pointer-cells/$stage")
@@ -63,6 +86,7 @@ class PinnedPointerCellsTest {
             assertTrue(primitives.containsAll(setOf("newPinnedByteArray#", "unsafeFreezeByteArray#", "byteArrayContents#",
                 "keepAlive#", "writeAddrOffAddr#", "readAddrOffAddr#", "indexAddrOffAddr#",
                 "writeAddrArray#", "readAddrArray#", "indexAddrArray#",
+                "ltAddr#", "leAddr#", "gtAddr#", "geAddr#",
                 "readWord8OffAddr#", "indexWord8Array#")))
             val paths = listOf("PinnedPointerCellsAudit.json", "THC.InterfaceClosure.json")
                 .map { File(directory, "core/$it") }
@@ -71,7 +95,7 @@ class PinnedPointerCellsTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    for (entry in listOf("pointerRoundtrip", "pointerArrayRoundtrip")) {
+                    for (entry in listOf("pointerRoundtrip", "pointerArrayRoundtrip", "pointerOrder")) {
                         val source = CoreModules.reachable(merged, entry) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, source)
                             else BytecodeProgram(language, source)
@@ -80,24 +104,29 @@ class PinnedPointerCellsTest {
                             assertEquals(expected, function.execute(input).asLong(), "$stage/$backend/$entry/$input")
                             assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
                         }
-                        rows.forEach { row -> check(row.first, if (entry == "pointerRoundtrip") row.second else row.third) }
+                        fun expected(row: Row) = when (entry) {
+                            "pointerRoundtrip" -> row.pointer
+                            "pointerArrayRoundtrip" -> row.array
+                            else -> row.order
+                        }
+                        rows.forEach { row -> check(row.input, expected(row)) }
                         // EntryValue compiles the active DirectCallNode target (which may
                         // be a split clone) and the public host root, checking both tiers.
                         assertTrue(function.invokeMember("compile").asBoolean(), "$stage/$backend/$entry compilation")
                         valid(program.hostEntryTarget(1), "$stage/$backend/$entry host target after compilation")
                         for (row in rows.asReversed()) {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                            check(row.first, if (entry == "pointerRoundtrip") row.second else row.third)
+                            check(row.input, expected(row))
                             var after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             if (after == before) {
                                 // A dependency can retire the public call-boundary stub;
                                 // require a bounded fresh last-tier execution for this row.
                                 assertTrue(function.invokeMember("compile").asBoolean(),
                                     "$stage/$backend/$entry recompilation")
-                                check(row.first, if (entry == "pointerRoundtrip") row.second else row.third)
+                                check(row.input, expected(row))
                                 after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             }
-                            assertTrue(after > before, "$stage/$backend/$entry/${row.first}: $before->$after")
+                            assertTrue(after > before, "$stage/$backend/$entry/${row.input}: $before->$after")
                         }
                     }
                 } finally { context.leave() }
