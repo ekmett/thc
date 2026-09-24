@@ -57,6 +57,12 @@ class ArrayCoreEvidenceTest {
         }
         badCalls += changedCall { it[2] = emptyList<Any?>() }
         badCalls += changedCall { it[2] = listOf(leaf) }
+        badCalls += changedCall { it[2] = listOf(listOf("void", mapOf("rep" to intRep))) }
+        badCalls += changedCall { call ->
+            val state = (call[1] as List<Any?>).toMutableList()
+            state[1] = (state[1] as List<Any?>) + formal("extra")
+            call[1] = state
+        }
         badCalls += changedCall { it[3] = listOf(true) }
         badCalls += changedCall { it[4] = true }
         badCalls += changedCall { it[5] = true }
@@ -80,6 +86,9 @@ class ArrayCoreEvidenceTest {
             { it.remove("joinValueArity") }, { it["joinValueArity"] = 0L },
             { it["joinValueArity"] = true }, { it["joinValueArity"] = 1.0 },
             { it["joinValueArity"] = 2L },
+            { it.remove("joinResultRep") },
+            { it["joinResultRep"] = emptyMap<String, Any?>()
+              it["expr"] = listOf("lam", listOf(formal("a")), leaf, mapOf("resultRep" to emptyMap<String, Any?>())) },
             { it["joinResultRep"] = intRep + ("primReps" to listOf("WordRep")) },
             { it["expr"] = listOf("lam", listOf(formal("a"), formal("b")), leaf, mapOf("resultRep" to intRep)) },
             { it["expr"] = listOf("lam", listOf(formal("a")),
