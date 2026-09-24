@@ -1,0 +1,48 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+package thc.runtime
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.bytecode.ContinuationResult
+import com.oracle.truffle.api.exception.AbstractTruffleException
+import com.oracle.truffle.api.nodes.Node
+
+/** Only the target's unwind carries this exception; the abandoned thunk keeps its continuation. */
+internal class AsyncDelivery(val request: AsyncRequest, node: Node) :
+    AbstractTruffleException("Asynchronous guest exception", null, 0, node)
+
+/** A trampoline has discarded every caller suffix and reached this exact tail target. */
+internal class TailYield(val continuation: ContinuationResult, val target: RootCallTarget) {
+    init {
+        check((continuation.continuationRootNode.sourceRootNode as? GuestRoot)?.isSelf(target) == true) {
+            "Tail continuation does not belong to the final tail target"
+        }
+    }
+}
+
+internal object AsyncContinuations {
+    @JvmStatic fun isYieldMarker(value: Any?): Boolean = value === Unit ||
+        value is ThunkSuspended || value is CallSegmentSuspended || value is AsyncRequest
+
+    // Copy the delivery identity before publishing a shared continuation. Another
+    // evaluator may already have consumed that continuation when its owner unwinds.
+    @JvmStatic fun request(continuation: ContinuationResult): AsyncRequest? = when (val cut = continuation.result) {
+        is AsyncRequest -> cut
+        is ThunkSuspended -> cut.asyncRequest
+        is CallSegmentSuspended -> cut.asyncRequest
+        else -> null
+    }
+
+    @JvmStatic @TruffleBoundary fun deliverIfCaught(
+        continuation: ContinuationResult, caught: Boolean, node: Node
+    ) {
+        if (!caught) return
+        val request = request(continuation) ?: return
+        check(request.target === Thread.currentThread() && request.state == AsyncRequestState.CLAIMED) {
+            "Async delivery left its target thread or was already consumed"
+        }
+        throw AsyncDelivery(request, node)
+    }
+}

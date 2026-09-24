@@ -1524,6 +1524,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     if (parked != null && SynchronousMasking.current(node) != callerMask)
                         throw new IllegalStateException("Parked IO action did not restore its caller mask");
                     MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
+                    AsyncContinuations.deliverIfCaught(continuation, caughtIOAction, node);
                     throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
                             destination.getShape(), caughtIOAction));
                 } finally { SynchronousMasking.set(node, callerMask); }
@@ -1613,6 +1614,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     /** Only the private captured catch# path may handle an async-origin payload. */
     @Operation public static final class RequireCaughtIOFailure {
         @Specialization public static Object payload(AbstractTruffleException failure) {
+            if (failure instanceof AsyncDelivery delivered) {
+                delivered.getRequest().acknowledge();
+                return delivered.getRequest().getPayload();
+            }
             if (failure instanceof CapturedAsyncDelivery delivered) {
                 if (delivered.getRequest() != null) delivered.getRequest().acknowledge();
                 return delivered.getPayload();

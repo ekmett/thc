@@ -140,7 +140,7 @@ internal class CapturedAsyncDelivery @JvmOverloads constructor(
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Private captured IO-handler delivery", null, 0, null)
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
-internal class ThunkSuspended(val thunk: Thunk) :
+internal class ThunkSuspended @JvmOverloads constructor(val thunk: Thunk, val asyncRequest: AsyncRequest? = null) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode thunk suspension", null, 0, null)
 /** A call returned its own bytecode continuation; only that exact call edge may capture it. */
@@ -150,7 +150,8 @@ internal class CapturedCallSuspension(val segment: CallSegment) :
 internal class CallSegmentSuspended @JvmOverloads constructor(
     val segment: CallSegment,
     /** Logical mask before a caller parked to its root-entry mask for Yield. */
-    val parkedActiveMask: MaskingState? = null
+    val parkedActiveMask: MaskingState? = null,
+    val asyncRequest: AsyncRequest? = (segment.value as? ContinuationResult)?.let(AsyncContinuations::request)
 ) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call segment suspension", null, 0, null)
@@ -616,16 +617,18 @@ internal class Force(private val metrics: Metrics) : Node() {
         val carrierAmbient = SynchronousMasking.current(this)
         try {
             SynchronousMasking.set(this, resumeMask)
-            val result = try { continuation.continueWith(resumeValue) }
+            val returned = try { continuation.continueWith(resumeValue) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+            val result = if (returned is TailYield) returned.continuation else returned
             if (result is ContinuationResult) {
-                if (result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
+                if (returned !is TailYield && result.continuationRootNode.sourceRootNode !== continuation.continuationRootNode.sourceRootNode)
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
                 val parkedMask = (result.result as? CallSegmentSuspended)?.parkedActiveMask
                 if (parkedMask != null && SynchronousMasking.current(this) != segment.callerMask)
                     throw IllegalStateException("Parked call segment did not restore its caller mask")
+                val request = AsyncContinuations.request(result)
                 publishCallContinuation(segment, result, parkedMask ?: SynchronousMasking.current(this))
-                throw CallSegmentSuspended(segment)
+                throw CallSegmentSuspended(segment, asyncRequest = request)
             }
             // A completed tuple may still be a producer-thread slab loan.
             // Release that loan even if the callee returned under a wrong mask.
@@ -717,7 +720,7 @@ internal class Force(private val metrics: Metrics) : Node() {
                 val target = thunk.target ?: fault("Unevaluated thunk has no body")
                 metrics.incrementThunkEvaluations(); metrics.recordThunk(target.rootNode.name)
             }
-            val result = if (continuation == null) {
+            val returned = if (continuation == null) {
                 try { calls.call(thunk.target ?: fault("Unevaluated thunk has no body"), thunk.environment) }
                 catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
             } else {
@@ -731,13 +734,15 @@ internal class Force(private val metrics: Metrics) : Node() {
                     catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
                 } finally { SynchronousMasking.set(this, ambient) }
             }
+            val result = if (returned is TailYield) returned.continuation else returned
             if (result is ContinuationResult) {
                 val expectedRoot = continuation?.continuationRootNode?.sourceRootNode
                     ?: thunk.target?.rootNode
-                if (result.continuationRootNode.sourceRootNode !== expectedRoot)
+                if (returned !is TailYield && result.continuationRootNode.sourceRootNode !== expectedRoot)
                     throw IllegalStateException("Nested bytecode yield has no captured caller segment")
+                val request = AsyncContinuations.request(result)
                 publishContinuation(thunk, result)
-                throw ThunkSuspended(thunk)
+                throw ThunkSuspended(thunk, request)
             }
             if (result is Thunk) fault("Thunk target violated WHNF convention")
             synchronized(thunk.monitor) {
