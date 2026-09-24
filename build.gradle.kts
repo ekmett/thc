@@ -231,3 +231,13 @@ val compileCbits by tasks.registering(Exec::class) {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
+
+// Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
+val generateStdioAbi by tasks.registering(Exec::class) {
+    inputs.files("scripts/generate-stdio-abi.py", "scripts/build-cbits.py", "src/main/c/stdio-abi-probe.c")
+    outputs.dir(layout.buildDirectory.dir("generated/stdio-abi"))
+    outputs.upToDateWhen { false }
+    commandLine("python3", "scripts/generate-stdio-abi.py", "--output", layout.buildDirectory.dir("generated/stdio-abi").get().asFile)
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/stdio-abi")) }
+tasks.processResources { dependsOn(generateStdioAbi) }
