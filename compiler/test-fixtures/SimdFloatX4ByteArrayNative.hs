@@ -32,4 +32,3 @@ dispatch _ = error "invalid input"
 main :: IO ()
 main = if finiteBitSize (0 :: Int) /= 64 then error "Requires 64-bit Int"
        else getContents >>= mapM_ (dispatch . words) . lines
-

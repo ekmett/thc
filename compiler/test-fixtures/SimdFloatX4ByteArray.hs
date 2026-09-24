@@ -27,7 +27,7 @@ initialize64 a s0 =
   case writeWord32Array# a 14# (wordToWord32# (int2Word# 2547389521#)) s14 of { s15 ->
   case writeWord32Array# a 15# (wordToWord32# (int2Word# 2564364632#)) s15 of { s16 ->
     s16
-  } } } } } } } } } } } } } } } } 
+  } } } } } } } } } } } } } } } }
 
 {-# INLINE writeFourBits #-}
 writeFourBits :: MutableByteArray# s -> Int# -> Int# -> Int# -> Int# -> Int# -> State# s -> State# s
@@ -37,7 +37,7 @@ writeFourBits a offset x0 x1 x2 x3 s0 =
   case writeWord32Array# a (offset +# 2#) (wordToWord32# (int2Word# x2)) s2 of { s3 ->
   case writeWord32Array# a (offset +# 3#) (wordToWord32# (int2Word# x3)) s3 of { s4 ->
     s4
-  } } } } 
+  } } } }
 
 {-# INLINE writeFourFloats #-}
 writeFourFloats :: MutableByteArray# s -> Int# -> Float# -> Float# -> Float# -> Float# -> State# s -> State# s
@@ -47,7 +47,7 @@ writeFourFloats a offset p0 p1 p2 p3 s0 =
   case writeFloatArray# a (offset +# 2#) p2 s2 of { s3 ->
   case writeFloatArray# a (offset +# 3#) p3 s3 of { s4 ->
     s4
-  } } } } 
+  } } } }
 
 vectorUnitCase :: Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int#
 vectorUnitCase offset x0 x1 x2 x3 lane = runRW# (\s0 ->
@@ -83,7 +83,7 @@ vectorReadWorker bytes offset lane s0 =
   case writeFourFloats scratch 0# p0 p1 p2 p3 s2 of { s3 ->
   case readWord32Array# scratch lane s3 of { (# s4, bits #) ->
      (# s4, word2Int# (word32ToWord# bits) #)
-  } } } } } 
+  } } } } }
 
 {-# OPAQUE vectorWriteWorker #-}
 vectorWriteWorker :: MutableByteArray# s -> Int# -> Int# -> Int# -> Int# -> Int# -> State# s -> (# State# s, Int# #)
@@ -96,7 +96,7 @@ vectorWriteWorker bytes offset x0 x1 x2 x3 s0 =
   case readFloatArray# scratch 3# s5 of { (# s6, p3 #) ->
   case writeFloatX4Array# bytes offset (packFloatX4# (# p0, p1, p2, p3 #)) s6 of { s7 ->
     (# s7, x0 *# 3# +# x1 *# 5# +# x2 *# 7# +# x3 *# 11# #)
-  } } } } } } } 
+  } } } } } } }
 
 {-# OPAQUE vectorIndexGraph #-}
 vectorIndexGraph :: ByteArray# -> Int# -> Int#
@@ -109,7 +109,7 @@ vectorStoreGraph bytes offset x0 x1 x2 x3 s0 =
   case writeFloatX4Array# bytes offset (packFloatX4# (# int2Float# x0, int2Float# x1, int2Float# x2, int2Float# x3 #)) s0 of { s1 ->
   case unsafeFreezeByteArray# bytes s1 of { (# _, frozen #) ->
     frozen
-  } } 
+  } }
 
 vectorIndexCase :: Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int#
 vectorIndexCase offset x0 x1 x2 x3 selector = runRW# (\s0 ->
@@ -189,7 +189,7 @@ scalarReadWorker bytes offset lane s0 =
   case writeFourFloats scratch 0# p0 p1 p2 p3 s2 of { s3 ->
   case readWord32Array# scratch lane s3 of { (# s4, bits #) ->
      (# s4, word2Int# (word32ToWord# bits) #)
-  } } } } } 
+  } } } } }
 
 {-# OPAQUE scalarWriteWorker #-}
 scalarWriteWorker :: MutableByteArray# s -> Int# -> Int# -> Int# -> Int# -> Int# -> State# s -> (# State# s, Int# #)
@@ -202,7 +202,7 @@ scalarWriteWorker bytes offset x0 x1 x2 x3 s0 =
   case readFloatArray# scratch 3# s5 of { (# s6, p3 #) ->
   case writeFloatArrayAsFloatX4# bytes offset (packFloatX4# (# p0, p1, p2, p3 #)) s6 of { s7 ->
     (# s7, x0 *# 3# +# x1 *# 5# +# x2 *# 7# +# x3 *# 11# #)
-  } } } } } } } 
+  } } } } } } }
 
 {-# OPAQUE scalarIndexGraph #-}
 scalarIndexGraph :: ByteArray# -> Int# -> Int#
@@ -215,7 +215,7 @@ scalarStoreGraph bytes offset x0 x1 x2 x3 s0 =
   case writeFloatArrayAsFloatX4# bytes offset (packFloatX4# (# int2Float# x0, int2Float# x1, int2Float# x2, int2Float# x3 #)) s0 of { s1 ->
   case unsafeFreezeByteArray# bytes s1 of { (# _, frozen #) ->
     frozen
-  } } 
+  } }
 
 scalarIndexCase :: Int# -> Int# -> Int# -> Int# -> Int# -> Int# -> Int#
 scalarIndexCase offset x0 x1 x2 x3 selector = runRW# (\s0 ->
