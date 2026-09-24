@@ -19,7 +19,7 @@ import unittest
 HERE = Path(__file__).resolve().parent
 DRIVER_ROOT = HERE.parent
 FIXTURE = HERE / "fixtures" / "tiny"
-REPO_ROOT = DRIVER_ROOT.parent
+REPO_ROOT = DRIVER_ROOT
 GHC_VERSION = "9.14.1"
 CABAL_VERSION = "3.16.0.0"
 
@@ -319,7 +319,7 @@ class DriverTest(unittest.TestCase):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--driver", type=Path, help="Prebuilt driver (requires --scratch); omit both to bootstrap")
-    parser.add_argument("--scratch", type=Path, help="Fixture scratch directory (requires --driver)")
+    parser.add_argument("--scratch", type=Path, help="Directory for persistent test evidence (requires --driver)")
     args = parser.parse_args()
     if (args.driver is None) != (args.scratch is None):
         parser.error("--driver and --scratch must be supplied together, or both omitted")
@@ -336,23 +336,24 @@ def main():
     try:
         if args.driver:
             DriverTest.driver = args.driver.resolve()
-            DriverTest.scratch = args.scratch.resolve()
             DriverTest.ghc_pkg = os.environ.get("GHC_PKG", "ghc-pkg")
             DriverTest.setup_command = [shutil.which("runghc") or "runghc", str(DRIVER_ROOT / "Setup.hs")]
             DriverTest.compiler_options = []
         else:
             DriverTest.driver, ghc, DriverTest.ghc_pkg, DriverTest.setup_command = bootstrap_driver(directory, commands)
-            DriverTest.scratch = directory / "scratch"
             DriverTest.compiler_options = ["--with-ghc", ghc, "--with-ghc-pkg", DriverTest.ghc_pkg]
     except (OSError, RuntimeError) as error:
         message = f"Cabal driver bootstrap failed: {error}\nEvidence: {directory}\n"
         (directory / "failure.log").write_text(message, encoding="utf-8")
         print(message, file=sys.stderr)
         return 1
-    DriverTest.scratch.mkdir(parents=True, exist_ok=True)
-    with (directory / "tests.log").open("w", encoding="utf-8") as log:
-        runner = unittest.TextTestRunner(stream=Tee(sys.stderr, log), verbosity=2)
-        result = runner.run(unittest.defaultTestLoader.loadTestsFromTestCase(DriverTest))
+    # Directory-mode fixtures must be outside this repository's cabal.project.
+    # Keep commands and results in the requested evidence directory.
+    with tempfile.TemporaryDirectory(prefix="thc-driver-fixtures-") as scratch:
+        DriverTest.scratch = Path(scratch)
+        with (directory / "tests.log").open("w", encoding="utf-8") as log:
+            runner = unittest.TextTestRunner(stream=Tee(sys.stderr, log), verbosity=2)
+            result = runner.run(unittest.defaultTestLoader.loadTestsFromTestCase(DriverTest))
     return 0 if result.wasSuccessful() else 1
 
 

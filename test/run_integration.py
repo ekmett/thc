@@ -39,7 +39,9 @@ def exercise(driver, runtime, thc_root, scratch):
             if backend:
                 import os
                 environment = dict(os.environ, THC_BACKEND=backend)
-            result = checked([driver, "run", package, "--exe", "completed",
+            # This fixture lives below the repository's cabal.project in CI.
+            # An explicit .cabal path requests independent package configuration.
+            result = checked([driver, "run", package / "run-pure.cabal", "--exe", "completed",
                               "--dist-dir", output, "--thc-root", thc_root,
                               "--runtime", runtime], cwd=root, environment=environment)
             return result, output

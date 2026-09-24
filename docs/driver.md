@@ -16,22 +16,20 @@ binary. The standalone `build` and `repl` commands remain absent.
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow
 because Cabal's configuration and symbolic-path interfaces are version specific.
-Put that compiler and its matching `ghc-pkg`/`runghc` on `PATH`. No Hackage
-download or cabal-install executable/library is needed.
+Put that compiler and its matching `ghc-pkg`/`runghc` on `PATH`, together with
+cabal-install 3.16. The driver links the Cabal libraries bundled with GHC.
 
-From `driver/`:
+From the repository root:
 
 ```sh
-runghc Setup.hs configure --builddir=../build/driver-package \
-  --package-db=clear --package-db=global
-runghc Setup.hs build --builddir=../build/driver-package
-
-../build/driver-package/build/thc/thc plan-package test/fixtures/tiny \
-  --dist-dir "$PWD/../build/tiny-plan" --enable-tests --enable-benchmarks
+cabal build thc
+cabal run thc -- --help
+cabal run thc -- plan-package test/fixtures/tiny/tiny-fixture.cabal \
+  --dist-dir "$PWD/build/tiny-plan" --enable-tests --enable-benchmarks
 
 python3 test/test_driver.py \
-  --driver ../build/driver-package/build/thc/thc \
-  --scratch ../build/driver-tests
+  --driver "$(cabal list-bin thc)" \
+  --scratch "$PWD/build/driver-tests"
 ```
 
 To exercise `run`, first build the plugin and JVM launcher from the repository
@@ -41,11 +39,11 @@ root using the pinned GHC and GraalVM JDK 25:
 export JAVA_HOME=/path/to/graalvm-jdk-25
 compiler/build.sh
 scripts/gradle.sh installDist --offline
-build/driver-package/build/thc/thc run driver/test/fixtures/run-pure \
+cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
   --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 
-python3 driver/test/run_integration.py \
-  --driver "$PWD/build/driver-package/build/thc/thc" \
+python3 test/run_integration.py \
+  --driver "$(cabal list-bin thc)" \
   --runtime "$PWD/build/install/thc/bin/thc" \
   --thc-root "$PWD" --scratch "$PWD/build/run-integration"
 ```
@@ -67,17 +65,11 @@ dependencies. It expects a source `.hs` main and an installed THC JVM launcher
 output is built but never launched by `thc run`. The runtime currently executes
 the IO action in the interpreter; it does not claim a compiled guest entry.
 
-On coordinated development hosts, wrap each configure/build/test command in the
-shared `resource_run.py --build-dir /absolute/checkout/build -- COMMAND` gate.
-The test command holds one lease while it runs its serial native fixture build;
-do not wrap its child commands in another lease.
-
-The Python test entrypoint also works without arguments, as required by the
-repository's full Python inventory:
+The Python test entrypoint also works without a prebuilt driver:
 
 ```sh
-python3 driver/test/test_driver.py
-python3 -O driver/test/test_driver.py
+python3 test/test_driver.py
+python3 -O test/test_driver.py
 ```
 
 Run these from the repository root (or use an absolute script path from any
