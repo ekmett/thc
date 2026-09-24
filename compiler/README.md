@@ -77,6 +77,83 @@ Exactly saturated `tagToEnum#` applications retain an `enumFamily` object in the
 
 Data-constructor **workers** become constructor expressions. Constructor wrappers remain ordinary variable references and require actual compiled definitions.
 
+### Foreign-call signature evidence
+
+An intact, directly headed GHC `FCallId` application can additionally carry
+`app[6].foreignCall`. This is structured signature evidence, **not runtime FFI
+support**. Its function remains the original `var` expression and ID; unknown
+foreign globals retain their existing strict frontier. No name or printed type
+string is parsed to classify a call, and no Haskell body is replaced.
+
+The schema-1 descriptor has these fields:
+
+```json
+{
+  "schema": 1,
+  "target": {"kind": "static", "symbol": "__hsbase_MD5Init", "unit": "main", "isFunction": true},
+  "convention": "ccall",
+  "safety": "unsafe",
+  "arity": 2,
+  "suppliedArity": 2,
+  "argumentReps": [
+    {"primReps": ["AddrRep"], "kind": "address", "evaluated": false},
+    {"primReps": [], "kind": "void", "evaluated": false}
+  ],
+  "resultRep": {"primReps": [], "kind": "unknown", "evaluated": false,
+                "aggregate": "unboxed-tuple",
+                "components": [{"primReps": [], "kind": "void", "evaluated": true}]}
+}
+```
+
+`GHC.Types.Id.isFCallId_maybe` supplies `ForeignCall`; the pinned
+`GHC.Types.ForeignCall.CCallSpec` supplies all target, convention and safety
+fields. A static target preserves its exact label, optional target unit (`null`
+when GHC provides none), and function/data flag. The example's unit is `main`
+because the compiler-only fixture belongs to that unit; it is not substituted
+for the actual `ghc-internal` unit of the original Fingerprint source. A dynamic
+target is exactly `{"kind":"dynamic"}`, without invented label/unit fields.
+Conventions are `ccall`, `capi`, `stdcall`, `prim`, or `javascript`; safety is
+`unsafe`, `safe`, or `interruptible`.
+
+GHC's original function type is instantiated with the actual leading type
+arguments before extracting declared argument and result representation records.
+`arity` counts the entire instantiated signature, including zero-width State or
+coercion slots; `suppliedArity` counts retained actual arguments. A consumer must
+check both, the complete signature, actual argument/result proofs and exact target
+contract, not merely recognize a symbol. Top-level declared `evaluated` flags are
+false: the descriptor itself confers no execution/WHNF certificate. Nested
+components retain the ordinary type-layout rule for known unlifted fields.
+Logical tuple components remain present even when every physical register is
+zero-width. Pinned `CInt` supplies `Int32Rep`, not the host `IntRep`: the MD5
+Init/Update/Final declared/supplied arities are 2/4/3 including the final State.
+
+Bare foreign variables, cast/tick function heads, still-polymorphic signatures,
+interleaved type applications and export-only wired/erased subtrees do not gain
+this descriptor. The ordinary export remains available and unsupported paths
+remain explicit. This bounded producer introduces no new executable node kind,
+general pointer support, callback implementation, or accepted-symbol whitelist.
+
+`compiler/test-fixtures/ForeignCallAudit.hs` is compiler-only: it declares the
+three MD5 machine signatures plus same-symbol safe, interruptible and wrong-type
+controls, a dynamic call, an unknown symbol, and an ordinary Haskell identifier
+with the same spelling. Export it before and after Tidy without linking or
+executing its negative controls.
+
+After exporting both stages, run the strict standalone reader (also with `-O`):
+
+```sh
+python3 compiler/test-fixtures/check-foreign-call-metadata.py PRE.json POST.json
+```
+
+Optional `--before PREVIOUS_PRE.json --before PREVIOUS_POST.json` additionally
+checks exact expression/proof equality after removing the new descriptor and
+allowing only bijective GHC-local unique renaming. This specifically includes
+foreign IDs, which the general executable comparator treats as unresolved
+external names. It does not parse those IDs to derive a signature. The reader
+also checks the existing auditor's unchanged missing-global/host-tuple frontiers
+and rejects independently mutated descriptor controls; it is not a runtime FFI
+validator.
+
 Type arguments and type lambdas erase. A type-only application becomes its function. Coercion arguments and coercion lambda binders retain a zero-width `void` slot so Core's value arity conventions remain explicit. Casts and ticks erase from the executable subset and remain visible in `sourceCore`. The source-note metadata below retains source attribution without executable tick wrappers or instrumentation events. Primitive literals retain kind, with integral/character codepoint values in decimal, byte strings in hexadecimal, floating values in decimal. Unsupported literal kinds stay explicit.
 
 ## Optional source attribution
