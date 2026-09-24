@@ -9,7 +9,8 @@
     "runtime-core-native": {
       "junit": [
         "thc.RuntimeTest",
-        "thc.BytecodeBackendTest"
+        "thc.BytecodeBackendTest",
+        "thc.SelfTailProfileTest"
       ],
       "commands": [
         {"argv": ["compiler/export.sh", "examples/THC/Fixtures.hs"]},
@@ -24,6 +25,7 @@
         "examples/THC/Prim.hs",
         "examples/THC/Fixtures.hs",
         "examples/NativeOracle.hs",
+        "examples/THC/MapWorkload.hs",
         "scripts/native-oracle.sh"
       ]
     },

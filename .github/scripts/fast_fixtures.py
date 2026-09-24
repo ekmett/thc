@@ -152,22 +152,28 @@ def prepare(root, selection, run, toolchain):
         raise ValueError("Invalid selected test mode")
 
     groups = sorted({owners[name] for name in classes if owners[name] is not None})
-    state = []
-    for group_id in groups:
-        group = manifest["groups"][group_id]
-        key = cache_key(root, group_id, group, toolchain)
-        stamp_path = root / STAMP_DIR / (group_id + ".json")
-        try:
-            stamp = json.loads(stamp_path.read_text())
-            reusable = (isinstance(stamp, dict) and stamp.get("schema") == 1 and stamp.get("key") == key and
-                        stamp.get("outputs") == _output_hashes(root, group))
-        except (FileNotFoundError, ValueError, OSError):
-            reusable = False
-        state.append((group_id, group, key, stamp_path, reusable))
+    def classify():
+        state = []
+        for group_id in groups:
+            group = manifest["groups"][group_id]
+            key = cache_key(root, group_id, group, toolchain)
+            stamp_path = root / STAMP_DIR / (group_id + ".json")
+            try:
+                stamp = json.loads(stamp_path.read_text())
+                reusable = (isinstance(stamp, dict) and stamp.get("schema") == 1 and
+                            stamp.get("key") == key and stamp.get("outputs") == _output_hashes(root, group))
+            except (FileNotFoundError, ValueError, OSError):
+                reusable = False
+            state.append((group_id, group, key, stamp_path, reusable))
+        return state
 
+    state = classify()
     if any(not reusable for _, _, _, _, reusable in state):
         run("fixture-scalar-signatures", ["python3", "scripts/generate-scalar-signatures.py"])
         run("fixture-compiler", ["compiler/build.sh"])
+        # A preparatory command may have updated a declared source. Never skip
+        # a previously reusable group on an identity calculated before it ran.
+        state = classify()
     rebuilt, reused = [], []
     for group_id, group, key, stamp_path, reusable in state:
         if reusable:

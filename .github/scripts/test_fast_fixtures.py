@@ -46,10 +46,14 @@ class FixturePreparationTest(unittest.TestCase):
         manifest.parent.mkdir(parents=True, exist_ok=True)
         manifest.write_text(json.dumps(self.manifest))
         self.calls = []
+        self.mutate_scalar_on_generator = False
         self.toolchain = {"ghcVersion": "9.14.1", "platform": "Linux-x86_64"}
 
     def fake_run(self, name, argv, stdout=None):
         self.calls.append((name, argv, stdout))
+        if argv == ["python3", "scripts/generate-scalar-signatures.py"] and self.mutate_scalar_on_generator:
+            resource = self.root / "src/main/resources/thc/scalar-primop-signatures.json"
+            resource.write_text("updated signature table")
         if argv == ["make-alpha"]:
             self.assertEqual(stdout, "build/alpha/oracle.tsv")
             output = self.root / stdout
@@ -114,6 +118,14 @@ class FixturePreparationTest(unittest.TestCase):
         self.calls.clear()
         self.toolchain["ghcVersion"] = "9.14.2"
         self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
+
+    def test_preparatory_source_change_rechecks_previous_hits(self):
+        self.prepare("thc.AlphaTest")
+        self.calls.clear()
+        self.mutate_scalar_on_generator = True
+        result = self.prepare("thc.AlphaTest", "thc.BetaTest")
+        self.assertEqual(result["rebuilt"], ["alpha", "beta"])
+        self.assertEqual(result["reused"], [])
 
     def test_unknown_or_full_selection_runs_complete_preparation(self):
         self.assertEqual(self.prepare("thc.UnknownTest"),
