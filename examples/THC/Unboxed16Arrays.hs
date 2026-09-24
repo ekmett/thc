@@ -36,7 +36,8 @@ unboxedInt16ST raw =
 unboxedWord16Accum :: Int# -> Int#
 unboxedWord16Accum raw =
   let x = fromIntegral (I# raw) :: Word16
-      a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word16
+      -- Explicitly convert the negative Int input to exercise Word16 wraparound.
+      a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,fromIntegral (-2 :: Int)),(4,x)] :: UArray Int Word16
   in case (fromIntegral (a!(-3))*7 + fromIntegral (a!0)*11 + fromIntegral (a!4)*13 :: Int) of
        I# answer -> answer
 

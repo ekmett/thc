@@ -2,6 +2,8 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, UnliftedDatatypes, StandaloneKindSignatures #-}
+-- Retain dataToTagSmall# to test its primitive and unsupported family frontiers.
+{-# OPTIONS_GHC -Wno-deprecations #-}
 module DataToTagAudit where
 
 import GHC.Exts

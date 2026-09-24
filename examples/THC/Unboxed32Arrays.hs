@@ -36,7 +36,8 @@ unboxedInt32ST raw =
 unboxedWord32Accum :: Int# -> Int#
 unboxedWord32Accum raw =
   let x = fromIntegral (I# raw) :: Word32
-      a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,-2),(4,x)] :: UArray Int Word32
+      -- Explicitly convert the negative Int input to exercise Word32 wraparound.
+      a = accumArray (+) x (-3,4) [(-3,3),(0,5),(-3,fromIntegral (-2 :: Int)),(4,x)] :: UArray Int Word32
   in case (fromIntegral (a!(-3))*7 + fromIntegral (a!0)*11 + fromIntegral (a!4)*13 :: Int) of
        I# answer -> answer
 
