@@ -176,6 +176,14 @@
     }
   },
   "owners": {
+    "src/main/kotlin/thc/CorePackageManifest.kt": {
+      "junit": ["thc.CoreZipBundleTest", "thc.CoreLinkerTest"],
+      "python": []
+    },
+    "src/test/kotlin/thc/CoreZipBundleTest.kt": {
+      "junit": ["thc.CoreZipBundleTest"],
+      "python": []
+    },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
         "thc.runtime.ArrayCoreEvidenceTest",
