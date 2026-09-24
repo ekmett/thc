@@ -149,19 +149,50 @@ internal class GuestThreads internal constructor(
                                       cause: Throwable? = null): Boolean {
         val thread = request.target ?: return false
         val target = threads[request.targetId] ?: return false
-        if (target.thread !== thread || request !in target.queue) return false
-        if (state == AsyncRequestState.CANCELLED && request.state != AsyncRequestState.PENDING)
+        if (target.thread !== thread) return false
+        val queued = request in target.queue
+        if (!queued && request.state != AsyncRequestState.PAUSED) return false
+        if (state == AsyncRequestState.CANCELLED && request.state !in setOf(
+                AsyncRequestState.PENDING, AsyncRequestState.PAUSED))
             return false
         if (state == AsyncRequestState.ACKNOWLEDGED && request.state != AsyncRequestState.CLAIMED)
             error("Async request was not claimed by its target")
         if (state == AsyncRequestState.FAILED && request.state !in setOf(
                 AsyncRequestState.PENDING, AsyncRequestState.CLAIMED)) return false
-        target.queue.remove(request)
+        if (queued) target.queue.remove(request)
         if (target.claimed === request) target.claimed = null
         target.pending = target.claimed == null && target.queue.isNotEmpty()
         request.failure = cause
         request.transition(state)
         return true
+    }
+
+    /** Remove an uncommitted outbound throwTo while its sender handles an async exception. */
+    @Synchronized internal fun pause(request: AsyncRequest): Boolean {
+        val target = threads[request.targetId] ?: return false
+        if (target.thread !== request.target || request.state != AsyncRequestState.PENDING ||
+            !target.queue.remove(request)) return false
+        target.pending = target.claimed == null && target.queue.isNotEmpty()
+        request.transition(AsyncRequestState.PAUSED)
+        return true
+    }
+
+    /** Resume the same logical request after the sender's caught continuation resumes. */
+    internal fun resume(request: AsyncRequest) {
+        val thread = synchronized(this) {
+            if (request.state != AsyncRequestState.PAUSED) return
+            val target = threads[request.targetId]
+            if (closed || target == null || target.thread !== request.target) {
+                request.transition(AsyncRequestState.TARGET_FINISHED)
+                return
+            }
+            target.queue.addLast(request)
+            request.transition(AsyncRequestState.PENDING)
+            target.pending = target.claimed == null
+            target.thread
+        }
+        try { wake(thread) }
+        catch (failure: Throwable) { request.fail(failure); throw failure }
     }
 
     companion object {
@@ -171,7 +202,7 @@ internal class GuestThreads internal constructor(
     }
 }
 
-internal enum class AsyncRequestState { PENDING, CLAIMED, ACKNOWLEDGED, CANCELLED, TARGET_FINISHED, FAILED }
+internal enum class AsyncRequestState { PENDING, CLAIMED, PAUSED, ACKNOWLEDGED, CANCELLED, TARGET_FINISHED, FAILED }
 
 /** A pending throwTo payload. Only the target's real catch handler may acknowledge it. */
 internal class AsyncRequest internal constructor(
@@ -208,21 +239,30 @@ internal class AsyncRequest internal constructor(
 
     /** Blocking send completion is interruptible and revokes only an unclaimed request. */
     @TruffleBoundary fun await(node: Node): AsyncRequestState = try {
-        TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, waitForTerminal, this)
+        owner.resume(this)
+        TruffleSafepoint.setBlockedThreadInterruptibleFunction(node,
+            TruffleSafepoint.InterruptibleFunction<AsyncRequest, AsyncRequestState> {
+                it.waitForTerminal(node)
+            }, this)
     } catch (failure: Throwable) {
-        cancel()
+        if (failure !is AsyncBlocked) cancel()
         throw failure
     }
 
-    private fun waitForTerminal(): AsyncRequestState = synchronized(monitor) {
-        while (state == AsyncRequestState.PENDING || state == AsyncRequestState.CLAIMED)
-            monitor.wait()
-        state
-    }
-
-    companion object {
-        private val waitForTerminal = TruffleSafepoint.InterruptibleFunction<AsyncRequest, AsyncRequestState> {
-            it.waitForTerminal()
+    private fun waitForTerminal(node: Node): AsyncRequestState {
+        while (true) {
+            val snapshot = state
+            if (snapshot != AsyncRequestState.PENDING && snapshot != AsyncRequestState.CLAIMED &&
+                snapshot != AsyncRequestState.PAUSED) return snapshot
+            val incoming = owner.poll(node, interruptible = true)
+            if (incoming != null) {
+                owner.pause(this)
+                throw AsyncBlocked(incoming, node)
+            }
+            synchronized(monitor) {
+                if (state == AsyncRequestState.PENDING || state == AsyncRequestState.CLAIMED ||
+                    state == AsyncRequestState.PAUSED) monitor.wait()
+            }
         }
     }
 }
