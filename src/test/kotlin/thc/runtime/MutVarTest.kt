@@ -26,6 +26,7 @@ class MutVarTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val names = listOf("stRef", "lazyRef", "closureRef", "orderedRef", "unliftedRef", "stLoop")
     private val equalityNames = listOf("stRefEquality", "lazyRefEquality")
+    private val lazyIONames = listOf("lazyIORef")
     private fun manifest() = Json.parse(File(root, "build/mutvar/manifest.json").readText()) as Map<String, Any?>
     private fun merged(paths: List<String>) = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
@@ -43,6 +44,7 @@ class MutVarTest {
                 }
             }
             "lazyRef" -> x + BigInteger.valueOf(5)
+            "lazyIORef" -> x + BigInteger.valueOf(17)
             "closureRef" -> x * BigInteger.valueOf(4) + BigInteger.valueOf(11)
             "unliftedRef" -> x * BigInteger.valueOf(258) + BigInteger.ONE
             "stLoop" -> {
@@ -71,6 +73,41 @@ class MutVarTest {
     @Test fun nativeSTRefAcrossResidualCalls() = native(false)
     @Test fun publicSTRefEqualityWithInlining() = native(true, entryNames = equalityNames)
     @Test fun publicSTRefEqualityAcrossResidualCalls() = native(false, entryNames = equalityNames)
+    @Test fun publicLazyIORefWithInlining() = native(true, entryNames = lazyIONames)
+    @Test fun publicLazyIORefAcrossResidualCalls() = native(false, entryNames = lazyIONames)
+
+    @Test fun genuineLazyReturnedActionsKeepExactMutVarProofs() {
+        fun nodes(value: Any?): List<List<Any?>> = when (value) {
+            is Map<*, *> -> value.values.flatMap(::nodes)
+            is List<*> -> listOf(value) + value.flatMap(::nodes)
+            else -> emptyList()
+        }
+        for ((stage, paths) in manifest()["stages"] as Map<String, List<String>>) {
+            val modules = paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> }
+            val original = modules.single { it["module"] == "MutVarAudit" }
+            assertTrue(Regex("\\blazy\\s+@").containsMatchIn(original["sourceCore"] as String),
+                "$stage must retain the genuine typed lazy identity before export erasure")
+            val helper = (original["bindings"] as List<Map<String, Any?>>).single { it["name"] == "freshActions" }
+            val calls = nodes(helper["expr"]).filter { node ->
+                node.firstOrNull() == "app" && (node[1] as? List<*>)?.let {
+                    it.firstOrNull() == "prim" && MutVarOp.named(it.getOrNull(1) as? String ?: "") != null
+                } == true
+            }
+            assertEquals(setOf("newMutVar#", "readMutVar#", "writeMutVar#"),
+                calls.map { (it[1] as List<*>)[1] }.toSet())
+            for (call in calls) {
+                val name = (call[1] as List<*>)[1] as String
+                MutVarOp.named(name)!!.validate(
+                    (call[2] as List<List<Any?>>).map(CoreRepresentations::expression),
+                    call[3] as List<*>, CoreRepresentations.expression(call))
+            }
+            val audit = Json.parse(File(root, "build/mutvar/$stage/lazyIORef.audit.json").readText()) as Map<String, Any?>
+            assertEquals(true, audit["accepted"])
+            assertEquals(emptyList<Any>(), audit["missingGlobals"])
+            assertEquals(emptyList<Any>(), audit["issues"])
+        }
+    }
+
     private fun native(inlining: Boolean, recoverLoop: Boolean = false, entryNames: List<String> = names) {
         val manifest = manifest()
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
@@ -79,7 +116,7 @@ class MutVarTest {
             assertEquals(expected, actual, "Stale MutVar fixture: $path; rerun prepare-mutvar.py")
         }
         val rows = File(root, "build/mutvar/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals((names + equalityNames).toSet(), rows.keys)
+        assertEquals((names + equalityNames + lazyIONames).toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
             val module = merged(paths)

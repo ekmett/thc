@@ -77,9 +77,15 @@ def fixture_checks(module, coercions):
     demand('deadEndEntry', 'deadEnd', 1, [False])
     barrier = demand('lazyBarrier', 'strictTree', 1, [False])
     # The original lazyId remains effective even though the exported argument
-    # now has exactly the same shape as the ordinary makeTree call.
+    # now has the ordinary typed makeTree call and its own demand certificate.
+    # That recovered inner evidence cannot make the outer argument strict or
+    # certify that the suspended call has already run / is safe to speculate.
     rewritten = calls(barrier[2][0], 'makeTree')
-    assert len(rewritten) == 1 and 'callDemand' not in rewritten[0][-1], rewritten
+    assert len(rewritten) == 1, rewritten
+    assert rewritten[0][-1]['callDemand'] == {'arity': 1, 'strictArgs': [False]}, rewritten
+    assert rewritten[0][4:6] == [False, False], rewritten
+    assert rewritten[0][-1]['rep'] == {
+        'kind': 'data', 'primReps': ['BoxedRep (Just Lifted)'], 'evaluated': False}, rewritten
 
     # This real GADT worker contains a retained coercion before its strict tree.
     workers = [binding for binding in walk(coercions['bindings'])

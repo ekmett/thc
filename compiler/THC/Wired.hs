@@ -50,12 +50,14 @@ wiredCase :: CoreExpr -> Maybe CoreExpr
 wiredCase (Case scrut bndr _ alts) = isUnsafeEqualityCase scrut bndr alts
 wiredCase _ = Nothing
 
--- runRW# f becomes f realWorld# without changing any retained Core type.
+-- runRW# f becomes f realWorld#, and lazy x becomes x, without changing
+-- retained Core types. Keep typed evidence within lazy returned IO actions.
 -- Unary-class erasure does change apparent types, so it must remain uncertified.
 -- Keep the exact GHC type check here rather than trusting a printed type/name.
 preservesWiredTypes :: CoreExpr -> CoreExpr -> Bool
 preservesWiredTypes original lowered = case collectArgs original of
-  (Var v, _) | v `hasKey` runRWKey -> eqType (exprType original) (exprType lowered)
+  (Var v, _) | any (v `hasKey`) [runRWKey, lazyIdKey] ->
+    eqType (exprType original) (exprType lowered)
   _ -> False
 
 -- | First-class fallback and compiler-generated selectors absent from interface

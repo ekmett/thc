@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/mutvar'
 SOURCE = 'compiler/test-fixtures/MutVarAudit.hs'
 ENTRIES = ['stRef', 'lazyRef', 'closureRef', 'orderedRef', 'unliftedRef', 'stLoop',
-           'stRefEquality', 'lazyRefEquality']
+           'stRefEquality', 'lazyRefEquality', 'lazyIORef']
 EQUALITY_ENTRIES = {'stRefEquality', 'lazyRefEquality'}
 PRIMITIVES = {'newMutVar#', 'readMutVar#', 'writeMutVar#'}
 
@@ -36,6 +36,8 @@ def mathematical(name, x):
         return signed(left * 257 + right * 65537 + 17 * score)
     if name == 'lazyRef':
         return signed(x + 5)
+    if name == 'lazyIORef':
+        return signed(x + 17)
     if name == 'closureRef':
         return signed(4 * x + 11)
     if name == 'unliftedRef':
