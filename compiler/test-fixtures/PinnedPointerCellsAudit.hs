@@ -112,3 +112,50 @@ byte8Roundtrip raw = runRW# (\s0 ->
                 +# word2Int# (word8ToWord# unsignedRead)) #)
     } } } } }) of { (# _, I# answer #) -> answer }
   } } })
+
+-- The pinned array write supplies target-native byte order. The four Addr#
+-- reads use two-byte element offsets and preserve signed/unsigned lanes.
+{-# OPAQUE halfwordReadRoundtrip #-}
+halfwordReadRoundtrip :: Int# -> Int#
+halfwordReadRoundtrip raw = runRW# (\s0 ->
+  case newPinnedByteArray# 32# s0 of { (# s1, mutable #) ->
+  case writeInt16Array# mutable 12# (intToInt16# raw) s1 of { s2 ->
+  case unsafeFreezeByteArray# mutable s2 of { (# s3, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s3 (\s4 ->
+    case readInt16OffAddr# base 12# s4 of { (# s5, signedRead #) ->
+    case readWord16OffAddr# base 12# s5 of { (# s6, unsignedRead #) ->
+    case indexInt16OffAddr# base 12# of { signedIndex ->
+    case indexWord16OffAddr# base 12# of { unsignedIndex ->
+      (# s6, I# ((int16ToInt# signedRead +# 32768#) *# 281474976710656#
+                +# (int16ToInt# signedIndex +# 32768#) *# 4294967296#
+                +# word2Int# (word16ToWord# unsignedRead) *# 65536#
+                +# word2Int# (word16ToWord# unsignedIndex)) #)
+    } } } }) of { (# _, I# answer #) -> answer }
+  } } } })
+
+-- Two native-endian halfword stores occupy bytes 16..17 and 24..25. A
+-- retained address at bytes 8..15 proves both writes are disjoint from the
+-- managed pointer cell; byte observations make the layout independently visible.
+{-# OPAQUE halfwordWriteRoundtrip #-}
+halfwordWriteRoundtrip :: Int# -> Int#
+halfwordWriteRoundtrip raw = runRW# (\s0 ->
+  case newPinnedByteArray# 32# s0 of { (# s1, mutable #) ->
+  case unsafeFreezeByteArray# mutable s1 of { (# s2, bytes #) ->
+  case byteArrayContents# bytes of { base ->
+  case keepAlive# bytes s2 (\s3 ->
+    case writeAddrOffAddr# base 1# (plusAddr# base 24#) s3 of { s4 ->
+    case writeInt16OffAddr# base 12# (intToInt16# raw) s4 of { s5 ->
+    case writeWord16OffAddr# base 8# (wordToWord16# (int2Word# (raw +# 32768#))) s5 of { s6 ->
+    case readAddrOffAddr# base 1# s6 of { (# s7, target #) ->
+    case indexWord8Array# bytes 16# of { a ->
+    case indexWord8Array# bytes 17# of { b ->
+    case indexWord8Array# bytes 24# of { c ->
+    case indexWord8Array# bytes 25# of { d ->
+      (# s7, I# (eqAddr# target (plusAddr# base 24#) *# 4294967296#
+        +# word2Int# (word8ToWord# a) *# 16777216#
+        +# word2Int# (word8ToWord# b) *# 65536#
+        +# word2Int# (word8ToWord# c) *# 256#
+        +# word2Int# (word8ToWord# d)) #)
+    } } } } } } } }) of { (# _, I# answer #) -> answer }
+  } } })

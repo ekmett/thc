@@ -602,6 +602,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class WriteWord16OffAddr {
+        @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
+            ManagedByteArray.requireState(state);
+            address.writeWord16(offset, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
     public static final class WriteAddrOffAddr {
         @Specialization public static Object write(ManagedAddress address, long offset,
                 ManagedAddress value, Object state) {
@@ -1504,6 +1513,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
         @Fallback public static long invalid(boolean signed, Object address, Object displacement) {
             if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
+            throw fail("Expected primitive Long");
+        }
+    }
+    @Operation @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
+    public static final class AddressIndexManagedScalar {
+        @Specialization public static long index(ManagedAddressRead operation, ManagedAddress address, long element) {
+            return operation.read(address, element);
+        }
+        @Fallback public static long invalid(ManagedAddressRead operation, Object address, Object element) {
+            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed Addr#");
             throw fail("Expected primitive Long");
         }
     }
