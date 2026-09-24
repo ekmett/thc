@@ -1327,6 +1327,65 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
+    /** Private checkpoint variant: a yielded action is captured before tuple destination consumption. */
+    @Operation(forceCached = true)
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class InvokeIOActionCheckpoint {
+        @Specialization public static void run(VirtualFrame frame, BytecodeTupleSlots destination, Metrics metrics,
+                Object action,
+                @Bind Node node,
+                @Cached(value = "createAction(destination, metrics)", neverDefault = true) TupleDispatch actionCall,
+                @Cached(value = "createForce(metrics)", neverDefault = true) Force force) {
+            Closure closure = RequireClosure.require(force.execute(frame, action));
+            MaskingState callerMask = SynchronousMasking.current(node);
+            try {
+                actionCall.execute(frame, closure, new Object[]{kotlin.Unit.INSTANCE});
+            } catch (TupleCallYield yielded) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                try {
+                    ContinuationResult continuation = yielded.getContinuation();
+                    Object source = continuation.getContinuationRootNode().getSourceRootNode();
+                    if (closure.arity != 1 || !(source instanceof BytecodeRoot callee) ||
+                            !callee.isSelf(closure.target) || !callee.hasTupleResult(destination.getShape()) ||
+                            !(continuation.getResult() == kotlin.Unit.INSTANCE ||
+                                    continuation.getResult() instanceof ThunkSuspended ||
+                                    continuation.getResult() instanceof CallSegmentSuspended))
+                        throw new IllegalStateException("IO action returned an unrelated tuple continuation");
+                    MaskingState parked = continuation.getResult() instanceof CallSegmentSuspended suspended
+                            ? suspended.getParkedActiveMask() : null;
+                    if (parked != null && SynchronousMasking.current(node) != callerMask)
+                        throw new IllegalStateException("Parked IO action did not restore its caller mask");
+                    MaskingState active = parked != null ? parked : SynchronousMasking.current(node);
+                    throw new CapturedCallSuspension(new CallSegment(continuation, active, callerMask,
+                            destination.getShape()));
+                } finally { SynchronousMasking.set(node, callerMask); }
+            }
+        }
+        public static TupleDispatch createAction(BytecodeTupleSlots destination, Metrics metrics) {
+            return new TupleDispatch(new ContinuationTupleDestination(destination), metrics, 1, false);
+        }
+        public static Force createForce(Metrics metrics) { return new Force(metrics); }
+    }
+
+    /** Copies a completed, owned tuple into the original caller frame exactly once. */
+    @Operation
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    public static final class ResumeIOAction {
+        @Specialization public static void resume(VirtualFrame frame, BytecodeTupleSlots destination,
+                CallSegmentSuspended suspended, ChildResume resumed, @Bind Node node) {
+            if (resumed.getFailure() != null) throw resumed.getFailure();
+            CallSegment segment = suspended.getSegment();
+            if (segment.getTupleShape() != destination.getShape() || segment.getState() != 2 ||
+                    segment.getValue() != resumed.getValue() || !(resumed.getValue() instanceof HandoffStorage owned))
+                throw new IllegalStateException("IO action continuation lost its tuple update");
+            destination.consume(frame, node, owned);
+        }
+        @Fallback public static void malformed(BytecodeTupleSlots destination, Object suspended, Object resumed) {
+            throw new IllegalStateException("IO action continuation requires an owned ChildResume tuple");
+        }
+    }
+
     /** The bytecode handler admits only synchronous Haskell guest exceptions. */
     @Operation public static final class RequireGuestFailure {
         @Specialization public static Object payload(AbstractTruffleException failure) {

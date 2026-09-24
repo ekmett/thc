@@ -25,6 +25,23 @@ uncaptured = delayed 7#
 applicationAnswer :: Int
 applicationAnswer = case delayed 7# of Box result -> I# (200# +# result)
 
+-- The private checkpoint may suspend an original catch# IO action before it
+-- produces its unboxed tuple. The handler remains a genuine GHC Core handler.
+{-# OPAQUE catchActionAnswer #-}
+catchActionAnswer :: Int
+catchActionAnswer =
+  case catch# (\s0 -> case noDuplicate# s0 of { s1 ->
+                 case noDuplicate# s1 of { s2 -> (# s2, Box 42# #) } })
+              (\(Box value) s3 -> (# s3, Box (value +# 100#) #)) realWorld# of
+    (# _, Box result #) -> I# result
+
+{-# OPAQUE catchActionFailure #-}
+catchActionFailure :: Int
+catchActionFailure =
+  case catch# (\s0 -> case noDuplicate# s0 of s1 -> raiseIO# (Box 7#) s1)
+              (\(Box value) s2 -> (# s2, Box (value +# 70#) #)) realWorld# of
+    (# _, Box result #) -> I# result
+
 -- A nested lambda owns this yield, not the directly called function root.
 {-# OPAQUE nestedDelayed #-}
 nestedDelayed :: Int# -> Box
