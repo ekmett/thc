@@ -79,7 +79,7 @@ def main():
     for stage in ['pre', 'post']:
         argv = ['compiler/export.sh']
         if stage == 'post':
-            argv.append('-fplugin-opt=Thc.Plugin:post-tidy')
+            argv.append('-fplugin-opt=THC.Plugin:post-tidy')
         argv.append(FIXTURE)
         run(stage + '-export', argv,
             {'THC_CORE_OUT': str(OUT / (stage + '-core')),

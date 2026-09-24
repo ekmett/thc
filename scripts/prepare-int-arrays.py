@@ -121,9 +121,9 @@ def main():
         for index, group in enumerate(GROUPS):
             directory = BUILD / stage / str(index)
             core = directory / 'core'
-            options = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+            options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
             run([ROOT / 'compiler/export.sh', *options,
-                 *['-fplugin-opt=Thc.Plugin:closure='+name for name in group['entries']], group['source']],
+                 *['-fplugin-opt=THC.Plugin:closure='+name for name in group['entries']], group['source']],
                 env=dict(THC_CORE_OUT=str(core), THC_GHC_OUT=str(directory / 'ghc'), THC_SOURCE_NOTES='true'))
             module_path = core / (group['module']+'.json')
             check(json.loads(module_path.read_text())['boundary'] == boundary, 'Wrong Core boundary')
@@ -171,7 +171,7 @@ def main():
     inputs_to_hash = [ROOT/g['source'] for g in GROUPS] + [Path(__file__).resolve(),
         ROOT/'scripts/test-int-array-model.py', ROOT/'scripts/core-capabilities.json', ROOT/'scripts/audit-core.py',
         ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-        *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/Thc').glob('*.hs')),
+        *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/THC').glob('*.hs')),
         *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     artifacts += [BUILD/'oracle.tsv', BUILD/'expected.tsv', source, binary]
     manifest.write_text(json.dumps(dict(schema=1, ghc='9.14.1', array=version, wordBits=64, byteOrder=sys.byteorder,

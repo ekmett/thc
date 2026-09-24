@@ -151,7 +151,7 @@ def prepare():
         return completed.stdout
     run(['compiler/build.sh'])
     for stage in STAGES:
-        flags = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+        flags = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
         run(['compiler/export.sh', *flags, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
     native = OUT/'native'; native.mkdir(exist_ok=True)
     binary = native/'sum-layout-oracle'
@@ -163,7 +163,7 @@ def prepare():
     (OUT/'oracle.tsv').write_text(oracle)
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT/'scripts/sum_layout_model.py', ROOT/'scripts/test-sum-layout.py',
                ROOT/'scripts/audit-core.py', ROOT/'scripts/core-capabilities.json', ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-               *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/Thc').glob('*.hs')),
+               *sorted((ROOT/'scripts').glob('core_*.py')), *sorted((ROOT/'compiler/THC').glob('*.hs')),
                *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     artifacts = [OUT/'oracle.tsv', *[p for directory in ('native', 'pre-core', 'pre-ghc', 'post-core', 'post-ghc')
                  for p in sorted((OUT/directory).rglob('*')) if p.is_file()]]

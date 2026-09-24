@@ -103,7 +103,7 @@ import GHC.Types.Demand
 import GHC.Types.Id.Make (lazyId)
 import GHC.Types.Tickish (GenTickish(HpcTick))
 import GHC.Unit.Types (mainUnit)
-import qualified Thc.Demands as D
+import qualified THC.Demands as D
 
 check :: (Eq a, Show a) => String -> a -> a -> IO ()
 check label actual expected
@@ -189,7 +189,7 @@ def main():
     parser.add_argument('--ghc-api', action='store_true', help='Also check synthetic GHC API edge cases')
     parser.add_argument('modules', nargs='*', type=Path)
     args = parser.parse_args()
-    paths = args.modules or [ROOT / 'build/core/DemandAudit.json', ROOT / 'build/core/CbvCoercionAudit.json']
+    paths = args.modules or [ROOT / 'build/core/DemandAudit.json', ROOT / 'build/core/CBVCoercionAudit.json']
     modules = [json.loads(path.read_text()) for path in paths]
     for module in modules:
         audit(module)

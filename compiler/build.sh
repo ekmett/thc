@@ -8,7 +8,7 @@ mkdir -p "$out"
 case "$(uname -s)" in Darwin) suffix=dylib ;; *) suffix=so ;; esac
 "$GHC" --make -O1 -dynamic -shared -fPIC -package ghc -package bytestring -package directory -package filepath -package containers \
   -this-unit-id thc-core-plugin-0.1 -hisuf dyn_hi -osuf dyn_o -icompiler -odir "$out" -hidir "$out" \
-  compiler/Thc/Plugin.hs -o "$out/libHSthc-core-plugin-0.1-ghc$version.$suffix"
+  compiler/THC/Plugin.hs -o "$out/libHSthc-core-plugin-0.1-ghc$version.$suffix"
 if [ ! -d "$out/package.conf.d" ]; then
   "$GHC_PKG" init "$out/package.conf.d"
 fi
@@ -23,7 +23,7 @@ version: 0.1
 id: thc-core-plugin-0.1
 key: thc-core-plugin-0.1
 exposed: True
-exposed-modules: Thc.Plugin
+exposed-modules: THC.Plugin
 import-dirs: $out
 library-dirs: $out
 dynamic-library-dirs: $out

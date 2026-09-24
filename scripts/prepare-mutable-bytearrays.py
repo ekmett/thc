@@ -24,8 +24,8 @@ def main():
     caps=json.loads((ROOT/'scripts/core-capabilities.json').read_text());stages={};summaries={};artifacts=[]
     for stage in ('pre','post'):
         core=OUT/f'{stage}-core'
-        run(['compiler/export.sh',*(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []),
-             *['-fplugin-opt=Thc.Plugin:closure='+n for n in ENTRIES],SOURCE],
+        run(['compiler/export.sh',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
+             *['-fplugin-opt=THC.Plugin:closure='+n for n in ENTRIES],SOURCE],
             env=dict(THC_CORE_OUT=str(core),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         paths=sorted(core.glob('*.json'));modules=[(str(p.relative_to(ROOT)),json.loads(p.read_text())) for p in paths]
         stages[stage]=[p for p,_ in modules];artifacts+=paths
@@ -49,7 +49,7 @@ def main():
     result=run([binary],input=''.join(f'{n}\t{x}\t{code}\n' for n,x,code,_ in rows()),text=True,capture_output=True,timeout=60)
     verify(result.stdout);(OUT/'oracle.tsv').write_text(result.stdout)
     sources=[SOURCE,Path(__file__).resolve(),ROOT/'scripts/mutable_bytearray_model.py',ROOT/'scripts/primop-coverage.py',ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
-             *sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/Thc').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
+             *sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     artifacts += [driver,binary,OUT/'oracle.tsv']
     hashes=lambda ps:{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(ps))}
     (OUT/'manifest.json').write_text(json.dumps(dict(schema=1,ghc='9.14.1',bytestring='0.12.2.0',wordBits=64,entries=ENTRIES,inputs=inputs(),stages=stages,audits=summaries,

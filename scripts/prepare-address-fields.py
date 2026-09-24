@@ -44,7 +44,7 @@ def main():
     stages, summaries, artifacts = {}, {}, []
     for stage in ('pre', 'post'):
         directory = BUILD/stage; core = directory/'core'
-        run([ROOT/'compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []), SOURCE],
+        run([ROOT/'compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []), SOURCE],
             env=dict(THC_CORE_OUT=str(core), THC_GHC_OUT=str(directory/'ghc')))
         path = core/'AddressFieldAudit.json'; module = json.loads(path.read_text()); artifacts.append(path)
         stages[stage] = str(path.relative_to(ROOT))
@@ -102,7 +102,7 @@ def main():
     (BUILD/'oracle.tsv').write_text(result.stdout); (BUILD/'expected.tsv').write_text(expected)
     inputs = [ROOT/SOURCE, Path(__file__).resolve(), ROOT/'scripts/audit-core.py', ROOT/'scripts/core-capabilities.json',
         ROOT/'src/main/resources/thc/scalar-primop-signatures.json', *sorted((ROOT/'scripts').glob('core_*.py')),
-        *sorted((ROOT/'compiler/Thc').glob('*.hs')), *[ROOT/'compiler'/n for n in ('build.sh', 'export.sh', 'toolchain.sh')]]
+        *sorted((ROOT/'compiler/THC').glob('*.hs')), *[ROOT/'compiler'/n for n in ('build.sh', 'export.sh', 'toolchain.sh')]]
     artifacts += [source, executable, BUILD/'oracle.tsv', BUILD/'expected.tsv']
     def hashes(paths): return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
     (BUILD/'manifest.json').write_text(json.dumps(dict(schema=1, ghc='9.14.1', wordBits=64,

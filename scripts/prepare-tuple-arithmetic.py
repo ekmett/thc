@@ -117,7 +117,7 @@ def main():
         command = list(map(str, command)); commands.append(command)
         return subprocess.run(command, cwd=ROOT, check=True, **kwargs)
     for stage in ('pre', 'post'):
-        run(['compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []), SOURCE],
+        run(['compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []), SOURCE],
             env=dict(os.environ, THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc')))
     driver = ['{-# LANGUAGE MagicHash #-}', 'module Main where',
               'import GHC.Exts (Int(I#), Int#)', 'import qualified TupleArithmeticAudit as P',
@@ -138,7 +138,7 @@ def main():
     verify()
     inputs_paths = [ROOT / p for p in [SOURCE, 'scripts/prepare-tuple-arithmetic.py', 'scripts/audit-core.py',
                     'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh']]
-    inputs_paths += sorted((ROOT / 'compiler/Thc').glob('*.hs'))
+    inputs_paths += sorted((ROOT / 'compiler/THC').glob('*.hs'))
     inputs_paths += sorted((ROOT / 'scripts').glob('core_*.py'))
     artifacts = [OUT / f'{stage}-core/TupleArithmeticAudit.json' for stage in ('pre', 'post')]
     artifacts += [OUT / 'oracle.tsv', OUT / 'call-oracle.tsv', source, executable]

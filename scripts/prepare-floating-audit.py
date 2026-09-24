@@ -129,7 +129,7 @@ def main():
         sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()),
                  record(ROOT / 'scripts/audit-core.py'), record(ROOT / 'scripts/core-capabilities.json'),
                  record(ROOT / 'src/main/resources/thc/scalar-primop-signatures.json'),
-                 *[record(p) for p in sorted((ROOT / 'compiler/Thc').glob('*.hs'))]]), indent=2) + '\n')
+                 *[record(p) for p in sorted((ROOT / 'compiler/THC').glob('*.hs'))]]), indent=2) + '\n')
     print(f'Floating audit: {len(rows.splitlines())} native rows, {len(PRIMITIVES)} primops, {len(entries)} strict entries')
 
 

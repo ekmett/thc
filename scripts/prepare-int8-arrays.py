@@ -88,8 +88,8 @@ def main():
         paths=[]
         for index,group in enumerate(GROUPS):
             folder=BUILD/stage/str(index); core=folder/'core'
-            options=['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []
-            run([ROOT/'compiler/export.sh',*options,*['-fplugin-opt=Thc.Plugin:closure='+n for n in group['entries']],group['source']],
+            options=['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []
+            run([ROOT/'compiler/export.sh',*options,*['-fplugin-opt=THC.Plugin:closure='+n for n in group['entries']],group['source']],
                 env=dict(THC_CORE_OUT=str(core),THC_GHC_OUT=str(folder/'ghc'),THC_SOURCE_NOTES='true'))
             p=core/(group['module']+'.json');check(json.loads(p.read_text())['boundary']==boundary,'Wrong boundary')
             paths.extend([p,core/'THC.InterfaceClosure.json'])
@@ -126,7 +126,7 @@ def main():
     check(actual==wanted,'Native/model mismatch: '+str(next(((k,actual[k],v) for k,v in wanted.items() if actual[k]!=v),None)))
     (BUILD/'oracle.tsv').write_text(text);(BUILD/'expected.tsv').write_text(''.join(f'{n}\t{x}\t{v}\n' for (n,x),v in wanted.items()))
     artifacts += [source,binary,BUILD/'oracle.tsv',BUILD/'expected.tsv']
-    sources=[ROOT/g['source'] for g in GROUPS]+[Path(__file__),ROOT/'scripts/test-int8-array-model.py',ROOT/'scripts/prepare-int16-arrays.py',ROOT/'scripts/core-capabilities.json',ROOT/'scripts/audit-core.py',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',*sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/Thc').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
+    sources=[ROOT/g['source'] for g in GROUPS]+[Path(__file__),ROOT/'scripts/test-int8-array-model.py',ROOT/'scripts/prepare-int16-arrays.py',ROOT/'scripts/core-capabilities.json',ROOT/'scripts/audit-core.py',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',*sorted((ROOT/'scripts').glob('core_*.py')),*sorted((ROOT/'compiler/THC').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     manifest.write_text(json.dumps(dict(schema=1,ghc='9.14.1',array='0.5.8.0',wordBits=64,elementBits=8,entries=ENTRIES,inputs=values,stages=paths_by_stage,nativeRows=len(actual),
         allNativeResultsMatchIndependentModels=True,expectedGuestCallsByEntry={n:calls['pre/'+n] for n in ENTRIES},checkedGuestCallsByStage=calls,
         requiredPrimitivesByEntry={n:sorted(v) for n,v in REQUIRED.items()},primitiveCounts=counts,reachableBindings=closures,

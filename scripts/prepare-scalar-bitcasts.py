@@ -73,7 +73,7 @@ def main():
     stages, reports, structures, artifacts = {}, {}, {}, []
     for stage in ('pre', 'post'):
         path = OUT/f'{stage}-core/ScalarBitCastAudit.json'
-        options = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+        options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
         run([ROOT/'compiler/export.sh', *options, SOURCE], env=dict(os.environ,
             THC_CORE_OUT=str(path.parent), THC_GHC_OUT=str(OUT/f'{stage}-ghc')))
         module = json.loads(path.read_text()); stages[stage] = str(path.relative_to(ROOT)); artifacts.append(path)
@@ -104,7 +104,7 @@ def main():
     sources = [SOURCE, Path(__file__), ROOT/'scripts/scalar_bitcast_model.py', ROOT/'scripts/test-scalar-bitcasts.py',
                ROOT/'scripts/core-capabilities.json', ROOT/'scripts/audit-core.py', ROOT/'scripts/generate-scalar-signatures.py',
                ROOT/'src/main/resources/thc/scalar-primop-signatures.json', *sorted((ROOT/'scripts').glob('core_*.py')),
-               *sorted((ROOT/'compiler/Thc').glob('*.hs')), *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
+               *sorted((ROOT/'compiler/THC').glob('*.hs')), *[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     hashes = lambda ps: {str(p.resolve().relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in ps}
     manifest = dict(schema=1, ghc='9.14.1', entries=ENTRIES, stages=stages, nativeRows=len(rows),
                     inputsByWidth={str(w):inputs(w) for w in (32,64)}, expectedGuestCalls=CALLS,

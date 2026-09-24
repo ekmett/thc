@@ -65,9 +65,9 @@ def main():
         directory = BUILD / stage
         core = directory / 'core'
         env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(directory / 'ghc'))
-        options = ['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []
+        options = ['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []
         run([ROOT / 'compiler/export.sh', *options,
-             *['-fplugin-opt=Thc.Plugin:closure=' + name for name in ENTRIES], SOURCE], env=env)
+             *['-fplugin-opt=THC.Plugin:closure=' + name for name in ENTRIES], SOURCE], env=env)
         # The installed interface omits $wlenAcc. Export the pinned original List
         # source with canonical ghc-internal identities, never a replacement body.
         run([sys.executable, ROOT / 'compiler/export-boot.py', '--frontier', 'lists', '--build-dir', directory], env=env)
@@ -134,7 +134,7 @@ def main():
     (BUILD / 'oracle.tsv').write_text(result.stdout)
     inputs = [SOURCE, 'scripts/prepare-bytearray.py', 'scripts/core-capabilities.json', 'scripts/audit-core.py',
               'scripts/core_vectors.py', 'src/main/resources/thc/scalar-primop-signatures.json', 'compiler/build.sh', 'compiler/export.sh', 'compiler/toolchain.sh', 'compiler/export-boot.py']
-    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/Thc').glob('*.hs'))
+    inputs += sorted(str(p.relative_to(ROOT)) for p in (ROOT / 'compiler/THC').glob('*.hs'))
     artifacts += ['build/bytearray/oracle.tsv', 'build/bytearray/NativeByteArray.hs']
     hashes = lambda paths: {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest() for p in paths}
     manifest.write_text(json.dumps(dict(schema=1, ghc='9.14.1', bytestring=bytestring, entries=ENTRIES, stages=stages,

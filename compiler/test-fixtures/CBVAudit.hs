@@ -1,6 +1,6 @@
 {-# LANGUAGE MagicHash, NoImplicitPrelude #-}
 -- Real worker-wrapper eligibility with a boxed sum argument that stays boxed.
-module CbvAudit where
+module CBVAudit where
 import GHC.Exts (Int(I#), Int#, Char(C#), Char#, (+#), (-#), (<=#))
 
 data Spine = Done | More Int# Spine

@@ -63,7 +63,7 @@ def prepare():
         core = directory / 'core'
         env = dict(os.environ, THC_CORE_OUT=str(core), THC_GHC_OUT=str(directory / 'ghc'))
         # Each group gets its own interface closure: the plugin writes one frontier per module.
-        run([ROOT / 'compiler/export.sh', *['-fplugin-opt=Thc.Plugin:closure=' + e['name']
+        run([ROOT / 'compiler/export.sh', *['-fplugin-opt=THC.Plugin:closure=' + e['name']
             for e in group['entries']], group['source']], env=env)
         if frontier := group.get('sourceLibraryFrontier'):
             run([sys.executable, ROOT / 'compiler/export-boot.py', '--frontier', frontier,

@@ -44,8 +44,8 @@ def main():
         'boxedChecked': {'ghc-internal:GHC.Internal.CString.unpackCString#','ghc-internal:GHC.Internal.Arr.arrEleBottom','ghc-internal:GHC.Internal.Ix.$w$sindexError'}}
     for stage in ('pre','post'):
         directory = BUILD/stage; core = directory/'core'
-        run([ROOT/'compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []),
-             *['-fplugin-opt=Thc.Plugin:closure='+name for name in ENTRIES+FRONTIERS], SOURCE],
+        run([ROOT/'compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
+             *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES+FRONTIERS], SOURCE],
             env=dict(THC_CORE_OUT=str(core),THC_GHC_OUT=str(directory/'ghc')))
         paths = sorted(core.glob('*.json')); modules = [(str(p.relative_to(ROOT)),json.loads(p.read_text())) for p in paths]
         boundary = 'optimized-Core-before-Tidy' if stage=='pre' else 'optimized-Core-after-Tidy-before-CorePrep'
@@ -93,7 +93,7 @@ def main():
     (BUILD/'oracle.tsv').write_text(result.stdout); (BUILD/'expected.tsv').write_text(''.join(expected))
     inputs=[ROOT/SOURCE,Path(__file__).resolve(),ROOT/'scripts/audit-core.py',ROOT/'scripts/core-capabilities.json',
             ROOT/'src/main/resources/thc/scalar-primop-signatures.json',*sorted((ROOT/'scripts').glob('core_*.py')),
-            *sorted((ROOT/'compiler/Thc').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
+            *sorted((ROOT/'compiler/THC').glob('*.hs')),*[ROOT/'compiler'/n for n in ('build.sh','export.sh','toolchain.sh')]]
     artifacts += [source,executable,BUILD/'oracle.tsv',BUILD/'expected.tsv']
     def hashes(paths):return {str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(paths))}
     (BUILD/'manifest.json').write_text(json.dumps(dict(schema=1,ghc='9.14.1',array='0.5.8.0',wordBits=64,entries=ENTRIES,

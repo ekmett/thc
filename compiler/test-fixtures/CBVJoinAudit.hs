@@ -1,7 +1,7 @@
 {-# LANGUAGE MagicHash, NoImplicitPrelude, RankNTypes, ScopedTypeVariables, TypeApplications #-}
 {-# OPTIONS_GHC -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion -fno-full-laziness #-}
 -- Keep the raw type/value join prefix visible so the ABI alignment is audited.
-module CbvJoinAudit where
+module CBVJoinAudit where
 import GHC.Exts (Int#, (+#), (<=#))
 data Spine = Done | More Int# Spine
 

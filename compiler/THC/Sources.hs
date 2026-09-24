@@ -1,5 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
-module Thc.Sources
+module THC.Sources
   ( Note(..), SourceFile(..), SourceSpan(..), SourceTable(..)
   , tickNote, binderNote, noteKey, buildSourceTable, hasNote
   ) where

@@ -53,7 +53,7 @@ class RealCoreEntryContractTest {
     }
 
     @Test fun genuineWorkerContractPreservesFullWidthResultsAndColdBranches() {
-        val module = exported("CbvAudit")
+        val module = exported("CBVAudit")
         val marked = definitions(module).filter { (it["entryStrict"] as List<Boolean>).any { mark -> mark } }
         assertTrue(marked.any { "walk" in it["name"].toString() && it["entryStrictSource"] == "ghc-tidy-proposal" })
         val ordinary = definitions(module).single { it["name"] == "plainStrict" }
@@ -62,7 +62,7 @@ class RealCoreEntryContractTest {
     }
 
     @Test fun genuinePolymorphicJoinUsesItsErasedValuePrefix() {
-        val module = exported("CbvJoinAudit")
+        val module = exported("CBVJoinAudit")
         val join = definitions(module).single { it["name"] == "done" }
         assertEquals(2, (join["joinValueArity"] as Number).toInt())
         assertEquals(listOf(false, true), join["entryStrict"])
@@ -70,7 +70,7 @@ class RealCoreEntryContractTest {
     }
 
     @Test fun genuineFunctionReturningJoinKeepsTheReturnedArgumentOutsideItsContract() {
-        val module = exported("CbvJoinAudit")
+        val module = exported("CBVJoinAudit")
         val join = definitions(module).single { it["name"] == "doneFunction" }
         assertEquals(1, (join["joinValueArity"] as Number).toInt())
         assertEquals(listOf(false, false), join["entryStrict"])
@@ -78,7 +78,7 @@ class RealCoreEntryContractTest {
     }
 
     @Test fun genuineWorkerRetainsTheCoercionSlotBeforeItsMarkedBoxedArgument() {
-        val module = exported("CbvCoercionAudit")
+        val module = exported("CBVCoercionAudit")
         val worker = definitions(module).single { it["name"] == "\$wwitnessed" }
         val parameters = (worker["expr"] as List<Any?>)[1] as List<Map<String, Any?>>
         assertEquals(listOf(false, false, true), worker["entryStrict"])

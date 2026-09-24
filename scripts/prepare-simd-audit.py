@@ -61,7 +61,7 @@ def main():
     for stage in stages:
         (OUT / f'{stage}-core/{module_name}.json').unlink(missing_ok=True)
         options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
-        if stage == 'post': options += ['-fplugin-opt=Thc.Plugin:post-tidy']
+        if stage == 'post': options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['compiler/export.sh', *options, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc')))
         module = json.loads((OUT / f'{stage}-core/{module_name}.json').read_text())
         assert module['boundary'] == ('optimized-Core-before-Tidy' if stage == 'pre' else 'optimized-Core-after-Tidy-before-CorePrep')
@@ -89,6 +89,6 @@ def main():
     artifacts = [OUT / f'{s}-core/{module_name}.json' for s in stages]
     if rows is not None: artifacts += [OUT / 'oracle.tsv']
     (OUT / 'provenance.json').write_text(json.dumps(dict(schema=1, vector=args.vector, commands=commands, nativeRows=rows, stages=stages, toolchain=toolchain,
-        sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()), *[record(p) for p in sorted((ROOT / 'compiler/Thc').glob('*.hs'))]], artifacts=[record(p) for p in artifacts]), indent=2)+'\n')
+        sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()), *[record(p) for p in sorted((ROOT / 'compiler/THC').glob('*.hs'))]], artifacts=[record(p) for p in artifacts]), indent=2)+'\n')
     print(f'SIMD export stages={stages}; native oracle rows={rows} (None means not run)')
 if __name__ == '__main__': main()

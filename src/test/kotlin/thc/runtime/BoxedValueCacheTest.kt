@@ -52,7 +52,7 @@ class BoxedValueCacheTest {
         return (module["constructors"] as List<Map<String, Any?>>).single { it["id"] == id }
     }
     private fun metadata(builtin: Builtin): Map<String, Any?> =
-        exported("build/core/CbvAudit.json", builtin.id)
+        exported("build/core/CBVAudit.json", builtin.id)
 
     @Test fun wiredConstructorIdentitiesAndPrimitiveRepresentationsMatchActualPinnedExports() {
         for (builtin in builtins) {

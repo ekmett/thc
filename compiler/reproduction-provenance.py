@@ -83,7 +83,7 @@ for owner in interface_owners:
     interface = directory / (module.replace('.', '/') + '.dyn_hi')
     interfaces.append(dict(record(interface), owner=owner, profile='dynamic'))
 
-exporter_paths = sorted(set((root / 'compiler/Thc').rglob('*.hs')) | {
+exporter_paths = sorted(set((root / 'compiler/THC').rglob('*.hs')) | {
     root / 'compiler/build.sh', root / 'compiler/export.sh', root / 'compiler/toolchain.sh',
     root / 'compiler/export-map.sh', root / 'compiler/export-boot.py', Path(__file__).resolve(),
 })
@@ -91,31 +91,31 @@ exporter_paths = sorted(set((root / 'compiler/Thc').rglob('*.hs')) | {
 # executable specification, including ordering, environment and output paths.
 shared_export = ['--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint',
                  '-package-db', '$ROOT/build/compiler/package.conf.d', '-package', 'thc-core-plugin',
-                 '-fplugin=Thc.Plugin', '-i$ROOT/examples']
+                 '-fplugin=THC.Plugin', '-i$ROOT/examples']
 # Existing-bundle supplements describe the actual files, even if today's driver
 # default differs from the setting used to produce them.
 source_notes_exported = any('sourceFiles' in m for m in module_data)
 source_notes_requested = (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true'
 if args.fresh_export and source_notes_exported != source_notes_requested:
     raise SystemExit('Fresh export source-note metadata differs from its driver setting')
-source_note_flags = ['-g', '-fplugin-opt=Thc.Plugin:source-notes'] if source_notes_exported else []
+source_note_flags = ['-g', '-fplugin-opt=THC.Plugin:source-notes'] if source_notes_exported else []
 boot_common = ['-c', '-dynamic', '-fforce-recomp', '-this-unit-id', 'ghc-internal', '-package', 'ghc-internal',
                '-odir', '$ROOT/build/map/boot-ghc', '-hidir', '$ROOT/build/map/boot-ghc']
 recipes = {
     'pluginBuild': ['--make', '-O1', '-dynamic', '-shared', '-fPIC', '-package', 'ghc', '-package', 'bytestring',
                     '-package', 'directory', '-package', 'filepath', '-package', 'containers', '-this-unit-id', 'thc-core-plugin-0.1',
                     '-hisuf', 'dyn_hi', '-osuf', 'dyn_o', '-icompiler', '-odir', '$ROOT/build/compiler',
-                    '-hidir', '$ROOT/build/compiler', 'compiler/Thc/Plugin.hs', '-o', '$ROOT/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.{dylib,so}'],
-    'mapSource': shared_export + ['-fplugin-opt=Thc.Plugin:$ROOT/build/map/core', '-odir', '$ROOT/build/map/ghc',
+                    '-hidir', '$ROOT/build/compiler', 'compiler/THC/Plugin.hs', '-o', '$ROOT/build/compiler/libHSthc-core-plugin-0.1-ghc9.14.1.{dylib,so}'],
+    'mapSource': shared_export + ['-fplugin-opt=THC.Plugin:$ROOT/build/map/core', '-odir', '$ROOT/build/map/ghc',
                   '-hidir', '$ROOT/build/map/ghc', '-i$ROOT/vendor/containers-0.8/src', '-I$ROOT/vendor/containers-0.8/include',
-                  '-fplugin-opt=Thc.Plugin:closure=mapAggregate'] + source_note_flags + ['examples/THC/MapWorkload.hs'],
+                  '-fplugin-opt=THC.Plugin:closure=mapAggregate'] + source_note_flags + ['examples/THC/MapWorkload.hs'],
     'bootSignatures': boot_common + ['$ROOT/vendor/ghc-9.14.1/{GHC/Internal/Exception/Type.hs-boot,GHC/Internal/Exception.hs-boot}'],
     'bootSources': boot_common + ['-O2', '-dcore-lint', '-package-db', '$ROOT/build/compiler/package.conf.d',
-                    '-package', 'thc-core-plugin', '-fplugin=Thc.Plugin', '-fplugin-opt=Thc.Plugin:$ROOT/build/map/boot-core',
-                    '-fplugin-opt=Thc.Plugin:post-tidy'] + source_note_flags + ['$ROOT/vendor/ghc-9.14.1/GHC/Internal/{CString,Err}.hs'],
-    'installedInterfaceRoot': shared_export + ['-fplugin-opt=Thc.Plugin:$ROOT/build/map/interface-core',
+                    '-package', 'thc-core-plugin', '-fplugin=THC.Plugin', '-fplugin-opt=THC.Plugin:$ROOT/build/map/boot-core',
+                    '-fplugin-opt=THC.Plugin:post-tidy'] + source_note_flags + ['$ROOT/vendor/ghc-9.14.1/GHC/Internal/{CString,Err}.hs'],
+    'installedInterfaceRoot': shared_export + ['-fplugin-opt=THC.Plugin:$ROOT/build/map/interface-core',
                     '-odir', '$ROOT/build/map/interface-ghc', '-hidir', '$ROOT/build/map/interface-ghc',
-                    '-package', 'ghc-internal', '-fplugin-opt=Thc.Plugin:closure=exceptionInterfaceRoot',
+                    '-package', 'ghc-internal', '-fplugin-opt=THC.Plugin:closure=exceptionInterfaceRoot',
                     ] + source_note_flags + ['compiler/package-roots/InterfaceRoots.hs'],
 }
 flags_bytes = json.dumps(recipes, sort_keys=True, separators=(',', ':')).encode()

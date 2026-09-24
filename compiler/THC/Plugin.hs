@@ -1,11 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
-module Thc.Plugin (plugin) where
+module THC.Plugin (plugin) where
 
 import GHC.Plugins
-import qualified Thc.Sources as Sources
-import qualified Thc.Cbv as Cbv
-import qualified Thc.Demands as Demands
-import Thc.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
+import qualified THC.Sources as Sources
+import qualified THC.CBV as CBV
+import qualified THC.Demands as Demands
+import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import GHC.Types.Tickish (CoreTickish)
 import GHC.Types.Literal
 import GHC.Types.RepType (typePrimRep_maybe, unwrapType, ubxSumRepType, layoutUbxSum, primRepSlot, slotPrimRep)
@@ -65,7 +65,7 @@ data Ctx = Ctx
   , evaluatedIds :: VarSet
   , canCertify :: Bool
   -- Current-module CBV requirements are selected only during native Tidy.
-  , deriveCbvContracts :: Bool
+  , deriveCBVContracts :: Bool
   , sourceTable :: Maybe Sources.SourceTable
   , activeSources :: [String]
   }
@@ -275,7 +275,7 @@ binding d (v,e) = O $
   , ("entryStrict",A (map B aligned)), ("entryStrictSource",S origin)
   ] ++ joinMetadata d v e ++ binderSource d v
   where
-    (marks,origin) = if canCertify d then Cbv.entryContract (deriveCbvContracts d) v e else ([],"none")
+    (marks,origin) = if canCertify d then CBV.entryContract (deriveCBVContracts d) v e else ([],"none")
     exported = expr d e
     -- Type binders have already erased; coercions retain their value slot.
     -- Joins may return further lambdas: their suffix must remain unmarked.
@@ -304,8 +304,8 @@ idMetadata d v = O
   , ("occurrence",S (pretty d (idOccInfo v))), ("oneShot",S (pretty d (idOneShotInfo v)))
   , ("joinArity",if isJoinId v then num (idJoinArity v) else Z)
   , ("inline",S (pretty d (idInlinePragma v)))
-  , ("cbvEligible",B (Cbv.eligible v))
-  , ("cbvMarks",maybe Z (A . map B) (Cbv.existingMarks v))
+  , ("cbvEligible",B (CBV.eligible v))
+  , ("cbvMarks",maybe Z (A . map B) (CBV.existingMarks v))
   ]
 
 flattenBind :: CoreBind -> [(Id,CoreExpr)]
@@ -626,7 +626,7 @@ exportInterfaceClosure dir rootCtx roots = do
       -- exporting their RHSs; this preserves recursive dictionary guards.
       recIds = mkVarSet [v | (_,v,_,_) <- imports]
   sources <- loadSources (case sourceTable rootCtx of Just _ -> True; _ -> False) [(v,e) | (_,v,e,_) <- imports]
-  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCbvContracts = False, sourceTable = sources, activeSources = [] }) (v,e) of
+  let importedBinding (d,v,e,kind) = case binding (d { recursiveIds = recIds, deriveCBVContracts = False, sourceTable = sources, activeSources = [] }) (v,e) of
         O fields -> O (fields ++ [("origin",S kind),("originModule",S (modulePrefix d))])
         _ -> error "binding was not an object"
       cons = nubBy (\a b -> dataConName a == dataConName b) (concat [exprCons e | (_,_,e,_) <- imports])

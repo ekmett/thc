@@ -108,8 +108,8 @@ def main():
         run(['compiler/build.sh'])
         run([sys.executable,'compiler/export-boot.py','--frontier','bignum','--build-dir',str(OUT/'boot')])
         for stage in STAGES:
-            run(['compiler/export.sh',*(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []),
-                 *['-fplugin-opt=Thc.Plugin:closure='+e for e in (*ENTRIES,*FRONTIERS)],'compiler/test-fixtures/BigNatLiteralAudit.hs'],
+            run(['compiler/export.sh',*(['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []),
+                 *['-fplugin-opt=THC.Plugin:closure='+e for e in (*ENTRIES,*FRONTIERS)],'compiler/test-fixtures/BigNatLiteralAudit.hs'],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         stages,coverage,counts=inventory()
         run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-icompiler/test-fixtures','-odir',str(OUT/'native'),'-hidir',str(OUT/'native'),'-o',str(OUT/'native/bignat-literal-oracle'),'compiler/test-fixtures/BigNatLiteralAuditNative.hs'])
@@ -120,7 +120,7 @@ def main():
         boot=json.loads((OUT/'boot/boot-provenance.json').read_text())
         sources=[*sorted((ROOT/'compiler/test-fixtures').glob('BigNatLiteralAudit*.hs')),Path(__file__).resolve(),ROOT/'scripts/bignat_literal_model.py',
                  ROOT/'compiler/export-boot.py',ROOT/'compiler/build.sh',ROOT/'compiler/export.sh',ROOT/'compiler/toolchain.sh',
-                 *sorted((ROOT/'compiler/Thc').glob('*.hs')),*audit_inputs(),*[ROOT/r['path'] for r in boot['sources']]]
+                 *sorted((ROOT/'compiler/THC').glob('*.hs')),*audit_inputs(),*[ROOT/r['path'] for r in boot['sources']]]
         artifacts=[OUT/'boot/boot-provenance.json',OUT/'requests.tsv',OUT/'oracle.tsv',*sorted(OUT.glob('*.audit.json'))]
         artifacts += [p for directory in ('pre-core','post-core','boot/core','native') for p in sorted((OUT/directory).rglob('*')) if p.is_file()]
         installed=Path(subprocess.check_output([ghc_pkg,'field','ghc-internal','import-dirs','--simple-output'],text=True).strip())

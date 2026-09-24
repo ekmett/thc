@@ -2,7 +2,7 @@
 -- These templates are never inserted into the optimized ModGuts or passed back
 -- through Core simplification: unary-class erasure changes the apparent Core
 -- type, exactly as GHC.CoreToStg.myCollectArgs does at the representation boundary.
-module Thc.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid, wiredOrigin) where
+module THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid, wiredOrigin) where
 
 import GHC.Plugins
 import GHC.Builtin.Names

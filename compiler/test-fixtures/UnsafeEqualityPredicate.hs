@@ -7,7 +7,7 @@ import GHC.Builtin.Types (intTy, liftedTypeKind, trueDataCon)
 import GHC.Types.Basic (OccInfo(..))
 import Data.Maybe (isJust)
 import System.Environment (getArgs)
-import Thc.Wired (wiredCase)
+import THC.Wired (wiredCase)
 
 main :: IO ()
 main = do

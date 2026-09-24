@@ -81,8 +81,8 @@ def main():
         run(['compiler/build.sh'])
         run([sys.executable, 'compiler/export-boot.py', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
         for stage in STAGES:
-            run(['compiler/export.sh', *(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage == 'post' else []),
-                 *['-fplugin-opt=Thc.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],
+            run(['compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
+                 *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         stages, coverage = inventory()
         run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-icompiler/test-fixtures',
@@ -95,7 +95,7 @@ def main():
         rows = verify(result.stdout)
         sources = [*FIXTURES, Path(__file__).resolve(), ROOT/'scripts/show_int_model.py', ROOT/'compiler/export-boot.py',
                    ROOT/'compiler/build.sh', ROOT/'compiler/export.sh', ROOT/'compiler/toolchain.sh',
-                   *sorted((ROOT/'compiler/Thc').glob('*.hs')), *audit_inputs(),
+                   *sorted((ROOT/'compiler/THC').glob('*.hs')), *audit_inputs(),
                    ROOT/'vendor/ghc-9.14.1/GHC/Internal/Show.hs', ROOT/'vendor/ghc-9.14.1/LICENSE']
         artifacts = [OUT/'requests.tsv', OUT/'oracle.tsv', OUT/'boot/boot-provenance.json', *sorted(OUT.glob('*.audit.json'))]
         artifacts += [p for folder in ('pre-core', 'post-core', 'boot/core', 'native') for p in sorted((OUT/folder).rglob('*')) if p.is_file()]
