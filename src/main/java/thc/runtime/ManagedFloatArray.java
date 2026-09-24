@@ -32,4 +32,21 @@ public final class ManagedFloatArray {
     public static void write(byte[] bytes, long index, float value) {
         ELEMENTS.set(bytes, byteOffset(bytes, index), value);
     }
+
+    /** Unlike FloatArray#, Word8ArrayAsFloat# counts bytes, not elements. */
+    private static int checkedByteOffset(byte[] bytes, long offset) {
+        if (offset < 0 || offset > (long) bytes.length - Float.BYTES) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new RuntimeFault("ByteArray# Float byte offset outside its backing storage");
+        }
+        return (int) offset;
+    }
+
+    public static float readByteOffset(byte[] bytes, long offset) {
+        return (float) ELEMENTS.get(bytes, checkedByteOffset(bytes, offset));
+    }
+
+    public static void writeByteOffset(byte[] bytes, long offset, float value) {
+        ELEMENTS.set(bytes, checkedByteOffset(bytes, offset), value);
+    }
 }

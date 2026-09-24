@@ -2292,48 +2292,60 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadDoubleArray {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            double result = ManagedByteArray.readDoubleGuest(value, index);
+            double result = byteOffset ? ManagedByteArray.readDoubleByteOffsetGuest(value, index)
+                : ManagedByteArray.readDoubleGuest(value, index);
             destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
-    @Operation public static final class WriteDoubleArray {
-        @Specialization public static Object write(Object value, long index, double number, Object state) {
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class WriteDoubleArray {
+        @Specialization public static Object write(boolean byteOffset, Object value, long index, double number, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeDoubleGuest(value, index, number);
+            if (byteOffset) ManagedByteArray.writeDoubleByteOffsetGuest(value, index, number);
+            else ManagedByteArray.writeDoubleGuest(value, index, number);
             return kotlin.Unit.INSTANCE;
         }
     }
-    @Operation public static final class IndexDoubleArray {
-        @Specialization public static double index(Object value, long index) {
-            return ManagedByteArray.readDoubleGuest(value, index);
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class IndexDoubleArray {
+        @Specialization public static double index(boolean byteOffset, Object value, long index) {
+            return byteOffset ? ManagedByteArray.readDoubleByteOffsetGuest(value, index)
+                : ManagedByteArray.readDoubleGuest(value, index);
         }
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadFloatArray {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
                 Object value, long index, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            float result = ManagedByteArray.readFloatGuest(value, index);
+            float result = byteOffset ? ManagedByteArray.readFloatByteOffsetGuest(value, index)
+                : ManagedByteArray.readFloatGuest(value, index);
             destination.setFloat(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
-    @Operation public static final class WriteFloatArray {
-        @Specialization public static Object write(Object value, long index, float number, Object state) {
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class WriteFloatArray {
+        @Specialization public static Object write(boolean byteOffset, Object value, long index, float number, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeFloatGuest(value, index, number);
+            if (byteOffset) ManagedByteArray.writeFloatByteOffsetGuest(value, index, number);
+            else ManagedByteArray.writeFloatGuest(value, index, number);
             return kotlin.Unit.INSTANCE;
         }
     }
-    @Operation public static final class IndexFloatArray {
-        @Specialization public static float index(Object value, long index) {
-            return ManagedByteArray.readFloatGuest(value, index);
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class IndexFloatArray {
+        @Specialization public static float index(boolean byteOffset, Object value, long index) {
+            return byteOffset ? ManagedByteArray.readFloatByteOffsetGuest(value, index)
+                : ManagedByteArray.readFloatGuest(value, index);
         }
     }
 
