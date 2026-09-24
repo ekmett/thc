@@ -112,10 +112,13 @@ object CoreModules {
 
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false): String {
+        val settings = linkedMapOf<String, Any>(
+            "entry" to entry, "instrument" to instrument,
+            "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend,
+            "sourceNotesEnabled" to sourceNotesEnabled)
+        if (ioMain) settings["ioMain"] = true
         val options = StringBuilder().also { Json.appendObjectDocument(it,
-            Json.stringify(mapOf("entry" to entry, "instrument" to instrument,
-                "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend,
-                "sourceNotesEnabled" to sourceNotesEnabled, "ioMain" to ioMain))) }
+            Json.stringify(settings)) }
         return buildString {
             append(options, 0, options.length - 1)
             append(",\"modules\":[")
