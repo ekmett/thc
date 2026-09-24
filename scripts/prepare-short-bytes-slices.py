@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT/'build/short-bytes-slices'
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
 FRONTIERS = ('appendFrontier', 'concatFrontier')
-OVERFLOW = 'bytestring-0.12.2.0-5637:Data.ByteString.Internal.Type.overflowError'
+OVERFLOW_WORKER = ':Data.ByteString.Internal.Type.overflowError'
 LENGTH = 'ghc-internal:GHC.Internal.List.$wlenAcc'
 FIXTURES = [ROOT/'compiler/test-fixtures'/name for name in ('ShortByteStringSliceAudit.hs', 'ShortByteStringSliceAuditNative.hs')]
 
@@ -28,7 +29,21 @@ def audit_inputs():
     return [ROOT/'scripts/audit-core.py', ROOT/'scripts/core-capabilities.json', *sorted((ROOT/'scripts').glob('core_*.py')),
             ROOT/'src/main/resources/thc/scalar-primop-signatures.json']
 
-def inventory():
+def overflow_id(unit):
+    check(isinstance(unit, str) and re.fullmatch(r'bytestring-0\.12\.2\.0(?:-[A-Za-z0-9]+)?', unit),
+          'Requires one exact installed bytestring0.12.2.0 unit id')
+    return unit+OVERFLOW_WORKER
+
+def check_frontier(report, unit, label):
+    expected = overflow_id(unit)
+    check(not report['accepted'] and not report['issues'] and
+          [m['id'] for m in report['missingGlobals']] == [expected],
+          label+': exact unimplemented overflow frontier changed')
+
+def inventory(unit=None):
+    if unit is None:
+        unit = json.loads((OUT/'manifest.json').read_text())['installedBytestringUnitId']
+    overflow_id(unit)
     spec = importlib.util.spec_from_file_location('slice_audit', ROOT/'scripts/audit-core.py')
     audit = importlib.util.module_from_spec(spec); spec.loader.exec_module(audit)
     caps = json.loads((ROOT/'scripts/core-capabilities.json').read_text())
@@ -62,8 +77,7 @@ def inventory():
                       [m['id'] for m in missing_list['missingGlobals']] == [LENGTH], 'Missing-source control changed')
                 (OUT/f'{stage}-{name}-missing-list.audit.json').write_text(json.dumps(missing_list, indent=2)+'\n')
             else:
-                check(not report['accepted'] and not report['issues'] and [m['id'] for m in report['missingGlobals']] == [OVERFLOW],
-                      stage+'/'+name+': exact unimplemented overflow frontier changed')
+                check_frontier(report, unit, stage+'/'+name)
             (OUT/f'{stage}-{name}.audit.json').write_text(json.dumps(report, indent=2)+'\n')
             reports[name] = dict(accepted=report['accepted'], reachable=report['reachableBindings'],
                                  primitives=[p['name'] for p in report['primitives']], missing=report['missingGlobals'], issues=report['issues'])
@@ -80,6 +94,8 @@ def main():
         ghc_info = subprocess.check_output([ghc,'--info'],text=True)
         check(dict(ast.literal_eval(ghc_info))['target word size in bits'] == '64', 'Requires 64-bit machine Int')
         check(subprocess.check_output([pkg,'field','bytestring','version','--simple-output'],text=True).strip() == '0.12.2.0', 'Requires bytestring0.12.2.0')
+        unit = subprocess.check_output([pkg,'field','bytestring','id','--simple-output'],text=True).strip()
+        overflow_id(unit)
         (OUT/'native').mkdir(parents=True, exist_ok=True); manifest_path.unlink(missing_ok=True); commands=[]
         def run(argv, env=None):
             argv=list(map(str,argv)); commands.append(dict(argv=argv, environment=env or {}))
@@ -91,7 +107,7 @@ def main():
             run(['compiler/export.sh',*(['-fplugin-opt=Thc.Plugin:post-tidy'] if stage=='post' else []),
                  *['-fplugin-opt=Thc.Plugin:closure='+n for n in (*ENTRIES,*FRONTIERS)],FIXTURES[0]],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
-        stages, coverage = inventory()
+        stages, coverage = inventory(unit)
         binary=OUT/'native/short-bytes-slices-oracle'
         run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-icompiler/test-fixtures',
              '-odir',OUT/'native','-hidir',OUT/'native',FIXTURES[1],'-o',binary])
@@ -109,12 +125,15 @@ def main():
         installed=Path(subprocess.check_output([pkg,'field','bytestring','import-dirs','--simple-output'],text=True).strip())/'Data/ByteString/Short/Internal.dyn_hi'
         manifest_path.write_text(json.dumps(dict(schema=1,entries=ENTRIES,seeds=seeds(),nativeRows=count,wordBits=64,
             stages=stages,coverage=coverage,commands=commands,ghcInfo=ghc_info,
+            installedBytestringUnitId=unit,
             installedShortInterface=dict(path=str(installed),sha256=digest(installed)),
             sources=[record(p) for p in dict.fromkeys(sources)],artifacts=[record(p) for p in dict.fromkeys(artifacts)],
             claim='Public native slices and independent byte/list model with complete original List/CString composition; compiled guest execution is a separate gate.'),indent=2)+'\n')
     manifest=json.loads(manifest_path.read_text())
     check(set(map(str,ENTRIES)) == set(manifest['entries']), 'Entry set changed')
     for r in [*manifest['sources'],*manifest['artifacts']]: check(record(ROOT/r['path']) == r, 'Stale slice input: '+r['path'])
+    installed_unit = subprocess.check_output([os.environ.get('GHC_PKG', 'ghc-pkg'),'field','bytestring','id','--simple-output'],text=True).strip()
+    check(installed_unit == manifest['installedBytestringUnitId'], 'Installed bytestring unit changed')
     installed=manifest['installedShortInterface'];check(digest(Path(installed['path'])) == installed['sha256'], 'Installed bytestring interface changed')
     count=verify((OUT/'oracle.tsv').read_text());stages,coverage=inventory()
     check(stages == manifest['stages'] and coverage == manifest['coverage'] and count == manifest['nativeRows'], 'Slice evidence changed')
