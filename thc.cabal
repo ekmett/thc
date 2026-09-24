@@ -12,18 +12,22 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/target-layout.c
   README.md
   docs/driver.md
   compiler/pinned-ghc-internal/GHC/Internal/Arr.hs
   compiler/pinned-ghc-internal/GHC/Internal/Base.hs
   compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs
   compiler/pinned-ghc-internal/GHC/Internal/CString.hs
+  compiler/pinned-ghc-internal/GHC/Internal/ClosureTypes.hs
   compiler/pinned-ghc-internal/GHC/Internal/Control/Monad/Fail.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Maybe.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/OldList.hs
   compiler/pinned-ghc-internal/GHC/Internal/Data/Typeable/Internal.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Data/Tuple.hs
   compiler/pinned-ghc-internal/GHC/Internal/Enum.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/Err.hs
+  compiler/pinned-ghc-internal/GHC/Internal/ExecutionStack/Internal.hsc
   compiler/pinned-ghc-internal/GHC/Internal/Exception.hs
   compiler/pinned-ghc-internal/GHC/Internal/Exception.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/Exception/Backtrace.hs
@@ -33,6 +37,12 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Exception/Type.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/Fingerprint.hs
   compiler/pinned-ghc-internal/GHC/Internal/Fingerprint.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Foreign/Marshal/Alloc.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Foreign/Storable.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Heap/Closures.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Heap/Constants.hsc
+  compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc
+  compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs
   compiler/pinned-ghc-internal/GHC/Internal/IO.hs-boot
   compiler/pinned-ghc-internal/GHC/Internal/IO/Exception.hs
@@ -45,6 +55,10 @@ extra-source-files:
   compiler/pinned-ghc-internal/GHC/Internal/Show.hs
   compiler/pinned-ghc-internal/GHC/Internal/Stack.hs
   compiler/pinned-ghc-internal/GHC/Internal/Stack.hs-boot
+  compiler/pinned-ghc-internal/GHC/Internal/Stack/Annotation.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Stack/CCS.hsc
+  compiler/pinned-ghc-internal/GHC/Internal/Stack/CloneStack.hs
+  compiler/pinned-ghc-internal/GHC/Internal/Stack/Constants.hsc
   compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs
   compiler/pinned-ghc-internal/GHC/Internal/Stack/Types.hs
   compiler/pinned-ghc-internal/GHC/Internal/Types.hs

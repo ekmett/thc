@@ -112,6 +112,26 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
         ("GHC.Internal.Data.Typeable.Internal" `elem` sourceModules)
       let bundle = string $ field (field (wired manifest) "bundle") "path"
       requireFile bundle
+      inner <- readCore bundle "manifest.json"
+      inputs <- readCore bundle "inplace-manifest.json"
+      let layout = field inner "targetLayout"
+          compiler = field inputs "compiler"
+          generated = objects inner "generatedSources"
+      assertEqual "wired layout receipt matches hashed build inputs"
+        layout (field inputs "targetLayout")
+      assertEqual "nonprofiling Core way" "dynamic-nonprofiling"
+        (string $ field compiler "way")
+      assertBool "target word size is supported"
+        (number (field layout "wordBytes") `elem` [4, 8])
+      assertBool "InfoProv starts inside InfoProvEnt"
+        (number (field layout "infoProvEntProvOffset") >
+         number (field layout "infoProvEntInfoOffset") &&
+         number (field layout "infoProvEntProvOffset") <
+         number (field layout "infoProvEntBytes"))
+      assertEqual "six original hsc sources preprocessed"
+        6 (length generated)
+      assertEqual "generated-source receipts match"
+        generated (objects inputs "generatedSources")
       plan <- readJson (output </> "native/cache/plan.json")
       let entry = one ((== "exe:cstring") . string . (`field` "component-name"))
                       (objects plan "install-plan")
