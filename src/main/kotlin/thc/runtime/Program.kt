@@ -323,7 +323,7 @@ private class Delay(private val target: RootCallTarget, private val captureLayou
                     @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
     override fun execute(frame: VirtualFrame): Thunk = Thunk(target, captureLayout?.capture(frame, captures))
 }
-internal class Force(private val metrics: Metrics) : Node() {
+internal class Force @JvmOverloads constructor(private val metrics: Metrics, private val asyncMode: Boolean = false) : Node() {
     private object Retry
     private class Parked(val boundary: Any, val continuation: ContinuationResult)
     @Child private var calls = ThunkTargetCache(metrics)
@@ -709,7 +709,10 @@ internal class Force(private val metrics: Metrics) : Node() {
     private fun awaitCallOwner(segment: CallSegment) {
         TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<CallSegment> { waiting ->
             synchronized(waiting.monitor) {
-                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) waiting.monitor.wait()
+                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
+                    if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
+                    waiting.monitor.wait()
+                }
             }
         }, segment)
     }
@@ -828,7 +831,10 @@ internal class Force(private val metrics: Metrics) : Node() {
     private fun awaitOwner(thunk: Thunk) {
         TruffleSafepoint.setBlockedThreadInterruptible(this, TruffleSafepoint.Interruptible<Thunk> { waiting ->
             synchronized(waiting.monitor) {
-                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) waiting.monitor.wait()
+                if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
+                    if (asyncMode) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
+                    waiting.monitor.wait()
+                }
             }
         }, thunk)
     }

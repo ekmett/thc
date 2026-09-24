@@ -31,7 +31,7 @@ class LiveAsyncNativeTest {
                 val bytes = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 assertEquals(expected, bytes.joinToString("") { "%02x".format(it) }, "Stale $path")
             }
-        assertEquals(listOf("1007", "-1", "200000008", "1", "1031"),
+        assertEquals(listOf("1007", "-1", "10000008", "1", "1031"),
             File(root, "build/live-async/oracle.txt").readLines())
         for (entry in entries) {
             val audit = Json.parse(File(root, "build/live-async/$stage/$entry-audit.json").readText()) as Map<String, Any?>
@@ -78,7 +78,7 @@ class LiveAsyncNativeTest {
             // Warm every loop branch without entering the shared CAF. Drain the
             // two signals so the next run synchronizes with the actual target.
             assertEquals(1L, call("releaseGate"))
-            assertEquals(199999007L, call("warmLoop", 199999000L))
+            assertEquals(9999007L, call("warmLoop", 9999000L))
             assertEquals(7L, call("takeReady"))
             assertEquals(7L, call("takeRunning"))
             assertEquals(0, shared.state)
@@ -109,7 +109,7 @@ class LiveAsyncNativeTest {
                 assertEquals(1L, call("prefixCount"))
                 if (!running) assertEquals(1L, call("releaseGate"))
                 // This call uses a different Java thread from the original owner.
-                assertEquals(200000008L, call("forceShared", 1))
+                assertEquals(10000008L, call("forceShared", 1))
                 assertEquals(2, shared.state)
                 assertEquals(1L, call("prefixCount"), "Resumption must not replay the effectful prefix")
                 assertNull(shared.target)
