@@ -19,9 +19,9 @@ division and comparison operands. Each bytecode operation has a constant width
 mask and primitive operands/results. No aggregate transport changed.
 
 `IntegerPrimopsAudit.hs` wraps every primitive with dynamic operands and the
-existing Int# host boundary. `prepare-integer-primops.py` rejects any wrapper
-whose intended primop disappears during GHC optimization, performs strict Core
-auditing, and generates 56,791 native oracle rows. Inputs include every bit
+existing Int# host boundary. The Cabal `thc-fixtures` executable exports the
+Core and generates 56,791 native oracle rows. The JVM
+test checks that every intended primop survives GHC optimization. Inputs include every bit
 position and its neighbors, zero, alternating patterns, the sign bit, all-ones
 and equal/neighbor operands. Every byte is checked for complement and every
 valid byte shift count; wider shifts cover every count and bit transition.
@@ -31,7 +31,7 @@ then executes every row on both runtimes before and after compilation. It
 requires exactly one installed guest entry for every oracle row and checks wrong
 arities in strict and diagnostic modes. Preparation is part of the normal
 `scripts/prepare-tests.sh` flow; Gradle tracks the generated inputs and CI retains
-the oracle and audit reports. SHA-256 manifests reject stale source or artifacts.
+the Core export and oracle. SHA-256 manifests reject stale source or artifacts.
 
 Division by zero and unchecked shifts outside `[0, width)` are outside the
 numeric oracle. No semantics for those inputs are promised. This slice leaves

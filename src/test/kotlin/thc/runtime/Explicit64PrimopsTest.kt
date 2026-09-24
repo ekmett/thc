@@ -12,8 +12,9 @@ import org.junit.jupiter.api.Test
 import thc.CoreModules
 import thc.Json
 import thc.Language
+import thc.NumericPrimopCoreEvidence
+import thc.ScalarPrimopModel
 import java.io.File
-import java.math.BigInteger
 import java.security.MessageDigest
 
 class Explicit64PrimopsTest {
@@ -45,44 +46,30 @@ class Explicit64PrimopsTest {
             assertEquals(expected, actual, "Stale explicit64 fixture: $path")
         }
     }
-    private fun mathematical(entry: Map<String, Any?>, left: Long, right: Long): Long {
-        val modulus = BigInteger.ONE.shiftLeft(64)
-        val rawX = BigInteger.valueOf(left); val rawY = BigInteger.valueOf(right)
-        val x = if (entry["unsigned"] == true) rawX.mod(modulus) else rawX
-        val y = if (entry["unsigned"] == true) rawY.mod(modulus) else rawY
-        fun bit(value: Boolean) = if (value) BigInteger.ONE else BigInteger.ZERO
-        val result = when (entry["operation"]) {
-            "identity" -> x
-            "literals" -> when (left) { 0L -> BigInteger.ZERO; 1L -> BigInteger.valueOf(Long.MAX_VALUE); 2L -> modulus - BigInteger.ONE; else -> modulus.shiftRight(1) }
-            "case" -> BigInteger.valueOf(when (left) { 0L -> 11L; Long.MIN_VALUE -> 13L; -1L -> 17L; else -> 19L })
-            "negate" -> -x
-            "plus" -> x+y
-            "sub" -> x-y
-            "times" -> x*y
-            "quot" -> x/y
-            "rem" -> x%y
-            "eq" -> bit(x == y); "ne" -> bit(x != y)
-            "lt" -> bit(x < y); "le" -> bit(x <= y); "gt" -> bit(x > y); "ge" -> bit(x >= y)
-            "and" -> x.and(y); "or" -> x.or(y); "xor" -> x.xor(y); "not" -> x.not()
-            "shiftL" -> x.shiftLeft(right.toInt())
-            "shiftRA" -> rawX.shiftRight(right.toInt())
-            "shiftRL" -> rawX.mod(modulus).shiftRight(right.toInt())
-            else -> error("Unknown explicit64 operation")
-        }
-        return result.toLong()
-    }
+    private fun mathematical(entry: Map<String, Any?>, left: Long, right: Long): Long =
+        ScalarPrimopModel.explicit64(entry["operation"] as String, entry["unsigned"] == true, left, right)
     @Test fun exactNativeScalarEntriesAgreeWithIndependentModelAndInstalledCode() {
         val manifest = manifest(); verifyHashes(manifest)
         val entries = manifest["entries"] as List<Map<String, Any?>>
         assertEquals(36, entries.count { it["primitive"] != null })
         val rows = File(root, "build/explicit64-primops/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
+        val exported = module()
+        val casesByName = entries.associate { entry ->
+            val name = entry["name"] as String
+            val cases = rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
+            for ((x, y, native) in cases) assertEquals(mathematical(entry, x, y), native, "native $name($x,$y)")
+            val primitive = entry["primitive"] as? String
+            if (primitive != null) NumericPrimopCoreEvidence.assertCall(
+                NumericPrimopCoreEvidence.calls(exported, name), primitive,
+                entry["arguments"] as List<String>, entry["result"] as String, name)
+            name to cases
+        }
         visit { language, backend ->
             for (entry in entries) {
                 val name=entry["name"] as String; val arity=(entry["arity"] as Number).toInt()
-                val cases=rows.getValue(name).map { listOf(it[1].toLong(), it[2].toLong(), it[3].toLong()) }
-                for ((x,y,native) in cases) assertEquals(mathematical(entry,x,y), native, "native $name($x,$y)")
-                val module=CoreModules.reachable(module(),name)
+                val cases=casesByName.getValue(name)
+                val module=CoreModules.reachable(exported,name)
                 val lambda=((module["bindings"] as List<Map<String,Any?>>).single()["expr"] as List<Any?>)
                 assertEquals((entry["arguments"] as List<String>).map { listOf(it) },
                     (lambda[1] as List<Map<String,Any?>>).map { CoreRepresentations.binder(it).primReps })

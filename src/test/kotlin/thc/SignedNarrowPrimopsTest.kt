@@ -9,7 +9,6 @@ import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.io.File
-import java.math.BigInteger
 import java.security.MessageDigest
 
 /** GHC's narrow signed values have canonical sign-extended Long carriers. */
@@ -20,31 +19,8 @@ class SignedNarrowPrimopsTest {
         ((Json.parse(function.getMember("diagnostics").asString()) as Map<String, Any?>)[key] as Number).toLong()
     private fun entries() = manifest()["entries"] as List<Map<String, Any?>>
 
-    private fun signed(value: BigInteger, width: Int): BigInteger {
-        val modulus = BigInteger.ONE.shiftLeft(width)
-        val residue = value.mod(modulus)
-        return if (residue.testBit(width - 1)) residue - modulus else residue
-    }
     private fun mathematical(name: String, width: Int, left: Long, right: Long): Long {
-        val x = signed(BigInteger.valueOf(left), width)
-        val y = signed(BigInteger.valueOf(right), width)
-        fun bit(condition: Boolean) = if (condition) BigInteger.ONE else BigInteger.ZERO
-        val result = when (name.substringBefore("Int")) {
-            "negate" -> -x
-            "plus" -> x + y
-            "sub" -> x - y
-            "times" -> x * y
-            "quot" -> x.divide(y)
-            "rem" -> x.remainder(y)
-            "eq" -> bit(x == y)
-            "ne" -> bit(x != y)
-            "lt" -> bit(x < y)
-            "le" -> bit(x <= y)
-            "gt" -> bit(x > y)
-            "ge" -> bit(x >= y)
-            else -> error("Unknown signed narrow primitive: $name")
-        }
-        return signed(result, width).toLong()
+        return ScalarPrimopModel.scalar(name.substringBefore("Int"), width, false, left, right)
     }
     private fun verifyHashes(manifest: Map<String, Any?>) {
         for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
@@ -61,7 +37,22 @@ class SignedNarrowPrimopsTest {
         assertEquals(36, entries.size)
         assertEquals("signedNarrowDispatch", manifest["compositeEntry"])
         assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
-        val modules = (manifest["modules"] as List<String>).map { Json.parse(File(root, it).readText()) }
+        val modules = (manifest["modules"] as List<String>).map {
+            Json.parse(File(root, it).readText()) as Map<String, Any?>
+        }
+        val merged = CoreModules.merge(modules)
+        val compositeCalls = NumericPrimopCoreEvidence.calls(merged, manifest["compositeEntry"] as String, singleBinding = true)
+        for (entry in entries) {
+            val name = entry["name"] as String
+            val operation = name.substringBefore("Int")
+            val rep = "Int${(entry["width"] as Number).toInt()}Rep"
+            val arguments = List((entry["arity"] as Number).toInt()) { rep }
+            val result = if (operation in setOf("eq", "ne", "lt", "le", "gt", "ge")) "IntRep" else rep
+            val primitive = entry["primitive"] as String
+            NumericPrimopCoreEvidence.assertCall(
+                NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, name)
+            NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "signedNarrowDispatch/$name")
+        }
         val rows = File(root, "build/signed-narrow-primops/oracle.tsv").readLines()
             .map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
@@ -78,6 +69,8 @@ class SignedNarrowPrimopsTest {
         }
         assertEquals((manifest["nativeRows"] as Number).toLong(), cases.values.sumOf { it.size.toLong() })
         for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
+            NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
+                entries.map { it["name"] as String }, backend)
             val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
                 "entry" to manifest["compositeEntry"], "backend" to backend, "instrument" to true)))
             fun check(entry: Map<String, Any?>, row: List<Long>) {

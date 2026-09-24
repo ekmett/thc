@@ -9,7 +9,6 @@ import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.io.File
-import java.math.BigInteger
 import java.security.MessageDigest
 
 /** Actual GHC primops, unsigned mathematical results and installed guest code. */
@@ -31,27 +30,7 @@ class IntegerPrimopsTest {
     }
 
     private fun mathematical(name: String, width: Int, left: Long, right: Long): Long {
-        val modulus = BigInteger.ONE.shiftLeft(width)
-        val mask = modulus - BigInteger.ONE
-        val x = BigInteger.valueOf(left).mod(modulus)
-        val y = BigInteger.valueOf(right).mod(modulus)
-        fun bit(condition: Boolean) = if (condition) BigInteger.ONE else BigInteger.ZERO
-        val value = when (name.substringBefore("Word")) {
-            "quot" -> x / y
-            "rem" -> x % y
-            "eq" -> bit(x == y)
-            "ne" -> bit(x != y)
-            "gt" -> bit(x > y)
-            "ge" -> bit(x >= y)
-            "and" -> x.and(y)
-            "or" -> x.or(y)
-            "xor" -> x.xor(y)
-            "not" -> x.xor(mask)
-            "uncheckedShiftL" -> x.shiftLeft(right.toInt()).and(mask)
-            "uncheckedShiftRL" -> x.shiftRight(right.toInt())
-            else -> error("Unknown integer primop $name")
-        }
-        return value.toLong()
+        return ScalarPrimopModel.scalar(name.substringBefore("Word"), width, true, left, right)
     }
 
     @Test fun realCoreAgreesWithNativeAndUnsignedModelBeforeAndAfterCompilation() {
@@ -65,7 +44,23 @@ class IntegerPrimopsTest {
         assertEquals(0, (composite["selectorArgument"] as Number).toInt())
         assertEquals(entries.map { it["name"] }, composite["selectorOrder"])
         assertEquals((0 until entries.size).toList(), entries.map { (it["selector"] as Number).toInt() })
-        val modules = (manifest["modules"] as List<String>).map { Json.parse(File(root, it).readText()) }
+        val modules = (manifest["modules"] as List<String>).map {
+            Json.parse(File(root, it).readText()) as Map<String, Any?>
+        }
+        val merged = CoreModules.merge(modules)
+        val compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite["name"] as String, singleBinding = true)
+        for (entry in entries) {
+            val name = entry["name"] as String
+            val operation = name.substringBefore("Word")
+            val word = if (name.endsWith("Word")) "WordRep" else "Word${(entry["width"] as Number).toInt()}Rep"
+            val arguments = if ((entry["arity"] as Number).toInt() == 1) listOf(word) else
+                listOf(word, if (operation.startsWith("uncheckedShift")) "IntRep" else word)
+            val result = if (operation in setOf("eq", "ne", "gt", "ge")) "IntRep" else word
+            val primitive = entry["primitive"] as String
+            NumericPrimopCoreEvidence.assertCall(
+                NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, name)
+            NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "composite/$name")
+        }
         val rows = File(root, "build/integer-primops/oracle.tsv").readLines()
             .map { it.split('\t') }.groupBy { it[0] }
         assertEquals(entries.map { it["name"] }.toSet(), rows.keys)
@@ -80,6 +75,8 @@ class IntegerPrimopsTest {
                 assertEquals(mathematical(name, width, left, right), native, "Native $name($left, $right)")
         }
         for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
+            NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
+                entries.map { it["name"] as String }, backend)
             val function = context.eval("thc", Json.stringify(mapOf("modules" to modules,
                 "entry" to composite["name"], "backend" to backend, "instrument" to true)))
             fun check(entry: Map<String, Any?>, row: List<Long>) {

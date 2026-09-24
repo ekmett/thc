@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
-import java.math.BigInteger
 import java.security.MessageDigest
 
 /** Native defined bits, an independent unbounded bit model, and exact installed entries. */
@@ -27,25 +26,8 @@ class BitPrimopsTest {
             assertEquals(expected, actual, "Stale bit primitive fixture: $path; rerun prepare-tests.sh")
         }
     }
-    private fun mathematical(operation: String, width: Int, carrier: Long): Long {
-        val input = BigInteger.valueOf(carrier).mod(BigInteger.ONE.shiftLeft(width))
-        val bits = List(width) { input.testBit(it) }
-        return when (operation) {
-            "popCnt" -> bits.count { it }.toLong()
-            "clz" -> bits.asReversed().takeWhile { !it }.size.toLong()
-            "ctz" -> bits.takeWhile { !it }.size.toLong()
-            "bitReverse", "byteSwap" -> {
-                var result = BigInteger.ZERO
-                for (bit in bits.indices) if (bits[bit]) {
-                    val destination = if (operation == "bitReverse") width - 1 - bit
-                        else width - 8 - 8 * (bit / 8) + bit % 8
-                    result = result + BigInteger.ONE.shiftLeft(destination)
-                }
-                result.toLong()
-            }
-            else -> error(operation)
-        }
-    }
+    private fun mathematical(operation: String, width: Int, carrier: Long): Long =
+        ScalarPrimopModel.bit(operation, width, carrier)
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
         Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier").invoke(target), label)
 
@@ -85,8 +67,20 @@ class BitPrimopsTest {
         assertEquals(1953, cases.size)
         for ((stage, paths) in stages) {
             val merged = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
+            val compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite, singleBinding = true)
+            for (entry in entries) {
+                val name = entry["name"] as String
+                val primitive = entry["primitive"] as String
+                val arguments = listOf(entry["argumentRep"] as String)
+                val result = entry["resultRep"] as String
+                NumericPrimopCoreEvidence.assertCall(
+                    NumericPrimopCoreEvidence.calls(merged, name), primitive, arguments, result, "$stage/$name")
+                NumericPrimopCoreEvidence.assertCall(compositeCalls, primitive, arguments, result, "$stage/$composite")
+            }
             for (backend in listOf("ast", "bytecode")) primopTestContext().use { context ->
-                context.initialize("thc"); context.enter()
+                NumericPrimopCoreEvidence.assertLoadableWrappers(context, merged,
+                    entries.map { it["name"] as String }, backend)
+                context.enter()
                 try {
                     val label = "$stage/$backend"
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
