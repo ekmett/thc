@@ -331,7 +331,7 @@ def main():
     sources = [FIXTURE, NATIVE, Path(__file__).resolve(), ROOT/'scripts/doublex2_bytearray_model.py',
                ROOT/'scripts/test-doublex2-bytearray-model.py', ROOT/'scripts/audit-core.py',
                ROOT/'scripts/core-capabilities.json', ROOT/'scripts/core_vectors.py', ROOT/'scripts/core_vector_memory.py',
-               ROOT/'src/main/kotlin/thc/runtime/CoreVectorMemory.kt', ROOT/'src/main/java/thc/runtime/DoubleX2.java',
+               ROOT/'src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt', ROOT/'src/main/java/thc/runtime/DoubleX2.java',
                ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
                *[ROOT/'compiler/THC'/name for name in ('CBV.hs', 'Demands.hs', 'Plugin.hs', 'Sources.hs', 'Wired.hs')],
                *[ROOT/'compiler'/name for name in ('build.sh', 'export.sh', 'toolchain.sh')]]
